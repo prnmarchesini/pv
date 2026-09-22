@@ -1,0 +1,28 @@
+# Build
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.dll
+*.pdb
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userprefs
+
+# AutoCAD
+*.dwl
+*.dwl2
+*.bak
+*.sv$
+*.err
+
+# Saída de teste
+TestResults/
+tests/proposto/
+
+# Sistema
+Thumbs.db
+desktop.ini
