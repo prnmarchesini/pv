@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Instala o Plugin UFV, conferindo antes se a versao do Civil 3D serve.
 
@@ -19,6 +19,10 @@
          primeiro comando util.
       4. O AutoCAD esta fechado? Aberto, ele segura as DLLs.
 
+    Estar em ApplicationPlugins faz o Civil 3D ACHAR o plugin, nao confiar
+    nele: a DLL nao e assinada e a pasta do usuario e gravavel, entao toda
+    abertura para num aviso. -ParaTodaAMaquina resolve (ver o parametro).
+
     Codigos de saida, para o instalador poder ser chamado por outro script:
       0  instalado (ou compativel, com -SomenteVerificar)
       1  erro de uso ou falha ao copiar
@@ -34,6 +38,12 @@
 .PARAMETER Desinstalar
     Remove o bundle instalado e sai.
 
+.PARAMETER ParaTodaAMaquina
+    Instala em %PROGRAMFILES%\Autodesk\ApplicationPlugins, para todos os
+    usuarios. Precisa de elevacao. E o unico jeito, sem assinar a DLL, de o
+    Civil 3D carregar o plugin sem avisar que ele nao e confiavel: a pasta do
+    usuario e gravavel, e o AutoCAD nao confia em pasta gravavel.
+
 .PARAMETER Bundle
     Pasta UFV.bundle a instalar. O padrao e artefatos\UFV.bundle, que
     publicar-bundle.ps1 monta.
@@ -46,6 +56,7 @@
 
 .EXAMPLE
     .\tools\instalar.ps1
+    .\tools\instalar.ps1 -ParaTodaAMaquina
     .\tools\instalar.ps1 -SomenteVerificar
     .\tools\instalar.ps1 -Desinstalar
 #>
@@ -53,6 +64,7 @@
 param(
     [switch] $SomenteVerificar,
     [switch] $Desinstalar,
+    [switch] $ParaTodaAMaquina,
     [string] $Bundle,
     [string] $SimularSerie,
 
@@ -66,7 +78,9 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $raiz    = (Resolve-Path (Split-Path -Parent $PSScriptRoot)).Path
-$destino = Join-Path $env:APPDATA 'Autodesk\ApplicationPlugins\UFV.bundle'
+$destinoDoUsuario = Join-Path $env:APPDATA 'Autodesk\ApplicationPlugins\UFV.bundle'
+$destinoDaMaquina = Join-Path $env:ProgramFiles 'Autodesk\ApplicationPlugins\UFV.bundle'
+$destino = if ($ParaTodaAMaquina) { $destinoDaMaquina } else { $destinoDoUsuario }
 
 if (-not $Bundle) { $Bundle = Join-Path $raiz 'artefatos\UFV.bundle' }
 
@@ -78,12 +92,22 @@ function Dizer {
 # ---- desinstalar -----------------------------------------------------------
 
 if ($Desinstalar) {
-    if (Test-Path $destino) {
-        Remove-Item $destino -Recurse -Force
-        Dizer "Plugin UFV removido de $destino" 'Green'
-    } else {
-        Dizer 'O Plugin UFV nao esta instalado.' 'DarkGray'
+    # Tira dos dois lugares: quem instalou para a maquina toda e depois so para
+    # o usuario ficaria com duas copias, e o AutoCAD carregaria a errada.
+    $removidos = 0
+    foreach ($alvo in $destinoDaMaquina, $destinoDoUsuario) {
+        if (-not (Test-Path $alvo)) { continue }
+        try {
+            Remove-Item $alvo -Recurse -Force
+            Dizer "Plugin UFV removido de $alvo" 'Green'
+            $removidos++
+        }
+        catch {
+            Dizer "Sem permissao para remover $alvo. Rode como administrador." 'Red'
+            exit 1
+        }
     }
+    if ($removidos -eq 0) { Dizer 'O Plugin UFV nao esta instalado.' 'DarkGray' }
     exit 0
 }
 
@@ -260,11 +284,74 @@ if ($segurando.Count -gt 0) {
     exit 5
 }
 
-if (Test-Path $destino) { Remove-Item $destino -Recurse -Force }
-New-Item -ItemType Directory -Path (Split-Path -Parent $destino) -Force | Out-Null
-Copy-Item $Bundle $destino -Recurse
+# Escrever em Program Files exige elevacao. Melhor dizer isso antes de copiar
+# pela metade e deixar um bundle quebrado no caminho.
+if ($ParaTodaAMaquina) {
+    $eu = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
+    if (-not $eu.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        Dizer 'Instalar para toda a maquina precisa de elevacao.' 'Red'
+        Dizer 'Abra um PowerShell como administrador e rode de novo, ou use:' 'Red'
+        Dizer "  Start-Process powershell -Verb RunAs -ArgumentList '-File','$PSCommandPath','-ParaTodaAMaquina'" 'DarkGray'
+        exit 1
+    }
+
+    # Duas copias fazem o AutoCAD carregar a que achar primeiro, que nao e
+    # necessariamente a que acabou de ser instalada.
+    if (Test-Path $destinoDoUsuario) {
+        Remove-Item $destinoDoUsuario -Recurse -Force
+        Dizer "Removida a instalacao anterior do usuario em $destinoDoUsuario" 'DarkGray'
+    }
+}
+
+try {
+    if (Test-Path $destino) { Remove-Item $destino -Recurse -Force }
+    New-Item -ItemType Directory -Path (Split-Path -Parent $destino) -Force | Out-Null
+    Copy-Item $Bundle $destino -Recurse
+}
+catch {
+    Dizer "Falha ao copiar para $destino : $($_.Exception.Message)" 'Red'
+    exit 1
+}
 
 Dizer ''
 Dizer "Instalado em $destino" 'Green'
-Dizer 'Abra o Civil 3D: a aba UFV aparece sozinha, sem NETLOAD.' 'DarkGray'
+
+# ---- por que a pasta importa -----------------------------------------------
+#
+# Estar em ApplicationPlugins faz o Civil 3D ACHAR o plugin, nao confiar nele.
+# Como UFV.Plugin.dll nao e assinada, o AutoCAD so a carrega sem perguntar se
+# ela estiver numa pasta que ele considere segura. "Segura" quer dizer
+# protegida por permissao: uma pasta que o proprio usuario pode escrever nao
+# vale, e %APPDATA% e uma dessas.
+#
+# Conferido na tela, no Civil 3D 2026: instalado em %APPDATA%, toda abertura
+# para no aviso "Unsigned Executable File". Acrescentar a pasta ao
+# TRUSTEDPATHS nao resolve - o AutoCAD despreza caminho gravavel pelo usuario.
+#
+# Sobram dois caminhos de verdade:
+#
+#   1. Instalar em %PROGRAMFILES%\Autodesk\ApplicationPlugins, que e protegido
+#      por permissao. Precisa de elevacao, e e o que -ParaTodaAMaquina faz.
+#   2. Assinar a DLL com certificado confiado pela maquina. Fica para quando
+#      houver certificado; e a resposta certa para distribuir a terceiros.
+#
+# Sem um dos dois, o usuario aperta "Always Load" uma vez e o AutoCAD passa a
+# confiar naquela DLL especifica. Funciona, mas se perde a cada nova versao.
+
+if ($ParaTodaAMaquina) {
+    Dizer ''
+    Dizer 'Instalado numa pasta protegida: o Civil 3D carrega sem perguntar.' 'Green'
+} else {
+    Dizer ''
+    Dizer 'Atenção: esta pasta é gravável pelo usuário, então o Civil 3D não a' 'Yellow'
+    Dizer 'considera segura. Toda abertura vai avisar que UFV.Plugin.dll não é' 'Yellow'
+    Dizer 'assinada e perguntar o que fazer.' 'Yellow'
+    Dizer ''
+    Dizer 'Para resolver, uma das duas:' 'Yellow'
+    Dizer '  - aperte "Always Load" no aviso (vale para esta versão da DLL); ou' 'Yellow'
+    Dizer '  - reinstale com  .\tools\instalar.ps1 -ParaTodaAMaquina  (pede elevação).' 'Yellow'
+}
+
+Dizer ''
+Dizer 'Abra o Civil 3D: a aba UFV aparece sem NETLOAD.' 'DarkGray'
 exit 0

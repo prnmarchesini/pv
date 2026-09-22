@@ -14,8 +14,11 @@
 ; sempre. A ultima linha imprime o valor restaurado, e o rodar.ps1 confere
 ; que voltou ao que era, alem de reconferir o registro.
 ;
-; Em producao nada disso acontece: o bundle fica em ApplicationPlugins, que o
-; AutoCAD ja trata como caminho confiavel.
+; Em producao a origem do aviso e a mesma, e nao some sozinha: estar em
+; ApplicationPlugins faz o Civil 3D ACHAR o plugin, nao confiar nele. Com a
+; DLL nao assinada, a abertura para num aviso ate alguem apertar "Always
+; Load" - ou ate o instalador marcar a pasta como confiavel
+; (tools/instalar.ps1 -ConfiarNoCaminho). Conferido na tela, no Civil 3D 2026.
 
 (setq ufv:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
