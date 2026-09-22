@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Descritor do bundle. Uma pasta UFV.bundle com este arquivo na raiz, dentro de
+  ApplicationPlugins, faz o Civil 3D carregar o plugin sozinho ao abrir, sem
+  NETLOAD.
+
+  SeriesMin/SeriesMax travam em R25.1, que e o AutoCAD/Civil 3D 2026. Isso e
+  proposital: 02-arquitetura.md trava o projeto na versao instalada, e versao
+  nova vira atualizacao. Carregar em versao nao testada e pior que nao carregar.
+-->
+<ApplicationPackage
+    SchemaVersion="1.0"
+    AutodeskProduct="AutoCAD"
+    ProductType="Application"
+    ProductCode="{4587CF2D-BA44-41CD-A4D3-50CA1D73FC5E}"
+    Name="Plugin UFV"
+    Description="Layout de usinas fotovoltaicas em terreno inclinado"
+    AppVersion="0.1.0"
+    Author="MarchEng">
+
+  <CompanyDetails Name="MarchEng" />
+
+  <Components Description="Civil 3D 2026">
+    <RuntimeRequirements
+        OS="Win64"
+        Platform="AutoCAD*"
+        SeriesMin="R25.1"
+        SeriesMax="R25.1" />
+
+    <ComponentEntry
+        AppName="UFV"
+        Version="0.1.0"
+        ModuleName="./Contents/UFV.Plugin.dll"
+        AppDescription="Plugin UFV"
+        LoadOnAutoCADStartup="True"
+        LoadOnCommandInvocation="False" />
+  </Components>
+
+</ApplicationPackage>

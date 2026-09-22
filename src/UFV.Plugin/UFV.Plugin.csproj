@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- A ribbon do AutoCAD (Autodesk.Windows) e WPF. -->
+    <UseWPF>true</UseWPF>
     <!-- O AutoCAD carrega a DLL no proprio processo: nada de copiar as libs dele. -->
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -37,6 +39,11 @@
     </Reference>
     <Reference Include="AeccDbMgd">
       <HintPath>$(Civil3DPath)C3D\AeccDbMgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Ribbon: aba, painel e botao. -->
+    <Reference Include="AdWindows">
+      <HintPath>$(Civil3DPath)AdWindows.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
