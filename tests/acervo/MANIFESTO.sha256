@@ -1,0 +1,8 @@
+# Acervo imutável — ver Plano/04-testes.md
+#
+# Formato:  <sha256 minúsculo>  <caminho relativo a tests/acervo>
+#
+# Este arquivo é mantido pelo Renan, nunca pelo Claude Code. Arquivos propostos
+# entram em tests/proposto/, são conferidos à mão e só então movidos para cá.
+#
+# Ainda vazio: a etapa 0 não gera resultado de referência.

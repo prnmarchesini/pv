@@ -26,3 +26,6 @@ tests/proposto/
 # Sistema
 Thumbs.db
 desktop.ini
+
+# Saída do placar de testes
+artefatos/
