@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- O AutoCAD carrega a DLL no proprio processo: nada de copiar as libs dele. -->
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!--
+      MSB3277: as DLLs do AutoCAD apontam para Microsoft.VisualBasic 10.1.0.0
+      (.NET Framework) e o net8.0-windows traz a 10.0.0.0. O plugin nao usa
+      nenhuma das duas; quem resolve em tempo de execucao e o proprio AutoCAD.
+    -->
+    <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UFV.Core\UFV.Core.csproj" />
+  </ItemGroup>
+
+  <!--
+    DLLs gerenciadas do AutoCAD / Civil 3D 2026.
+    Private = false: o AutoCAD ja tem essas assemblies carregadas. Copiar
+    para a pasta de saida faz o plugin carregar uma segunda copia e quebrar.
+  -->
+  <ItemGroup>
+    <Reference Include="AcCoreMgd">
+      <HintPath>$(Civil3DPath)accoremgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="AcDbMgd">
+      <HintPath>$(Civil3DPath)acdbmgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="AcMgd">
+      <HintPath>$(Civil3DPath)acmgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="AeccDbMgd">
+      <HintPath>$(Civil3DPath)C3D\AeccDbMgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="ConferirCivil3D" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(Civil3DPath)acmgd.dll')"
+           Text="Civil 3D 2026 nao encontrado em '$(Civil3DPath)'. Passe -p:Civil3DPath=&quot;caminho\da\instalacao\&quot; (com a barra no fim)." />
+    <Error Condition="!Exists('$(Civil3DPath)C3D\AeccDbMgd.dll')"
+           Text="AeccDbMgd.dll nao encontrada em '$(Civil3DPath)C3D\'. Isso indica AutoCAD sem Civil 3D instalado." />
+  </Target>
+
+</Project>

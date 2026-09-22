@@ -1,0 +1,22 @@
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!--
+    Raiz da instalacao do AutoCAD Civil 3D 2026.
+    Sobrescreva na linha de comando se estiver em outro caminho:
+      dotnet build -p:Civil3DPath="D:\Autodesk\AutoCAD 2026\"
+  -->
+  <PropertyGroup>
+    <Civil3DPath Condition="'$(Civil3DPath)' == ''">C:\Program Files\Autodesk\AutoCAD 2026\</Civil3DPath>
+  </PropertyGroup>
+
+</Project>
