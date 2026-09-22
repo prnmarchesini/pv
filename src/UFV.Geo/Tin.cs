@@ -13,8 +13,11 @@ namespace UFV.Geo;
 /// é informação, não detalhe: uma malha com muitos descartes é um levantamento
 /// com problema, e o resumo do passo 1.4 precisa poder dizer isso.
 ///
-/// Esta versão percorre todos os triângulos a cada consulta. O índice espacial
-/// entra no passo 1.2, e o contrato de TryGetZ não muda com ele.
+/// A busca usa um índice espacial (<see cref="TriangleGrid"/>): sem ele, cada
+/// consulta varre a malha inteira, o que num terreno real é meia hora de
+/// espera para o que devia levar um segundo. O índice não muda a resposta —
+/// só o caminho até ela — e <see cref="TryGetZLinear"/> existe para os testes
+/// poderem conferir isso.
 /// </summary>
 public sealed class Tin
 {
@@ -26,6 +29,12 @@ public sealed class Tin
     /// triângulo por consulta.
     /// </summary>
     private readonly double[] _denominators;
+
+    /// <summary>
+    /// Grade que diz quais triângulos podem conter um ponto. Nula só quando a
+    /// malha está vazia.
+    /// </summary>
+    private readonly TriangleGrid? _grid;
 
     public Tin(IEnumerable<Triangle> triangles)
     {
@@ -54,6 +63,7 @@ public sealed class Tin
             _denominators[i] = _triangles[i].DoubleSignedArea2D;
 
         DiscardedTriangleCount = descartados;
+        _grid = _triangles.Length > 0 ? new TriangleGrid(_triangles) : null;
     }
 
     /// <summary>Quantos triângulos a malha usa para responder cota.</summary>
@@ -83,6 +93,38 @@ public sealed class Tin
         // dois passariam pelo teste de dentro/fora sem disparar nada e sairiam
         // como cota, contaminando tudo que vier depois.
         if (!double.IsFinite(x) || !double.IsFinite(y)) return false;
+        if (_grid is null) return false;
+
+        foreach (var i in _grid.Candidates(x, y))
+        {
+            if (TryInterpolate(_triangles[i], _denominators[i], x, y, out z)) return true;
+        }
+
+        // Os grandes demais ficam fora da grade e são olhados sempre. Numa
+        // malha regular esta lista é vazia; numa superfície de curvas de nível
+        // ela tem os poucos triângulos compridos e diagonais.
+        foreach (var i in _grid.Oversized)
+        {
+            if (TryInterpolate(_triangles[i], _denominators[i], x, y, out z)) return true;
+        }
+
+        z = 0;
+        return false;
+    }
+
+    /// <summary>
+    /// A mesma consulta, varrendo todos os triângulos, sem índice.
+    ///
+    /// Existe para os testes poderem afirmar que o índice não mudou resposta
+    /// nenhuma: um índice que perde um triângulo devolve "fora do terreno"
+    /// para um ponto que está dentro, e isso não aparece em teste que só use o
+    /// próprio índice.
+    /// </summary>
+    internal bool TryGetZLinear(double x, double y, out double z)
+    {
+        z = 0;
+
+        if (!double.IsFinite(x) || !double.IsFinite(y)) return false;
 
         for (var i = 0; i < _triangles.Length; i++)
         {
@@ -92,6 +134,15 @@ public sealed class Tin
         z = 0;
         return false;
     }
+
+    /// <summary>Quantas células o índice tem. Só para diagnóstico e teste.</summary>
+    internal long CellCount => _grid?.CellCount ?? 0;
+
+    /// <summary>Entradas do índice, contando triângulo que entra em mais de uma célula.</summary>
+    internal long OccupancyCount => _grid?.OccupancyCount ?? 0;
+
+    /// <summary>Triângulos varridos em toda consulta por cobrirem células demais.</summary>
+    internal int OversizedCount => _grid?.OversizedCount ?? 0;
 
     /// <summary>
     /// Coordenadas baricêntricas do ponto em relação ao triângulo, em planta.
@@ -110,6 +161,11 @@ public sealed class Tin
         out double z)
     {
         z = 0;
+
+        // A guarda mora aqui, e não só em quem chama: é aqui que o estrago
+        // aconteceria. Com x ou y não finito os pesos viram NaN, toda
+        // comparação com NaN é falsa, e o ponto sairia "dentro" com cota NaN.
+        if (!double.IsFinite(x) || !double.IsFinite(y)) return false;
 
         var (a, b, c) = (triangle.A, triangle.B, triangle.C);
 

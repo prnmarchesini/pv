@@ -6,4 +6,13 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!--
+      O índice espacial e a busca linear são detalhe interno: o motor só
+      conhece TryGetZ. Os testes precisam dos dois para poder afirmar que o
+      índice não mudou resposta nenhuma.
+    -->
+    <InternalsVisibleTo Include="UFV.Geo.Tests" />
+  </ItemGroup>
+
 </Project>
