@@ -69,7 +69,7 @@ public class ArchitectureTests
     {
         // Civil3DPath vive aqui e e so um texto; o que nao pode e uma
         // Reference ou PackageReference de CAD, que valeria para todo projeto.
-        var documento = XDocument.Load(Path.Combine(RaizDoRepositorio(), caminhoRelativo));
+        var documento = XDocument.Load(Path.Combine(Repositorio.Raiz, caminhoRelativo));
 
         var referencias = documento
             .Descendants()
@@ -88,7 +88,7 @@ public class ArchitectureTests
     {
         get
         {
-            var raiz = RaizDoRepositorio();
+            var raiz = Repositorio.Raiz;
             var dados = new TheoryData<string>();
             var achou = false;
 
@@ -211,24 +211,13 @@ public class ArchitectureTests
         return (referencias, caminhos);
     }
 
-    private static string RaizDoRepositorio()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "UFV.sln")))
-            dir = dir.Parent;
-
-        Assert.True(dir is not null, $"UFV.sln nao encontrada acima de {AppContext.BaseDirectory}.");
-        return dir!.FullName;
-    }
-
     /// <summary>
     /// Todo .csproj do repositorio, por nome. A varredura pula bin e obj, onde
     /// o NuGet deixa copias de projeto que nao sao codigo nosso.
     /// </summary>
     private static Dictionary<string, string> TodosOsProjetos()
     {
-        var raiz = RaizDoRepositorio();
+        var raiz = Repositorio.Raiz;
 
         return Directory
             .EnumerateFiles(raiz, "*.csproj", SearchOption.AllDirectories)

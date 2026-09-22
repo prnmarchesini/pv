@@ -44,7 +44,7 @@ public class BundleTests
         Assert.Equal(VersaoEsperada, (string?)ComponentEntry().Attribute("Version"));
         Assert.Equal(
             VersaoEsperada,
-            XDocument.Load(Path.Combine(RaizDoRepositorio(), "Directory.Build.props"))
+            XDocument.Load(Repositorio.Caminho("Directory.Build.props"))
                 .Descendants()
                 .First(e => e.Name.LocalName == "Version")
                 .Value);
@@ -81,19 +81,8 @@ public class BundleTests
     // ---- apoio -------------------------------------------------------------
 
     private static XElement Pacote() =>
-        XDocument.Load(Path.Combine(RaizDoRepositorio(), "src", "UFV.Plugin", "PackageContents.xml")).Root!;
+        XDocument.Load(Repositorio.Caminho("src", "UFV.Plugin", "PackageContents.xml")).Root!;
 
     private static XElement ComponentEntry() =>
         Pacote().Descendants().First(e => e.Name.LocalName == "ComponentEntry");
-
-    private static string RaizDoRepositorio()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "UFV.sln")))
-            dir = dir.Parent;
-
-        Assert.True(dir is not null, $"UFV.sln nao encontrada acima de {AppContext.BaseDirectory}.");
-        return dir!.FullName;
-    }
 }

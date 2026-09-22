@@ -92,6 +92,11 @@ if (-not (Test-Path $desenho)) {
     if (-not $desenho) {
         Falhar 'Nenhum desenho de partida encontrado (nem no acervo, nem nos templates do Civil 3D).'
     }
+
+    # O acervo ainda nao tem desenho da etapa 0, entao caimos num template do
+    # Civil 3D. Dizemos qual: no dia em que o acervo passar a mandar, a entrada
+    # do teste muda, e essa linha e o unico aviso.
+    Write-Host "  (sem desenho no acervo; usando $desenho)" -ForegroundColor DarkGray
 }
 
 # ---- a mensagem esperada ---------------------------------------------------
@@ -123,34 +128,85 @@ if (Test-Path $out) { Remove-Item $out -Force }
 # desfaz a gravacao. Entao guardamos os valores aqui e os devolvemos depois,
 # aconteca o que acontecer com o processo do CAD. Um teste nao pode deixar o
 # AutoCAD do Renan menos protegido do que achou.
+# Guardamos TODOS os perfis, inclusive os que ainda nao tem o valor. Esse e o
+# caso perigoso: num perfil onde o usuario nunca mexeu em SECURELOAD, o setvar
+# do script CRIA a entrada no registro. Se so olhassemos os perfis que ja tem o
+# valor, esse ficaria com 0 gravado para sempre, sem ninguem para apagar.
+# $null aqui significa "nao existia", e o finally remove de volta.
 $perfisAntes = @{}
 Get-ChildItem 'HKCU:\SOFTWARE\Autodesk\AutoCAD' -Recurse -ErrorAction SilentlyContinue |
-    Where-Object { $_.Property -contains 'SecureLoad' } |
-    ForEach-Object {
-        $valor = Ler-SecureLoad $_.PSPath
-        if ($null -ne $valor) { $perfisAntes[$_.PSPath] = $valor }
-    }
+    Where-Object { $_.PSChildName -eq 'Variables' } |
+    ForEach-Object { $perfisAntes[$_.PSPath] = Ler-SecureLoad $_.PSPath }
 
-# O accoreconsole escreve em UTF-16. Redirecionar pelo cmd preserva os bytes;
-# o redirecionamento do PowerShell 5.1 os estraga.
+# Rodamos o Core Console direto, sem cmd no meio: assim nao ha aspas aninhadas
+# para escapar, e a saida e lida ja decodificada. O accoreconsole escreve em
+# UTF-16, que declaramos em StandardOutputEncoding - deixar o padrao entrega
+# texto picotado, com um espaco entre cada letra.
+$estourouOTempo = $false
+$limiteEmSegundos = 300
+$codigo = $null
+$texto = ''
+
+$inicio = New-Object System.Diagnostics.ProcessStartInfo
+$inicio.FileName               = $console
+$inicio.Arguments              = "/i `"$desenho`" /s `"$scr`""
+$inicio.UseShellExecute        = $false
+$inicio.CreateNoWindow         = $true
+$inicio.RedirectStandardOutput = $true
+$inicio.RedirectStandardError  = $true
+$inicio.StandardOutputEncoding = [System.Text.Encoding]::Unicode
+$inicio.StandardErrorEncoding  = [System.Text.Encoding]::Unicode
+
+$processo = $null
+
 try {
-    cmd /c "`"$console`" /i `"$desenho`" /s `"$scr`" > `"$out`" 2>&1" | Out-Null
-    $codigo = $LASTEXITCODE
+    $processo = [System.Diagnostics.Process]::Start($inicio)
+
+    # Os dois fluxos sao lidos em paralelo: ler um ate o fim e so depois o
+    # outro trava se o segundo encher o buffer do pipe.
+    $lendoSaida = $processo.StandardOutput.ReadToEndAsync()
+    $lendoErro  = $processo.StandardError.ReadToEndAsync()
+
+    # Com timeout: travado, o Core Console ficaria rodando com o SECURELOAD
+    # baixo por tempo indefinido.
+    if ($processo.WaitForExit($limiteEmSegundos * 1000)) {
+        $codigo = $processo.ExitCode
+        $texto  = $lendoSaida.Result + $lendoErro.Result
+    }
+    else {
+        $processo.Kill()
+        $estourouOTempo = $true
+    }
 }
 finally {
     foreach ($perfil in @($perfisAntes.Keys)) {
+        $antes = $perfisAntes[$perfil]
         $agora = Ler-SecureLoad $perfil
-        if ($null -ne $agora -and $agora -ne $perfisAntes[$perfil]) {
-            Set-ItemProperty -LiteralPath $perfil -Name 'SecureLoad' -Value $perfisAntes[$perfil]
+
+        if ($antes -eq $agora) { continue }
+
+        if ($null -eq $antes) {
+            # Nao existia: o script criou. Apagamos, e o AutoCAD volta ao padrao.
+            Remove-ItemProperty -LiteralPath $perfil -Name 'SecureLoad' -ErrorAction SilentlyContinue
+        }
+        elseif (Test-Path -LiteralPath $perfil) {
+            # -Type DWord porque o valor pode ter sido apagado no meio: sem
+            # isso o Set-ItemProperty recriaria como String.
+            Set-ItemProperty -LiteralPath $perfil -Name 'SecureLoad' -Value $antes -Type DWord
         }
     }
 }
 
-if (-not (Test-Path $out)) {
-    Falhar "O Core Console nao produziu saida (codigo $codigo)."
+# Guardamos a saida em arquivo para poder ser lida depois de um teste vermelho.
+Set-Content $out -Value $texto -Encoding UTF8
+
+if ($estourouOTempo) {
+    Falhar "O Core Console passou de $limiteEmSegundos s e foi encerrado. Veja $out"
 }
 
-$texto = [IO.File]::ReadAllText($out, [Text.Encoding]::Unicode)
+if ([string]::IsNullOrWhiteSpace($texto)) {
+    Falhar "O Core Console nao produziu saida (codigo $codigo)."
+}
 
 if ($codigo -ne 0) {
     Falhar "Core Console terminou com codigo $codigo. Saida em $out"
@@ -171,8 +227,7 @@ if ($texto -match 'UFV_SECURELOAD_ANTES=(\d+)\s+DEPOIS=(\d+)') {
 
 # E conferimos o registro, que e onde o estrago ficaria.
 $mudados = @($perfisAntes.Keys) | Where-Object {
-    $agora = Ler-SecureLoad $_
-    ($null -ne $agora) -and ($agora -ne $perfisAntes[$_])
+    (Ler-SecureLoad $_) -ne $perfisAntes[$_]
 }
 
 if ($mudados) {

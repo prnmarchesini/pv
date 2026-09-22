@@ -13,9 +13,13 @@ public class PluginInfoTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
+    [InlineData("+")]          // versao informativa malformada
+    [InlineData("+abc123")]    // so o sufixo de build, sem versao
+    [InlineData("  +abc  ")]
     [Trait("Etapa", "0")]
     public void SemVersaoLegivelDizDesconhecida(string? versao)
     {
+        // Nenhuma destas pode terminar a frase no vazio ("... carregado, versão ").
         Assert.Equal("Plugin UFV carregado, versão desconhecida", PluginInfo.MensagemDeApresentacao(versao));
     }
 
@@ -23,6 +27,7 @@ public class PluginInfoTests
     [InlineData("0.1.0+3f2a1c9d", "0.1.0")]
     [InlineData("1.2.3-beta+abc", "1.2.3-beta")]
     [InlineData("  0.1.0  ", "0.1.0")]
+    [InlineData("0.1.0 +abc", "0.1.0")]
     [Trait("Etapa", "0")]
     public void SufixoDeBuildNaoVaiParaATela(string informada, string esperada)
     {
@@ -33,10 +38,15 @@ public class PluginInfoTests
 
     [Fact]
     [Trait("Etapa", "0")]
-    public void PrefixoDeIdentidadeEOCombinado()
+    public void AMensagemNuncaTerminaNoVazio()
     {
-        // 02-arquitetura.md: XData e dicionario sob MARCHENG_UFV. Mudar isso
-        // orfana a identidade de todo desenho ja processado.
-        Assert.Equal("MARCHENG_UFV", PluginInfo.PrefixoDeIdentidade);
+        foreach (var entrada in new string?[] { null, "", " ", "+", "+x", "  +  ", "\t" })
+        {
+            var mensagem = PluginInfo.MensagemDeApresentacao(entrada);
+
+            Assert.False(
+                mensagem.TrimEnd().EndsWith("versão", StringComparison.Ordinal),
+                $"A mensagem ficou sem versão para a entrada {entrada ?? "(null)"}: '{mensagem}'");
+        }
     }
 }

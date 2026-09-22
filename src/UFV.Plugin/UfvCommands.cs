@@ -21,12 +21,14 @@ public static class UfvCommands
     /// <summary>
     /// UFV_OLA: prova de vida. Escreve na linha de comando que o plugin esta
     /// carregado e em que versao.
+    ///
+    /// O nome vem de PluginInfo.ComandoOla, a mesma constante que o botao da
+    /// ribbon usa: renomear o comando num lugar so nao deixa o botao mudo.
     /// </summary>
-    [CommandMethod("UFV_OLA")]
+    [CommandMethod(PluginInfo.ComandoOla)]
     public static void Ola()
     {
-        // Sem desenho aberto nao ha linha de comando para escrever. Acontece
-        // no Core Console antes de abrir o .dwg.
+        // Sem desenho aberto nao ha linha de comando para escrever.
         var documento = AcadApp.DocumentManager.MdiActiveDocument;
         if (documento is null) return;
 

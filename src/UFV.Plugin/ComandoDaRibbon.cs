@@ -12,7 +12,7 @@ namespace UFV.Plugin;
 /// botao e o comando digitado passam exatamente pelo mesmo caminho, e nao ha
 /// uma segunda implementacao para manter em pe.
 /// </summary>
-public sealed class ComandoDaRibbon : ICommand
+internal sealed class ComandoDaRibbon : ICommand
 {
     public event EventHandler? CanExecuteChanged
     {
@@ -21,18 +21,37 @@ public sealed class ComandoDaRibbon : ICommand
     }
 
     public bool CanExecute(object? parameter) =>
-        AcadApp.DocumentManager.MdiActiveDocument is not null;
+        AcadApp.DocumentManager.MdiActiveDocument is not null
+        && !string.IsNullOrWhiteSpace(LerComando(parameter));
 
     public void Execute(object? parameter)
     {
+        var comando = LerComando(parameter);
+        if (string.IsNullOrWhiteSpace(comando))
+        {
+            // Botao sem comando e um botao que nao faz nada ao ser clicado:
+            // sem registro, isso vira um bug mudo.
+            RegistroDeDiagnostico.Registrar(
+                $"Botão da ribbon acionado sem comando (parâmetro: {parameter?.GetType().Name ?? "nulo"}).");
+            return;
+        }
+
         var documento = AcadApp.DocumentManager.MdiActiveDocument;
         if (documento is null) return;
 
-        var comando = (parameter as RibbonButton)?.CommandParameter as string
-                      ?? parameter as string;
-
-        if (string.IsNullOrWhiteSpace(comando)) return;
-
         documento.SendStringToExecute(comando, true, false, true);
     }
+
+    /// <summary>
+    /// A ribbon entrega o proprio item como parametro. O tipo declarado e
+    /// RibbonCommandItem, a classe base que expoe CommandParameter: castar
+    /// para RibbonButton concreto faria o botao virar um no-op silencioso no
+    /// dia em que ele virasse um split button ou fosse embrulhado.
+    /// </summary>
+    private static string? LerComando(object? parameter) => parameter switch
+    {
+        RibbonCommandItem item => item.CommandParameter as string,
+        string texto => texto,
+        _ => null,
+    };
 }

@@ -18,17 +18,17 @@
     As DLLs do AutoCAD nao entram no bundle: sao referencias com Copy Local =
     false, porque o AutoCAD ja as tem carregadas (ver 02-arquitetura.md).
 
-    Este script monta e copia. Detectar versao instalada e avisar de
-    incompatibilidade e trabalho do instalador, no passo 0.6.
+    Este script so monta. Instalar e trabalho de tools\instalar.ps1, que antes
+    confere a versao do Civil 3D; com -Instalar, chamamos ele.
 
 .PARAMETER Configuracao
     Debug (padrao) ou Release.
 
 .PARAMETER Instalar
-    Alem de montar, copia para ApplicationPlugins do usuario atual.
+    Alem de montar, chama tools\instalar.ps1 para instalar o bundle montado.
 
 .PARAMETER Desinstalar
-    Remove o bundle de ApplicationPlugins e sai.
+    Chama tools\instalar.ps1 -Desinstalar e sai.
 
 .EXAMPLE
     .\tools\publicar-bundle.ps1 -Instalar
@@ -49,7 +49,6 @@ Set-StrictMode -Version Latest
 $raiz     = (Resolve-Path (Split-Path -Parent $PSScriptRoot)).Path
 $projeto  = Join-Path $raiz 'src\UFV.Plugin\UFV.Plugin.csproj'
 $bundle   = Join-Path $raiz 'artefatos\UFV.bundle'
-$destino  = Join-Path $env:APPDATA 'Autodesk\ApplicationPlugins\UFV.bundle'
 
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
     $env:PATH = "C:\Program Files\dotnet;$env:PATH"
@@ -58,13 +57,8 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
 # ---- desinstalar -----------------------------------------------------------
 
 if ($Desinstalar) {
-    if (Test-Path $destino) {
-        Remove-Item $destino -Recurse -Force
-        Write-Host "Bundle removido de $destino" -ForegroundColor Green
-    } else {
-        Write-Host "Nada a remover: $destino nao existe." -ForegroundColor DarkGray
-    }
-    exit 0
+    & (Join-Path $PSScriptRoot 'instalar.ps1') -Desinstalar
+    exit $LASTEXITCODE
 }
 
 # ---- compilar --------------------------------------------------------------
@@ -123,23 +117,14 @@ if ($Configuracao -eq 'Debug') {
 Write-Host "Bundle montado em $bundle" -ForegroundColor Green
 
 # ---- instalar --------------------------------------------------------------
+# Quem instala e tools\instalar.ps1, e so ele. Duplicar a copia aqui criaria um
+# segundo caminho de instalacao sem a checagem de versao, que e a razao de o
+# instalador existir.
 
 if (-not $Instalar) {
-    Write-Host 'Use -Instalar para copiar para ApplicationPlugins.' -ForegroundColor DarkGray
+    Write-Host 'Use -Instalar para instalar (chama tools\instalar.ps1).' -ForegroundColor DarkGray
     exit 0
 }
 
-# O AutoCAD segura as DLLs enquanto esta aberto.
-$aberto = Get-Process -Name 'acad' -ErrorAction SilentlyContinue
-if ($aberto) {
-    Write-Host 'O AutoCAD/Civil 3D esta aberto. Feche antes de instalar o bundle.' -ForegroundColor Red
-    exit 1
-}
-
-if (Test-Path $destino) { Remove-Item $destino -Recurse -Force }
-New-Item -ItemType Directory -Path (Split-Path -Parent $destino) -Force | Out-Null
-Copy-Item $bundle $destino -Recurse
-
-Write-Host "Instalado em $destino" -ForegroundColor Green
-Write-Host 'Abra o Civil 3D: a aba UFV aparece sozinha, sem NETLOAD.' -ForegroundColor DarkGray
-exit 0
+& (Join-Path $PSScriptRoot 'instalar.ps1') -Bundle $bundle
+exit $LASTEXITCODE
