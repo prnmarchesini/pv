@@ -35,8 +35,7 @@ confiável, e a pasta `bin` do build não é uma. Sem interface não há como
 autorizar, então o teste baixa a guarda pelo tempo do NETLOAD e devolve depois.
 Como o valor fica salvo no perfil do usuário, quem garante a devolução é o
 runner, em `finally`, inclusive apagando a entrada nos perfis onde ela não
-existia antes. Em produção nada disso acontece: o bundle fica em
-`ApplicationPlugins`, que o AutoCAD já trata como caminho confiável.
+existia antes. A origem do aviso em produção é a mesma, e está logo abaixo.
 
 **O aviso de arquivo não assinado.** Conferido abrindo o Civil 3D 2026: com o
 bundle em `%APPDATA%\Autodesk\ApplicationPlugins`, toda abertura para no aviso
@@ -63,10 +62,6 @@ aquela DLL, e se perde a cada nova versão.
 Civil 3D e diz qual usou. Quando a etapa 1 congelar um `.dwg` de referência, ele
 passa a mandar — e a entrada do teste muda.
 
-**A pasta do plano ficou `Plano` com P maiúsculo.** A intenção era `plano`; um
-processo segurava o diretório na hora da reorganização. Um `git mv` resolve
-quando estiver livre.
-
 **Fora do escopo, para as etapas seguintes:**
 
 - O instalador copia para `ApplicationPlugins` do usuário atual. Instalação para
@@ -74,3 +69,5 @@ quando estiver livre.
 - Os códigos de saída 1, 4 e 5 do instalador não têm teste automatizado: exigem
   máquina sem AutoCAD ou com o CAD aberto.
 - O botão da ribbon não tem ícone (`ShowImage = false`).
+- `-ParaTodaAMaquina` ainda não foi exercitado: precisa de elevação (UAC).
+- Assinar a DLL com certificado, que dispensaria a pasta protegida.
