@@ -29,3 +29,8 @@ desktop.ini
 
 # Saída do placar de testes
 artefatos/
+
+# Material de trabalho do Renan (desenhos de projeto, referências soltas).
+# Desenho que vira referência de teste não fica aqui: ele entra em
+# tests/acervo/ e no MANIFESTO.sha256, congelado (ver plano/04-testes.md).
+0 - Assets/

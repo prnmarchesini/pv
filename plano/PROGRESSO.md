@@ -5,12 +5,19 @@ Só o Renan marca VALIDADO.
 
 | Passo | Descrição | Status | Observação |
 |---|---|---|---|
-| 0.1 | Solução e projetos vazios | AGUARDANDO VALIDAÇÃO | Alvo mudou de Civil 3D 2025 para 2026 |
-| 0.2 | Teste de arquitetura e placar | AGUARDANDO VALIDAÇÃO | |
-| 0.3 | Comando hello world | AGUARDANDO VALIDAÇÃO | Conferido na tela do Civil 3D 2026 |
-| 0.4 | Carregamento automático (bundle) | AGUARDANDO VALIDAÇÃO | Conferido na tela; carrega após um clique no aviso |
-| 0.5 | Core Console fumaça | AGUARDANDO VALIDAÇÃO | |
-| 0.6 | Instalador com detecção de versão | AGUARDANDO VALIDAÇÃO | Falta instalar numa máquina limpa |
+| 0.1 | Solução e projetos vazios | VALIDADO | Alvo mudou de Civil 3D 2025 para 2026 |
+| 0.2 | Teste de arquitetura e placar | VALIDADO | |
+| 0.3 | Comando hello world | VALIDADO | Renan conferiu no Civil 3D 2026 em 22/09/2026 |
+| 0.4 | Carregamento automático (bundle) | VALIDADO | Botão conferido pelo Renan; carrega após "Always Load" |
+| 0.5 | Core Console fumaça | VALIDADO | |
+| 0.6 | Instalador com detecção de versão | VALIDADO | Renan aprovou em 22/09/2026; máquina limpa fica pendente |
+| 1.1 | Modelo de TIN puro (Geo) | AGUARDANDO VALIDAÇÃO | 44 testes; validação é automática, sem CAD |
+| 1.2 | Índice espacial | PENDENTE | |
+| 1.3 | Listar superfícies | PENDENTE | |
+| 1.4 | Processar superfície | PENDENTE | |
+| 1.5 | Identidade e carimbo | PENDENTE | |
+| 1.6 | Coordenada geográfica | PENDENTE | |
+| 1.7 | Botão Obter Coordenada | PENDENTE | |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -18,6 +25,7 @@ Só o Renan marca VALIDADO.
 
 ```
 Etapa 0   45/45    OK
+Etapa 1   44/44    OK
 Nivel 2   1/1      OK
 Acervo             OK
 ```
@@ -71,3 +79,7 @@ passa a mandar — e a entrada do teste muda.
 - O botão da ribbon não tem ícone (`ShowImage = false`).
 - `-ParaTodaAMaquina` ainda não foi exercitado: precisa de elevação (UAC).
 - Assinar a DLL com certificado, que dispensaria a pasta protegida.
+- `0 - Assets/Curvas Itatiba.dwg` é material do Renan, fora do git. Quando
+  virar referência de teste, entra em `tests/acervo/` congelado por ele.
+- Os testes do 1.1 usam terreno analítico (plano, quina de calombo). Terreno
+  real com curvatura entra no acervo da etapa 1.
