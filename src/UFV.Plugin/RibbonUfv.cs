@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Autodesk.Windows;
 using UFV.Core;
+using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
 namespace UFV.Plugin;
 
@@ -93,10 +94,18 @@ internal static class RibbonUfv
     private static void Montar()
     {
         var ribbon = ComponentManager.Ribbon;
-        if (ribbon is null) return;
+        if (ribbon is null)
+        {
+            RegistroDeDiagnostico.Registrar("Montar chamado sem ribbon.");
+            return;
+        }
 
         // NETLOAD por cima do bundle montaria a aba duas vezes.
-        if (ribbon.Tabs.Any(t => t.Id == IdDaAba)) return;
+        if (ribbon.Tabs.Any(t => t.Id == IdDaAba))
+        {
+            RegistroDeDiagnostico.Registrar("Aba UFV já existia; nada a montar.");
+            return;
+        }
 
         var aba = new RibbonTab
         {
@@ -107,6 +116,9 @@ internal static class RibbonUfv
 
         aba.Panels.Add(MontarPainelInicio());
         ribbon.Tabs.Add(aba);
+
+        var temDocumento = AcadApp.DocumentManager.MdiActiveDocument is not null;
+        RegistroDeDiagnostico.Registrar($"Aba UFV montada (documento aberto: {temDocumento}).");
     }
 
     private static RibbonPanel MontarPainelInicio()
@@ -121,10 +133,10 @@ internal static class RibbonUfv
             Size = RibbonItemSize.Large,
             Orientation = System.Windows.Controls.Orientation.Vertical,
             // O nome vem da constante que registra o comando: renomear o
-            // comando arrasta o botao junto. O espaco no fim e o Enter; sem
-            // ele o texto so fica digitado na linha de comando.
-            CommandParameter = PluginInfo.ComandoOla + " ",
-            CommandHandler = new ComandoDaRibbon(),
+            // comando arrasta o botao junto. Quem guarda o nome e o handler,
+            // e nao o CommandParameter: a ribbon chama CanExecute(null), e um
+            // handler que dependesse do parametro deixaria o botao inerte.
+            CommandHandler = new ComandoDaRibbon(PluginInfo.ComandoOla),
             ToolTip = $"{PluginInfo.Nome}: confirma que o plugin está carregado.",
         });
 

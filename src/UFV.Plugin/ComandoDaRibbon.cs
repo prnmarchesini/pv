@@ -7,51 +7,63 @@ namespace UFV.Plugin;
 /// <summary>
 /// Liga um botao da ribbon a um comando da linha de comando do AutoCAD.
 ///
-/// O botao guarda o texto do comando em CommandParameter (com um espaco no
-/// fim, que e o Enter) e este handler o envia ao documento ativo. Assim o
-/// botao e o comando digitado passam exatamente pelo mesmo caminho, e nao ha
-/// uma segunda implementacao para manter em pe.
+/// O handler guarda o nome do comando, recebido no construtor. Nao depende do
+/// parametro que a ribbon passa: quando a ribbon chama CanExecute(null) - e
+/// ela chama - um handler que so soubesse do comando pelo parametro
+/// responderia "nao posso" e o botao ficaria desabilitado, ignorando o clique
+/// em silencio. Foi exatamente o que aconteceu na primeira versao.
+///
+/// O caminho continua sendo um so: o botao manda o comando para a linha de
+/// comando, igualzinho a quem digita. Nao ha uma segunda implementacao para
+/// manter em pe.
 /// </summary>
 internal sealed class ComandoDaRibbon : ICommand
 {
+    private readonly string _comando;
+
+    /// <param name="comando">
+    /// Nome do comando, sem o Enter: ele e acrescentado no envio.
+    /// </param>
+    internal ComandoDaRibbon(string comando)
+    {
+        if (string.IsNullOrWhiteSpace(comando))
+            throw new ArgumentException("O botão da ribbon precisa de um comando.", nameof(comando));
+
+        _comando = comando.Trim();
+    }
+
     public event EventHandler? CanExecuteChanged
     {
         add => CommandManager.RequerySuggested += value;
         remove => CommandManager.RequerySuggested -= value;
     }
 
-    public bool CanExecute(object? parameter) =>
-        AcadApp.DocumentManager.MdiActiveDocument is not null
-        && !string.IsNullOrWhiteSpace(LerComando(parameter));
+    /// <summary>
+    /// Sempre verdadeiro, e isso e proposital.
+    ///
+    /// O WPF pergunta uma vez, quando monta o botao, e a ribbon do AutoCAD nao
+    /// volta a perguntar. Quando o plugin carrega cedo no boot - que e o que
+    /// acontece quando o bundle ja e confiavel - ainda nao ha documento
+    /// aberto: responder "nao posso" ali deixaria o botao desabilitado para o
+    /// resto da sessao, ignorando o clique em silencio. Foi o que aconteceu.
+    ///
+    /// Quem confere se ha desenho e o Execute, que tem como avisar.
+    /// </summary>
+    public bool CanExecute(object? parameter) => true;
 
     public void Execute(object? parameter)
     {
-        var comando = LerComando(parameter);
-        if (string.IsNullOrWhiteSpace(comando))
+        RegistroDeDiagnostico.Registrar($"Botão da ribbon acionado: {_comando}.");
+
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null)
         {
-            // Botao sem comando e um botao que nao faz nada ao ser clicado:
-            // sem registro, isso vira um bug mudo.
-            RegistroDeDiagnostico.Registrar(
-                $"Botão da ribbon acionado sem comando (parâmetro: {parameter?.GetType().Name ?? "nulo"}).");
+            RegistroDeDiagnostico.Registrar($"{_comando}: acionado sem desenho aberto.");
             return;
         }
 
-        var documento = AcadApp.DocumentManager.MdiActiveDocument;
-        if (documento is null) return;
-
-        documento.SendStringToExecute(comando, true, false, true);
+        // O espaco no fim e o Enter; sem ele o texto so fica digitado na linha
+        // de comando, esperando o usuario confirmar.
+        documento.SendStringToExecute(_comando + " ", true, false, true);
     }
-
-    /// <summary>
-    /// A ribbon entrega o proprio item como parametro. O tipo declarado e
-    /// RibbonCommandItem, a classe base que expoe CommandParameter: castar
-    /// para RibbonButton concreto faria o botao virar um no-op silencioso no
-    /// dia em que ele virasse um split button ou fosse embrulhado.
-    /// </summary>
-    private static string? LerComando(object? parameter) => parameter switch
-    {
-        RibbonCommandItem item => item.CommandParameter as string,
-        string texto => texto,
-        _ => null,
-    };
 }
