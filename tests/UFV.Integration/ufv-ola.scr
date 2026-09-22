@@ -1,0 +1,26 @@
+; Teste de fumaca de nivel 2 (04-testes.md): carrega o plugin no Core Console,
+; roda UFV_OLA e deixa a resposta na saida padrao, que o rodar.ps1 confere.
+;
+; Este arquivo e um modelo: {{DLL}} vira o caminho de UFV.Plugin.dll antes de
+; rodar. O .scr gerado fica em artefatos/testes.
+;
+; Sobre o SECURELOAD. O AutoCAD so carrega codigo de caminho confiavel. A
+; pasta bin do build nao e uma, e sem interface nao ha como o usuario
+; autorizar: o NETLOAD falha com "Unable to load assembly" e o comando nunca
+; se registra. Por isso o teste baixa a guarda, e so pelo tempo do NETLOAD.
+;
+; O valor e guardado antes e devolvido depois, porque SECURELOAD e salvo no
+; perfil do usuario: deixar 0 aqui enfraqueceria o AutoCAD do Renan para
+; sempre. A ultima linha imprime o valor restaurado, e o rodar.ps1 confere
+; que voltou ao que era, alem de reconferir o registro.
+;
+; Em producao nada disso acontece: o bundle fica em ApplicationPlugins, que o
+; AutoCAD ja trata como caminho confiavel.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_OLA")
+(setvar "SECURELOAD" ufv:secureload)
+(princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)
