@@ -22,8 +22,32 @@ Só o Renan marca VALIDADO.
 | 2.2 | Identidade da área | VALIDADO | GUID sobrevive a salvar e reabrir (teste de nível 2) |
 | 2.3 | Comando Área | VALIDADO | Renan orbitou em 3D e a linha seguiu o terreno; pediu o rastro na tela, feito |
 | 2.4 | Reindexar | VALIDADO | Renan copiou a área "teste2" para outro desenho e ela foi reconhecida lá |
+| 3.1 | Módulo e biblioteca | AGUARDANDO VALIDAÇÃO | Risen RSM132-8-720BHDG, 2384×1303×33 mm, do datasheet |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
+
+## Etapa 3: os números que o Renan deu
+
+Em 23/09/2026, para a mesa de referência:
+
+- módulo **Risen 720 Wp**, modelo `RSM132-8-720BHDG`. As medidas vieram do
+  datasheet do fabricante (2384 × 1303 × 33 mm, 37,5 kg, 132 células), não do
+  Renan: ele disse "pega na net uma qualquer, só coloca o modelo";
+- **28 módulos** por mesa;
+- **2 cm** de espaçamento entre módulos, horizontal e vertical;
+- **10 cm** de estrutura passando de cada lado da mesa;
+- pilares com **cerca de 3 m** de distanciamento — "não precisa ser 3 m
+  cravado, provavelmente vai dar quebrado";
+- pilar de **até 2,5 m**, enterrado **no mínimo 90 cm**;
+- tesoura de **3 m no máximo**, pilar na posição **2,5 m** da tesoura.
+
+**O que ainda falta, e trava o 3.5:** a inclinação (tilt) e a altura livre na
+ponta baixa do módulo. Sem os dois não há altura de pilar.
+
+**Uma contradição a resolver com ele:** tesoura de 3 m não comporta 2V — dois
+módulos em pé somam 4,79 m. O desenho de conferência foi feito em 1V, que é o
+que os números descrevem, e dá mesa de 37,224 m com 12 vãos de 3,102 m. Se a
+mesa for 2V mesmo, a tesoura é outra.
 
 ## Placar na entrega da etapa 2
 
@@ -218,3 +242,59 @@ compilador (CS1061) e anotado no código para não voltar.
 - Entraram neste diff três correções de vazamento que são da etapa 1
   (`GeoStore`, `ProvenanceStore`, `PluginDictionary`). São corretas, mas
   deviam ter ficado fora do escopo do passo.
+
+**Observações da etapa 3.**
+
+Só entra na biblioteca de módulos aquele cujo datasheet foi conferido. Medida
+aproximada é pior que medida nenhuma: ela parece dado e ninguém volta a
+conferir. Por isso a biblioteca começa com três módulos da mesma série Risen
+(720, 730 e 740 Wp, todos 2384 × 1303 × 33 mm) e não com uma lista grande de
+marcas cujas medidas eu não teria como garantir.
+
+O JSON vai embutido na DLL. Como arquivo solto ao lado do plugin ele sumiria na
+primeira instalação que copiasse só a DLL, e a lista apareceria vazia sem
+explicação — que é o resultado que a etapa inteira evita.
+
+**O que a revisão de código do 3.1 apontou, e o que foi feito.**
+
+Corrigidos:
+
+- `Parse("[]")` devolvia lista vazia **em silêncio** — justamente o caso que o
+  método documenta como o pior resultado possível, e o mais provável de
+  acontecer (alguém editando o JSON e apagando as entradas). Agora dá erro.
+- `Default()` devolvia a `List` de dentro: qualquer chamador podia esvaziar a
+  biblioteca para o resto da sessão do AutoCAD. Agora é `ReadOnlyCollection`.
+- O cache estático virou `Lazy` com publicação protegida. `UFV.Core` é C# puro
+  e também roda fora do AutoCAD, onde não vale a garantia de thread única.
+- Dois comparadores diferentes no mesmo método (`Ordinal` para repetido,
+  `CurrentCulture` para ordenar). O segundo fazia a ordem da lista depender do
+  idioma da máquina. Unificados em `InvariantCultureIgnoreCase`.
+- A potência não tinha faixa nenhuma: 0,72 (quem digitou em quilowatt) e
+  500000 (quem digitou a potência da string) passavam como válidos. E as
+  medidas tinham teto mas não piso — um módulo de dois milímetros passava.
+
+**Dois testes meus não testavam nada, e a revisão pegou os dois:**
+
+- o teste de ordenação recalculava a ordem com a mesma expressão LINQ da
+  implementação, e as três entradas do JSON já estavam em ordem no arquivo:
+  passaria inclusive se `Parse` não ordenasse nada. Agora a entrada está
+  deliberadamente fora de ordem e a saída é comparada com uma lista escrita à
+  mão;
+- o teste de modelo repetido olhava o arquivo da biblioteca, e não a regra:
+  apagar o `GroupBy` da implementação o deixaria verde. Agora a regra tem
+  teste próprio, com `"Y"` e `" y "`.
+
+As quatro correções foram conferidas por mutação: com as regras desligadas,
+quatro testes falham.
+
+**Pendências técnicas da etapa 3:**
+
+- A "opção livre" do enunciado é hoje só o construtor público do record. Um
+  módulo digitado à mão e inválido devolve `IsValid == false` sem dizer **qual**
+  campo está errado; só `LooksSwapped` tem texto. A mensagem campo a campo fica
+  para o 3.7, que é quem tem janela.
+- `Find` devolve null para modelo que não existe, mas **lança** se a biblioteca
+  embutida estiver quebrada. É proposital e está documentado: instalação
+  corrompida tem que aparecer, não virar "não achei o modelo".
+- O limite de 2000 Wp e o piso de 1 Wp são meus, não do Renan. Servem para
+  pegar erro de digitação, não são regra de projeto.

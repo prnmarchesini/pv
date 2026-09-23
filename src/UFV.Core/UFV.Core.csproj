@@ -4,6 +4,15 @@
     <ProjectReference Include="..\UFV.Geo\UFV.Geo.csproj" />
   </ItemGroup>
 
+  <!--
+    A biblioteca de modulos viaja dentro da DLL. Como arquivo solto ao lado do
+    plugin ela sumiria na primeira instalacao que copiasse so a DLL, e a lista
+    apareceria vazia sem explicacao.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="modulos.json" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
