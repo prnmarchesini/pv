@@ -1,5 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <!--
+    ForTesting de TableGeometry so e visivel aos testes: montar geometria sem
+    validacao e legitimo para provar que um verificador recusa mesa torta, e
+    ilegitimo em qualquer outro lugar.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="UFV.Core.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\UFV.Geo\UFV.Geo.csproj" />
   </ItemGroup>

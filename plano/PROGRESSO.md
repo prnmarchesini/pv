@@ -25,6 +25,7 @@ Só o Renan marca VALIDADO.
 | 3.1 | Módulo e biblioteca | AGUARDANDO VALIDAÇÃO | Risen RSM132-8-720BHDG, 2384×1303×33 mm, do datasheet |
 | 3.2 | Comprimento da mesa | AGUARDANDO VALIDAÇÃO | 2V, 28 módulos: 18,702 m de comprimento e 4,788 m na inclinação |
 | 3.3 | Tabela de pilares | AGUARDANDO VALIDAÇÃO | 18,702 m com alvo de 3 m dá 6 vãos de 3,117 m, 7 pilares |
+| 3.4 | Geometria local da mesa | AGUARDANDO VALIDAÇÃO | Matriz única + primeiro verificador de regra sagrada (RigidTable) |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -472,3 +473,74 @@ marcada. Avisado a ele.
 - afrouxar a tolerância de 1 mm para 1 cm passava verde, porque o caso "não
   tolerado" do teste era 5 cm, que reprova das duas formas. O nome do teste
   prometia o que ele não fazia. Agora o caso é 5 mm.
+
+**Etapa 3.4: a geometria local, e o primeiro verificador de regra sagrada.**
+
+O sistema local da mesa: X ao longo do comprimento, Y ao longo da inclinação
+(o M2 do desenho), Z para cima, com a **face superior dos módulos em z = 0** e
+o corpo descendo a espessura. Pôr a face no zero, e não a base, faz o plano dos
+módulos ser o plano z = 0 — e a regra sagrada 2 vira uma conferência de uma
+linha, aqui e depois de qualquer transformação.
+
+`UFV.Core.Invariants` passou a existir, com `RigidTable` (regra sagrada 2). As
+outras três regras ainda não têm verificador: a 1 e a 4 dependem do terreno, e
+a 3 depende de as peças terem GUID, que ainda não têm. Anotado abaixo.
+
+**Dois defeitos que eu mesmo achei escrevendo:**
+
+- o verificador estava somando os vértices de baixo do módulo. Com 33 mm de
+  espessura, nenhuma mesa seria plana — ele reprovaria toda mesa perfeita. Um
+  verificador que reprova sempre é desligado, e aí a regra se perde de vez;
+- a sobra da tesoura entra na posição do pilar: `PillarRow = (M2 − T1)/2 + T2`,
+  3,394 m na mesa do Renan. Esquecê-la erraria a altura de todo pilar da usina
+  pelo mesmo valor.
+
+**O que a revisão do 3.4 apontou, e o que foi feito.**
+
+O achado principal: **`Transform` prometia rigidez que não garantia.** O
+construtor era público e aceitava doze números quaisquer, então uma matriz de
+escala era um `Transform` legítimo. O revisor rodou: com ela o módulo saía com
+2,606 m de largura e o verificador da regra sagrada 2 **aprovava**, porque
+transformação afim também leva plano em plano. Uma reflexão passava igual, e
+virava todas as faces para baixo — usina inteira com produção zero no PVsyst e
+o desenho perfeito. Agora o construtor é privado, só as fábricas constroem, e
+`Transformed` exige `IsRigid` (colunas ortonormais, determinante +1).
+
+Mais:
+
+- o plano do verificador passava pelo primeiro vértice e tirava a direção de
+  três pontos extremos. Media até três vezes mais desvio do que existia, e
+  acusava vértice inocente quando o torto era o primeiro. **Pior**: o vértice
+  torto costuma SER um dos extremos, e o plano se inclinava para acompanhá-lo.
+  Agora é o plano dos mínimos quadrados, por covariância e Jacobi;
+- `ForTesting` era `public` numa DLL de produção — o construtor privado
+  exposto. Virou `internal` com `InternalsVisibleTo`;
+- `1e-12` sobre o módulo de um produto vetorial (uma área) foi trocado por
+  distância à reta em metro, com a tolerância geométrica de 1e-6;
+- `TableFrame` não tinha arquivo de teste nenhum. Tem agora.
+
+**Três mutantes vivos que a revisão encontrou, todos mortos:**
+
+- trocar a sobra da esquerda pela da direita passava, porque toda mesa de teste
+  usava 0,10 nos dois lados;
+- a pegada do pilar podia começar na estação em vez de ser centrada nela — 7 cm
+  de ferro deslocado, invisível em planta;
+- a ordem dos cantos de baixo do sólido não era contrato nenhum: embaralhá-los
+  passava em tudo, e quem for montar a caixa no CAD vai confiar nela.
+
+**E um teste meu que só copiava a implementação.** O de `Place` recompunha a
+mesma expressão do corpo do método. Detectava mutação, mas não validava nada —
+quem trocasse a ordem e "consertasse" o teste na mesma linha não encontraria
+resistência. Pior: quando o revisor inverteu tilt com azimute, esse foi o
+**único teste da solução inteira** a falhar. Agora o esperado é calculado à mão
+(mesa a 30°, azimute 90°, um ponto 2 m acima da ponta baixa).
+
+**Pendências da etapa 3.4:**
+
+- **regra sagrada 3 sem verificador.** `ModulePiece`, `PillarPiece` e
+  `TableGeometry` não carregam GUID, e a regra pede um por pilar, módulo e
+  mesa. Como a identidade hoje mora no XData (etapa 2) e a geometria é objeto
+  puro, isso precisa ser decidido: ou a peça ganha GUID no Core, ou o
+  verificador roda só do lado do plugin. Provavelmente é assunto da etapa 4;
+- o comprimento do pilar não existe no 3.4 de propósito — ele nasce no 3.5,
+  quando a mesa encontra o terreno.
