@@ -13,7 +13,7 @@ Só o Renan marca VALIDADO.
 | 0.6 | Instalador com detecção de versão | VALIDADO | Renan aprovou em 22/09/2026; máquina limpa fica pendente |
 | 1.1 | Modelo de TIN puro (Geo) | AGUARDANDO VALIDAÇÃO | 44 testes; validação é automática, sem CAD |
 | 1.2 | Índice espacial | AGUARDANDO VALIDAÇÃO | Validação é automática, sem CAD |
-| 1.3 | Listar superfícies | AGUARDANDO VALIDAÇÃO | Renan viu a lista no Itatiba; falta desenho com várias superfícies |
+| 1.3 | Listar superfícies | AGUARDANDO VALIDAÇÃO | Duas superfícies conferidas no Porto Feliz |
 | 1.4 | Processar superfície | PENDENTE | |
 | 1.5 | Identidade e carimbo | PENDENTE | |
 | 1.6 | Coordenada geográfica | PENDENTE | |
@@ -26,7 +26,7 @@ Só o Renan marca VALIDADO.
 ```
 Etapa 0   45/45    OK
 Etapa 1   74/74    OK
-Nivel 2   2/2      OK
+Nivel 2   3/3      OK
 Acervo             OK
 ```
 
@@ -66,7 +66,18 @@ Duas saídas de verdade, e o instalador já traz a primeira:
 Sem uma das duas, o usuário aperta "Always Load" uma vez — mas isso vale para
 aquela DLL, e se perde a cada nova versão.
 
-**O acervo ainda não tem desenho.** O teste de nível 2 cai num template do
+**O acervo foi congelado em 22/09/2026** com dois desenhos do Renan: `Curvas
+Itatiba.dwg` (uma superfície, 12.621 pontos) e `Porto Feliz - 2
+Superficies.dwg` (duas: 342 e 7.220 pontos). O teste de nível 2 roda contra
+todos os `.dwg` do acervo, então congelar mais um é só copiar o arquivo e
+declarar o hash.
+
+As linhas do `MANIFESTO.sha256` foram acrescentadas pelo Claude Code, com
+autorização do Renan na conversa ("tudo o que for terminal faça vc"). A regra
+de `04-testes.md` continua valendo, e `checar-acervo.ps1` avisa sempre que o
+manifesto difere do git.
+
+**Nota antiga, já resolvida:** O teste de nível 2 cai num template do
 Civil 3D e diz qual usou. Quando a etapa 1 congelar um `.dwg` de referência, ele
 passa a mandar — e a entrada do teste muda.
 

@@ -259,13 +259,22 @@ if (-not (Test-Path $desenhoVazio)) {
     }
 }
 
-# Desenho com superficie, para o caso do terreno. Quando o acervo da etapa 1
-# tiver o desenho congelado, ele manda; ate la, o material de trabalho serve.
-$desenhoComTerreno = Join-Path $raiz 'tests\acervo\etapa-1\terreno.dwg'
-$doAcervo = Test-Path $desenhoComTerreno
+# Desenhos com superficie, para o caso do terreno: TODOS os .dwg do acervo.
+# Nao um caminho fixo — assim, congelar mais um desenho e so copiar o arquivo
+# e declarar o hash no manifesto; o teste passa a rodar contra ele sozinho.
+$pastaDoAcervo = Join-Path $raiz 'tests\acervo'
+$desenhos = @(
+    Get-ChildItem $pastaDoAcervo -Recurse -Filter '*.dwg' -File -ErrorAction SilentlyContinue |
+        Sort-Object FullName |
+        ForEach-Object { $_.FullName }
+)
+
+$doAcervo = $desenhos.Count -gt 0
 
 if (-not $doAcervo) {
-    $desenhoComTerreno = Join-Path $raiz '0 - Assets\Curvas Itatiba.dwg'
+    # Material de trabalho, enquanto o acervo nao tiver nada congelado.
+    $solto = Join-Path $raiz '0 - Assets\Curvas Itatiba.dwg'
+    if (Test-Path $solto) { $desenhos = @($solto) }
 }
 
 # ---- a mensagem esperada do UFV_OLA ----------------------------------------
@@ -288,17 +297,19 @@ if (-not $versao) { Parar-Com 'Nao consegui ler <Version> de Directory.Build.pro
     com o total que o comando anunciou.
 #>
 function Testar-CasoDoTerreno {
-    $r = Invoke-CoreConsole -Desenho $desenhoComTerreno `
+    param([string] $Desenho, [string] $Rotulo)
+
+    $r = Invoke-CoreConsole -Desenho $Desenho `
                             -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr') `
-                            -Rotulo 'ufv-terreno'
+                            -Rotulo $Rotulo
 
     if ($r.Estourou) {
-        $problemas.Add("ufv-terreno passou de $limiteEmSegundos s. Veja $($r.Saida)")
+        $problemas.Add("$Rotulo passou de $limiteEmSegundos s. Veja $($r.Saida)")
         return $false
     }
 
     if ($r.Codigo -ne 0) {
-        $problemas.Add("ufv-terreno terminou com codigo $($r.Codigo). Veja $($r.Saida)")
+        $problemas.Add("$Rotulo terminou com codigo $($r.Codigo). Veja $($r.Saida)")
         return $false
     }
 
@@ -306,7 +317,7 @@ function Testar-CasoDoTerreno {
 
     $cabecalho = $linhas | Where-Object { $_ -match 'Superfícies do desenho: (\d+)' } | Select-Object -First 1
     if (-not $cabecalho) {
-        $problemas.Add("ufv-terreno nao anunciou quantas superficies achou. Veja $($r.Saida)")
+        $problemas.Add("$Rotulo nao anunciou quantas superficies achou. Veja $($r.Saida)")
         return $false
     }
 
@@ -314,7 +325,7 @@ function Testar-CasoDoTerreno {
     $anunciadas = [int] $Matches[1]
 
     if ($anunciadas -lt 1) {
-        $problemas.Add("ufv-terreno nao achou superficie no desenho. Veja $($r.Saida)")
+        $problemas.Add("$Rotulo nao achou superficie no desenho. Veja $($r.Saida)")
         return $false
     }
 
@@ -331,12 +342,12 @@ function Testar-CasoDoTerreno {
 
     if ($r.Texto -match 'UFV_SECURELOAD_ANTES=(\d+)\s+DEPOIS=(\d+)') {
         if ($Matches[1] -ne $Matches[2]) {
-            $problemas.Add("ufv-terreno nao restaurou o SECURELOAD.")
+            $problemas.Add("$Rotulo nao restaurou o SECURELOAD.")
             return $false
         }
     }
     else {
-        $problemas.Add("ufv-terreno nao informa o SECURELOAD antes e depois. Veja $($r.Saida)")
+        $problemas.Add("$Rotulo nao informa o SECURELOAD antes e depois. Veja $($r.Saida)")
         return $false
     }
 
@@ -358,19 +369,22 @@ if (Testar-Caso -Rotulo 'ufv-ola' -Desenho $desenhoVazio -Script (Join-Path $PSS
 # quando o desenho nao estava la, e o placar saia "1/1 OK", verde, afirmando
 # que tudo passou enquanto o unico teste que prova a leitura do desenho nao
 # tinha rodado. Teste que some em silencio e pior que teste que falha.
-$total++
-
-if (-not (Test-Path $desenhoComTerreno)) {
+if ($desenhos.Count -eq 0) {
+    $total++
     $problemas.Add(
-        'ufv-terreno nao rodou: falta um desenho com superficie. Congele um em ' +
-        'tests\acervo\etapa-1\terreno.dwg (ver plano\04-testes.md).')
+        'ufv-terreno nao rodou: nao ha desenho com superficie. Congele um em ' +
+        'tests\acervo (ver plano\04-testes.md).')
 }
 else {
     if (-not $doAcervo) {
-        Write-Host "  (terreno fora do acervo; usando $desenhoComTerreno)" -ForegroundColor DarkGray
+        Write-Host "  (desenho fora do acervo; usando $($desenhos[0]))" -ForegroundColor DarkGray
     }
 
-    if (Testar-CasoDoTerreno) { $passaram++ }
+    foreach ($desenho in $desenhos) {
+        $total++
+        $rotulo = 'ufv-terreno--' + [IO.Path]::GetFileNameWithoutExtension($desenho)
+        if (Testar-CasoDoTerreno -Desenho $desenho -Rotulo $rotulo) { $passaram++ }
+    }
 }
 
 # ---- veredito --------------------------------------------------------------
