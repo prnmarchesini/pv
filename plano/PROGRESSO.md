@@ -34,6 +34,91 @@ Só o Renan marca VALIDADO.
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
+## POR ONDE CONTINUAR
+
+Atualizado em 23/09/2026, depois do commit `9ca12e0` (etapa 4.2).
+
+Esta seção existe porque o resto do arquivo é diário de decisões, e diário não
+responde "e agora?". Ela fica no topo de propósito. **Quem retomar o trabalho
+lê isto primeiro, e depois `CLAUDE.md`.**
+
+### Estado
+
+Etapas 0, 1, 2 e 3 **validadas pelo Renan**. Etapa 4 com 4.1 e 4.2 prontos,
+aguardando validação. Placar na última execução:
+
+```
+Etapa 0   45/45    OK
+Etapa 1   126/126  OK
+Etapa 2   24/24    OK
+Etapa 3   335/335  OK
+Etapa 4   111/111  OK
+Nivel 2   7/7      OK
+Acervo             OK
+```
+
+### O próximo passo é o 4.3
+
+**Regras de análise**: cada análise (ponta baixa, altura de pilar, embutimento,
+declividade longitudinal, mesa na borda) com limites e cores configuráveis,
+cada uma em camada própria.
+
+**Antes de começar, perguntar ao Renan as cores.** É decisão dele, é visual, e
+chutar cor é o tipo de coisa que ele vai querer mudar depois de ver — melhor
+perguntar do que refazer.
+
+O 4.4 (a tela única de configuração) vem depois e é o que torna o 4.1
+palpável: hoje a configuração existe no motor e não tem onde ser editada.
+
+### O que está travado no Renan
+
+1. **Testar o 4.2 no CAD**: `UFV_ALINHAMENTO` — traçar a linha, clicar o lado,
+   conferir em `UFV_ALINHAMENTOS`; depois copiar a linha para outro desenho e
+   rodar `UFV_REINDEXAR`. O bundle já está instalado.
+2. **`tests/proposto/etapa-1/terreno-esperado.psd1`** espera ele conferir e
+   mover para `tests/acervo/etapa-1/`. Está parado há várias etapas, e é a
+   única coisa que só ele pode fazer. O acervo é dele; o Claude Code não toca.
+3. **Conferir a mesa do 3.7 contra um projeto de fabricante.** Ele aprovou a
+   etapa 3 sem relatar essa conferência, que é o que o plano pede como
+   validação do 3.7 — é o único jeito de saber se o motor acerta o número, e
+   não só a forma.
+
+### Perguntas abertas, nenhuma delas bloqueante
+
+- **Cinco valores da configuração são meus, não dele** (pitch 6,0 m; enterro
+  máximo 2,00 m; degrau 0 a 0,50 m; espaçamento que quebra fileira 0,50 m; e a
+  tolerância de invasão, que ele já respondeu que é contagem e está em zero).
+  Estão marcados na seção do 4.1;
+- **relação entre degrau, espaçamento e pitch**: hoje os três são validados
+  isoladamente e nada confere um contra o outro. Se existe relação real, ela
+  não está escrita nem como comentário.
+
+### Dívidas técnicas que valem lembrar
+
+- `AlignmentStore`, `AlignmentXData` e `AlignmentScan` não têm teste de nível 1
+  (são do plugin) nem de nível 2 (não há `.scr` de alinhamento);
+- o teste de nível 2 carrega a DLL de **Debug**, onde o inlining está
+  desligado: ele guarda o sintoma da janela sem interface, não a regra do
+  `[MethodImpl(NoInlining)]`;
+- `SignedDistance` devolve **negativo à esquerda**, inverso da convenção usual.
+  Documentado e testado, mas quem usar na etapa 5 vai se enganar uma vez;
+- `MaiorMedida = 50` tem três donos diferentes no Core;
+- o parser do carimbo (etapa 1) ainda mora no plugin, onde nenhum teste de
+  nível 1 alcança. O lugar dele é o Core.
+
+### Uma lição que se repetiu duas vezes e vale a pena não repetir uma terceira
+
+Em dois passos seguidos (4.1 e 4.2), o achado mais grave da revisão foi **um
+comentário meu afirmando uma garantia que o código não dava**:
+
+- no 4.1, um comentário dizia que os valores padrão estavam registrados neste
+  arquivo. Não estavam;
+- no 4.2, dois comentários diziam que número não valia como lado. E
+  `Enum.TryParse` aceitava `"1"` numa boa.
+
+Comentário que descreve uma defesa é uma promessa. Quando ele mente, é pior que
+ausência de comentário: alguém lê, acredita, e para de procurar.
+
 ## Etapa 3: os números que o Renan deu
 
 Em 23/09/2026, para a mesa de referência:
