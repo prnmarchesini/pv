@@ -23,6 +23,7 @@ Só o Renan marca VALIDADO.
 | 2.3 | Comando Área | VALIDADO | Renan orbitou em 3D e a linha seguiu o terreno; pediu o rastro na tela, feito |
 | 2.4 | Reindexar | VALIDADO | Renan copiou a área "teste2" para outro desenho e ela foi reconhecida lá |
 | 3.1 | Módulo e biblioteca | AGUARDANDO VALIDAÇÃO | Risen RSM132-8-720BHDG, 2384×1303×33 mm, do datasheet |
+| 3.2 | Comprimento da mesa | AGUARDANDO VALIDAÇÃO | 2V, 28 módulos: 18,702 m de comprimento e 4,788 m na inclinação |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -48,6 +49,130 @@ ponta baixa do módulo. Sem os dois não há altura de pilar.
 módulos em pé somam 4,79 m. O desenho de conferência foi feito em 1V, que é o
 que os números descrevem, e dá mesa de 37,224 m com 12 vãos de 3,102 m. Se a
 mesa for 2V mesmo, a tesoura é outra.
+
+## A mesa não fica nivelada: ela acompanha o terreno
+
+Decisão do Renan em 23/09/2026, depois de corrigir um erro meu de conceito.
+
+Eu estava calculando a altura do pilar como se o terreno fosse plano — um pilar
+só, um número só. Ele apontou: "e se o terreno tiver descendo? ou subindo? e se
+tiver morro?". Está certo, e é o ponto inteiro do projeto.
+
+O que vale:
+
+- **a viga longitudinal da mesa fica na declividade do terreno.** A mesa não é
+  nivelada;
+- **essa declividade é uma grandeza do projeto, e tem que ser medida** mesa a
+  mesa, não arbitrada;
+- **haverá filtro de mínimo e de máximo** sobre ela. Uma mesa cuja declividade
+  fique fora da faixa não serve, e a ferramenta tem que dizer isso.
+
+Consequência para o modelo: a mesa não tem "uma altura livre". Ela tem um pilar
+por estação, cada um com o seu comprimento, e o que os pilares precisam absorver
+é a **ondulação que sobra depois de tirar a declividade média** — não o desnível
+bruto do terreno.
+
+Por que isso importa em número: com 20°, pilar a 2,5 m da tesoura, 0,30 m de
+altura livre mínima, 0,90 m de enterro e 2,50 m de pilar máximo, o comprimento
+de pilar só pode variar entre 2,06 m e 2,50 m. São 44 cm de folga. Se a mesa
+fosse nivelada, 44 cm seria o desnível máximo de terreno que uma mesa de 37 m
+aceitaria — cerca de 1,2% de caimento, menos que quase qualquer terreno real.
+Acompanhando o terreno, os 44 cm passam a valer para a ondulação, que é uma
+ordem de grandeza menor.
+
+**Fechado em 23/09/2026:** estrutura **fixa**, arranjo **2V**, e filtro padrão de
+declividade longitudinal em **10°** — acima disso a mesa não serve.
+
+Com isso a mesa de referência passa a ser:
+
+| | |
+|---|---|
+| Arranjo | 2V, 28 módulos em 14 colunas |
+| Comprimento | 14 × 1,303 + 13 × 0,02 + 0,20 = **18,702 m** |
+| Medida na inclinação | 2 × 2,384 + 0,02 = **4,788 m** |
+| Vãos de ~3 m | 6 vãos de 3,117 m, 7 pilares |
+
+## Nomenclatura do Renan (desenho de 23/09/2026)
+
+Ele mandou um corte cotado, e é a partir dele que o código deve nomear as
+coisas:
+
+| Sigla | O que é |
+|---|---|
+| **M1** | altura livre da **ponta baixa do MÓDULO** até o terreno |
+| **T1** | comprimento da tesoura |
+| **T2** | posição do pilar ao longo da tesoura, medida da ponta baixa **dela** |
+| **P1** | comprimento total do pilar |
+| **P2** | parte enterrada |
+| **P3** | parte acima do terreno |
+
+Com `P1 = P2 + P3`.
+
+**O desenho matou uma incoerência que eu insistia em levantar.** Eu vinha
+apontando que "tesoura de 3 m" não comporta os 4,788 m de uma mesa 2V. No
+desenho dele a tesoura é **mais curta que o módulo**, e o módulo sobra nas duas
+pontas — que é exatamente o que o passo 3.4 já dizia ("Tesoura menor que o
+módulo"). Uma tesoura de 3 m debaixo de 4,788 m de módulo está certa. Eu estava
+comparando coisas que não se comparam, e o plano já tinha me avisado.
+
+**O que o desenho revelou que falta.** M1 é medido na ponta baixa do MÓDULO e T2
+na ponta baixa da TESOURA. Como o módulo sobra para baixo da tesoura, os dois
+não partem do mesmo lugar, e essa sobra entra na conta do pilar:
+
+```
+P3 = M1 + (sobra + T2) × sen(tilt)
+P1 = P3 + P2
+```
+
+A **sobra** não está cotada no desenho dele e não foi informada. Enquanto não
+vier, qualquer altura de pilar que o plugin calcular está errada por um valor
+constante — e plausível, que é o pior tipo de erro.
+
+Nota sobre o plano: os números do teste do passo 3.5 ("tesoura 4 m a 10°:
+0,30 / 0,647 / 0,995 m nas posições 0, 2 e 4 m") só fecham se a distância for
+medida **da ponta baixa do módulo**, com sobra zero. A nomenclatura do desenho
+mede da tesoura. Os dois precisam ser reconciliados antes do 3.5.
+
+## Módulo, pilar e mesa são blocos — e a face superior é sagrada
+
+Decisão do Renan em 23/09/2026, reforçando o plano.
+
+- **módulo é bloco próprio;**
+- **pilar é bloco próprio;**
+- **mesa é bloco próprio**, contendo a estrutura e os módulos.
+
+Isto não estava escrito no plano com estas palavras. O que está é a regra
+sagrada 3 ("Pilar, módulo e mesa são objetos únicos com GUID próprio") e uma
+menção de passagem na etapa 7 ("renomear os blocos para o padrão do plugin").
+O passo 3.4 fala em "caixas", não em blocos. Fica registrado aqui como
+especificação dele, mais forte que a regra 3 e compatível com ela.
+
+**A face superior do módulo não é detalhe de desenho: é o produto.**
+
+O Renan corrigiu um erro meu aqui. Eu havia proposto que a face superior fosse
+uma sub-entidade aninhada na definição do bloco do módulo. Está errado, e o
+plano já dizia por quê em três lugares:
+
+- 3.4: "face superior de cada módulo como **entidade separada**";
+- 6.1: o escritor DAE "recebe **lista de faces superiores de módulo**";
+- 6.3: no PVsyst o Renan "**indica a layer do módulo**" na importação.
+
+O PVsyst não recebe sólido nem bloco: recebe **plano**. Então a face superior
+precisa de layer própria e identidade própria, alcançável sem explodir o bloco.
+O bloco é conveniência para quem mexe no CAD; a face é o que sai pela porta.
+
+Se a face ficar indistinguível dentro do bloco, a etapa 6 não tem o que
+exportar — e isso só apareceria lá na frente, depois de toda a etapa 3 pronta.
+
+## Uma pergunta que eu não precisava ter feito
+
+Perguntei ao Renan se, quando o pilar estoura o limite de 2,50 m, o certo era
+apertar a faixa da ponta baixa ou aceitar o pilar maior. **A regra sagrada 4 já
+respondia:** "A ponta baixa manda, o pilar é consequência. O que cede é o pilar,
+que pode estourar e é marcado."
+
+Fica a lição, que vale para todo passo: reler as regras sagradas antes de
+perguntar. Elas são curtas justamente para serem relidas.
 
 ## Placar na entrega da etapa 2
 
