@@ -194,6 +194,12 @@ internal static class RibbonUfv
             PluginInfo.ComandoArea,
             "Traça a área de implantação e a assenta no terreno."));
 
+        origem.Items.Add(BotaoGrande(
+            "Mesa",
+            IconesDaRibbon.Mesa(),
+            PluginInfo.ComandoMesa,
+            "Monta a mesa: módulo, quantidade, folgas, estrutura e pilares."));
+
         return new RibbonPanel { Source = origem };
     }
 

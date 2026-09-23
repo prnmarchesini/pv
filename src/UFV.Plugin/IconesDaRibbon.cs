@@ -61,6 +61,19 @@ internal static class IconesDaRibbon
         Traco("M16,4 A12,12 0 1 1 15.99,4 Z", Neutro, 2.0),
         Traco("M10,16.5 L14.5,21 L22,12", Verde, 2.8));
 
+    /// <summary>
+    /// Uma mesa em planta: a fileira de módulos com os apoios embaixo. É o que
+    /// a janela mostra, e é por isso que o ícone é a planta e não o corte.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Mesa() => Montar(
+        Preenchimento("M3,7 H29 V19 H3 Z", AzulTranslucido),
+        Traco("M3,7 H29 V19 H3 Z", Azul, 2.0),
+        Traco("M9.5,7 V19 M16,7 V19 M22.5,7 V19", Azul, 1.2),
+        Preenchimento("M5,21 H8 V26 H5 Z", Ambar),
+        Preenchimento("M14.5,21 H17.5 V26 H14.5 Z", Ambar),
+        Preenchimento("M24,21 H27 V26 H24 Z", Ambar));
+
     /// <summary>Contorno fechado sobre o relevo: a área de implantação.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static ImageSource Area() => Montar(

@@ -28,6 +28,7 @@ Só o Renan marca VALIDADO.
 | 3.4 | Geometria local da mesa | AGUARDANDO VALIDAÇÃO | Matriz única + primeiro verificador de regra sagrada (RigidTable) |
 | 3.5 | Fórmula da altura livre | AGUARDANDO VALIDAÇÃO | Exemplo do plano fecha; verificador da regra sagrada 1 |
 | 3.6 | Perfil nomeado | AGUARDANDO VALIDAÇÃO | JSON com versão de formato; ida e volta exata em qualquer ângulo |
+| 3.7 | Modal | AGUARDANDO VALIDAÇÃO | UFV_MESA: campos, comprimento ao vivo e planta baixa com as sobras |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -676,3 +677,83 @@ chamado só "Tilt" é meio caminho andado para alguém ligar nele o campo em
 graus da janela do 3.7.
 
 Cinco mutações conferidas: **15 testes caem**.
+
+**Etapa 3.7: a janela da mesa.**
+
+`UFV_MESA` abre um modal com todos os campos, o comprimento recalculado a cada
+tecla e a planta baixa com os módulos, os pilares e as sobras das pontas. Botão
+**Mesa** na ribbon, com ícone.
+
+Junto foi a parte de arquivo do 3.6: `TableProfileStore`, que grava e lê perfil
+em `%LOCALAPPDATA%\MarchEng\UFV\perfis`. Mora no Core, com a pasta vindo de
+fora — assim ele é testável, e quem sabe onde guardar continua sendo o plugin.
+
+A planta existe porque o número sozinho não denuncia erro de digitação: 28
+módulos em 1V dão 37,224 m, que parece tão razoável quanto 18,702 m. O que
+denuncia é a forma mudando na hora.
+
+**Um teste de nível 2 novo, e é o que guarda a regra mais cara deste projeto.**
+`ufv-mesa-sem-interface.scr` roda `UFV_OLA` e `UFV_MESA` no Core Console.
+Nomear um tipo WPF num método faz o runtime resolver as assemblies de interface
+ao carregá-lo, e num host sem elas isso derruba o NETLOAD inteiro — o sintoma é
+o plugin sumir, não a janela falhar. Conferido por mutação: tirando a guarda de
+interface, o Core Console trava e o teste falha por estouro de tempo, que é
+exatamente o que aconteceria na máquina do Renan.
+
+**O que a revisão do 3.7 apontou, e o que foi feito.**
+
+O achado mais grave **derrubaria o Civil 3D**: `Recalcular` roda dentro de um
+manipulador de evento do WPF, e exceção não tratada ali não fecha a janela —
+fecha o AutoCAD, sem salvar nada. E havia caminho real: espaçamento de 5 m com
+contagem alta passa na validação do perfil e faz a tabela de pilares passar dos
+mil vãos, que é recusa por exceção. Bastava digitar `5` no espaçamento. Agora o
+método inteiro está dentro de um try.
+
+No `TableProfileStore`, cinco defeitos, todos medidos pelo revisor:
+
+- **colisão por maiúscula**: o Windows não distingue caixa no nome de arquivo,
+  o escape distinguia. Salvar "mesa" apagava "Mesa" em silêncio, e pedir "Mesa"
+  de volta devolvia "mesa";
+- **colisão por espaço nas pontas**: `Caminho` trimava e `ToJson` não, então
+  " Mesa " sobrescrevia o arquivo de "Mesa";
+- **o limite de 120 era conferido antes do escape**, e cada caractere
+  convertido ocupa cinco: 120 barras viravam um arquivo de 600 caracteres e o
+  erro ilegível do Windows;
+- **pasta com barra no fim** fazia a conferência de segurança recusar todo
+  nome, culpando o nome pelo erro de quem montou o caminho;
+- **o arquivo provisório tinha nome fixo**: dois Civil 3D salvando o mesmo
+  perfil brigavam por ele, e na pior janela um publicava o arquivo pela metade
+  do outro por cima do perfil bom — justamente o que o escrever-e-trocar
+  existia para impedir. Em 200 gravações concorrentes, 181 falhavam.
+
+**A leitura de número saiu da janela para o Core**, como `NumberInput`, e ganhou
+teste. Era o pedaço mais sujeito a erro silencioso do passo, e estava preso
+dentro do controle de interface, sem teste nenhum. A revisão mediu: `"1.500"` no
+campo de potência virava **1,5 Wp**, passava na validação, e a usina saía com a
+potência dividida por mil.
+
+Escrevendo os testes dele achei mais dois, que a revisão não tinha visto:
+`NumberStyles.AllowThousands` não confere o tamanho dos grupos, então `"1.2.3"`
+virava 123 e — pior — **`"28.5"` no campo de módulos virava 285**. Duzentos e
+oitenta e cinco módulos é um número plausível, e o projetista digitou vinte e
+oito e meio. A regra de milhar passou a ser estrita.
+
+Outros achados corrigidos: a mensagem de erro não nomeava o campo; preencher a
+janela com um perfil disparava a troca automática de módulo e **jogava fora as
+medidas ajustadas à mão**; marca e modelo de módulo fora da biblioteca eram
+apagados ao salvar; `Salvar` sobrescrevia perfil de mesmo nome sem perguntar;
+`Exists` e `Delete` do store não tinham chamador; e `UltimoPerfil` devolvia o
+primeiro em ordem alfabética.
+
+A janela ganhou **seletor de perfil salvo**, que faltava: havia botão de salvar
+e nenhuma forma de escolher qual carregar.
+
+**Pendências da etapa 3.7:**
+
+- o teste de nível 2 carrega a DLL de **Debug**, onde o inlining está
+  desligado. Ele guarda o sintoma (a janela sem interface), não a regra
+  (`NoInlining`): apagar o atributo não o deixaria vermelho. Rodar também em
+  Release fecharia o buraco;
+- a janela não tem teste de nível 1, por ser WPF. O que dava para extrair e
+  testar foi extraído (`NumberInput`); o resto é montagem de controle;
+- desenhar a mesa no CAD é da etapa 5. A janela diz isso ao fechar.

@@ -97,6 +97,11 @@ public class TableGeometryTests
 
         Assert.Equal(0.10, menorX, 9);
         Assert.Equal(Mesa().Length - 0.10, maiorX, 9);
+
+        // E a geometria guarda o comprimento da ESTRUTURA, que inclui as duas
+        // sobras — medir só os módulos perderia os 20 cm de ferro.
+        Assert.Equal(18.702, geo.Length, 6);
+        Assert.Equal(4.788, geo.Depth, 6);
     }
 
     /// <summary>

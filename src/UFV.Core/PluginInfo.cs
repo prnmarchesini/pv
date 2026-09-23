@@ -69,6 +69,12 @@ public static class PluginInfo
     public const string ComandoReindexar = "UFV_REINDEXAR";
 
     /// <summary>
+    /// Comando que abre a janela da mesa: os campos da estrutura, o
+    /// comprimento que sai deles e a planta baixa.
+    /// </summary>
+    public const string ComandoMesa = "UFV_MESA";
+
+    /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).
     /// </summary>

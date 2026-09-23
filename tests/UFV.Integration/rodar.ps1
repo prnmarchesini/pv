@@ -931,6 +931,18 @@ if (Testar-Caso -Rotulo 'ufv-ola' -Desenho $desenhoVazio -Script (Join-Path $PSS
     $passaram++
 }
 
+# A janela da mesa (3.7) e o unico WPF fora da ribbon. Se ela for nomeada sem
+# cuidado, o NETLOAD inteiro cai num host sem interface - e o sintoma e o
+# plugin sumir, nao a janela falhar.
+$total++
+if (Testar-Caso -Rotulo 'ufv-mesa-sem-interface' -Desenho $desenhoVazio `
+                -Script (Join-Path $PSScriptRoot 'ufv-mesa-sem-interface.scr') `
+                -Esperados @(
+                    [regex]::Escape("Plugin UFV carregado, versão $versao"),
+                    [regex]::Escape('A janela da mesa precisa da interface do Civil 3D'))) {
+    $passaram++
+}
+
 # O caso do terreno conta no total SEMPRE. Antes ele era simplesmente pulado
 # quando o desenho nao estava la, e o placar saia "1/1 OK", verde, afirmando
 # que tudo passou enquanto o unico teste que prova a leitura do desenho nao

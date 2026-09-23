@@ -70,12 +70,16 @@ public sealed class TableGeometry
         IReadOnlyList<ModulePiece> modulos,
         IReadOnlyList<PillarPiece> pilares,
         double sobraDaTesoura,
-        double fileiraDoPilar)
+        double fileiraDoPilar,
+        double comprimento,
+        double profundidade)
     {
         Modules = modulos;
         Pillars = pilares;
         RafterOffset = sobraDaTesoura;
         PillarRow = fileiraDoPilar;
+        Length = comprimento;
+        Depth = profundidade;
     }
 
     /// <summary>Os módulos, coluna a coluna e fileira a fileira.</summary>
@@ -98,6 +102,18 @@ public sealed class TableGeometry
     /// <c>sobra + T2</c>. É a distância que entra na conta da altura do pilar.
     /// </summary>
     public double PillarRow { get; }
+
+    /// <summary>
+    /// O comprimento da mesa, de ponta a ponta da estrutura.
+    ///
+    /// Vem guardado, e não medido nos módulos: as sobras das pontas ficam
+    /// FORA deles, e quem medisse só os módulos perderia os 20 cm de
+    /// estrutura — que é exatamente o que a planta baixa existe para mostrar.
+    /// </summary>
+    public double Length { get; }
+
+    /// <summary>A medida da mesa na direção da inclinação: o M2.</summary>
+    public double Depth { get; }
 
     /// <summary>
     /// Monta a mesa deitada, em coordenadas locais.
@@ -136,7 +152,9 @@ public sealed class TableGeometry
             MontarModulos(mesa),
             MontarPilares(pilares, estrutura, fileiraDoPilar),
             sobra,
-            fileiraDoPilar);
+            fileiraDoPilar,
+            mesa.Length,
+            profundidade);
     }
 
     /// <summary>
@@ -176,7 +194,7 @@ public sealed class TableGeometry
                 Levar(p.Footprint, colocacao)))
             .ToList();
 
-        return new TableGeometry(modulos, pilares, RafterOffset, PillarRow);
+        return new TableGeometry(modulos, pilares, RafterOffset, PillarRow, Length, Depth);
     }
 
     /// <summary>
@@ -195,8 +213,10 @@ public sealed class TableGeometry
         IReadOnlyList<ModulePiece> modulos,
         IReadOnlyList<PillarPiece> pilares,
         double sobraDaTesoura,
-        double fileiraDoPilar) =>
-        new(modulos, pilares, sobraDaTesoura, fileiraDoPilar);
+        double fileiraDoPilar,
+        double comprimento = 0,
+        double profundidade = 0) =>
+        new(modulos, pilares, sobraDaTesoura, fileiraDoPilar, comprimento, profundidade);
 
     /// <summary>
     /// Os pontos que a regra sagrada 2 manda estar no mesmo plano: as faces

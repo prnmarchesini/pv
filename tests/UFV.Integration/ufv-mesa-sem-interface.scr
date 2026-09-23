@@ -1,0 +1,27 @@
+; Nivel 2: a janela da mesa nao pode derrubar o plugin num host sem interface.
+;
+; Este e o teste que guarda a regra mais cara de aprender deste projeto: nomear
+; um tipo WPF num metodo obriga o runtime a resolver PresentationFramework ao
+; CARREGAR aquele metodo, e num Core Console isso derruba o NETLOAD inteiro -
+; inclusive os comandos que funcionariam bem sem janela nenhuma.
+;
+; O teste prova duas coisas de uma vez:
+;   1. o plugin ainda carrega no Core Console depois de a janela existir
+;      (se nao carregasse, UFV_OLA nao responderia);
+;   2. UFV_MESA reconhece que nao ha interface e diz isso, em vez de estourar.
+;
+; Se alguem apagar o [MethodImpl(NoInlining)] de MesaCommands.Abrir, ou nomear
+; JanelaDeMesa direto em Mesa(), este teste fica vermelho.
+;
+; Sobre o SECURELOAD, vale o mesmo que em ufv-ola.scr: baixado so pelo tempo do
+; NETLOAD e devolvido em seguida, com o valor impresso para o rodar.ps1
+; conferir.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_OLA")
+(command "UFV_MESA")
+(setvar "SECURELOAD" ufv:secureload)
+(princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)
