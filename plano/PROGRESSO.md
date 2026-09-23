@@ -29,6 +29,7 @@ Só o Renan marca VALIDADO.
 | 3.5 | Fórmula da altura livre | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
 | 3.6 | Perfil nomeado | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
 | 3.7 | Modal | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
+| 4.1 | Modelo de configuração | AGUARDANDO VALIDAÇÃO | Divergência do plano registrada abaixo; cinco padrões são meus |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -820,3 +821,126 @@ meio com espera crescente.
 Vale registrar por que isso foi tratado como defeito e não como azar: teste que
 falha às vezes é pior que teste nenhum, porque ensina a ignorar o placar — e o
 placar é a única coisa que separa "está verde" de "eu acho que está verde".
+
+# Etapa 4
+
+## 4.1: o modelo de configuração
+
+`SystemConfiguration` guarda os limites que valem para o projeto inteiro. Ele
+quase não calcula — e é por isso que é caro de errar: o defeito não aparece
+nele, aparece três etapas adiante, numa mesa marcada que não devia ser, ou
+pior, numa que devia e não foi.
+
+### Uma divergência deliberada do plano
+
+O passo 4.1 pede "comprimentos comerciais de pilar". **Não foi feito assim**, e
+a razão é o Renan, em 23/09/2026:
+
+> "mas o tamanho é personalizavel, para vc, vc vai considerar o minimo
+> enterrado, o que precisa para cima e me dar o tamanho ideal, se ficar menor
+> ou maior problema meu"
+>
+> "sua missão é dar o tamanho do pilar, a conferencia se bate ou nao com o que
+> eu preciso, eu uso filtros para selecionar"
+
+Então o comprimento é **saída**: `IdealPillarLength = altura livre + enterro
+mínimo`. Não há lista comercial travando nada. Existe um teto **opcional**,
+desligado por padrão, para quem quiser marcar pilar acima de um valor — marcar,
+nunca encurtar, porque encurtar mudaria a altura livre que o projetista pediu.
+
+**Isto aposenta um número dele mesmo.** Antes, no mesmo dia, ele tinha dito
+"pilar de até 2,5 m". Eu vinha tratando os 2,5 m como teto rígido, e daí saía a
+conclusão de que a ponta baixa só iria até 0,439 m dos 0,80 m da faixa — metade
+da faixa viraria mesa marcada. Com o comprimento sendo saída, **essa conclusão
+evapora**: nada estoura, o plugin entrega o número e ele filtra. A fala mais
+recente é a que vale, mas quem decidiu isso fui eu; **vale confirmar com ele**.
+
+### Uma segunda divergência, esta de regra sagrada
+
+A regra sagrada 4 diz, literalmente: "o usuário define **quantos módulos** por
+mesa podem estourar a ponta baixa (ex.: 5 em 20)". O código guarda **fração**,
+não contagem, porque "cinco módulos" significa coisas diferentes numa mesa de
+28 e numa de 14.
+
+É troca de regra sagrada por conta própria, e fica registrada como tal.
+**Pergunta aberta ao Renan:** ele quer digitar contagem ou percentual?
+
+Efeito colateral já medido e testado: a fração arredonda para baixo, então numa
+mesa pequena uma fração pequena dá tolerância zero — 25% de 3 módulos é zero, e
+quem ligou a tolerância não é avisado. O arredondamento para baixo é
+proposital (permissão que arredonda para cima é permissão que ninguém pediu),
+mas o silêncio não é confortável.
+
+### A pendência do azimute, fechada
+
+A etapa 3 deixou anotado que a convenção de azimute precisaria ser decidida, e
+que escolher errado espelharia a usina inteira sem aparecer em planta. Decidido
+e fixado em teste:
+
+- **`FacingAzimuthRadians` é o rumo para onde a mesa OLHA**, do norte no
+  sentido horário. Zero é olhando para o norte, que é o normal no Brasil;
+- **`UpslopeAzimuthRadians` é o que gira o sistema local**, e vale o de mira
+  mais meia volta — porque o +Y local aponta da ponta baixa para a alta, ou
+  seja, para o lado oposto ao que a mesa olha.
+
+Quem for colocar a mesa no terreno usa o segundo. Passar o primeiro direto para
+a rotação põe a usina de costas, com o desenho perfeito.
+
+**O que não foi contemplado:** o plano lista "Norte" como item separado do
+azimute. Não há campo de norte do desenho, e a hipótese silenciosa é que o DWG
+já esteja no norte geográfico. Se o desenho do Renan usa grid rotacionado, isso
+precisa de campo — está aqui para ele dizer.
+
+### Os padrões que são meus, não dele
+
+| campo | valor | de quem |
+|---|---|---|
+| azimute de mira | 0° (norte) | Renan |
+| ponta baixa | 0,30 a 0,80 m | Renan |
+| enterro mínimo | 0,90 m | Renan |
+| declividade longitudinal máxima | 10° | Renan |
+| teto de pilar | desligado | Renan |
+| **pitch entre mesas** | **6,0 m** | **meu** |
+| **enterro máximo** | **2,00 m** | **meu** |
+| **degrau entre mesas** | **0 a 0,50 m** | **meu** |
+| **tolerância de invasão** | **0 (nenhum módulo)** | **meu** |
+| **espaçamento que quebra fileira** | **0,50 m** | **meu** |
+
+### O que a revisão do 4.1 apontou, e o que foi feito
+
+O achado mais constrangedor: **um comentário meu mentia.** Ele dizia que os
+padrões estavam listados em PROGRESSO.md, e não estavam — esta seção nasceu por
+causa disso. Comentário que aponta para documentação inexistente é pior que
+comentário nenhum.
+
+Corrigidos:
+
+- **a faixa da ponta baixa podia ser inalcançável e a configuração aprovava.**
+  Um teto de 1,15 m com enterro de 0,90 e ponta baixa mínima de 0,30 fazia toda
+  mesa da usina nascer marcada, e nada reclamava. A conferência agora é contra
+  `enterro + ponta baixa mínima`, e não só contra o enterro;
+- **graus e radianos no mesmo objeto de motor**, contra a arquitetura. Pior:
+  um campo terminava em `Degrees` e o outro não dizia a unidade, e o padrão
+  zero esconde o erro (0° = 0 rad). Agora tudo é radiano, com os graus em
+  propriedades calculadas para tela e texto;
+- **`BumpToleranceFor` com fração NaN devolvia `int.MinValue`** — menos dois
+  bilhões de módulos de tolerância. Configuração quebrada agora responde zero;
+- **`IdealPillarLength` duplicava `PillarSizing.Length`** com guardas mais
+  fracas: aceitava altura livre de um bilhão de metros. Agora delega, e herda a
+  rede de escala do resto do Core;
+- **`WhyPillarIsTooLong(NaN)` devolvia null**, ou seja, "não sei medir" virava
+  "está bom". Agora marca;
+- **`MaxEmbedment` era campo que ninguém lia** — o mesmo defeito que a revisão
+  do 3.5 mandou tirar de `PillarLimits`. Ganhou uso em `WhyEmbedmentIsWrong`;
+- **enterro mínimo de um bilionésimo de metro era aceito**: pilar que flutua,
+  aprovado pela configuração. Piso de um milímetro, a tolerância de regra.
+
+Seis mutações conferidas depois das correções: **11 testes caem**.
+
+### Pendências do 4.1
+
+- `MinStep`/`MaxStep` e `MaxGapBeforeBreak` não têm conferência cruzada com
+  nada. Se existe relação real com o pitch ou com o comprimento da mesa, ela
+  não está escrita nem como comentário;
+- `MaiorMedida = 50` é o terceiro dono de um limite de escala que já existe em
+  `PillarSizing`. Vale centralizar antes de virar quatro.
