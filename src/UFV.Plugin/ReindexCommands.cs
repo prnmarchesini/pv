@@ -1,3 +1,4 @@
+using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using UFV.Core;
@@ -23,10 +24,60 @@ namespace UFV.Plugin;
 /// </summary>
 public static class ReindexCommands
 {
+    /// <summary>
+    /// Refaz o registro dos alinhamentos a partir do XData das entidades.
+    ///
+    /// Sem a ressalva das cotas que a área tem: o alinhamento é uma linha em
+    /// planta, e atravessar desenhos não o deixa errado — só desconhecido.
+    /// </summary>
+    private static void ReindexarAlinhamentos(Editor editor, Database database)
+    {
+        var registro = AlignmentStore.Ler(database);
+        var antes = registro.Items;
+
+        if (registro.Problem is not null)
+            editor.WriteMessage($"\n  {Capitalize(registro.Problem)}.\n");
+
+        var noDesenho = AlignmentScan.Varrer(database);
+
+        var novos = noDesenho.Where(a => antes.All(r => r.Identity.Id != a.Identity.Id)).ToList();
+        var sumidos = antes.Where(r => noDesenho.All(a => a.Identity.Id != r.Identity.Id)).ToList();
+
+        // O desenho manda, pelo mesmo motivo das áreas.
+        AlignmentStore.Save(database, noDesenho);
+
+        editor.WriteMessage($"\nREINDEXADO {noDesenho.Count} alinhamento(s) no desenho.\n");
+
+        if (novos.Count > 0)
+        {
+            editor.WriteMessage($"  {novos.Count} passaram a ser reconhecidos:\n");
+            foreach (var alinhamento in novos)
+                editor.WriteMessage($"    {alinhamento.Identity.Describe()}\n");
+        }
+
+        if (sumidos.Count > 0)
+        {
+            editor.WriteMessage($"  {sumidos.Count} não estão mais no desenho e saíram do registro:\n");
+            foreach (var alinhamento in sumidos)
+                editor.WriteMessage($"    {alinhamento.Identity.Describe()}\n");
+        }
+
+        if (novos.Count == 0 && sumidos.Count == 0)
+            editor.WriteMessage("  O registro já estava em dia.\n");
+    }
+
     private static string Capitalize(string problema) =>
         problema.Length == 0 ? problema : char.ToUpperInvariant(problema[0]) + problema[1..];
 
-    /// <summary>UFV_REINDEXAR: acha as áreas pelo XData e refaz o registro.</summary>
+    /// <summary>
+    /// UFV_REINDEXAR: acha as áreas e os alinhamentos pelo XData e refaz os
+    /// registros.
+    ///
+    /// Os dois, e não só as áreas. Enquanto o alinhamento ficou de fora, a
+    /// identidade dele era gravada na entidade e nunca lida — um alinhamento
+    /// copiado para outro desenho ficava invisível e irrecuperável, enquanto o
+    /// código prometia por escrito que o reindexar o reconstruiria.
+    /// </summary>
     [CommandMethod(PluginInfo.ComandoReindexar)]
     public static void Reindexar()
     {
@@ -38,14 +89,14 @@ public static class ReindexCommands
         try
         {
             var registro = AreaStore.Ler(documento.Database);
-            var antes = registro.Areas;
+            var antes = registro.Items;
 
-            if (registro.Problema is not null)
+            if (registro.Problem is not null)
             {
                 // Dizer o que estava quebrado importa: sem isto o comando
                 // anunciaria "passaram a ser reconhecidas" para áreas que
                 // já estavam registradas e cujo registro se perdeu.
-                editor.WriteMessage($"\n  {Capitalize(registro.Problema)}.\n");
+                editor.WriteMessage($"\n  {Capitalize(registro.Problem)}.\n");
             }
             var noDesenho = AreaListCommands.Varrer(documento.Database);
 
@@ -83,11 +134,13 @@ public static class ReindexCommands
                 editor.WriteMessage("  O registro já estava em dia.\n");
             }
 
+            ReindexarAlinhamentos(editor, documento.Database);
+
             GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
         }
         catch (System.Exception erro)
         {
-            RegistroDeDiagnostico.Registrar("Falha ao reindexar as áreas.", erro);
+            RegistroDeDiagnostico.Registrar("Falha ao reindexar.", erro);
             editor.WriteMessage($"\nNão consegui reindexar: {erro.Message}\n");
         }
     }

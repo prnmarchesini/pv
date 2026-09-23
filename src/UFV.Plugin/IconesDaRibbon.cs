@@ -74,6 +74,19 @@ internal static class IconesDaRibbon
         Preenchimento("M14.5,21 H17.5 V26 H14.5 Z", Ambar),
         Preenchimento("M24,21 H27 V26 H24 Z", Ambar));
 
+    /// <summary>
+    /// Uma linha com marcas de um lado só: a linha de alinhamento e o lado em
+    /// que ficam as mesas. O ícone mostra o lado porque é ele que o desenho
+    /// não carrega sozinho.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Alinhamento() => Montar(
+        Traco("M3,20 H29", Ambar, 2.4),
+        Preenchimento("M6,9 H11 V17 H6 Z", Azul),
+        Preenchimento("M13.5,9 H18.5 V17 H13.5 Z", Azul),
+        Preenchimento("M21,9 H26 V17 H21 Z", Azul),
+        Traco("M5,24 H27", Neutro, 1.2));
+
     /// <summary>Contorno fechado sobre o relevo: a área de implantação.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static ImageSource Area() => Montar(

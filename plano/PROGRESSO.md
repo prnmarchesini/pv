@@ -30,6 +30,7 @@ Só o Renan marca VALIDADO.
 | 3.6 | Perfil nomeado | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
 | 3.7 | Modal | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
 | 4.1 | Modelo de configuração | AGUARDANDO VALIDAÇÃO | Divergência do plano registrada abaixo; cinco padrões são meus |
+| 4.2 | Linha de alinhamento | AGUARDANDO VALIDAÇÃO | UFV_ALINHAMENTO: traça a linha e clica o lado; entra no UFV_REINDEXAR |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -986,3 +987,86 @@ perguntar.
 Então não há campo de norte do desenho, e a hipótese deixa de ser silenciosa:
 está escrita aqui. Se um dia entrar um DWG com grid rotacionado, é aqui que a
 falta vai aparecer.
+
+## 4.2: a linha de alinhamento
+
+O usuário traça a linha e **clica** de que lado ficam as mesas. Clique, e não
+"esquerda/direita" digitado: esquerda de quem — do traçado, da tela, do norte?
+Clicar não tem ambiguidade nenhuma.
+
+O lado só faz sentido junto com o **sentido** do traçado, e é isso que a
+identidade guarda. Desenhar a mesma linha ao contrário troca os dois lados.
+
+Comandos: `UFV_ALINHAMENTO` e `UFV_ALINHAMENTOS`. Botão na ribbon, com ícone.
+
+### O que a revisão do 4.2 apontou, e o que foi feito
+
+**O achado bloqueante foi um comentário meu que mentia.** Os dois arquivos que
+gravam o lado diziam, por extenso, que número não valia como lado — e
+`Enum.TryParse<LineSide>("1")` devolve `Left` numa boa. Ou seja, a defesa que o
+comentário descrevia **não existia**: um registro com `"1"` era aceito hoje, e
+no dia de renumerar a enumeração viraria `Right` em silêncio, com a usina
+inteira do lado errado. Era exatamente o modo de falha que o passo diz temer.
+
+Agora o mapa é explícito (`LineSides.Name` / `TryParseName`), no Geo, com teste
+de nível 1 que recusa `"0"`, `"1"`, `"2"`, `"+1"` e `" 2 "`.
+
+**`AlignmentXData.Load` era código morto.** A identidade era gravada na entidade
+e nunca lida por caminho nenhum: um alinhamento copiado para outro desenho
+ficava invisível e irrecuperável, enquanto o código prometia por escrito que "o
+XData é a verdade e o reindexar o reconstrói". Verdadeiro para a área, falso
+para o alinhamento. Agora existe `AlignmentScan.Varrer`, e o `UFV_REINDEXAR`
+refaz os dois registros.
+
+**A quantidade de campos por item morava em dois lugares soltos** — a constante
+da leitura e o vetor da gravação —, ligados só por convenção. Desalinhados, a
+tabela inteira virava "entradas ilegíveis" e o índice se perdia. Agora a
+gravação confere e lança.
+
+**Uma garantia da etapa 2 tinha um buraco que ninguém tinha visto:** a
+conferência da quantidade declarada só rodava se o terceiro campo do cabeçalho
+estivesse íntegro. Corrompido justamente ele, o registro voltava truncado e sem
+problema relatado — a defesa contra truncamento sumia exatamente quando mais
+importava.
+
+Menores, também corrigidos: o `catch` do clique do lado culpava a linha mesmo
+quando o problema era o ponto clicado, e não registrava nada no log; a mensagem
+de erro dizia "não consegui criar" quando o alinhamento já estava no desenho e
+só a indexação tinha falhado (o usuário redesenharia e ficaria com dois); o
+`SignedDistance` devolvia infinito para coordenada absurda; e a tolerância de
+"clique em cima da linha" estava com o mesmo nome e o mesmo número do
+"comprimento mínimo de uma linha de referência", que são coisas diferentes.
+
+### Duas extrações que a revisão cobrou, e estavam certas
+
+O formato dos registros tinha sido extraído de `AreaStore` para ser
+reaproveitado pelo alinhamento. A revisão apontou duas coisas:
+
+1. **o XData devia ter sido extraído junto.** `AlignmentXData` era cópia quase
+   literal de `AreaXData`, incluindo um método idêntico caractere a caractere.
+   Se repetir o formato do registro central era errado, repetir o do XData
+   também era. Agora existe `PluginXData`, e os dois são finos;
+2. **o formato devia estar no Core, não no plugin.** As três garantias que ele
+   dá — versão recusada, ilegível relatado, quantidade conferida — foram
+   exigidas pela revisão da etapa 2 e **não tinham teste em nível nenhum**,
+   porque moravam no plugin. A refatoração que as moveu de lugar só pôde ser
+   conferida por leitura: o revisor teve que reimplementar os dois algoritmos
+   fora do repositório para comparar.
+
+   Agora o miolo é `UFV.Core.RecordTable`, que é texto virando lista e tem 17
+   testes de nível 1. O plugin ficou com o adaptador de `ResultBuffer`.
+
+E a pergunta de nome, que estava escrita palavra por palavra em dois comandos,
+virou `Perguntas.Nome`.
+
+Sete mutações conferidas depois das correções: **16 testes caem**.
+
+### Pendências do 4.2
+
+- `AlignmentStore`, `AlignmentXData` e `AlignmentScan` continuam sem teste de
+  nível 1, por serem do plugin, e sem teste de nível 2, porque não há `.scr` de
+  alinhamento. O que dava para trazer para o Core foi trazido (o formato e o
+  nome do lado); o que sobrou é conversa com o AutoCAD;
+- `SignedDistance` devolve **negativo à esquerda**, que é o inverso da
+  convenção usual da regra da mão direita. Está documentado e testado, mas quem
+  usar isso na etapa 5 para ordenar mesas vai se enganar uma vez.

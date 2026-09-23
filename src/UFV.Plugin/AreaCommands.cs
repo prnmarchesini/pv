@@ -139,49 +139,8 @@ public static class AreaCommands
         return pontos;
     }
 
-    /// <summary>
-    /// Maior nome aceito.
-    ///
-    /// O XData corta cada texto em 255 bytes, e em UTF-8 um acento gasta dois.
-    /// O limite é conferido aqui, logo depois da pergunta, e não na gravação:
-    /// estourar lá dentro faria o usuário perder a área que acabou de traçar,
-    /// com uma mensagem que não explicaria nada.
-    /// </summary>
-    private const int MaiorNome = 100;
-
-    private static string? PerguntarNome(Editor editor)
-    {
-        while (true)
-        {
-            var resposta = editor.GetString(new PromptStringOptions("\nNome da área: ")
-            {
-                AllowSpaces = true,
-            });
-
-            if (resposta.Status != PromptStatus.OK)
-            {
-                editor.WriteMessage("\nÁrea não criada.\n");
-                return null;
-            }
-
-            var nome = resposta.StringResult.Trim();
-
-            if (nome.Length == 0)
-            {
-                editor.WriteMessage("\nA área precisa de um nome.\n");
-                continue;
-            }
-
-            if (nome.Length > MaiorNome)
-            {
-                editor.WriteMessage(
-                    $"\nNome longo demais ({nome.Length} caracteres). O limite é {MaiorNome}.\n");
-                continue;
-            }
-
-            return nome;
-        }
-    }
+    private static string? PerguntarNome(Editor editor) =>
+        Perguntas.Nome(editor, "área", "A área");
 
     private static void Criar(
         Editor editor,

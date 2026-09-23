@@ -200,6 +200,12 @@ internal static class RibbonUfv
             PluginInfo.ComandoMesa,
             "Monta a mesa: módulo, quantidade, folgas, estrutura e pilares."));
 
+        origem.Items.Add(BotaoGrande(
+            "Alinhamento",
+            IconesDaRibbon.Alinhamento(),
+            PluginInfo.ComandoAlinhamento,
+            "Traça a linha de referência das fileiras e guarda de que lado ficam as mesas."));
+
         return new RibbonPanel { Source = origem };
     }
 

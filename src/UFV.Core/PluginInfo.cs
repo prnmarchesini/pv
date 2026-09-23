@@ -75,6 +75,15 @@ public static class PluginInfo
     public const string ComandoMesa = "UFV_MESA";
 
     /// <summary>
+    /// Comando que traça a linha de alinhamento e guarda de que lado ficam as
+    /// mesas.
+    /// </summary>
+    public const string ComandoAlinhamento = "UFV_ALINHAMENTO";
+
+    /// <summary>Comando que lista os alinhamentos do desenho.</summary>
+    public const string ComandoAlinhamentos = "UFV_ALINHAMENTOS";
+
+    /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).
     /// </summary>
