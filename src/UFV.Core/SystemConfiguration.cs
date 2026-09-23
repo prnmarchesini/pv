@@ -13,12 +13,15 @@ namespace UFV.Core;
 /// foi. O que ele faz de útil é recusar combinação incoerente antes de ela
 /// virar usina.
 ///
-/// <b>O comprimento do pilar é saída, não limite.</b> O Renan foi explícito em
-/// 23/09/2026: "vc vai considerar o mínimo enterrado, o que precisa para cima,
-/// e me dar o tamanho ideal; se ficar menor ou maior, problema meu — eu uso
-/// filtros para selecionar". Por isso não há lista de comprimentos comerciais
-/// travando nada, e o teto (<see cref="MaxPillarLength"/>) nasce desligado.
-/// A divergência em relação ao plano está registrada em PROGRESSO.md.
+/// <b>O comprimento do pilar é saída, e só isso.</b> O Renan foi explícito duas
+/// vezes em 23/09/2026: "vc vai considerar o mínimo enterrado, o que precisa
+/// para cima e me dar o tamanho ideal, se ficar menor ou maior problema meu" e,
+/// quando perguntado se os 2,5 m eram teto, "eu costumo comprar, volto a dizer,
+/// vc deve calcular o pilar ideal apenas".
+///
+/// Por isso não há lista de comprimentos comerciais nem teto: o plugin entrega
+/// o número e ele filtra. A divergência em relação ao plano, que pedia
+/// "comprimentos comerciais de pilar", está registrada em PROGRESSO.md.
 ///
 /// <b>Todo ângulo aqui é radiano</b>, como manda a arquitetura. Os graus
 /// aparecem só em propriedades calculadas, para a tela e para o texto.
@@ -46,26 +49,19 @@ namespace UFV.Core;
 /// imposto de fora — o comprimento ideal enterra exatamente o mínimo. Quem o
 /// usa é <see cref="WhyEmbedmentIsWrong"/>.
 /// </param>
-/// <param name="MaxPillarLength">
-/// Teto do comprimento do pilar, ou null para não haver teto — que é o padrão.
-///
-/// Ligado, ele não encurta pilar nenhum: marca. É a regra sagrada 4, "o que
-/// cede é o pilar, que pode estourar e é marcado" — encurtar mudaria a altura
-/// livre que o projetista pediu.
-/// </param>
 /// <param name="MinStep">Degrau mínimo entre mesas vizinhas.</param>
 /// <param name="MaxStep">Degrau máximo entre mesas vizinhas.</param>
-/// <param name="BumpToleranceFraction">
-/// Que fração dos módulos de uma mesa pode estourar a faixa da ponta baixa
-/// antes de a mesa inteira ser marcada.
+/// <param name="BumpToleranceModules">
+/// Quantos módulos de uma mesa podem estourar a faixa da ponta baixa antes de
+/// a mesa inteira ser marcada.
 ///
-/// A regra sagrada 4 fala em contagem ("5 em 20"); aqui é fração, porque
-/// "cinco módulos" significa coisas diferentes numa mesa de 28 e numa de 14. É
-/// divergência da regra, está registrada em PROGRESSO.md, e espera a palavra
-/// do Renan.
+/// Contagem, como a regra sagrada 4 manda ao pé da letra ("o usuário define
+/// quantos módulos por mesa podem estourar a ponta baixa, ex.: 5 em 20"). Eu
+/// tinha guardado fração, achando que contagem significaria coisas diferentes
+/// numa mesa de 28 e numa de 14; perguntei, e o Renan respondeu "contagem" em
+/// 23/09/2026.
 ///
-/// Zero é o padrão: nenhum módulo pode invadir. Um é legítimo e desliga a
-/// regra — quem puser isso está dizendo que aceita qualquer invasão.
+/// Zero é o padrão: nenhum módulo pode invadir.
 /// </param>
 /// <param name="MaxLongitudinalSlope">
 /// Declividade longitudinal máxima da mesa, em radianos, ou null para não
@@ -82,10 +78,9 @@ public sealed record SystemConfiguration(
     double MaxLowEdge,
     double MinEmbedment,
     double MaxEmbedment,
-    double? MaxPillarLength,
     double MinStep,
     double MaxStep,
-    double BumpToleranceFraction,
+    int BumpToleranceModules,
     double? MaxLongitudinalSlope,
     double MaxGapBeforeBreak)
 {
@@ -121,10 +116,9 @@ public sealed record SystemConfiguration(
         MaxLowEdge: 0.80,                   // Renan
         MinEmbedment: 0.90,                 // Renan
         MaxEmbedment: 2.00,                 // meu
-        MaxPillarLength: null,              // Renan: sem teto, ele filtra depois
         MinStep: 0,                         // meu
         MaxStep: 0.50,                      // meu
-        BumpToleranceFraction: 0,           // meu, o mais restritivo
+        BumpToleranceModules: 0,            // meu, o mais restritivo
         MaxLongitudinalSlope: 10 * Grau,    // Renan
         MaxGapBeforeBreak: 0.50);           // meu
 
@@ -182,30 +176,8 @@ public sealed record SystemConfiguration(
             if (Faixa(MinStep, MaxStep, minimoPodeSerZero: true) is { } degrau)
                 return $"a faixa de degrau entre mesas {degrau}";
 
-            if (MaxPillarLength is { } teto)
-            {
-                if (!Medida(teto)) return "o teto de comprimento do pilar não é uma medida válida";
-
-                // A conferência que importa não é "sobra algo acima do chão",
-                // e sim "sobra o que a faixa pede". Um teto que não comporta
-                // nem a ponta baixa MÍNIMA faz toda a usina nascer marcada, e
-                // a configuração era aceita como coerente.
-                var precisaDeNoMinimo = MinEmbedment + MinLowEdge;
-
-                if (teto <= precisaDeNoMinimo)
-                {
-                    return $"o teto de pilar ({Texto(teto)} m) não comporta nem a ponta baixa "
-                        + $"mínima de {Texto(MinLowEdge)} m com enterro de "
-                        + $"{Texto(MinEmbedment)} m: nenhuma mesa caberia, e não sobraria nada "
-                        + "acima do chão";
-                }
-            }
-
-            if (!double.IsFinite(BumpToleranceFraction)
-                || BumpToleranceFraction < 0 || BumpToleranceFraction > 1)
-            {
-                return "a tolerância de invasão por lombo precisa ser uma fração entre 0 e 1";
-            }
+            if (BumpToleranceModules < 0)
+                return "a tolerância de invasão por lombo não pode ser negativa";
 
             if (MaxLongitudinalSlope is { } inclinacao
                 && (!double.IsFinite(inclinacao) || inclinacao <= 0 || inclinacao >= Math.PI / 2))
@@ -245,25 +217,6 @@ public sealed record SystemConfiguration(
     }
 
     /// <summary>
-    /// Por que este pilar passa do teto, ou null — inclusive quando não há
-    /// teto, que é o padrão.
-    ///
-    /// Comprimento que não é número é marcado, e não aprovado: "não sei medir"
-    /// virando "está bom" é a direção errada de falha.
-    /// </summary>
-    public string? WhyPillarIsTooLong(double pillarLength)
-    {
-        if (!double.IsFinite(pillarLength))
-            return "o comprimento do pilar não é um número";
-
-        if (MaxPillarLength is not { } teto) return null;
-        if (pillarLength <= teto) return null;
-
-        return $"o pilar precisa de {Texto(pillarLength)} m e o teto é {Texto(teto)} m "
-            + $"(passa {Texto(pillarLength - teto)} m)";
-    }
-
-    /// <summary>
     /// Por que este enterro está fora da faixa, ou null se está dentro.
     ///
     /// Só faz diferença quando o comprimento do pilar vem imposto de fora: com
@@ -291,22 +244,18 @@ public sealed record SystemConfiguration(
     }
 
     /// <summary>
-    /// Quantos módulos de uma mesa podem estourar a faixa da ponta baixa antes
-    /// de a mesa ser marcada.
+    /// Quantos módulos desta mesa podem estourar a faixa da ponta baixa antes
+    /// de ela ser marcada.
     ///
-    /// Arredonda para baixo de propósito: a tolerância é permissão, e permissão
-    /// que arredonda para cima vira permissão que ninguém pediu. O efeito
-    /// colateral está registrado em PROGRESSO.md — numa mesa pequena, uma
-    /// fração pequena dá zero, e a tolerância ligada não vale nada.
+    /// É a contagem configurada, limitada ao tamanho da mesa: uma tolerância
+    /// de cinco numa mesa de três módulos vale três, e não cinco — senão a
+    /// comparação adiante nunca marcaria mesa nenhuma.
     /// </summary>
     public int BumpToleranceFor(int moduleCount)
     {
-        // Configuração quebrada não responde número: com fração NaN o cast
-        // devolvia int.MinValue, e uma tolerância de menos dois bilhões numa
-        // comparação adiante é estouro esperando acontecer.
         if (moduleCount <= 0 || !IsValid) return 0;
 
-        return (int)Math.Floor(BumpToleranceFraction * moduleCount);
+        return Math.Min(BumpToleranceModules, moduleCount);
     }
 
     /// <summary>A linha que descreve a configuração para o usuário.</summary>
@@ -314,16 +263,12 @@ public sealed record SystemConfiguration(
     {
         if (WhyInvalid is { } motivo) return $"Configuração inválida: {motivo}.";
 
-        var teto = MaxPillarLength is { } limite
-            ? $", pilar até {Texto(limite)} m"
-            : ", sem teto de pilar";
-
         var declividade = MaxLongitudinalSlopeDegrees is { } graus
             ? $", declividade até {Texto(graus)}°"
             : ", sem limite de declividade";
 
         return $"ponta baixa de {Texto(MinLowEdge)} a {Texto(MaxLowEdge)} m, enterro de "
-            + $"{Texto(MinEmbedment)} a {Texto(MaxEmbedment)} m{teto}, pitch de "
+            + $"{Texto(MinEmbedment)} a {Texto(MaxEmbedment)} m, pitch de "
             + $"{Texto(Pitch)} m{declividade}";
     }
 

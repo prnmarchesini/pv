@@ -9,7 +9,7 @@ namespace UFV.Core.Tests;
 /// devia e não foi.
 ///
 /// A coerência entre os números é o que este arquivo trava: mínimo menor que
-/// máximo, faixa possível, fração entre zero e um.
+/// máximo, faixa possível, contagem não negativa.
 /// </summary>
 public class SystemConfigurationTests
 {
@@ -39,29 +39,15 @@ public class SystemConfigurationTests
         Assert.Equal(10 * Grau, config.MaxLongitudinalSlope!.Value, 9);
     }
 
-    /// <summary>
-    /// O azimute é o rumo para onde a MESA OLHA, contado do norte no sentido
-    /// horário. No Brasil o normal é zero — mesa olhando para o norte.
-    ///
-    /// A convenção está fixada em teste porque ela é a que espelha a usina
-    /// inteira se for trocada, e em planta isso não aparece.
-    /// </summary>
-    [Fact]
-    [Trait("Etapa", "4")]
-    public void OAzimutePadraoEZeroQueEOlharParaONorte()
-    {
-        Assert.Equal(0, Padrao().FacingAzimuthRadians, 9);
-    }
-
     // --------------------------------------------- o comprimento do pilar
 
     /// <summary>
-    /// A missão do plugin, nas palavras do Renan: "vc vai considerar o mínimo
+    /// A missão do plugin, nas palavras dele: "vc vai considerar o mínimo
     /// enterrado, o que precisa para cima, e me dar o tamanho ideal".
     ///
-    /// O comprimento é <b>saída</b>, não restrição. Não existe lista comercial
-    /// travando nada — ele filtra depois, e o que ficar maior ou menor é
-    /// problema dele.
+    /// O comprimento é <b>saída</b>, e só isso. Perguntei se os 2,5 m que ele
+    /// compra eram teto, e a resposta foi "eu costumo comprar, volto a dizer,
+    /// vc deve calcular o pilar ideal apenas".
     /// </summary>
     [Theory]
     [Trait("Etapa", "4")]
@@ -76,66 +62,17 @@ public class SystemConfigurationTests
     }
 
     /// <summary>
-    /// Sem teto configurado, comprimento nenhum é reprovado — é o padrão, e é
-    /// o que o Renan pediu.
+    /// Não existe teto de comprimento de pilar, e o teste guarda essa ausência:
+    /// um campo assim voltaria como "configuração inofensiva" e viraria um
+    /// segundo dono de um número que é dele, não do plugin.
     /// </summary>
     [Fact]
     [Trait("Etapa", "4")]
-    public void SemTetoNenhumComprimentoEReprovado()
+    public void NaoHaTetoDeComprimentoDePilar()
     {
-        var config = Padrao();
+        var campos = typeof(SystemConfiguration).GetProperties().Select(p => p.Name).ToList();
 
-        Assert.Null(config.MaxPillarLength);
-        Assert.Null(config.WhyPillarIsTooLong(2.861));
-        Assert.Null(config.WhyPillarIsTooLong(9));
-    }
-
-    /// <summary>
-    /// Quem quiser o teto, liga: aí o pilar que passa dele é marcado, como
-    /// manda a regra sagrada 4 — marcado, nunca encurtado, porque encurtar
-    /// mudaria a altura livre que o projetista pediu.
-    /// </summary>
-    [Fact]
-    [Trait("Etapa", "4")]
-    public void ComTetoOPilarQuePassaEMarcado()
-    {
-        var config = Padrao() with { MaxPillarLength = 2.50 };
-
-        Assert.Null(config.WhyPillarIsTooLong(2.361));
-
-        var motivo = config.WhyPillarIsTooLong(2.861);
-
-        Assert.NotNull(motivo);
-        Assert.Contains("2,861", motivo!);
-        Assert.Contains("2,5", motivo);
-    }
-
-    [Theory]
-    [Trait("Etapa", "4")]
-    [InlineData(0)]
-    [InlineData(-2.5)]
-    [InlineData(99)]
-    [InlineData(double.NaN)]
-    public void TetoDePilarImpossivelERecusado(double teto)
-    {
-        var config = Padrao() with { MaxPillarLength = teto };
-
-        Assert.False(config.IsValid);
-        Assert.Contains("pilar", config.WhyInvalid!);
-    }
-
-    /// <summary>
-    /// Teto menor que o enterro mínimo é projeto impossível: não sobraria nada
-    /// acima do chão, que é a regra sagrada 1 ao contrário.
-    /// </summary>
-    [Fact]
-    [Trait("Etapa", "4")]
-    public void TetoMenorQueOEnterroERecusado()
-    {
-        var config = Padrao() with { MaxPillarLength = 0.5 };
-
-        Assert.False(config.IsValid);
-        Assert.Contains("acima do chão", config.WhyInvalid!);
+        Assert.DoesNotContain("MaxPillarLength", campos);
     }
 
     [Theory]
@@ -145,6 +82,151 @@ public class SystemConfigurationTests
     public void ComprimentoIdealDeAlturaImpossivelERecusado(double livre)
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => Padrao().IdealPillarLength(livre));
+    }
+
+    /// <summary>
+    /// A rede de escala do comprimento ideal é a mesma do resto do Core, e não
+    /// uma segunda: ela vem de PillarSizing.Length.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "4")]
+    public void OComprimentoIdealHerdaARedeDeEscalaDoCore()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => Padrao().IdealPillarLength(1e9));
+    }
+
+    [Fact]
+    [Trait("Etapa", "4")]
+    public void ConfiguracaoQuebradaNaoRespondeComprimentoDePilar()
+    {
+        var quebrada = Padrao() with { MinEmbedment = double.NaN };
+
+        Assert.Throws<InvalidOperationException>(() => quebrada.IdealPillarLength(1.461));
+    }
+
+    // ------------------------------------------------------------- azimute
+
+    /// <summary>
+    /// O azimute é o rumo para onde a MESA OLHA, contado do norte no sentido
+    /// horário. No Brasil o normal é zero — mesa olhando para o norte.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "4")]
+    public void OAzimutePadraoEZeroQueEOlharParaONorte()
+    {
+        Assert.Equal(0, Padrao().FacingAzimuthRadians, 9);
+    }
+
+    /// <summary>
+    /// A pendência que a etapa 3 deixou aberta, agora fechada em código: o
+    /// azimute de mira e o azimute do eixo que sobe a inclinação são opostos.
+    ///
+    /// O +Y local aponta da ponta baixa para a alta, ou seja, para o lado
+    /// contrário ao que a mesa olha. Passar o azimute de mira direto para a
+    /// rotação põe a usina inteira virada para o lado errado, com o desenho
+    /// perfeito e a produção pela metade.
+    /// </summary>
+    [Theory]
+    [Trait("Etapa", "4")]
+    [InlineData(0, 180)]
+    [InlineData(180, 0)]
+    [InlineData(90, 270)]
+    [InlineData(350, 170)]
+    public void OEixoQueSobeApontaParaOLadoOpostoAoQueAMesaOlha(double mira, double subida)
+    {
+        var config = Padrao() with { FacingAzimuthRadians = mira * Grau };
+
+        Assert.Equal(subida * Grau, config.UpslopeAzimuthRadians, 9);
+    }
+
+    [Fact]
+    [Trait("Etapa", "4")]
+    public void OAzimuteEmGrausAcompanhaORadiano()
+    {
+        var config = Padrao() with { FacingAzimuthRadians = 45 * Grau };
+
+        Assert.Equal(45, config.FacingAzimuthDegrees, 9);
+    }
+
+    [Theory]
+    [Trait("Etapa", "4")]
+    [InlineData(-0.1)]
+    [InlineData(7)]
+    [InlineData(double.NaN)]
+    public void AzimuteForaDeUmaVoltaERecusado(double azimute)
+    {
+        var config = Padrao() with { FacingAzimuthRadians = azimute };
+
+        Assert.False(config.IsValid);
+        Assert.Contains("azimute", config.WhyInvalid!);
+    }
+
+    // ------------------------------------------- tolerância de invasão
+
+    /// <summary>
+    /// A tolerância é contagem de módulos, como a regra sagrada 4 manda ao pé
+    /// da letra: "o usuário define quantos módulos por mesa podem estourar a
+    /// ponta baixa (ex.: 5 em 20)".
+    ///
+    /// Eu tinha guardado fração, achando que contagem significaria coisas
+    /// diferentes numa mesa de 28 e numa de 14. Perguntei, e ele respondeu
+    /// "contagem" em 23/09/2026.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "4")]
+    public void AToleranciaEContagemDeModulos()
+    {
+        var config = Padrao() with { BumpToleranceModules = 5 };
+
+        Assert.True(config.IsValid, config.WhyInvalid);
+        Assert.Equal(5, config.BumpToleranceFor(28));
+        Assert.Equal(5, config.BumpToleranceFor(20));
+    }
+
+    /// <summary>
+    /// Tolerância maior que a mesa vale a mesa inteira: cinco numa mesa de três
+    /// são três. Sem o limite, a comparação adiante nunca marcaria mesa nenhuma.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "4")]
+    public void ToleranciaMaiorQueAMesaValeAMesaInteira()
+    {
+        Assert.Equal(3, (Padrao() with { BumpToleranceModules = 5 }).BumpToleranceFor(3));
+    }
+
+    /// <summary>Zero é o padrão: nenhum módulo pode invadir.</summary>
+    [Fact]
+    [Trait("Etapa", "4")]
+    public void OPadraoNaoDeixaNenhumModuloInvadir()
+    {
+        Assert.Equal(0, Padrao().BumpToleranceModules);
+        Assert.Equal(0, Padrao().BumpToleranceFor(28));
+    }
+
+    [Fact]
+    [Trait("Etapa", "4")]
+    public void ToleranciaNegativaERecusada()
+    {
+        var config = Padrao() with { BumpToleranceModules = -1 };
+
+        Assert.False(config.IsValid);
+        Assert.Contains("invasão", config.WhyInvalid!);
+    }
+
+    /// <summary>
+    /// Configuração quebrada não responde número: a tolerância seria usada
+    /// numa comparação adiante, e responder por uma configuração que não fecha
+    /// é dar um número que ninguém conferiu.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "4")]
+    public void ConfiguracaoQuebradaNaoRespondeTolerancia()
+    {
+        var quebrada = Padrao() with { MinLowEdge = 9, BumpToleranceModules = 5 };
+
+        Assert.Equal(0, quebrada.BumpToleranceFor(28));
+        Assert.Equal(0, Padrao().BumpToleranceFor(0));
+        Assert.Equal(0, Padrao().BumpToleranceFor(-5));
     }
 
     // ----------------------------------------------- coerência entre limites
@@ -175,6 +257,39 @@ public class SystemConfigurationTests
         Assert.Contains("enterro", config.WhyInvalid!);
     }
 
+    /// <summary>
+    /// Enterro mínimo de um bilionésimo de metro é pilar que flutua, e passava
+    /// pela conferência de sinal.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "4")]
+    public void EnterroMinimoMenorQueUmMilimetroERecusado()
+    {
+        var config = Padrao() with { MinEmbedment = 1e-9 };
+
+        Assert.False(config.IsValid);
+        Assert.Contains("milímetro", config.WhyInvalid!);
+    }
+
+    /// <summary>
+    /// O enterro máximo não é campo que ninguém lê: ele vale quando o
+    /// comprimento do pilar vem imposto de fora.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "4")]
+    public void OEnterroForaDaFaixaEDenunciado()
+    {
+        var config = Padrao();
+
+        Assert.Null(config.WhyEmbedmentIsWrong(0.90));
+        Assert.Null(config.WhyEmbedmentIsWrong(1.50));
+        Assert.Null(config.WhyEmbedmentIsWrong(2.00));
+
+        Assert.Contains("mínimo", config.WhyEmbedmentIsWrong(0.5)!);
+        Assert.Contains("máximo", config.WhyEmbedmentIsWrong(2.5)!);
+        Assert.NotNull(config.WhyEmbedmentIsWrong(double.NaN));
+    }
+
     [Theory]
     [Trait("Etapa", "4")]
     [InlineData(0.6, 0.2)]
@@ -198,41 +313,6 @@ public class SystemConfigurationTests
     public void PitchImpossivelERecusado(double pitch)
     {
         Assert.False((Padrao() with { Pitch = pitch }).IsValid);
-    }
-
-    [Theory]
-    [Trait("Etapa", "4")]
-    [InlineData(-1)]
-    [InlineData(-0.001)]
-    [InlineData(1.01)]
-    [InlineData(double.NaN)]
-    public void ToleranciaDeInvasaoForaDeZeroAUmERecusada(double tolerancia)
-    {
-        var config = Padrao() with { BumpToleranceFraction = tolerancia };
-
-        Assert.False(config.IsValid);
-        Assert.Contains("invasão", config.WhyInvalid!);
-    }
-
-    /// <summary>
-    /// A tolerância é fração da mesa, e não contagem: mesa de 28 módulos e
-    /// mesa de 14 não podem ter a mesma permissão absoluta. Um inteiro só
-    /// significaria coisas diferentes em cada mesa.
-    /// </summary>
-    [Fact]
-    [Trait("Etapa", "4")]
-    public void QuantosModulosPodemInvadirSaiDaFracao()
-    {
-        var config = Padrao() with { BumpToleranceFraction = 0.25 };
-
-        // 25% de 28 módulos são 7.
-        Assert.Equal(7, config.BumpToleranceFor(28));
-
-        // E nunca arredonda para cima: 25% de 10 são 2,5, e vale 2.
-        Assert.Equal(2, config.BumpToleranceFor(10));
-
-        // Tolerância zero é o padrão: nenhum módulo pode invadir.
-        Assert.Equal(0, Padrao().BumpToleranceFor(28));
     }
 
     /// <summary>
@@ -277,19 +357,6 @@ public class SystemConfigurationTests
         Assert.Contains("espaçamento", config.WhyInvalid!);
     }
 
-    [Theory]
-    [Trait("Etapa", "4")]
-    [InlineData(-0.1)]
-    [InlineData(7)]
-    [InlineData(double.NaN)]
-    public void AzimuteForaDeUmaVoltaERecusado(double azimute)
-    {
-        var config = Padrao() with { FacingAzimuthRadians = azimute };
-
-        Assert.False(config.IsValid);
-        Assert.Contains("azimute", config.WhyInvalid!);
-    }
-
     // ------------------------------------------------------------- texto
 
     [Fact]
@@ -330,7 +397,7 @@ public class SystemConfigurationTests
             Padrao() with { MinEmbedment = 5 },
             Padrao() with { MaxStep = -1 },
             Padrao() with { FacingAzimuthRadians = 9 },
-            Padrao() with { MaxPillarLength = 0.2 },
+            Padrao() with { BumpToleranceModules = -3 },
         ];
 
         foreach (var config in quebradas)
@@ -338,189 +405,5 @@ public class SystemConfigurationTests
             Assert.False(config.IsValid);
             Assert.False(string.IsNullOrWhiteSpace(config.WhyInvalid));
         }
-    }
-
-    // ------------------------------- o que a revisão do 4.1 mandou cobrir
-
-    /// <summary>
-    /// A pendência que a etapa 3 deixou aberta, agora fechada em código: o
-    /// azimute de mira e o azimute do eixo que sobe a inclinação são opostos.
-    ///
-    /// O +Y local aponta da ponta baixa para a alta, ou seja, para o lado
-    /// contrário ao que a mesa olha. Passar o azimute de mira direto para a
-    /// rotação põe a usina inteira virada para o lado errado, com o desenho
-    /// perfeito e a produção pela metade.
-    /// </summary>
-    [Theory]
-    [Trait("Etapa", "4")]
-    [InlineData(0, 180)]
-    [InlineData(180, 0)]
-    [InlineData(90, 270)]
-    [InlineData(350, 170)]
-    public void OEixoQueSobeApontaParaOLadoOpostoAoQueAMesaOlha(double mira, double subida)
-    {
-        var config = Padrao() with { FacingAzimuthRadians = mira * Grau };
-
-        Assert.Equal(subida * Grau, config.UpslopeAzimuthRadians, 9);
-    }
-
-    [Fact]
-    [Trait("Etapa", "4")]
-    public void OAzimuteEmGrausAcompanhaORadiano()
-    {
-        var config = Padrao() with { FacingAzimuthRadians = 45 * Grau };
-
-        Assert.Equal(45, config.FacingAzimuthDegrees, 9);
-    }
-
-    /// <summary>
-    /// O achado da revisão: um teto que não comporta nem a ponta baixa mínima
-    /// faz TODA mesa da usina nascer marcada — e a configuração era aceita
-    /// como coerente.
-    ///
-    /// Com enterro de 0,90 e ponta baixa mínima de 0,30, o teto precisa passar
-    /// de 1,20 m só para existir uma mesa possível.
-    /// </summary>
-    [Theory]
-    [Trait("Etapa", "4")]
-    [InlineData(1.0)]
-    [InlineData(1.15)]
-    [InlineData(1.20)]
-    public void TetoQueNaoComportaNemAPontaBaixaMinimaERecusado(double teto)
-    {
-        var config = Padrao() with { MaxPillarLength = teto };
-
-        Assert.False(config.IsValid);
-        Assert.Contains("nenhuma mesa caberia", config.WhyInvalid!);
-    }
-
-    [Fact]
-    [Trait("Etapa", "4")]
-    public void TetoQueComportaAPontaBaixaMinimaEAceito()
-    {
-        Assert.True((Padrao() with { MaxPillarLength = 1.21 }).IsValid);
-    }
-
-    /// <summary>
-    /// Enterro mínimo de um bilionésimo de metro é pilar que flutua, e passava
-    /// pela conferência de sinal.
-    /// </summary>
-    [Fact]
-    [Trait("Etapa", "4")]
-    public void EnterroMinimoMenorQueUmMilimetroERecusado()
-    {
-        var config = Padrao() with { MinEmbedment = 1e-9 };
-
-        Assert.False(config.IsValid);
-        Assert.Contains("milímetro", config.WhyInvalid!);
-    }
-
-    /// <summary>
-    /// O enterro máximo deixou de ser campo que ninguém lê: ele vale quando o
-    /// comprimento do pilar vem imposto de fora.
-    /// </summary>
-    [Fact]
-    [Trait("Etapa", "4")]
-    public void OEnterroForaDaFaixaEDenunciado()
-    {
-        var config = Padrao();
-
-        Assert.Null(config.WhyEmbedmentIsWrong(0.90));
-        Assert.Null(config.WhyEmbedmentIsWrong(1.50));
-        Assert.Null(config.WhyEmbedmentIsWrong(2.00));
-
-        Assert.Contains("mínimo", config.WhyEmbedmentIsWrong(0.5)!);
-        Assert.Contains("máximo", config.WhyEmbedmentIsWrong(2.5)!);
-        Assert.NotNull(config.WhyEmbedmentIsWrong(double.NaN));
-    }
-
-    /// <summary>
-    /// "Não sei medir" não pode virar "está bom": comprimento que não é número
-    /// é marcado.
-    /// </summary>
-    [Fact]
-    [Trait("Etapa", "4")]
-    public void ComprimentoQueNaoENumeroEMarcado()
-    {
-        Assert.NotNull(Padrao().WhyPillarIsTooLong(double.NaN));
-        Assert.NotNull(Padrao().WhyPillarIsTooLong(double.PositiveInfinity));
-    }
-
-    /// <summary>
-    /// A fronteira exata do teto: um pilar do tamanho do teto cabe. Sem este
-    /// teste, trocar o menor-ou-igual por menor passaria impune.
-    /// </summary>
-    [Fact]
-    [Trait("Etapa", "4")]
-    public void OPilarDoTamanhoExatoDoTetoCabe()
-    {
-        var config = Padrao() with { MaxPillarLength = 2.50 };
-
-        Assert.Null(config.WhyPillarIsTooLong(2.50));
-        Assert.NotNull(config.WhyPillarIsTooLong(2.5001));
-    }
-
-    /// <summary>
-    /// Configuração quebrada não responde número. Com a fração em NaN, o cast
-    /// devolvia int.MinValue — uma tolerância de menos dois bilhões numa
-    /// comparação adiante é estouro esperando acontecer.
-    /// </summary>
-    [Fact]
-    [Trait("Etapa", "4")]
-    public void ConfiguracaoQuebradaNaoRespondeTolerancia()
-    {
-        Assert.Equal(0, (Padrao() with { BumpToleranceFraction = double.NaN }).BumpToleranceFor(28));
-        Assert.Equal(0, (Padrao() with { BumpToleranceFraction = -0.5 }).BumpToleranceFor(28));
-        Assert.Equal(0, Padrao().BumpToleranceFor(0));
-        Assert.Equal(0, Padrao().BumpToleranceFor(-5));
-    }
-
-    [Fact]
-    [Trait("Etapa", "4")]
-    public void ConfiguracaoQuebradaNaoRespondeComprimentoDePilar()
-    {
-        var quebrada = Padrao() with { MinEmbedment = double.NaN };
-
-        Assert.Throws<InvalidOperationException>(() => quebrada.IdealPillarLength(1.461));
-    }
-
-    /// <summary>
-    /// Registrado como comportamento, não como acidente: numa mesa pequena uma
-    /// fração pequena dá tolerância zero, e quem ligou a tolerância não é
-    /// avisado. Está em PROGRESSO.md esperando a palavra do Renan.
-    /// </summary>
-    [Fact]
-    [Trait("Etapa", "4")]
-    public void NumaMesaPequenaUmaFracaoPequenaDaToleranciaZero()
-    {
-        var config = Padrao() with { BumpToleranceFraction = 0.25 };
-
-        Assert.Equal(0, config.BumpToleranceFor(3));
-        Assert.Equal(1, config.BumpToleranceFor(4));
-    }
-
-    /// <summary>
-    /// Tolerância um é legítimo e desliga a regra sagrada 4: quem puser isso
-    /// está dizendo que aceita qualquer invasão.
-    /// </summary>
-    [Fact]
-    [Trait("Etapa", "4")]
-    public void ToleranciaUmAceitaTodosOsModulos()
-    {
-        var config = Padrao() with { BumpToleranceFraction = 1.0 };
-
-        Assert.True(config.IsValid);
-        Assert.Equal(28, config.BumpToleranceFor(28));
-    }
-
-    /// <summary>
-    /// A rede de escala do comprimento ideal é a mesma do resto do Core, e não
-    /// uma segunda: ela vem de PillarSizing.Length.
-    /// </summary>
-    [Fact]
-    [Trait("Etapa", "4")]
-    public void OComprimentoIdealHerdaARedeDeEscalaDoCore()
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() => Padrao().IdealPillarLength(1e9));
     }
 }

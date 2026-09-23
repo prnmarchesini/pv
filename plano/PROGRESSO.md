@@ -944,3 +944,45 @@ Seis mutações conferidas depois das correções: **11 testes caem**.
   não está escrita nem como comentário;
 - `MaiorMedida = 50` é o terceiro dono de um limite de escala que já existe em
   `PillarSizing`. Vale centralizar antes de virar quatro.
+
+## As três respostas do Renan, aplicadas (23/09/2026)
+
+Perguntei as três coisas que eu tinha decidido por conta própria. Ele respondeu,
+e duas das respostas **apagaram código**.
+
+**1. O pilar é só cálculo.** Perguntei se os 2,5 m eram teto de verdade:
+
+> "eu costumo comprar, volto a dizer, vc deve calcular o pilar ideal apenas"
+
+O teto opcional saiu inteiro — `MaxPillarLength` e `WhyPillarIsTooLong` não
+existem mais. Configuração que ninguém usa é passivo: ela vira campo na tela do
+4.4, vira um segundo dono de um número que é dele, e volta como "inofensiva".
+Ficou um teste guardando a ausência, para ela não voltar sem querer.
+
+Com isso a conclusão de que "a ponta baixa só vai até 0,439 m" está
+definitivamente aposentada. Ela era artefato de eu tratar os 2,5 m como
+restrição.
+
+**2. Tolerância de invasão é contagem, não fração.**
+
+> "contagem"
+
+Voltou a ser o que a regra sagrada 4 diz ao pé da letra. `BumpToleranceFraction`
+(double) virou `BumpToleranceModules` (int), e com isso some também o efeito
+colateral que eu tinha registrado: numa mesa pequena, a fração arredondada para
+baixo dava tolerância zero sem avisar. A única regra que sobrou é o limite pelo
+tamanho da mesa — cinco numa mesa de três valem três, senão a comparação adiante
+nunca marcaria mesa nenhuma.
+
+**Lição para os próximos passos:** eu tinha bons argumentos de engenharia para a
+fração, e mesmo assim estava errado — porque o que estava em jogo não era a
+engenharia, era a regra que ele escreveu. Regra sagrada não se melhora sem
+perguntar.
+
+**3. O desenho está no norte geográfico.**
+
+> "esta com o norte"
+
+Então não há campo de norte do desenho, e a hipótese deixa de ser silenciosa:
+está escrita aqui. Se um dia entrar um DWG com grid rotacionado, é aqui que a
+falta vai aparecer.
