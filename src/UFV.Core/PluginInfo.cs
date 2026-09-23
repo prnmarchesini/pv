@@ -45,6 +45,13 @@ public static class PluginInfo
     public const string ComandoCoordenada = "UFV_COORD";
 
     /// <summary>
+    /// Comando que define ou corrige a latitude e a longitude do terreno.
+    /// Sem ele, um sinal trocado ficaria gravado para sempre — e latitude
+    /// trocada põe a usina no hemisfério errado.
+    /// </summary>
+    public const string ComandoLocalizacao = "UFV_LOCAL";
+
+    /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).
     /// </summary>

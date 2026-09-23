@@ -110,6 +110,13 @@ internal static class GeoStore
         PluginDictionary.Save(database, Chave, buffer);
     }
 
+    /// <summary>
+    /// A localização gravada pelo plugin, ou null. Diferente de
+    /// <see cref="Read"/>, não cai para a do desenho: serve para mostrar ao
+    /// usuário exatamente o que está guardado.
+    /// </summary>
+    internal static GeoLocation? Gravada(Database database) => Load(database);
+
     /// <summary>A localização gravada pelo plugin, ou null.</summary>
     private static GeoLocation? Load(Database database)
     {

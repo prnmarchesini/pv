@@ -19,8 +19,12 @@ public class ProvenanceTests
         int pontos = 12_621,
         int triangulos = 25_107,
         double minZ = 707.0,
-        double maxZ = 764.0) =>
-        new(handle, nome, revisao, pontos, triangulos, minZ, maxZ);
+        double maxZ = 764.0,
+        double minX = 313_848.093,
+        double minY = 7_455_953.826,
+        double maxX = 314_288.158,
+        double maxY = 7_456_473.096) =>
+        new(handle, nome, revisao, pontos, triangulos, minZ, maxZ, minX, minY, maxX, maxY);
 
     private static ProvenanceStamp Carimbo(SurfaceFingerprint? superficie = null) =>
         new(superficie ?? Superficie(), new DateTime(2026, 9, 22, 14, 30, 0), "0.1.0");
@@ -80,6 +84,8 @@ public class ProvenanceTests
     [InlineData("triângulos")]
     [InlineData("cota mínima")]
     [InlineData("cota máxima")]
+    [InlineData("posição em X")]
+    [InlineData("posição em Y")]
     public void QualquerMudancaSozinhaJaInvalida(string oQueMudou)
     {
         // Cada uma destas, isolada, significa que a superfície foi mexida.
@@ -91,12 +97,57 @@ public class ProvenanceTests
             "triângulos" => Superficie(triangulos: 25_108),
             "cota mínima" => Superficie(minZ: 706.99),
             "cota máxima" => Superficie(maxZ: 764.01),
+            "posição em X" => Superficie(minX: 313_849.093, maxX: 314_289.158),
+            "posição em Y" => Superficie(minY: 7_455_954.826, maxY: 7_456_474.096),
             _ => throw new ArgumentOutOfRangeException(nameof(oQueMudou)),
         };
 
         Assert.Equal(
             ProvenanceState.Desatualizado,
             ProvenanceCheck.Evaluate(Carimbo(), depois));
+    }
+
+    [Fact]
+    [Trait("Etapa", "1")]
+    public void SuperficieMovidaEDetectadaEDitaPorExtenso()
+    {
+        // O caso que o Renan achou testando: mover a superfície no desenho não
+        // muda contagem nenhuma nem as cotas extremas, e o carimbo dizia
+        // "atual" enquanto toda cota consultada passava a sair de outro lugar.
+        const double deslocamentoX = 25.5;
+        const double deslocamentoY = -12.0;
+
+        var movida = Superficie(
+            minX: 313_848.093 + deslocamentoX,
+            maxX: 314_288.158 + deslocamentoX,
+            minY: 7_455_953.826 + deslocamentoY,
+            maxY: 7_456_473.096 + deslocamentoY);
+
+        Assert.Equal(ProvenanceState.Desatualizado, ProvenanceCheck.Evaluate(Carimbo(), movida));
+
+        // A mensagem precisa dizer que foi MOVIDA, e quanto: "está diferente"
+        // deixaria o engenheiro procurando uma edição que não houve.
+        var mudancas = movida.DescribeChangesFrom(Superficie());
+
+        Assert.Single(mudancas);
+        Assert.Contains("foi movida", mudancas[0]);
+        Assert.Contains("25,500", mudancas[0]);
+        Assert.Contains("-12,000", mudancas[0]);
+    }
+
+    [Fact]
+    [Trait("Etapa", "1")]
+    public void SuperficieQueCresceuNaoEChamadaDeMovida()
+    {
+        // Aqui o tamanho mudou junto, então não foi um deslocamento: dizer
+        // "foi movida" seria uma explicação errada de um fato certo.
+        var maior = Superficie(maxX: 314_500.0);
+
+        var mudancas = maior.DescribeChangesFrom(Superficie());
+
+        Assert.Single(mudancas);
+        Assert.DoesNotContain("foi movida", mudancas[0]);
+        Assert.Contains("posição ou de tamanho", mudancas[0]);
     }
 
     [Fact]

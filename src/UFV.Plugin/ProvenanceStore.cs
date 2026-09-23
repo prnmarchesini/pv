@@ -31,15 +31,23 @@ internal static class ProvenanceStore
     private const string CampoTriangulos = "TRIANGULOS";
     private const string CampoCotaMinima = "COTAMIN";
     private const string CampoCotaMaxima = "COTAMAX";
+    private const string CampoCaixaMinX = "CAIXAMINX";
+    private const string CampoCaixaMinY = "CAIXAMINY";
+    private const string CampoCaixaMaxX = "CAIXAMAXX";
+    private const string CampoCaixaMaxY = "CAIXAMAXY";
     private const string CampoProcessadoEm = "PROCESSADOEM";
     private const string CampoVersaoDoPlugin = "VERSAO";
 
     /// <summary>
-    /// Versão do formato do carimbo. Um carimbo gravado por uma versão mais
-    /// nova é ignorado em vez de lido pela metade — melhor dizer "não há
-    /// carimbo" do que entender errado o que está escrito.
+    /// Versão do formato do carimbo. Um carimbo de versão diferente — mais
+    /// nova ou mais velha — é ignorado em vez de lido pela metade: melhor
+    /// dizer "não há carimbo" e pedir para reprocessar do que entender errado
+    /// o que está escrito.
+    ///
+    /// A 2 acrescentou a caixa envolvente em planta. Um carimbo da 1 não a
+    /// tem, e lê-lo com zeros faria toda superfície parecer "movida".
     /// </summary>
-    private const int VersaoDoFormato = 1;
+    private const int VersaoDoFormato = 2;
 
     /// <summary>Grava o carimbo, substituindo o anterior.</summary>
     internal static void Save(Database database, ProvenanceStamp carimbo)
@@ -80,6 +88,10 @@ internal static class ProvenanceStore
         Acrescentar(buffer, CampoTriangulos, s.TriangleCount.ToString(CultureInfo.InvariantCulture));
         Acrescentar(buffer, CampoCotaMinima, s.MinZ.ToString("R", CultureInfo.InvariantCulture));
         Acrescentar(buffer, CampoCotaMaxima, s.MaxZ.ToString("R", CultureInfo.InvariantCulture));
+        Acrescentar(buffer, CampoCaixaMinX, s.MinX.ToString("R", CultureInfo.InvariantCulture));
+        Acrescentar(buffer, CampoCaixaMinY, s.MinY.ToString("R", CultureInfo.InvariantCulture));
+        Acrescentar(buffer, CampoCaixaMaxX, s.MaxX.ToString("R", CultureInfo.InvariantCulture));
+        Acrescentar(buffer, CampoCaixaMaxY, s.MaxY.ToString("R", CultureInfo.InvariantCulture));
 
         // Formato redondo e invariante: quem lê pode estar noutra máquina, com
         // outra cultura, e a data precisa significar o mesmo instante.
@@ -108,10 +120,11 @@ internal static class ProvenanceStore
             campos[campo] = valores[i + 1].Value as string ?? string.Empty;
         }
 
-        if (!Inteiro(campos, CampoVersaoDoFormato, out var formato) || formato > VersaoDoFormato)
+        if (!Inteiro(campos, CampoVersaoDoFormato, out var formato) || formato != VersaoDoFormato)
         {
-            // Gravado por uma versão mais nova do plugin: melhor dizer que não
-            // há carimbo do que entender errado o que está escrito.
+            // Versão diferente da que sabemos ler. Tratar como ausente faz o
+            // usuário reprocessar, que é barato; adivinhar o que falta faria
+            // o carimbo mentir.
             return null;
         }
 
@@ -123,6 +136,10 @@ internal static class ProvenanceStore
         if (!Inteiro(campos, CampoTriangulos, out var triangulos)) return null;
         if (!Real(campos, CampoCotaMinima, out var minZ)) return null;
         if (!Real(campos, CampoCotaMaxima, out var maxZ)) return null;
+        if (!Real(campos, CampoCaixaMinX, out var minX)) return null;
+        if (!Real(campos, CampoCaixaMinY, out var minY)) return null;
+        if (!Real(campos, CampoCaixaMaxX, out var maxX)) return null;
+        if (!Real(campos, CampoCaixaMaxY, out var maxY)) return null;
 
         if (!campos.TryGetValue(CampoProcessadoEm, out var quando)
             || !DateTime.TryParse(
@@ -138,7 +155,9 @@ internal static class ProvenanceStore
         campos.TryGetValue(CampoVersaoDoPlugin, out var versao);
 
         return new ProvenanceStamp(
-            new SurfaceFingerprint(handle, nome ?? string.Empty, revisao, pontos, triangulos, minZ, maxZ),
+            new SurfaceFingerprint(
+                handle, nome ?? string.Empty, revisao, pontos, triangulos,
+                minZ, maxZ, minX, minY, maxX, maxY),
             processadoEm,
             versao ?? PluginInfo.VersaoDesconhecida);
     }

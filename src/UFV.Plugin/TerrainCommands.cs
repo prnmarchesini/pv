@@ -190,12 +190,18 @@ public static class TerrainCommands
                 return;
             }
 
-            var agora = LerIdentidadeAtual(documento, carimbo.Surface.Handle);
+            var agora = TerrenoEnvelhecido.LerIdentidadeAtual(documento, carimbo.Surface.Handle);
             var estado = ProvenanceCheck.Evaluate(carimbo, agora);
 
             editor.WriteMessage(
                 $"\nSTATUS {estado}: terreno de {carimbo.Surface.Name}, "
-                + $"processado em {carimbo.ProcessedAtText} pela versão {carimbo.PluginVersion}.\n");
+                + $"processado em {carimbo.ProcessedAtText} pela versão "
+                + $"{PluginInfo.VersaoLegivel(carimbo.PluginVersion)}.\n");
+
+            // A localização gravada aparece aqui, e não só no processamento:
+            // é o único lugar onde o usuário pode conferir o que ficou
+            // guardado — e, se ele digitou errado, descobrir isso.
+            MostrarLocalizacaoGravada(editor, documento);
 
             var aviso = ProvenanceCheck.Warning(carimbo, agora);
             if (aviso is not null) editor.WriteMessage($"{aviso}\n");
@@ -208,123 +214,68 @@ public static class TerrainCommands
     }
 
     /// <summary>
-    /// A superfície do carimbo, como ela está agora, ou null se ela não
-    /// estiver mais no desenho.
+    /// Mostra a localização já gravada, e como corrigi-la.
+    ///
+    /// Sem isto, uma latitude digitada com o sinal trocado ficaria gravada
+    /// para sempre sem o usuário ter onde ver nem como desfazer — e latitude
+    /// trocada põe a usina no hemisfério errado e inverte a orientação das
+    /// mesas.
     /// </summary>
-    private static SurfaceFingerprint? LerIdentidadeAtual(Document documento, string handle)
-    {
-        using var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction();
-
-        var id = ObjectId.Null;
-
-        try
-        {
-            // O handle é texto hexadecimal no desenho; aqui ele volta a ser o
-            // identificador do objeto.
-            var convertido = Convert.ToInt64(handle, 16);
-            id = documento.Database.GetObjectId(false, new Handle(convertido), 0);
-        }
-        catch (System.Exception)
-        {
-            // Handle que não existe mais neste desenho: o objeto foi apagado,
-            // ou o carimbo veio de outro arquivo por cópia.
-            return null;
-        }
-
-        if (id.IsNull || id.IsErased) return null;
-        if (transacao.GetObject(id, OpenMode.ForRead) is not TinSurface superficie) return null;
-
-        var identidade = FingerprintReader.Read(superficie);
-        transacao.Commit();
-
-        return identidade;
-    }
-
     /// <summary>
-    /// Mostra onde no mundo fica o terreno, e pergunta quando o desenho não
-    /// sabe.
+    /// Mostra onde no mundo fica o terreno que acabou de ser processado.
     ///
     /// É pré-requisito da posição do sol, e portanto do azimute e de qualquer
-    /// conta de sombreamento adiante. Perguntar agora, e não na etapa em que
-    /// for usado, é proposital: lá o erro já estaria embutido no layout.
+    /// conta de sombreamento adiante. Quando o desenho não sabe responder, o
+    /// comando não pergunta aqui: manda usar UFV_LOCAL, que é onde a pergunta
+    /// mora — junto com a correção. Dois lugares perguntando o mesmo dado
+    /// acabariam com validações que divergem.
     /// </summary>
-    private static void MostrarLocalizacao(Editor editor, Document documento, Point3d pontoDoTerreno)
+    private static void MostrarLocalizacaoDoTerreno(
+        Editor editor,
+        Document documento,
+        Point3d pontoDoTerreno)
     {
         try
         {
             var lugar = GeoStore.Read(documento.Database, pontoDoTerreno);
 
-            if (lugar is not null)
+            if (lugar is null)
             {
-                var origem = lugar.Source == GeoLocationSource.Desenho
-                    ? "do desenho"
-                    : "informada";
-
-                editor.WriteMessage($"  localização:    {lugar.Describe()}  ({origem})\n");
+                editor.WriteMessage(
+                    $"  localização:    não definida. Use {PluginInfo.ComandoLocalizacao} para informar.\n");
                 return;
             }
 
-            if (!UfvExtension.TemInterface())
-            {
-                // Sem interface não há a quem perguntar. Dizer que falta é
-                // melhor que inventar um valor.
-                editor.WriteMessage("  localização:    não definida neste desenho\n");
-                return;
-            }
-
-            Perguntar(editor, documento);
+            var origem = lugar.Source == GeoLocationSource.Desenho ? "do desenho" : "informada";
+            editor.WriteMessage($"  localização:    {lugar.Describe()}  ({origem})\n");
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao obter a localização geográfica.", erro);
+            editor.WriteMessage("  localização:    não consegui obter (ver log)\n");
         }
     }
 
-    private static void Perguntar(Editor editor, Document documento)
+    private static void MostrarLocalizacaoGravada(Editor editor, Document documento)
     {
-        editor.WriteMessage(
-            "\n  Este desenho não tem localização geográfica definida, e ela é necessária\n"
-            + "  para a posição do sol. Informe a do terreno (negativo para sul e oeste).\n");
-
-        if (!PerguntarGrau(editor, "Latitude", -90, 90, out var latitude)) return;
-        if (!PerguntarGrau(editor, "Longitude", -180, 180, out var longitude)) return;
-
-        var lugar = new GeoLocation(latitude, longitude, GeoLocationSource.Usuario);
-
-        if (!lugar.IsValid)
+        try
         {
-            editor.WriteMessage("  Valor fora dos limites; a localização não foi gravada.\n");
-            return;
+            var lugar = GeoStore.Gravada(documento.Database);
+            if (lugar is null) return;
+
+            var origem = lugar.Source == GeoLocationSource.Desenho ? "do desenho" : "informada";
+            editor.WriteMessage($"  localização:    {lugar.Describe()}  ({origem})\n");
+
+            if (lugar.Source == GeoLocationSource.Usuario)
+            {
+                editor.WriteMessage(
+                    $"  (para corrigir, use {PluginInfo.ComandoLocalizacao})\n");
+            }
         }
-
-        GeoStore.Save(documento.Database, lugar);
-        editor.WriteMessage($"  localização:    {lugar.Describe()}  (informada)\n");
-    }
-
-    private static bool PerguntarGrau(Editor editor, string rotulo, double minimo, double maximo, out double valor)
-    {
-        valor = 0;
-
-        var opcoes = new PromptDoubleOptions($"\n  {rotulo} em graus: ")
+        catch (System.Exception erro)
         {
-            AllowNone = false,
-        };
-
-        var resposta = editor.GetDouble(opcoes);
-        if (resposta.Status != PromptStatus.OK)
-        {
-            editor.WriteMessage("  Localização não informada.\n");
-            return false;
+            RegistroDeDiagnostico.Registrar("Não consegui mostrar a localização gravada.", erro);
         }
-
-        if (resposta.Value < minimo || resposta.Value > maximo)
-        {
-            editor.WriteMessage($"  {rotulo} precisa ficar entre {minimo} e {maximo}.\n");
-            return false;
-        }
-
-        valor = resposta.Value;
-        return true;
     }
 
     private static void GravarCarimbo(Editor editor, Document documento, SurfaceFingerprint identidade)
@@ -461,7 +412,7 @@ public static class TerrainCommands
         editor.WriteMessage("\n");
         foreach (var linha in resumo.Lines()) editor.WriteMessage($"{linha}\n");
 
-        MostrarLocalizacao(editor, documento, centroDoTerreno);
+        MostrarLocalizacaoDoTerreno(editor, documento, centroDoTerreno);
 
         if (lida.UnreadableCount > 0)
         {

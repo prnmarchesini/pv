@@ -29,7 +29,13 @@ internal static class FingerprintReader
             gerais.NumberOfPoints,
             tin.NumberOfTriangles,
             gerais.MinimumElevation,
-            gerais.MaximumElevation);
+            gerais.MaximumElevation,
+            // A caixa em planta é o que detecta a superfície movida: nenhum
+            // dos outros campos muda quando o terreno anda em X e Y.
+            gerais.MinimumCoordinateX,
+            gerais.MinimumCoordinateY,
+            gerais.MaximumCoordinateX,
+            gerais.MaximumCoordinateY);
     }
 
     private static string LerNome(TinSurface superficie)

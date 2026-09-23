@@ -1,0 +1,21 @@
+; Teste de nivel 2 do passo 1.7: consulta a cota de um ponto conhecido e de um
+; ponto fora do terreno.
+;
+; O comando pede o ponto pelo GetPoint, e no Core Console o GetPoint le do
+; proprio script — entao da para exercitar o comando do produto inteiro, sem
+; um comando separado so para teste.
+;
+; Os dois pontos vem de {{DENTRO}} e {{FORA}}, calculados pelo runner a partir
+; da caixa da superficie: o de dentro e o centro, o de fora fica bem longe.
+; Assim o teste vale para qualquer desenho do acervo, sem coordenada cravada.
+;
+; O terceiro Enter sai do laco de perguntas.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_TERRENO_AUTO")
+(command "UFV_COORD" "{{DENTRO}}" "{{FORA}}" "")
+(setvar "SECURELOAD" ufv:secureload)
+(princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

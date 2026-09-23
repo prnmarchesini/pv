@@ -1,0 +1,32 @@
+; Teste de nivel 2 do passo 1.5, terceira metade: abre o desenho que ja tem
+; carimbo, MOVE a superficie, e pergunta o status.
+;
+; Tem que responder "STATUS Desatualizado". Este e o caso que o Renan achou
+; testando a mao: mover a superficie nao muda a contagem de pontos, nem a de
+; triangulos, nem as cotas extremas — os campos que a primeira versao do
+; carimbo comparava — e o plugin dizia "atual" enquanto toda cota consultada
+; passava a sair de outro lugar do terreno.
+;
+; O deslocamento e de 50 m em X e 30 m em Y, bem acima do milimetro de
+; tolerancia, para o teste nao depender de arredondamento.
+;
+; Vale tambem como medida do que nao foi medido: se o numero de revisao do
+; Civil 3D fosse a unica coisa a mudar aqui, este teste passaria mesmo sem a
+; caixa envolvente. Ele so prova o conjunto; o teste de nivel 1
+; SuperficieMovidaEDetectadaEDitaPorExtenso e que isola a caixa.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(setq ss (ssget "_X" '((0 . "AECC_TIN_SURFACE"))))
+(if ss
+  (progn
+    (command "_.MOVE" ss "" "0,0,0" "50,30,0")
+    (princ (strcat "\nUFV_MOVEU=" (itoa (sslength ss))))
+  )
+  (princ "\nUFV_MOVEU=0")
+)
+(command "UFV_TERRENO_STATUS")
+(setvar "SECURELOAD" ufv:secureload)
+(princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

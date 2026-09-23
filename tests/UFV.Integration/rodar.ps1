@@ -451,10 +451,30 @@ function Testar-CasoDoTerreno {
     # coordenada norte em UTM, e so precisa bater dentro de um grau para
     # provar que o ponto convertido e o do terreno, e nao outro qualquer.
 
-    if ($r.Texto -match 'localização:\s+([\d,\.]+)° ([NS]), ([\d,\.]+)° ([LO])') {
+    # A linha tem que EXISTIR. Sem esta exigencia, a conferencia toda ficava
+    # dentro de um "se a linha aparecer" — e qualquer mudanca no texto da
+    # mensagem, ou uma excecao engolida na hora de obter a localizacao, fazia
+    # o caso passar verde sem testar nada. Foi assim que dois outros trechos
+    # deste arquivo ja passaram a nao testar coisa nenhuma.
+    # (?m) para o $ ancorar no fim da LINHA, e nao do texto inteiro.
+    if ($r.Texto -notmatch '(?m)^\s*localização:\s+\S') {
+        $problemas.Add("$Rotulo : o resumo nao traz a linha de localizacao. Veja $($r.Saida)")
+        return $false
+    }
+
+    # Desenho sem geolocalizacao e caso legitimo: o comando diz isso e nao ha
+    # coordenada para conferir.
+    if ($r.Texto -notmatch 'localização:\s+não definida') {
+        if ($r.Texto -notmatch 'localização:\s+([\d,\.]+)° ([NSns]), ([\d,\.]+)° ([LOlo])') {
+            $problemas.Add(
+                "$Rotulo : a localizacao nao esta no formato esperado (grau e hemisferio). " +
+                "Veja $($r.Saida)")
+            return $false
+        }
+
         $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
-        $sinal = if ($Matches[2] -eq 'S') { -1 } else { 1 }
-        $latitude = [double]::Parse($Matches[1], $ptbr) * $sinal
+        $latitude = [double]::Parse($Matches[1], $ptbr) * $(if ($Matches[2] -eq 'S') { -1 } else { 1 })
+        $longitude = [double]::Parse($Matches[3], $ptbr) * $(if ($Matches[4] -eq 'O') { -1 } else { 1 })
 
         if ($r.Texto -notmatch 'centroY=(-?[\d.]+)') {
             $problemas.Add("$Rotulo : o comando nao informou o centro do terreno. Veja $($r.Saida)")
@@ -463,13 +483,29 @@ function Testar-CasoDoTerreno {
 
         $norte = [double]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture)
 
-        # UTM do hemisferio sul: 10.000.000 m no equador, ~110.574 m por grau.
+        # Estimativa grosseira pela coordenada norte em UTM do hemisferio sul:
+        # 10.000.000 m no equador, ~110.574 m por grau. So serve para provar
+        # que o ponto convertido e o do terreno, e nao um ponto qualquer.
+        #
+        # Vale enquanto os desenhos do acervo forem UTM do hemisferio sul. Um
+        # desenho de outra projecao deixaria este teste vermelho sem defeito
+        # nenhum — e ai a conferencia precisa mudar, nao o plugin.
         $latitudeEstimada = -(10000000 - $norte) / 110574
 
         if ([Math]::Abs($latitude - $latitudeEstimada) -gt 1.0) {
             $problemas.Add(
                 "$Rotulo : a localizacao diz latitude $latitude, mas o terreno esta perto de " +
                 "$([Math]::Round($latitudeEstimada, 2)). Veja $($r.Saida)")
+            return $false
+        }
+
+        # O Brasil inteiro fica entre 35 e 74 graus a oeste. Nao e uma
+        # conferencia geografica de verdade; e a rede que pega longitude com o
+        # sinal trocado, que e o erro classico e sai plausivel.
+        if ($longitude -gt 0) {
+            $problemas.Add(
+                "$Rotulo : longitude positiva ($longitude) num terreno em UTM sul. " +
+                "Veja $($r.Saida)")
             return $false
         }
     }
@@ -644,6 +680,119 @@ function Testar-Carimbo {
         return $false
     }
 
+    # Terceira metade: move a superficie e exige que o carimbo perceba.
+    #
+    # E o caso que o Renan achou a mao. Sem ele, a deteccao de terreno
+    # envelhecido so era exercitada por mutacao de codigo — e mutar o codigo
+    # nao prova que o Civil 3D muda o que se espera que ele mude quando a
+    # superficie e editada de verdade.
+    $mover = Invoke-CoreConsole -Desenho $copia -Rotulo 'ufv-carimbo-mover' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-carimbo-mover.scr')
+
+    if ($mover.Texto -notmatch 'UFV_MOVEU=([1-9]\d*)') {
+        $problemas.Add("ufv-carimbo: nao consegui mover a superficie no desenho. Veja $($mover.Saida)")
+        return $false
+    }
+
+    if ($mover.Texto -notmatch '(?m)^STATUS (\w+):') {
+        $problemas.Add("ufv-carimbo: depois de mover, o status nao respondeu. Veja $($mover.Saida)")
+        return $false
+    }
+
+    $estadoDepoisDeMover = $Matches[1]
+    if ($estadoDepoisDeMover -ne 'Desatualizado') {
+        $problemas.Add(
+            "ufv-carimbo: a superficie foi movida 50 m e o status deu '$estadoDepoisDeMover'. " +
+            "Mover o terreno muda de onde sai cada cota, e o carimbo tem que perceber. " +
+            "Veja $($mover.Saida)")
+        return $false
+    }
+
+    # E a mensagem precisa dizer o que aconteceu, nao so que algo aconteceu.
+    if ($mover.Texto -notmatch 'foi movida') {
+        $problemas.Add(
+            "ufv-carimbo: o aviso nao diz que a superficie foi movida. Veja $($mover.Saida)")
+        return $false
+    }
+
+    return $true
+}
+
+<#
+    A consulta de cota (passo 1.7).
+
+    Usa o comando do produto, o mesmo que o usuario aciona pelo botao: no Core
+    Console o GetPoint le do proprio script, entao nao e preciso um comando
+    separado so para o teste.
+
+    Os pontos saem da caixa da superficie, que o comando automatico imprime.
+    O de dentro e o centro; o de fora fica a dez quilometros. Assim o caso
+    vale para qualquer desenho congelado depois, sem coordenada cravada a mao.
+#>
+function Testar-Coordenada {
+    param([string] $Desenho, [string] $Rotulo)
+
+    # Primeiro descobrimos onde fica o terreno, rodando o automatico.
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo "$Rotulo--sonda" `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("$Rotulo : nao consegui achar o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    # Cultura invariante no ponto decimal: com a do PowerShell em portugues,
+    # "314068,126" sai com virgula, e o AutoCAD le virgula como separador de
+    # coordenada — o ponto viraria quatro numeros e o comando engasgaria.
+    $dentro = [string]::Format($invariante, '{0:0.###},{1:0.###}', $centroX, $centroY)
+    $fora = [string]::Format($invariante, '{0:0.###},{1:0.###}', $centroX + 10000, $centroY + 10000)
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo $Rotulo `
+                            -Script (Join-Path $PSScriptRoot 'ufv-coord.scr') `
+                            -Substituicoes @{ '{{DENTRO}}' = $dentro; '{{FORA}}' = $fora }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("$Rotulo terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    # O ponto de dentro tem que devolver uma cota, e ela tem que cair entre a
+    # cota minima e a maxima do terreno — que o proprio comando imprimiu.
+    if ($r.Texto -notmatch '(?m)^\s+X [\d\.,]+\s+Y [\d\.,]+\s+Z ([\d\.,-]+)\s*$') {
+        $problemas.Add("$Rotulo : o ponto de dentro nao devolveu cota. Veja $($r.Saida)")
+        return $false
+    }
+
+    $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
+    $z = [double]::Parse($Matches[1], $ptbr)
+
+    if ($r.Texto -notmatch 'cotas:\s+(-?[\d.,]+) m a (-?[\d.,]+) m') {
+        $problemas.Add("$Rotulo : nao achei as cotas do resumo. Veja $($r.Saida)")
+        return $false
+    }
+
+    $minima = [double]::Parse($Matches[1], $ptbr)
+    $maxima = [double]::Parse($Matches[2], $ptbr)
+
+    if ($z -lt $minima -or $z -gt $maxima) {
+        $problemas.Add(
+            "$Rotulo : a cota consultada ($z) esta fora da faixa do terreno ($minima a $maxima). " +
+            "Veja $($r.Saida)")
+        return $false
+    }
+
+    # E o ponto de fora tem que ser recusado, em vez de receber um numero.
+    if ($r.Texto -notmatch 'fora do terreno') {
+        $problemas.Add(
+            "$Rotulo : um ponto a dez quilometros do terreno nao foi recusado. " +
+            "Veja $($r.Saida)")
+        return $false
+    }
+
     return $true
 }
 
@@ -684,6 +833,10 @@ else {
     # para desenho.
     $total++
     if (Testar-Carimbo -Desenho $desenhos[0]) { $passaram++ }
+
+    # A consulta de cota, idem.
+    $total++
+    if (Testar-Coordenada -Desenho $desenhos[0] -Rotulo 'ufv-coord') { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

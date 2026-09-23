@@ -5,10 +5,16 @@ namespace UFV.Core;
 /// é a mesma de antes, e para perceber quando deixou de ser.
 ///
 /// Não existe data de modificação por objeto no desenho, então a identidade se
-/// apoia em quatro coisas que mudam juntas quando alguém mexe na superfície: o
-/// número de revisão que o Civil 3D mantém, a contagem de pontos, a de
-/// triângulos e as cotas extremas. Uma edição que não mexa em nenhuma das
-/// quatro também não muda nenhuma cota, que é o que importa aqui.
+/// apoia em coisas que mudam quando alguém mexe na superfície: o número de
+/// revisão que o Civil 3D mantém, a contagem de pontos, a de triângulos, as
+/// cotas extremas e a CAIXA ENVOLVENTE em planta.
+///
+/// A caixa entrou depois, e por um caso real: o Renan moveu a superfície no
+/// desenho e o carimbo continuou dizendo "atual". Mover em X e Y desloca cada
+/// ponto do terreno — toda cota consultada passa a sair de um lugar
+/// diferente — mas não muda contagem nenhuma nem as cotas extremas. Sem a
+/// caixa, o deslocamento passava batido, e é o tipo de coisa que acontece
+/// quando se ajusta a topografia à planta do projeto.
 /// </summary>
 /// <param name="Handle">
 /// O identificador permanente da superfície dentro do arquivo. Nasce com ela e
@@ -20,6 +26,10 @@ namespace UFV.Core;
 /// <param name="TriangleCount">Triângulos da superfície.</param>
 /// <param name="MinZ">Cota mais baixa, em metros.</param>
 /// <param name="MaxZ">Cota mais alta, em metros.</param>
+/// <param name="MinX">Extremo oeste da superfície, em metros.</param>
+/// <param name="MinY">Extremo sul da superfície, em metros.</param>
+/// <param name="MaxX">Extremo leste da superfície, em metros.</param>
+/// <param name="MaxY">Extremo norte da superfície, em metros.</param>
 public sealed record SurfaceFingerprint(
     string Handle,
     string Name,
@@ -27,7 +37,11 @@ public sealed record SurfaceFingerprint(
     int PointCount,
     int TriangleCount,
     double MinZ,
-    double MaxZ)
+    double MaxZ,
+    double MinX,
+    double MinY,
+    double MaxX,
+    double MaxY)
 {
     /// <summary>Um milímetro: a mesma tolerância dos verificadores de regra sagrada.</summary>
     private const double ToleranciaDeCota = 0.001;
@@ -48,7 +62,11 @@ public sealed record SurfaceFingerprint(
             && PointCount == outra.PointCount
             && TriangleCount == outra.TriangleCount
             && Math.Abs(MinZ - outra.MinZ) <= ToleranciaDeCota
-            && Math.Abs(MaxZ - outra.MaxZ) <= ToleranciaDeCota;
+            && Math.Abs(MaxZ - outra.MaxZ) <= ToleranciaDeCota
+            && Math.Abs(MinX - outra.MinX) <= ToleranciaDeCota
+            && Math.Abs(MinY - outra.MinY) <= ToleranciaDeCota
+            && Math.Abs(MaxX - outra.MaxX) <= ToleranciaDeCota
+            && Math.Abs(MaxY - outra.MaxY) <= ToleranciaDeCota;
     }
 
     /// <summary>
@@ -79,6 +97,24 @@ public sealed record SurfaceFingerprint(
             mudancas.Add(
                 $"cotas: {anterior.MinZ:0.000} a {anterior.MaxZ:0.000} m "
                 + $"→ {MinZ:0.000} a {MaxZ:0.000} m");
+        }
+
+        if (Math.Abs(MinX - anterior.MinX) > ToleranciaDeCota
+            || Math.Abs(MinY - anterior.MinY) > ToleranciaDeCota
+            || Math.Abs(MaxX - anterior.MaxX) > ToleranciaDeCota
+            || Math.Abs(MaxY - anterior.MaxY) > ToleranciaDeCota)
+        {
+            // Deslocamento puro merece um nome próprio: é a edição que mais
+            // engana, porque o terreno continua com a mesma cara e todos os
+            // números de tamanho continuam iguais.
+            var deslocou =
+                Math.Abs((MaxX - MinX) - (anterior.MaxX - anterior.MinX)) <= ToleranciaDeCota
+                && Math.Abs((MaxY - MinY) - (anterior.MaxY - anterior.MinY)) <= ToleranciaDeCota;
+
+            mudancas.Add(deslocou
+                ? $"foi movida ({MinX - anterior.MinX:+0.000;-0.000} m em X, "
+                  + $"{MinY - anterior.MinY:+0.000;-0.000} m em Y)"
+                : "mudou de posição ou de tamanho em planta");
         }
 
         return mudancas;

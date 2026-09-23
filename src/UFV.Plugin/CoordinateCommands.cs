@@ -1,4 +1,5 @@
 using System.Globalization;
+using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
@@ -30,43 +31,77 @@ public static class CoordinateCommands
 
         var editor = documento.Editor;
 
-        var terreno = TerrainCache.Get(documento);
-        if (terreno is null)
+        try
         {
-            // Sem terreno processado não há o que consultar. A mensagem diz o
-            // que fazer, e não só que não dá.
-            editor.WriteMessage(
-                "\nNenhum terreno processado neste desenho. Use o botão Terreno primeiro.\n");
-            return;
-        }
-
-        while (true)
-        {
-            var opcoes = new PromptPointOptions("\nPonto no terreno (Enter para sair): ")
+            var terreno = TerrainCache.Get(documento);
+            if (terreno is null)
             {
-                AllowNone = true,
-            };
+                // Sem terreno processado não há o que consultar. A mensagem diz
+                // o que fazer, e não só que não dá.
+                editor.WriteMessage(
+                    "\nNenhum terreno processado neste desenho. Use o botão Terreno primeiro.\n");
+                return;
+            }
 
-            var resposta = editor.GetPoint(opcoes);
+            // O carimbo é conferido aqui, e não só no comando de status. De
+            // nada serve saber que o terreno envelheceu se o comando que
+            // entrega cota não pergunta: a resposta sai com três casas,
+            // formatada igual à correta, e ninguém desconfia.
+            AvisarSeEnvelheceu(editor, documento);
 
-            // Enter, Esc ou cancelamento: o usuário terminou.
-            if (resposta.Status != PromptStatus.OK) break;
+            while (true)
+            {
+                var opcoes = new PromptPointOptions("\nPonto no terreno (Enter para sair): ")
+                {
+                    AllowNone = true,
+                };
 
-            Responder(editor, terreno, resposta.Value);
+                var resposta = editor.GetPoint(opcoes);
+
+                // Enter, Esc ou cancelamento: o usuário terminou.
+                if (resposta.Status != PromptStatus.OK) break;
+
+                Responder(editor, terreno, resposta.Value);
+            }
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao consultar a cota do terreno.", erro);
+            editor.WriteMessage($"\nNão consegui consultar o terreno: {erro.Message}\n");
+        }
+    }
+
+    /// <summary>
+    /// Avisa, uma vez por uso do comando, se o terreno em memória não
+    /// corresponde mais à superfície do desenho.
+    /// </summary>
+    private static void AvisarSeEnvelheceu(Editor editor, Document documento)
+    {
+        try
+        {
+            var aviso = TerrenoEnvelhecido.Conferir(documento);
+            if (aviso is null) return;
+
+            editor.WriteMessage($"\n  ATENÇÃO: {aviso}\n");
+        }
+        catch (System.Exception erro)
+        {
+            // Não conseguir conferir não pode impedir a consulta; o que não
+            // pode é a falha passar sem rastro.
+            RegistroDeDiagnostico.Registrar("Não consegui conferir o carimbo antes da consulta.", erro);
         }
     }
 
     private static void Responder(Editor editor, ProcessedTerrain terreno, Point3d ponto)
     {
+        var ptbr = CultureInfo.GetCultureInfo("pt-BR");
+
         // A cota vem do terreno, não do Z do clique: o usuário aponta em
         // planta, e o que interessa é a superfície embaixo do dedo dele.
         if (!terreno.Mesh.TryGetZ(ponto.X, ponto.Y, out var z))
         {
             editor.WriteMessage(string.Format(
-                CultureInfo.GetCultureInfo("pt-BR"),
-                "\n  X {0:N3}   Y {1:N3}   fora do terreno\n",
-                ponto.X,
-                ponto.Y));
+                ptbr, "\n  X {0:N3}   Y {1:N3}   fora do terreno\n", ponto.X, ponto.Y));
 
             // "Fora do terreno" tem duas causas bem diferentes, e o usuário
             // precisa saber qual: clicou fora da borda, ou achou um buraco na
@@ -78,10 +113,6 @@ public static class CoordinateCommands
         }
 
         editor.WriteMessage(string.Format(
-            CultureInfo.GetCultureInfo("pt-BR"),
-            "\n  X {0:N3}   Y {1:N3}   Z {2:N3}\n",
-            ponto.X,
-            ponto.Y,
-            z));
+            ptbr, "\n  X {0:N3}   Y {1:N3}   Z {2:N3}\n", ponto.X, ponto.Y, z));
     }
 }
