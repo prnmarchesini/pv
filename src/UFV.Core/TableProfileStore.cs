@@ -239,9 +239,16 @@ public sealed class TableProfileStore
     /// </summary>
     private static void Trocar(string provisorio, string caminho)
     {
-        const int tentativas = 3;
+        // Prazo, e não contagem fixa de tentativas. Com três tentativas de 20 e
+        // 40 ms, o teste de gravação concorrente falhava de vez em quando — e
+        // teste instável é pior que teste nenhum, porque ensina a ignorar o
+        // placar. Um segundo e meio é muito mais do que a disputa real entre
+        // dois Civil 3D precisa, e continua curto o bastante para uma pasta
+        // sem permissão falhar rápido em vez de travar a janela.
+        var prazo = DateTime.UtcNow.AddSeconds(1.5);
+        var espera = 5;
 
-        for (var tentativa = 1; ; tentativa++)
+        while (true)
         {
             try
             {
@@ -249,9 +256,10 @@ public sealed class TableProfileStore
                 return;
             }
             catch (Exception erro) when (
-                tentativa < tentativas && erro is IOException or UnauthorizedAccessException)
+                DateTime.UtcNow < prazo && erro is IOException or UnauthorizedAccessException)
             {
-                Thread.Sleep(20 * tentativa);
+                Thread.Sleep(espera);
+                espera = Math.Min(espera * 2, 60);
             }
         }
     }

@@ -22,13 +22,13 @@ Só o Renan marca VALIDADO.
 | 2.2 | Identidade da área | VALIDADO | GUID sobrevive a salvar e reabrir (teste de nível 2) |
 | 2.3 | Comando Área | VALIDADO | Renan orbitou em 3D e a linha seguiu o terreno; pediu o rastro na tela, feito |
 | 2.4 | Reindexar | VALIDADO | Renan copiou a área "teste2" para outro desenho e ela foi reconhecida lá |
-| 3.1 | Módulo e biblioteca | AGUARDANDO VALIDAÇÃO | Risen RSM132-8-720BHDG, 2384×1303×33 mm, do datasheet |
-| 3.2 | Comprimento da mesa | AGUARDANDO VALIDAÇÃO | 2V, 28 módulos: 18,702 m de comprimento e 4,788 m na inclinação |
-| 3.3 | Tabela de pilares | AGUARDANDO VALIDAÇÃO | 18,702 m com alvo de 3 m dá 6 vãos de 3,117 m, 7 pilares |
-| 3.4 | Geometria local da mesa | AGUARDANDO VALIDAÇÃO | Matriz única + primeiro verificador de regra sagrada (RigidTable) |
-| 3.5 | Fórmula da altura livre | AGUARDANDO VALIDAÇÃO | Exemplo do plano fecha; verificador da regra sagrada 1 |
-| 3.6 | Perfil nomeado | AGUARDANDO VALIDAÇÃO | JSON com versão de formato; ida e volta exata em qualquer ângulo |
-| 3.7 | Modal | AGUARDANDO VALIDAÇÃO | UFV_MESA: campos, comprimento ao vivo e planta baixa com as sobras |
+| 3.1 | Módulo e biblioteca | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
+| 3.2 | Comprimento da mesa | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
+| 3.3 | Tabela de pilares | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
+| 3.4 | Geometria local da mesa | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
+| 3.5 | Fórmula da altura livre | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
+| 3.6 | Perfil nomeado | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
+| 3.7 | Modal | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -791,3 +791,32 @@ azimute zero o deixa apontando para o norte — ou seja, azimute zero põe a mes
 olhando para o SUL. No Brasil o normal é o contrário. Ou o azimute passa a
 significar "para onde a mesa olha", ou o eixo local se inverte. Escolher errado
 espelha a usina inteira, e em planta isso não aparece.
+
+## Etapa 3 aprovada pelo Renan em 23/09/2026
+
+Palavras dele, depois de usar a janela: "ficou bom pra um caralho, se quiser
+colocar um vista lateral fica top, do resto ta tudo aprovado".
+
+**Uma ressalva honesta sobre o que foi conferido.** O plano pede, como validação
+do 3.7, que ele "monte uma mesa real que ele conhece e confira comprimento e
+posição dos pilares com o projeto do fabricante". Ele aprovou sem relatar essa
+conferência. A aprovação é dele e está registrada; a conferência contra projeto
+de fabricante continua valendo a pena, e é o único jeito de saber se o motor
+acerta o número e não só a forma.
+
+**A vista lateral** foi acrescentada junto: o corte na direção da inclinação,
+com a nomenclatura do desenho dele (M2, T1, T2) e a subida do pilar acima da
+ponta baixa. Não há terreno nela, de propósito — o pilar desce até a linha da
+ponta baixa e segue tracejado, porque o comprimento de verdade só existe com o
+terreno, na etapa 5. Desenhar um chão qualquer seria inventar um número com
+cara de calculado.
+
+**Um teste instável, consertado na hora.** O de gravação concorrente do perfil
+falhava de vez em quando no placar (em Debug, que é mais lento) e passava
+sempre em Release. A causa era o reenvio da troca do arquivo, que tinha
+orçamento fixo de três tentativas com 20 e 40 ms. Virou prazo de um segundo e
+meio com espera crescente.
+
+Vale registrar por que isso foi tratado como defeito e não como azar: teste que
+falha às vezes é pior que teste nenhum, porque ensina a ignorar o placar — e o
+placar é a única coisa que separa "está verde" de "eu acho que está verde".

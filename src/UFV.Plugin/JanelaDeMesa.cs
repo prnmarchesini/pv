@@ -54,6 +54,7 @@ internal sealed class JanelaDeMesa : Window
     private readonly TextBox _balanco = Campo();
 
     private readonly PlantaDaMesa _planta = new();
+    private readonly CorteDaMesa _corte = new();
     private readonly TextBlock _resumo = new()
     {
         TextWrapping = TextWrapping.Wrap,
@@ -94,9 +95,9 @@ internal sealed class JanelaDeMesa : Window
 
         Title = "UFV — Mesa";
         Width = 1000;
-        Height = 660;
+        Height = 760;
         MinWidth = 840;
-        MinHeight = 540;
+        MinHeight = 600;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
@@ -165,26 +166,29 @@ internal sealed class JanelaDeMesa : Window
 
         var direita = new DockPanel();
 
-        var rotulo = new TextBlock
-        {
-            Text = "PLANTA BAIXA",
-            FontSize = 10.5,
-            Foreground = Brushes.Gray,
-            Margin = new Thickness(0, 0, 0, 4),
-        };
-
-        DockPanel.SetDock(rotulo, Dock.Top);
-        direita.Children.Add(rotulo);
-
         DockPanel.SetDock(_resumo, Dock.Bottom);
         direita.Children.Add(_resumo);
 
-        direita.Children.Add(new Border
-        {
-            BorderBrush = Brushes.Gray,
-            BorderThickness = new Thickness(1),
-            Child = _planta,
-        });
+        // Os dois desenhos empilhados: a planta conta o comprimento e os
+        // pilares, o corte conta a inclinação, a tesoura e onde o pilar
+        // encosta. Um não substitui o outro — e é justamente o que a planta
+        // não mostra que o Renan pediu para ver.
+        var desenhos = new Grid();
+
+        desenhos.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.15, GridUnitType.Star) });
+        desenhos.RowDefinitions.Add(new RowDefinition { Height = new GridLength(10) });
+        desenhos.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+        var emCima = Emoldurar("PLANTA BAIXA", _planta);
+        var embaixo = Emoldurar("VISTA LATERAL — na direção da inclinação", _corte);
+
+        Grid.SetRow(emCima, 0);
+        Grid.SetRow(embaixo, 2);
+
+        desenhos.Children.Add(emCima);
+        desenhos.Children.Add(embaixo);
+
+        direita.Children.Add(desenhos);
 
         Grid.SetColumn(direita, 2);
         Grid.SetRow(direita, 0);
@@ -214,6 +218,32 @@ internal sealed class JanelaDeMesa : Window
         grade.Children.Add(botoes);
 
         return grade;
+    }
+
+    /// <summary>Um desenho com o seu rótulo em cima.</summary>
+    private static UIElement Emoldurar(string rotulo, UIElement desenho)
+    {
+        var painel = new DockPanel();
+
+        var texto = new TextBlock
+        {
+            Text = rotulo,
+            FontSize = 10.5,
+            Foreground = Brushes.Gray,
+            Margin = new Thickness(0, 0, 0, 4),
+        };
+
+        DockPanel.SetDock(texto, Dock.Top);
+        painel.Children.Add(texto);
+
+        painel.Children.Add(new Border
+        {
+            BorderBrush = Brushes.Gray,
+            BorderThickness = new Thickness(1),
+            Child = desenho,
+        });
+
+        return painel;
     }
 
     private UIElement Formulario()
@@ -510,6 +540,7 @@ internal sealed class JanelaDeMesa : Window
             var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
 
             _planta.Mostrar(geometria);
+            _corte.Mostrar(geometria, perfil.TiltRadians);
 
             var potencia = perfil.Layout.ModuleCount * perfil.Layout.Module.PowerWatts / 1000;
 
@@ -543,6 +574,7 @@ internal sealed class JanelaDeMesa : Window
     private void NaoDeu(string motivo)
     {
         _planta.Dizer("A mesa ainda não fecha.");
+        _corte.Dizer("A mesa ainda não fecha.");
         _resumo.Text = motivo;
         _usar.IsEnabled = false;
         _salvar.IsEnabled = false;
