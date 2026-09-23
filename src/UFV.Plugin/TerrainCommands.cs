@@ -1,6 +1,10 @@
+using System.Diagnostics;
+using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
+using Autodesk.Civil.DatabaseServices;
 using UFV.Core;
+using UFV.Geo;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
 [assembly: CommandClass(typeof(UFV.Plugin.TerrainCommands))]
@@ -51,6 +55,10 @@ public static class TerrainCommands
             // comando: é o que torna este comando testável sem ninguém clicar.
             if (!UfvExtension.TemInterface())
             {
+                // Sem interface não há como confirmar nada, e escolher sozinho
+                // seria o comando do produto se comportando de um jeito no
+                // Civil 3D e de outro em lote. Quem processa sem perguntar é
+                // UFV_TERRENO_AUTO, um comando à parte.
                 Listar(editor, lista);
                 return;
             }
@@ -61,6 +69,50 @@ public static class TerrainCommands
         {
             RegistroDeDiagnostico.Registrar("Falha ao listar as superfícies do desenho.", erro);
             editor.WriteMessage($"\nNão consegui ler as superfícies deste desenho: {erro.Message}\n");
+        }
+    }
+
+    /// <summary>
+    /// UFV_TERRENO_AUTO: lista e processa a primeira superfície aproveitável,
+    /// sem perguntar.
+    ///
+    /// Existe para o teste de nível 2 alcançar o processamento, que é o miolo
+    /// do passo 1.4 e só existe do lado do CAD. Fica num comando separado de
+    /// propósito: teste não pode ditar o comportamento do comando que o
+    /// usuário usa.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoTerrenoAutomatico)]
+    public static void TerrenoAutomatico()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+
+        try
+        {
+            var varredura = SurfaceReader.Read(documento.Database);
+            var lista = SurfaceCatalog.Organize(varredura.Surfaces, e => e.Summary);
+
+            var motivo = SurfaceCatalog.WhyNothingToChoose(
+                lista.Select(e => e.Summary).ToArray(),
+                varredura.HasExternalReference);
+
+            if (motivo is not null)
+            {
+                editor.WriteMessage($"\n{motivo}\n");
+                return;
+            }
+
+            Listar(editor, lista);
+
+            var primeira = lista.FirstOrDefault(e => e.Summary.CanBeTerrain);
+            if (primeira is not null) Processar(editor, primeira);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao processar a superfície automaticamente.", erro);
+            editor.WriteMessage($"\nNão consegui processar a superfície: {erro.Message}\n");
         }
     }
 
@@ -82,9 +134,89 @@ public static class TerrainCommands
             return;
         }
 
-        // No passo 1.4 esta escolha passa a ser processada e guardada, pelo
-        // identificador. Aqui ela só é confirmada em voz alta, para o usuário
-        // ver que o plugin entendeu qual superfície ele quis.
         editor.WriteMessage($"\nTerreno escolhido: {escolhida.Summary.Describe()}\n");
+        Processar(editor, escolhida);
+    }
+
+    /// <summary>
+    /// Lê a superfície escolhida, monta a malha e guarda. O resumo que sai
+    /// daqui é o que o usuário confere contra o Civil 3D.
+    /// </summary>
+    private static void Processar(Editor editor, SurfaceEntry escolhida)
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        // O identificador veio do banco deste documento. Se a superfície foi
+        // apagada entre a escolha e agora — dá tempo, a janela fica aberta —,
+        // abrir o objeto lança, e o usuário leria a mensagem genérica de "não
+        // consegui ler as superfícies", que aponta para o lugar errado.
+        if (escolhida.Id.IsNull || escolhida.Id.IsErased)
+        {
+            editor.WriteMessage("\nA superfície escolhida não está mais no desenho.\n");
+            TerrainCache.Forget(documento);
+            return;
+        }
+
+        editor.WriteMessage($"\nProcessando {escolhida.Summary.DisplayName}...\n");
+
+        var relogio = Stopwatch.StartNew();
+        SurfaceMesh lida;
+
+        // Uma transação para a leitura inteira, fechada antes de qualquer
+        // conta: o motor trabalha sobre os números, não sobre o banco.
+        using (var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction())
+        {
+            if (transacao.GetObject(escolhida.Id, OpenMode.ForRead) is not TinSurface superficie)
+            {
+                editor.WriteMessage("\nA superfície escolhida não está mais no desenho.\n");
+                TerrainCache.Forget(documento);
+                return;
+            }
+
+            lida = SurfaceExtractor.Extract(superficie);
+            transacao.Commit();
+        }
+
+        var malha = new Tin(lida.Triangles);
+
+        if (malha.TriangleCount == 0)
+        {
+            // Sem esquecer o anterior, o terreno de antes continuaria valendo,
+            // e os comandos seguintes responderiam cota de uma superfície que
+            // o usuário acabou de trocar.
+            TerrainCache.Forget(documento);
+
+            editor.WriteMessage(
+                "\nA superfície não tem nenhum triângulo aproveitável. "
+                + "Confira se ela está construída e visível no Civil 3D.\n");
+            return;
+        }
+
+        var resumo = new TerrainSummary(
+            escolhida.Summary.DisplayName,
+            malha.TriangleCount,
+            malha.DiscardedTriangleCount,
+            malha.MinZ,
+            malha.MaxZ,
+            malha.Area2D,
+            malha.Area3D);
+
+        TerrainCache.Store(documento, new ProcessedTerrain(escolhida.Id, malha, resumo));
+
+        editor.WriteMessage("\n");
+        foreach (var linha in resumo.Lines()) editor.WriteMessage($"{linha}\n");
+
+        if (lida.UnreadableCount > 0)
+        {
+            // Precisa aparecer na tela, e não só no log: uma superfície
+            // sistematicamente ilegível produz um resumo de aparência normal,
+            // calculado sobre um punhado de triângulos, e ninguém desconfia.
+            editor.WriteMessage(
+                $"  ATENÇÃO: {lida.UnreadableCount} triângulo(s) não puderam ser lidos "
+                + "e viraram buraco no terreno.\n");
+        }
+
+        editor.WriteMessage($"  em {relogio.Elapsed.TotalSeconds:0.0} s\n");
     }
 }

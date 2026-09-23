@@ -14,7 +14,7 @@ Só o Renan marca VALIDADO.
 | 1.1 | Modelo de TIN puro (Geo) | AGUARDANDO VALIDAÇÃO | 44 testes; validação é automática, sem CAD |
 | 1.2 | Índice espacial | AGUARDANDO VALIDAÇÃO | Validação é automática, sem CAD |
 | 1.3 | Listar superfícies | AGUARDANDO VALIDAÇÃO | Duas superfícies conferidas no Porto Feliz |
-| 1.4 | Processar superfície | PENDENTE | |
+| 1.4 | Processar superfície | AGUARDANDO VALIDAÇÃO | Os 5 números batem com o Civil 3D no Itatiba |
 | 1.5 | Identidade e carimbo | PENDENTE | |
 | 1.6 | Coordenada geográfica | PENDENTE | |
 | 1.7 | Botão Obter Coordenada | PENDENTE | |
@@ -25,7 +25,7 @@ Só o Renan marca VALIDADO.
 
 ```
 Etapa 0   45/45    OK
-Etapa 1   74/74    OK
+Etapa 1   93/93    OK
 Nivel 2   3/3      OK
 Acervo             OK
 ```
@@ -94,3 +94,8 @@ passa a mandar — e a entrada do teste muda.
   virar referência de teste, entra em `tests/acervo/` congelado por ele.
 - Os testes do 1.1 usam terreno analítico (plano, quina de calombo). Terreno
   real com curvatura entra no acervo da etapa 1.
+- `tests/proposto/etapa-1/terreno-esperado.psd1` espera conferência do Renan
+  para ir ao acervo. Os números do Itatiba já foram conferidos na tela; os do
+  Porto Feliz saíram do próprio plugin e ainda não.
+- Ninguém confere a unidade do desenho (INSUNITS). Um DWG em milímetro ou em
+  pé entregaria cota errada por fator constante, plausível. Vale um passo.

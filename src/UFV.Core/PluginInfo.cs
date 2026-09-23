@@ -25,6 +25,20 @@ public static class PluginInfo
     /// </summary>
     public const string ComandoTerreno = "UFV_TERRENO";
 
+    /// <summary>
+    /// Comando que processa a superfície sem perguntar nada, escolhendo a
+    /// primeira aproveitável. Existe para o teste de nível 2 poder exercitar
+    /// o processamento sem ninguém clicar — o comando do produto continua
+    /// exigindo que o usuário confirme.
+    /// </summary>
+    public const string ComandoTerrenoAutomatico = "UFV_TERRENO_AUTO";
+
+    /// <summary>
+    /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
+    /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).
+    /// </summary>
+    public const string PrefixoDeDados = "MARCHENG_UFV";
+
     /// <summary>Texto usado quando a versao nao pode ser lida da assembly.</summary>
     public const string VersaoDesconhecida = "desconhecida";
 

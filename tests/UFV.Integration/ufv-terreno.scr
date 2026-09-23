@@ -1,16 +1,18 @@
-; Teste de nivel 2 do passo 1.3: lista as superficies do desenho.
+; Teste de nivel 2 dos passos 1.3 e 1.4: lista as superficies do desenho e
+; processa a primeira aproveitavel.
 ;
-; Sem interface, UFV_TERRENO escreve a lista na linha de comando em vez de
-; abrir a janela de escolha. E o que torna o comando testavel sem ninguem
-; clicar — e tambem o que prova que a leitura do desenho funciona, que e a
-; parte que nenhum teste de nivel 1 alcanca.
+; O comando e o UFV_TERRENO_AUTO, e nao o UFV_TERRENO do produto. O do produto
+; abre uma janela e espera o usuario confirmar; sem interface ele so lista, e
+; e assim que tem que ser — teste nao pode ditar como o comando do usuario se
+; comporta. O automatico existe so para o processamento ter como ser
+; exercitado sem ninguem clicar.
 ;
 ; Sobre o SECURELOAD e a barra normal no caminho, ver ufv-ola.scr.
 
 (setq ufv:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
 (command "_.NETLOAD" "{{DLL}}")
-(command "UFV_TERRENO")
+(command "UFV_TERRENO_AUTO")
 (setvar "SECURELOAD" ufv:secureload)
 (princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
 (princ)

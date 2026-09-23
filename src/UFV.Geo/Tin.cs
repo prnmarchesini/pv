@@ -64,7 +64,81 @@ public sealed class Tin
 
         DiscardedTriangleCount = descartados;
         _grid = _triangles.Length > 0 ? new TriangleGrid(_triangles) : null;
+
+        Medir();
     }
+
+    /// <summary>
+    /// Cota mais baixa e mais alta do terreno, e as duas áreas. Sai de uma
+    /// passada só na construção: são os números do resumo que o usuário
+    /// confere contra o Civil 3D, e recalculá-los a cada pergunta seria
+    /// desperdício.
+    /// </summary>
+    private void Medir()
+    {
+        if (_triangles.Length == 0)
+        {
+            MinZ = 0;
+            MaxZ = 0;
+            return;
+        }
+
+        var menor = double.MaxValue;
+        var maior = double.MinValue;
+        double area2d = 0, area3d = 0;
+
+        for (var i = 0; i < _triangles.Length; i++)
+        {
+            var t = _triangles[i];
+
+            // Sem alocar um array por triângulo para percorrer três pontos:
+            // com 2 milhões deles isso eram quase 200 MB de lixo. É o mesmo
+            // engano que TriangleGrid.Envolver já tinha corrigido.
+            menor = Math.Min(menor, Math.Min(t.A.Z, Math.Min(t.B.Z, t.C.Z)));
+            maior = Math.Max(maior, Math.Max(t.A.Z, Math.Max(t.B.Z, t.C.Z)));
+
+            // Em planta, metade do dobro da área com sinal. O valor absoluto
+            // não é preciosismo: o Civil 3D não garante que todos os
+            // triângulos girem para o mesmo lado, e sem ele os horários
+            // subtrairiam dos anti-horários — a área sairia menor, e
+            // plausível.
+            area2d += Math.Abs(_denominators[i]) * 0.5;
+
+            // No espaço, metade da norma do produto vetorial dos dois lados.
+            // É a área que o terreno teria se fosse desdobrado: num terreno
+            // inclinado ela é sempre maior que a projetada, e é ela que diz
+            // quanto de chão existe de verdade.
+            var (ux, uy, uz) = (t.B.X - t.A.X, t.B.Y - t.A.Y, t.B.Z - t.A.Z);
+            var (vx, vy, vz) = (t.C.X - t.A.X, t.C.Y - t.A.Y, t.C.Z - t.A.Z);
+
+            var nx = uy * vz - uz * vy;
+            var ny = uz * vx - ux * vz;
+            var nz = ux * vy - uy * vx;
+
+            area3d += Math.Sqrt(nx * nx + ny * ny + nz * nz) * 0.5;
+        }
+
+        MinZ = menor;
+        MaxZ = maior;
+        Area2D = area2d;
+        Area3D = area3d;
+    }
+
+    /// <summary>Cota mais baixa da malha, em metros. Zero se a malha está vazia.</summary>
+    public double MinZ { get; private set; }
+
+    /// <summary>Cota mais alta da malha, em metros. Zero se a malha está vazia.</summary>
+    public double MaxZ { get; private set; }
+
+    /// <summary>Área projetada em planta, em metros quadrados. É a que se mede num mapa.</summary>
+    public double Area2D { get; private set; }
+
+    /// <summary>
+    /// Área da superfície no espaço, em metros quadrados. Num terreno
+    /// inclinado é maior que a projetada, e é ela que diz quanto de chão
+    /// existe de verdade.
+    /// </summary>
+    public double Area3D { get; private set; }
 
     /// <summary>Quantos triângulos a malha usa para responder cota.</summary>
     public int TriangleCount => _triangles.Length;

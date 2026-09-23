@@ -227,7 +227,8 @@ function Testar-Caso {
         return $false
     }
 
-    return $true
+    # Se alguma conferencia de numero falhou, ela ja registrou o problema.
+    return -not ($problemas | Where-Object { $_ -like "$Rotulo *" })
 }
 
 # ---- o que precisamos ter a mao --------------------------------------------
@@ -299,6 +300,9 @@ if (-not $versao) { Parar-Com 'Nao consegui ler <Version> de Directory.Build.pro
 function Testar-CasoDoTerreno {
     param([string] $Desenho, [string] $Rotulo)
 
+    $nomeDoDesenho = [IO.Path]::GetFileNameWithoutExtension($Desenho)
+    $esperado = $esperados[$nomeDoDesenho]
+
     $r = Invoke-CoreConsole -Desenho $Desenho `
                             -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr') `
                             -Rotulo $Rotulo
@@ -329,6 +333,9 @@ function Testar-CasoDoTerreno {
         return $false
     }
 
+    $null = Conferir-Numero -Rotulo $Rotulo -Nome 'superficies no desenho' `
+                            -Obtido $anunciadas -Esperado $esperado.Superficies
+
     # A linha de item, como Describe() a escreve: dois espacos, o nome, um
     # travessao e a contagem com separador de milhar.
     $itens = @($linhas | Where-Object { $_ -match '^\s{2}\S.* — [\d.]+ pontos?\s*$' })
@@ -337,6 +344,92 @@ function Testar-CasoDoTerreno {
         $problemas.Add(
             "ufv-terreno anunciou $anunciadas superficie(s) mas imprimiu $($itens.Count) linha(s). " +
             "Veja $($r.Saida)")
+        return $false
+    }
+
+    # O processamento do passo 1.4: o resumo tem que sair, e os numeros tem
+    # que ser coerentes entre si. Sem isto, o miolo do 1.4 — ler a superficie
+    # e montar a malha — nao teria teste automatico nenhum, porque ele so
+    # existe do lado do CAD.
+    if ($r.Texto -notmatch 'Terreno processado: \S') {
+        $problemas.Add("$Rotulo nao processou a superficie. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'triângulos:\s+([\d.]+)') {
+        $problemas.Add("$Rotulo nao informou a quantidade de triangulos. Veja $($r.Saida)")
+        return $false
+    }
+
+    $triangulos = [int] ($Matches[1] -replace '\.', '')
+    if ($triangulos -lt 1) {
+        $problemas.Add("$Rotulo processou a superficie e achou $triangulos triangulos. Veja $($r.Saida)")
+        return $false
+    }
+
+    # Contagem de triangulo e exata: o Civil 3D diz um numero inteiro, e o
+    # motor tem que chegar no mesmo.
+    $null = Conferir-Numero -Rotulo $Rotulo -Nome 'triangulos' `
+                            -Obtido $triangulos -Esperado $esperado.Triangulos
+
+    if ($esperado -and $esperado.Superficie) {
+        if ($r.Texto -notmatch ('Terreno processado: ' + [regex]::Escape($esperado.Superficie))) {
+            $problemas.Add(
+                "$Rotulo processou outra superficie; esperava '$($esperado.Superficie)'. Veja $($r.Saida)")
+            return $false
+        }
+    }
+
+    if ($r.Texto -notmatch 'cotas:\s+(-?[\d.,]+) m a (-?[\d.,]+) m') {
+        $problemas.Add("$Rotulo nao informou as cotas. Veja $($r.Saida)")
+        return $false
+    }
+
+    $cotaMinima = [double]::Parse($Matches[1], [Globalization.CultureInfo]::GetCultureInfo('pt-BR'))
+    $cotaMaxima = [double]::Parse($Matches[2], [Globalization.CultureInfo]::GetCultureInfo('pt-BR'))
+
+    if ($cotaMaxima -lt $cotaMinima) {
+        $problemas.Add("$Rotulo devolveu cota maxima ($cotaMaxima) menor que a minima ($cotaMinima).")
+        return $false
+    }
+
+    # 1 cm, que e a ultima casa que o Civil 3D mostra nas propriedades.
+    $null = Conferir-Numero -Rotulo $Rotulo -Nome 'cota minima' `
+                            -Obtido $cotaMinima -Esperado $esperado.CotaMinima -Tolerancia 0.01
+    $null = Conferir-Numero -Rotulo $Rotulo -Nome 'cota maxima' `
+                            -Obtido $cotaMaxima -Esperado $esperado.CotaMaxima -Tolerancia 0.01
+
+    if ($r.Texto -notmatch 'área em planta:\s+([\d.,]+) m²') {
+        $problemas.Add("$Rotulo nao informou a area. Veja $($r.Saida)")
+        return $false
+    }
+
+    $areaEmPlanta = [double]::Parse($Matches[1], [Globalization.CultureInfo]::GetCultureInfo('pt-BR'))
+    if ($areaEmPlanta -le 0) {
+        $problemas.Add("$Rotulo devolveu area em planta de $areaEmPlanta. Veja $($r.Saida)")
+        return $false
+    }
+
+    $null = Conferir-Numero -Rotulo $Rotulo -Nome 'area em planta' `
+                            -Obtido $areaEmPlanta -Esperado $esperado.AreaEmPlanta -Tolerancia 0.01
+
+    if ($r.Texto -notmatch 'área do terreno:\s+([\d.,]+) m²') {
+        $problemas.Add("$Rotulo nao informou a area do terreno. Veja $($r.Saida)")
+        return $false
+    }
+
+    $areaDoTerreno = [double]::Parse($Matches[1], [Globalization.CultureInfo]::GetCultureInfo('pt-BR'))
+
+    # A area no espaco nunca e menor que a projetada: terreno inclinado tem
+    # mais chao do que aparece no mapa, e plano tem o mesmo. Menor seria erro
+    # de conta, e e o tipo de erro que passa despercebido porque o numero
+    # continua parecendo razoavel.
+    $null = Conferir-Numero -Rotulo $Rotulo -Nome 'area do terreno' `
+                            -Obtido $areaDoTerreno -Esperado $esperado.AreaDoTerreno -Tolerancia 0.01
+
+    if ($areaDoTerreno -lt ($areaEmPlanta - 0.01)) {
+        $problemas.Add(
+            "$Rotulo devolveu area do terreno ($areaDoTerreno) menor que a projetada ($areaEmPlanta).")
         return $false
     }
 
@@ -351,7 +444,53 @@ function Testar-CasoDoTerreno {
         return $false
     }
 
-    return $true
+    # Se alguma conferencia de numero falhou, ela ja registrou o problema.
+    return -not ($problemas | Where-Object { $_ -like "$Rotulo *" })
+}
+
+# ---- os valores esperados --------------------------------------------------
+#
+# Conferir so a coerencia interna dos numeros nao prova nada: uma leitura
+# sistematicamente errada mantem tudo batendo entre si — a area continua
+# positiva, a cota maxima continua acima da minima —, so que sobre o terreno
+# errado. O que fecha isso e comparar com numeros que nao sairam do plugin.
+
+$esperadoDoAcervo   = Join-Path $pastaDoAcervo 'etapa-1\terreno-esperado.psd1'
+$esperadoProposto   = Join-Path $raiz 'tests\proposto\etapa-1\terreno-esperado.psd1'
+
+$arquivoEsperado = if (Test-Path $esperadoDoAcervo) { $esperadoDoAcervo }
+                   elseif (Test-Path $esperadoProposto) { $esperadoProposto }
+                   else { $null }
+
+$esperados = @{}
+if ($arquivoEsperado) {
+    $esperados = Import-PowerShellDataFile -LiteralPath $arquivoEsperado
+
+    if ($arquivoEsperado -eq $esperadoProposto) {
+        Write-Host '  (valores esperados ainda em tests\proposto; o Renan precisa conferir e mover para o acervo)' -ForegroundColor DarkGray
+    }
+}
+
+<#
+    Confere um numero do resumo contra o esperado.
+#>
+function Conferir-Numero {
+    param(
+        [string] $Rotulo,
+        [string] $Nome,
+        $Obtido,
+        $Esperado,
+        [double] $Tolerancia = 0.0
+    )
+
+    if ($null -eq $Esperado) { return $true }
+
+    $diferenca = [Math]::Abs([double]$Obtido - [double]$Esperado)
+    if ($diferenca -le $Tolerancia) { return $true }
+
+    $script:problemas.Add(
+        "$Rotulo : $Nome deu $Obtido e o esperado e $Esperado (diferenca de $diferenca).")
+    return $false
 }
 
 # ---- os casos --------------------------------------------------------------
