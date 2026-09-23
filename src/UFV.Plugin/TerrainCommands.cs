@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Globalization;
+using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
@@ -107,12 +109,58 @@ public static class TerrainCommands
             Listar(editor, lista);
 
             var primeira = lista.FirstOrDefault(e => e.Summary.CanBeTerrain);
-            if (primeira is not null) Processar(editor, primeira);
+            if (primeira is null) return;
+
+            Processar(editor, primeira);
+            ConferirContraOCivil3D(editor, documento, primeira);
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao processar a superfície automaticamente.", erro);
             editor.WriteMessage($"\nNão consegui processar a superfície: {erro.Message}\n");
+        }
+    }
+
+    /// <summary>
+    /// Imprime o que o próprio Civil 3D diz da superfície, para o teste de
+    /// nível 2 poder comparar com o que o motor calculou.
+    ///
+    /// Esta é a conferência que vale: o motor lê os triângulos e faz as contas
+    /// dele; o Civil 3D responde das estatísticas dele, por um caminho
+    /// independente. Comparar os dois no mesmo desenho pega o erro que a
+    /// coerência interna não pega — uma leitura sistematicamente errada mantém
+    /// os números do motor batendo entre si, só que sobre o terreno errado.
+    ///
+    /// Só no comando automático: no comando do produto isto seria ruído na
+    /// tela do usuário.
+    /// </summary>
+    private static void ConferirContraOCivil3D(Editor editor, Document documento, SurfaceEntry entrada)
+    {
+        try
+        {
+            using var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction();
+
+            if (transacao.GetObject(entrada.Id, OpenMode.ForRead) is not TinSurface superficie) return;
+
+            var gerais = superficie.GetGeneralProperties();
+            var tin = superficie.GetTinProperties();
+
+            // Formato fixo e em cultura invariante: quem lê isto é o runner do
+            // teste, não o usuário.
+            editor.WriteMessage(string.Format(
+                CultureInfo.InvariantCulture,
+                "\nCIVIL3D triangulos={0} cotaMin={1:0.000} cotaMax={2:0.000} pontos={3}\n",
+                tin.NumberOfTriangles,
+                gerais.MinimumElevation,
+                gerais.MaximumElevation,
+                gerais.NumberOfPoints));
+
+            transacao.Commit();
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui ler as estatísticas do Civil 3D.", erro);
+            editor.WriteMessage("\nCIVIL3D indisponivel\n");
         }
     }
 

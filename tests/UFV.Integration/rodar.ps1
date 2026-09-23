@@ -227,8 +227,7 @@ function Testar-Caso {
         return $false
     }
 
-    # Se alguma conferencia de numero falhou, ela ja registrou o problema.
-    return -not ($problemas | Where-Object { $_ -like "$Rotulo *" })
+    return $true
 }
 
 # ---- o que precisamos ter a mao --------------------------------------------
@@ -441,6 +440,49 @@ function Testar-CasoDoTerreno {
     }
     else {
         $problemas.Add("$Rotulo nao informa o SECURELOAD antes e depois. Veja $($r.Saida)")
+        return $false
+    }
+
+    # ---- a conferencia que vale: motor contra Civil 3D ---------------------
+    #
+    # Os numeros acima provam que o motor e coerente consigo mesmo, e isso e
+    # exatamente o que uma leitura sistematicamente errada preserva. Aqui o
+    # comando imprime tambem o que o proprio Civil 3D diz da superficie, por
+    # um caminho independente, e os dois lados sao comparados. Vale para
+    # qualquer desenho que o Renan congele depois, sem ninguem cravar numero
+    # nenhum a mao.
+
+    if ($r.Texto -match 'CIVIL3D indisponivel') {
+        $problemas.Add("$Rotulo nao conseguiu ler as estatisticas do Civil 3D. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'CIVIL3D triangulos=(\d+) cotaMin=(-?[\d.]+) cotaMax=(-?[\d.]+) pontos=(\d+)') {
+        $problemas.Add("$Rotulo nao imprimiu a conferencia do Civil 3D. Veja $($r.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $trianguloDoCad = [int] $Matches[1]
+    $cotaMinimaDoCad = [double]::Parse($Matches[2], $invariante)
+    $cotaMaximaDoCad = [double]::Parse($Matches[3], $invariante)
+
+    if ($triangulos -ne $trianguloDoCad) {
+        $problemas.Add(
+            "$Rotulo : o motor leu $triangulos triangulos e o Civil 3D diz $trianguloDoCad.")
+        return $false
+    }
+
+    # 1 cm: o Civil 3D mostra a elevacao com tres casas.
+    if ([Math]::Abs($cotaMinima - $cotaMinimaDoCad) -gt 0.01) {
+        $problemas.Add(
+            "$Rotulo : cota minima do motor $cotaMinima, do Civil 3D $cotaMinimaDoCad.")
+        return $false
+    }
+
+    if ([Math]::Abs($cotaMaxima - $cotaMaximaDoCad) -gt 0.01) {
+        $problemas.Add(
+            "$Rotulo : cota maxima do motor $cotaMaxima, do Civil 3D $cotaMaximaDoCad.")
         return $false
     }
 

@@ -99,3 +99,18 @@ passa a mandar — e a entrada do teste muda.
   Porto Feliz saíram do próprio plugin e ainda não.
 - Ninguém confere a unidade do desenho (INSUNITS). Um DWG em milímetro ou em
   pé entregaria cota errada por fator constante, plausível. Vale um passo.
+
+**Casos que nenhum desenho do acervo exercita.** Os dois desenhos congelados
+são parecidos entre si — topografia em UTM, uma ou duas superfícies, sem
+talude vertical, sem XRef, e o Renan disse em 22/09/2026 que o resto do acervo
+dele é do mesmo tipo. Então estes caminhos do código só têm teste analítico,
+de nível 1, e nenhum teste dentro do CAD:
+
+- triângulo descartado por não ter área em planta (faceta vertical de talude).
+  Nos dois desenhos o descarte é zero;
+- superfície vazia, que aparece acinzentada e não deixa escolher;
+- superfície vinda de referência externa, e a mensagem que manda vincular.
+  Este dá para montar no próprio teste, anexando um desenho do acervo como
+  XRef a um desenho vazio — não precisa de arquivo novo;
+- terreno grande de verdade (centenas de milhares de pontos). O desempenho só
+  foi medido em malha sintética.
