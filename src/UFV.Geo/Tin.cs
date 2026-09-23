@@ -209,6 +209,21 @@ public sealed class Tin
         return false;
     }
 
+    /// <summary>
+    /// Os triângulos que um segmento pode atravessar.
+    ///
+    /// É o que o drapeamento precisa: para acrescentar um vértice em cada
+    /// aresta cruzada, ele tem que saber quais triângulos ficam no caminho —
+    /// e percorrer a malha inteira por segmento seria voltar ao problema que
+    /// o índice resolveu.
+    /// </summary>
+    internal IEnumerable<Triangle> TrianglesAlong(double x0, double y0, double x1, double y1)
+    {
+        if (_grid is null) yield break;
+
+        foreach (var i in _grid.CandidatesAlong(x0, y0, x1, y1)) yield return _triangles[i];
+    }
+
     /// <summary>Quantas células o índice tem. Só para diagnóstico e teste.</summary>
     internal long CellCount => _grid?.CellCount ?? 0;
 

@@ -209,6 +209,149 @@ internal sealed class TriangleGrid
         return _indices.AsSpan(inicio, _inicios[celula + 1] - inicio);
     }
 
+    /// <summary>
+    /// Os índices dos triângulos que um segmento pode atravessar, sem repetir.
+    ///
+    /// Percorre as células que o segmento cruza, de uma em uma, em vez de
+    /// pegar a caixa inteira dele: um segmento diagonal de um quilômetro tem
+    /// caixa de um quilômetro de lado, e devolveria quase a malha toda.
+    /// </summary>
+    internal IReadOnlyCollection<int> CandidatesAlong(double x0, double y0, double x1, double y1)
+    {
+        var achados = new HashSet<int>();
+
+        // Os grandes demais ficam fora da grade e valem para qualquer lugar.
+        foreach (var i in _grandes) achados.Add(i);
+
+        if (!double.IsFinite(x0) || !double.IsFinite(y0)
+            || !double.IsFinite(x1) || !double.IsFinite(y1))
+        {
+            return achados;
+        }
+
+        // Trecho do segmento que cai dentro da caixa da malha. Fora dela não
+        // há célula para visitar.
+        //
+        // O recorte é paramétrico, e não um Clamp em cada eixo: prender X e Y
+        // separadamente move as pontas do segmento em vez de cortá-lo. Uma
+        // diagonal que entra pela lateral esquerda e sai pelo topo viraria
+        // outra diagonal, e a caminhada percorreria células que o segmento
+        // nunca visita — deixando de fora as que ele visita de verdade.
+        if (!Recortar(ref x0, ref y0, ref x1, ref y1)) return achados;
+
+        var coluna0 = Math.Clamp(Coluna(x0), 0, _colunas - 1);
+        var linha0 = Math.Clamp(Linha(y0), 0, _linhas - 1);
+        var coluna1 = Math.Clamp(Coluna(x1), 0, _colunas - 1);
+        var linha1 = Math.Clamp(Linha(y1), 0, _linhas - 1);
+
+        // Caminhada de célula em célula (Bresenham em grade), visitando também
+        // as vizinhas de cada passo diagonal: uma diagonal que corta o canto
+        // de uma célula ainda pode cruzar um triângulo dela.
+        var passoColuna = Math.Sign(coluna1 - coluna0);
+        var passoLinha = Math.Sign(linha1 - linha0);
+
+        var deltaColuna = Math.Abs(coluna1 - coluna0);
+        var deltaLinha = Math.Abs(linha1 - linha0);
+
+        var coluna = coluna0;
+        var linha = linha0;
+        var erro = deltaColuna - deltaLinha;
+
+        // Teto de segurança: uma diagonal atravessa no máximo colunas + linhas
+        // células, e o laço não pode depender de a aritmética fechar.
+        var limite = deltaColuna + deltaLinha + 2;
+
+        for (var passo = 0; passo <= limite; passo++)
+        {
+            Colher(achados, coluna, linha);
+
+            if (coluna == coluna1 && linha == linha1) break;
+
+            var dobro = 2 * erro;
+
+            if (dobro > -deltaLinha)
+            {
+                erro -= deltaLinha;
+                coluna += passoColuna;
+                // A vizinha em linha, para não perder o triângulo que o
+                // segmento raspa ao mudar de coluna.
+                Colher(achados, coluna, linha + passoLinha);
+            }
+
+            if (dobro < deltaColuna)
+            {
+                erro += deltaColuna;
+                linha += passoLinha;
+                Colher(achados, coluna + passoColuna, linha);
+            }
+        }
+
+        return achados;
+    }
+
+    /// <summary>
+    /// Corta o segmento na caixa da malha (Liang-Barsky). Devolve falso se ele
+    /// passa inteiro por fora.
+    /// </summary>
+    private bool Recortar(ref double x0, ref double y0, ref double x1, ref double y1)
+    {
+        var dx = x1 - x0;
+        var dy = y1 - y0;
+
+        var entrada = 0.0;
+        var saida = 1.0;
+
+        if (!Aparar(-dx, x0 - _minX, ref entrada, ref saida)) return false;
+        if (!Aparar(dx, _maxX - x0, ref entrada, ref saida)) return false;
+        if (!Aparar(-dy, y0 - _minY, ref entrada, ref saida)) return false;
+        if (!Aparar(dy, _maxY - y0, ref entrada, ref saida)) return false;
+
+        // A ordem importa: x1 é calculado a partir do x0 original.
+        var novoX0 = x0 + dx * entrada;
+        var novoY0 = y0 + dy * entrada;
+
+        x1 = x0 + dx * saida;
+        y1 = y0 + dy * saida;
+        x0 = novoX0;
+        y0 = novoY0;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Aperta o intervalo [entrada, saída] contra uma das quatro bordas.
+    /// Devolve falso quando o intervalo fica vazio.
+    /// </summary>
+    private static bool Aparar(double direcao, double distancia, ref double entrada, ref double saida)
+    {
+        // Segmento paralelo a esta borda: ou está do lado de dentro dela, e
+        // não há o que apertar, ou está do lado de fora, e não há recorte.
+        if (direcao == 0) return distancia >= 0;
+
+        var t = distancia / direcao;
+
+        if (direcao < 0)
+        {
+            if (t > saida) return false;
+            if (t > entrada) entrada = t;
+        }
+        else
+        {
+            if (t < entrada) return false;
+            if (t < saida) saida = t;
+        }
+
+        return true;
+    }
+
+    private void Colher(HashSet<int> destino, int coluna, int linha)
+    {
+        if (coluna < 0 || coluna >= _colunas || linha < 0 || linha >= _linhas) return;
+
+        var celula = linha * _colunas + coluna;
+        for (var i = _inicios[celula]; i < _inicios[celula + 1]; i++) destino.Add(_indices[i]);
+    }
+
     /// <summary>Ocupação total e quantos triângulos são grandes demais, com o tamanho de célula atual.</summary>
     private (long Ocupacao, int Grandes) Medir(Triangle[] triangles)
     {

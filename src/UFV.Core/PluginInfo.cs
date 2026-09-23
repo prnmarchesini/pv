@@ -52,6 +52,23 @@ public static class PluginInfo
     public const string ComandoLocalizacao = "UFV_LOCAL";
 
     /// <summary>
+    /// Comando que traça a área de implantação e a assenta no terreno.
+    /// </summary>
+    public const string ComandoArea = "UFV_AREA";
+
+    /// <summary>
+    /// Comando que lista as áreas do desenho, lendo a identidade de cada
+    /// polilinha. É por onde se confere que o GUID sobreviveu ao arquivo.
+    /// </summary>
+    public const string ComandoAreas = "UFV_AREAS";
+
+    /// <summary>
+    /// Comando que reconstrói o registro central a partir do XData das
+    /// entidades. É o que reconhece uma área copiada de outro desenho.
+    /// </summary>
+    public const string ComandoReindexar = "UFV_REINDEXAR";
+
+    /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).
     /// </summary>

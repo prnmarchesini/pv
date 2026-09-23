@@ -120,7 +120,7 @@ internal static class GeoStore
     /// <summary>A localização gravada pelo plugin, ou null.</summary>
     private static GeoLocation? Load(Database database)
     {
-        var buffer = PluginDictionary.Load(database, Chave);
+        using var buffer = PluginDictionary.Load(database, Chave);
         if (buffer is null) return null;
 
         var campos = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

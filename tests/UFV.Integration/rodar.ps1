@@ -796,6 +796,130 @@ function Testar-Coordenada {
     return $true
 }
 
+<#
+    A area de implantacao (passos 2.2 e 2.3), em duas metades.
+
+    Primeira: processa o terreno, traca uma area e salva. Segunda: abre a
+    copia noutro processo e confere que a identidade da area e a MESMA.
+
+    E o que o plano pede em 2.2: "GUID sobrevive a salvar e reabrir". Uma area
+    que perde a identidade vira uma polilinha qualquer no meio de milhares, e
+    todo resultado calculado sobre ela fica orfao.
+
+    Os vertices saem da caixa da superficie, para o caso valer em qualquer
+    desenho do acervo.
+#>
+function Testar-Area {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-area--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-area : nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    # Um quadrado de 100 m em volta do centro do terreno.
+    function Ponto([double] $dx, [double] $dy) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###}', $centroX + $dx, $centroY + $dy)
+    }
+
+    $copia = Join-Path $saida 'area.dwg'
+    if (Test-Path $copia) { Remove-Item $copia -Force }
+
+    $nome = 'Area de teste'
+
+    $criar = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-area-criar' `
+        -Script (Join-Path $PSScriptRoot 'ufv-area-criar.scr') `
+        -Substituicoes @{
+            '{{P1}}' = (Ponto -50 -50)
+            '{{P2}}' = (Ponto  50 -50)
+            '{{P3}}' = (Ponto  50  50)
+            '{{P4}}' = (Ponto -50  50)
+            '{{NOME}}' = $nome
+            '{{SAIDA}}' = $copia
+        }
+
+    if ($criar.Texto -notmatch 'UFV_GRAVADO') {
+        $problemas.Add("ufv-area : a primeira metade nao terminou. Veja $($criar.Saida)")
+        return $false
+    }
+
+    if ($criar.Texto -notmatch 'Área criada:') {
+        $problemas.Add("ufv-area : a area nao foi criada. Veja $($criar.Saida)")
+        return $false
+    }
+
+    # A area tem que ter ganhado vertices no contorno do relevo: um quadrado
+    # de 100 m sobre terreno real cruza muitos triangulos, e sem os vertices
+    # extras a linha passaria por dentro do morro.
+    if ($criar.Texto -notmatch 'vértices no terreno:\s+(\d+)') {
+        $problemas.Add("ufv-area : nao achei a contagem de vertices. Veja $($criar.Saida)")
+        return $false
+    }
+
+    $verticesNoTerreno = [int] $Matches[1]
+    if ($verticesNoTerreno -le 4) {
+        $problemas.Add(
+            "ufv-area : a area ficou com $verticesNoTerreno vertices, os mesmos quatro tracados. " +
+            "Sobre terreno de verdade ela tinha que ganhar vertices ao cruzar os triangulos. " +
+            "Veja $($criar.Saida)")
+        return $false
+    }
+
+    if ($criar.Texto -notmatch 'NODESENHO ([0-9a-f-]{36}) ') {
+        $problemas.Add("ufv-area : a area nao apareceu na listagem. Veja $($criar.Saida)")
+        return $false
+    }
+
+    $identidadeAntes = $Matches[1]
+
+    if (-not (Test-Path $copia)) {
+        $problemas.Add("ufv-area : o desenho nao foi salvo. Veja $($criar.Saida)")
+        return $false
+    }
+
+    $ler = Invoke-CoreConsole -Desenho $copia -Rotulo 'ufv-area-ler' `
+                              -Script (Join-Path $PSScriptRoot 'ufv-area-ler.scr')
+
+    if ($ler.Texto -notmatch 'NODESENHO ([0-9a-f-]{36}) ') {
+        $problemas.Add(
+            'ufv-area : depois de salvar e reabrir, a area nao foi reconhecida. ' +
+            "A identidade nao sobreviveu ao arquivo. Veja $($ler.Saida)")
+        return $false
+    }
+
+    $identidadeDepois = $Matches[1]
+
+    if ($identidadeDepois -ne $identidadeAntes) {
+        $problemas.Add(
+            "ufv-area : a identidade mudou ao reabrir ($identidadeAntes -> $identidadeDepois). " +
+            "Veja $($ler.Saida)")
+        return $false
+    }
+
+    # E o registro central tambem precisa ter sobrevivido: ele e o indice, e
+    # sem ele o plugin varreria o desenho inteiro a cada comando.
+    if ($ler.Texto -notmatch ('REGISTRADA ' + [regex]::Escape($identidadeAntes))) {
+        $problemas.Add(
+            'ufv-area : a area sobreviveu mas sumiu do registro central. ' +
+            "Veja $($ler.Saida)")
+        return $false
+    }
+
+    if ($ler.Texto -notmatch ([regex]::Escape($nome))) {
+        $problemas.Add("ufv-area : o nome da area nao sobreviveu. Veja $($ler.Saida)")
+        return $false
+    }
+
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -837,6 +961,10 @@ else {
     # A consulta de cota, idem.
     $total++
     if (Testar-Coordenada -Desenho $desenhos[0] -Rotulo 'ufv-coord') { $passaram++ }
+
+    # E a area, que tambem salva e reabre.
+    $total++
+    if (Testar-Area -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

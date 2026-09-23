@@ -68,7 +68,8 @@ internal static class ProvenanceStore
         // Carimbo ilegível é tratado como ausente, aqui e no dicionário: a
         // alternativa seria impedir o usuário de trabalhar por causa de um
         // dado auxiliar.
-        return Ler(PluginDictionary.Load(database, ChaveDoTerreno));
+        using var dados = PluginDictionary.Load(database, ChaveDoTerreno);
+        return Ler(dados);
     }
 
     private static ResultBuffer Escrever(ProvenanceStamp carimbo)

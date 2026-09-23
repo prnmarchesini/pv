@@ -1,0 +1,13 @@
+; Segunda metade: abre o desenho salvo e lista as areas.
+;
+; O identificador de cada area tem que ser o mesmo da primeira metade. Se ele
+; mudar, a identidade nao sobreviveu ao arquivo — e uma area que perde a
+; identidade vira uma polilinha qualquer no meio de milhares.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_AREAS")
+(setvar "SECURELOAD" ufv:secureload)
+(princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

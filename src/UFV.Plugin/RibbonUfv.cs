@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Windows.Media;
 using Autodesk.Windows;
 using UFV.Core;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
@@ -116,6 +117,7 @@ internal static class RibbonUfv
 
         aba.Panels.Add(MontarPainelInicio());
         aba.Panels.Add(MontarPainelTerreno());
+        aba.Panels.Add(MontarPainelUfv());
         ribbon.Tabs.Add(aba);
 
         var temDocumento = AcadApp.DocumentManager.MdiActiveDocument is not null;
@@ -126,70 +128,111 @@ internal static class RibbonUfv
     {
         var origem = new RibbonPanelSource { Title = "Início" };
 
-        origem.Items.Add(new RibbonButton
-        {
-            Text = "Olá",
-            ShowText = true,
-            ShowImage = false,
-            Size = RibbonItemSize.Large,
-            Orientation = System.Windows.Controls.Orientation.Vertical,
-            // O nome vem da constante que registra o comando: renomear o
-            // comando arrasta o botao junto. Quem guarda o nome e o handler,
-            // e nao o CommandParameter: a ribbon chama CanExecute(null), e um
-            // handler que dependesse do parametro deixaria o botao inerte.
-            CommandHandler = new ComandoDaRibbon(PluginInfo.ComandoOla),
-            ToolTip = $"{PluginInfo.Nome}: confirma que o plugin está carregado.",
-        });
+        origem.Items.Add(BotaoGrande(
+            "Olá",
+            IconesDaRibbon.Ola(),
+            PluginInfo.ComandoOla,
+            $"{PluginInfo.Nome}: confirma que o plugin está carregado."));
 
         return new RibbonPanel { Source = origem };
     }
 
     /// <summary>
-    /// Seção Terreno. Os botões de manipulação da superfície só entram depois
-    /// que houver terreno processado (passo 1.4 em diante); por ora há só o
-    /// botão que escolhe qual superfície é o terreno.
+    /// Seção Terreno: escolher a superfície e conferir o que saiu dela.
+    ///
+    /// O botão Terreno é o grande, porque é por onde se começa. Os outros dois
+    /// dependem dele e ficam pequenos, empilhados ao lado — é o arranjo que o
+    /// próprio Civil 3D usa, e economiza a largura que três botões grandes
+    /// ocupariam.
+    ///
+    /// Eles não são desabilitados quando não há terreno: o comando avisa e diz
+    /// o que fazer, que é mais útil que um botão cinza sem explicação.
     /// </summary>
     private static RibbonPanel MontarPainelTerreno()
     {
         var origem = new RibbonPanelSource { Title = "Terreno" };
 
-        origem.Items.Add(new RibbonButton
-        {
-            Text = "Terreno",
-            ShowText = true,
-            ShowImage = false,
-            Size = RibbonItemSize.Large,
-            Orientation = System.Windows.Controls.Orientation.Vertical,
-            CommandHandler = new ComandoDaRibbon(PluginInfo.ComandoTerreno),
-            ToolTip = "Escolhe qual superfície do desenho é o terreno.",
-        });
+        origem.Items.Add(BotaoGrande(
+            "Terreno",
+            IconesDaRibbon.Terreno(),
+            PluginInfo.ComandoTerreno,
+            "Escolhe qual superfície do desenho é o terreno."));
 
-        // Os botões que dependem do terreno vêm depois dele, na mesma seção.
-        // Eles não são desabilitados quando não há terreno: o comando avisa e
-        // diz o que fazer, que é mais útil que um botão cinza sem explicação.
-        origem.Items.Add(new RibbonButton
-        {
-            // A quebra de linha deixa o rótulo em duas linhas no botão grande.
-            Text = "Obter\nCoordenada",
-            ShowText = true,
-            ShowImage = false,
-            Size = RibbonItemSize.Large,
-            Orientation = System.Windows.Controls.Orientation.Vertical,
-            CommandHandler = new ComandoDaRibbon(PluginInfo.ComandoCoordenada),
-            ToolTip = "Clica num ponto e responde X, Y e Z do terreno.",
-        });
+        var coluna = new RibbonRowPanel();
 
-        origem.Items.Add(new RibbonButton
-        {
-            Text = "Status",
-            ShowText = true,
-            ShowImage = false,
-            Size = RibbonItemSize.Large,
-            Orientation = System.Windows.Controls.Orientation.Vertical,
-            CommandHandler = new ComandoDaRibbon(PluginInfo.ComandoTerrenoStatus),
-            ToolTip = "Diz se o terreno processado ainda corresponde à superfície do desenho.",
-        });
+        coluna.Items.Add(BotaoPequeno(
+            "Coordenada",
+            IconesDaRibbon.Coordenada(),
+            PluginInfo.ComandoCoordenada,
+            "Clica num ponto e responde X, Y e Z do terreno."));
+
+        // A quebra manda o próximo botão para a linha de baixo. Sem ela os
+        // dois ficariam lado a lado e o painel voltaria a ficar largo.
+        coluna.Items.Add(new RibbonRowBreak());
+
+        coluna.Items.Add(BotaoPequeno(
+            "Status",
+            IconesDaRibbon.Status(),
+            PluginInfo.ComandoTerrenoStatus,
+            "Diz se o terreno processado ainda corresponde à superfície do desenho."));
+
+        origem.Items.Add(coluna);
 
         return new RibbonPanel { Source = origem };
     }
+
+    /// <summary>
+    /// Seção UFV: o que é do projeto da usina, e não do terreno.
+    /// </summary>
+    private static RibbonPanel MontarPainelUfv()
+    {
+        var origem = new RibbonPanelSource { Title = "UFV" };
+
+        origem.Items.Add(BotaoGrande(
+            "Área",
+            IconesDaRibbon.Area(),
+            PluginInfo.ComandoArea,
+            "Traça a área de implantação e a assenta no terreno."));
+
+        return new RibbonPanel { Source = origem };
+    }
+
+    /// <summary>
+    /// Botão grande: ícone em cima, rótulo embaixo.
+    ///
+    /// O nome do comando vem sempre de uma constante de <see cref="PluginInfo"/>:
+    /// renomear o comando arrasta o botão junto. Quem guarda o nome é o
+    /// handler, e não o CommandParameter — a ribbon chama CanExecute(null), e
+    /// um handler que dependesse do parâmetro deixaria o botão inerte.
+    /// </summary>
+    private static RibbonButton BotaoGrande(
+        string rotulo, ImageSource icone, string comando, string dica) =>
+        new()
+        {
+            Text = rotulo,
+            ShowText = true,
+            ShowImage = true,
+            LargeImage = icone,
+            Image = icone,
+            Size = RibbonItemSize.Large,
+            Orientation = System.Windows.Controls.Orientation.Vertical,
+            CommandHandler = new ComandoDaRibbon(comando),
+            ToolTip = dica,
+        };
+
+    /// <summary>Botão pequeno: ícone à esquerda, rótulo ao lado.</summary>
+    private static RibbonButton BotaoPequeno(
+        string rotulo, ImageSource icone, string comando, string dica) =>
+        new()
+        {
+            Text = rotulo,
+            ShowText = true,
+            ShowImage = true,
+            Image = icone,
+            LargeImage = icone,
+            Size = RibbonItemSize.Standard,
+            Orientation = System.Windows.Controls.Orientation.Horizontal,
+            CommandHandler = new ComandoDaRibbon(comando),
+            ToolTip = dica,
+        };
 }

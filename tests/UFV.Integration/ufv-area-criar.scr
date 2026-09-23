@@ -1,0 +1,23 @@
+; Teste de nivel 2 dos passos 2.2 e 2.3, primeira metade: processa o terreno,
+; traca uma area, lista o que ficou, e SALVA o desenho.
+;
+; O comando do produto e usado como esta: no Core Console o GetPoint e o
+; GetString leem do proprio script, entao os vertices e o nome entram como se
+; alguem estivesse clicando e digitando. Nao foi preciso um comando separado
+; para teste.
+;
+; O Enter depois do ultimo vertice fecha a area, como no PLINE.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_TERRENO_AUTO")
+(command "UFV_AREA" "{{P1}}" "{{P2}}" "{{P3}}" "{{P4}}" "" "{{NOME}}")
+(command "UFV_AREAS")
+(setvar "SECURELOAD" ufv:secureload)
+(setvar "FILEDIA" 0)
+(command "_.SAVEAS" "2018" "{{SAIDA}}")
+(setvar "FILEDIA" 1)
+(princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ "\nUFV_GRAVADO")
+(princ)

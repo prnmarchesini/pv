@@ -19,6 +19,12 @@ internal static class PluginDictionary
     private const string Nome = PluginInfo.PrefixoDeDados;
 
     /// <summary>Grava um registro sob a chave, substituindo o anterior.</summary>
+    /// <param name="dados">
+    /// O conteúdo a gravar. Save assume a posse dele: quem chama entrega o
+    /// buffer e não o usa mais, porque é Save quem o descarta. Se algo lançar
+    /// antes do Commit o buffer vaza — aceitável porque todos os chamadores o
+    /// montam na linha de cima e não têm o que fazer com ele depois.
+    /// </param>
     internal static void Save(Database database, string chave, ResultBuffer dados)
     {
         ArgumentNullException.ThrowIfNull(database);
@@ -48,6 +54,10 @@ internal static class PluginDictionary
         transacao.AddNewlyCreatedDBObject(registro, true);
 
         transacao.Commit();
+
+        // ResultBuffer segura memória não gerenciada. Depois do commit o
+        // Xrecord já tem a cópia dele, e este aqui só ocuparia lugar.
+        dados.Dispose();
     }
 
     /// <summary>
