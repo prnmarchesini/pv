@@ -64,6 +64,32 @@ public sealed record TableFrame(
         }
     }
 
+    /// <summary>
+    /// Por que esta estrutura não serve para esta mesa, ou null se serve.
+    ///
+    /// Hoje há uma conferência só, a que o passo 3.4 exige: a tesoura precisa
+    /// ser menor que os módulos. Maior daria sobra negativa e poria o pilar
+    /// fora da mesa.
+    ///
+    /// Mora aqui, e não repetida na geometria e no perfil, porque regra
+    /// duplicada é regra que diverge: bastaria alguém trocar o sinal num dos
+    /// dois lados para o perfil passar a aceitar o que a geometria recusa.
+    /// </summary>
+    public string? WhyDoesNotFit(TableLayout mesa)
+    {
+        if (mesa is null) return "não há mesa para a estrutura segurar";
+        if (WhyInvalid is { } porCausaDaEstrutura) return porCausaDaEstrutura;
+        if (mesa.WhyInvalid is { } porCausaDaMesa) return porCausaDaMesa;
+
+        if (RafterLength > mesa.Depth)
+        {
+            return $"a tesoura tem {Texto(RafterLength)} m e os módulos ocupam "
+                + $"{Texto(mesa.Depth)} m na inclinação: ela precisa ser menor que eles";
+        }
+
+        return null;
+    }
+
     /// <summary>A linha que descreve a estrutura para o usuário.</summary>
     public string Describe() =>
         WhyInvalid is { } motivo

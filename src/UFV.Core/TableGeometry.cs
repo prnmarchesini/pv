@@ -122,16 +122,12 @@ public sealed class TableGeometry
         if (pilares.WhyDoesNotFit(mesa.Length) is { } porCausaDosPilares)
             throw new InvalidOperationException(porCausaDosPilares);
 
-        var profundidade = mesa.Depth;
+        // A exigência do plano ("tesoura menor que o módulo") mora em
+        // TableFrame, para o perfil e a geometria nunca divergirem sobre ela.
+        if (estrutura.WhyDoesNotFit(mesa) is { } porCausaDaTesoura)
+            throw new InvalidOperationException($"A estrutura não serve para a mesa: {porCausaDaTesoura}.");
 
-        if (estrutura.RafterLength > profundidade)
-        {
-            // Exigência do plano: "tesoura menor que o módulo". Maior daria
-            // sobra negativa e poria o pilar fora da mesa.
-            throw new InvalidOperationException(
-                $"A tesoura tem {estrutura.RafterLength:0.###} m e os módulos ocupam "
-                + $"{profundidade:0.###} m na inclinação: a tesoura precisa ser menor que eles.");
-        }
+        var profundidade = mesa.Depth;
 
         var sobra = (profundidade - estrutura.RafterLength) / 2;
         var fileiraDoPilar = sobra + estrutura.PillarAlongRafter;

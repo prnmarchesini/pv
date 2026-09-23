@@ -27,6 +27,7 @@ Só o Renan marca VALIDADO.
 | 3.3 | Tabela de pilares | AGUARDANDO VALIDAÇÃO | 18,702 m com alvo de 3 m dá 6 vãos de 3,117 m, 7 pilares |
 | 3.4 | Geometria local da mesa | AGUARDANDO VALIDAÇÃO | Matriz única + primeiro verificador de regra sagrada (RigidTable) |
 | 3.5 | Fórmula da altura livre | AGUARDANDO VALIDAÇÃO | Exemplo do plano fecha; verificador da regra sagrada 1 |
+| 3.6 | Perfil nomeado | AGUARDANDO VALIDAÇÃO | JSON com versão de formato; ida e volta exata em qualquer ângulo |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -613,3 +614,65 @@ apagada): **16 testes caem**.
 - falta o verificador da regra sagrada 4 em `UFV.Core.Invariants`. Ele depende
   da tolerância de invasão por lombo ("o usuário define quantos módulos por
   mesa podem estourar a ponta baixa"), que também é configuração do 4.1.
+
+**Etapa 3.6: o perfil nomeado.**
+
+O risco deste passo não é o JSON — é o tempo. Um perfil gravado hoje será
+aberto daqui a um ano, por outra versão do plugin, num computador com o
+separador decimal diferente. Se qualquer uma dessas coisas mudar um número em
+silêncio, a usina sai com a mesa errada e ninguém desconfia, porque o nome é o
+mesmo.
+
+Decisões do formato, todas por causa disso:
+
+- número com ponto decimal, invariante de cultura;
+- arranjo gravado **e lido** só como texto;
+- campo ausente recusado pelo nome, nunca lido como zero;
+- campo desconhecido recusado, não ignorado;
+- versão do formato no arquivo, e arquivo de outra versão é recusado.
+
+A inclinação é o único número do projeto que vai para o arquivo em **graus**:
+um perfil é feito para ser aberto num editor e conferido de relance, e
+"0.3490658503988659" não se confere.
+
+**O que a revisão do 3.6 apontou, e o que foi feito.**
+
+O achado principal, e é o tipo de coisa que só aparece quando alguém procura:
+**a ida e volta não era exata, e o meu teste passava por sorte.** O revisor
+rodou os 901 ângulos de décimo em décimo entre 0° e 90°: **37 deles voltavam
+diferentes**, por um ULP. Vinte graus — o ângulo que eu escolhi para o teste —
+fecha; 37,5° saía como `37.50000000000001` no arquivo e o perfil voltava
+diferente do que entrou. Num fuzz de 200 mil radianos, 25% não fechavam.
+
+Isso quebrava duas coisas: a igualdade do perfil (qualquer "este perfil
+mudou?" daria falso positivo) e a própria justificativa do formato em graus,
+já que `68.99999999999999` não se confere de relance. Corrigido arredondando
+na gravação, e o teste agora roda os nove ângulos que o revisor achou.
+
+Dois outros achados graves:
+
+- **o arranjo era gravado como texto, mas a leitura aceitava número.** Um `7`
+  no arquivo não é 1V nem 2V: toda comparação com 2V dá falso e a mesa sai
+  como 1V, com 37,224 m no lugar de 18,702 m. O dobro do comprimento, sem erro
+  nenhum. O meu teste só olhava a gravação;
+- **campo ausente virava zero**, e zero é valor legítimo para folga e para
+  margem — "faltou" e "vale zero" eram indistinguíveis. Um perfil sem
+  `horizontalGap` carregava "com sucesso" 26 cm mais curto. Agora todo campo
+  do arquivo é anulável e a recusa nomeia o campo.
+
+Menores, corrigidos: campo desconhecido era ignorado em silêncio; o nome era
+trimado só na gravação, então voltava diferente; a mensagem de erro do
+`System.Text.Json` vazava em inglês com o nome de um tipo privado interno; e o
+teste de cultura rodava na cultura da máquina — passava aqui por ser pt-BR e
+não provava nada. Agora ele troca a cultura de propósito.
+
+E uma duplicação que valia corrigir: a regra "tesoura menor que o módulo"
+estava escrita palavra por palavra em dois arquivos. Bastaria alguém trocar o
+sinal num dos dois para o perfil passar a aceitar o que a geometria recusa.
+Agora mora em `TableFrame.WhyDoesNotFit`, e os dois chamam de lá.
+
+Renomeado `Tilt` para `TiltRadians`: ao lado de `TiltDegrees`, um campo
+chamado só "Tilt" é meio caminho andado para alguém ligar nele o campo em
+graus da janela do 3.7.
+
+Cinco mutações conferidas: **15 testes caem**.
