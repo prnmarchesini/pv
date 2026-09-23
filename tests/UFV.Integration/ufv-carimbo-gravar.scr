@@ -1,0 +1,23 @@
+; Teste de nivel 2 do passo 1.5, primeira metade: processa o terreno e SALVA
+; o desenho, para a segunda metade reabrir e conferir que o carimbo
+; sobreviveu ao arquivo ser fechado.
+;
+; Este e o teste que o plano pede com todas as letras: "reabrir o desenho
+; recupera o registro". Guardar em memoria passaria num teste de uma sessao so
+; e falharia no uso real, que e exatamente onde o carimbo precisa funcionar —
+; meses depois, noutra maquina, com o arquivo vindo de e-mail.
+;
+; O desenho gravado e uma copia em artefatos, nunca o do acervo: o acervo e
+; congelado por hash, e salvar por cima dele deixaria o placar vermelho.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_TERRENO_AUTO")
+(setvar "SECURELOAD" ufv:secureload)
+(setvar "FILEDIA" 0)
+(command "_.SAVEAS" "2018" "{{SAIDA}}")
+(setvar "FILEDIA" 1)
+(princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ "\nUFV_GRAVADO")
+(princ)

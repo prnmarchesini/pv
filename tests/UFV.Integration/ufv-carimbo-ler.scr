@@ -1,0 +1,15 @@
+; Teste de nivel 2 do passo 1.5, segunda metade: abre o desenho que a primeira
+; metade salvou e pergunta o status do terreno.
+;
+; Tem que responder "STATUS Atual": o carimbo esta la, e a superficie nao
+; mudou desde o processamento. Se a resposta for SemCarimbo, o carimbo nao
+; sobreviveu ao arquivo; se for Desatualizado ou SuperficieSumiu, a leitura de
+; volta entendeu errado o que foi gravado.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_TERRENO_STATUS")
+(setvar "SECURELOAD" ufv:secureload)
+(princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

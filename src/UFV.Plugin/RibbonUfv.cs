@@ -164,6 +164,32 @@ internal static class RibbonUfv
             ToolTip = "Escolhe qual superfície do desenho é o terreno.",
         });
 
+        // Os botões que dependem do terreno vêm depois dele, na mesma seção.
+        // Eles não são desabilitados quando não há terreno: o comando avisa e
+        // diz o que fazer, que é mais útil que um botão cinza sem explicação.
+        origem.Items.Add(new RibbonButton
+        {
+            // A quebra de linha deixa o rótulo em duas linhas no botão grande.
+            Text = "Obter\nCoordenada",
+            ShowText = true,
+            ShowImage = false,
+            Size = RibbonItemSize.Large,
+            Orientation = System.Windows.Controls.Orientation.Vertical,
+            CommandHandler = new ComandoDaRibbon(PluginInfo.ComandoCoordenada),
+            ToolTip = "Clica num ponto e responde X, Y e Z do terreno.",
+        });
+
+        origem.Items.Add(new RibbonButton
+        {
+            Text = "Status",
+            ShowText = true,
+            ShowImage = false,
+            Size = RibbonItemSize.Large,
+            Orientation = System.Windows.Controls.Orientation.Vertical,
+            CommandHandler = new ComandoDaRibbon(PluginInfo.ComandoTerrenoStatus),
+            ToolTip = "Diz se o terreno processado ainda corresponde à superfície do desenho.",
+        });
+
         return new RibbonPanel { Source = origem };
     }
 }

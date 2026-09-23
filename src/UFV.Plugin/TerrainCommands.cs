@@ -3,6 +3,7 @@ using System.Globalization;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
+using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
 using Autodesk.Civil.DatabaseServices;
 using UFV.Core;
@@ -149,11 +150,14 @@ public static class TerrainCommands
             // teste, não o usuário.
             editor.WriteMessage(string.Format(
                 CultureInfo.InvariantCulture,
-                "\nCIVIL3D triangulos={0} cotaMin={1:0.000} cotaMax={2:0.000} pontos={3}\n",
+                "\nCIVIL3D triangulos={0} cotaMin={1:0.000} cotaMax={2:0.000} pontos={3} "
+                + "centroX={4:0.###} centroY={5:0.###}\n",
                 tin.NumberOfTriangles,
                 gerais.MinimumElevation,
                 gerais.MaximumElevation,
-                gerais.NumberOfPoints));
+                gerais.NumberOfPoints,
+                (gerais.MinimumCoordinateX + gerais.MaximumCoordinateX) / 2,
+                (gerais.MinimumCoordinateY + gerais.MaximumCoordinateY) / 2));
 
             transacao.Commit();
         }
@@ -161,6 +165,185 @@ public static class TerrainCommands
         {
             RegistroDeDiagnostico.Registrar("Não consegui ler as estatísticas do Civil 3D.", erro);
             editor.WriteMessage("\nCIVIL3D indisponivel\n");
+        }
+    }
+
+    /// <summary>
+    /// UFV_TERRENO_STATUS: diz se o terreno gravado neste desenho ainda
+    /// corresponde à superfície como ela está agora.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoTerrenoStatus)]
+    public static void TerrenoStatus()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+
+        try
+        {
+            var carimbo = ProvenanceStore.Load(documento.Database);
+
+            if (carimbo is null)
+            {
+                editor.WriteMessage("\nSTATUS SemCarimbo: este desenho ainda não teve terreno processado.\n");
+                return;
+            }
+
+            var agora = LerIdentidadeAtual(documento, carimbo.Surface.Handle);
+            var estado = ProvenanceCheck.Evaluate(carimbo, agora);
+
+            editor.WriteMessage(
+                $"\nSTATUS {estado}: terreno de {carimbo.Surface.Name}, "
+                + $"processado em {carimbo.ProcessedAtText} pela versão {carimbo.PluginVersion}.\n");
+
+            var aviso = ProvenanceCheck.Warning(carimbo, agora);
+            if (aviso is not null) editor.WriteMessage($"{aviso}\n");
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao conferir o carimbo do terreno.", erro);
+            editor.WriteMessage($"\nNão consegui conferir o terreno deste desenho: {erro.Message}\n");
+        }
+    }
+
+    /// <summary>
+    /// A superfície do carimbo, como ela está agora, ou null se ela não
+    /// estiver mais no desenho.
+    /// </summary>
+    private static SurfaceFingerprint? LerIdentidadeAtual(Document documento, string handle)
+    {
+        using var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction();
+
+        var id = ObjectId.Null;
+
+        try
+        {
+            // O handle é texto hexadecimal no desenho; aqui ele volta a ser o
+            // identificador do objeto.
+            var convertido = Convert.ToInt64(handle, 16);
+            id = documento.Database.GetObjectId(false, new Handle(convertido), 0);
+        }
+        catch (System.Exception)
+        {
+            // Handle que não existe mais neste desenho: o objeto foi apagado,
+            // ou o carimbo veio de outro arquivo por cópia.
+            return null;
+        }
+
+        if (id.IsNull || id.IsErased) return null;
+        if (transacao.GetObject(id, OpenMode.ForRead) is not TinSurface superficie) return null;
+
+        var identidade = FingerprintReader.Read(superficie);
+        transacao.Commit();
+
+        return identidade;
+    }
+
+    /// <summary>
+    /// Mostra onde no mundo fica o terreno, e pergunta quando o desenho não
+    /// sabe.
+    ///
+    /// É pré-requisito da posição do sol, e portanto do azimute e de qualquer
+    /// conta de sombreamento adiante. Perguntar agora, e não na etapa em que
+    /// for usado, é proposital: lá o erro já estaria embutido no layout.
+    /// </summary>
+    private static void MostrarLocalizacao(Editor editor, Document documento, Point3d pontoDoTerreno)
+    {
+        try
+        {
+            var lugar = GeoStore.Read(documento.Database, pontoDoTerreno);
+
+            if (lugar is not null)
+            {
+                var origem = lugar.Source == GeoLocationSource.Desenho
+                    ? "do desenho"
+                    : "informada";
+
+                editor.WriteMessage($"  localização:    {lugar.Describe()}  ({origem})\n");
+                return;
+            }
+
+            if (!UfvExtension.TemInterface())
+            {
+                // Sem interface não há a quem perguntar. Dizer que falta é
+                // melhor que inventar um valor.
+                editor.WriteMessage("  localização:    não definida neste desenho\n");
+                return;
+            }
+
+            Perguntar(editor, documento);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao obter a localização geográfica.", erro);
+        }
+    }
+
+    private static void Perguntar(Editor editor, Document documento)
+    {
+        editor.WriteMessage(
+            "\n  Este desenho não tem localização geográfica definida, e ela é necessária\n"
+            + "  para a posição do sol. Informe a do terreno (negativo para sul e oeste).\n");
+
+        if (!PerguntarGrau(editor, "Latitude", -90, 90, out var latitude)) return;
+        if (!PerguntarGrau(editor, "Longitude", -180, 180, out var longitude)) return;
+
+        var lugar = new GeoLocation(latitude, longitude, GeoLocationSource.Usuario);
+
+        if (!lugar.IsValid)
+        {
+            editor.WriteMessage("  Valor fora dos limites; a localização não foi gravada.\n");
+            return;
+        }
+
+        GeoStore.Save(documento.Database, lugar);
+        editor.WriteMessage($"  localização:    {lugar.Describe()}  (informada)\n");
+    }
+
+    private static bool PerguntarGrau(Editor editor, string rotulo, double minimo, double maximo, out double valor)
+    {
+        valor = 0;
+
+        var opcoes = new PromptDoubleOptions($"\n  {rotulo} em graus: ")
+        {
+            AllowNone = false,
+        };
+
+        var resposta = editor.GetDouble(opcoes);
+        if (resposta.Status != PromptStatus.OK)
+        {
+            editor.WriteMessage("  Localização não informada.\n");
+            return false;
+        }
+
+        if (resposta.Value < minimo || resposta.Value > maximo)
+        {
+            editor.WriteMessage($"  {rotulo} precisa ficar entre {minimo} e {maximo}.\n");
+            return false;
+        }
+
+        valor = resposta.Value;
+        return true;
+    }
+
+    private static void GravarCarimbo(Editor editor, Document documento, SurfaceFingerprint identidade)
+    {
+        try
+        {
+            ProvenanceStore.Save(
+                documento.Database,
+                new ProvenanceStamp(identidade, DateTime.Now, UfvCommands.VersaoDoPlugin()));
+        }
+        catch (System.Exception erro)
+        {
+            // O terreno já está processado e utilizável; o que se perde é a
+            // capacidade de avisar depois que ele ficou velho. Vale dizer, e
+            // não vale desfazer o trabalho.
+            RegistroDeDiagnostico.Registrar("Não consegui gravar o carimbo de proveniência.", erro);
+            editor.WriteMessage(
+                "\n  ATENÇÃO: não consegui gravar o carimbo no desenho. O terreno funciona nesta "
+                + "sessão, mas ao reabrir o arquivo não haverá como saber se ele envelheceu.\n");
         }
     }
 
@@ -210,6 +393,8 @@ public static class TerrainCommands
 
         var relogio = Stopwatch.StartNew();
         SurfaceMesh lida;
+        SurfaceFingerprint identidade;
+        Point3d centroDoTerreno;
 
         // Uma transação para a leitura inteira, fechada antes de qualquer
         // conta: o motor trabalha sobre os números, não sobre o banco.
@@ -223,6 +408,21 @@ public static class TerrainCommands
             }
 
             lida = SurfaceExtractor.Extract(superficie);
+
+            // A identidade é lida agora, com a superfície na mão, e não depois:
+            // entre uma transação e outra o desenho pode mudar, e o carimbo
+            // passaria a descrever um estado que nunca foi processado.
+            identidade = FingerprintReader.Read(superficie);
+
+            // O meio da superfície, para perguntar ao AutoCAD onde no mundo
+            // fica este terreno. Um ponto de dentro dele, e não um ponto
+            // qualquer do desenho.
+            var caixa = superficie.GetGeneralProperties();
+            centroDoTerreno = new Point3d(
+                (caixa.MinimumCoordinateX + caixa.MaximumCoordinateX) / 2,
+                (caixa.MinimumCoordinateY + caixa.MaximumCoordinateY) / 2,
+                0);
+
             transacao.Commit();
         }
 
@@ -252,8 +452,16 @@ public static class TerrainCommands
 
         TerrainCache.Store(documento, new ProcessedTerrain(escolhida.Id, malha, resumo));
 
+        // O carimbo vai para dentro do desenho, e não para a memória: ele
+        // precisa sobreviver a fechar e reabrir o arquivo. É o que permite,
+        // meses depois de uma terraplenagem, o plugin dizer que o resultado
+        // está velho em vez de deixar o número passar.
+        GravarCarimbo(editor, documento, identidade);
+
         editor.WriteMessage("\n");
         foreach (var linha in resumo.Lines()) editor.WriteMessage($"{linha}\n");
+
+        MostrarLocalizacao(editor, documento, centroDoTerreno);
 
         if (lida.UnreadableCount > 0)
         {

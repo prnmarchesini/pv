@@ -34,6 +34,17 @@ public static class PluginInfo
     public const string ComandoTerrenoAutomatico = "UFV_TERRENO_AUTO";
 
     /// <summary>
+    /// Comando que diz se o terreno gravado no desenho ainda corresponde à
+    /// superfície como ela está agora.
+    /// </summary>
+    public const string ComandoTerrenoStatus = "UFV_TERRENO_STATUS";
+
+    /// <summary>
+    /// Comando que responde X, Y e Z de um ponto clicado no terreno.
+    /// </summary>
+    public const string ComandoCoordenada = "UFV_COORD";
+
+    /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).
     /// </summary>
@@ -46,7 +57,16 @@ public static class PluginInfo
     /// A linha que o comando UFV_OLA escreve na linha de comando do Civil 3D.
     /// </summary>
     public static string MensagemDeApresentacao(string? versao) =>
-        $"{Nome} carregado, versão {Limpar(versao)}";
+        $"{Nome} carregado, versão {VersaoLegivel(versao)}";
+
+    /// <summary>
+    /// A versão como o usuário lê: sem o sufixo de build que o SDK acrescenta.
+    ///
+    /// O sufixo continua valendo onde ele serve — gravado no carimbo do
+    /// desenho, ele identifica exatamente qual build processou o terreno.
+    /// Numa mensagem de tela, é ruído.
+    /// </summary>
+    public static string VersaoLegivel(string? versao) => Limpar(versao);
 
     /// <summary>
     /// Tira o sufixo de build que o SDK acrescenta a versao informativa

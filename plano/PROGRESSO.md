@@ -15,9 +15,9 @@ Só o Renan marca VALIDADO.
 | 1.2 | Índice espacial | AGUARDANDO VALIDAÇÃO | Validação é automática, sem CAD |
 | 1.3 | Listar superfícies | AGUARDANDO VALIDAÇÃO | Duas superfícies conferidas no Porto Feliz |
 | 1.4 | Processar superfície | AGUARDANDO VALIDAÇÃO | Os 5 números batem com o Civil 3D no Itatiba |
-| 1.5 | Identidade e carimbo | PENDENTE | |
-| 1.6 | Coordenada geográfica | PENDENTE | |
-| 1.7 | Botão Obter Coordenada | PENDENTE | |
+| 1.5 | Identidade e carimbo | AGUARDANDO VALIDAÇÃO | Carimbo sobrevive a salvar e reabrir, conferido por teste |
+| 1.6 | Coordenada geográfica | AGUARDANDO VALIDAÇÃO | Itatiba e Porto Feliz batem com as cidades reais |
+| 1.7 | Botão Obter Coordenada | AGUARDANDO VALIDAÇÃO | Renan conferiu Z contra o desenho e o caso fora do terreno |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -25,8 +25,8 @@ Só o Renan marca VALIDADO.
 
 ```
 Etapa 0   45/45    OK
-Etapa 1   93/93    OK
-Nivel 2   3/3      OK
+Etapa 1   122/122  OK
+Nivel 2   4/4      OK
 Acervo             OK
 ```
 

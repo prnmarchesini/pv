@@ -85,7 +85,8 @@ function Invoke-CoreConsole {
     param(
         [string] $Desenho,
         [string] $Script,
-        [string] $Rotulo
+        [string] $Rotulo,
+        [hashtable] $Substituicoes = @{}
     )
 
     $scr = Join-Path $saida "nivel2-$Rotulo.scr"
@@ -93,8 +94,13 @@ function Invoke-CoreConsole {
 
     # Barra normal: dentro de uma string LISP a barra invertida e escape, e
     # "C:\Dev\..." chegaria ao NETLOAD como "C:Dev...".
-    (Get-Content $Script -Raw).Replace('{{DLL}}', $script:dll.Replace('\', '/')) |
-        Set-Content $scr -Encoding ascii
+    $texto = (Get-Content $Script -Raw).Replace('{{DLL}}', $script:dll.Replace('\', '/'))
+
+    foreach ($marcador in $Substituicoes.Keys) {
+        $texto = $texto.Replace($marcador, ([string]$Substituicoes[$marcador]).Replace('\', '/'))
+    }
+
+    $texto | Set-Content $scr -Encoding ascii
 
     if (Test-Path $out) { Remove-Item $out -Force }
 
@@ -432,6 +438,42 @@ function Testar-CasoDoTerreno {
         return $false
     }
 
+    # ---- a localizacao geografica (passo 1.6) ------------------------------
+    #
+    # Nao basta sair um par de numeros: ele precisa cair PERTO do terreno.
+    # Num desenho real, a primeira versao lia o ponto de referencia da
+    # geolocalizacao — um ponto de calibracao arbitrario, a mil quilometros da
+    # usina — e anunciava 14 graus sul para um terreno a 23 graus sul. Nove
+    # graus de latitude estragam a posicao do sol, o azimute das mesas e toda
+    # a conta de sombreamento, e o numero sai plausivel.
+    #
+    # A conferencia e grosseira de proposito: a latitude e estimada pela
+    # coordenada norte em UTM, e so precisa bater dentro de um grau para
+    # provar que o ponto convertido e o do terreno, e nao outro qualquer.
+
+    if ($r.Texto -match 'localização:\s+([\d,\.]+)° ([NS]), ([\d,\.]+)° ([LO])') {
+        $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
+        $sinal = if ($Matches[2] -eq 'S') { -1 } else { 1 }
+        $latitude = [double]::Parse($Matches[1], $ptbr) * $sinal
+
+        if ($r.Texto -notmatch 'centroY=(-?[\d.]+)') {
+            $problemas.Add("$Rotulo : o comando nao informou o centro do terreno. Veja $($r.Saida)")
+            return $false
+        }
+
+        $norte = [double]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture)
+
+        # UTM do hemisferio sul: 10.000.000 m no equador, ~110.574 m por grau.
+        $latitudeEstimada = -(10000000 - $norte) / 110574
+
+        if ([Math]::Abs($latitude - $latitudeEstimada) -gt 1.0) {
+            $problemas.Add(
+                "$Rotulo : a localizacao diz latitude $latitude, mas o terreno esta perto de " +
+                "$([Math]::Round($latitudeEstimada, 2)). Veja $($r.Saida)")
+            return $false
+        }
+    }
+
     if ($r.Texto -match 'UFV_SECURELOAD_ANTES=(\d+)\s+DEPOIS=(\d+)') {
         if ($Matches[1] -ne $Matches[2]) {
             $problemas.Add("$Rotulo nao restaurou o SECURELOAD.")
@@ -535,6 +577,76 @@ function Conferir-Numero {
     return $false
 }
 
+<#
+    O carimbo de proveniencia (passo 1.5), em duas metades.
+
+    Primeira: processa o terreno e salva o desenho numa copia. Segunda: abre a
+    copia, ja noutro processo do Core Console, e pergunta o status.
+
+    Duas metades porque e isso que o plano pede — "reabrir o desenho recupera o
+    registro". Um carimbo guardado em memoria passaria num teste de uma sessao
+    so e falharia no uso real, que e meses depois, noutra maquina, com o
+    arquivo vindo por e-mail.
+
+    A copia fica em artefatos, nunca no acervo: o acervo e congelado por hash,
+    e salvar por cima dele deixaria o placar vermelho — corretamente.
+#>
+function Testar-Carimbo {
+    param([string] $Desenho)
+
+    $copia = Join-Path $saida 'carimbo.dwg'
+    if (Test-Path $copia) { Remove-Item $copia -Force }
+
+    $gravar = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-carimbo-gravar' `
+                                 -Script (Join-Path $PSScriptRoot 'ufv-carimbo-gravar.scr') `
+                                 -Substituicoes @{ '{{SAIDA}}' = $copia }
+
+    if ($gravar.Texto -notmatch 'UFV_GRAVADO') {
+        $problemas.Add("ufv-carimbo: a primeira metade nao terminou. Veja $($gravar.Saida)")
+        return $false
+    }
+
+    if (-not (Test-Path $copia)) {
+        $problemas.Add("ufv-carimbo: o desenho nao foi salvo em $copia. Veja $($gravar.Saida)")
+        return $false
+    }
+
+    $ler = Invoke-CoreConsole -Desenho $copia -Rotulo 'ufv-carimbo-ler' `
+                              -Script (Join-Path $PSScriptRoot 'ufv-carimbo-ler.scr')
+
+    # Ancorado no inicio da linha: sem isso o proprio eco do comando
+    # ("UFV_TERRENO_STATUS Loading AECC Mapcheck...") casa com o padrao e o
+    # teste le "Loading" como se fosse o estado.
+    if ($ler.Texto -match '(?m)^STATUS SemCarimbo') {
+        $problemas.Add(
+            'ufv-carimbo: o carimbo nao sobreviveu ao arquivo ser salvo e reaberto. ' +
+            "Veja $($ler.Saida)")
+        return $false
+    }
+
+    if ($ler.Texto -notmatch '(?m)^STATUS (\w+):') {
+        $problemas.Add("ufv-carimbo: a segunda metade nao respondeu o status. Veja $($ler.Saida)")
+        return $false
+    }
+
+    $estado = $Matches[1]
+    if ($estado -ne 'Atual') {
+        $problemas.Add(
+            "ufv-carimbo: depois de reabrir, o status deu '$estado' e devia ser 'Atual'. " +
+            "Veja $($ler.Saida)")
+        return $false
+    }
+
+    # O carimbo precisa dizer de qual superficie ele e, e quando foi feito:
+    # sem isso o aviso futuro nao teria o que mostrar ao usuario.
+    if ($ler.Texto -notmatch 'terreno de \S.*processado em \d{2}/\d{2}/\d{4} \d{2}:\d{2}') {
+        $problemas.Add("ufv-carimbo: o status nao traz a superficie e a data. Veja $($ler.Saida)")
+        return $false
+    }
+
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -566,6 +678,12 @@ else {
         $rotulo = 'ufv-terreno--' + [IO.Path]::GetFileNameWithoutExtension($desenho)
         if (Testar-CasoDoTerreno -Desenho $desenho -Rotulo $rotulo) { $passaram++ }
     }
+
+    # O carimbo roda uma vez so: salvar e reabrir custa dois processos do
+    # Core Console, e o que se testa e o formato, que nao muda de desenho
+    # para desenho.
+    $total++
+    if (Testar-Carimbo -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------
