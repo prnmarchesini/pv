@@ -26,6 +26,7 @@ Só o Renan marca VALIDADO.
 | 3.2 | Comprimento da mesa | AGUARDANDO VALIDAÇÃO | 2V, 28 módulos: 18,702 m de comprimento e 4,788 m na inclinação |
 | 3.3 | Tabela de pilares | AGUARDANDO VALIDAÇÃO | 18,702 m com alvo de 3 m dá 6 vãos de 3,117 m, 7 pilares |
 | 3.4 | Geometria local da mesa | AGUARDANDO VALIDAÇÃO | Matriz única + primeiro verificador de regra sagrada (RigidTable) |
+| 3.5 | Fórmula da altura livre | AGUARDANDO VALIDAÇÃO | Exemplo do plano fecha; verificador da regra sagrada 1 |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -544,3 +545,71 @@ resistência. Pior: quando o revisor inverteu tilt com azimute, esse foi o
   verificador roda só do lado do plugin. Provavelmente é assunto da etapa 4;
 - o comprimento do pilar não existe no 3.4 de propósito — ele nasce no 3.5,
   quando a mesa encontra o terreno.
+
+**Etapa 3.5: a fórmula da altura livre, e o verificador da regra sagrada 1.**
+
+O exemplo trabalhado do plano fecha na primeira: tesoura de 4 m a 10° dá
+0,300 / 0,647 / 0,995 m nas posições 0, 2 e 4.
+
+Na mesa do Renan, com a sobra da tesoura somada:
+
+```
+sobra = (4,788 - 3,000) / 2 = 0,894 m
+P3    = M1 + (0,894 + 2,500) x sen 20 graus = M1 + 1,161 m
+P1    = P3 + P2
+```
+
+Com M1 = 0,30 e P2 = 0,90, o pilar dá **2,361 m**. E o M1 só vai até **0,439 m**
+antes de P1 passar de 2,50 m — contra os 0,80 m que a faixa dele permite. Pela
+regra sagrada 4 isso não é erro (o pilar cede e é marcado), mas boa parte da
+faixa vai gerar mesa marcada.
+
+**O que a revisão do 3.5 apontou, e o que foi feito.**
+
+Dois achados sérios:
+
+- **a regra sagrada 1 não valia para a saída.** O revisor rodou:
+  `Measure(0; 3,394; 0)` devolvia altura livre zero, comprimento 0,90 e
+  `Fits = True` — mesa pousada no chão, aprovada. E com inclinação negativa a
+  altura livre ficava francamente negativa, com `Fits` ainda verdadeiro. Pior:
+  **não existia verificador da regra 1** em `UFV.Core.Invariants`, embora este
+  seja o passo que torna os dois números calculáveis pela primeira vez. Agora
+  existe `FloatingPillar`, e a inclinação tem faixa (0 a 90 graus);
+- **eu tinha adiantado escopo.** `PillarLimits` (faixa da ponta baixa, enterro
+  mínimo, comprimento máximo) é o conteúdo do **passo 4.1**, que o plano lista
+  nominalmente; e `Measure`/`Overrun` são do **5.x**. Cravar
+  `Padrao = (0,30; 0,80; 0,90; 2,50)` aqui criava um segundo dono desses
+  números, que o 4.1 teria que reconciliar. Removidos. O passo entrega o que
+  ele pede: a fórmula, o comprimento do pilar, e o verificador da regra.
+
+Outros achados corrigidos:
+
+- ponta baixa negativa passava e dava pilar de comprimento negativo sem aviso;
+- `MinClearance`/`MaxClearance` eram **código morto**: os dois campos existiam,
+  nenhum cálculo os usava, e a faixa da regra 4 não era conferida em lugar
+  nenhum. Saíram junto com `PillarLimits`, e a conferência da faixa vira
+  responsabilidade do 4.1;
+- `Fits` comparava sem a tolerância de 1 mm da arquitetura, e um dos meus
+  testes cravava esse comportamento — ou seja, testava a ausência da
+  tolerância. Saiu junto;
+- `Padrao` era nome público em português, contra o CLAUDE.md.
+
+**A ligação que faltava.** O `3,394` estava digitado à mão em todo teste, e
+nada no repositório ligava a fórmula a `TableGeometry.PillarRow`, que é quem
+carrega a sobra da tesoura. Dava para apagar a sobra da geometria e a fórmula
+continuaria "certa" sozinha. Agora existe um teste que monta a mesa 2V de
+verdade e passa `geo.PillarRow` para a fórmula — e a mutação que zera a sobra
+derruba a suíte.
+
+Cinco mutações conferidas no passo (cosseno no lugar do seno, inclinação sem
+faixa, comprimento sem o enterro, verificador cego ao embutimento, sobra
+apagada): **16 testes caem**.
+
+**Pendências da etapa 3.5:**
+
+- a faixa da ponta baixa (0,30 a 0,80 m) não é conferida por ninguém ainda.
+  Ela é a regra sagrada 4 propriamente dita, e o lugar dela é o 4.1, junto com
+  os outros limites de configuração;
+- falta o verificador da regra sagrada 4 em `UFV.Core.Invariants`. Ele depende
+  da tolerância de invasão por lombo ("o usuário define quantos módulos por
+  mesa podem estourar a ponta baixa"), que também é configuração do 4.1.
