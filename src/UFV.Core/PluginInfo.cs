@@ -19,6 +19,12 @@ public static class PluginInfo
     /// </summary>
     public const string ComandoOla = "UFV_OLA";
 
+    /// <summary>
+    /// Comando que lista as superfícies do desenho para o usuário escolher
+    /// qual é o terreno. Mesma razão de ser constante que <see cref="ComandoOla"/>.
+    /// </summary>
+    public const string ComandoTerreno = "UFV_TERRENO";
+
     /// <summary>Texto usado quando a versao nao pode ser lida da assembly.</summary>
     public const string VersaoDesconhecida = "desconhecida";
 

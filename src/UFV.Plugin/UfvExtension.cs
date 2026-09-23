@@ -65,7 +65,7 @@ public sealed class UfvExtension : IExtensionApplication
     /// Console (accoreconsole.exe) e em qualquer outro host que nao esteja na
     /// lista.
     /// </summary>
-    private static bool TemInterface()
+    internal static bool TemInterface()
     {
         try
         {

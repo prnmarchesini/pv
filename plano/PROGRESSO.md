@@ -12,8 +12,8 @@ Só o Renan marca VALIDADO.
 | 0.5 | Core Console fumaça | VALIDADO | |
 | 0.6 | Instalador com detecção de versão | VALIDADO | Renan aprovou em 22/09/2026; máquina limpa fica pendente |
 | 1.1 | Modelo de TIN puro (Geo) | AGUARDANDO VALIDAÇÃO | 44 testes; validação é automática, sem CAD |
-| 1.2 | Índice espacial | AGUARDANDO VALIDAÇÃO | 55 testes; validação é automática, sem CAD |
-| 1.3 | Listar superfícies | PENDENTE | |
+| 1.2 | Índice espacial | AGUARDANDO VALIDAÇÃO | Validação é automática, sem CAD |
+| 1.3 | Listar superfícies | AGUARDANDO VALIDAÇÃO | Renan viu a lista no Itatiba; falta desenho com várias superfícies |
 | 1.4 | Processar superfície | PENDENTE | |
 | 1.5 | Identidade e carimbo | PENDENTE | |
 | 1.6 | Coordenada geográfica | PENDENTE | |
@@ -25,8 +25,8 @@ Só o Renan marca VALIDADO.
 
 ```
 Etapa 0   45/45    OK
-Etapa 1   55/55    OK
-Nivel 2   1/1      OK
+Etapa 1   74/74    OK
+Nivel 2   2/2      OK
 Acervo             OK
 ```
 

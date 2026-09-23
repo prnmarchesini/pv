@@ -172,8 +172,13 @@ public class ArchitectureTests
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToArray();
 
-        // AdWindows entra no passo 0.4, por causa da ribbon.
-        Assert.Equal(["AcCoreMgd", "AcDbMgd", "AcMgd", "AdWindows", "AeccDbMgd"], nomes);
+        // AdWindows entra no passo 0.4, por causa da ribbon. AecBaseMgd entra
+        // no 1.3: a superfície TIN herda de uma Entity que mora lá, e sem
+        // essa referência o compilador não consegue nem perguntar se um
+        // objeto do desenho é uma superfície.
+        Assert.Equal(
+            ["AcCoreMgd", "AcDbMgd", "AcMgd", "AdWindows", "AecBaseMgd", "AeccDbMgd"],
+            nomes);
 
         // Copy Local = false: o AutoCAD ja tem essas assemblies carregadas, e
         // uma segunda copia na pasta de saida quebra o carregamento do plugin.

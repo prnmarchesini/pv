@@ -41,6 +41,15 @@
       <HintPath>$(Civil3DPath)C3D\AeccDbMgd.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!--
+      AecBaseMgd traz a Entity de que a superfície TIN herda. Sem ela o
+      compilador não consegue nem perguntar "isto é uma TinSurface?".
+      Mora em ACA\, não em C3D\: é a camada comum do Architecture.
+    -->
+    <Reference Include="AecBaseMgd">
+      <HintPath>$(Civil3DPath)ACA\AecBaseMgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <!-- Ribbon: aba, painel e botao. -->
     <Reference Include="AdWindows">
       <HintPath>$(Civil3DPath)AdWindows.dll</HintPath>

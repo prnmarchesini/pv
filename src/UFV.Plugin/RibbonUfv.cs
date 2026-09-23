@@ -115,6 +115,7 @@ internal static class RibbonUfv
         };
 
         aba.Panels.Add(MontarPainelInicio());
+        aba.Panels.Add(MontarPainelTerreno());
         ribbon.Tabs.Add(aba);
 
         var temDocumento = AcadApp.DocumentManager.MdiActiveDocument is not null;
@@ -138,6 +139,29 @@ internal static class RibbonUfv
             // handler que dependesse do parametro deixaria o botao inerte.
             CommandHandler = new ComandoDaRibbon(PluginInfo.ComandoOla),
             ToolTip = $"{PluginInfo.Nome}: confirma que o plugin está carregado.",
+        });
+
+        return new RibbonPanel { Source = origem };
+    }
+
+    /// <summary>
+    /// Seção Terreno. Os botões de manipulação da superfície só entram depois
+    /// que houver terreno processado (passo 1.4 em diante); por ora há só o
+    /// botão que escolhe qual superfície é o terreno.
+    /// </summary>
+    private static RibbonPanel MontarPainelTerreno()
+    {
+        var origem = new RibbonPanelSource { Title = "Terreno" };
+
+        origem.Items.Add(new RibbonButton
+        {
+            Text = "Terreno",
+            ShowText = true,
+            ShowImage = false,
+            Size = RibbonItemSize.Large,
+            Orientation = System.Windows.Controls.Orientation.Vertical,
+            CommandHandler = new ComandoDaRibbon(PluginInfo.ComandoTerreno),
+            ToolTip = "Escolhe qual superfície do desenho é o terreno.",
         });
 
         return new RibbonPanel { Source = origem };
