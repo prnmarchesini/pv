@@ -23,11 +23,25 @@ namespace UFV.Core;
 /// </param>
 /// <param name="PillarWidth">Um lado da seção do pilar, ao longo da mesa.</param>
 /// <param name="PillarDepth">O outro lado, na direção da inclinação.</param>
+/// <param name="PillarSpanTarget">
+/// O vão pretendido entre pilares, em metro. É alvo, não regra: o vão de
+/// verdade sai do comprimento dividido, e quase sempre dá quebrado.
+/// </param>
+/// <param name="PillarCantilever">
+/// O balanço: quanto de estrutura sobra para fora do primeiro e do último
+/// pilar.
+///
+/// Zero é valor legítimo — o pilar cravado na ponta —, e foi como o plugin
+/// nasceu. Mas é escolha de projeto, não constante: o Renan confirmou em
+/// 23/09/2026 que a estrutura dele aceita os dois.
+/// </param>
 public sealed record TableFrame(
     double RafterLength,
     double PillarAlongRafter,
     double PillarWidth,
-    double PillarDepth)
+    double PillarDepth,
+    double PillarSpanTarget,
+    double PillarCantilever)
 {
     private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
 
@@ -51,6 +65,11 @@ public sealed record TableFrame(
 
             if (!double.IsFinite(PillarAlongRafter) || PillarAlongRafter < 0)
                 return "a posição do pilar na tesoura não é uma distância válida";
+
+            if (!Medida(PillarSpanTarget)) return "o vão pretendido entre pilares não é uma medida válida";
+
+            if (!double.IsFinite(PillarCantilever) || PillarCantilever < 0 || PillarCantilever > MaiorMedida)
+                return "o balanço das pontas não é uma medida válida";
 
             if (PillarAlongRafter > RafterLength)
             {
@@ -87,6 +106,15 @@ public sealed record TableFrame(
                 + $"{Texto(mesa.Depth)} m na inclinação: ela precisa ser menor que eles";
         }
 
+        // Os dois balanços juntos não podem comer a mesa inteira: sobraria um
+        // vão de comprimento zero ou negativo entre o primeiro e o último
+        // pilar, que é pilar em cima de pilar.
+        if (2 * PillarCantilever >= mesa.Length)
+        {
+            return $"os dois balanços somam {Texto(2 * PillarCantilever)} m numa mesa de "
+                + $"{Texto(mesa.Length)} m: não sobra estrutura entre os pilares das pontas";
+        }
+
         return null;
     }
 
@@ -95,7 +123,8 @@ public sealed record TableFrame(
         WhyInvalid is { } motivo
             ? $"Estrutura inválida: {motivo}."
             : $"tesoura de {Texto(RafterLength)} m, pilar a {Texto(PillarAlongRafter)} m dela, "
-              + $"seção {Texto(PillarWidth)} × {Texto(PillarDepth)} m";
+              + $"seção {Texto(PillarWidth)} × {Texto(PillarDepth)} m, vão de "
+              + $"{Texto(PillarSpanTarget)} m e balanço de {Texto(PillarCantilever)} m";
 
     private static string Texto(double valor) => valor.ToString("0.###", Brasil);
 

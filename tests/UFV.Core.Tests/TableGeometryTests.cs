@@ -22,7 +22,7 @@ public class TableGeometryTests
         new(Risen(), 28, TableArrangement.DoubleRow, 0.02, 0.02, 0.10, 0.10);
 
     /// <summary>Tesoura de 3 m, pilar a 2,5 m dela, seção de 0,15 × 0,07 m.</summary>
-    private static TableFrame Estrutura() => new(3.00, 2.50, 0.15, 0.07);
+    private static TableFrame Estrutura() => new(3.00, 2.50, 0.15, 0.07, 3.00, 0);
 
     private static TableGeometry Geometria() =>
         TableGeometry.Local(Mesa(), PillarTable.Distribute(Mesa().Length, 3), Estrutura());
@@ -73,7 +73,7 @@ public class TableGeometryTests
     public void Em1VHaUmaFileiraSo()
     {
         var mesa = new TableLayout(Risen(), 28, TableArrangement.SingleRow, 0.02, 0.02, 0.10, 0.10);
-        var geo = TableGeometry.Local(mesa, PillarTable.Distribute(mesa.Length, 3), new TableFrame(2.0, 1.5, 0.15, 0.07));
+        var geo = TableGeometry.Local(mesa, PillarTable.Distribute(mesa.Length, 3), new TableFrame(2.0, 1.5, 0.15, 0.07, 3.00, 0));
 
         Assert.Equal(28, geo.Modules.Count);
         Assert.Single(geo.Modules.Select(m => m.Row).Distinct());
@@ -395,7 +395,7 @@ public class TableGeometryTests
     public void TesouraMaiorQueOsModulosERecusada()
     {
         var erro = Assert.Throws<InvalidOperationException>(
-            () => TableGeometry.Local(Mesa(), PillarTable.Distribute(Mesa().Length, 3), new TableFrame(9, 2.5, 0.15, 0.07)));
+            () => TableGeometry.Local(Mesa(), PillarTable.Distribute(Mesa().Length, 3), new TableFrame(9, 2.5, 0.15, 0.07, 3.00, 0)));
 
         Assert.Contains("tesoura", erro.Message, StringComparison.OrdinalIgnoreCase);
     }

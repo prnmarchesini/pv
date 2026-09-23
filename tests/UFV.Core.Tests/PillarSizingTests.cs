@@ -101,7 +101,7 @@ public class PillarSizingTests
     {
         var mesa = Mesa();
         var geo = TableGeometry.Local(
-            mesa, PillarTable.Distribute(mesa.Length, 3), new TableFrame(3.00, 2.50, 0.15, 0.07));
+            mesa, PillarTable.Distribute(mesa.Length, 3), new TableFrame(3.00, 2.50, 0.15, 0.07, 3.00, 0));
 
         Assert.Equal(0.894, geo.RafterOffset, 3);
         Assert.Equal(3.394, geo.PillarRow, 3);

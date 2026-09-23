@@ -757,3 +757,37 @@ e nenhuma forma de escolher qual carregar.
 - a janela não tem teste de nível 1, por ser WPF. O que dava para extrair e
   testar foi extraído (`NumberInput`); o resto é montagem de controle;
 - desenhar a mesa no CAD é da etapa 5. A janela diz isso ao fechar.
+
+**Ajuste pedido pelo Renan depois de usar a janela (23/09/2026).**
+
+Ele olhou a planta baixa e pediu três coisas: indicar o norte, cotar os vãos
+entre pilares, e cotar o espaço livre entre o pilar e o fim da estrutura. A
+terceira revelou um buraco no modelo.
+
+**O balanço virou parâmetro.** A tabela de pilares punha um pilar cravado em
+cada ponta da estrutura, sempre — "distâncias acumuladas do zero", como o plano
+diz. Mas estrutura de verdade costuma ter balanço, e ele confirmou: "o pilar
+pode ficar cravado em zero e pode ter distância configurada". Então:
+
+- `PillarTable` ganhou `Cantilever`, e as posições passam a começar nele, não
+  em zero. Sem isso, a cota do balanço não teria o que medir — e o desenho
+  estava certo por acidente, porque o balanço era sempre zero;
+- `Distribute` recebe o balanço e divide só o **miolo** entre os pilares. A
+  soma balanço + vãos + balanço continua fechando com o comprimento, que é a
+  única regra que a classe não abre mão;
+- `TableFrame` ganhou `PillarSpanTarget` e `PillarCantilever`. O vão de 3 m
+  estava cravado na janela como constante, o que já era errado;
+- o perfil passou para a **versão 2** do formato. Perfil da versão 1 é recusado
+  com o motivo, que é exatamente para isso que a versão existe.
+
+**Sobre o norte.** A seta aponta para a ponta baixa, que no hemisfério sul é a
+face voltada ao norte. Vale para a mesa deitada com azimute zero, que é o que a
+janela mostra; o azimute de verdade entra na etapa 5.
+
+**E uma pendência que este ajuste levanta**, anotada antes de virar defeito: a
+convenção de azimute precisa ser decidida na etapa 5. Hoje `Transform.Azimuth`
+gira o +Y local (a direção que sobe a inclinação, da ponta baixa para a alta) e
+azimute zero o deixa apontando para o norte — ou seja, azimute zero põe a mesa
+olhando para o SUL. No Brasil o normal é o contrário. Ou o azimute passa a
+significar "para onde a mesa olha", ou o eixo local se inverte. Escolher errado
+espelha a usina inteira, e em planta isso não aparece.

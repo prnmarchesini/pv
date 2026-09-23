@@ -19,7 +19,7 @@ public class TableProfileTests
     private static TableProfile Perfil() => new(
         "Mesa do Renan 28 módulos",
         new TableLayout(Risen(), 28, TableArrangement.DoubleRow, 0.02, 0.02, 0.10, 0.10),
-        new TableFrame(3.00, 2.50, 0.15, 0.07),
+        new TableFrame(3.00, 2.50, 0.15, 0.07, 3.00, 0),
         20 * Math.PI / 180);
 
     // ---------------------------------------------------------- ida e volta
@@ -146,14 +146,14 @@ public class TableProfileTests
     [Trait("Etapa", "3")]
     public void OArquivoTrazAVersaoDoFormato()
     {
-        Assert.Contains("\"formatVersion\": 1", Perfil().ToJson());
+        Assert.Contains("\"formatVersion\": 2", Perfil().ToJson());
     }
 
     [Fact]
     [Trait("Etapa", "3")]
     public void PerfilDeOutraVersaoERecusadoComOMotivo()
     {
-        var json = Perfil().ToJson().Replace("\"formatVersion\": 1", "\"formatVersion\": 7");
+        var json = Perfil().ToJson().Replace("\"formatVersion\": 2", "\"formatVersion\": 7");
 
         var erro = Assert.Throws<InvalidOperationException>(() => TableProfile.Parse(json));
 
@@ -187,7 +187,7 @@ public class TableProfileTests
     {
         const string json = """
         {
-          "formatVersion": 1,
+          "formatVersion": 2,
           "name": "Sem módulo",
           "tiltDegrees": 20,
           "layout": { "moduleCount": 28, "arrangement": "DoubleRow" },
@@ -222,7 +222,7 @@ public class TableProfileTests
     [Trait("Etapa", "3")]
     public void PerfilDeEstruturaImpossivelNaoEGravado()
     {
-        var impossivel = Perfil() with { Frame = new TableFrame(3.00, 9.00, 0.15, 0.07) };
+        var impossivel = Perfil() with { Frame = new TableFrame(3.00, 9.00, 0.15, 0.07, 3.00, 0) };
 
         Assert.False(impossivel.IsValid);
         Assert.Contains("fora dela", impossivel.WhyInvalid!);
@@ -257,7 +257,7 @@ public class TableProfileTests
     [Trait("Etapa", "3")]
     public void PerfilComTesouraMaiorQueOsModulosNaoEValido()
     {
-        var ruim = Perfil() with { Frame = new TableFrame(6.00, 2.50, 0.15, 0.07) };
+        var ruim = Perfil() with { Frame = new TableFrame(6.00, 2.50, 0.15, 0.07, 3.00, 0) };
 
         Assert.False(ruim.IsValid);
         Assert.Contains("tesoura", ruim.WhyInvalid!, StringComparison.OrdinalIgnoreCase);
@@ -405,8 +405,8 @@ public class TableProfileTests
     public void CampoDesconhecidoERecusado()
     {
         var json = Perfil().ToJson().Replace(
-            "\"formatVersion\": 1,",
-            "\"formatVersion\": 1,\n  \"moduleGap\": 0.05,");
+            "\"formatVersion\": 2,",
+            "\"formatVersion\": 2,\n  \"moduleGap\": 0.05,");
 
         Assert.Throws<InvalidOperationException>(() => TableProfile.Parse(json));
     }

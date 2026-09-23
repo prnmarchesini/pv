@@ -22,7 +22,7 @@ public class InvariantsTests
         new(Risen(), 28, TableArrangement.DoubleRow, 0.02, 0.02, 0.10, 0.10);
 
     private static TableGeometry Geometria() =>
-        TableGeometry.Local(Mesa(), PillarTable.Distribute(Mesa().Length, 3), new TableFrame(3.00, 2.50, 0.15, 0.07));
+        TableGeometry.Local(Mesa(), PillarTable.Distribute(Mesa().Length, 3), new TableFrame(3.00, 2.50, 0.15, 0.07, 3.00, 0));
 
     // ------------------------------------------- regra 2: mesa é monolito
 

@@ -30,9 +30,6 @@ internal sealed class JanelaDeMesa : Window
 {
     private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
 
-    /// <summary>Vão pretendido entre pilares, em metro.</summary>
-    private const double VaoAlvo = 3.0;
-
     private readonly TableProfileStore _perfis;
 
     private readonly ComboBox _salvos = new() { Margin = new Thickness(0, 2, 0, 6) };
@@ -53,6 +50,8 @@ internal sealed class JanelaDeMesa : Window
     private readonly TextBox _pilarNaTesoura = Campo();
     private readonly TextBox _pilarLargura = Campo();
     private readonly TextBox _pilarProfundidade = Campo();
+    private readonly TextBox _vaoAlvo = Campo();
+    private readonly TextBox _balanco = Campo();
 
     private readonly PlantaDaMesa _planta = new();
     private readonly TextBlock _resumo = new()
@@ -260,6 +259,8 @@ internal sealed class JanelaDeMesa : Window
         Linha("Pilar na tesoura T2 (m)", _pilarNaTesoura);
         Linha("Pilar: largura (m)", _pilarLargura);
         Linha("Pilar: profundidade (m)", _pilarProfundidade);
+        Linha("Vão entre pilares (m)", _vaoAlvo);
+        Linha("Balanço nas pontas (m)", _balanco);
 
         foreach (var (campo, _) in Todos()) campo.TextChanged += (_, _) => Recalcular();
 
@@ -295,6 +296,8 @@ internal sealed class JanelaDeMesa : Window
         yield return (_pilarNaTesoura, "Pilar na tesoura T2");
         yield return (_pilarLargura, "Pilar: largura");
         yield return (_pilarProfundidade, "Pilar: profundidade");
+        yield return (_vaoAlvo, "Vão entre pilares");
+        yield return (_balanco, "Balanço nas pontas");
     }
 
     // --------------------------------------------------------- ida e volta
@@ -363,6 +366,8 @@ internal sealed class JanelaDeMesa : Window
         _pilarNaTesoura.Text = Numero(perfil.Frame.PillarAlongRafter);
         _pilarLargura.Text = Numero(perfil.Frame.PillarWidth);
         _pilarProfundidade.Text = Numero(perfil.Frame.PillarDepth);
+        _vaoAlvo.Text = Numero(perfil.Frame.PillarSpanTarget);
+        _balanco.Text = Numero(perfil.Frame.PillarCantilever);
 
         Selecionar(_arranjo, perfil.Layout.Arrangement);
 
@@ -409,6 +414,8 @@ internal sealed class JanelaDeMesa : Window
         NumberInput.TryParseMeasure(_pilarNaTesoura.Text, out var t2);
         NumberInput.TryParseMeasure(_pilarLargura.Text, out var pilarL);
         NumberInput.TryParseMeasure(_pilarProfundidade.Text, out var pilarP);
+        NumberInput.TryParseMeasure(_vaoAlvo.Text, out var vao);
+        NumberInput.TryParseMeasure(_balanco.Text, out var balanco);
 
         if (!NumberInput.TryParseCount(_quantidade.Text, out var quantidade))
         {
@@ -425,7 +432,7 @@ internal sealed class JanelaDeMesa : Window
                 quantidade,
                 Arranjo(),
                 gapH, gapV, esquerda, direita),
-            new TableFrame(tesoura, t2, pilarL, pilarP),
+            new TableFrame(tesoura, t2, pilarL, pilarP, vao, balanco),
             graus * Math.PI / 180);
 
         if (perfil.WhyInvalid is { } porQue)
@@ -496,7 +503,10 @@ internal sealed class JanelaDeMesa : Window
                 return;
             }
 
-            var pilares = PillarTable.Distribute(perfil.Layout.Length, VaoAlvo);
+            var pilares = PillarTable.Distribute(
+                perfil.Layout.Length,
+                perfil.Frame.PillarSpanTarget,
+                perfil.Frame.PillarCantilever);
             var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
 
             _planta.Mostrar(geometria);
@@ -512,7 +522,10 @@ internal sealed class JanelaDeMesa : Window
                 + $"inclinação · {perfil.Layout.Columns} colunas · "
                 + $"{potencia.ToString("0.#", Brasil)} kWp\n"
                 + $"{pilares.PillarCount} pilares em {pilares.Spans.Count} vãos de "
-                + $"{Numero(pilares.Spans[0])} m\n"
+                + $"{Numero(pilares.Spans[0])} m"
+                + (pilares.Cantilever > 0
+                    ? $", com balanço de {Numero(pilares.Cantilever)} m em cada ponta\n"
+                    : ", com o pilar na ponta da estrutura\n")
                 + $"O pilar encosta na mesa a {Numero(geometria.PillarRow)} m da ponta baixa do "
                 + $"módulo (sobra da tesoura {Numero(geometria.RafterOffset)} m), e sobe "
                 + $"{Numero(subida)} m acima dela.";

@@ -61,7 +61,14 @@ public sealed record TableProfile(
     /// ler pela metade entrega uma mesa parecida com a que o projetista
     /// salvou, e parecida é o pior resultado possível.
     /// </summary>
-    public const int VersaoDoFormato = 1;
+    /// <remarks>
+    /// Versão 2: o balanço das pontas e o vão pretendido entre pilares
+    /// entraram na estrutura, quando o Renan confirmou que os dois são escolha
+    /// de projeto e não constante. Perfil da versão 1 é recusado com o motivo,
+    /// e não lido sem esses dois campos — ler pela metade daria uma mesa
+    /// parecida com a que ele salvou, e parecida é o pior resultado possível.
+    /// </remarks>
+    public const int VersaoDoFormato = 2;
 
     /// <summary>
     /// Casas decimais do grau gravado no arquivo.
@@ -168,6 +175,8 @@ public sealed record TableProfile(
                 PillarAlongRafter = Frame.PillarAlongRafter,
                 PillarWidth = Frame.PillarWidth,
                 PillarDepth = Frame.PillarDepth,
+                PillarSpanTarget = Frame.PillarSpanTarget,
+                PillarCantilever = Frame.PillarCantilever,
             },
         };
 
@@ -245,7 +254,9 @@ public sealed record TableProfile(
                 Exigir(arquivo.Frame.RafterLength, "frame.rafterLength"),
                 Exigir(arquivo.Frame.PillarAlongRafter, "frame.pillarAlongRafter"),
                 Exigir(arquivo.Frame.PillarWidth, "frame.pillarWidth"),
-                Exigir(arquivo.Frame.PillarDepth, "frame.pillarDepth")),
+                Exigir(arquivo.Frame.PillarDepth, "frame.pillarDepth"),
+                Exigir(arquivo.Frame.PillarSpanTarget, "frame.pillarSpanTarget"),
+                Exigir(arquivo.Frame.PillarCantilever, "frame.pillarCantilever")),
             Exigir(arquivo.TiltDegrees, "tiltDegrees") * Math.PI / 180);
 
         if (perfil.WhyInvalid is { } motivo)
@@ -318,5 +329,7 @@ public sealed record TableProfile(
         public double? PillarAlongRafter { get; init; }
         public double? PillarWidth { get; init; }
         public double? PillarDepth { get; init; }
+        public double? PillarSpanTarget { get; init; }
+        public double? PillarCantilever { get; init; }
     }
 }

@@ -72,7 +72,7 @@ public static class MesaCommands
         return new TableProfile(
             "Mesa 28 módulos",
             new TableLayout(modulo, 28, TableArrangement.DoubleRow, 0.02, 0.02, 0.10, 0.10),
-            new TableFrame(3.00, 2.50, 0.15, 0.07),
+            new TableFrame(3.00, 2.50, 0.15, 0.07, 3.00, 0),
             20 * Math.PI / 180);
     }
 

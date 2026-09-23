@@ -6,23 +6,29 @@ namespace UFV.Core;
 /// <summary>
 /// Onde cada pilar fica ao longo da mesa, contado do zero da estrutura.
 ///
+/// A tabela tem duas partes: o <b>balanço</b>, que é quanto de estrutura sobra
+/// para fora do primeiro e do último pilar, e os <b>vãos</b> entre pilares.
+/// Balanço zero põe o pilar cravado na ponta, que é projeto legítimo; balanço
+/// positivo recua os dois pilares das extremidades. O Renan confirmou em
+/// 23/09/2026 que a estrutura dele aceita os dois, e por isso ele é parâmetro
+/// e não constante.
+///
 /// Os vãos são desiguais de propósito: o projeto do fabricante não distribui
 /// pilar igualzinho, e forçar isso seria inventar estrutura que não existe. O
-/// que não pode é a soma dos vãos não bater com o comprimento da mesa — aí a
-/// tabela descreve uma mesa que não é aquela, e a diferença só aparece no
-/// campo, quando o ferro já está comprado.
+/// que não pode é a soma — balanço, vãos, balanço — não bater com o
+/// comprimento da mesa: aí a tabela descreve uma mesa que não é aquela, e a
+/// diferença só aparece no campo, com o ferro já comprado.
 ///
-/// Um pilar por posição, e as posições são as distâncias acumuladas: n vãos
-/// dão n+1 pilares, um em cada ponta.
+/// <c>n</c> vãos dão <c>n+1</c> pilares.
 /// </summary>
 public sealed record PillarTable
 {
     private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
 
     /// <summary>
-    /// Um milímetro. Diferença menor que isso entre a soma dos vãos e o
-    /// comprimento é arredondamento de quem digitou, não erro de projeto — e é
-    /// a mesma tolerância com que o drapeamento enxuga vértice.
+    /// Um milímetro. Diferença menor que isso entre a soma e o comprimento é
+    /// arredondamento de quem digitou, não erro de projeto — e é a mesma
+    /// tolerância com que o drapeamento enxuga vértice.
     /// </summary>
     private const double Tolerancia = 0.001;
 
@@ -43,17 +49,25 @@ public sealed record PillarTable
 
     private readonly double[] _vaos;
 
-    /// <param name="spans">Os vãos, na ordem, do zero da estrutura em diante.</param>
-    public PillarTable(IReadOnlyList<double> spans)
+    /// <param name="spans">Os vãos entre pilares, na ordem.</param>
+    /// <param name="cantilever">
+    /// O balanço de cada ponta: quanto de estrutura sobra para fora do
+    /// primeiro e do último pilar. Zero deixa o pilar na ponta.
+    /// </param>
+    public PillarTable(IReadOnlyList<double> spans, double cantilever = 0)
     {
         // Copiado, e não guardado por referência: senão o chamador podia mexer
         // na lista depois e transformar uma tabela válida em inválida já
         // construída. Um record que muda sozinho não é um record.
         _vaos = spans is null ? [] : [.. spans];
+        Cantilever = cantilever;
     }
 
-    /// <summary>Os vãos, na ordem, do zero da estrutura em diante.</summary>
+    /// <summary>Os vãos entre pilares, na ordem.</summary>
     public IReadOnlyList<double> Spans => _vaos;
+
+    /// <summary>O balanço de cada ponta da estrutura.</summary>
+    public double Cantilever { get; }
 
     /// <summary>Se a tabela descreve uma sequência de pilares possível.</summary>
     public bool IsValid => WhyInvalid is null;
@@ -68,6 +82,12 @@ public sealed record PillarTable
     {
         get
         {
+            if (!double.IsFinite(Cantilever) || Cantilever < 0)
+                return "o balanço das pontas não é uma distância válida";
+
+            if (Cantilever > MaiorVao)
+                return $"o balanço tem {Texto(Cantilever)} m, mais que os {MaiorVao:0} m possíveis";
+
             if (_vaos.Length == 0) return "a tabela precisa de pelo menos um vão";
 
             for (var i = 0; i < _vaos.Length; i++)
@@ -100,7 +120,11 @@ public sealed record PillarTable
     }
 
     /// <summary>
-    /// As posições dos pilares, do zero da estrutura em diante.
+    /// As posições dos pilares, contadas do zero da estrutura.
+    ///
+    /// Com balanço, o primeiro pilar não fica em zero: fica no balanço. É essa
+    /// a diferença entre "onde a estrutura começa" e "onde o primeiro pilar
+    /// encosta no chão".
     /// </summary>
     /// <exception cref="InvalidOperationException">Se a tabela não serve.</exception>
     public IReadOnlyList<double> Positions
@@ -110,7 +134,9 @@ public sealed record PillarTable
             Conferir();
 
             var posicoes = new double[_vaos.Length + 1];
-            var acumulado = 0.0;
+            var acumulado = Cantilever;
+
+            posicoes[0] = acumulado;
 
             for (var i = 0; i < _vaos.Length; i++)
             {
@@ -122,7 +148,7 @@ public sealed record PillarTable
         }
     }
 
-    /// <summary>A soma dos vãos: onde cai o último pilar.</summary>
+    /// <summary>A soma dos vãos: a distância do primeiro ao último pilar.</summary>
     /// <exception cref="InvalidOperationException">Se a tabela não serve.</exception>
     public double TotalSpan
     {
@@ -140,6 +166,13 @@ public sealed record PillarTable
     }
 
     /// <summary>
+    /// O comprimento de estrutura que a tabela descreve: os dois balanços mais
+    /// os vãos.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Se a tabela não serve.</exception>
+    public double TotalLength => 2 * Cantilever + TotalSpan;
+
+    /// <summary>
     /// Por que esta tabela não serve para uma mesa deste comprimento, ou null
     /// se serve.
     ///
@@ -155,14 +188,14 @@ public sealed record PillarTable
         if (!double.IsFinite(comprimento) || comprimento <= 0)
             return "o comprimento da mesa não é uma medida válida";
 
-        var total = TotalSpan;
+        var total = TotalLength;
         var diferenca = total - comprimento;
 
         if (Math.Abs(diferenca) <= Tolerancia) return null;
 
         var sinal = diferenca > 0 ? "sobra" : "falta";
 
-        return $"a tabela de pilares não fecha com a mesa: os vãos somam {Texto(total)} m "
+        return $"a tabela de pilares não fecha com a mesa: ela cobre {Texto(total)} m "
             + $"e a mesa tem {Texto(comprimento)} m ({sinal} {Texto(Math.Abs(diferenca))} m)";
     }
 
@@ -173,15 +206,21 @@ public sealed record PillarTable
     /// Existe porque o Renan pediu assim: "pilares com 3 m de distanciamento,
     /// não precisa ser 3 m cravado, provavelmente vai dar quebrado". O alvo é
     /// alvo, não regra — o que não pode é a soma não fechar, e por isso o vão
-    /// sai do comprimento dividido, e não do alvo arredondado.
+    /// sai do que sobra dividido, e não do alvo arredondado.
     ///
     /// É ponto de partida: a tabela continua editável vão a vão.
     /// </summary>
+    /// <param name="comprimento">O comprimento da mesa, de ponta a ponta.</param>
+    /// <param name="alvo">O vão pretendido entre pilares.</param>
+    /// <param name="balanco">
+    /// Quanto de estrutura sobra para fora do primeiro e do último pilar. Zero
+    /// deixa o pilar cravado na ponta.
+    /// </param>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// Se o comprimento ou o alvo não forem medidas possíveis, ou se a mesa
-    /// exigir mais vãos do que uma tabela comporta.
+    /// Se alguma medida não for possível, ou se a mesa exigir mais vãos do que
+    /// uma tabela comporta.
     /// </exception>
-    public static PillarTable Distribute(double comprimento, double alvo)
+    public static PillarTable Distribute(double comprimento, double alvo, double balanco = 0)
     {
         if (!double.IsFinite(comprimento) || comprimento <= 0)
             throw new ArgumentOutOfRangeException(nameof(comprimento), comprimento,
@@ -191,12 +230,23 @@ public sealed record PillarTable
             throw new ArgumentOutOfRangeException(nameof(alvo), alvo,
                 "O vão pretendido precisa ser positivo.");
 
-        // Quantos vãos o alvo pede, e quantos o limite de vão exige. Mandar
-        // direto o número do alvo devolvia tabela que esta mesma classe
-        // reprova: alvo de 60 m em mesa de 60 m dava um vão só, de 60 m, acima
-        // do máximo.
-        var pedidos = comprimento / alvo;
-        var necessarios = comprimento / MaiorVao;
+        if (!double.IsFinite(balanco) || balanco < 0)
+            throw new ArgumentOutOfRangeException(nameof(balanco), balanco,
+                "O balanço não pode ser negativo.");
+
+        if (2 * balanco >= comprimento)
+        {
+            throw new ArgumentOutOfRangeException(nameof(balanco), balanco,
+                $"Os dois balanços somam {Texto(2 * balanco)} m numa mesa de "
+                + $"{Texto(comprimento)} m: não sobra estrutura entre os pilares das pontas.");
+        }
+
+        // O que os vãos iguais cobrem é o miolo, do primeiro ao último pilar —
+        // e não a mesa inteira.
+        var miolo = comprimento - 2 * balanco;
+
+        var pedidos = miolo / alvo;
+        var necessarios = miolo / MaiorVao;
 
         if (pedidos > MaiorQuantidadeDeVaos || necessarios > MaiorQuantidadeDeVaos)
         {
@@ -208,17 +258,17 @@ public sealed record PillarTable
         }
 
         // Pelo menos um vão: uma mesa mais curta que o alvo ainda precisa de
-        // dois pilares, um em cada ponta.
+        // dois pilares.
         var quantos = Math.Max(1, (int)Math.Round(pedidos, MidpointRounding.AwayFromZero));
 
         quantos = Math.Max(quantos, (int)Math.Ceiling(necessarios));
 
-        var vao = comprimento / quantos;
+        var vao = miolo / quantos;
         var vaos = new double[quantos];
 
         Array.Fill(vaos, vao);
 
-        return new PillarTable(vaos);
+        return new PillarTable(vaos, balanco);
     }
 
     /// <summary>A linha que descreve a tabela para o usuário.</summary>
@@ -228,28 +278,38 @@ public sealed record PillarTable
 
         var vaos = string.Join(" + ", _vaos.Select(Texto));
 
-        return $"{_vaos.Length + 1} pilares em {_vaos.Length} vão(s): {vaos} = {Texto(TotalSpan)} m";
+        var balanco = Cantilever > 0
+            ? $", com balanço de {Texto(Cantilever)} m em cada ponta"
+            : ", com o pilar na ponta da estrutura";
+
+        return $"{_vaos.Length + 1} pilares em {_vaos.Length} vão(s): {vaos} = "
+            + $"{Texto(TotalSpan)} m{balanco}";
     }
 
     /// <summary>
-    /// Duas tabelas com os mesmos vãos são a mesma tabela.
+    /// Duas tabelas com os mesmos vãos e o mesmo balanço são a mesma tabela.
     ///
     /// Sem isto valeria a igualdade que o record gera, que compara a
     /// referência do vetor — e duas tabelas idênticas sairiam diferentes.
     /// </summary>
     public bool Equals(PillarTable? outra) =>
-        outra is not null && _vaos.AsSpan().SequenceEqual(outra._vaos);
+        outra is not null
+        && Cantilever.Equals(outra.Cantilever)
+        && _vaos.AsSpan().SequenceEqual(outra._vaos);
 
     /// <inheritdoc/>
     public override int GetHashCode()
     {
         var codigo = new HashCode();
+
+        codigo.Add(Cantilever);
         foreach (var vao in _vaos) codigo.Add(vao);
+
         return codigo.ToHashCode();
     }
 
     /// <summary>
-    /// Só os vãos entram no texto do record.
+    /// Só os vãos e o balanço entram no texto do record.
     ///
     /// Sem este corte, o ToString gerado imprimiria também PillarCount,
     /// Positions e TotalSpan — que lançam em tabela inválida. Justamente a
@@ -259,6 +319,7 @@ public sealed record PillarTable
     private bool PrintMembers(StringBuilder texto)
     {
         texto.Append("Spans = [").Append(string.Join(", ", _vaos.Select(Texto))).Append(']');
+        texto.Append(", Cantilever = ").Append(Texto(Cantilever));
         return true;
     }
 

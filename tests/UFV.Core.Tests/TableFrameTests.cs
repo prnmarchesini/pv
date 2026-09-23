@@ -11,7 +11,7 @@ namespace UFV.Core.Tests;
 public class TableFrameTests
 {
     /// <summary>A estrutura do Renan: tesoura de 3 m, pilar a 2,5 m, seção 0,15 × 0,07.</summary>
-    private static TableFrame Padrao() => new(3.00, 2.50, 0.15, 0.07);
+    private static TableFrame Padrao() => new(3.00, 2.50, 0.15, 0.07, 3.00, 0);
 
     [Fact]
     [Trait("Etapa", "3")]
@@ -38,7 +38,7 @@ public class TableFrameTests
     [InlineData(-0.1, false)]
     public void OPilarPrecisaEstarSobreATesoura(double t2, bool serve)
     {
-        var estrutura = new TableFrame(3.00, t2, 0.15, 0.07);
+        var estrutura = new TableFrame(3.00, t2, 0.15, 0.07, 3.00, 0);
 
         Assert.Equal(serve, estrutura.IsValid);
     }
@@ -47,7 +47,7 @@ public class TableFrameTests
     [Trait("Etapa", "3")]
     public void OMotivoDizOsDoisNumerosQuandoOPilarSaiDaTesoura()
     {
-        var motivo = new TableFrame(3.00, 4.20, 0.15, 0.07).WhyInvalid;
+        var motivo = new TableFrame(3.00, 4.20, 0.15, 0.07, 3.00, 0).WhyInvalid;
 
         Assert.NotNull(motivo);
         Assert.Contains("4,2", motivo!);
@@ -71,7 +71,7 @@ public class TableFrameTests
     [InlineData(3, double.PositiveInfinity, 0.15, 0.07)]
     public void MedidaImpossivelNaoEhEstrutura(double t1, double t2, double largura, double profundidade)
     {
-        Assert.False(new TableFrame(t1, t2, largura, profundidade).IsValid);
+        Assert.False(new TableFrame(t1, t2, largura, profundidade, 3.00, 0).IsValid);
     }
 
     /// <summary>
@@ -88,7 +88,7 @@ public class TableFrameTests
     public void CadaMotivoNomeiaOSeuCampo(
         double t1, double t2, double largura, double profundidade, string campo)
     {
-        var estrutura = new TableFrame(t1, t2, largura, profundidade);
+        var estrutura = new TableFrame(t1, t2, largura, profundidade, 3.00, 0);
 
         Assert.False(estrutura.IsValid);
         Assert.Contains(campo, estrutura.WhyInvalid!);
@@ -111,7 +111,7 @@ public class TableFrameTests
     [Trait("Etapa", "3")]
     public void ADescricaoDeUmaEstruturaQuebradaDizOMotivo()
     {
-        var texto = new TableFrame(3.00, 4.20, 0.15, 0.07).Describe();
+        var texto = new TableFrame(3.00, 4.20, 0.15, 0.07, 3.00, 0).Describe();
 
         Assert.Contains("inválida", texto);
         Assert.Contains("fora dela", texto);

@@ -347,4 +347,148 @@ public class PillarTableTests
 
         Assert.Contains("-5", texto);
     }
+
+    // ------------------------------------------------------------ balanço
+
+    /// <summary>
+    /// Balanço zero é o que o plugin fazia desde sempre: pilar cravado na
+    /// ponta da estrutura. Continua sendo o padrão, e é projeto legítimo.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "3")]
+    public void SemBalancoOPrimeiroPilarFicaNaPonta()
+    {
+        var tabela = PillarTable.Distribute(18.702, 3);
+
+        Assert.Equal(0, tabela.Cantilever, 9);
+        Assert.Equal(0, tabela.Positions[0], 9);
+        Assert.Equal(18.702, tabela.Positions[^1], 6);
+        Assert.Equal(7, tabela.PillarCount);
+    }
+
+    /// <summary>
+    /// Com balanço, a estrutura passa do pilar: o primeiro fica recuado, e o
+    /// último também. É a diferença entre "onde a estrutura começa" e "onde o
+    /// primeiro pilar encosta no chão".
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "3")]
+    public void ComBalancoAEstruturaPassaDoPilar()
+    {
+        var tabela = PillarTable.Distribute(18.702, 3, 0.5);
+
+        Assert.Equal(0.5, tabela.Cantilever, 9);
+        Assert.Equal(0.5, tabela.Positions[0], 9);
+        Assert.Equal(18.202, tabela.Positions[^1], 6);
+
+        // E a tabela continua fechando com a mesa: balanço + vãos + balanço.
+        Assert.Null(tabela.WhyDoesNotFit(18.702));
+        Assert.Equal(18.702, tabela.TotalLength, 6);
+    }
+
+    /// <summary>
+    /// Os vãos iguais cobrem o miolo, não a mesa inteira. Com 0,5 m de balanço
+    /// de cada lado sobram 17,702 m para dividir — e não 18,702.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "3")]
+    public void OsVaosCobremOMioloENaoAMesaInteira()
+    {
+        var tabela = PillarTable.Distribute(18.702, 3, 0.5);
+
+        Assert.Equal(17.702, tabela.TotalSpan, 6);
+        Assert.Equal(17.702 / 6, tabela.Spans[0], 9);
+    }
+
+    [Theory]
+    [Trait("Etapa", "3")]
+    [InlineData(18.702, 3, 0)]
+    [InlineData(18.702, 3, 0.5)]
+    [InlineData(18.702, 3, 1.75)]
+    [InlineData(37.224, 3, 0.9)]
+    [InlineData(5, 3, 2.4)]
+    public void ADistribuicaoComBalancoSempreFecha(double comprimento, double alvo, double balanco)
+    {
+        var tabela = PillarTable.Distribute(comprimento, alvo, balanco);
+
+        Assert.True(tabela.IsValid, tabela.WhyInvalid);
+        Assert.Null(tabela.WhyDoesNotFit(comprimento));
+    }
+
+    /// <summary>
+    /// Os dois balanços não podem comer a mesa inteira: sobraria um vão de
+    /// comprimento zero ou negativo, que é pilar em cima de pilar.
+    /// </summary>
+    [Theory]
+    [Trait("Etapa", "3")]
+    [InlineData(18.702, 9.351)]
+    [InlineData(18.702, 12)]
+    [InlineData(18.702, -0.5)]
+    [InlineData(18.702, double.NaN)]
+    public void BalancoImpossivelERecusado(double comprimento, double balanco)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => PillarTable.Distribute(comprimento, 3, balanco));
+    }
+
+    /// <summary>
+    /// A tabela montada à mão também carrega o balanço, e ele entra na conta
+    /// do que ela cobre. Sem isso, uma tabela com balanço nunca fecharia com a
+    /// mesa — a diferença seria exatamente os dois balanços.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "3")]
+    public void ATabelaAMaoComBalancoFechaComAMesa()
+    {
+        var tabela = new PillarTable([3, 3, 3, 4, 3], 0.5);
+
+        Assert.Equal(17, tabela.TotalLength, 9);
+        Assert.Null(tabela.WhyDoesNotFit(17));
+
+        // Sem o balanço ela cobriria 16 e não fecharia com 17.
+        Assert.NotNull(new PillarTable([3, 3, 3, 4, 3]).WhyDoesNotFit(17));
+    }
+
+    [Fact]
+    [Trait("Etapa", "3")]
+    public void AsPosicoesComBalancoComecamNoBalanco()
+    {
+        var tabela = new PillarTable([3, 3, 3, 4, 3], 0.5);
+
+        Assert.Equal([0.5, 3.5, 6.5, 9.5, 13.5, 16.5], tabela.Positions);
+    }
+
+    [Theory]
+    [Trait("Etapa", "3")]
+    [InlineData(-0.5)]
+    [InlineData(double.NaN)]
+    [InlineData(99)]
+    public void TabelaComBalancoImpossivelNaoEValida(double balanco)
+    {
+        var tabela = new PillarTable([3, 3], balanco);
+
+        Assert.False(tabela.IsValid);
+        Assert.Contains("balanço", tabela.WhyInvalid!);
+    }
+
+    /// <summary>
+    /// Duas tabelas com os mesmos vãos e balanços diferentes são tabelas
+    /// diferentes. Sem isto, trocar o balanço passaria despercebido por
+    /// qualquer comparação.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "3")]
+    public void OBalancoEntraNaIgualdade()
+    {
+        Assert.NotEqual(new PillarTable([3, 3], 0.5), new PillarTable([3, 3]));
+        Assert.Equal(new PillarTable([3, 3], 0.5), new PillarTable([3, 3], 0.5));
+    }
+
+    [Fact]
+    [Trait("Etapa", "3")]
+    public void ADescricaoDizSeHaBalanco()
+    {
+        Assert.Contains("pilar na ponta", PillarTable.Distribute(18.702, 3).Describe());
+        Assert.Contains("balanço de 0,5 m", PillarTable.Distribute(18.702, 3, 0.5).Describe());
+    }
 }

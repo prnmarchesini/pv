@@ -25,7 +25,7 @@ public sealed class TableProfileStoreTests : IDisposable
     private static TableProfile Perfil(string nome = "Mesa do Renan 28 módulos") => new(
         nome,
         new TableLayout(Risen(), 28, TableArrangement.DoubleRow, 0.02, 0.02, 0.10, 0.10),
-        new TableFrame(3.00, 2.50, 0.15, 0.07),
+        new TableFrame(3.00, 2.50, 0.15, 0.07, 3.00, 0),
         20 * Math.PI / 180);
 
     [Fact]
