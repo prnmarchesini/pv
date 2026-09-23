@@ -24,6 +24,7 @@ Só o Renan marca VALIDADO.
 | 2.4 | Reindexar | VALIDADO | Renan copiou a área "teste2" para outro desenho e ela foi reconhecida lá |
 | 3.1 | Módulo e biblioteca | AGUARDANDO VALIDAÇÃO | Risen RSM132-8-720BHDG, 2384×1303×33 mm, do datasheet |
 | 3.2 | Comprimento da mesa | AGUARDANDO VALIDAÇÃO | 2V, 28 módulos: 18,702 m de comprimento e 4,788 m na inclinação |
+| 3.3 | Tabela de pilares | AGUARDANDO VALIDAÇÃO | 18,702 m com alvo de 3 m dá 6 vãos de 3,117 m, 7 pilares |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -423,3 +424,51 @@ quatro testes falham.
   corrompida tem que aparecer, não virar "não achei o modelo".
 - O limite de 2000 Wp e o piso de 1 Wp são meus, não do Renan. Servem para
   pegar erro de digitação, não são regra de projeto.
+
+**Geometria fechada em 23/09/2026, pelo segundo desenho do Renan.**
+
+Ele acrescentou **M2** (módulos + espaçamento, ao longo da inclinação) e o
+**eixo**: tesoura e módulo **alinhados pelo centro**. Com isso não falta mais
+cota nenhuma:
+
+```
+sobra = (M2 - T1) / 2
+P3    = M1 + (sobra + T2) x sen(tilt)
+P1    = P3 + P2
+```
+
+O desenho também mostra que **o pilar não fica no eixo**: T2 é medido do começo
+da tesoura, e com T1 = 3 m e T2 = 2,5 m ele cai acima do centro. O eixo serve
+para ancorar o bloco da mesa; o pilar, não.
+
+Consequência numérica com os valores de hoje (2V, M2 = 4,788, T1 = 3, T2 = 2,5,
+tilt 20 graus, P2 = 0,90, P1 máximo 2,50): sobra = 0,894 m, e
+**P3 = M1 + 1,161 m**. O M1 só vai até **0,44 m** antes de o pilar passar de
+2,50 m, e a faixa que o Renan deu vai até 0,80 m. Pela regra sagrada 4 isso não
+é erro — o pilar cede e é marcado —, mas boa parte da faixa vai gerar mesa
+marcada. Avisado a ele.
+
+**O que a revisão do 3.3 apontou, e o que foi feito.**
+
+- `Distribute` podia devolver uma tabela que **a própria classe reprova**:
+  escolhia o número de vãos só pelo alvo e nunca conferia contra o vão máximo.
+  Alvo de 60 m em mesa de 60 m dava um vão de 60 m, acima do limite. Pior, uma
+  razão comprimento/alvo enorme saturava o cast para `int` em silêncio, ou
+  tentava alocar um bilhão de doubles.
+- A tabela guardava a **lista do chamador por referência**: mexer nela depois
+  transformava uma tabela válida em inválida já construída. Agora é copiada.
+- `Positions` devolvia uma `List` mutável cujas alterações se perdiam no acesso
+  seguinte — escrita silenciosamente ignorada, que é pior que escrita que falha.
+- `ToString()` de uma tabela **inválida lançava**, porque o texto gerado pelo
+  record imprime `Positions` e `TotalSpan`. Justamente a tabela que se quer ver
+  num log ou num assert que falhou era a que explodia.
+- A igualdade do record comparava a referência do vetor: duas tabelas idênticas
+  saíam diferentes.
+
+**Dois testes meus não mordiam, e a revisão provou mutando:**
+
+- inverter "sobra" e "falta" na mensagem passava verde — nenhum teste olhava a
+  palavra, só os números. O sinal é o que manda alongar ou encurtar a mesa;
+- afrouxar a tolerância de 1 mm para 1 cm passava verde, porque o caso "não
+  tolerado" do teste era 5 cm, que reprova das duas formas. O nome do teste
+  prometia o que ele não fazia. Agora o caso é 5 mm.
