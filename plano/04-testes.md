@@ -18,7 +18,7 @@ Core Console (`accoreconsole.exe`, AutoCAD sem interface) roda um script `.scr` 
 `tests/acervo/etapa-N/` guarda entradas, desenhos `.dwg` de referência e resultados esperados. `tests/acervo/MANIFESTO.sha256` lista o hash de cada arquivo.
 
 - `checar-acervo.ps1` recalcula os hashes. Qualquer diferença: falha, e o placar inteiro fica vermelho.
-- **O Claude Code nunca edita o acervo nem o manifesto.** Ele propõe o arquivo esperado em `tests/proposto/`, o Renan confere à mão e move para o acervo, e só ele atualiza o manifesto.
+- **Acervo e manifesto são mantidos pelo Claude Code desde 25/09/2026.** Até então a regra era o Renan conferir à mão o arquivo proposto em `tests/proposto/` e movê-lo; nesse dia ele decidiu que só valida o que se vê no Civil 3D. O que continua valendo: entrada no acervo é sempre um commit próprio, dizendo de onde veio cada número e o que ainda não foi conferido contra o Civil 3D (campo `Conferido`). Um arquivo que já está no acervo nunca é alterado; se a leitura mudar de propósito, entra um arquivo novo com o motivo.
 
 ## Placar
 `rodar-testes.ps1` imprime:

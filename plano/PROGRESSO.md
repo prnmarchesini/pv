@@ -29,14 +29,18 @@ Só o Renan marca VALIDADO.
 | 3.5 | Fórmula da altura livre | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
 | 3.6 | Perfil nomeado | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
 | 3.7 | Modal | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
-| 4.1 | Modelo de configuração | AGUARDANDO VALIDAÇÃO | Divergência do plano registrada abaixo; cinco padrões são meus |
+| 4.1 | Modelo de configuração | VALIDADO (automático) | Sem tela; fechado em 25/09/2026 pela regra "só valido no CAD". Cinco padrões continuam meus |
 | 4.2 | Linha de alinhamento | AGUARDANDO VALIDAÇÃO | UFV_ALINHAMENTO: traça a linha e clica o lado; entra no UFV_REINDEXAR |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
 ## POR ONDE CONTINUAR
 
-Atualizado em 23/09/2026, depois do commit `9ca12e0` (etapa 4.2).
+Atualizado em 25/09/2026, depois de congelar o terreno-esperado no acervo.
+
+**Regra nova, 25/09/2026: o Renan só valida o que se vê no Civil 3D.**
+Arquivos, acervo, manifesto e valores padrão são do Claude Code. Pedido a
+ele só em forma de roteiro de tela: comando, o que clicar, o que deve aparecer.
 
 Esta seção existe porque o resto do arquivo é diário de decisões, e diário não
 responde "e agora?". Ela fica no topo de propósito. **Quem retomar o trabalho
@@ -75,9 +79,10 @@ palpável: hoje a configuração existe no motor e não tem onde ser editada.
 1. **Testar o 4.2 no CAD**: `UFV_ALINHAMENTO` — traçar a linha, clicar o lado,
    conferir em `UFV_ALINHAMENTOS`; depois copiar a linha para outro desenho e
    rodar `UFV_REINDEXAR`. O bundle já está instalado.
-2. **`tests/proposto/etapa-1/terreno-esperado.psd1`** espera ele conferir e
-   mover para `tests/acervo/etapa-1/`. Está parado há várias etapas, e é a
-   única coisa que só ele pode fazer. O acervo é dele; o Claude Code não toca.
+2. ~~`terreno-esperado.psd1`~~ Resolvido em 25/09/2026: o Renan decidiu que
+   só valida o que se vê no CAD, e o arquivo foi congelado em
+   `tests/acervo/etapa-1/` pelo Claude Code, com o Porto Feliz marcado como
+   não conferido (trava regressão, não prova acerto).
 3. **Conferir a mesa do 3.7 contra um projeto de fabricante.** Ele aprovou a
    etapa 3 sem relatar essa conferência, que é o que o plano pede como
    validação do 3.7 — é o único jeito de saber se o motor acerta o número, e
@@ -88,7 +93,8 @@ palpável: hoje a configuração existe no motor e não tem onde ser editada.
 - **Cinco valores da configuração são meus, não dele** (pitch 6,0 m; enterro
   máximo 2,00 m; degrau 0 a 0,50 m; espaçamento que quebra fileira 0,50 m; e a
   tolerância de invasão, que ele já respondeu que é contagem e está em zero).
-  Estão marcados na seção do 4.1;
+  Ele não vai conferir tabela de número. A hora de ele ver isso é o 4.4, na
+  tela de configuração: se um padrão estiver errado, ele troca lá;
 - **relação entre degrau, espaçamento e pitch**: hoje os três são validados
   isoladamente e nada confere um contra o outro. Se existe relação real, ela
   não está escrita nem como comentário.

@@ -28,8 +28,8 @@ Código, nomes de classe e métodos em inglês. Comentários, mensagens ao usuá
 
 ## Nunca
 
-- Editar arquivos dentro de `tests/acervo/` (ver `plano/04-testes.md`).
+- Alterar um arquivo que já está em `tests/acervo/`. Acrescentar arquivo novo e declarar o hash no manifesto pode, desde 25/09/2026 (ver `plano/04-testes.md`).
 - Apagar ou afrouxar um teste para ele passar.
 - Referenciar DLL do AutoCAD/Civil 3D em `UFV.Core` ou `UFV.Geo`.
 - Renomear, renumerar ou mover entidades do usuário sem comando explícito dele.
-- Marcar um passo como `VALIDADO`. Só o Renan faz isso.
+- Marcar como `VALIDADO` um passo que tem comando na tela. Só o Renan faz isso. Passo que é só modelo, arquivo ou número (sem nada para ver no Civil 3D) o Claude Code fecha sozinho com os testes automáticos, marca `VALIDADO (automático)` e registra no PROGRESSO.md o que assumiu (decisão do Renan em 25/09/2026: "vou validar somente coisas no cad").
