@@ -14,14 +14,19 @@ namespace UFV.Plugin;
 /// <summary>
 /// A linha de alinhamento: a referência de onde as fileiras de mesas começam.
 ///
-/// O usuário traça a linha e clica de que lado ficam as mesas. O lado é a parte
-/// que o desenho não carrega sozinho — uma linha é simétrica —, e é a que
-/// custa caro perder: a usina inteira nasce do outro lado e o desenho fica
-/// perfeito.
+/// O usuário traça a linha, com quantos pontos quiser, e clica de que lado
+/// ficam as mesas. O lado é a parte que o desenho não carrega sozinho (uma
+/// linha é simétrica) e é a que custa caro perder: a usina inteira nasce do
+/// outro lado e o desenho fica perfeito.
 ///
 /// Por isso o lado é guardado junto com o SENTIDO do traçado. "Esquerda" é
-/// esquerda de quem caminha do primeiro ponto para o segundo; a mesma linha
-/// desenhada ao contrário troca os dois lados.
+/// esquerda de quem caminha do primeiro ponto para o último, trecho a trecho;
+/// a mesma linha desenhada ao contrário troca os lados.
+///
+/// A linha não precisa ser reta (Renan, 25/09/2026: "eu posso fazer vários
+/// pontos"), e assenta no terreno como a área: a cota de cada vértice vem do
+/// terreno processado, e a linha ganha vértices onde cruza o relevo (regra
+/// sagrada 5).
 /// </summary>
 public static class AlignmentCommands
 {
@@ -42,16 +47,33 @@ public static class AlignmentCommands
 
         try
         {
-            var linha = Tracar(editor);
-            if (linha is null) return;
+            var terreno = TerrainCache.Get(documento);
+            if (terreno is null)
+            {
+                editor.WriteMessage(
+                    "\nNenhum terreno processado neste desenho. Use o botão Terreno primeiro.\n");
+                return;
+            }
 
-            var (de, para) = linha.Value;
+            var aviso = TerrenoEnvelhecido.Conferir(documento);
+            if (aviso is not null)
+            {
+                editor.WriteMessage($"\n  ATENÇÃO: {aviso}\n");
+            }
+
+            // O rastro vive por todo o comando, e não só enquanto se traça:
+            // é com a linha na tela que o usuário clica o lado. Sem ela, "de
+            // que lado?" é pergunta sobre uma coisa que ele não está vendo.
+            using var rastro = new RastroDoTracado();
+
+            var pontos = Tracar(editor, rastro);
+            if (pontos is null) return;
+
+            var tracado = pontos.Select(p => new Point3(p.X, p.Y, p.Z)).ToList();
 
             // Conferido aqui, uma vez, e não a cada clique do lado: descobrir
-            // no meio pouparia o usuário de dois prompts inúteis, e o catch lá
-            // dentro culpava a linha mesmo quando o problema era o clique.
-            var curta = LineSides.WhyTooShort(
-                new Point3(de.X, de.Y, de.Z), new Point3(para.X, para.Y, para.Z));
+            // no meio pouparia o usuário de dois prompts inúteis.
+            var curta = PathSides.WhyTooShort(tracado);
 
             if (curta is not null)
             {
@@ -59,15 +81,13 @@ public static class AlignmentCommands
                 return;
             }
 
-            var lado = PerguntarOLado(editor, de, para);
+            var lado = PerguntarOLado(editor, tracado);
             if (lado is null) return;
 
             var nome = PerguntarNome(editor);
             if (nome is null) return;
 
-            (de, para) = Assentar(editor, documento, de, para);
-
-            Criar(editor, documento, de, para, lado.Value, nome);
+            Criar(editor, documento, terreno, tracado, lado.Value, nome);
         }
         catch (System.Exception erro)
         {
@@ -116,98 +136,72 @@ public static class AlignmentCommands
     }
 
     /// <summary>
-    /// Os dois pontos da linha.
+    /// Coleta os pontos da linha, um a um, até o usuário dar Enter.
     ///
-    /// Dois pontos, e não uma polilinha: o alinhamento é uma direção de
-    /// referência, e uma linha quebrada não tem lado bem definido — o mesmo
-    /// ponto ficaria à esquerda de um trecho e à direita de outro.
+    /// Mesmo ritual do UFV_AREA: os pontos são pedidos aqui, e não pelo PLINE
+    /// do AutoCAD, para o plugin saber exatamente o que foi traçado. O rastro
+    /// mostra os trechos já clicados; sem ele é desenhar às cegas.
+    ///
+    /// O Z de cada clique é ignorado depois: com OSNAP em planta, um clique
+    /// pega a cota de uma curva de nível e o outro cai em zero. A cota vem
+    /// do terreno, no <see cref="Criar"/>.
     /// </summary>
-    private static (Point3d De, Point3d Para)? Tracar(Editor editor)
+    private static IReadOnlyList<Point3d>? Tracar(Editor editor, RastroDoTracado rastro)
     {
+        var pontos = new List<Point3d>();
+
         editor.WriteMessage(
-            "\nTrace a linha de alinhamento. Ela é a referência de onde as fileiras começam.\n");
+            "\nTrace a linha de alinhamento em planta, com quantos pontos quiser. Enter termina.\n"
+            + "Ela é a referência de onde as fileiras começam; a cota vem do terreno.\n");
 
-        var primeiro = editor.GetPoint(new PromptPointOptions("\nPrimeiro ponto: "));
-
-        if (primeiro.Status != PromptStatus.OK)
+        while (true)
         {
-            editor.WriteMessage("\nAlinhamento não criado.\n");
-            return null;
-        }
+            var opcoes = pontos.Count == 0
+                ? new PromptPointOptions("\nPrimeiro ponto: ")
+                : new PromptPointOptions($"\nPróximo ponto <{pontos.Count} traçados, Enter termina>: ")
+                {
+                    UseBasePoint = true,
+                    BasePoint = pontos[^1],
+                    AllowNone = true,
+                };
 
-        var segundo = editor.GetPoint(new PromptPointOptions("\nSegundo ponto: ")
-        {
-            UseBasePoint = true,
-            BasePoint = primeiro.Value,
-        });
+            var resposta = editor.GetPoint(opcoes);
 
-        if (segundo.Status != PromptStatus.OK)
-        {
-            editor.WriteMessage("\nAlinhamento não criado.\n");
-            return null;
-        }
+            // Enter termina a linha, como no PLINE. Esc desiste.
+            if (resposta.Status == PromptStatus.None) break;
 
-        return (primeiro.Value, segundo.Value);
-    }
-
-    /// <summary>
-    /// Decide a cota das duas pontas. O alinhamento é uma referência em
-    /// planta: só X e Y importam para o lado e para as fileiras. Mas a linha
-    /// vai para o desenho, e lá o Z aparece.
-    ///
-    /// O Z que vem do clique não serve. Em planta, com o OSNAP ligado, um
-    /// clique pega a cota de uma curva de nível (700 m) e o outro cai na
-    /// elevação corrente (0 m): a linha parece certa de cima e, ao orbitar,
-    /// é um poste de 700 m atravessando o terreno. Foi assim que o Renan a
-    /// viu em 25/09/2026.
-    ///
-    /// Então: com terreno processado e as duas pontas sobre ele, cada ponta
-    /// ganha a cota do terreno, e a linha fica encostada no relevo. Sem
-    /// terreno, ou com uma ponta fora dele, as duas vão para Z = 0 — plana,
-    /// e avisada. Nunca uma ponta de cada jeito.
-    /// </summary>
-    private static (Point3d De, Point3d Para) Assentar(
-        Editor editor, Document documento, Point3d de, Point3d para)
-    {
-        var terreno = TerrainCache.Get(documento);
-
-        if (terreno is not null)
-        {
-            var drapejada = Draping.Along(terreno.Mesh,
-                [new Point3(de.X, de.Y, de.Z), new Point3(para.X, para.Y, para.Z)]);
-
-            if (!drapejada.HasGaps)
+            if (resposta.Status == PromptStatus.Cancel)
             {
-                var a = drapejada.Vertices[0];
-                var b = drapejada.Vertices[^1];
-
-                return (new Point3d(a.X, a.Y, a.Z), new Point3d(b.X, b.Y, b.Z));
+                editor.WriteMessage("\nAlinhamento não criado.\n");
+                return null;
             }
 
-            editor.WriteMessage(
-                "\n  Uma das pontas caiu fora do terreno processado: a linha fica em Z = 0.\n");
-        }
-        else
-        {
-            editor.WriteMessage(
-                "\n  Sem terreno processado: a linha fica em Z = 0. Só X e Y importam para o alinhamento.\n");
+            if (resposta.Status != PromptStatus.OK) break;
+
+            if (pontos.Count > 0) rastro.Acrescentar(pontos[^1], resposta.Value);
+
+            pontos.Add(resposta.Value);
         }
 
-        return (new Point3d(de.X, de.Y, 0), new Point3d(para.X, para.Y, 0));
+        if (pontos.Count < 2)
+        {
+            editor.WriteMessage("\nUm alinhamento precisa de pelo menos dois pontos. Alinhamento não criado.\n");
+            return null;
+        }
+
+        return pontos;
     }
 
     /// <summary>
-    /// Pergunta de que lado ficam as mesas, por clique.
+    /// Pergunta de que lado ficam as mesas, por clique, com a linha ainda na
+    /// tela (o rastro).
     ///
     /// Por clique, e não por "esquerda/direita" digitado: esquerda de quem?
-    /// Do traçado, da tela, do norte? Clicar não tem ambiguidade nenhuma — o
-    /// usuário aponta o lado, e a conta descobre qual é.
+    /// Do traçado, da tela, do norte? Clicar não tem ambiguidade nenhuma. O
+    /// lado é o do trecho mais próximo do clique (<see cref="PathSides"/>).
     /// </summary>
-    private static LineSide? PerguntarOLado(Editor editor, Point3d de, Point3d para)
+    private static LineSide? PerguntarOLado(Editor editor, IReadOnlyList<Point3> tracado)
     {
-        var a = new Point3(de.X, de.Y, de.Z);
-        var b = new Point3(para.X, para.Y, para.Z);
-
         while (true)
         {
             var resposta = editor.GetPoint(new PromptPointOptions(
@@ -225,14 +219,13 @@ public static class AlignmentCommands
 
             try
             {
-                lado = LineSides.Of(a, b, ponto);
+                lado = PathSides.Of(tracado, ponto);
             }
             catch (ArgumentOutOfRangeException erro)
             {
                 // A linha já foi conferida antes de chegar aqui, então o que
-                // sobra é o ponto clicado — coordenada absurda vinda de um
-                // OSNAP maluco, por exemplo. Antes esta mensagem culpava a
-                // linha em qualquer caso, e o erro não ia para lugar nenhum.
+                // sobra é o ponto clicado: coordenada absurda vinda de um
+                // OSNAP maluco, por exemplo.
                 RegistroDeDiagnostico.Registrar("Não consegui decidir o lado do alinhamento.", erro);
 
                 editor.WriteMessage(
@@ -251,14 +244,33 @@ public static class AlignmentCommands
     private static string? PerguntarNome(Editor editor) =>
         Perguntas.Nome(editor, "alinhamento", "O alinhamento");
 
+    /// <summary>
+    /// Assenta a linha no terreno e a grava como polilinha 3D, com a
+    /// identidade no XData e o registro no índice.
+    ///
+    /// O drapeamento é o mesmo da área: cada vértice ganha a cota do terreno,
+    /// e a linha ganha vértices onde cruza arestas do relevo, para não passar
+    /// por dentro do morro. Ponto que cair fora do terreno fica com a cota do
+    /// clique e é avisado, como na área.
+    /// </summary>
     private static void Criar(
         Editor editor,
         Document documento,
-        Point3d de,
-        Point3d para,
+        ProcessedTerrain terreno,
+        IReadOnlyList<Point3> tracado,
         LineSide lado,
         string nome)
     {
+        var drapejada = Draping.Along(terreno.Mesh, tracado);
+        var vertices = drapejada.Vertices;
+
+        if (vertices.Count < 2)
+        {
+            editor.WriteMessage(
+                "\nA linha ficou com um vértice só depois de assentar no terreno. Alinhamento não criado.\n");
+            return;
+        }
+
         var identidade = AlignmentIdentity.Create(nome, lado, DateTime.Now);
 
         string handle;
@@ -269,19 +281,30 @@ public static class AlignmentCommands
             var espaco = (BlockTableRecord)transacao.GetObject(
                 tabela[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
 
-            var linha = new Line(de, para)
+            var polilinha = new Polyline3d
             {
+                Closed = false,
                 Layer = GarantirLayer(transacao, documento.Database),
             };
 
-            espaco.AppendEntity(linha);
-            transacao.AddNewlyCreatedDBObject(linha, true);
+            espaco.AppendEntity(polilinha);
+            transacao.AddNewlyCreatedDBObject(polilinha, true);
 
-            AlignmentXData.Save(transacao, linha, identidade);
+            // Os vértices entram depois de a polilinha estar no banco: antes
+            // disso ela não tem onde guardá-los.
+            foreach (var p in vertices)
+            {
+                var vertice = new PolylineVertex3d(new Point3d(p.X, p.Y, p.Z));
+
+                polilinha.AppendVertex(vertice);
+                transacao.AddNewlyCreatedDBObject(vertice, true);
+            }
+
+            AlignmentXData.Save(transacao, polilinha, identidade);
 
             // Lido dentro da transação que criou a entidade: depois do commit
             // seria acesso a objeto de banco já fechado.
-            handle = linha.Handle.ToString();
+            handle = polilinha.Handle.ToString();
 
             transacao.Commit();
         }
@@ -308,18 +331,39 @@ public static class AlignmentCommands
                 $"\n  ATENÇÃO: o alinhamento está no desenho, mas não entrou no registro\n"
                 + $"  ({erro.Message}). Rode UFV_REINDEXAR.\n");
         }
-        Relatar(editor, identidade, de, para);
+
+        Relatar(editor, identidade, tracado, drapejada);
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
     }
 
-    private static void Relatar(Editor editor, AlignmentIdentity identidade, Point3d de, Point3d para)
+    private static void Relatar(
+        Editor editor,
+        AlignmentIdentity identidade,
+        IReadOnlyList<Point3> tracado,
+        DrapedLine drapejada)
     {
-        var comprimento = Math.Sqrt(
-            (para.X - de.X) * (para.X - de.X) + (para.Y - de.Y) * (para.Y - de.Y));
+        var noTerreno = drapejada.Vertices.Count;
+        var acrescentados = noTerreno - tracado.Count;
+
+        var cotaMinima = drapejada.Vertices.Min(v => v.Z);
+        var cotaMaxima = drapejada.Vertices.Max(v => v.Z);
 
         editor.WriteMessage($"\nAlinhamento criado: {identidade.Describe()}\n");
-        editor.WriteMessage($"  comprimento em planta: {comprimento:0.###} m\n");
-        editor.WriteMessage($"  cotas das pontas: {de.Z:0.###} m e {para.Z:0.###} m\n");
+        editor.WriteMessage($"  comprimento em planta:  {PathSides.PlanLength(tracado):0.###} m\n");
+        editor.WriteMessage($"  pontos traçados:        {tracado.Count}\n");
+        editor.WriteMessage(
+            $"  vértices no terreno:    {noTerreno} "
+            + $"({Math.Max(acrescentados, 0)} acrescentados no contorno do relevo)\n");
+        editor.WriteMessage($"  cotas:                  {cotaMinima:0.###} m a {cotaMaxima:0.###} m\n");
+
+        if (drapejada.HasGaps)
+        {
+            // Sem este aviso, o trecho sem terreno fica com a cota que o
+            // usuário clicou: plausível, e sem nada que o denuncie.
+            editor.WriteMessage(
+                $"  ATENÇÃO: {drapejada.OutsideCount} vértice(s) caíram fora do terreno e ficaram\n"
+                + "  com a cota do clique. Reveja o traçado ou processe uma superfície maior.\n");
+        }
 
         // O sentido importa e o usuário precisa saber disso: redesenhar a
         // mesma linha ao contrário troca o lado.
@@ -331,7 +375,7 @@ public static class AlignmentCommands
     /// <summary>
     /// Garante a layer dos alinhamentos e devolve o nome dela.
     ///
-    /// A layer é só aparência — serve para ligar e desligar o que se vê. Quem
+    /// A layer é só aparência: serve para ligar e desligar o que se vê. Quem
     /// diz que a linha é um alinhamento nosso é o XData; trocar a layer não
     /// tira a identidade dela (02-arquitetura.md).
     /// </summary>

@@ -30,7 +30,7 @@ Só o Renan marca VALIDADO.
 | 3.6 | Perfil nomeado | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
 | 3.7 | Modal | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
 | 4.1 | Modelo de configuração | VALIDADO (automático) | Sem tela; fechado em 25/09/2026 pela regra "só valido no CAD". Cinco padrões continuam meus |
-| 4.2 | Linha de alinhamento | AGUARDANDO VALIDAÇÃO | REPROVADO em 25/09 (linha com Z do clique); corrigido, com teste de nível 2 da cota; entra no UFV_REINDEXAR |
+| 4.2 | Linha de alinhamento | AGUARDANDO VALIDAÇÃO | REPROVADO 2x em 25/09; agora é polilinha de vários pontos, drapejada, com rastro; teste de nível 2 lê os vértices |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -1171,6 +1171,41 @@ Ele classificou como erro grave, e é. Duas coisas mudaram:
 A correção: `Assentar` no comando. Com terreno processado e as duas pontas
 sobre ele, cada ponta ganha a cota do terreno. Sem terreno, ou com uma ponta
 fora, as duas vão para Z = 0 com aviso. Nunca uma ponta de cada jeito.
+
+### Segunda reprovação do 4.2, no mesmo dia: a linha era pobre demais
+
+Depois da correção da cota, o Renan disse o que de fato estava errado:
+
+> "O alinhamento não precisa ser reto, eu posso fazer vários pontos. O
+> alinhamento basicamente é uma linha, não reta ou reta, que deveria ter o
+> formato do terreno, quando eu desenho eu deveria ver eu fazendo o desenho,
+> igual quando eu faço a área que é criada linha temporária. Aí você pede
+> para clicar de que lado nasce a mesa, e sem ver a linha, é meio que difícil."
+
+Três coisas, todas já existentes na área e que eu não reaproveitei:
+
+- **vários pontos**: `Tracar` virou o laço do UFV_AREA (Enter termina, mínimo
+  dois). A entidade é `Polyline3d`, não `Line`. O varredor e o índice não
+  dependem do tipo, então o UFV_REINDEXAR segue igual;
+- **acompanha o terreno**: `Draping.Along` sobre o traçado, como a área. A
+  linha ganha vértices onde cruza o relevo. Exige terreno processado, como
+  a área; sem terreno o comando recusa;
+- **rastro**: `RastroDoTracado` vive o comando inteiro, inclusive durante o
+  clique do lado e o nome. Era isso que faltava para "de que lado?" fazer
+  sentido.
+
+O lado de uma linha quebrada é o **do trecho mais próximo do clique**
+(`PathSides` no Geo, 8 testes). A convenção de sentido continua a mesma:
+inverter o traçado inverte todos os trechos de uma vez.
+
+O teste de nível 2 traça três pontos em "V" com Z de clique 0 e 9999, e lê
+os vértices da polilinha em LISP: tem que haver mais de três (assentou no
+relevo) e todos dentro da faixa de cotas do terreno.
+
+**Lição**: quando dois comandos fazem "traçar uma coisa em planta sobre o
+terreno", o segundo copia o ritual do primeiro inteiro. Eu fiz o
+alinhamento mais simples que a área porque o plano dizia "linha", e o
+Renan teve que me pedir o óbvio.
 
 ### Pendências do 4.2
 
