@@ -16,6 +16,11 @@ A faixa da ponta baixa do MÓDULO (não do ferro) até o terreno é respeitada. 
 
 **Exceção única:** tolerância de invasão por lombo. O usuário define quantos módulos por mesa podem estourar a ponta baixa (ex.: 5 em 20). Acima disso a mesa é marcada. Verificador: para cada mesa, módulos fora da faixa ≤ tolerância, ou a mesa está marcada.
 
+## 5. Tudo que o plugin desenha acompanha o terreno
+Nenhuma entidade criada pelo plugin (linha, área, mesa, pilar, marcação) leva a cota do clique. A cota vem do terreno processado; sem terreno, a entidade nasce plana e avisada, nunca com uma ponta em cada cota. Verificador: em todo teste de nível 2 que cria entidade, a cota de cada vértice é lida DA ENTIDADE (LISP, não do relatório do plugin) e tem que cair na faixa de cotas do terreno.
+
+**Origem:** 25/09/2026. O alinhamento do 4.2 guardou o Z bruto dos cliques; com OSNAP em planta, uma ponta pegou 700 m de uma curva de nível e a outra ficou em 0. Em planta parecia certo; orbitando, era um poste atravessando o terreno. Chegou ao Renan sem teste. **Passo que desenha no CAD não sai para validação sem teste de nível 2 da cota.**
+
 ## Princípios de comportamento (também invioláveis)
 
 - O motor nunca move nem quebra fileira sozinho. Encaixa o máximo, marca o resto.

@@ -920,6 +920,118 @@ function Testar-Area {
     return $true
 }
 
+<#
+    O alinhamento (passo 4.2): a linha tem que assentar no terreno.
+
+    Regra sagrada 5 (01-regras-sagradas.md): qualquer coisa que o plugin
+    desenha acompanha o terreno. O teste entrega ao comando cotas de clique
+    absurdas (0 e 9999) e le, direto da entidade, a cota das duas pontas: as
+    duas tem que cair dentro da faixa de cotas do terreno, e nenhuma pode ser
+    a que foi digitada.
+#>
+function Testar-Alinhamento {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-alinhamento--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-alinhamento : nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-alinhamento' `
+        -Script (Join-Path $PSScriptRoot 'ufv-alinhamento.scr') `
+        -Substituicoes @{
+            '{{P1}}'   = (Ponto3 -40 0 0)
+            '{{P2}}'   = (Ponto3  40 0 9999)
+            '{{LADO}}' = (Ponto3 0 30 0)
+            '{{NOME}}' = 'Alinhamento de teste'
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-alinhamento terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'Alinhamento criado:') {
+        $problemas.Add("ufv-alinhamento : o alinhamento nao foi criado. Veja $($r.Saida)")
+        return $false
+    }
+
+    # O Core Console ecoa a expressao LISP antes do resultado, e o (princ)
+    # devolve a string ainda por cima; por isso o nome da layer e lido so ate
+    # o primeiro caractere que nao pode fazer parte de um nome.
+    if ($r.Texto -notmatch 'UFV_PONTAS zA=(-?[\d.]+) zB=(-?[\d.]+) layer=([A-Za-z0-9_\-]+)') {
+        $problemas.Add("ufv-alinhamento : nao consegui ler as pontas da entidade. Veja $($r.Saida)")
+        return $false
+    }
+
+    $zA = [double]::Parse($Matches[1], $invariante)
+    $zB = [double]::Parse($Matches[2], $invariante)
+    $layer = $Matches[3]
+
+    # As pontas distam 80 m em planta. Se o comprimento veio outro, algo
+    # puxou os pontos (OSNAP ligado, por exemplo) e o resto do teste nao esta
+    # mais conferindo o que pensa que confere.
+    if ($r.Texto -notmatch 'comprimento em planta:\s+(-?[\d.,]+) m') {
+        $problemas.Add("ufv-alinhamento : nao achei o comprimento em planta. Veja $($r.Saida)")
+        return $false
+    }
+
+    $comprimento = [double]::Parse($Matches[1], [Globalization.CultureInfo]::GetCultureInfo('pt-BR'))
+    if ([math]::Abs($comprimento - 80) -gt 0.01) {
+        $problemas.Add(
+            "ufv-alinhamento : o comprimento em planta deu $comprimento m, e nao 80 m: os pontos " +
+            "digitados foram deslocados antes de chegar ao comando. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($layer -ne 'MARCHENG_UFV_ALINHAMENTO') {
+        $problemas.Add(
+            "ufv-alinhamento : a ultima entidade do desenho esta na layer '$layer', nao e a linha do alinhamento. " +
+            "Veja $($r.Saida)")
+        return $false
+    }
+
+    $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
+    if ($r.Texto -notmatch 'cotas:\s+(-?[\d.,]+) m a (-?[\d.,]+) m') {
+        $problemas.Add("ufv-alinhamento : nao achei as cotas do resumo. Veja $($r.Saida)")
+        return $false
+    }
+
+    $minima = [double]::Parse($Matches[1], $ptbr)
+    $maxima = [double]::Parse($Matches[2], $ptbr)
+
+    foreach ($par in @(@('primeira', $zA), @('segunda', $zB))) {
+        $rotulo = $par[0]; $z = $par[1]
+        if ($z -lt $minima -or $z -gt $maxima) {
+            $problemas.Add(
+                "ufv-alinhamento : a $rotulo ponta ficou em Z=$z, fora da faixa do terreno ($minima a $maxima). " +
+                "A linha nao assentou no terreno. Veja $($r.Saida)")
+            return $false
+        }
+    }
+
+    # A cota digitada no clique nao pode ter sobrevivido. O 9999 ja cai fora
+    # da faixa; o 0 pode coincidir com um terreno ao nivel do mar, entao a
+    # conferencia e explicita.
+    if ([math]::Abs($zA) -lt 0.0005 -and $minima -gt 0.001) {
+        $problemas.Add("ufv-alinhamento : a primeira ponta manteve o Z=0 do clique. Veja $($r.Saida)")
+        return $false
+    }
+
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -977,6 +1089,9 @@ else {
     # E a area, que tambem salva e reabre.
     $total++
     if (Testar-Area -Desenho $desenhos[0]) { $passaram++ }
+
+    $total++
+    if (Testar-Alinhamento -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

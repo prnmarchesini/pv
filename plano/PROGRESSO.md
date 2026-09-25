@@ -30,7 +30,7 @@ Só o Renan marca VALIDADO.
 | 3.6 | Perfil nomeado | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
 | 3.7 | Modal | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
 | 4.1 | Modelo de configuração | VALIDADO (automático) | Sem tela; fechado em 25/09/2026 pela regra "só valido no CAD". Cinco padrões continuam meus |
-| 4.2 | Linha de alinhamento | AGUARDANDO VALIDAÇÃO | UFV_ALINHAMENTO: traça a linha e clica o lado; entra no UFV_REINDEXAR |
+| 4.2 | Linha de alinhamento | AGUARDANDO VALIDAÇÃO | REPROVADO em 25/09 (linha com Z do clique); corrigido, com teste de nível 2 da cota; entra no UFV_REINDEXAR |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -1151,6 +1151,26 @@ E a pergunta de nome, que estava escrita palavra por palavra em dois comandos,
 virou `Perguntas.Nome`.
 
 Sete mutações conferidas depois das correções: **16 testes caem**.
+
+### Reprovação do 4.2 em 25/09/2026, e o que ela ensinou
+
+O Renan traçou o alinhamento em planta, orbitou, e a linha era um poste
+atravessando o terreno. Causa: o comando guardava o Z bruto de cada clique.
+Com OSNAP, um clique pegou a cota de uma curva de nível e o outro caiu na
+elevação corrente, zero. O lado e a identidade estavam certos (usam só X e
+Y), e por isso nenhum teste acusou: **não havia teste da cota**.
+
+Ele classificou como erro grave, e é. Duas coisas mudaram:
+
+- **regra sagrada 5** em `01-regras-sagradas.md`: tudo que o plugin desenha
+  acompanha o terreno, e passo que desenha não sai para validação sem teste
+  de nível 2 que leia a cota da entidade;
+- **`ufv-alinhamento.scr`** e `Testar-Alinhamento` no runner: entrega cotas
+  de clique absurdas (0 e 9999) e lê as pontas direto da entidade, em LISP.
+
+A correção: `Assentar` no comando. Com terreno processado e as duas pontas
+sobre ele, cada ponta ganha a cota do terreno. Sem terreno, ou com uma ponta
+fora, as duas vão para Z = 0 com aviso. Nunca uma ponta de cada jeito.
 
 ### Pendências do 4.2
 

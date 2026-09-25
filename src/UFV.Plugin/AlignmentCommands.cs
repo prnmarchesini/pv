@@ -65,6 +65,8 @@ public static class AlignmentCommands
             var nome = PerguntarNome(editor);
             if (nome is null) return;
 
+            (de, para) = Assentar(editor, documento, de, para);
+
             Criar(editor, documento, de, para, lado.Value, nome);
         }
         catch (System.Exception erro)
@@ -146,6 +148,52 @@ public static class AlignmentCommands
         }
 
         return (primeiro.Value, segundo.Value);
+    }
+
+    /// <summary>
+    /// Decide a cota das duas pontas. O alinhamento é uma referência em
+    /// planta: só X e Y importam para o lado e para as fileiras. Mas a linha
+    /// vai para o desenho, e lá o Z aparece.
+    ///
+    /// O Z que vem do clique não serve. Em planta, com o OSNAP ligado, um
+    /// clique pega a cota de uma curva de nível (700 m) e o outro cai na
+    /// elevação corrente (0 m): a linha parece certa de cima e, ao orbitar,
+    /// é um poste de 700 m atravessando o terreno. Foi assim que o Renan a
+    /// viu em 25/09/2026.
+    ///
+    /// Então: com terreno processado e as duas pontas sobre ele, cada ponta
+    /// ganha a cota do terreno, e a linha fica encostada no relevo. Sem
+    /// terreno, ou com uma ponta fora dele, as duas vão para Z = 0 — plana,
+    /// e avisada. Nunca uma ponta de cada jeito.
+    /// </summary>
+    private static (Point3d De, Point3d Para) Assentar(
+        Editor editor, Document documento, Point3d de, Point3d para)
+    {
+        var terreno = TerrainCache.Get(documento);
+
+        if (terreno is not null)
+        {
+            var drapejada = Draping.Along(terreno.Mesh,
+                [new Point3(de.X, de.Y, de.Z), new Point3(para.X, para.Y, para.Z)]);
+
+            if (!drapejada.HasGaps)
+            {
+                var a = drapejada.Vertices[0];
+                var b = drapejada.Vertices[^1];
+
+                return (new Point3d(a.X, a.Y, a.Z), new Point3d(b.X, b.Y, b.Z));
+            }
+
+            editor.WriteMessage(
+                "\n  Uma das pontas caiu fora do terreno processado: a linha fica em Z = 0.\n");
+        }
+        else
+        {
+            editor.WriteMessage(
+                "\n  Sem terreno processado: a linha fica em Z = 0. Só X e Y importam para o alinhamento.\n");
+        }
+
+        return (new Point3d(de.X, de.Y, 0), new Point3d(para.X, para.Y, 0));
     }
 
     /// <summary>
@@ -271,6 +319,7 @@ public static class AlignmentCommands
 
         editor.WriteMessage($"\nAlinhamento criado: {identidade.Describe()}\n");
         editor.WriteMessage($"  comprimento em planta: {comprimento:0.###} m\n");
+        editor.WriteMessage($"  cotas das pontas: {de.Z:0.###} m e {para.Z:0.###} m\n");
 
         // O sentido importa e o usuário precisa saber disso: redesenhar a
         // mesma linha ao contrário troca o lado.
