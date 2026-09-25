@@ -63,9 +63,9 @@ Acervo             OK
 declividade longitudinal, mesa na borda) com limites e cores configuráveis,
 cada uma em camada própria.
 
-**Antes de começar, perguntar ao Renan as cores.** É decisão dele, é visual, e
-chutar cor é o tipo de coisa que ele vai querer mudar depois de ver — melhor
-perguntar do que refazer.
+**Cores, respondidas pelo Renan em 25/09/2026:** cada análise tem paleta de
+seleção (o usuário escolhe a cor), e o padrão é **vermelho para valor abaixo
+do limite** e **azul para valor acima**. Não perguntar de novo.
 
 O 4.4 (a tela única de configuração) vem depois e é o que torna o 4.1
 palpável: hoje a configuração existe no motor e não tem onde ser editada.
