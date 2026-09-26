@@ -199,6 +199,9 @@ teste: a etapa 6 é onde passa a ter.
   `PorHandle` duplica o de `TerrenoEnvelhecido`: consolidar;
 - rodar `UFV_FILEIRA` ou `UFV_USINA` duas vezes desenha por cima (o comando
   avisa); apagar e substituir é assunto da etapa 7;
+- `UFV_EXPORTAR` derruba a exportação inteira se uma 3DFACE nossa foi
+  escalada até ficar sem área ou vertical (mensagem do Core); pular a face
+  e contá-la seria melhor;
 - `RowSolverTests.EDeterministaERapido` mede 200 mesas contra 2 s e marcou
   2017 ms em 26/09/2026 com a máquina sob carga (passou na rodada seguinte):
   medir o menor de três execuções, em vez de afrouxar o limite;
@@ -2470,4 +2473,144 @@ resto); a linha `ORIGEM` invariante só sai no comando automático. Anotado,
 não feito: uma 3DFACE nossa que o usuário escalou até ficar sem área ou
 vertical derruba a exportação inteira com a mensagem do Core; pular e
 contar seria melhor (Observações).
+
+## 6.4: o formato PVC (estudo, 26/09/2026)
+
+O plano manda "levantar a especificação do PVC, entregar um resumo ao Renan
+e PARAR". Este é o resumo. O 6.5 não começou.
+
+### Fontes
+
+- Help do PVsyst: "PV Collada file format" e "Sketchup and other CAD
+  software" (pvsyst.com/help, versões 7 e 8);
+- repositório `pvlib/pvcollada` no GitHub, onde a especificação vive:
+  README, `docs/dev_guide.md`, `docs/pvcollada_coordinate_transformation…`,
+  `schema/PVCollada_2.0/pvcollada_schema_2.0.xsd`, os schematron de
+  estrutura/referências/negócio, a extensão do PVsyst
+  (`extensions/pvsyst/*.xsd`), e os exemplos `Examples/PVCollada_1.0/
+  SampleFixedPVC.pvc` e `Examples/PVCollada_2.0/01…07.pvc2` (mais dois com a
+  extensão do PVsyst);
+- PVcase, "PVC 2.0: the open-source solar data exchange standard" (blog).
+  A página de ajuda do PVcase sobre exportar para o PVsyst responde 403 a
+  quem não está logado; **não tenho um arquivo exportado pelo PVcase** (o
+  plano pedia; ver pergunta 2).
+
+### Há dois PVC, e não são compatíveis entre si
+
+**PVC 1.4.1 (`.pvc`)**, o antigo. Collada 1.4.1 "modificado" (o próprio
+pvlib chama de *non-compliant*): `<created>`/`<modified>` opcionais, ids
+de cena como texto livre, e um filho a mais dentro de cada `<mesh>`:
+`<frame_parameters>` (mesa fixa: `module_width`, `module_height`,
+`module_x_spacing`, `module_y_spacing`, `module_manufacturer`,
+`module_name`) ou `<tracker_parameters>` (os mesmos mais `tracker_type`,
+`axis_vertices`, `min_phi`, `max_phi`, `min_theta`, `max_theta`). Uma
+geometria por mesa: o plano da mesa como um paralelepípedo fino (8
+vértices no exemplo), material "Frames"; árvores e terreno vão como malhas
+comuns com outros materiais. O PVsyst importa desde a 7.0. Não há esquema
+formal: o `pvcollada_schema_1.0.xsd` do repositório é uma cópia byte a byte
+do Collada 1.4.1 (mesmo tamanho), ou seja, o formato é o que o exemplo
+mostra. O exemplo tem `<triangles count="0">` com índices dentro, e o
+PVsyst lê mesmo assim: engenharia reversa, com o risco que isso tem.
+
+**PVC 2.0 (`.pvc2`, ou `.pvz2` zipado)**, o atual. Collada 1.5 VÁLIDO, com
+tudo que é fotovoltaico em `<extra><technique profile="PVCollada-2.0">`,
+namespace `https://pvcollada.org/2026/XMLSchema` (prefixo `pv`). Mantido
+no pvlib com PVcase, PVsyst, Sandia e DNV. **PVsyst lê desde a 8.1.5;
+PVcase escreve desde a 2.60.** É o que o plano chama de "carrega também
+dados de módulos e mesas" e o que o 6.5 deve escrever, se a versão do
+PVsyst do Renan permitir (pergunta 1).
+
+### A estrutura de um `.pvc2` de mesas fixas (do exemplo 01 e do esquema)
+
+1. `<asset>`: `contributor`, `coverage/geographic_location` com
+   `longitude`, `latitude`, `altitude` (é a ORIGEM do sistema local
+   leste-norte-cima, em graus e metro), `created`, `modified`, `unit`
+   (o exemplo usa cm; metro é permitido), `up_axis` Z_UP, e o `<extra>`
+   com `pv:software` (`source`, `target`), `pv:project` (`name` e,
+   opcionais, `drawing`, `company`, `country`, `timezone`,
+   `local_projection`, `module_count`, `table_count`, `capacity_dc`…) e
+   `pv:components/pv:modules/pv:module id=…`.
+2. `pv:module` exige 23 campos: `manufacturer`, `name`, `module_type`,
+   `module_architecture`, `nom_power`, `length`, `width`, `depth`,
+   `num_cells`, `num_cells_length`, `num_cells_width`, `num_cells_series`,
+   `num_strings`, `cell_material`, `cell_architecture`, `bifacial_factor`,
+   `t_coef_power`, `t_coef_isc`, `t_coef_voc`, `i_sc`, `i_mpp`, `v_oc`,
+   `v_mpp`. **Temos seis** (`SolarModule`: marca, modelo, potência, altura,
+   largura, espessura). A extensão do PVsyst (`technique
+   profile="PVCollada-2.0-PVsyst"`, namespace
+   `https://www.pvsyst.com/pvcollada-2.0-extensions`) acrescenta
+   `pvsyst:module module_id=… > pan_file_name` (e, opcional,
+   `pan_file_content` em CDATA): "the PAN data or the data from the PVsyst
+   database will be used for that module instead of the data defined in
+   the PVCollada extension". Ou seja: com o nome do PAN, o PVsyst ignora os
+   23 campos, mas o esquema continua a exigi-los no arquivo (pergunta 2).
+3. `library_geometries`: por modelo de mesa, uma `geometry` com o PLANO da
+   mesa (4 vértices, 2 `triangles`, no exemplo o retângulo inteiro com os
+   módulos implícitos) e `<extra>` `pv:rack`: `rack_type` fixed_tilt,
+   `module_rows`, `module_columns`, `module_orientation`
+   (landscape/portrait), `row_spacing`, `column_spacing`, `inset_*`,
+   `tilt` e `azimuth` em graus (obrigatórios para mesa fixa, pelo
+   schematron), `slope` (o nosso giro longitudinal; permitido em mesa fixa,
+   proibido em tracker), `height_above_ground`, `module_id`. A mesa é
+   descrita, não desenhada módulo a módulo: as faces do 6.1 não servem
+   aqui, o que serve é a `TableGeometry` + a `SolvedTable`.
+4. `library_nodes`: um `node` "modelo de mesa" com `instance_geometry` do
+   rack, `bind_material`, `<extra>` `pv:instance_rack id` e `pv:table`
+   (`type` fixed; para tracker, `tracker_type`, curso etc.).
+5. `library_visual_scenes`: um `node` por mesa instalada, com
+   `<translate>`/`<rotate>`, `instance_node` do modelo e `<extra>`
+   `pv:instance_table id` com `instance_racks_array/instance_rack_ref`.
+   Opcionalmente um nó de terreno (`geometry` + `pv:terrain` com contagens
+   e caixa) instanciado com `pv:instance_terrain`.
+6. Coordenadas: sistema LOCAL leste-norte-cima (x = leste, y = norte, z =
+   cima) cuja origem é a `geographic_location`. O doc do pvlib mostra a
+   conversão (pymap3d/pyproj); o PVsyst "usa a localização do arquivo para
+   verificação de consistência com o sítio do projeto" (distância ao
+   sítio).
+
+### O que já temos, o que falta, e como o 6.5 ficaria
+
+- **Temos**: geometria por mesa (cantos do plano, tilt, giro longitudinal,
+  direção → azimute), linhas e colunas de módulos e vãos
+  (`TableLayout`: arranjo, `HorizontalGap`, `VerticalGap`, margens →
+  `inset_*`), GUIDs de mesa (viram os ids de `instance_table`), potência e
+  medidas do módulo, e a `GeoLocation` (lat/long) do desenho.
+- **Falta**: (a) os 17 campos elétricos do módulo, ou o nome do PAN; (b) a
+  altitude e a lat/long DA ORIGEM LOCAL (a `GeoLocation` é do sítio; a
+  origem tem que ser convertida do UTM do desenho para lat/long, o que
+  pede o sistema de coordenadas do desenho no Civil 3D, ou um ponto de
+  referência digitado); (c) a convenção de azimute do PVCollada (o exemplo
+  põe 180 numa mesa a 46° N; é bússola, 180 = sul? o esquema não diz; o
+  PVsyst usa 0 = sul no hemisfério norte e 0 = norte no sul); (d) um
+  arquivo do PVcase para comparar.
+- **Forma do 6.5**: `PvColladaWriter` puro no Core, uma `geometry` POR
+  MESA (cada mesa tem giro e cota próprios; um modelo por mesa evita a
+  matriz de rotação no nó e é válido pelo esquema), origem local do 6.2
+  convertida para lat/long/alt na `geographic_location`, unidade metro,
+  extensão do PVsyst com o nome do PAN. Teste de nível 1 contra o XSD do
+  Collada 1.5 + PVCollada 2.0 com `XmlSchemaSet` do .NET (os XSD vão para
+  `tests/` como referência), e as regras do schematron de mesa fixa
+  (azimute e tilt presentes, sem campos de tracker) como asserções. Um
+  `validate.py` com lxml existe no repositório se quisermos a conferência
+  completa fora do .NET.
+
+### As três perguntas para o Renan (o 6.5 não começa sem elas)
+
+1. **Qual versão do PVsyst?** 8.1.5 ou mais: PVC 2.0, formato documentado e
+   validável. Menos que isso: PVC 1.4.1, por engenharia reversa do exemplo,
+   e sem esquema. (Ou atualizar o PVsyst, que é a saída limpa.)
+2. **Dados elétricos do módulo.** Prefere (a) acrescentar à biblioteca de
+   módulos (`modulos.json`, janela da Mesa) o nome do arquivo PAN e deixar
+   o PVsyst buscar o resto na base dele, com os 17 campos elétricos
+   preenchidos com o que o PAN diz (você me manda o PAN); ou (b) digitar os
+   17 campos na biblioteca? A (a) é o que a extensão do PVsyst foi feita
+   para fazer. E: **consegue exportar um `.pvc2` do PVcase** do mesmo projeto
+   (Itatiba) e me mandar? É a referência que falta para comparar campo a
+   campo.
+3. **Georreferência do desenho.** O DWG do Itatiba tem sistema de
+   coordenadas atribuído no Civil 3D (Configurações do desenho > Unidades
+   e zona; algo como SIRGAS2000.UTM-23S)? Se tem, converto a origem local
+   para lat/long/alt por ele. Se não, você digita lat/long de um ponto
+   conhecido do desenho (e eu registro qual) — ou aceita que a cena vá
+   com a `GeoLocation` do sítio como origem, sem a conversão exata.
 
