@@ -42,6 +42,11 @@ Só o Renan marca VALIDADO.
 | 5.7 | Desenho | AGUARDANDO VALIDAÇÃO | `LayoutDrawer`: pilares (bloco escalado), módulos (bloco por modelo) + face separada, contorno da mesa, alturas em camada desligada, aviso de marcada; uma transação |
 | 5.8 | Uma fileira no CAD | AGUARDANDO VALIDAÇÃO | `UFV_FILEIRA`; nível 2 com 6 mesas, 42 pilares e 168 faces sobre o Itatiba, cotas lidas em LISP |
 | 5.9 | Área inteira | AGUARDANDO VALIDAÇÃO | `UFV_USINA`; nível 2 com 102 mesas em 17 fileiras sobre o Itatiba: motor 0,6 s, desenho 0,2 s |
+| 6.1 | Escritor DAE puro | VALIDADO (automático) | `ColladaWriter` no Core: Collada 1.4.1, uma geometria e um nó por face, material com o nome da camada (é por ele que o PVsyst reconhece módulos); 16 testes; fechado em 26/09/2026 |
+| 6.2 | Botão Exportar para PVsyst | PENDENTE | |
+| 6.3 | Validação no PVsyst | PENDENTE | |
+| 6.4 | Estudo do formato PVC | PENDENTE | |
+| 6.5 | Escritor PVC | PENDENTE | |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -84,7 +89,7 @@ Nivel 2   11/11    OK
 Acervo             OK
 ```
 
-### O próximo passo é a etapa 6 (PVsyst), começando pelo 6.1
+### O próximo passo é a etapa 6 (PVsyst): 6.1 fechado, seguir pelo 6.2
 
 Antes de começar, ler `plano/etapas/etapa-6-pvsyst.md`. O que a etapa 6
 recebe da 5: as faces superiores dos módulos são entidades `3DFACE` na
@@ -173,6 +178,9 @@ teste: a etapa 6 é onde passa a ter.
   `PorHandle` duplica o de `TerrenoEnvelhecido`: consolidar;
 - rodar `UFV_FILEIRA` ou `UFV_USINA` duas vezes desenha por cima (o comando
   avisa); apagar e substituir é assunto da etapa 7;
+- `RowSolverTests.EDeterministaERapido` mede 200 mesas contra 2 s e marcou
+  2017 ms em 26/09/2026 com a máquina sob carga (passou na rodada seguinte):
+  medir o menor de três execuções, em vez de afrouxar o limite;
 - o teste de nível 2 carrega a DLL de **Debug**, onde o inlining está
   desligado: ele guarda o sintoma da janela sem interface, não a regra do
   `[MethodImpl(NoInlining)]`;
@@ -2331,4 +2339,54 @@ Anotado, não feito: `GarantirLayer` existe em três lugares (área,
 alinhamento, layout) e `PorHandle` duplica o do terreno envelhecido — vale
 consolidar; `LayoutXData.Load*` não tem uso nem teste ainda (é o par
 simétrico, para as etapas 6 e 7).
+
+## 6.1: o escritor DAE
+
+Fechado em 26/09/2026, só modelo, `VALIDADO (automático)`. `ColladaWriter`
+em `UFV.Core` recebe `ModuleFace` (GUID da face + quatro cantos em metro) e
+devolve um `XDocument` Collada 1.4.1: unidade metro, `Z_UP`, uma geometria
+(quatro vértices, dois triângulos, uma normal) e um nó por face. Dezesseis
+testes: XML bem formado e relido, contagem, os doze números de cada face
+voltando iguais com ponto decimal, normal unitária para cima, material,
+recusas.
+
+### O que o PVsyst reconhece: o MATERIAL, não a camada
+
+O plano dizia "indica a layer do módulo" na importação. O help do PVsyst 7
+e 8 diz outra coisa: "pick up one or more materials used in the imported
+scene and convert the faces which use them to PV fields". Não há camada em
+Collada; o que o PVsyst lista é o material. Então todas as faces usam um
+único material cujo NOME é o nome da camada de faces (`MARCHENG_UFV_FACE`
+hoje), e o mesmo nome vai nos nós para quem abrir o arquivo noutro
+programa. É esse nome que o Renan escolhe no PVsyst no 6.3. O exemplo
+oficial da especificação PVCollada (`SampleFixedPVC.pvc`, do repositório
+pvlib/pvcollada) usa `triangles`, não `polylist`, e é isso que o escritor
+usa também.
+
+### Decisões que são minhas
+
+- sem face é erro (`ArgumentException`), porque o esquema exige geometria e
+  nó e um arquivo vazio não serve; o comando do 6.2 diz "nenhum módulo"
+  antes de chamar;
+- cantos em ordem horária são invertidos em silêncio (a normal sai para
+  cima de qualquer jeito); face vertical ou sem área é recusada; quatro
+  cantos tomados como coplanares (mesa rígida, regra sagrada 2);
+- id do material com prefixo `material-` para não colidir com o id da cena
+  nem com os das faces; o nome fica com a camada tal como é;
+- cor do material azul escuro fixa (0.1 0.2 0.5); só aparece na
+  visualização do PVsyst.
+
+### O que a revisão do 6.1 apontou, e o que foi feito
+
+Nenhum bloqueante. Dois importantes, corrigidos: o documento com zero faces
+era inválido pelo esquema e o teste dizia "válido" (agora recusa); cantos
+horários davam face virada para baixo sem aviso (agora inverte, com teste).
+Menores corrigidos: colisão de id se a camada se chamasse `cena`; testes
+para NaN, `Guid.Empty` e face vertical; teste de tempo com folga (5 s).
+Anotado para o 6.2: `XDocument.ToString()` descarta a declaração XML, gravar
+com `Save`; **subtrair uma origem local das coordenadas UTM** antes de
+escrever (E ≈ 300 000 e N ≈ 7 400 000 em float32 perdem o milímetro) e
+registrar a origem; conferir no PVsyst (6.3) se os dois triângulos de cada
+face viram um campo PV só; e que um nó por módulo numa usina grande são
+dezenas de milhares de objetos, que o PVsyst importa devagar.
 
