@@ -34,7 +34,7 @@ Só o Renan marca VALIDADO.
 | 4.3 | Regras de análise | VALIDADO (automático) | Modelo no Core, sem tela; fechado em 26/09/2026 pela regra "só valido no CAD". A tela é o 4.4, a pintura é a etapa 5 |
 | 4.4 | Modal | AGUARDANDO VALIDAÇÃO | `UFV_CONFIG`: tela única, grava no desenho; nível 2 salva, reabre e compara campo a campo |
 | 5.1 | Distribuição em planta | VALIDADO (automático) | `RowDistributor` no Core, `Polygons` no Geo; só modelo, fechado em 26/09/2026. A fileira segue a linha de alinhamento: **Renan confirma no 5.8** |
-| 5.2 | Amostragem | PENDENTE | |
+| 5.2 | Amostragem | VALIDADO (automático) | `TablePlacement` e `TerrainSampler` no Core; a ponta baixa é amostrada na aresta inteira (`Tin.TryGetMaxZAlong`); fechado em 26/09/2026 |
 | 5.3 | Cotas viáveis por mesa | PENDENTE | |
 | 5.4 | Alinhamento na fileira | PENDENTE | |
 | 5.5 | Pilares | PENDENTE | |
@@ -1628,4 +1628,94 @@ registro (o 4.4 ainda não foi instalado), então não há o que migrar.
 
 Placar do passo: Geo 41 testes de polígono; Core 47 de distribuição e
 orientação; etapa 5 com 93/93.
+
+## 5.2: a amostragem do terreno
+
+Duas coisas, as duas no Core, as duas só modelo.
+
+**`TablePlacement.Plan`**: a matriz que leva a mesa local (deitada, origem
+na ponta baixa, X ao longo do comprimento, Y subindo a inclinação) para a
+célula que a distribuição reservou em planta. A célula é um retângulo
+alinhado com a fileira, de comprimento por fundo × cos(inclinação). O que
+decide onde a origem local cai é a `RowOrientation` do 5.1: com a ponta
+baixa na borda de cá, a origem é um canto da borda de cá; senão, um da
+borda de lá — e, em cada caso, o canto de onde o eixo +X local parte, que é
+a subida girada 90° no sentido horário (é o que `Transform.Azimuth` faz). O
+teste leva os quatro cantos da mesa inclinada pela matriz e exige que caiam,
+em planta, nos quatro cantos da célula, em seis combinações de lado, rumo e
+azimute pedido.
+
+Uma consequência que engana: com a mesa olhando para o norte (o padrão), a
+subida é para o sul e o +X local aponta para OESTE. A mesa "cresce" da
+origem para a esquerda de quem olha o norte. Eu mesmo tropecei nisso num
+teste (pus a mesa na borda leste do terreno esperando que saísse por lá).
+
+**`TerrainSampler.Sample`**: para cada mesa, a cota do terreno no pé de cada
+pilar (a projeção do apoio levada pela matriz; o pilar é vertical) e sob a
+ponta baixa de cada módulo da fileira de baixo. Sob a ponta baixa vale a
+**cota mais alta** entre as duas pontas e o meio da aresta: a regra sagrada
+4 mede da ponta baixa até o terreno, e o terreno que importa é o que chega
+mais perto. Ponto fora do terreno é null e contado, nunca zero. A amostra
+não depende da cota da mesa (só de X e Y), e por isso se amostra uma vez
+com cota zero e a mesma amostra serve para toda cota que a otimização
+experimentar — é a arquitetura ("terreno amostrado uma vez e guardado; o
+motor não volta à superfície durante a otimização") virando objeto imutável.
+
+O terreno dos testes é um plano, z = 0,02x + 0,03y + 700, onde a cota certa
+em qualquer ponto se calcula à mão; há um teste de ponta a ponta, da célula
+do distribuidor à amostra, e um de mesa na borda do terreno com amostras
+dos dois tipos.
+
+### O que a revisão do 5.2 apontou, e o que foi feito
+
+Três importantes, todos corrigidos:
+
+- **três pontos por aresta não davam "a cota mais alta sob a ponta baixa"**:
+  um TIN com uma crista cruzando a aresta a um quarto do módulo passava
+  entre a ponta e o meio, e a altura livre sairia otimista — a regra
+  sagrada 4 violada sem marca. O comentário prometia o que só a aresta
+  inteira dá. Agora o `Tin` responde `TryGetMaxZAlong`: a cota é linear
+  dentro de cada triângulo, então o máximo ao longo do segmento está numa
+  ponta de cada pedaço do segmento dentro de cada triângulo, e é isso que
+  se avalia, com os candidatos do índice. Segmento com qualquer parte fora
+  do terreno (ou sobre um buraco da triangulação) é sem resposta, não "o
+  máximo do pedaço que existe". Dez testes no Geo (crista no meio, a um
+  quarto, na diagonal, sobre uma aresta da malha, buraco, ponta fora, e
+  concordância com amostragem fina de mil pontos em 200 segmentos
+  aleatórios), e o teste da crista no Core;
+- **a matriz aceitava orientação de outra fileira**: com a subida a 30° da
+  perpendicular, saía uma matriz rígida e finita com a mesa girada dentro
+  da célula, amostrando terreno sob a vizinha. Agora `Plan` exige subida
+  perpendicular à célula e recusa célula sem quatro cantos ou curta;
+- **"uma ponta dentro, outra fora" não estava pinado**: testes para o
+  módulo que atravessa a borda do terreno (null) e para o buraco de 10 cm
+  sob a ponta baixa (null), com os vizinhos inteiros continuando com cota.
+
+Um detalhe do próprio `TryGetMaxZAlong`, pego pelo teste: a folga
+baricêntrica que evita fresta entre triângulos vizinhos deixava o corte ir
+um nada além da aresta, e o plano do triângulo extrapolava a crista em
+1e-8 m. O corte de cobertura (com folga) e o de avaliação (exato) são
+separados.
+
+Menores, corrigidos: `HighestGround`/`LowestGround` duplicavam a cadeia
+LINQ (agora `CotasConhecidas`, com teste do mínimo); `IsFinite` redundante
+ao lado de `IsRigid`; teste renomeado para o que testa (matriz não finita,
+já que uma não rígida não se monta); testes de mesa 1V e de inclinação
+zero; `LowEdgeSample` ganhou `Station` (a estação local do meio do módulo),
+que o 5.3 precisa para a cota da ponta baixa variar ao longo da mesa.
+
+### Duas anotações para o 5.3
+
+- **um giro longitudinal move o pé do pilar em planta.** A amostra vale
+  para toda cota da mesa com inclinação e azimute fixos; se o 5.3 inclinar
+  a mesa no sentido da fileira (início e fim em cotas diferentes), o apoio
+  de cada pilar se desloca alguns centímetros em planta (5° e um pilar a
+  10 m da origem: 5 a 8 cm; num terreno a 20%, 1 a 2 cm de cota). Decidir
+  lá se isso vale uma reamostragem ou se fica como aproximação declarada;
+- **coluna 0 não é "a esquerda de quem olha a mesa de frente"** na
+  configuração padrão: fileira para leste, mesa olhando para o norte, o +X
+  local corre para oeste, e a coluna 0 fica na ponta LESTE. `ModulePiece.Column`
+  diz "contando da ponta esquerda", que é a esquerda do sistema local. Não
+  afeta a amostragem; afeta rótulo e a tolerância "5 em 20" se alguém
+  assumir que coluna 0 é a esquerda vista de frente.
 

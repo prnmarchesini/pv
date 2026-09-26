@@ -187,6 +187,156 @@ public sealed class Tin
     }
 
     /// <summary>
+    /// A cota mais alta do terreno ao longo do segmento em planta de (x0, y0)
+    /// a (x1, y1).
+    ///
+    /// Não é o máximo de alguns pontos amostrados: é o máximo de verdade. A
+    /// cota é linear dentro de cada triângulo, então ao longo do pedaço do
+    /// segmento que cai num triângulo o máximo está numa das duas pontas do
+    /// pedaço — e as pontas são onde o segmento entra e sai do triângulo. É
+    /// isso que se avalia, triângulo a triângulo, pelos candidatos do índice.
+    ///
+    /// Existe para a ponta baixa do módulo: a regra sagrada 4 mede da ponta
+    /// baixa até o terreno, e o terreno que importa é o que chega mais perto
+    /// em QUALQUER ponto da aresta. Três pontos amostrados deixavam passar
+    /// uma crista entre eles.
+    /// </summary>
+    /// <returns>
+    /// Falso se qualquer parte do segmento fica sem terreno embaixo (fora da
+    /// borda, ou num buraco da triangulação). Não se responde o máximo de
+    /// metade de uma aresta: fora do terreno é ausência de resposta.
+    /// </returns>
+    public bool TryGetMaxZAlong(double x0, double y0, double x1, double y1, out double z)
+    {
+        z = 0;
+
+        if (!double.IsFinite(x0) || !double.IsFinite(y0) || !double.IsFinite(x1) || !double.IsFinite(y1))
+            return false;
+
+        if (_grid is null) return false;
+
+        // Segmento de comprimento zero: é um ponto.
+        if (Math.Abs(x1 - x0) <= 1e-12 && Math.Abs(y1 - y0) <= 1e-12) return TryGetZ(x0, y0, out z);
+
+        var pedacos = new List<(double T0, double T1)>();
+        var maximo = double.NegativeInfinity;
+
+        foreach (var i in _grid.CandidatesAlong(x0, y0, x1, y1).Concat(_grid.Oversized.ToArray()))
+        {
+            if (!PedacoDentro(_triangles[i], _denominators[i], x0, y0, x1, y1, out var t0, out var t1, out var zT0, out var zT1))
+                continue;
+
+            pedacos.Add((t0, t1));
+            maximo = Math.Max(maximo, Math.Max(zT0, zT1));
+        }
+
+        if (pedacos.Count == 0) return false;
+
+        // O segmento inteiro precisa estar coberto: os pedaços, em ordem,
+        // têm que emendar de 0 a 1. Folga adimensional, como a dos pesos.
+        const double folga = 1e-9;
+
+        pedacos.Sort((p, q) => p.T0.CompareTo(q.T0));
+
+        var coberto = 0.0;
+
+        foreach (var (t0, t1) in pedacos)
+        {
+            if (t0 > coberto + folga) return false;
+
+            coberto = Math.Max(coberto, t1);
+        }
+
+        if (coberto < 1 - folga) return false;
+
+        z = maximo;
+        return true;
+    }
+
+    /// <summary>
+    /// O pedaço do segmento, em parâmetro t de 0 a 1, que cai dentro do
+    /// triângulo, e a cota do terreno nas duas pontas do pedaço.
+    ///
+    /// Os pesos baricêntricos são afins em t, então cada um dá uma
+    /// desigualdade linear em t, e o pedaço é a interseção das três com [0, 1].
+    /// </summary>
+    private static bool PedacoDentro(
+        in Triangle triangle, double denominator,
+        double x0, double y0, double x1, double y1,
+        out double t0, out double t1, out double zT0, out double zT1)
+    {
+        t0 = 0;
+        t1 = 1;
+        zT0 = zT1 = 0;
+
+        var (a, b, c) = (triangle.A, triangle.B, triangle.C);
+
+        // Pesos nas duas pontas do segmento.
+        var pa0 = ((b.Y - c.Y) * (x0 - c.X) + (c.X - b.X) * (y0 - c.Y)) / denominator;
+        var pb0 = ((c.Y - a.Y) * (x0 - c.X) + (a.X - c.X) * (y0 - c.Y)) / denominator;
+        var pc0 = 1.0 - pa0 - pb0;
+
+        var pa1 = ((b.Y - c.Y) * (x1 - c.X) + (c.X - b.X) * (y1 - c.Y)) / denominator;
+        var pb1 = ((c.Y - a.Y) * (x1 - c.X) + (a.X - c.X) * (y1 - c.Y)) / denominator;
+        var pc1 = 1.0 - pa1 - pb1;
+
+        const double folga = 1e-9;
+
+        // Dois recortes: um com folga, para a cobertura (dois triângulos
+        // vizinhos precisam emendar sem fresta de arredondamento), e um
+        // exato, para a cota. Avaliar a cota no corte com folga extrapola o
+        // plano do triângulo um nada além da aresta, e numa crista isso
+        // devolve um máximo que o terreno não tem.
+        var e0 = 0.0;
+        var e1 = 1.0;
+
+        // Cada peso p(t) = p0 + t·(p1 − p0) ≥ 0 recorta [t0, t1].
+        foreach (var (p0, p1) in new[] { (pa0, pa1), (pb0, pb1), (pc0, pc1) })
+        {
+            var delta = p1 - p0;
+
+            if (Math.Abs(delta) <= 1e-15)
+            {
+                if (p0 < -folga) return false;
+                continue;
+            }
+
+            var comFolga = (-folga - p0) / delta;
+            var exato = -p0 / delta;
+
+            if (delta > 0)
+            {
+                t0 = Math.Max(t0, comFolga);
+                e0 = Math.Max(e0, exato);
+            }
+            else
+            {
+                t1 = Math.Min(t1, comFolga);
+                e1 = Math.Min(e1, exato);
+            }
+        }
+
+        if (t1 < t0) return false;
+
+        double Cota(double t)
+        {
+            var pa = pa0 + t * (pa1 - pa0);
+            var pb = pb0 + t * (pb1 - pb0);
+            var pc = 1.0 - pa - pb;
+
+            return pa * a.Z + pb * b.Z + pc * c.Z;
+        }
+
+        // O segmento só encosta no triângulo (pedaço exato vazio): a cota é
+        // a do ponto de encosto, que os vizinhos também respondem.
+        if (e1 < e0) e0 = e1 = (t0 + t1) / 2;
+
+        zT0 = Cota(e0);
+        zT1 = Cota(e1);
+        return true;
+    }
+
+    /// <summary>
     /// A mesma consulta, varrendo todos os triângulos, sem índice.
     ///
     /// Existe para os testes poderem afirmar que o índice não mudou resposta
