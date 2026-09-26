@@ -43,7 +43,7 @@
 (setq ufv:faces (ssget "_X" (list (cons 0 "3DFACE") (cons 8 "MARCHENG_UFV_FACE"))))
 (setq ufv:alturas (ssget "_X" (list (cons 0 "MTEXT") (cons 8 "MARCHENG_UFV_ALTURAS"))))
 (setq ufv:marcadas (ssget "_X" (list (cons 0 "MTEXT") (cons 8 "MARCHENG_UFV_MARCADA"))))
-(setq ufv:contornos (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "MARCHENG_UFV_MESA,MARCHENG_UFV_ANALISE_BORDA,MARCHENG_UFV_ANALISE_DECLIVIDADE"))))
+(setq ufv:contornos (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "MARCHENG_UFV_MESA,MARCHENG_UFV_ANALISE_BORDA,MARCHENG_UFV_ANALISE_DECLIVIDADE,MARCHENG_UFV_MARCADA"))))
 (setq ufv:np (ufv:conta ufv:pilares) ufv:nm (ufv:conta ufv:modulos) ufv:nf (ufv:conta ufv:faces)
       ufv:na (ufv:conta ufv:alturas) ufv:nk (ufv:conta ufv:marcadas) ufv:nc (ufv:conta ufv:contornos))
 

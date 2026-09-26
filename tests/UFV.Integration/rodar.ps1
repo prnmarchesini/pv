@@ -1803,6 +1803,86 @@ function Testar-Vigia {
     return $true
 }
 
+<#
+    O Refazer: processa uma fileira, manda refazer a area inteira e le do
+    desenho que a fileira antiga sumiu (7 pilares e 28 faces por contorno,
+    nada em dobro), que ha mais de uma fileira, e que toda nota (cota,
+    aviso) aponta para uma mesa existente.
+#>
+function Testar-Refazer {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-refazer--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-refazer: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-refazer' `
+        -Script (Join-Path $PSScriptRoot 'ufv-refazer.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-refazer terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^REFAZER (\d+) mesa\(s\) apagada\(s\)') {
+        $problemas.Add("ufv-refazer: o comando nao apagou. Veja $($r.Saida)")
+        return $false
+    }
+
+    $apagadas = [int] $Matches[1]
+
+    if ($r.Texto -notmatch 'UFV_REFAZER antes=(\d+) contornos=(\d+) pilares=(\d+) faces=(\d+) notas=(\d+) notasorfas=(\d+)') {
+        $problemas.Add("ufv-refazer: nao consegui ler o desenho em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $antes = [int] $Matches[1]
+    $contornos = [int] $Matches[2]
+    $pilares = [int] $Matches[3]
+    $faces = [int] $Matches[4]
+    $notas = [int] $Matches[5]
+    $orfas = [int] $Matches[6]
+
+    if ($apagadas -lt 1 -or $antes -lt 1) {
+        $problemas.Add("ufv-refazer: nada havia para apagar ($antes entidades, $apagadas mesas). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($contornos -lt 10 -or $pilares -ne 7 * $contornos -or $faces -ne 28 * $contornos) {
+        $problemas.Add("ufv-refazer: $contornos contorno(s), $pilares pilar(es), $faces face(s); esperava 7 e 28 por contorno, sem dobro. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($notas -lt $pilares -or $orfas -ne 0) {
+        $problemas.Add("ufv-refazer: $notas nota(s), $orfas orfa(s); toda nota tem que apontar para uma mesa existente. Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (refazer: $apagadas mesa(s) apagada(s), $contornos redesenhada(s), $notas notas todas com dona)" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -1888,6 +1968,10 @@ else {
     # O vigia: MOVE suja, ERASE registra.
     $total++
     if (Testar-Vigia -Desenho $desenhos[0]) { $passaram++ }
+
+    # O Refazer: apaga por area e redesenha, sem dobro.
+    $total++
+    if (Testar-Refazer -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

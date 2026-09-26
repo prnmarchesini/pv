@@ -51,9 +51,9 @@ public class TableAnalysisTests
         var area = new[] { new Point3(0, 0, 0), new Point3(200, 0, 0), new Point3(200, 200, 0), new Point3(0, 200, 0) };
         var alinhamento = new[] { new Point3(10, 10, 0), new Point3(10, 190, 0) };
 
-        var layout = RowDistributor.Distribute(area, alinhamento, LineSide.Right, 8, 0.5, new TableFootprint(geo.Length, geo.Depth * Math.Cos(Tilt)));
+        var layout = RowDistributor.Distribute(area, alinhamento, LineSide.Right, 8, 0.5, new TableFootprint(geo.Length, geo.Depth * Math.Cos(Tilt)), cfg.UpslopeAzimuthRadians);
         var cell = layout.Rows[1].Tables[2] with { PartlyOutside = naBorda };
-        var orientacao = RowOrientation.Resolve(cell.DirectionRadians, LineSide.Right, cfg.UpslopeAzimuthRadians);
+        var orientacao = RowOrientation.Resolve(cell, cfg.UpslopeAzimuthRadians);
 
         tin ??= Plano(terreno);
         amostras = TerrainSampler.Sample(geo, TablePlacement.Plan(cell, orientacao, Tilt, 0), tin);
@@ -340,9 +340,9 @@ public class TableAnalysisTests
         // relatório que tem que recusar.
         var geo = Geometria();
         var area = new[] { new Point3(0, 0, 0), new Point3(200, 0, 0), new Point3(200, 200, 0), new Point3(0, 200, 0) };
-        var layout = RowDistributor.Distribute(area, [new Point3(10, 10, 0), new Point3(190, 10, 0)], LineSide.Left, 8, 0.5, new TableFootprint(geo.Length, geo.Depth * Math.Cos(Tilt)));
+        var layout = RowDistributor.Distribute(area, [new Point3(10, 10, 0), new Point3(10, 190, 0)], LineSide.Right, 8, 0.5, new TableFootprint(geo.Length, geo.Depth * Math.Cos(Tilt)), Config().UpslopeAzimuthRadians);
         var cell = layout.Rows[1].Tables[2];
-        var orientacao = RowOrientation.Resolve(cell.DirectionRadians, LineSide.Right, Config().UpslopeAzimuthRadians);
+        var orientacao = RowOrientation.Resolve(cell, Config().UpslopeAzimuthRadians);
         var amostras = TerrainSampler.Sample(geo, TablePlacement.Plan(cell, orientacao, Tilt, 0), Plano(700));
         var resolvida = new SolvedTable("F2.3", 700.5, 700.5, 0, false, null);
         var pilares = PillarCalculator.Compute(geo, cell, orientacao, Tilt, resolvida, Plano(700), Config());

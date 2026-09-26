@@ -98,6 +98,21 @@ public sealed record ModuleIdentity(Guid Id, Guid Table, int Column, int Row, do
 }
 
 /// <summary>
+/// A identidade de uma nota do desenho: a cota (risco e texto) e o aviso de
+/// mesa que não cabe. Não é peça da mesa, mas pertence a ela: apagar ou
+/// refazer a mesa leva as notas junto.
+/// </summary>
+/// <param name="Id">O GUID da nota.</param>
+/// <param name="Table">O GUID da mesa.</param>
+public sealed record NoteIdentity(Guid Id, Guid Table)
+{
+    /// <summary>O tipo, como vai no XData.</summary>
+    public const string Tipo = "Nota";
+
+    public bool IsValid => Id != Guid.Empty && Table != Guid.Empty;
+}
+
+/// <summary>
 /// A identidade da face superior de um módulo: entidade própria, GUID
 /// próprio, e o GUID do módulo de que ela é a face. "Identidade própria" é
 /// o que o Renan pediu para o PVsyst; a ligação com o módulo é o campo, e

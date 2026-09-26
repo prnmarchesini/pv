@@ -17,7 +17,7 @@
 (setq ufv:faces (ssget "_X" (list (cons 0 "3DFACE") (cons 8 "MARCHENG_UFV_FACE"))))
 ; O contorno da mesa pintada por analise (borda, declividade) muda para a
 ; camada da analise; um contorno esta numa das tres camadas.
-(setq ufv:mesas (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "MARCHENG_UFV_MESA,MARCHENG_UFV_ANALISE_BORDA,MARCHENG_UFV_ANALISE_DECLIVIDADE"))))
+(setq ufv:mesas (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "MARCHENG_UFV_MESA,MARCHENG_UFV_ANALISE_BORDA,MARCHENG_UFV_ANALISE_DECLIVIDADE,MARCHENG_UFV_MARCADA"))))
 (setq ufv:np (if ufv:pilares (sslength ufv:pilares) 0))
 (setq ufv:nf (if ufv:faces (sslength ufv:faces) 0))
 (setq ufv:nm (if ufv:mesas (sslength ufv:mesas) 0))

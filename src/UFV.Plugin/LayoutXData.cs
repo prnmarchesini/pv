@@ -135,6 +135,26 @@ internal static class LayoutXData
         return face.IsValid ? face : null;
     }
 
+    private const int VersaoDaNota = 1;
+
+    /// <summary>GUID, mesa.</summary>
+    private const int CamposDaNota = 2;
+
+    internal static void SaveNote(Transaction transacao, Entity entidade, NoteIdentity nota) =>
+        PluginXData.Save(transacao, entidade, NoteIdentity.Tipo, VersaoDaNota, nota.Id.ToString("D"), nota.Table.ToString("D"));
+
+    internal static NoteIdentity? LoadNote(Entity entidade)
+    {
+        var c = PluginXData.Load(entidade, NoteIdentity.Tipo, VersaoDaNota, CamposDaNota);
+        if (c is null) return null;
+
+        if (!Guid.TryParse(c[0], out var id) || !Guid.TryParse(c[1], out var mesa)) return null;
+
+        var nota = new NoteIdentity(id, mesa);
+
+        return nota.IsValid ? nota : null;
+    }
+
     internal static ModuleIdentity? LoadModule(Entity entidade)
     {
         var c = PluginXData.Load(entidade, ModuleIdentity.Tipo, VersaoDoModulo, CamposDoModulo);

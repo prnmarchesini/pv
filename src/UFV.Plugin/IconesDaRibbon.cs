@@ -114,6 +114,13 @@ internal static class IconesDaRibbon
         Traco("M3,8 H13 M18,8 H29 M3,15 H13 M18,15 H29 M3,22 H13 M18,22 H29", Azul, 3.0),
         Traco("M2,28 H30", Neutro, 1.6));
 
+    /// <summary>Uma seta circular sobre uma mesa: refazer.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Refazer() => Montar(
+        Traco("M6,24 L26,20", Azul, 3.0),
+        Traco("M22,6 A7,7 0 1 0 25,13", Neutro, 2.2),
+        Traco("M22,3 L22,7 L18,7", Neutro, 2.2));
+
     /// <summary>Uma cota vertical com o número ao lado: as alturas dos pilares.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static ImageSource Alturas() => Montar(

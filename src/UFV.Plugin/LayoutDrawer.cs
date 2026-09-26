@@ -92,6 +92,13 @@ internal static class LayoutDrawer
             var colocacao = mesa.Placement;
             var matriz = Matriz(colocacao);
 
+            // A mesa que não cabe no terreno (o alinhamento a marcou, ou um
+            // pilar não tem altura livre / não tem terreno): pintada INTEIRA
+            // de magenta na camada de marcadas, com o aviso no meio. Pedido
+            // do Renan em 26/09/2026: "olha projetista, essa mesa tá socada
+            // na terra porque ali não tem como fazer milagre".
+            var naoCabe = mesa.Solved.Marked || mesa.Pillars.ProblemCount > 0;
+
             // 1. Pilares.
             for (var i = 0; i < mesa.Pillars.Pillars.Count; i++)
             {
@@ -112,10 +119,10 @@ internal static class LayoutDrawer
                     Rotation = mesa.Cell.DirectionRadians,
                 };
 
-                if (pilar.Problem is not null)
+                if (naoCabe)
                 {
                     bloco.Layer = camadaMarcada;
-                    bloco.Color = Color.FromRgb(255, 0, 0);
+                    bloco.Color = CorDeNaoCabe;
                 }
                 else
                 {
@@ -140,9 +147,9 @@ internal static class LayoutDrawer
 
                 if (pilar.Problem is null)
                 {
-                    Cota(transacao, espaco, camadaAlturas, pilar.LowEdgeClearance, "PB", pontaBaixa, colocacao, mesa.Cell.DirectionRadians);
-                    Cota(transacao, espaco, camadaAlturas, pilar.HighEdgeClearance, "PA", pontaAlta, colocacao, mesa.Cell.DirectionRadians);
-                    Cota(transacao, espaco, camadaAlturas, pilar.FreeHeight, "P3", new Point3(pilar.X, pilar.Y, pilar.TopZ), colocacao, mesa.Cell.DirectionRadians);
+                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.LowEdgeClearance, "PB", pontaBaixa, colocacao, mesa.Cell.DirectionRadians);
+                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.HighEdgeClearance, "PA", pontaAlta, colocacao, mesa.Cell.DirectionRadians);
+                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.FreeHeight, "P3", new Point3(pilar.X, pilar.Y, pilar.TopZ), colocacao, mesa.Cell.DirectionRadians);
                 }
                 else
                 {
@@ -158,6 +165,7 @@ internal static class LayoutDrawer
 
                     espaco.AppendEntity(aviso);
                     transacao.AddNewlyCreatedDBObject(aviso, true);
+                    LayoutXData.SaveNote(transacao, aviso, new NoteIdentity(Guid.NewGuid(), identidade.Id));
                 }
             }
 
@@ -177,7 +185,15 @@ internal static class LayoutDrawer
                     BlockTransform = matriz * deslocamento,
                 };
 
-                Pintar(bloco, relatorio?.Verdict, camadaModulo, ref pintadas);
+                if (naoCabe)
+                {
+                    bloco.Layer = camadaMarcada;
+                    bloco.Color = CorDeNaoCabe;
+                }
+                else
+                {
+                    Pintar(bloco, relatorio?.Verdict, camadaModulo, ref pintadas);
+                }
 
                 espaco.AppendEntity(bloco);
                 transacao.AddNewlyCreatedDBObject(bloco, true);
@@ -212,7 +228,12 @@ internal static class LayoutDrawer
                 transacao.AddNewlyCreatedDBObject(vertice, true);
             }
 
-            if (mesa.Report.EdgeVerdict.Color is { } corDaBorda)
+            if (naoCabe)
+            {
+                contorno.Layer = camadaMarcada;
+                contorno.Color = CorDeNaoCabe;
+            }
+            else if (mesa.Report.EdgeVerdict.Color is { } corDaBorda)
             {
                 contorno.Layer = mesa.Report.EdgeVerdict.Layer!;
                 contorno.Color = Color.FromRgb(corDaBorda.R, corDaBorda.G, corDaBorda.B);
@@ -227,20 +248,27 @@ internal static class LayoutDrawer
 
             LayoutXData.SaveTable(transacao, contorno, identidade);
 
-            // 4. O aviso da marcada, no meio da mesa, na camada de marcadas.
-            if (mesa.Solved.Marked)
+            // 4. O aviso da mesa que não cabe, no meio dela, na camada de marcadas.
+            if (naoCabe)
             {
+                var motivo = mesa.Solved.Reason
+                    ?? mesa.Pillars.Pillars.FirstOrDefault(p => p.Problem is not null)?.Problem
+                    ?? "sem solução";
                 var centro = colocacao.Apply(new Point3(geometria.Length / 2, geometria.Depth / 2, 0));
                 var aviso = new MText
                 {
                     Location = new Point3d(centro.X, centro.Y, centro.Z + AlturaDoTexto),
                     TextHeight = AlturaDoTexto * 1.5,
                     Layer = camadaMarcada,
-                    Contents = $"{mesa.Label} MARCADA\\P{mesa.Solved.Reason}",
+                    Color = CorDeNaoCabe,
+                    Attachment = AttachmentPoint.MiddleCenter,
+                    Rotation = mesa.Cell.DirectionRadians,
+                    Contents = $"{mesa.Label} NÃO CABE NO TERRENO\\P{motivo}",
                 };
 
                 espaco.AppendEntity(aviso);
                 transacao.AddNewlyCreatedDBObject(aviso, true);
+                LayoutXData.SaveNote(transacao, aviso, new NoteIdentity(Guid.NewGuid(), identidade.Id));
                 marcadas++;
             }
         }
@@ -253,13 +281,16 @@ internal static class LayoutDrawer
     /// <summary>Metade do comprimento do risco vermelho de cota, em metro, ao longo da fileira.</summary>
     private const double MeioRisco = 0.50;
 
+    /// <summary>Magenta: a cor da mesa que não cabe no terreno, inteira.</summary>
+    private static readonly Color CorDeNaoCabe = Color.FromRgb(255, 0, 255);
+
     /// <summary>
     /// Uma cota: um risco vermelho no ponto, atravessado no sentido da
     /// fileira, e o valor ao lado ("PB 0,45"). Sem valor (sem terreno ali) o
     /// texto diz "PB s/ terreno".
     /// </summary>
     private static void Cota(
-        Transaction transacao, BlockTableRecord espaco, string camada,
+        Transaction transacao, BlockTableRecord espaco, string camada, Guid mesa,
         double? valor, string sigla, Point3 ponto, Transform colocacao, double rumo)
     {
         // O risco corre no eixo local X (ao longo da fileira), no plano da mesa.
@@ -279,6 +310,7 @@ internal static class LayoutDrawer
 
         espaco.AppendEntity(risco);
         transacao.AddNewlyCreatedDBObject(risco, true);
+        LayoutXData.SaveNote(transacao, risco, new NoteIdentity(Guid.NewGuid(), mesa));
 
         var texto = new MText
         {
@@ -292,6 +324,7 @@ internal static class LayoutDrawer
 
         espaco.AppendEntity(texto);
         transacao.AddNewlyCreatedDBObject(texto, true);
+        LayoutXData.SaveNote(transacao, texto, new NoteIdentity(Guid.NewGuid(), mesa));
     }
 
     /// <summary>Camada e cor da peça: a da análise quando ela pinta, a fixa quando não.</summary>

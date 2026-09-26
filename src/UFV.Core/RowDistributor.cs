@@ -14,18 +14,13 @@ namespace UFV.Core;
 public sealed record TableFootprint(double Length, double PlanDepth);
 
 /// <summary>Uma mesa colocada em planta, ainda sem cota.</summary>
-/// <param name="Row">
-/// O número da fileira, a partir de 1 na primeira fileira que tem mesa (a
-/// fileira nasce numa estação da linha de alinhamento; estação cuja fileira
-/// não entra na área não recebe número). Zero numa mesa pulada por
-/// sobreposição.
-/// </param>
-/// <param name="Number">O número da mesa na fileira, a partir de 1 na mesa que nasce na linha. Zero numa mesa pulada.</param>
-/// <param name="Origin">O canto de partida: início da mesa, na borda voltada para o início da linha.</param>
+/// <param name="Row">O número da fileira, a partir de 1 na fileira que nasce no início da linha de alinhamento.</param>
+/// <param name="Number">O número da mesa na fileira, a partir de 1 na mesa que encosta na linha de alinhamento.</param>
+/// <param name="Origin">O canto de partida: início da mesa, na borda baixa (a voltada contra o azimute).</param>
 /// <param name="DirectionRadians">
 /// A direção da fileira, em radianos a partir do +X, anti-horário (a
-/// convenção matemática, a mesma de <c>Math.Atan2</c>): perpendicular à
-/// linha de alinhamento, para o lado das mesas. NÃO é azimute: o azimute
+/// convenção matemática, a mesma de <c>Math.Atan2</c>): perpendicular ao
+/// azimute da configuração, para o lado das mesas. NÃO é azimute: o azimute
 /// topográfico, do norte e horário, é o que <see cref="Transform.Azimuth"/>
 /// espera, e a conversão mora em <see cref="RowOrientation"/>, num lugar só.
 /// </param>
@@ -33,13 +28,14 @@ public sealed record TableFootprint(double Length, double PlanDepth);
 /// <param name="PlanDepth">O fundo em planta.</param>
 /// <param name="Corners">
 /// Os quatro cantos em ordem: origem, fim do comprimento, canto oposto, fim
-/// do fundo. Z é sempre zero: a cota é da amostragem, não da distribuição.
+/// do fundo. O fundo (canto 3 − canto 0) aponta no sentido do azimute, a
+/// subida da mesa. Z é sempre zero: a cota é da amostragem, não da
+/// distribuição.
 /// </param>
 /// <param name="PartlyOutside">
-/// Se alguma parte da mesa cai fora da área: um canto fora, um vértice da
-/// área dentro dela, ou uma aresta da área atravessando-a. A mesa fica
-/// mesmo assim — "mantida e pintada inteira com uma cor própria, para o
-/// engenheiro decidir".
+/// Sempre falso desde 26/09/2026: mesa que passa da área não é colocada
+/// (decisão do Renan na tela). O campo fica porque a análise de borda (4.3)
+/// o lê; hoje ela não tem o que pintar.
 /// </param>
 public sealed record PlacedTable(
     int Row,
@@ -51,23 +47,22 @@ public sealed record PlacedTable(
     IReadOnlyList<Point3> Corners,
     bool PartlyOutside)
 {
-    /// <summary>O letreiro do plano de requisitos: F1.1, F1.2, F2.1… A mesa pulada não tem.</summary>
-    public string Label => Row > 0 ? $"F{Row}.{Number}" : "(sobreposta)";
+    /// <summary>O letreiro do plano de requisitos: F1.1, F1.2, F2.1…</summary>
+    public string Label => $"F{Row}.{Number}";
 }
 
 /// <summary>Uma fileira: as mesas em sequência sobre a mesma reta.</summary>
 /// <param name="Number">O número da fileira, a partir de 1.</param>
-/// <param name="Segment">O trecho da linha de alinhamento de que ela nasce.</param>
-/// <param name="Tables">As mesas, da linha para fora.</param>
-public sealed record PlanRow(int Number, int Segment, IReadOnlyList<PlacedTable> Tables);
+/// <param name="Tables">As mesas, da linha de alinhamento para fora.</param>
+public sealed record PlanRow(int Number, IReadOnlyList<PlacedTable> Tables);
 
 /// <summary>O resultado da distribuição em planta.</summary>
 public sealed class PlanLayout
 {
-    internal PlanLayout(IReadOnlyList<PlanRow> rows, IReadOnlyList<PlacedTable> overlapping)
+    internal PlanLayout(IReadOnlyList<PlanRow> rows, int droppedOutside)
     {
         Rows = rows;
-        Overlapping = overlapping;
+        DroppedOutside = droppedOutside;
         Tables = rows.SelectMany(f => f.Tables).ToList();
     }
 
@@ -78,49 +73,38 @@ public sealed class PlanLayout
     public IReadOnlyList<PlacedTable> Tables { get; }
 
     /// <summary>
-    /// As mesas que NÃO foram colocadas porque pisariam em mesa de outra
-    /// família (outro trecho do alinhamento), com a posição em que teriam
-    /// ficado. Devolvidas, e não só contadas: o desenho (5.7) as pinta com
-    /// cor própria, e o engenheiro vê onde ficou vazio. Não estão em
-    /// <see cref="Rows"/> nem em <see cref="Tables"/>.
+    /// Quantas posições de mesa foram descartadas por passar da área: a
+    /// última de um trecho, que não cabe inteira, e a que um recorte da
+    /// área invade. Contadas para o relatório; não desenhadas.
     /// </summary>
-    public IReadOnlyList<PlacedTable> Overlapping { get; }
-
-    /// <summary>Quantas mesas foram puladas por sobreposição.</summary>
-    public int SkippedForOverlap => Overlapping.Count;
-
-    /// <summary>Quantas mesas colocadas caíram parcialmente fora da área.</summary>
-    public int PartlyOutsideCount => Tables.Count(m => m.PartlyOutside);
+    public int DroppedOutside { get; }
 }
 
 /// <summary>
-/// A distribuição em planta: a linha de alinhamento é o EIXO TRANSVERSAL da
-/// usina. Toda fileira nasce nela, uma a cada pitch ao longo dela, e corre a
-/// 90° para o lado que o usuário clicou, com mesas enfileiradas da linha para
-/// fora, dentro da área.
+/// A distribuição em planta.
 ///
-/// É a regra que o Renan deu em 26/09/2026, ao reprovar a primeira versão
-/// (que punha as fileiras paralelas à linha): "o alinhamento é uma linha
-/// perpendicular às fileiras; toda fileira nasce nele e vai a 90 graus". A
-/// fileira 1 nasce no início da linha; a fileira k nasce a (k−1) pitches
-/// dali, medido ao longo da linha. A mesa 1 de cada fileira começa na linha
-/// (ou onde a área começa, se a linha está fora dela); a seguinte vem depois
-/// do espaçamento; a última, que passa da borda, fica e é marcada. Só nascem
-/// fileiras ao longo do comprimento traçado da linha: a linha define até onde
-/// vão as fileiras, e a área define até onde vai cada fileira.
+/// Três regras, na ordem em que o Renan as deu ao reprovar as duas primeiras
+/// versões na tela (26/09/2026):
 ///
-/// <b>A fileira é perpendicular à linha, e não ao azimute da configuração.</b>
-/// A célula que a distribuição reserva tem exatamente o comprimento (ao longo
-/// da fileira) por o fundo (ao longo da linha), e girá-la invadiria a vizinha.
-/// O azimute da configuração serve para uma coisa só: escolher, entre os dois
-/// sentidos da linha, qual é a subida da mesa (<see cref="RowOrientation"/>),
-/// e avisar quando a linha traçada diverge muito dele (a linha deve ser
-/// paralela ao azimute: norte-sul numa usina que olha para o norte).
+/// 1. <b>A fileira corre perpendicular ao AZIMUTE da configuração, sempre.</b>
+///    Numa usina que olha para o norte (subida para o sul), toda fileira é
+///    leste-oeste, não importa como a linha de alinhamento foi traçada. As
+///    fileiras se sucedem no sentido do azimute, uma a cada pitch, e o fundo
+///    da célula corre no sentido do azimute (é a subida da mesa).
+/// 2. <b>A linha de alinhamento é mestra só do alinhamento LATERAL das mesas:</b>
+///    ela diz onde cada fileira começa. Cada fileira nasce onde a sua faixa
+///    cruza a linha, e a mesa 1 encosta ali; as seguintes vêm depois do
+///    espaçamento, para o lado clicado, até a área acabar. Uma linha quebrada
+///    dá um começo escalonado, e é para isso que ela existe. A fileira 1 é a
+///    que nasce no início da linha (primeiro clique).
+/// 3. <b>Mesa não passa da área.</b> A que não cabe inteira no trecho, ou que
+///    um recorte da área invade, não é colocada: conta em
+///    <see cref="PlanLayout.DroppedOutside"/> e só.
 ///
-/// Uma linha quebrada gera uma família de fileiras por trecho, cada trecho com
-/// as suas estações; onde as famílias se cruzam, a segunda não pisa na
-/// primeira — a mesa que pisaria é devolvida em <see cref="PlanLayout.Overlapping"/>,
-/// com posição, e não colocada. O motor não move mesa para caber.
+/// A célula que a distribuição reserva tem exatamente o comprimento por o
+/// fundo; girá-la invadiria a vizinha. Fileiras em faixas distintas nunca se
+/// sobrepõem, então não há mais verificação de sobreposição aqui
+/// (<see cref="Overlap"/> fica para quem precisar).
 ///
 /// Tudo aqui é planta: Z entra zero e sai zero. A cota é da amostragem (5.2).
 /// </summary>
@@ -130,11 +114,10 @@ public static class RowDistributor
     private const double Tolerancia = 1e-6;
 
     /// <summary>
-    /// Quanto as linhas de corte da fileira se afastam das bordas da faixa,
-    /// em metro. A fileira 1 nasce no início da linha de alinhamento, que
-    /// quase sempre está numa borda da área: cortar exatamente na borda é
-    /// tangente, e tangente não entra. Um milímetro para dentro resolve sem
-    /// mudar nada que se enxergue.
+    /// Quanto as linhas de corte da faixa se afastam das bordas dela, em
+    /// metro. A primeira faixa costuma ter a borda em cima de uma borda da
+    /// área: cortar exatamente na borda é tangente, e tangente não entra. Um
+    /// milímetro para dentro resolve sem mudar nada que se enxergue.
     /// </summary>
     private const double Recuo = 1e-3;
 
@@ -159,105 +142,191 @@ public static class RowDistributor
     /// Distribui as mesas.
     /// </summary>
     /// <param name="area">O contorno da área de implantação, em planta.</param>
-    /// <param name="alignment">A linha de alinhamento (o eixo transversal), no sentido em que foi traçada: a fileira 1 nasce no início.</param>
+    /// <param name="alignment">A linha de alinhamento lateral, no sentido em que foi traçada: a fileira 1 nasce no início.</param>
     /// <param name="side">Para que lado da linha correm as fileiras.</param>
-    /// <param name="pitch">A distância entre fileiras, de início a início, medida ao longo da linha, em metro.</param>
+    /// <param name="pitch">A distância entre fileiras, de início a início, no sentido do azimute, em metro.</param>
     /// <param name="gap">O espaçamento entre mesas vizinhas de uma fileira, em metro.</param>
     /// <param name="table">O que a mesa ocupa em planta.</param>
+    /// <param name="upslopeAzimuthRadians">O azimute da subida da mesa (do norte, horário), da configuração.</param>
     /// <exception cref="ArgumentOutOfRangeException">
     /// Área com menos de três vértices, linha sem trecho com comprimento,
     /// pitch que não deixa a fileira caber (menor ou igual ao fundo), medida
     /// abaixo de <see cref="MenorMedida"/>, não finita, ou espaçamento negativo.
     /// </exception>
-    /// <exception cref="ArgumentException">Lado "em cima", que não é lado.</exception>
+    /// <exception cref="ArgumentException">Lado "em cima", ou linha de alinhamento paralela às fileiras (não há como escolher o lado).</exception>
     public static PlanLayout Distribute(
         IReadOnlyList<Point3> area,
         IReadOnlyList<Point3> alignment,
         LineSide side,
         double pitch,
         double gap,
-        TableFootprint table)
+        TableFootprint table,
+        double upslopeAzimuthRadians)
     {
         ArgumentNullException.ThrowIfNull(area);
         ArgumentNullException.ThrowIfNull(alignment);
         ArgumentNullException.ThrowIfNull(table);
 
-        Conferir(area, alignment, side, pitch, gap, table);
+        Conferir(area, alignment, side, pitch, gap, table, upslopeAzimuthRadians);
 
         var trechos = Trechos(alignment);
+
+        // O eixo do azimute (a subida, e o fundo da célula) e a direção da
+        // fileira, perpendicular a ele, para o lado clicado. O lado é decidido
+        // pela linha inteira, do primeiro ao último vértice.
+        var subida = new Point3(Math.Sin(upslopeAzimuthRadians), Math.Cos(upslopeAzimuthRadians), 0);
+        var direcao = DirecaoDaFileira(subida, trechos, side);
+        var rumo = Math.Atan2(direcao.Y, direcao.X);
+
+        // O sistema da usina: u ao longo da fileira, v ao longo da subida,
+        // origem no início da linha (é onde nasce a fileira 1).
+        var origem = trechos[0].A;
+        var vertices = alignment.Select(p => Local(p, origem, direcao, subida)).ToList();
+        var vMin = vertices.Min(p => p.V);
+        var vMax = vertices.Max(p => p.V);
+
+        // A fileira 1 encosta no início da linha e a célula dela cresce no
+        // sentido em que a linha caminha (subindo ou descendo o azimute); as
+        // seguintes vêm a cada pitch nesse sentido. Só nascem fileiras cujas
+        // faixas cruzam a linha.
+        var sentido = vertices[^1].V >= vertices[0].V ? 1 : -1;
+        var alcance = (int)Math.Ceiling((Math.Max(Math.Abs(vMin), Math.Abs(vMax)) + table.PlanDepth) / pitch) + 1;
+
         var fileiras = new List<PlanRow>();
-        var puladas = new List<PlacedTable>();
+        var descartadas = 0;
 
-        // As mesas colocadas, por família, para a conferência de sobreposição
-        // entre famílias. Com um trecho só não há outra família, e a lista
-        // nem é consultada.
-        var familias = new List<List<PlacedTable>>();
-
-        for (var t = 0; t < trechos.Count; t++)
+        for (var k = -alcance; k <= alcance; k++)
         {
-            var (a, b) = trechos[t];
-            var familia = new List<PlacedTable>();
+            var afastamento = sentido > 0 ? k * pitch : -k * pitch - table.PlanDepth;
 
-            var dx = b.X - a.X;
-            var dy = b.Y - a.Y;
-            var comprimento = Math.Sqrt(dx * dx + dy * dy);
+            if (afastamento + table.PlanDepth < vMin - Tolerancia || afastamento > vMax + Tolerancia) continue;
 
-            // O eixo da linha: é ao longo dele que as fileiras se sucedem, e
-            // é o fundo da célula de cada mesa.
-            var eixo = new Point3(dx / comprimento, dy / comprimento, 0);
+            // Onde a faixa cruza a linha: o ponto mais adiantado para o lado
+            // das mesas entre as três linhas da faixa, para nenhum canto da
+            // mesa 1 ficar atrás da linha.
+            var comeco = ComecoDaFileira(trechos, origem, direcao, subida, afastamento, table.PlanDepth);
+            if (comeco is null) continue;
 
-            // A direção da fileira: perpendicular à linha, para o lado das
-            // mesas. LineSides.SignedDistance é positiva à direita do sentido
-            // a→b: a direita é (dy, −dx).
-            var direcao = side == LineSide.Right
-                ? new Point3(eixo.Y, -eixo.X, 0)
-                : new Point3(-eixo.Y, eixo.X, 0);
+            var mesas = new List<PlacedTable>();
 
-            var rumo = Math.Atan2(direcao.Y, direcao.X);
-
-            // Uma fileira por estação da linha, a cada pitch, enquanto a
-            // estação estiver no trecho traçado.
-            for (var k = 0; k * pitch <= comprimento + Tolerancia; k++)
+            foreach (var (inicioDoTrecho, fimDoTrecho) in Trechos(area, origem, direcao, subida, afastamento, table.PlanDepth))
             {
-                var estacao = k * pitch;
-                var mesas = new List<PlacedTable>();
+                var inicio = Math.Max(inicioDoTrecho, comeco.Value);
+                var fim = fimDoTrecho;
 
-                foreach (var (inicioDoTrecho, fimDoTrecho) in Trechos(area, a, direcao, eixo, estacao, table.PlanDepth))
+                if (fim - inicio <= Tolerancia) continue;
+
+                for (var s = inicio; s < fim - Tolerancia; s += table.Length + gap)
                 {
-                    // As mesas começam na linha (u = 0), nunca atrás dela; se
-                    // a área começa mais adiante, começam onde ela começa.
-                    var inicio = Math.Max(inicioDoTrecho, 0);
-                    var fim = fimDoTrecho;
-
-                    if (fim - inicio <= Tolerancia) continue;
-
-                    for (var s = inicio; s < fim - Tolerancia; s += table.Length + gap)
+                    // Não cabe inteira no trecho: descartada, e o trecho acabou.
+                    if (s + table.Length > fim + Tolerancia)
                     {
-                        var origem = new Point3(
-                            a.X + direcao.X * s + eixo.X * estacao,
-                            a.Y + direcao.Y * s + eixo.Y * estacao,
-                            0);
-
-                        var mesa = Montar(fileiras.Count + 1, mesas.Count + 1, origem, direcao, eixo, rumo, table, area);
-
-                        if (t > 0 && PisaEmOutraFamilia(mesa, familias))
-                        {
-                            puladas.Add(mesa with { Row = 0, Number = 0 });
-                            continue;
-                        }
-
-                        mesas.Add(mesa);
-                        familia.Add(mesa);
+                        descartadas++;
+                        break;
                     }
-                }
 
-                if (mesas.Count > 0) fileiras.Add(new PlanRow(fileiras.Count + 1, t, mesas));
+                    var canto = new Point3(
+                        origem.X + direcao.X * s + subida.X * afastamento,
+                        origem.Y + direcao.Y * s + subida.Y * afastamento,
+                        0);
+
+                    var mesa = Montar(fileiras.Count + 1, mesas.Count + 1, canto, direcao, subida, rumo, table);
+
+                    // Um recorte da área entrando pela mesa: descartada.
+                    if (ParcialmenteFora(mesa.Corners, canto, direcao, subida, table, area))
+                    {
+                        descartadas++;
+                        continue;
+                    }
+
+                    mesas.Add(mesa with { Number = mesas.Count + 1 });
+                }
             }
 
-            familias.Add(familia);
+            if (mesas.Count > 0) fileiras.Add(new PlanRow(fileiras.Count + 1, mesas));
         }
 
-        return new PlanLayout(fileiras, puladas);
+        return new PlanLayout(fileiras, descartadas);
+    }
+
+    /// <summary>
+    /// A direção da fileira: perpendicular à subida, para o lado clicado da
+    /// linha. Dos dois perpendiculares, o que aponta para o lado das mesas em
+    /// relação à linha inteira (do primeiro ao último vértice).
+    /// </summary>
+    private static Point3 DirecaoDaFileira(Point3 subida, List<(Point3 A, Point3 B)> trechos, LineSide side)
+    {
+        var a = trechos[0].A;
+        var b = trechos[^1].B;
+        var tx = b.X - a.X;
+        var ty = b.Y - a.Y;
+        var comprimento = Math.Sqrt(tx * tx + ty * ty);
+
+        if (comprimento < LineSides.ComprimentoMinimo)
+        {
+            // Linha que volta ao ponto de partida: vale o primeiro trecho.
+            (tx, ty) = (trechos[0].B.X - a.X, trechos[0].B.Y - a.Y);
+            comprimento = Math.Sqrt(tx * tx + ty * ty);
+        }
+
+        tx /= comprimento;
+        ty /= comprimento;
+
+        // A normal da linha para o lado das mesas: a direita de a→b é (ty, −tx).
+        var (nx, ny) = side == LineSide.Right ? (ty, -tx) : (-ty, tx);
+
+        // Os dois perpendiculares à subida.
+        var candidata = new Point3(subida.Y, -subida.X, 0);
+        var produto = candidata.X * nx + candidata.Y * ny;
+
+        if (Math.Abs(produto) < 1e-9)
+        {
+            throw new ArgumentException(
+                "A linha de alinhamento está paralela às fileiras (perpendicular ao azimute): não há como saber para que lado as fileiras vão. "
+                + "Trace a linha atravessando as fileiras.", nameof(side));
+        }
+
+        return produto > 0 ? candidata : new Point3(-candidata.X, -candidata.Y, 0);
+    }
+
+    /// <summary>
+    /// Onde a faixa [afastamento, afastamento + fundo] cruza a linha de
+    /// alinhamento, como o maior u entre os cruzamentos das três linhas da
+    /// faixa (bordas e meio) com os trechos. Null se a faixa não cruza a linha.
+    /// </summary>
+    private static double? ComecoDaFileira(
+        List<(Point3 A, Point3 B)> trechos, Point3 origem, Point3 direcao, Point3 subida, double afastamento, double fundo)
+    {
+        double? maior = null;
+
+        foreach (var v in new[] { afastamento + Recuo, afastamento + fundo / 2, afastamento + fundo - Recuo })
+        {
+            foreach (var (a, b) in trechos)
+            {
+                var (ua, va) = Local(a, origem, direcao, subida);
+                var (ub, vb) = Local(b, origem, direcao, subida);
+
+                // O trecho cruza a linha v? (inclusive nas pontas, para uma
+                // linha que termina exatamente na faixa contar)
+                if ((va - v) * (vb - v) > 0) continue;
+
+                double u;
+
+                if (Math.Abs(vb - va) <= Tolerancia)
+                {
+                    // Trecho deitado na própria linha v: vale o ponto mais adiantado.
+                    u = Math.Max(ua, ub);
+                }
+                else
+                {
+                    u = ua + (ub - ua) * (v - va) / (vb - va);
+                }
+
+                if (maior is null || u > maior) maior = u;
+            }
+        }
+
+        return maior;
     }
 
     /// <summary>
@@ -271,9 +340,6 @@ public static class RowDistributor
         ArgumentNullException.ThrowIfNull(a);
         ArgumentNullException.ThrowIfNull(b);
 
-        // Prefiltro barato: mesas mais longe que a soma das meias diagonais
-        // não se tocam, e num alinhamento quebrado a maioria dos pares é
-        // assim.
         var (cax, cay) = Centro(a);
         var (cbx, cby) = Centro(b);
         var alcance = (Diagonal(a) + Diagonal(b)) / 2;
@@ -293,24 +359,20 @@ public static class RowDistributor
 
     /// <summary>
     /// Onde a faixa da fileira está dentro da área, como intervalos do
-    /// parâmetro ao longo da direção da fileira (u, da linha para fora).
+    /// parâmetro u ao longo da direção da fileira.
     ///
-    /// A faixa é a tira de largura igual ao fundo da mesa, a partir da
-    /// estação, ao longo da direção. É a projeção, sobre a direção da
-    /// fileira, da parte da área que cai dentro da faixa. Essa parte é
-    /// limitada por pedaços de aresta da área que estão na faixa e por
-    /// pedaços das bordas da faixa que estão na área, e a projeção de uma
-    /// região é a projeção do seu contorno: então os intervalos são a união
-    /// (1) dos cruzamentos das bordas da faixa com a área e (2) das arestas
-    /// da área recortadas pela faixa.
+    /// É a projeção, sobre a direção da fileira, da parte da área que cai
+    /// dentro da faixa. Essa parte é limitada por pedaços de aresta da área
+    /// que estão na faixa e por pedaços das bordas da faixa que estão na
+    /// área, e a projeção de uma região é a projeção do seu contorno: então
+    /// os intervalos são a união (1) dos cruzamentos das bordas da faixa com
+    /// a área e (2) das arestas da área recortadas pela faixa.
     ///
-    /// As bordas são cortadas um milímetro para dentro (<see cref="Recuo"/>)
-    /// porque a fileira 1 nasce no início da linha, que costuma estar numa
-    /// borda da área, e tangente não entra; a linha do meio entra também,
-    /// por redundância barata. As arestas recortadas são o que garante que
-    /// toda parte da área dentro da faixa, por menor que seja, ganha o seu
-    /// intervalo — inclusive uma área fininha que não toca nenhuma das três
-    /// linhas.
+    /// As bordas são cortadas um milímetro para dentro (<see cref="Recuo"/>),
+    /// porque tangente não entra; a linha do meio entra também, por
+    /// redundância barata. As arestas recortadas são o que garante que toda
+    /// parte da área dentro da faixa, por menor que seja, ganha o seu
+    /// intervalo.
     /// </summary>
     private static List<(double Inicio, double Fim)> Trechos(
         IReadOnlyList<Point3> area, Point3 a, Point3 direcao, Point3 normal, double afastamento, double fundo)
@@ -330,7 +392,6 @@ public static class RowDistributor
 
         for (int i = 0, j = n - 1; i < n; j = i++)
         {
-            // Coordenadas da aresta no sistema da fileira: u ao longo, v para o lado.
             var (u0, v0) = Local(area[j], a, direcao, normal);
             var (u1, v1) = Local(area[i], a, direcao, normal);
 
@@ -345,13 +406,9 @@ public static class RowDistributor
         foreach (var (inicio, fim) in intervalos)
         {
             if (uniao.Count > 0 && inicio <= uniao[^1].Fim + Tolerancia)
-            {
                 uniao[^1] = (uniao[^1].Inicio, Math.Max(uniao[^1].Fim, fim));
-            }
             else
-            {
                 uniao.Add((inicio, fim));
-            }
         }
 
         return uniao;
@@ -386,8 +443,7 @@ public static class RowDistributor
     }
 
     private static PlacedTable Montar(
-        int fileira, int numero, Point3 origem, Point3 direcao, Point3 normal, double rumo,
-        TableFootprint mesa, IReadOnlyList<Point3> area)
+        int fileira, int numero, Point3 origem, Point3 direcao, Point3 normal, double rumo, TableFootprint mesa)
     {
         var fim = new Point3(origem.X + direcao.X * mesa.Length, origem.Y + direcao.Y * mesa.Length, 0);
         var oposto = new Point3(fim.X + normal.X * mesa.PlanDepth, fim.Y + normal.Y * mesa.PlanDepth, 0);
@@ -395,24 +451,21 @@ public static class RowDistributor
 
         Point3[] cantos = [origem, fim, oposto, fundo];
 
-        return new PlacedTable(
-            fileira, numero, origem, rumo, mesa.Length, mesa.PlanDepth, cantos,
-            ParcialmenteFora(cantos, origem, direcao, normal, mesa, area));
+        return new PlacedTable(fileira, numero, origem, rumo, mesa.Length, mesa.PlanDepth, cantos, false);
     }
 
     /// <summary>
     /// Se alguma parte da mesa está fora da área. Três perguntas, e as três
     /// são necessárias: um canto fora (a mesa passa da borda); um vértice da
     /// área dentro da mesa (a área faz um recorte que entra por ela, com os
-    /// quatro cantos ainda dentro — a revisão do 5.1 pegou a versão que só
-    /// olhava os cantos); uma aresta da área atravessando uma aresta da mesa
-    /// (o recorte entra e sai sem deixar vértice dentro). Borda conta como
-    /// dentro (<see cref="Polygons.Contains"/>) e encostar não é atravessar
-    /// (<see cref="Polygons.SegmentsCross"/>): a mesa encostada na borda da
-    /// área é inteira, não parcial.
+    /// quatro cantos ainda dentro); uma aresta da área atravessando uma
+    /// aresta da mesa (o recorte entra e sai sem deixar vértice dentro).
+    /// Borda conta como dentro (<see cref="Polygons.Contains"/>) e encostar
+    /// não é atravessar (<see cref="Polygons.SegmentsCross"/>): a mesa
+    /// encostada na borda da área é inteira.
     /// </summary>
     private static bool ParcialmenteFora(
-        Point3[] cantos, Point3 origem, Point3 direcao, Point3 normal, TableFootprint mesa, IReadOnlyList<Point3> area)
+        IReadOnlyList<Point3> cantos, Point3 origem, Point3 direcao, Point3 normal, TableFootprint mesa, IReadOnlyList<Point3> area)
     {
         foreach (var canto in cantos)
         {
@@ -431,19 +484,6 @@ public static class RowDistributor
             for (var c = 0; c < 4; c++)
             {
                 if (Polygons.SegmentsCross(area[j], area[i], cantos[c], cantos[(c + 1) % 4])) return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool PisaEmOutraFamilia(PlacedTable mesa, List<List<PlacedTable>> familias)
-    {
-        foreach (var familia in familias)
-        {
-            foreach (var outra in familia)
-            {
-                if (Overlap(mesa, outra)) return true;
             }
         }
 
@@ -484,8 +524,7 @@ public static class RowDistributor
     /// <summary>
     /// Os trechos da linha com comprimento de verdade em planta. Trecho mais
     /// curto que <see cref="LineSides.ComprimentoMinimo"/> é clique duplo, e
-    /// é pulado: um trecho de 5 mm daria uma família inteira de fileiras
-    /// com o rumo do tremor da mão.
+    /// é pulado.
     /// </summary>
     private static List<(Point3 A, Point3 B)> Trechos(IReadOnlyList<Point3> alinhamento)
     {
@@ -513,7 +552,7 @@ public static class RowDistributor
 
     private static void Conferir(
         IReadOnlyList<Point3> area, IReadOnlyList<Point3> alinhamento, LineSide lado,
-        double pitch, double gap, TableFootprint mesa)
+        double pitch, double gap, TableFootprint mesa, double azimute)
     {
         if (area.Count < 3)
         {
@@ -529,6 +568,9 @@ public static class RowDistributor
 
         if (lado == LineSide.On)
             throw new ArgumentException("\"Em cima da linha\" não é lado para as mesas.", nameof(lado));
+
+        if (!double.IsFinite(azimute))
+            throw new ArgumentOutOfRangeException(nameof(azimute), "O azimute não é um número.");
 
         if (!Medida(mesa.Length))
             throw new ArgumentOutOfRangeException(nameof(mesa), mesa.Length, "O comprimento da mesa não é uma medida válida.");

@@ -50,6 +50,7 @@ public sealed class UfvExtension : IExtensionApplication
         {
             RegistroDeDiagnostico.Registrar($"Initialize: host com interface, versão {UfvCommands.VersaoDoPlugin()}.");
             RibbonUfv.Instalar();
+            MenuDeContexto.Instalar();
         }
         catch (System.Exception erro)
         {
@@ -68,6 +69,15 @@ public sealed class UfvExtension : IExtensionApplication
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao desligar o vigia.", erro);
+        }
+
+        try
+        {
+            MenuDeContexto.Desinstalar();
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao desinstalar o menu de contexto.", erro);
         }
 
         try

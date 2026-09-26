@@ -35,6 +35,17 @@ internal static class Perguntas
     {
         ArgumentNullException.ThrowIfNull(editor);
 
+        // Com interface, uma janela (pedido do Renan em 26/09/2026); no Core
+        // Console, a linha de comando, que é o que o script alimenta.
+        if (UfvExtension.TemInterface())
+        {
+            var nome = NomePelaJanela(oQue);
+
+            if (nome is null) editor.WriteMessage($"\n{oQueMaiusculo} não foi criada.\n");
+
+            return nome;
+        }
+
         while (true)
         {
             var resposta = editor.GetString(new PromptStringOptions($"\nNome do {oQue}: ")
@@ -65,5 +76,14 @@ internal static class Perguntas
 
             return nome;
         }
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static string? NomePelaJanela(string oQue)
+    {
+        var janela = new JanelaDeNome($"Nome do {oQue}", $"Como se chama este {oQue}?");
+        var resultado = Autodesk.AutoCAD.ApplicationServices.Core.Application.ShowModalWindow(janela);
+
+        return resultado == true ? janela.Nome : null;
     }
 }

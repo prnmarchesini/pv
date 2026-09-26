@@ -92,18 +92,19 @@ public static class UsinaCommands
         }
     }
 
-    private static void Executar(
+    internal static void Executar(
         Editor editor,
         Document documento,
         ProcessedTerrain terreno,
         (IReadOnlyList<Point3> Vertices, string Nome) area,
         (IReadOnlyList<Point3> Vertices, AlignmentIdentity Identidade) alinhamento,
-        TableProfile perfil)
+        TableProfile perfil,
+        bool avisarSeJaHaMesas = true)
     {
         var settings = ConfigCommands.Inicial(documento, out var avisoDaConfig);
         if (avisoDaConfig is not null) editor.WriteMessage($"\n  ATENÇÃO: {avisoDaConfig}\n");
 
-        FileiraCommands.AvisarSeJaHaMesas(editor, documento.Database);
+        if (avisarSeJaHaMesas) FileiraCommands.AvisarSeJaHaMesas(editor, documento.Database);
 
         var pilares = PillarTable.Distribute(perfil.Layout.Length, perfil.Frame.PillarSpanTarget, perfil.Frame.PillarCantilever);
         var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
@@ -116,25 +117,19 @@ public static class UsinaCommands
             + $"Área: {area.Nome}; alinhamento: {alinhamento.Identidade.Describe()}\n");
 
         var layout = RowDistributor.Distribute(
-            area.Vertices, alinhamento.Vertices, alinhamento.Identidade.Side, config.Pitch, config.TableGap, celula);
+            area.Vertices, alinhamento.Vertices, alinhamento.Identidade.Side, config.Pitch, config.TableGap, celula,
+            config.UpslopeAzimuthRadians);
 
         if (layout.Rows.Count == 0)
         {
-            editor.WriteMessage("\nUSINA Nenhuma fileira cabe: a área está do outro lado da linha, ou é pequena demais.\n");
+            editor.WriteMessage("\nUSINA Nenhuma fileira cabe: a área está do outro lado da linha, a linha não a atravessa, ou ela é pequena demais.\n");
             return;
-        }
-
-        var orientacao = RowOrientation.Resolve(layout.Rows[0].Tables[0].DirectionRadians, alinhamento.Identidade.Side, config.UpslopeAzimuthRadians);
-        if (orientacao.DivergenceRadians > 5 * Math.PI / 180)
-        {
-            editor.WriteMessage(
-                $"\n  ATENÇÃO: a linha de alinhamento diverge {orientacao.DivergenceRadians * 180 / Math.PI:0.#}° do azimute configurado (a linha de alinhamento deve ser paralela ao azimute: norte-sul numa usina que olha para o norte).\n");
         }
 
         editor.WriteMessage($"\nProcessando {layout.Rows.Count} fileira(s), {layout.Tables.Count} mesa(s)...\n");
 
         var usina = PlantPipeline.ProcessAll(
-            layout, alinhamento.Identidade.Side, geometria, perfil.TiltRadians,
+            layout, geometria, perfil.TiltRadians,
             perfil.Layout.ModuleCount, perfil.Layout.Module.PowerWatts, terreno.Mesh, settings,
             (feitas, total) => { if (feitas % 10 == 0 || feitas == total) editor.WriteMessage($"  {feitas}/{total} fileira(s)\n"); });
 

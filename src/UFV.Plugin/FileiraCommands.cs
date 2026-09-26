@@ -172,11 +172,12 @@ public static class FileiraCommands
         var relogio = System.Diagnostics.Stopwatch.StartNew();
 
         var layout = RowDistributor.Distribute(
-            area.Vertices, alinhamento.Vertices, alinhamento.Identidade.Side, config.Pitch, config.TableGap, celula);
+            area.Vertices, alinhamento.Vertices, alinhamento.Identidade.Side, config.Pitch, config.TableGap, celula,
+            config.UpslopeAzimuthRadians);
 
         if (layout.Rows.Count == 0)
         {
-            editor.WriteMessage("\nFILEIRA Nenhuma fileira cabe: a área está do outro lado da linha, ou é pequena demais.\n");
+            editor.WriteMessage("\nFILEIRA Nenhuma fileira cabe: a área está do outro lado da linha, a linha não a atravessa, ou ela é pequena demais.\n");
             return;
         }
 
@@ -188,15 +189,7 @@ public static class FileiraCommands
 
         var fileira = layout.Rows[numeroDaFileira - 1];
 
-        var orientacao = RowOrientation.Resolve(fileira.Tables[0].DirectionRadians, alinhamento.Identidade.Side, config.UpslopeAzimuthRadians);
-        if (orientacao.DivergenceRadians > 5 * Math.PI / 180)
-        {
-            editor.WriteMessage(
-                $"\n  ATENÇÃO: a linha de alinhamento diverge {orientacao.DivergenceRadians * 180 / Math.PI:0.#}° do azimute configurado (a linha de alinhamento deve ser paralela ao azimute: norte-sul numa usina que olha para o norte). "
-                + "A mesa segue a fileira, e vai olhar para um lado diferente do configurado.\n");
-        }
-
-        var processada = RowPipeline.ProcessRow(fileira, alinhamento.Identidade.Side, geometria, perfil.TiltRadians, terreno.Mesh, settings);
+        var processada = RowPipeline.ProcessRow(fileira, geometria, perfil.TiltRadians, terreno.Mesh, settings);
 
         var desenho = LayoutDrawer.Draw(documento.Database, processada, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses);
 
@@ -215,7 +208,7 @@ public static class FileiraCommands
         editor.WriteMessage(
             $"\nFILEIRA {fileira.Describe()}\n"
             + $"  distribuição: {layout.Rows.Count} fileira(s), {layout.Tables.Count} mesa(s), "
-            + $"{layout.PartlyOutsideCount} na borda, {layout.SkippedForOverlap} pulada(s) por sobreposição\n"
+            + $"{layout.DroppedOutside} posição(ões) descartada(s) por passar da área\n"
             + $"  desenhado: {desenho.Tables} mesa(s), {desenho.Pillars} pilar(es), {desenho.Modules} módulo(s) com face, "
             + $"{desenho.Painted} peça(s) pintada(s), {desenho.Marked} marcada(s)\n"
             + (cotas.Count > 0
@@ -234,6 +227,12 @@ public static class FileiraCommands
     internal static ProcessedTerrain? ExigirTerreno(Editor editor, Document documento)
     {
         var terreno = TerrainCache.Get(documento);
+
+        // Fechou e reabriu o desenho: a malha era só memória, mas o carimbo
+        // no desenho diz qual superfície foi processada. Reprocessa sozinho.
+        // Pedido do Renan em 26/09/2026: "é preciso que ele não perca".
+        if (terreno is null && TerrainCommands.Reprocessar(editor, documento))
+            terreno = TerrainCache.Get(documento);
 
         if (terreno is null)
         {
@@ -437,7 +436,7 @@ public static class FileiraCommands
     /// colinearidade. O Z não é usado pela distribuição, e a cota de tudo que
     /// se desenha vem do terreno, nunca daqui (regra sagrada 5).
     /// </summary>
-    private static IReadOnlyList<Point3> Vertices(Polyline3d polilinha, Transaction transacao)
+    internal static IReadOnlyList<Point3> Vertices(Polyline3d polilinha, Transaction transacao)
     {
         var pontos = new List<Point3>();
 

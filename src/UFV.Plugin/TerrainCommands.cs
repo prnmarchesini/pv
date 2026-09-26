@@ -321,6 +321,48 @@ public static class TerrainCommands
     }
 
     /// <summary>
+    /// Reprocessa, sem perguntar, a superfície que o carimbo do desenho diz
+    /// ter sido processada (pelo handle, e senão pelo nome); sem carimbo, a
+    /// única superfície do desenho, se houver uma só. Devolve se conseguiu.
+    /// É o que faz o terreno "não se perder" ao fechar e reabrir.
+    /// </summary>
+    internal static bool Reprocessar(Editor editor, Document documento)
+    {
+        try
+        {
+            var carimbo = ProvenanceStore.Load(documento.Database);
+            var varredura = SurfaceReader.Read(documento.Database);
+            var candidatas = varredura.Surfaces.Where(e => e.Summary.CanBeTerrain).ToList();
+
+            SurfaceEntry? escolhida = null;
+
+            if (carimbo is not null)
+            {
+                escolhida = candidatas.FirstOrDefault(e => e.Id.Handle.ToString() == carimbo.Surface.Handle)
+                    ?? candidatas.FirstOrDefault(e => e.Summary.DisplayName == carimbo.Surface.Name);
+            }
+
+            if (escolhida is null && carimbo is null && candidatas.Count == 1)
+                escolhida = candidatas[0];
+
+            if (escolhida is null) return false;
+
+            editor.WriteMessage(
+                $"\nO terreno não estava na memória (o desenho foi reaberto). Reprocessando {escolhida.Summary.DisplayName}"
+                + (carimbo is not null ? $", processada em {carimbo.ProcessedAtText}" : string.Empty) + "...\n");
+
+            Processar(editor, escolhida);
+
+            return TerrainCache.Get(documento) is not null;
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui reprocessar o terreno registrado.", erro);
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Lê a superfície escolhida, monta a malha e guarda. O resumo que sai
     /// daqui é o que o usuário confere contra o Civil 3D.
     /// </summary>

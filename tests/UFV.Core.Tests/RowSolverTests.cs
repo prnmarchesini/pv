@@ -575,8 +575,8 @@ public class RowSolverTests
     public void OVaoEntreMesasVemDaPlanta()
     {
         var area = new[] { new Point3(0, 0, 0), new Point3(100, 0, 0), new Point3(100, 50, 0), new Point3(0, 50, 0) };
-        var alinhamento = new[] { new Point3(0, 0, 0), new Point3(100, 0, 0) };
-        var layout = RowDistributor.Distribute(area, alinhamento, LineSide.Left, 6, 0.75, new TableFootprint(20, 4));
+        var alinhamento = new[] { new Point3(0, 0, 0), new Point3(0, 50, 0) };
+        var layout = RowDistributor.Distribute(area, alinhamento, LineSide.Right, 6, 0.75, new TableFootprint(20, 4), Math.PI);
 
         var fileira = layout.Rows[0].Tables;
 

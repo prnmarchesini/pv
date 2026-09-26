@@ -340,10 +340,10 @@ public class TerrainSamplerTests
         var area = new[] { new Point3(0, 0, 0), new Point3(200, 0, 0), new Point3(200, 200, 0), new Point3(0, 200, 0) };
         var alinhamento = new[] { new Point3(10, 10, 0), new Point3(10, 190, 0) };
 
-        var layout = RowDistributor.Distribute(area, alinhamento, LineSide.Right, 8, 0.5, new TableFootprint(geo.Length, fundoEmPlanta));
+        var layout = RowDistributor.Distribute(area, alinhamento, LineSide.Right, 8, 0.5, new TableFootprint(geo.Length, fundoEmPlanta), SystemConfiguration.Default.UpslopeAzimuthRadians);
         var celula = layout.Rows[1].Tables[2];
 
-        var orientacao = RowOrientation.Resolve(celula.DirectionRadians, LineSide.Right, SystemConfiguration.Default.UpslopeAzimuthRadians);
+        var orientacao = RowOrientation.Resolve(celula, SystemConfiguration.Default.UpslopeAzimuthRadians);
         var matriz = TablePlacement.Plan(celula, orientacao, tilt, 0);
         var amostras = TerrainSampler.Sample(geo, matriz, PlanoInclinado());
 

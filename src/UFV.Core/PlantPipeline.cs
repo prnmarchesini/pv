@@ -44,7 +44,7 @@ public sealed record ProcessedPlant(
         $"{Rows.Count} fileira(s), {Tables.Count} mesa(s), {ModuleCount} módulo(s), "
         + $"{PowerKwp.ToString("0.#", Brasil)} kWp, {PillarCount} pilar(es); "
         + $"{MarkedCount} mesa(s) marcada(s), {PillarProblemCount} pilar(es) com problema, "
-        + $"{Layout.PartlyOutsideCount} na borda, {Layout.SkippedForOverlap} pulada(s) por sobreposição; "
+        + $"{Layout.DroppedOutside} posição(ões) descartada(s) por passar da área; "
         + $"{Elapsed.TotalSeconds.ToString("0.0", Brasil)} s";
 }
 
@@ -66,7 +66,6 @@ public static class PlantPipeline
     /// Processa todas as fileiras.
     /// </summary>
     /// <param name="layout">A distribuição em planta.</param>
-    /// <param name="side">De que lado da linha ficam as mesas.</param>
     /// <param name="geometry">A mesa em coordenadas locais.</param>
     /// <param name="tiltRadians">A inclinação transversal.</param>
     /// <param name="modulesPerTable">Quantos módulos cada mesa tem.</param>
@@ -76,7 +75,6 @@ public static class PlantPipeline
     /// <param name="progress">Chamado depois de cada fileira, com quantas já foram; para a tela dizer que está vivo.</param>
     public static ProcessedPlant ProcessAll(
         PlanLayout layout,
-        LineSide side,
         TableGeometry geometry,
         double tiltRadians,
         int modulesPerTable,
@@ -101,7 +99,7 @@ public static class PlantPipeline
 
         foreach (var fileira in layout.Rows)
         {
-            fileiras.Add(RowPipeline.ProcessRow(fileira, side, geometry, tiltRadians, terrain, settings));
+            fileiras.Add(RowPipeline.ProcessRow(fileira, geometry, tiltRadians, terrain, settings));
             progress?.Invoke(fileiras.Count, layout.Rows.Count);
         }
 

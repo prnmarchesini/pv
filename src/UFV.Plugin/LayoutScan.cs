@@ -9,16 +9,21 @@ namespace UFV.Plugin;
 /// <param name="Pillars">Os blocos de pilar.</param>
 /// <param name="Modules">Os blocos de módulo.</param>
 /// <param name="Faces">As faces superiores.</param>
+/// <param name="Notes">As notas: cotas (risco e texto) e avisos.</param>
 internal sealed record TableParts(
     TableIdentity? Identity,
     ObjectId? Contour,
     IReadOnlyList<ObjectId> Pillars,
     IReadOnlyList<ObjectId> Modules,
-    IReadOnlyList<ObjectId> Faces)
+    IReadOnlyList<ObjectId> Faces,
+    IReadOnlyList<ObjectId> Notes)
 {
-    /// <summary>Contorno, pilares e módulos: o que se pinta. A face nunca (é o que o PVsyst recebe).</summary>
+    /// <summary>Contorno, pilares e módulos: o que se pinta. A face nunca (é o que o PVsyst recebe); a nota também não.</summary>
     public IEnumerable<ObjectId> Paintable =>
         (Contour is { } c ? new[] { c } : Array.Empty<ObjectId>()).Concat(Pillars).Concat(Modules);
+
+    /// <summary>Tudo da mesa: o que se apaga ao refazer.</summary>
+    public IEnumerable<ObjectId> All => Paintable.Concat(Faces).Concat(Notes);
 }
 
 /// <summary>
@@ -44,6 +49,7 @@ internal static class LayoutScan
         var pilares = new Dictionary<Guid, List<ObjectId>>();
         var modulos = new Dictionary<Guid, List<ObjectId>>();
         var faces = new Dictionary<Guid, List<ObjectId>>();
+        var notas = new Dictionary<Guid, List<ObjectId>>();
 
         var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForRead);
         var espaco = (BlockTableRecord)transacao.GetObject(tabela[BlockTableRecord.ModelSpace], OpenMode.ForRead);
@@ -77,9 +83,13 @@ internal static class LayoutScan
             {
                 Juntar(faces, face.Table, id);
             }
+            else if (LayoutXData.LoadNote(entidade) is { } nota)
+            {
+                Juntar(notas, nota.Table, id);
+            }
         }
 
-        var todas = identidades.Keys.Concat(pilares.Keys).Concat(modulos.Keys).Concat(faces.Keys).Distinct();
+        var todas = identidades.Keys.Concat(pilares.Keys).Concat(modulos.Keys).Concat(faces.Keys).Concat(notas.Keys).Distinct();
         var resultado = new Dictionary<Guid, TableParts>();
 
         foreach (var guid in todas)
@@ -89,7 +99,8 @@ internal static class LayoutScan
                 contornos.TryGetValue(guid, out var c) ? c : null,
                 pilares.GetValueOrDefault(guid) ?? [],
                 modulos.GetValueOrDefault(guid) ?? [],
-                faces.GetValueOrDefault(guid) ?? []);
+                faces.GetValueOrDefault(guid) ?? [],
+                notas.GetValueOrDefault(guid) ?? []);
         }
 
         return resultado;
@@ -106,16 +117,20 @@ internal static class LayoutScan
         return LayoutXData.LoadTable(entidade)?.Id
             ?? LayoutXData.LoadPillar(entidade)?.Table
             ?? LayoutXData.LoadModule(entidade)?.Table
-            ?? LayoutXData.LoadFace(entidade)?.Table;
+            ?? LayoutXData.LoadFace(entidade)?.Table
+            ?? LayoutXData.LoadNote(entidade)?.Table;
     }
 
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDoBloco = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(BlockReference));
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDaPolilinha = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline3d));
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDaFace = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Face));
+    private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDoTexto = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(MText));
+    private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDaLinha = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Line));
 
-    /// <summary>Bloco (pilar, módulo), polilinha 3D (contorno) ou face: o que pode ser peça nossa.</summary>
+    /// <summary>Bloco (pilar, módulo), polilinha 3D (contorno), face, texto ou linha (notas): o que pode ser peça nossa.</summary>
     private static bool ENossaClasse(ObjectId id) =>
-        id.ObjectClass == ClasseDoBloco || id.ObjectClass == ClasseDaPolilinha || id.ObjectClass == ClasseDaFace;
+        id.ObjectClass == ClasseDoBloco || id.ObjectClass == ClasseDaPolilinha || id.ObjectClass == ClasseDaFace
+        || id.ObjectClass == ClasseDoTexto || id.ObjectClass == ClasseDaLinha;
 
     private static void Juntar(Dictionary<Guid, List<ObjectId>> grupos, Guid mesa, ObjectId id)
     {

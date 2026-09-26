@@ -252,10 +252,11 @@ teste: a etapa 6 é onde passa a ter.
   `PorHandle` duplica o de `TerrenoEnvelhecido`: consolidar;
 - rodar `UFV_FILEIRA` ou `UFV_USINA` duas vezes desenha por cima (o comando
   avisa); apagar e substituir é assunto da etapa 7;
-- os textos de altura (`_ALTURAS`) e o aviso de marcada (`_MARCADA`) não
-  carregam XData: não pertencem a mesa nenhuma para o `LayoutScan`, e o
-  recálculo (7.3) não vai saber apagá-los por mesa. Dar-lhes identidade
-  (GUID da mesa) no `LayoutDrawer` antes do 7.3;
+- ~~os textos de altura e o aviso de marcada não carregam XData~~ Pago em
+  26/09/2026: são notas (`NoteIdentity`) com o GUID da mesa;
+- a análise de borda (4.3, "mesa na borda") não tem mais o que pintar
+  desde que mesa não passa da área; ou some da tela de configuração, ou
+  vira "mesa encostada na borda";
 - `UFV_EXPORTAR` derruba a exportação inteira se uma 3DFACE nossa foi
   escalada até ficar sem área ou vertical (mensagem do Core); pular a face
   e contá-la seria melhor;
@@ -2891,3 +2892,63 @@ com teste. Pilar com problema leva só o motivo, no centro. O nível 2
 conta três textos por pilar. Siglas PB/PA/P3 são minhas; se ele preferir
 M1 (a nomenclatura do desenho de 23/09) para a ponta baixa, é uma string.
 
+## Segunda reprovação do 5.8 em 26/09/2026: seis pedidos do Renan
+
+Depois do primeiro conserto (fileira nascendo na linha), o Renan olhou de
+novo e mandou dois prints e seis pedidos. Tudo feito no mesmo dia, nível 1
+e 2 verdes.
+
+1. **"A linha de alinhamento é mestra apenas do alinhamento lateral dos
+   módulos. O azimute é definido nas configurações."** A fileira corre
+   perpendicular ao AZIMUTE da configuração, sempre; a linha só diz onde
+   cada fileira começa (a mesa 1 encosta nela; uma linha quebrada dá um
+   começo escalonado). As fileiras se sucedem a cada pitch no sentido do
+   azimute; a fileira 1 encosta no início da linha e a célula cresce no
+   sentido em que a linha caminha. Linha paralela às fileiras é recusada
+   com explicação. `RowDistributor.Distribute` ganhou o azimute como
+   parâmetro; `RowOrientation.Resolve` passou a ler a normal da própria
+   célula (os cantos), e o lado da linha saiu do pipeline. Terceira
+   versão do 5.1 no dia; os testes foram reescritos de novo (retângulo de
+   100 × 50 com a linha na borda oeste: 8 fileiras de 5 mesas).
+2. **"As mesas não podem passar da área."** Mesa que não cabe inteira, ou
+   que um recorte da área invade, não é colocada: `PlanLayout.DroppedOutside`
+   conta e o relatório diz. `PartlyOutside` ficou no modelo, sempre falso;
+   a análise de borda (4.3) não tem mais o que pintar (anotado em Dívidas).
+3. **"Mesa socada na terra: já poderia vir pintada de uma forma que diz
+   'olha projetista, ali não tem como fazer milagre'."** Mesa marcada pelo
+   alinhamento, ou com pilar sem altura livre / fora do terreno, é pintada
+   INTEIRA de magenta na camada de marcadas (contorno, pilares, módulos;
+   a face não), com o aviso "F1.x NÃO CABE NO TERRENO" e o motivo no meio.
+4. **"Botão direito na área → Refazer."** `UFV_REFAZER` (botão Refazer na
+   seção Processar, e o item "Refazer as mesas desta área" no menu de
+   botão direito sobre a polilinha da área, via `MenuDeContexto`): apaga
+   tudo que o plugin desenhou dentro da área (pelo XData: mesa, pilares,
+   módulos, faces e notas) e desenha de novo com a configuração ATUAL. As
+   cotas e os avisos ganharam identidade (`NoteIdentity`, XData "Nota"
+   com o GUID da mesa) para serem apagados junto: era a dívida anotada
+   antes do 7.3, paga aqui. Nível 2 (`ufv-refazer.scr`): fileira, refazer,
+   80 mesas, 7 pilares e 28 faces por contorno, nenhuma nota órfã.
+5. **"Quando o sistema pede o nome, poderia aparecer uma janela."**
+   `JanelaDeNome` (WPF) para área e alinhamento quando há interface; no
+   Core Console continua a linha de comando (é o que o script alimenta).
+6. **"Ele perde o terreno quando fecho e reabro."** A malha era só memória;
+   o carimbo no desenho diz qual superfície foi processada. Agora, se não
+   há terreno na memória, `TerrainCommands.Reprocessar` reprocessa sozinho
+   a superfície do carimbo (pelo handle, senão pelo nome; sem carimbo, a
+   única superfície do desenho), avisando na linha de comando.
+
+Também respondi uma dúvida dele, sem fazer nada: terraplanagem sugerida é
+possível (uma segunda superfície gerada pelo plugin, mesas calculadas sobre
+ela, corte e aterro contra a original); fica para depois.
+
+### Decisões minhas neste lote (Renan confirma na tela)
+
+- a fileira 1 é a do início da linha (primeiro clique) e a célula cresce
+  no sentido da linha; o 7.10 é onde ele indica F1 à mão;
+- só nascem fileiras cujas faixas cruzam a linha: a linha deve atravessar
+  todas as fileiras que ele quer;
+- a mesa 1 começa no ponto mais adiantado em que a faixa cruza a linha
+  (nenhum canto fica atrás da linha);
+- magenta para "não cabe no terreno"; o vermelho continua sendo "suja"
+  (7.1) e o de análise é o da configuração;
+- o Refazer redesenha a área inteira (todas as fileiras), não só uma.

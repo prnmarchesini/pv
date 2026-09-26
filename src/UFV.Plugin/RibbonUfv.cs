@@ -238,6 +238,12 @@ internal static class RibbonUfv
             "Processa e desenha a área inteira: todas as fileiras, com o tempo medido."));
 
         origem.Items.Add(BotaoPequeno(
+            "Refazer",
+            IconesDaRibbon.Refazer(),
+            PluginInfo.ComandoRefazer,
+            "Apaga as mesas de uma área e as desenha de novo com a configuração atual (também no botão direito sobre a área)."));
+
+        origem.Items.Add(BotaoPequeno(
             "Alturas",
             IconesDaRibbon.Alturas(),
             PluginInfo.ComandoAlturas,

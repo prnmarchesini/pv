@@ -53,9 +53,9 @@ public class PillarCalculatorTests
         var area = new[] { new Point3(0, 0, 0), new Point3(200, 0, 0), new Point3(200, 200, 0), new Point3(0, 200, 0) };
         var alinhamento = new[] { new Point3(10, 10, 0), new Point3(10, 190, 0) };
 
-        var layout = RowDistributor.Distribute(area, alinhamento, LineSide.Right, 8, 0.5, new TableFootprint(geo.Length, geo.Depth * Math.Cos(Tilt)));
+        var layout = RowDistributor.Distribute(area, alinhamento, LineSide.Right, 8, 0.5, new TableFootprint(geo.Length, geo.Depth * Math.Cos(Tilt)), Config().UpslopeAzimuthRadians);
         var cell = layout.Rows[1].Tables[2];
-        var orientacao = RowOrientation.Resolve(cell.DirectionRadians, LineSide.Right, Config().UpslopeAzimuthRadians);
+        var orientacao = RowOrientation.Resolve(cell, Config().UpslopeAzimuthRadians);
 
         return (cell, orientacao);
     }
@@ -133,7 +133,7 @@ public class PillarCalculatorTests
         {
             Assert.Equal(geo.Pillars[i].Station, pilares.Pillars[i].Station, 9);
             Assert.InRange(pilares.Pillars[i].X, cell.Origin.X - 1e-6, cell.Origin.X + geo.Length + 1e-6);
-            Assert.InRange(pilares.Pillars[i].Y, cell.Origin.Y - 1e-6, cell.Origin.Y + fundo + 1e-6);
+            Assert.InRange(pilares.Pillars[i].Y, cell.Corners.Min(c => c.Y) - 1e-6, cell.Corners.Max(c => c.Y) + 1e-6);
         }
     }
 

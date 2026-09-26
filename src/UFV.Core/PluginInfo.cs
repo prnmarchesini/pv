@@ -144,6 +144,12 @@ public static class PluginInfo
     /// <summary>Comando que diz quantas mesas estão limpas e quais estão sujas, e por quê.</summary>
     public const string ComandoEstado = "UFV_ESTADO";
 
+    /// <summary>Comando que apaga as mesas de uma área e as desenha de novo com a configuração atual.</summary>
+    public const string ComandoRefazer = "UFV_REFAZER";
+
+    /// <summary>Comando que refaz a primeira área com o primeiro alinhamento, sem perguntar. Para o nível 2.</summary>
+    public const string ComandoRefazerAutomatico = "UFV_REFAZER_AUTO";
+
     /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).

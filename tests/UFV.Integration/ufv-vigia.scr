@@ -62,7 +62,7 @@
   (if (= ufv:t "Mesa")
     (progn (setq ufv:contornos (1+ ufv:contornos))
            (if (and (/= (ufv:campo ufv:xd 0) ufv:ga) (= (ufv:campo ufv:xd 7) "1")) (setq ufv:outrassujas (1+ ufv:outrassujas)))))
-  (if (and (/= ufv:t "Face") (= (if (= ufv:t "Mesa") (ufv:campo ufv:xd 0) (ufv:campo ufv:xd 1)) ufv:ga))
+  (if (and (/= ufv:t "Face") (/= ufv:t "Nota") (= (if (= ufv:t "Mesa") (ufv:campo ufv:xd 0) (ufv:campo ufv:xd 1)) ufv:ga))
     (setq ufv:pecasa (1+ ufv:pecasa) ufv:vermelhasa (+ ufv:vermelhasa (ufv:vermelho ufv:en))))
   (setq ufv:i (1+ ufv:i)))
 

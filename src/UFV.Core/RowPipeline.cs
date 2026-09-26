@@ -78,7 +78,6 @@ public static class RowPipeline
     /// Processa uma fileira da distribuição.
     /// </summary>
     /// <param name="row">A fileira em planta.</param>
-    /// <param name="side">De que lado da linha ficam as mesas (o mesmo passado ao distribuidor).</param>
     /// <param name="geometry">A mesa em coordenadas locais.</param>
     /// <param name="tiltRadians">A inclinação transversal da mesa.</param>
     /// <param name="terrain">O terreno.</param>
@@ -86,7 +85,6 @@ public static class RowPipeline
     /// <param name="step">O passo da grade de cotas (5.3).</param>
     public static ProcessedRow ProcessRow(
         PlanRow row,
-        LineSide side,
         TableGeometry geometry,
         double tiltRadians,
         Tin terrain,
@@ -113,7 +111,7 @@ public static class RowPipeline
 
         foreach (var celula in row.Tables)
         {
-            var orientacao = RowOrientation.Resolve(celula.DirectionRadians, side, config.UpslopeAzimuthRadians);
+            var orientacao = RowOrientation.Resolve(celula, config.UpslopeAzimuthRadians);
             var colocacao = TablePlacement.Plan(celula, orientacao, tiltRadians, 0);
             var amostra = TerrainSampler.Sample(geometry, colocacao, terrain);
 

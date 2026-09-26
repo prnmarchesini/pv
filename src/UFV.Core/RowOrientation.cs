@@ -12,16 +12,15 @@ namespace UFV.Core;
 /// configuração pede.
 /// </param>
 /// <param name="LowEdgeOnNearSide">
-/// Se a ponta baixa da mesa fica na borda da célula voltada para o início da
-/// linha de alinhamento (a origem de <see cref="PlacedTable"/>). Quando não,
-/// a ponta baixa está na borda de lá, um fundo adiante ao longo da linha.
+/// Se a ponta baixa da mesa fica na borda da célula onde está a origem de
+/// <see cref="PlacedTable"/> (canto 0 e 1). Quando não, a ponta baixa está
+/// na borda de lá (cantos 3 e 2). Com o distribuidor de 26/09/2026, que põe
+/// o fundo da célula no sentido do azimute, é sempre verdadeiro.
 /// </param>
 /// <param name="DivergenceRadians">
 /// Quanto a subida escolhida difere da que a configuração pede, em radianos,
-/// de 0 a 90°. Zero quando a linha de alinhamento foi traçada paralela ao
-/// azimute (norte-sul numa usina que olha para o norte); perto de 90° quando
-/// ela foi traçada quase perpendicular a ele, e aí a mesa vai olhar para um
-/// lado bem diferente do configurado — é para avisar.
+/// de 0 a 90°. Com o distribuidor atual é zero; ficou para uma célula que
+/// venha de outro lugar (uma mesa movida à mão, etapa 7).
 /// </param>
 /// <param name="LengthRunsWithRow">
 /// Se o comprimento local da mesa (+X, da estação zero à final) corre no
@@ -39,39 +38,40 @@ public sealed record RowOrientation(
     bool LengthRunsWithRow)
 {
     /// <summary>
-    /// Resolve a orientação de uma mesa a partir da direção da fileira e do
+    /// Resolve a orientação de uma mesa a partir da célula em planta e do
     /// azimute de subida que a configuração pede.
     ///
     /// A mesa fica alinhada com a fileira, sempre: a célula reservada pela
     /// distribuição tem exatamente o comprimento por o fundo, e girá-la
-    /// invadiria a vizinha. Os dois lados perpendiculares à fileira são os
-    /// dois sentidos da linha de alinhamento; o azimute da configuração
-    /// decide qual deles é a subida — e é aqui, num lugar só, que a direção
-    /// matemática da fileira (do +X, anti-horária) vira azimute topográfico
-    /// (do norte, horário).
+    /// invadiria a vizinha. A normal da célula é lida dos cantos (canto 3 −
+    /// canto 0); o azimute da configuração decide se a subida é +normal ou
+    /// −normal — e é aqui, num lugar só, que a direção matemática da fileira
+    /// (do +X, anti-horária) vira azimute topográfico (do norte, horário).
     /// </summary>
-    /// <param name="directionRadians">A direção da fileira, como em <see cref="PlacedTable.DirectionRadians"/>.</param>
-    /// <param name="side">Para que lado da linha correm as fileiras, como em <see cref="RowDistributor.Distribute"/>.</param>
+    /// <param name="cell">A célula, como o distribuidor a colocou.</param>
     /// <param name="preferredUpslopeAzimuthRadians">O azimute de subida da configuração.</param>
-    public static RowOrientation Resolve(double directionRadians, LineSide side, double preferredUpslopeAzimuthRadians)
+    public static RowOrientation Resolve(PlacedTable cell, double preferredUpslopeAzimuthRadians)
     {
-        if (!double.IsFinite(directionRadians))
-            throw new ArgumentOutOfRangeException(nameof(directionRadians), "A direção não é um número.");
+        ArgumentNullException.ThrowIfNull(cell);
+
+        if (!double.IsFinite(cell.DirectionRadians))
+            throw new ArgumentOutOfRangeException(nameof(cell), "A direção não é um número.");
 
         if (!double.IsFinite(preferredUpslopeAzimuthRadians))
             throw new ArgumentOutOfRangeException(nameof(preferredUpslopeAzimuthRadians), "O azimute não é um número.");
 
-        if (side == LineSide.On)
-            throw new ArgumentException("\"Em cima da linha\" não é lado para as mesas.", nameof(side));
+        if (cell.Corners is not { Count: 4 } || cell.PlanDepth <= 0)
+            throw new ArgumentException("A célula não tem quatro cantos com fundo.", nameof(cell));
 
-        var dx = Math.Cos(directionRadians);
-        var dy = Math.Sin(directionRadians);
+        var dx = Math.Cos(cell.DirectionRadians);
+        var dy = Math.Sin(cell.DirectionRadians);
 
-        // A normal da célula é o eixo da linha de alinhamento, a mesma
-        // convenção do distribuidor: a fileira é a direita da linha quando
-        // side é Right, logo a linha é a ESQUERDA da fileira, (−dy, dx); e
-        // vice-versa.
-        var (nx, ny) = side == LineSide.Right ? (-dy, dx) : (dy, -dx);
+        // A normal da célula, dos cantos: o fundo, unitário.
+        var nx = (cell.Corners[3].X - cell.Corners[0].X) / cell.PlanDepth;
+        var ny = (cell.Corners[3].Y - cell.Corners[0].Y) / cell.PlanDepth;
+
+        if (!double.IsFinite(nx) || !double.IsFinite(ny) || Math.Abs(nx * nx + ny * ny - 1) > 1e-6)
+            throw new ArgumentException("O fundo da célula não fecha com o fundo declarado.", nameof(cell));
 
         // O vetor do azimute pedido, em (X = leste, Y = norte).
         var px = Math.Sin(preferredUpslopeAzimuthRadians);
