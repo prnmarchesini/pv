@@ -87,8 +87,8 @@ aguardando validação na tela. Etapa 5: 5.1 a 5.6 fechados automaticamente
 (só modelo), 5.7, 5.8 e 5.9 aguardando validação na tela. Etapa 6: 6.1
 fechado automaticamente, 6.2 e 6.3 aguardando validação (no PVsyst), 6.4
 entregue e PARADO por ordem do plano, 6.5 pendente das respostas dele.
-Etapa 7: 7.1 aguardando validação na tela. As etapas 5, 6 e o 7.1 foram
-feitos em 26/09/2026, sem o Renan ver uma mesa na tela. Placar na última
+Etapa 7: 7.1 e 7.2 aguardando validação na tela. As etapas 5, 6 e o
+7.1/7.2 foram feitos em 26/09/2026, sem o Renan ver uma mesa na tela. Placar na última
 execução:
 
 ```
@@ -99,8 +99,8 @@ Etapa 3   335/335  OK
 Etapa 4   242/242  OK
 Etapa 5   250/250  OK
 Etapa 6   19/19    OK
-Etapa 7   5/5      OK
-Nivel 2   13/13    OK
+Etapa 7   14/14    OK
+Nivel 2   14/14    OK
 Acervo             OK
 ```
 
