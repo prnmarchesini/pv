@@ -36,7 +36,7 @@ Só o Renan marca VALIDADO.
 | 5.1 | Distribuição em planta | VALIDADO (automático) | `RowDistributor` no Core, `Polygons` no Geo; só modelo, fechado em 26/09/2026. A fileira segue a linha de alinhamento: **Renan confirma no 5.8** |
 | 5.2 | Amostragem | VALIDADO (automático) | `TablePlacement` e `TerrainSampler` no Core; a ponta baixa é amostrada na aresta inteira (`Tin.TryGetMaxZAlong`); fechado em 26/09/2026 |
 | 5.3 | Cotas viáveis por mesa | VALIDADO (automático) | `ViableElevations` no Core; grade de 1 cm, intervalos por varredura; fechado em 26/09/2026 |
-| 5.4 | Alinhamento na fileira | PENDENTE | |
+| 5.4 | Alinhamento na fileira | VALIDADO (automático) | `RowSolver` no Core: programação dinâmica, não iterativo (divergência do plano, registrada); fechado em 26/09/2026. **Renan confirma no 5.8** o "degrau mínimo = 0 ou ≥ mínimo" e a ausência do campo de iterações |
 | 5.5 | Pilares | PENDENTE | |
 | 5.6 | Resultado das análises | PENDENTE | |
 | 5.7 | Desenho | PENDENTE | |
@@ -1819,4 +1819,124 @@ pilares o giro desloca o pé em planta por centímetros; a decisão de
 reamostrar fica para o 5.5, onde o pilar é calculado.
 
 Placar do passo: 32 testes; etapa 5 com 166/166.
+
+## 5.4: o alinhamento na fileira
+
+`RowSolver` no Core, só modelo. Dada uma fileira (as mesas na ordem, com o
+vão entre elas e as cotas viáveis de cada uma, do 5.3), escolhe a cota de
+cada mesa de modo que os degraus entre vizinhas respeitem a configuração e
+o estouro seja o menor possível — a fileira inteira de uma vez.
+
+### Uma divergência deliberada do plano de execução
+
+O passo pede "iterativo com máximo de iterações configurável, visível na
+interface", e deixa "programação dinâmica registrada como alternativa a
+avaliar". **Fiz programação dinâmica**, e o motivo está no próprio plano
+de requisitos: "programação dinâmica resolve isso de forma exata e rápida,
+sem depender de convergência: cada mesa tem seu conjunto de cotas viáveis
+(discretizadas em passo fino, ex.: 1 cm), cada junta entre mesas tem o
+degrau permitido como custo, e o algoritmo varre a fileira inteira achando
+o ótimo global de uma vez". O 5.3 entregou exatamente esse conjunto de
+cotas viáveis, em intervalos, numa grade de 1 cm; a DP sobre as chaves da
+grade é o passo natural, e 200 mesas resolvem em menos de um segundo.
+
+O que se perde: o campo "máximo de iterações" na tela. Não há iteração,
+então não há o que limitar; a tela do 5.8 não terá esse campo. **Se o Renan
+quiser o iterativo do jeito que descreveu, o lugar de dizer é o 5.8**,
+quando vir a fileira; a DP fica como está até lá.
+
+### O que o resultado garante
+
+- **todo degrau está em {0} ∪ [degrau mínimo, degrau máximo]**: um degrau
+  que a estrutura não consegue fazer não aparece, nunca. Esta é a minha
+  leitura de "degrau mínimo": ou não há degrau, ou ele tem pelo menos o
+  mínimo (um degrau de 5 cm não se constrói). Fica para o Renan confirmar;
+- **toda mesa tem cota**, mesmo a que não cabe: ela fica nivelada e marcada
+  com o motivo (nenhuma cota respeita a faixa; declividade passa do limite;
+  n módulos fora e a tolerância é k; sem terreno). O motor não move mesa,
+  não apaga mesa;
+- **só quebra onde o vão passa do limite** (`MaxGapBeforeBreak`, 5 m), que
+  é a definição de fileira do plano; cada trecho é resolvido em separado.
+
+### A ordem do que se minimiza
+
+Primeiro mesas marcadas, depois módulos fora da faixa (dentro da
+tolerância), depois a soma dos degraus, e por fim a inclinação longitudinal
+de cada mesa. Cada critério vale mais que todos os seguintes juntos (pesos
+1e9, 1e5, 1 por metro, 1e-3 por metro). É isso que faz o terreno plano dar
+degrau zero: nada estoura, e o degrau é o que sobra para minimizar.
+
+### Os testes do plano, e os outros
+
+Terreno plano: nenhuma marcada, degrau zero em toda junta, mesas
+niveladas. Rampa de 3 cm/m: nenhuma marcada, as mesas inclinam com a rampa
+e sobem 3 m ao longo de 8 mesas. Rampa que a mesa não pode acompanhar
+(limite de 1°): a fileira sobe por degraus, sem marcar — "alinhamento entre
+mesas primeiro". Calombo sob um módulo: com tolerância um, a mesa fica com
+um módulo fora e não é marcada; com tolerância zero, só ela é marcada,
+nivelada, e as quatro vizinhas seguem inteiras. Paredão de 2 m com degrau
+máximo de 0,5: alguma mesa é marcada, mas nenhum degrau proibido aparece.
+Vão de 20 m quebra em dois trechos. Mesa sem terreno no meio: marcada, e a
+fileira segue por ela. Determinismo e velocidade (200 mesas, < 2 s). E o
+teste que confere a marca contra a definição do 5.3, em terrenos aleatórios.
+
+### Duas contas minhas erradas nos testes
+
+Escolhi rampas de 1,2 e 1,5 cm/m para "obrigar degraus" com limite de 1°, e
+tan(1°) é 1,75 cm/m: a mesa acompanhava sem degrau nenhum, e o código
+estava certo. Com 3 cm/m os degraus aparecem.
+
+### O que a revisão do 5.4 apontou, e o que foi feito
+
+Dois bloqueantes, um importante de modelagem, todos corrigidos. O revisor
+compilou o Core e rodou o solver em entradas que os testes não cobriam.
+
+- **Bloqueante: as cotas de fim eram cortadas pela janela de início.** A
+  janela de cada mesa era só as cotas iniciais viáveis mais um degrau, e a
+  junta só percorria essa janela; mas o fim viável de uma mesa de 18,7 m
+  fica até 3,3 m acima do início (10°). Resultado medido pelo revisor: uma
+  mesa sozinha numa rampa de 6 % (3,4°, bem dentro dos 10°) saía marcada, e
+  duas mesas em rampa de 6 % ou mais lançavam exceção. **É o caso de uso
+  central do plugin, terreno inclinado, e eu não tinha nenhum teste com
+  rampa acima de 3 %.** Agora as janelas de início e fim são separadas, a
+  grade cobre as duas, e há teste com rampas de 6, 8 e 10 %, subindo e
+  descendo, com uma e com seis mesas: nenhuma marcada;
+- **Bloqueante: a opção marcada só existia na janela estreita**, então um
+  paredão maior que dois degraus entre mesas vizinhas rompia a cadeia e
+  lançava a exceção "não deveria acontecer". Agora a marcada existe em
+  qualquer cota alcançável, e a cadeia de marcadas nunca se rompe. Testes
+  com paredão de 2, 2,1 e 4 m: sem exceção;
+- **Importante: a marcada só nivelada marcava mesa que cabia.** No paredão
+  de 2 m, a terceira mesa (terreno plano, cabia perfeitamente) era marcada e
+  posta 1,28 m acima do chão para servir de escada para a quarta. Fere
+  "encaixa o máximo, marca o resto". Agora uma marcada pode inclinar (cinco
+  giros: nivelada, meio giro e giro inteiro para cada lado, até o limite de
+  declividade), e no paredão só a quarta mesa é marcada, inclinada como
+  escada, com as outras cinco inteiras. O teste exige exatamente isso, e não
+  mais "até três marcadas";
+- **os pesos dos critérios tinham teto**: marca 1e9 contra estouro 1e5 só
+  valia até 10 mil módulos fora somados. Agora o custo da marca é escalado
+  pelo total de módulos do trecho;
+- **desempenho**: a folga da grade crescia com o número de mesas e o laço
+  varria a grade inteira por mesa (25 s para 200 mesas depois da primeira
+  correção). Folga de um giro e um degrau (uma marcada longe de qualquer
+  cota viável nunca ajuda), e o laço varre só o intervalo com custo finito:
+  200 mesas em menos de dois segundos;
+- **testes que faltavam**: força bruta contra a DP em duas mesas com as
+  mesmas opções (pega janela, ordem de critérios e carimbo de uma vez);
+  estouro tolerado antes de degrau (rampa de 3 % com limite de 1° e
+  tolerância 2 sobe por degraus sem gastar a tolerância); degrau mínimo
+  determinístico (salto de 0,60: sem mínimo o ótimo usa um degrau de 6 cm,
+  com mínimo de 0,20 não há degrau em (0, 0,20)); `EndRanges(z0, k)` e
+  `HighestGroundOrNull` do 5.3.
+
+Os comentários que prometiam "ótimo global" e "toda mesa tem cota" foram
+reescritos para dizer o que é garantido: ótimo dentro do espaço de estados
+(grade de 1 cm, alcance limitado, cinco giros para marcada), todo degrau
+permitido, toda mesa com cota, a que não cabe marcada.
+
+Registrado como limitação conhecida: `IsUnbounded` do 5.3 é ignorado; a DP
+só explora a janela declarada.
+
+Placar do passo: 31 testes de solver (65 com os do 5.3); etapa 5 com 223/223 na árvore, já contando os testes do 5.5 e do 5.6, começados antes deste commit.
 

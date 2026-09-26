@@ -437,6 +437,48 @@ public class ViableElevationsTests
 
     // --------------------------------------------------------- utilidades
 
+    /// <summary>
+    /// EndRanges por número de violações: cresce com k (mais tolerância,
+    /// mais cotas), fecha com a conta direta módulo a módulo, é preso ao
+    /// número de módulos, e com Problem não responde nada.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "5")]
+    public void OsIntervalosPorViolacaoCrescemComATolerancia()
+    {
+        var viaveis = ViableElevations.Compute(Amostra(s => 700 + 0.04 * s), Comprimento, Config() with { BumpToleranceModules = 3, MaxLongitudinalSlope = null });
+
+        for (var k = 0; k < 3; k++)
+        {
+            var menos = viaveis.EndRanges(700.50, k);
+            var mais = viaveis.EndRanges(700.50, k + 1);
+
+            for (var z1 = 698.0; z1 <= 704; z1 += 0.01)
+            {
+                var emMenos = menos.Any(f => f.Contains(z1));
+                var emMais = mais.Any(f => f.Contains(z1));
+                var naBorda = menos.Concat(mais).Any(f => Math.Abs(z1 - f.Min) < 1e-3 || Math.Abs(z1 - f.Max) < 1e-3);
+
+                if (emMenos) Assert.True(emMais);
+                if (!naBorda) Assert.Equal(viaveis.Violations(700.50, z1) <= k, emMenos);
+            }
+        }
+
+        Assert.Equal(viaveis.EndRanges(700.50, 14), viaveis.EndRanges(700.50, 99));
+        Assert.Empty(viaveis.EndRanges(double.NaN, 1));
+
+        var comProblema = ViableElevations.Compute(Amostra(_ => null), Comprimento, Config());
+        Assert.Empty(comProblema.EndRanges(700.50, 5));
+    }
+
+    [Fact]
+    [Trait("Etapa", "5")]
+    public void OTerrenoMaisAltoEODosModulosComTerreno()
+    {
+        Assert.Equal(700 + 0.05 * Estacao(13), ViableElevations.Compute(Amostra(s => 700 + 0.05 * s), Comprimento, Config()).HighestGroundOrNull()!.Value, 9);
+        Assert.Null(ViableElevations.Compute(Amostra(_ => null), Comprimento, Config()).HighestGroundOrNull());
+    }
+
     [Fact]
     [Trait("Etapa", "5")]
     public void AChaveDaGradeEInteira()

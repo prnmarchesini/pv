@@ -249,7 +249,7 @@ public sealed class ViableElevations
         for (long i = 0; i <= quantas; i++)
         {
             var z0 = Math.Round((primeira + i * step) / step) * step;
-            var intervalos = vazio.EndRangesFor(z0);
+            var intervalos = vazio.EndRangesFor(z0, vazio._toleradas);
 
             if (intervalos.Count > 0) starts.Add(new ViableStart(z0, intervalos));
         }
@@ -298,6 +298,31 @@ public sealed class ViableElevations
         return Violations(startElevation, endElevation) <= _toleradas;
     }
 
+    /// <summary>
+    /// Os intervalos de cota final viáveis para uma cota inicial qualquer,
+    /// com no máximo <paramref name="maxViolations"/> módulos fora da faixa.
+    ///
+    /// É o que <see cref="Starts"/> guarda para a tolerância configurada,
+    /// calculado sob demanda para qualquer tolerância menor: a otimização
+    /// da fileira (5.4) precisa saber não só se a mesa cabe, mas com quantos
+    /// módulos estourando, para minimizar o estouro e não só evitá-lo.
+    /// </summary>
+    public IReadOnlyList<ElevationRange> EndRanges(double startElevation, int maxViolations)
+    {
+        if (!double.IsFinite(startElevation)) return [];
+        if (Problem is not null) return [];
+
+        return EndRangesFor(startElevation, Math.Clamp(maxViolations, 0, _modulos.Count));
+    }
+
+    /// <summary>
+    /// O terreno mais alto sob a ponta baixa entre os módulos que têm
+    /// terreno, ou null se nenhum tem. Serve para a fileira dar cota a uma
+    /// mesa sem cota viável: ela fica nivelada, marcada, mas em cima do
+    /// terreno dela, e não em zero.
+    /// </summary>
+    public double? HighestGroundOrNull() => _modulos.Count == 0 ? null : _modulos.Max(m => m.Ground);
+
     /// <summary>A linha que descreve o conjunto para o usuário.</summary>
     public string Describe()
     {
@@ -317,9 +342,8 @@ public sealed class ViableElevations
     /// dos intervalos, contando quantos estão abertos, dá as regiões. O
     /// limite de declividade é mais um intervalo, esse obrigatório.
     /// </summary>
-    private List<ElevationRange> EndRangesFor(double z0)
+    private List<ElevationRange> EndRangesFor(double z0, int minimo)
     {
-        var minimo = _toleradas;
         var eventos = new List<(double Z, int Delta)>();
         var semAlcance = 0;
         var fixos = 0;
