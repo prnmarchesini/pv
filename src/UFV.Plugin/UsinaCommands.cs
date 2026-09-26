@@ -92,6 +92,9 @@ public static class UsinaCommands
         }
     }
 
+    /// <summary>O que o planejamento da usina produz, para o desenho vir depois (o Refazer apaga entre os dois).</summary>
+    internal sealed record PlanoDaUsina(ProjectSettings Settings, TableGeometry Geometria, TableProfile Perfil, PlanLayout Layout, ProcessedPlant Usina);
+
     internal static void Executar(
         Editor editor,
         Document documento,
@@ -100,6 +103,25 @@ public static class UsinaCommands
         (IReadOnlyList<Point3> Vertices, AlignmentIdentity Identidade) alinhamento,
         TableProfile perfil,
         bool avisarSeJaHaMesas = true)
+    {
+        var plano = Planejar(editor, documento, terreno, area, alinhamento, perfil, avisarSeJaHaMesas);
+        if (plano is null) return;
+
+        Desenhar(editor, documento, plano);
+    }
+
+    /// <summary>
+    /// Distribui e processa a usina inteira, sem tocar no desenho. Null,
+    /// com a mensagem já dada, quando não há o que desenhar.
+    /// </summary>
+    internal static PlanoDaUsina? Planejar(
+        Editor editor,
+        Document documento,
+        ProcessedTerrain terreno,
+        (IReadOnlyList<Point3> Vertices, string Nome) area,
+        (IReadOnlyList<Point3> Vertices, AlignmentIdentity Identidade) alinhamento,
+        TableProfile perfil,
+        bool avisarSeJaHaMesas)
     {
         var settings = ConfigCommands.Inicial(documento, out var avisoDaConfig);
         if (avisoDaConfig is not null) editor.WriteMessage($"\n  ATENÇÃO: {avisoDaConfig}\n");
@@ -116,14 +138,24 @@ public static class UsinaCommands
             + $"Configuração: {settings.Describe()}\n"
             + $"Área: {area.Nome}; alinhamento: {alinhamento.Identidade.Describe()}\n");
 
-        var layout = RowDistributor.Distribute(
-            area.Vertices, alinhamento.Vertices, alinhamento.Identidade.Side, config.Pitch, config.TableGap, celula,
-            config.UpslopeAzimuthRadians);
+        PlanLayout layout;
+
+        try
+        {
+            layout = RowDistributor.Distribute(
+                area.Vertices, alinhamento.Vertices, alinhamento.Identidade.Side, config.Pitch, config.TableGap, celula,
+                config.UpslopeAzimuthRadians);
+        }
+        catch (ArgumentException erro)
+        {
+            editor.WriteMessage($"\nUSINA {erro.Message}\n");
+            return null;
+        }
 
         if (layout.Rows.Count == 0)
         {
             editor.WriteMessage("\nUSINA Nenhuma fileira cabe: a área está do outro lado da linha, a linha não a atravessa, ou ela é pequena demais.\n");
-            return;
+            return null;
         }
 
         editor.WriteMessage($"\nProcessando {layout.Rows.Count} fileira(s), {layout.Tables.Count} mesa(s)...\n");
@@ -132,6 +164,14 @@ public static class UsinaCommands
             layout, geometria, perfil.TiltRadians,
             perfil.Layout.ModuleCount, perfil.Layout.Module.PowerWatts, terreno.Mesh, settings,
             (feitas, total) => { if (feitas % 10 == 0 || feitas == total) editor.WriteMessage($"  {feitas}/{total} fileira(s)\n"); });
+
+        return new PlanoDaUsina(settings, geometria, perfil, layout, usina);
+    }
+
+    /// <summary>Desenha o que foi planejado e relata.</summary>
+    internal static void Desenhar(Editor editor, Document documento, PlanoDaUsina plano)
+    {
+        var (settings, geometria, perfil, _, usina) = plano;
 
         var relogio = System.Diagnostics.Stopwatch.StartNew();
         var desenhadas = 0;

@@ -5,22 +5,31 @@ namespace UFV.Plugin;
 
 /// <summary>As peças de uma mesa no desenho, achadas pelo GUID dela no XData.</summary>
 /// <param name="Identity">A identidade lida do contorno, ou null se o contorno sumiu.</param>
-/// <param name="Contour">O contorno (a entidade que carrega a identidade da mesa), ou nulo.</param>
+/// <param name="Contours">
+/// Os contornos com este GUID: um, normalmente; dois ou mais quando o
+/// usuário copiou a mesa (a cópia leva o XData junto). Até o 7.5 dar
+/// identidade nova à cópia, quem recalcula ou pinta precisa saber.
+/// </param>
 /// <param name="Pillars">Os blocos de pilar.</param>
 /// <param name="Modules">Os blocos de módulo.</param>
 /// <param name="Faces">As faces superiores.</param>
 /// <param name="Notes">As notas: cotas (risco e texto) e avisos.</param>
 internal sealed record TableParts(
     TableIdentity? Identity,
-    ObjectId? Contour,
+    IReadOnlyList<ObjectId> Contours,
     IReadOnlyList<ObjectId> Pillars,
     IReadOnlyList<ObjectId> Modules,
     IReadOnlyList<ObjectId> Faces,
     IReadOnlyList<ObjectId> Notes)
 {
-    /// <summary>Contorno, pilares e módulos: o que se pinta. A face nunca (é o que o PVsyst recebe); a nota também não.</summary>
-    public IEnumerable<ObjectId> Paintable =>
-        (Contour is { } c ? new[] { c } : Array.Empty<ObjectId>()).Concat(Pillars).Concat(Modules);
+    /// <summary>O contorno (o primeiro, quando há cópia), ou nulo.</summary>
+    public ObjectId? Contour => Contours.Count > 0 ? Contours[0] : null;
+
+    /// <summary>Se há mais de um contorno com o GUID: mesa copiada e colada, assunto do 7.5.</summary>
+    public bool IsDuplicated => Contours.Count > 1;
+
+    /// <summary>Contornos, pilares e módulos: o que se pinta. A face nunca (é o que o PVsyst recebe); a nota também não.</summary>
+    public IEnumerable<ObjectId> Paintable => Contours.Concat(Pillars).Concat(Modules);
 
     /// <summary>Tudo da mesa: o que se apaga ao refazer.</summary>
     public IEnumerable<ObjectId> All => Paintable.Concat(Faces).Concat(Notes);
@@ -45,7 +54,7 @@ internal static class LayoutScan
         ArgumentNullException.ThrowIfNull(database);
 
         var identidades = new Dictionary<Guid, TableIdentity>();
-        var contornos = new Dictionary<Guid, ObjectId>();
+        var contornos = new Dictionary<Guid, List<ObjectId>>();
         var pilares = new Dictionary<Guid, List<ObjectId>>();
         var modulos = new Dictionary<Guid, List<ObjectId>>();
         var faces = new Dictionary<Guid, List<ObjectId>>();
@@ -67,9 +76,9 @@ internal static class LayoutScan
             if (LayoutXData.LoadTable(entidade) is { } mesa)
             {
                 // Duas entidades com o mesmo GUID de mesa (cópia): a primeira
-                // fica; a cópia é assunto do 7.5.
+                // dá a identidade; todos os contornos ficam na lista.
                 identidades.TryAdd(mesa.Id, mesa);
-                contornos.TryAdd(mesa.Id, id);
+                Juntar(contornos, mesa.Id, id);
             }
             else if (LayoutXData.LoadPillar(entidade) is { } pilar)
             {
@@ -89,14 +98,14 @@ internal static class LayoutScan
             }
         }
 
-        var todas = identidades.Keys.Concat(pilares.Keys).Concat(modulos.Keys).Concat(faces.Keys).Concat(notas.Keys).Distinct();
+        var todas = contornos.Keys.Concat(pilares.Keys).Concat(modulos.Keys).Concat(faces.Keys).Concat(notas.Keys).Distinct();
         var resultado = new Dictionary<Guid, TableParts>();
 
         foreach (var guid in todas)
         {
             resultado[guid] = new TableParts(
                 identidades.GetValueOrDefault(guid),
-                contornos.TryGetValue(guid, out var c) ? c : null,
+                contornos.GetValueOrDefault(guid) ?? [],
                 pilares.GetValueOrDefault(guid) ?? [],
                 modulos.GetValueOrDefault(guid) ?? [],
                 faces.GetValueOrDefault(guid) ?? [],

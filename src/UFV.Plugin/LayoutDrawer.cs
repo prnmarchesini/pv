@@ -44,13 +44,18 @@ internal static class LayoutDrawer
 
     /// <summary>Desenha a fileira. Abre e fecha a própria transação.</summary>
     /// <param name="tiltRadians">A inclinação transversal da mesa, gravada na identidade dela.</param>
+    /// <param name="idDaMesa">
+    /// O GUID a dar a cada mesa; null gera um novo. O recalcular (7.3) passa
+    /// o GUID que a mesa já tinha, para ela continuar sendo ela.
+    /// </param>
     internal static DrawnRow Draw(
         Database database,
         ProcessedRow fileira,
         TableGeometry geometria,
         SolarModule modulo,
         double tiltRadians,
-        AnalysisRules regras)
+        AnalysisRules regras,
+        Func<ProcessedTable, Guid>? idDaMesa = null)
     {
         ArgumentNullException.ThrowIfNull(database);
         ArgumentNullException.ThrowIfNull(fileira);
@@ -85,7 +90,7 @@ internal static class LayoutDrawer
         foreach (var mesa in fileira.Tables)
         {
             var identidade = new TableIdentity(
-                Guid.NewGuid(), mesa.Label,
+                idDaMesa?.Invoke(mesa) ?? Guid.NewGuid(), mesa.Label,
                 mesa.Solved.StartElevation, mesa.Solved.EndElevation, tiltRadians,
                 mesa.Solved.Marked, mesa.Solved.Reason);
 

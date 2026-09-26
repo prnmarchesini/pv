@@ -287,6 +287,18 @@ internal static class RibbonUfv
             PluginInfo.ComandoEstado,
             "Diz quantas mesas estão limpas e quais estão sujas, e por quê."));
 
+        origem.Items.Add(BotaoPequeno(
+            "Recalcular",
+            IconesDaRibbon.Recalcular(),
+            PluginInfo.ComandoRecalcular,
+            "Recalcula uma mesa onde ela está: reamostra o terreno e refaz pilares e pontas baixas (também no botão direito sobre a mesa)."));
+
+        origem.Items.Add(BotaoPequeno(
+            "Recalcular sujas",
+            IconesDaRibbon.RecalcularSujas(),
+            PluginInfo.ComandoRecalcularSujas,
+            "Recalcula só as mesas sujas."));
+
         return new RibbonPanel { Source = origem };
     }
 

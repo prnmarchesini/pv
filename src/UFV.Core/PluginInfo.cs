@@ -150,6 +150,15 @@ public static class PluginInfo
     /// <summary>Comando que refaz a primeira área com o primeiro alinhamento, sem perguntar. Para o nível 2.</summary>
     public const string ComandoRefazerAutomatico = "UFV_REFAZER_AUTO";
 
+    /// <summary>Comando que recalcula uma mesa onde ela está (reamostra, refaz pilares e pontas baixas), mantendo o GUID.</summary>
+    public const string ComandoRecalcular = "UFV_RECALCULAR";
+
+    /// <summary>Comando que recalcula só as mesas sujas.</summary>
+    public const string ComandoRecalcularSujas = "UFV_RECALCULAR_SUJAS";
+
+    /// <summary>Comando que recalcula as sujas com a mesa de exemplo, sem perguntar. Para o nível 2.</summary>
+    public const string ComandoRecalcularAutomatico = "UFV_RECALCULAR_AUTO";
+
     /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).

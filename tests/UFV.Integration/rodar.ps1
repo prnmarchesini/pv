@@ -1870,7 +1870,22 @@ function Testar-Refazer {
     }
 
     if ($contornos -lt 10 -or $pilares -ne 7 * $contornos -or $faces -ne 28 * $contornos) {
-        $problemas.Add("ufv-refazer: $contornos contorno(s), $pilares pilar(es), $faces face(s); esperava 7 e 28 por contorno, sem dobro. Veja $($r.Saida)")
+        $problemas.Add("ufv-refazer: $contornos contorno(s), $pilares pilar(es), $faces face(s); esperava 7 e 28 por contorno. Veja $($r.Saida)")
+        return $false
+    }
+
+    # "Nada em dobro": o que esta no desenho e exatamente o que a usina
+    # relatou ter desenhado; a fileira antiga nao sobrou.
+    # A ultima linha "desenhado" e a da usina (a primeira e da fileira inicial).
+    $resumos = @([regex]::Matches($r.Texto, 'desenhado: (\d+) mesa\(s\), (\d+) pilar\(es\), (\d+) módulo\(s\) com face'))
+    if ($resumos.Count -lt 2) {
+        $problemas.Add("ufv-refazer: esperava dois resumos de desenho (fileira e usina). Veja $($r.Saida)")
+        return $false
+    }
+
+    $usina = $resumos[$resumos.Count - 1]
+    if ([int] $usina.Groups[1].Value -ne $contornos -or [int] $usina.Groups[2].Value -ne $pilares -or [int] $usina.Groups[3].Value -ne $faces) {
+        $problemas.Add("ufv-refazer: a usina desenhou $($usina.Groups[1].Value) mesa(s), $($usina.Groups[2].Value) pilar(es), $($usina.Groups[3].Value) modulo(s), mas o desenho tem $contornos, $pilares e ${faces}: sobrou algo da fileira antiga. Veja $($r.Saida)")
         return $false
     }
 
@@ -1880,6 +1895,109 @@ function Testar-Refazer {
     }
 
     Write-Host "  (refazer: $apagadas mesa(s) apagada(s), $contornos redesenhada(s), $notas notas todas com dona)" -ForegroundColor DarkGray
+    return $true
+}
+
+<#
+    Recalcular (7.3/7.4): processa uma fileira, suja a primeira mesa e manda
+    recalcular as sujas. O comando diz o GUID sujado; depois a mesa com esse
+    GUID tem que existir limpa, com 7 pilares, 28 modulos e 28 faces, sem
+    peca vermelha; o total de contornos nao muda; UFV_ESTADO conta 0 sujas.
+    Lido em LISP pelo XData (o proprio ufv-sujo.scr tem o padrao).
+#>
+function Testar-Recalcular {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-recalcular--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-recalcular: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-recalcular' `
+        -Script (Join-Path $PSScriptRoot 'ufv-recalcular.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-recalcular terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'SUJAR_GUID ([0-9a-fA-F-]+) pecas=(\d+)') {
+        $problemas.Add("ufv-recalcular: nada foi sujado. Veja $($r.Saida)")
+        return $false
+    }
+
+    $guid = $Matches[1]
+
+    if ($r.Texto -notmatch '(?m)^RECALCULAR (\S+) refeita onde está') {
+        $problemas.Add("ufv-recalcular: o comando nao refez a mesa. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^RECALCULAR 1 de 1 mesa\(s\) recalculada\(s\)') {
+        $problemas.Add("ufv-recalcular: esperava 1 de 1. Veja $($r.Saida)")
+        return $false
+    }
+
+    # Depois do recalcular, ESTADO conta zero sujas.
+    $estados = @([regex]::Matches($r.Texto, '(?m)^ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), (\d+) suja\(s\)'))
+    if ($estados.Count -lt 1 -or [int] $estados[$estados.Count - 1].Groups[3].Value -ne 0) {
+        $problemas.Add("ufv-recalcular: UFV_ESTADO ainda conta mesa suja. Veja $($r.Saida)")
+        return $false
+    }
+
+    $mesasEstado = [int] $estados[$estados.Count - 1].Groups[1].Value
+
+    if ($r.Texto -notmatch 'UFV_RECALC_LISP antes=(\d+) contornos=(\d+) guid=([0-9a-fA-F-]+) cont=(\d+) suja=(\S+) pilares=(\d+) modulos=(\d+) faces=(\d+) vermelhas=(\d+)') {
+        $problemas.Add("ufv-recalcular: nao consegui ler o desenho em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $antes = [int] $Matches[1]
+    $contornos = [int] $Matches[2]
+    $guidLisp = $Matches[3].ToLowerInvariant()
+    $cont = [int] $Matches[4]
+    $suja = $Matches[5]
+    $pil = [int] $Matches[6]
+    $mod = [int] $Matches[7]
+    $fac = [int] $Matches[8]
+    $verm = [int] $Matches[9]
+
+    if ($guidLisp -ne $guid.ToLowerInvariant()) {
+        $problemas.Add("ufv-recalcular: o LISP achou suja a mesa $guidLisp e o comando sujou $guid. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($contornos -ne $antes -or $contornos -ne $mesasEstado -or $contornos -lt 2) {
+        $problemas.Add("ufv-recalcular: $antes contorno(s) antes, $contornos depois, $mesasEstado no ESTADO. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($cont -ne 1 -or $suja -ne '0' -or $pil -ne 7 -or $mod -ne 28 -or $fac -ne 28 -or $verm -ne 0) {
+        $problemas.Add("ufv-recalcular: a mesa $guidLisp depois do recalcular tem $cont contorno(s) (suja=$suja), $pil pilar(es), $mod modulo(s), $fac face(s), $verm vermelha(s); esperava 1/0/7/28/28/0. Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (recalcular: mesa $($guid.Substring(0,8)) refeita limpa; $contornos mesas no desenho)" -ForegroundColor DarkGray
     return $true
 }
 
@@ -1972,6 +2090,10 @@ else {
     # O Refazer: apaga por area e redesenha, sem dobro.
     $total++
     if (Testar-Refazer -Desenho $desenhos[0]) { $passaram++ }
+
+    # Recalcular uma mesa suja onde ela esta, com o mesmo GUID.
+    $total++
+    if (Testar-Recalcular -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

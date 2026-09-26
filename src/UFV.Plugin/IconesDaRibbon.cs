@@ -121,6 +121,23 @@ internal static class IconesDaRibbon
         Traco("M22,6 A7,7 0 1 0 25,13", Neutro, 2.2),
         Traco("M22,3 L22,7 L18,7", Neutro, 2.2));
 
+    /// <summary>Uma mesa com uma seta circular pequena: recalcular a mesa.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Recalcular() => Montar(
+        Traco("M4,22 L16,17", Azul, 3.0),
+        Traco("M10,20 V27", Ambar, 2.0),
+        Traco("M24,7 A5,5 0 1 0 27,12", Neutro, 2.0),
+        Traco("M24,4 L24,7.5 L20.5,7.5", Neutro, 2.0));
+
+    /// <summary>Três mesas, uma vermelha, e a seta circular: recalcular as sujas.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource RecalcularSujas() => Montar(
+        Traco("M3,12 L11,9", Azul, 2.6),
+        Traco("M3,19 L11,16", new SolidColorBrush(Color.FromRgb(200, 40, 40)), 2.6),
+        Traco("M3,26 L11,23", Azul, 2.6),
+        Traco("M24,9 A6,6 0 1 0 27.5,15", Neutro, 2.2),
+        Traco("M24,5 L24,9.5 L19.5,9.5", Neutro, 2.2));
+
     /// <summary>Uma cota vertical com o número ao lado: as alturas dos pilares.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static ImageSource Alturas() => Montar(

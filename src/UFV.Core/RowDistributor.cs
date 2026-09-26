@@ -95,8 +95,12 @@ public sealed class PlanLayout
 ///    ela diz onde cada fileira começa. Cada fileira nasce onde a sua faixa
 ///    cruza a linha, e a mesa 1 encosta ali; as seguintes vêm depois do
 ///    espaçamento, para o lado clicado, até a área acabar. Uma linha quebrada
-///    dá um começo escalonado, e é para isso que ela existe. A fileira 1 é a
-///    que nasce no início da linha (primeiro clique).
+///    dá um começo escalonado, e é para isso que ela existe; uma linha que
+///    cruza a mesma faixa duas vezes (zigue-zague) começa a fileira no
+///    cruzamento mais adiantado, e o que fica atrás dele fica vazio. A
+///    fileira 1 é a que nasce no início da linha (primeiro clique), e as
+///    faixas se sucedem no sentido em que a linha caminha do primeiro ao
+///    último vértice.
 /// 3. <b>Mesa não passa da área.</b> A que não cabe inteira no trecho, ou que
 ///    um recorte da área invade, não é colocada: conta em
 ///    <see cref="PlanLayout.DroppedOutside"/> e só.

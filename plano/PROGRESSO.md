@@ -49,8 +49,8 @@ Só o Renan marca VALIDADO.
 | 6.5 | Escritor PVC | PENDENTE | |
 | 7.1 | Estado sujo | AGUARDANDO VALIDAÇÃO | `TableIdentity.Dirty` no XData (versão 2, lê a 1); `UFV_SUJAR` pinta contorno, pilares e módulos de vermelho; `UFV_ESTADO` lista; nível 2 confere cor e XData |
 | 7.2 | O vigia | AGUARDANDO VALIDAÇÃO | `LayoutWatcher` por desenho: eventos do banco + fim de comando; `PendingChanges` (Core) decide; MOVE suja, ERASE do contorno registra remoção (`RemovalStore`); nível 2 com MOVE e ERASE por script |
-| 7.3 | Recalcular mesa | PENDENTE | |
-| 7.4 | Recalcular tudo | PENDENTE | |
+| 7.3 | Recalcular mesa | AGUARDANDO VALIDAÇÃO | `UFV_RECALCULAR` (botão e botão direito sobre a peça): célula dos cantos do contorno (`TableCells`), reamostra, refaz pilares e pontas baixas, mesmo GUID, nasce limpa |
+| 7.4 | Recalcular tudo | AGUARDANDO VALIDAÇÃO | `UFV_RECALCULAR_SUJAS` (botão "Recalcular sujas"); nível 2: suja uma, recalcula, mesmo GUID limpo, 7/28/28 peças |
 | 7.5 | Cópia | PENDENTE | |
 | 7.6 | Apagar e recontar | PENDENTE | |
 | 7.7 | Validação | PENDENTE | |
@@ -87,9 +87,11 @@ aguardando validação na tela. Etapa 5: 5.1 a 5.6 fechados automaticamente
 (só modelo), 5.7, 5.8 e 5.9 aguardando validação na tela. Etapa 6: 6.1
 fechado automaticamente, 6.2 e 6.3 aguardando validação (no PVsyst), 6.4
 entregue e PARADO por ordem do plano, 6.5 pendente das respostas dele.
-Etapa 7: 7.1 e 7.2 aguardando validação na tela. As etapas 5, 6 e o
-7.1/7.2 foram feitos em 26/09/2026, sem o Renan ver uma mesa na tela. Placar na última
-execução:
+Etapa 7: 7.1 a 7.4 aguardando validação na tela. As etapas 5, 6 e 7.1 a
+7.4 foram feitas em 26/09/2026; a 5 foi reprovada duas vezes na tela no
+mesmo dia e refeita (fileira pelo azimute, mesa dentro da área, mesa que
+não cabe pintada, Refazer, janela de nome, terreno que não se perde).
+Placar na última execução:
 
 ```
 Etapa 0   45/45    OK
@@ -99,28 +101,28 @@ Etapa 3   335/335  OK
 Etapa 4   242/242  OK
 Etapa 5   250/250  OK
 Etapa 6   19/19    OK
-Etapa 7   14/14    OK
-Nivel 2   14/14    OK
+Etapa 7   21/21    OK
+Nivel 2   16/16    OK
 Acervo             OK
 ```
 
-### O próximo passo é o 7.3 (recalcular mesa); o 6.5 espera as respostas do 6.4
+### O próximo passo é o 7.5 (cópia); o 6.5 espera as respostas do 6.4
 
 6.1 fechado, 6.2 e 6.3 aguardando validação (o DAE no PVsyst), 6.4 é o
 resumo do formato PVC ("Entregar um resumo ao Renan e PARAR"). O 6.5 só
 começa depois que o Renan ler o resumo e decidir as três perguntas dele. A
-etapa 7 (edição) não depende da 6 e seguiu: 7.1 (estado sujo) e 7.2 (o
-vigia) feitos, aguardando validação. O 7.3 é "recalcular mesa" (item de
-menu de botão direito sobre a mesa: reamostra o terreno e refaz pilares e
-pontas baixas daquela mesa). Antes de começar, ler
-`plano/etapas/etapa-7-edicao.md` e as seções "7.1: o estado sujo" e "7.2:
-o vigia" no fim deste arquivo. **Antes do 7.3 há uma dívida a pagar**: os
-textos de altura e o aviso de marcada não têm identidade (XData), e o
-recálculo precisa apagá-los por mesa (ver Dívidas). Também vale decidir
-ali o que "recalcular" significa para uma mesa MOVIDA: ela é reprocessada
-onde está agora (a posição nova é a vontade do usuário), com a cota vinda
-do terreno (regra sagrada 5), e o alinhamento de fileira (5.4) não é
-refeito para as vizinhas, que é o "recalcular tudo" do 7.4.
+etapa 7 (edição) não depende da 6 e seguiu: 7.1 (estado sujo), 7.2 (o
+vigia), 7.3 (recalcular mesa) e 7.4 (recalcular sujas) feitos, aguardando
+validação. Fora do plano, a pedido do Renan na tela em 26/09/2026, a
+etapa 5 foi refeita duas vezes no mesmo dia (fileira pelo azimute, mesa
+dentro da área, mesa que não cabe pintada, Refazer, janela de nome,
+terreno que não se perde): ver "Segunda reprovação do 5.8". O 7.5 é a
+cópia: detectar GUID duplicado (o vigia já suja original e cópia com
+"copiada"), dar identidade nova à cópia e a cada peça dela. Antes de
+começar, ler `plano/etapas/etapa-7-edicao.md` e as seções 7.1 a 7.4 no
+fim deste arquivo. O `LayoutScan.Tables` hoje agrupa as peças de dois
+contornos com o mesmo GUID sob um só: o 7.5 tem que separá-las (pela
+proximidade ao contorno, ou pela ordem de criação).
 
 Antes de começar, ler `plano/etapas/etapa-6-pvsyst.md`. O que a etapa 6
 recebe da 5: as faces superiores dos módulos são entidades `3DFACE` na
@@ -224,6 +226,16 @@ teste: a etapa 6 é onde passa a ter.
    pela paleta de propriedades: também suja ("movida ou editada"). Rodar
    `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
    nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
+9. **Testar o 7.3 e o 7.4 (recalcular)**: MOVE numa mesa inteira (janela
+   sobre ela) para um lugar onde o terreno é outro: fica vermelha. Botão
+   direito sobre qualquer peça dela → UFV → "Recalcular esta mesa" (ou
+   botão "Recalcular" na seção Edição e clicar na peça): a mesa é
+   redesenhada onde está, com pilares e cotas do terreno novo, limpa (cor
+   normal), mesmo letreiro. Suje duas ou três mesas (botão "Sujar") e use
+   "Recalcular sujas": só elas mudam; `UFV_ESTADO` conta 0 sujas. Trocar
+   a mesa na janela Mesa e recalcular: o comando recusa ("trocou de mesa?
+   use o Refazer da área"). Recalcular não refaz o alinhamento com as
+   vizinhas; para isso é o Refazer da área.
 5. **Conferir a mesa do 3.7 contra um projeto de fabricante.** Ele aprovou a
    etapa 3 sem relatar essa conferência, que é o que o plano pede como
    validação do 3.7 — é o único jeito de saber se o motor acerta o número, e
@@ -2952,3 +2964,76 @@ ela, corte e aterro contra a original); fica para depois.
 - magenta para "não cabe no terreno"; o vermelho continua sendo "suja"
   (7.1) e o de análise é o da configuração;
 - o Refazer redesenha a área inteira (todas as fileiras), não só uma.
+
+## 7.3 e 7.4: recalcular uma mesa, recalcular as sujas
+
+Feitos em 26/09/2026, `AGUARDANDO VALIDAÇÃO`. Nível 1: sete testes
+(`TableCellsTests`). Nível 2: `ufv-recalcular.scr` processa a fileira do
+5.8, suja a primeira mesa e manda recalcular as sujas: a mesa com o MESMO
+GUID continua existindo, limpa, com 7 pilares, 28 módulos e 28 faces, o
+total de contornos não muda, `UFV_ESTADO` conta 0 sujas.
+
+### O que "recalcular" significa
+
+A mesa é recalculada ONDE ESTÁ: a célula em planta vem dos quatro cantos
+do contorno desenhado (`TableCells.FromCorners`, Core): origem no canto da
+borda baixa, direção da borda baixa, normal para o lado da borda alta, e
+comprimento e fundo do PERFIL ATUAL (o contorno em planta não é retângulo
+quando há giro longitudinal, é paralelogramo com a borda baixa encurtada;
+a célula é a nominal e o giro o pipeline recalcula das cotas). Se a borda
+baixa desenhada não fecha com o comprimento do perfil (trocou de mesa), o
+comando recusa e manda usar o Refazer. Depois, `RowPipeline.ProcessRow`
+com uma fileira de uma mesa só (o alinhamento com as vizinhas não é
+refeito: isso é o Refazer), tudo dela é apagado (contorno, pilares,
+módulos, faces, notas) e desenhado de novo pelo `LayoutDrawer` com o mesmo
+GUID (`idDaMesa`), nascendo limpa. Uma mesa movida é recalculada na posição
+nova, com a cota do terreno (regra sagrada 5): a posição é vontade do
+usuário.
+
+### Onde está
+
+- `UFV_RECALCULAR` (botão "Recalcular" na seção Edição, e o item
+  "Recalcular esta mesa" no botão direito sobre contorno, pilar, módulo ou
+  face); aceita a seleção prévia ou pede um clique;
+- `UFV_RECALCULAR_SUJAS` (botão "Recalcular sujas"): as sujas, em ordem de
+  letreiro;
+- `UFV_RECALCULAR_AUTO`: as sujas com a mesa de exemplo, para o nível 2.
+
+### Decisões que são minhas
+
+- recalcular usa o perfil de mesa e a configuração ATUAIS (é o que o
+  Renan pediu para o Refazer: "sempre baseadas nas configurações");
+- o letreiro é mantido (F1.3 continua F1.3), mesmo que a mesa tenha sido
+  movida para outra fileira; renumerar é o 7.10;
+- mesa sem contorno não se recalcula (não há onde ler a posição): o
+  comando diz e manda usar o Refazer.
+
+### O que a revisão (dos dois lotes de 26/09) apontou, e o que foi feito
+
+Um revisor só para o lote dos seis pedidos e o do 7.3/7.4. Nenhum
+bloqueante. Quatro importantes, corrigidos: (1) mesa copiada (dois
+contornos com o mesmo GUID) entrava no "recalcular sujas" e perdia as
+peças da cópia; `LayoutScan` passou a guardar TODOS os contornos do GUID
+(`TableParts.Contours`, `IsDuplicated`), o Recalcular recusa a duplicada
+("apague a cópia ou use o Refazer; dar identidade à cópia é o 7.5") e o
+Refazer apaga as duas cópias; (2) o Refazer apagava e commitava antes de
+distribuir: "nenhuma fileira cabe" deixava a área vazia; `UsinaCommands`
+foi dividido em `Planejar` e `Desenhar`, e o Refazer só apaga depois de
+planejar (e diz que U devolve as apagadas); (3) `Reprocessar` caía para o
+NOME da superfície e regravava o carimbo, anulando o aviso de terreno
+velho; agora só pelo handle, e sem o handle avisa "a superfície processada
+em <data> não está mais no desenho (há outra com o mesmo nome); use o
+botão Terreno"; (4) os níveis 2 do Refazer e do Recalcular não provavam o
+que prometiam: o do Refazer agora compara o desenho com o resumo da usina
+(nada da fileira antiga sobrou), e o do Recalcular guarda o GUID sujo antes
+e confere depois: mesmo GUID, limpo, 7 pilares, 28 módulos, 28 faces,
+nenhuma peça vermelha. Menores corrigidos: aviso de divergência quando a
+mesa recalculada foi girada à mão; o Refazer decide por qualquer vértice do
+contorno dentro da área e tira as apagadas do registro de removidas; uma
+varredura só no "recalcular sujas"; `Loaded` da janela protegido;
+zigue-zague documentado no distribuidor. Anotado, não feito:
+`PartlyOutside` e a análise de borda estão mortos; `Overlap` só os testes
+usam; `LayoutScan` abre toda `Line` e `MText` do desenho (medir numa usina
+grande); linha que recua e depois avança faz F1 não ser a do primeiro
+clique (sem teste).
+

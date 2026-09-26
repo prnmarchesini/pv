@@ -99,13 +99,25 @@ public static class RefazerCommands
         (IReadOnlyList<Point3> Vertices, AlignmentIdentity Identidade) alinhamento,
         TableProfile perfil)
     {
+        // Planeja ANTES de apagar: se a distribuição não dá fileira (linha
+        // paralela, área do outro lado), nada é apagado.
+        var plano = UsinaCommands.Planejar(editor, documento, terreno, area, alinhamento, perfil, avisarSeJaHaMesas: false);
+
+        if (plano is null)
+        {
+            editor.WriteMessage("\nREFAZER Nada foi apagado.\n");
+            return;
+        }
+
         var apagadas = LayoutEraser.ApagarDentro(documento.Database, area.Vertices);
 
-        editor.WriteMessage(
-            $"\nREFAZER {apagadas.Tables} mesa(s) apagada(s) dentro de {area.Nome} "
-            + $"({apagadas.Entities} entidade(s)); desenhando de novo com a configuração atual...\n");
+        if (apagadas.Tables.Count > 0) RemovalStore.Remove(documento.Database, apagadas.Tables);
 
-        UsinaCommands.Executar(editor, documento, terreno, area, alinhamento, perfil, avisarSeJaHaMesas: false);
+        editor.WriteMessage(
+            $"\nREFAZER {apagadas.Tables.Count} mesa(s) apagada(s) dentro de {area.Nome} "
+            + $"({apagadas.Entities} entidade(s)); desenhando de novo com a configuração atual (se algo falhar, U devolve as apagadas)...\n");
+
+        UsinaCommands.Desenhar(editor, documento, plano);
     }
 
     /// <summary>A área que veio selecionada antes do comando (o botão direito sobre ela), ou null.</summary>
@@ -133,13 +145,15 @@ public static class RefazerCommands
     }
 }
 
-/// <summary>O que o apagar por área removeu.</summary>
-internal sealed record Erased(int Tables, int Entities);
+/// <summary>O que o apagar por área removeu: os GUIDs das mesas e quantas entidades.</summary>
+internal sealed record Erased(IReadOnlyList<Guid> Tables, int Entities);
 
 /// <summary>
-/// Apaga o que o plugin desenhou dentro de uma área: toda mesa cujo
-/// contorno (ou, sem contorno, a primeira peça) está dentro do polígono,
-/// com pilares, módulos, faces e notas. Pelo XData, nunca pela camada.
+/// Apaga o que o plugin desenhou dentro de uma área: toda mesa com algum
+/// vértice do contorno (ou, sem contorno, a primeira peça) dentro do
+/// polígono, com pilares, módulos, faces e notas; mesa copiada (dois
+/// contornos com o mesmo GUID) vai inteira, com as duas cópias. Pelo
+/// XData, nunca pela camada.
 /// </summary>
 internal static class LayoutEraser
 {
@@ -148,18 +162,16 @@ internal static class LayoutEraser
         ArgumentNullException.ThrowIfNull(database);
         ArgumentNullException.ThrowIfNull(area);
 
-        var mesas = 0;
+        var mesas = new List<Guid>();
         var entidades = 0;
 
         using var transacao = database.TransactionManager.StartTransaction();
 
-        foreach (var mesa in LayoutScan.Tables(transacao, database).Values)
+        foreach (var (guid, mesa) in LayoutScan.Tables(transacao, database))
         {
-            var referencia = mesa.Contour ?? mesa.All.Cast<ObjectId?>().FirstOrDefault();
-            if (referencia is not { } id || id.IsNull) continue;
+            var referencias = mesa.Contours.Count > 0 ? mesa.Contours : mesa.All.Take(1).ToList();
 
-            var ponto = Ponto(transacao, id);
-            if (ponto is null || !Polygons.Contains(area, ponto.Value.X, ponto.Value.Y)) continue;
+            if (!referencias.Any(id => Pontos(transacao, id).Any(p => Polygons.Contains(area, p.X, p.Y)))) continue;
 
             foreach (var peca in mesa.All)
             {
@@ -168,7 +180,7 @@ internal static class LayoutEraser
                 entidades++;
             }
 
-            mesas++;
+            mesas.Add(guid);
         }
 
         transacao.Commit();
@@ -176,8 +188,8 @@ internal static class LayoutEraser
         return new Erased(mesas, entidades);
     }
 
-    /// <summary>Um ponto de referência da entidade, em planta.</summary>
-    private static Point3? Ponto(Transaction transacao, ObjectId id)
+    /// <summary>Os pontos de referência da entidade, em planta: os vértices do contorno, ou um ponto da peça.</summary>
+    private static IEnumerable<Point3> Pontos(Transaction transacao, ObjectId id)
     {
         switch (transacao.GetObject(id, OpenMode.ForRead))
         {
@@ -185,18 +197,19 @@ internal static class LayoutEraser
                 foreach (ObjectId v in polilinha)
                 {
                     var vertice = (PolylineVertex3d)transacao.GetObject(v, OpenMode.ForRead);
-                    return new Point3(vertice.Position.X, vertice.Position.Y, 0);
+                    yield return new Point3(vertice.Position.X, vertice.Position.Y, 0);
                 }
-                return null;
+                break;
             case BlockReference bloco:
-                return new Point3(bloco.Position.X, bloco.Position.Y, 0);
+                yield return new Point3(bloco.Position.X, bloco.Position.Y, 0);
+                break;
             case Face face:
                 var p = face.GetVertexAt(0);
-                return new Point3(p.X, p.Y, 0);
+                yield return new Point3(p.X, p.Y, 0);
+                break;
             case MText texto:
-                return new Point3(texto.Location.X, texto.Location.Y, 0);
-            default:
-                return null;
+                yield return new Point3(texto.Location.X, texto.Location.Y, 0);
+                break;
         }
     }
 }

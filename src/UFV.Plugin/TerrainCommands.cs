@@ -338,12 +338,27 @@ public static class TerrainCommands
 
             if (carimbo is not null)
             {
-                escolhida = candidatas.FirstOrDefault(e => e.Id.Handle.ToString() == carimbo.Surface.Handle)
-                    ?? candidatas.FirstOrDefault(e => e.Summary.DisplayName == carimbo.Surface.Name);
-            }
+                // Só pelo handle. Uma superfície recriada com o mesmo nome é
+                // exatamente o que o carimbo existe para denunciar; reprocessá-la
+                // por baixo dos panos regravaria o carimbo e apagaria o aviso.
+                escolhida = candidatas.FirstOrDefault(e => e.Id.Handle.ToString() == carimbo.Surface.Handle);
 
-            if (escolhida is null && carimbo is null && candidatas.Count == 1)
+                if (escolhida is null)
+                {
+                    var homonima = candidatas.Any(e => e.Summary.DisplayName == carimbo.Surface.Name);
+
+                    editor.WriteMessage(
+                        $"\nA superfície \"{carimbo.Surface.Name}\" processada em {carimbo.ProcessedAtText} não está mais no desenho"
+                        + (homonima ? " (há outra com o mesmo nome, recriada)" : string.Empty)
+                        + ". Use o botão Terreno para escolher a superfície e processar de novo.\n");
+
+                    return false;
+                }
+            }
+            else if (candidatas.Count == 1)
+            {
                 escolhida = candidatas[0];
+            }
 
             if (escolhida is null) return false;
 

@@ -49,7 +49,11 @@ internal sealed class JanelaDeNome : Window
         painel.Children.Add(botoes);
         Content = painel;
 
-        Loaded += (_, _) => _caixa.Focus();
+        Loaded += (_, _) =>
+        {
+            try { _caixa.Focus(); }
+            catch (System.Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao focar a caixa do nome.", erro); }
+        };
     }
 
     private void Conferir()

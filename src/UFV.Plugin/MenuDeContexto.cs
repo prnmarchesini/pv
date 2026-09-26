@@ -8,9 +8,10 @@ using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 namespace UFV.Plugin;
 
 /// <summary>
-/// O menu de botão direito sobre a polilinha da área: "Refazer as mesas
-/// desta área". O AutoCAD mostra o item quando a entidade selecionada é da
-/// classe registrada (toda polilinha 3D; o comando confere se é área nossa).
+/// O menu de botão direito do plugin: sobre a polilinha da área, "Refazer
+/// as mesas desta área"; sobre qualquer peça de mesa (contorno, pilar,
+/// módulo, face), "Recalcular esta mesa". O AutoCAD mostra o item pela
+/// classe da entidade selecionada; o comando confere se ela é nossa.
 ///
 /// Só existe com interface; num host sem ela nem é tocado (os tipos de
 /// Autodesk.AutoCAD.Windows não carregam lá), por isso os métodos são
@@ -18,45 +19,65 @@ namespace UFV.Plugin;
 /// </summary>
 internal static class MenuDeContexto
 {
-    private static ContextMenuExtension? _menu;
+    private static readonly List<(RXClass Classe, ContextMenuExtension Menu)> Menus = [];
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static void Instalar()
     {
-        if (_menu is not null) return;
+        if (Menus.Count > 0) return;
 
-        var menu = new ContextMenuExtension { Title = "UFV" };
+        Registrar(typeof(Polyline3d),
+            ("Refazer as mesas desta área", PluginInfo.ComandoRefazer),
+            ("Recalcular esta mesa", PluginInfo.ComandoRecalcular));
 
-        var refazer = new MenuItem("Refazer as mesas desta área");
-        refazer.Click += (_, _) =>
-        {
-            try
-            {
-                var documento = AcadApp.DocumentManager.MdiActiveDocument;
-                documento?.SendStringToExecute($"_{PluginInfo.ComandoRefazer} ", true, false, false);
-            }
-            catch (System.Exception erro)
-            {
-                RegistroDeDiagnostico.Registrar("Falha ao chamar o Refazer pelo menu.", erro);
-            }
-        };
-
-        menu.MenuItems.Add(refazer);
-
-        Autodesk.AutoCAD.ApplicationServices.Application.AddObjectContextMenuExtension(
-            RXObject.GetClass(typeof(Polyline3d)), menu);
-
-        _menu = menu;
+        Registrar(typeof(BlockReference), ("Recalcular esta mesa", PluginInfo.ComandoRecalcular));
+        Registrar(typeof(Face), ("Recalcular esta mesa", PluginInfo.ComandoRecalcular));
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static void Desinstalar()
     {
-        if (_menu is null) return;
+        foreach (var (classe, menu) in Menus)
+        {
+            try
+            {
+                Autodesk.AutoCAD.ApplicationServices.Application.RemoveObjectContextMenuExtension(classe, menu);
+            }
+            catch (System.Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao tirar um menu de contexto.", erro);
+            }
+        }
 
-        Autodesk.AutoCAD.ApplicationServices.Application.RemoveObjectContextMenuExtension(
-            RXObject.GetClass(typeof(Polyline3d)), _menu);
+        Menus.Clear();
+    }
 
-        _menu = null;
+    private static void Registrar(Type tipo, params (string Rotulo, string Comando)[] itens)
+    {
+        var menu = new ContextMenuExtension { Title = "UFV" };
+
+        foreach (var (rotulo, comando) in itens)
+        {
+            var item = new MenuItem(rotulo);
+            var nome = comando;
+
+            item.Click += (_, _) =>
+            {
+                try
+                {
+                    AcadApp.DocumentManager.MdiActiveDocument?.SendStringToExecute($"_{nome} ", true, false, false);
+                }
+                catch (System.Exception erro)
+                {
+                    RegistroDeDiagnostico.Registrar($"Falha ao chamar {nome} pelo menu.", erro);
+                }
+            };
+
+            menu.MenuItems.Add(item);
+        }
+
+        var classe = RXObject.GetClass(tipo);
+        Autodesk.AutoCAD.ApplicationServices.Application.AddObjectContextMenuExtension(classe, menu);
+        Menus.Add((classe, menu));
     }
 }
