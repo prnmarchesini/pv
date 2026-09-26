@@ -168,6 +168,9 @@ public static class PluginInfo
     /// <summary>Comando que confere registros, mesas, identidades e o carimbo da superfície, e diz o que achou.</summary>
     public const string ComandoValidar = "UFV_VALIDAR";
 
+    /// <summary>Comando que diz mesas, módulos e kWp da seleção (a conta da caixa flutuante).</summary>
+    public const string ComandoKwpSelecao = "UFV_KWP_SELECAO";
+
     /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).

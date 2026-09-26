@@ -2306,6 +2306,71 @@ function Testar-Validar {
     return $true
 }
 
+<#
+    A conta da selecao (7.8): duas mesas inteiras e um pilar de uma terceira
+    na selecao previa dao 3 mesas, 84 modulos e 60,5 kWp; uma linha do
+    usuario da "nenhuma mesa".
+#>
+function Testar-Selecao {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-selecao--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-selecao: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-selecao' `
+        -Script (Join-Path $PSScriptRoot 'ufv-selecao.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-selecao terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'UFV_SELECAO_LISP selecionadas=(\d+)') {
+        $problemas.Add("ufv-selecao: nao consegui montar a selecao em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ([int] $Matches[1] -lt 2 * 36 + 1) {
+        $problemas.Add("ufv-selecao: so $($Matches[1]) entidade(s) selecionada(s). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^SELECAO 3 mesa\(s\), 84 módulo\(s\), 60,5 kWp') {
+        $problemas.Add("ufv-selecao: esperava 'SELECAO 3 mesa(s), 84 módulo(s), 60,5 kWp'. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^SELECAO nenhuma mesa do plugin') {
+        $problemas.Add("ufv-selecao: a linha do usuario devia dar 'nenhuma mesa'. Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (selecao: 3 mesas, 84 modulos, 60,5 kWp; linha do usuario sem mesa)" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -2411,6 +2476,10 @@ else {
     # Validar: registros, sujas, duplicadas, orfas, removidas, terreno.
     $total++
     if (Testar-Validar -Desenho $desenhos[0]) { $passaram++ }
+
+    # A conta da selecao (a caixa flutuante usa a mesma).
+    $total++
+    if (Testar-Selecao -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

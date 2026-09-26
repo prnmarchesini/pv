@@ -250,12 +250,12 @@ public static class FileiraCommands
     /// A mesa: o primeiro perfil salvo, ou a de exemplo. É dito na linha de
     /// comando; trocar é pela janela da mesa.
     /// </summary>
-    internal static TableProfile PerfilDaMesa(Editor editor)
+    internal static TableProfile PerfilDaMesa(Editor editor, bool silencioso = false)
     {
         var perfis = new TableProfileStore(MesaCommands.PastaDosPerfis);
         var salvo = MesaCommands.PrimeiroPerfil(perfis);
 
-        if (salvo is null)
+        if (salvo is null && !silencioso)
             editor.WriteMessage("\nNenhum perfil de mesa salvo: usando a mesa de exemplo. Salve um pela janela Mesa.\n");
 
         return salvo ?? MesaCommands.MesaDeExemplo();

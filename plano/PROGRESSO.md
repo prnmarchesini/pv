@@ -54,7 +54,7 @@ Só o Renan marca VALIDADO.
 | 7.5 | Cópia | AGUARDANDO VALIDAÇÃO | `CopyFixer` no fim do comando que copiou: mesa nova e peças novas (agrupadas pelo deslocamento), suja "copiada"; `UFV_RENOMEAR` para blocos com sufixo; nível 2 com COPY e -RENAME |
 | 7.6 | Apagar e recontar | AGUARDANDO VALIDAÇÃO | remoção já era do vigia (7.2); `UFV_RECONTAR` (botão Recontar) conta pelo XData (`LayoutCensus`, Core, 3 testes) e consome as removidas; nível 2 com ERASE |
 | 7.7 | Validação | AGUARDANDO VALIDAÇÃO | `UFV_VALIDAR` (botão Validar) e ao abrir o desenho: registros que sumiram, sujas, duplicadas (mesa e peça), órfãs, removidas não recontadas, carimbo do terreno (`LayoutValidation`, Core, 3 testes); nível 2 com quatro estragos |
-| 7.8 | Auto-seleção | PENDENTE | |
+| 7.8 | Auto-seleção | AGUARDANDO VALIDAÇÃO | caixa flutuante semitransparente com mesas, módulos e kWp da seleção (`AutoSelecao`, na folga do AutoCAD); a conta é o `UFV_KWP_SELECAO`, com nível 2 |
 | 7.9 | Grupos e painel de informações | PENDENTE | |
 | 7.10 | Numeração | PENDENTE | |
 
@@ -106,28 +106,30 @@ Nivel 2   16/16    OK
 Acervo             OK
 ```
 
-### O próximo passo é o 7.8 (auto-seleção); o 6.5 espera as respostas do 6.4
+### O próximo passo é o 7.9 (grupos e painel); o 6.5 espera as respostas do 6.4
 
 6.1 fechado, 6.2 e 6.3 aguardando validação (o DAE no PVsyst), 6.4 é o
 resumo do formato PVC ("Entregar um resumo ao Renan e PARAR"). O 6.5 só
 começa depois que o Renan ler o resumo e decidir as três perguntas dele. A
 etapa 7 (edição) não depende da 6 e seguiu: 7.1 (estado sujo), 7.2 (o
 vigia), 7.3 (recalcular mesa), 7.4 (recalcular sujas), 7.5 (cópia), 7.6
-(recontar) e 7.7 (validação) feitos, aguardando validação. Fora do plano, a pedido do Renan na tela em 26/09/2026, a
+(recontar), 7.7 (validação) e 7.8 (auto-seleção) feitos, aguardando
+validação. Fora do plano, a pedido do Renan na tela em 26/09/2026, a
 etapa 5 foi refeita duas vezes no mesmo dia (fileira pelo azimute, mesa
 dentro da área, mesa que não cabe pintada, Refazer, janela de nome,
 terreno que não se perde): ver "Segunda reprovação do 5.8". O 7.5 é a
 cópia: detectar GUID duplicado (o vigia já suja original e cópia com
 "copiada"), dar identidade nova à cópia e a cada peça dela. Antes de
 começar, ler `plano/etapas/etapa-7-edicao.md` e as seções 7.1 a 7.4 no
-fim deste arquivo. O 7.8 é a auto-seleção: ao selecionar mesas
-(arrastando ou clicando), uma caixa flutuante semitransparente com o kWp
-da seleção. É tela pura (WPF sobre o editor, ou um tooltip na posição do
-cursor) ligada ao evento de seleção do editor (`SelectionAdded` /
-`PromptingForSelection`, ou o `Idle` conferindo `SelectImplied`); a conta
-é a do `LayoutCensus` (Core) sobre as mesas cujas peças estão na seleção.
-Sem tela não há como testar em nível 2 além de "a conta da seleção está
-certa": separar a conta (comando `UFV_KWP_SELECAO` que imprime) da caixa.
+fim deste arquivo. O 7.9 são os grupos e o painel de informações: formar
+um grupo com nome a partir da seleção (um registro no dicionário do
+desenho, GUID do grupo + lista de GUIDs de mesa, e o nome; a mesa não
+precisa saber do grupo), um painel (paleta WPF do AutoCAD, `PaletteSet`)
+que lista os grupos com mesas, módulos, pilares e kWp (a conta é o
+`LayoutCensus` filtrado pelas mesas do grupo, como a seleção faz), e
+"recalcular por grupo" (o `RecalcularMesas` recebendo a lista do grupo).
+Separar o registro e a conta (comandos `UFV_GRUPO_CRIAR`, `UFV_GRUPOS`,
+`UFV_GRUPO_RECALCULAR`, testáveis no nível 2) do painel (só tela).
 
 Antes de começar, ler `plano/etapas/etapa-6-pvsyst.md`. O que a etapa 6
 recebe da 5: as faces superiores dos módulos são entidades `3DFACE` na
@@ -231,6 +233,19 @@ teste: a etapa 6 é onde passa a ter.
    pela paleta de propriedades: também suja ("movida ou editada"). Rodar
    `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
    nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
+13. **Testar o 7.8 (auto-seleção)**: clique numa mesa, ou arraste uma
+   janela sobre várias: aparece, no canto de cima à esquerda da área de
+   desenho, uma caixa azul semitransparente "Seleção: N mesa(s), M
+   módulo(s), X kWp". Uma mesa entra inteira mesmo com só um pilar dela
+   selecionado. Esc some com a caixa; selecionar uma linha que não é do
+   plugin não mostra nada. Durante um comando a caixa se esconde e VOLTA
+   quando ele acaba se a seleção sobreviveu (dê um zoom pela roda ou pela
+   ribbon, ou arraste um grip, com as mesas selecionadas). Minimize o
+   Civil 3D: a caixa some junto. Clique em cima da caixa: o clique vai
+   para o desenho e a linha de comando continua com o foco. Se algo disso
+   falhar, ou a posição, o tamanho ou a cor incomodarem, me diga: é
+   ajuste em `AutoSelecao`. O comando `UFV_KWP_SELECAO` imprime a mesma
+   conta.
 12. **Testar o 7.7 (validação)**: abra o desenho da usina: a linha de
    comando diz "AO ABRIR nada a apontar" ou lista os achados. Faça
    estragos e clique "Validar" na seção Edição: apague a polilinha da área
@@ -3236,4 +3251,51 @@ vigia". Anotado, não feito: a validação faz duas passadas pelas peças
 (`LayoutScan` e a busca de GUID repetido); `FingerprintReader` dentro do
 `DocumentCreated` pode reconstruir uma superfície marcada para
 reconstruir, e se travar ao abrir o remédio é adiar para `Idle`.
+
+## 7.8: auto-seleção
+
+Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO` (é tela). A conta ficou num
+comando, `UFV_KWP_SELECAO` (`SelecaoCommands.Resumir`): as mesas com
+alguma peça na seleção entram inteiras, e mesas, módulos e kWp saem do
+`LayoutCensus` (Core) sobre elas, cada mesa com a sua potência. A caixa
+(`AutoSelecao`) escuta o evento `ImpliedSelectionChanged` de cada
+documento, esconde no começo de todo comando e reavalia no fim, reconta
+só quando o conjunto de MESAS tocadas muda, e mostra
+uma janela WPF sem borda, semitransparente, filha da janela do Civil 3D
+(minimiza com ele) e transparente ao clique, no canto de cima à esquerda;
+some quando a seleção esvazia ou não tem mesa nossa, e durante comandos. Nível 2 (`ufv-selecao.scr`):
+duas mesas inteiras e um pilar de uma terceira na seleção prévia dão "3
+mesa(s), 84 módulo(s), 60,5 kWp"; uma linha do usuário dá "nenhuma mesa".
+
+### Decisões que são minhas
+
+- a mesa entra inteira com qualquer peça selecionada (o pedido é "ao
+  selecionar mesas", e clicar num pilar é selecionar a mesa);
+- a caixa fica num canto fixo, não junto do cursor: junto do cursor
+  cobre o que se está clicando;
+- só com interface; no Core Console não existe.
+
+### O que a revisão do 7.8 apontou, e o que foi feito
+
+Um bloqueante, corrigido: a caixa se escondia no começo de um comando mas
+guardava a seleção anterior, e não voltava depois de um zoom ou de um
+grip com as mesas ainda selecionadas. Importantes, corrigidos: (1) a
+caixa era `Topmost` sem dona e flutuava por cima de outros programas
+quando o Civil 3D perdia o foco; agora a dona é a janela do Civil 3D
+(minimiza com ele); (2) era clicável sobre o desenho, roubando o clique e
+o foco da linha de comando; agora é transparente ao clique e não ativa
+(`WS_EX_TRANSPARENT | WS_EX_NOACTIVATE`), e foi para o canto esquerdo,
+longe do ViewCube; (3) olhava a seleção na folga do AutoCAD, dezenas de
+vezes por segundo, e varria o desenho a cada mudança de ids; agora escuta
+`Document.ImpliedSelectionChanged` (o evento existe; o comentário dizia que
+não), esconde no começo e reavalia no fim de todo comando, e só reconta
+quando o conjunto de MESAS tocadas muda; (4) uma exceção repetida no
+evento inundaria o diagnóstico; depois de cinco falhas seguidas a caixa se
+desliga sozinha, com uma linha no log. Menores corrigidos: mesa duplicada
+conta pelos contornos e avisa, como no Recontar; o perfil só é lido do
+disco quando alguma mesa não tem potência gravada; `Describe` reaproveita
+a linha do `LayoutCensus`; a busca das mesas tocadas separou-se da conta
+(`MesasTocadas` e `Resumir`). Anotado, não feito: a caixa em si (dona,
+foco, posição, DPI) só se prova na tela, e o roteiro do Renan pede zoom
+e grip com seleção viva, minimizar e clicar sobre a caixa.
 

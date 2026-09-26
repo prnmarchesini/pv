@@ -52,6 +52,7 @@ public sealed class UfvExtension : IExtensionApplication
             RegistroDeDiagnostico.Registrar($"Initialize: host com interface, versão {UfvCommands.VersaoDoPlugin()}.");
             RibbonUfv.Instalar();
             MenuDeContexto.Instalar();
+            AutoSelecao.Instalar();
         }
         catch (System.Exception erro)
         {
@@ -75,6 +76,7 @@ public sealed class UfvExtension : IExtensionApplication
 
         try
         {
+            AutoSelecao.Desinstalar();
             MenuDeContexto.Desinstalar();
         }
         catch (System.Exception erro)
