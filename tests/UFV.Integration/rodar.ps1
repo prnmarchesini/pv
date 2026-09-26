@@ -2470,6 +2470,109 @@ function Testar-Grupos {
     return $true
 }
 
+<#
+    Numeracao (7.10): a usina inteira (80 mesas em 16 fileiras) renumerada
+    com a F1.1 na antiga F16.5 e a ultima fileira na antiga F1.1: toda mesa
+    F(r).(n) vira F(17-r).(6-n), 80 letreiros trocados, sem aviso; numerar
+    de novo com os letreiros novos troca zero.
+#>
+function Testar-Numerar {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-numerar--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-numerar: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-numerar' `
+        -Script (Join-Path $PSScriptRoot 'ufv-numerar.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 9999)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-numerar terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    $numeracoes = @([regex]::Matches($r.Texto, '(?m)^NUMERAR (\d+) fileira\(s\), (\d+) mesa\(s\), (\d+) letreiro\(s\) trocado\(s\)'))
+    if ($numeracoes.Count -ne 2) {
+        $problemas.Add("ufv-numerar: esperava duas numeracoes. Veja $($r.Saida)")
+        return $false
+    }
+
+    $fileiras = [int] $numeracoes[0].Groups[1].Value
+    $mesas    = [int] $numeracoes[0].Groups[2].Value
+    $trocados = [int] $numeracoes[0].Groups[3].Value
+
+    if ($fileiras -ne 16 -or $mesas -ne 80 -or $trocados -ne 80) {
+        $problemas.Add("ufv-numerar: esperava 16 fileiras, 80 mesas e 80 trocados; deu $fileiras/$mesas/$trocados. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ([int] $numeracoes[1].Groups[3].Value -ne 0) {
+        $problemas.Add("ufv-numerar: numerar de novo com os letreiros novos devia trocar zero. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -match 'ATEN.{1,4}O: a mesa') {
+        $problemas.Add("ufv-numerar: a numeracao avisou algo que nao devia. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'UFV_NUMERAR_LISP invertidas=(\d+) de (\d+) letreiros=(\d+) avisos=(\d+) de (\d+) intactas=(\d+)') {
+        $problemas.Add("ufv-numerar: nao consegui ler o LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $invertidas = [int] $Matches[1]
+    $total      = [int] $Matches[2]
+    $letreiros  = [int] $Matches[3]
+    $avisos     = [int] $Matches[4]
+    $notas      = [int] $Matches[5]
+    $intactas   = [int] $Matches[6]
+
+    if ($notas -lt 1) {
+        $problemas.Add("ufv-numerar: o aviso NAO CABE plantado pelo LISP nao foi achado. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($intactas -ne $total) {
+        $problemas.Add("ufv-numerar: $intactas de $total mesas com os outros campos do XData intactos. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($total -ne 80 -or $invertidas -ne 80 -or $letreiros -ne 80) {
+        $problemas.Add("ufv-numerar: $invertidas de $total mesas com o letreiro invertido, $letreiros letreiros distintos. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($avisos -ne 0) {
+        $problemas.Add("ufv-numerar: $avisos de $notas aviso(s) NAO CABE sem o letreiro novo. Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (numerar: 80 mesas em 16 fileiras invertidas, F16.5 virou F1.1, aviso NAO CABE renomeado; de novo, zero trocas)" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -2583,6 +2686,10 @@ else {
     # Grupos: criar, listar, recalcular, selecionar, apagar.
     $total++
     if (Testar-Grupos -Desenho $desenhos[0]) { $passaram++ }
+
+    # Numerar: a usina invertida pela F1.1 e pela ultima fileira.
+    $total++
+    if (Testar-Numerar -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

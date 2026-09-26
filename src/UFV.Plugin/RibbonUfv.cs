@@ -121,6 +121,7 @@ internal static class RibbonUfv
         aba.Panels.Add(MontarPainelProcessar());
         aba.Panels.Add(MontarPainelPvsyst());
         aba.Panels.Add(MontarPainelEdicao());
+        aba.Panels.Add(MontarPainelNumeracao());
         ribbon.Tabs.Add(aba);
 
         var temDocumento = AcadApp.DocumentManager.MdiActiveDocument is not null;
@@ -322,6 +323,23 @@ internal static class RibbonUfv
             IconesDaRibbon.Renomear(),
             PluginInfo.ComandoRenomear,
             "Devolve ao padrão do plugin os blocos que chegaram de outro desenho com sufixo ($0$)."));
+
+        return new RibbonPanel { Source = origem };
+    }
+
+    /// <summary>
+    /// Seção Numeração (7.10): gerar a numeração das mesas a partir da F1.1
+    /// e de uma mesa da última fileira.
+    /// </summary>
+    private static RibbonPanel MontarPainelNumeracao()
+    {
+        var origem = new RibbonPanelSource { Title = "Numeração" };
+
+        origem.Items.Add(BotaoGrande(
+            "Gerar numeração",
+            IconesDaRibbon.Numerar(),
+            PluginInfo.ComandoNumerar,
+            "Renumera todas as mesas: você indica a F1.1 e uma mesa da última fileira; fileira é mesa contínua na mesma reta e azimute."));
 
         return new RibbonPanel { Source = origem };
     }

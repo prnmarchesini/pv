@@ -56,7 +56,7 @@ Só o Renan marca VALIDADO.
 | 7.7 | Validação | AGUARDANDO VALIDAÇÃO | `UFV_VALIDAR` (botão Validar) e ao abrir o desenho: registros que sumiram, sujas, duplicadas (mesa e peça), órfãs, removidas não recontadas, carimbo do terreno (`LayoutValidation`, Core, 3 testes); nível 2 com quatro estragos |
 | 7.8 | Auto-seleção | AGUARDANDO VALIDAÇÃO | caixa flutuante semitransparente com mesas, módulos e kWp da seleção (`AutoSelecao`, na folga do AutoCAD); a conta é o `UFV_KWP_SELECAO`, com nível 2 |
 | 7.9 | Grupos e painel de informações | AGUARDANDO VALIDAÇÃO | `TableGroup` (Core, 3 testes) no registro `GRUPOS`; `UFV_GRUPO_CRIAR`/`GRUPOS`/`GRUPO_RECALCULAR`/`GRUPO_SELECIONAR`/`GRUPO_APAGAR` com nível 2; painel (paleta WPF) com lista e botões |
-| 7.10 | Numeração | PENDENTE | |
+| 7.10 | Numeração | AGUARDANDO VALIDAÇÃO | `RowNumbering` (Core, 8 testes); `UFV_NUMERAR` com nível 2 (usina de 80 mesas invertida); seção Numeração na ribbon |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -106,31 +106,25 @@ Nivel 2   16/16    OK
 Acervo             OK
 ```
 
-### O próximo passo é o 7.10 (numeração); o 6.5 espera as respostas do 6.4
+### A etapa 7 está inteira aguardando validação; o 6.5 espera as respostas do 6.4
 
 6.1 fechado, 6.2 e 6.3 aguardando validação (o DAE no PVsyst), 6.4 é o
 resumo do formato PVC ("Entregar um resumo ao Renan e PARAR"). O 6.5 só
 começa depois que o Renan ler o resumo e decidir as três perguntas dele. A
 etapa 7 (edição) não depende da 6 e seguiu: 7.1 (estado sujo), 7.2 (o
 vigia), 7.3 (recalcular mesa), 7.4 (recalcular sujas), 7.5 (cópia), 7.6
-(recontar), 7.7 (validação), 7.8 (auto-seleção) e 7.9 (grupos) feitos,
-aguardando validação. Fora do plano, a pedido do Renan na tela em 26/09/2026, a
+(recontar), 7.7 (validação), 7.8 (auto-seleção), 7.9 (grupos) e 7.10
+(numeração) feitos, aguardando validação. Fora do plano, a pedido do Renan na tela em 26/09/2026, a
 etapa 5 foi refeita duas vezes no mesmo dia (fileira pelo azimute, mesa
 dentro da área, mesa que não cabe pintada, Refazer, janela de nome,
 terreno que não se perde): ver "Segunda reprovação do 5.8". O 7.5 é a
 cópia: detectar GUID duplicado (o vigia já suja original e cópia com
 "copiada"), dar identidade nova à cópia e a cada peça dela. Antes de
 começar, ler `plano/etapas/etapa-7-edicao.md` e as seções 7.1 a 7.4 no
-fim deste arquivo. O 7.10 é a numeração, o último passo da etapa 7:
-botão "Gerar numeração" numa seção própria; fileira = mesas contínuas na
-mesma reta e mesmo azimute (espaçamento acima do limite, ou azimute
-diferente, abre fileira nova); o usuário indica a F1 e a última; letreiros
-F1, F2… e mesas F1.1, F1.2…; módulos e pilares numerados em consequência.
-É o passo que renumera depois de apagar, copiar e mover: o Core recebe as
-células (`TableCells.FromCorners` dos contornos) e devolve os letreiros
-novos (puro, com teste); o plugin regrava o XData (letreiro da mesa;
-pilar e módulo já têm número na mesa) e os avisos. **Validação do Renan
-na tela antes de fechar**, diz o plano.
+fim deste arquivo. Não há passo PENDENTE: a etapa 7 acabou no 7.10, e o
+que falta é do Renan (as validações de tela dos passos 5.8 a 7.10 e as
+três respostas do 6.4 para o 6.5). Sem elas o Claude Code não tem o que
+fazer além de dívidas anotadas nas Observações.
 
 Antes de começar, ler `plano/etapas/etapa-6-pvsyst.md`. O que a etapa 6
 recebe da 5: as faces superiores dos módulos são entidades `3DFACE` na
@@ -234,6 +228,16 @@ teste: a etapa 6 é onde passa a ter.
    pela paleta de propriedades: também suja ("movida ou editada"). Rodar
    `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
    nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
+15. **Testar o 7.10 (numeração)**: com a usina desenhada (e depois de
+   apagar, copiar ou mover mesas), clique "Gerar numeração" na seção
+   Numeração. Ele pede a mesa que será a F1.1 (clique numa peça, ou
+   digite L e o letreiro atual) e uma mesa da última fileira. Confira na
+   tela: F1 é a fileira da mesa indicada, F1.1 é ela, as mesas correm a
+   partir dela, as fileiras crescem até a última indicada; mesa girada ou
+   afastada mais que o "vão que abre fileira" da configuração vira fileira
+   própria. Avisos aparecem quando a mesa indicada não é a ponta. O
+   letreiro está no XData (Propriedades não mostra): o aviso "NÃO CABE" e o
+   Recontar/Estado mostram o nome novo.
 14. **Testar o 7.9 (grupos)**: selecione algumas mesas e clique "Grupos"
    na seção Edição → no painel, "Criar grupo" pede o nome (janela) e a
    lista mostra mesas, módulos, pilares e kWp do grupo. Escolha o grupo na
@@ -3381,4 +3385,82 @@ F1.1 e F1.2, lista 2/56/14/40,3 kWp, suja F1.1 e recalcula o grupo (2 de
   em dois grupos, sem aviso.
 - O painel não se atualiza sozinho depois de Refazer, Recontar, cópia ou
   ERASE (o botão Atualizar existe); escutar `CommandEnded` resolveria.
+
+## 7.10: numeração
+
+Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO`. `RowNumbering` (Core, 8
+testes) recebe as células reconstruídas dos contornos
+(`TableCells.FromCorners`, a mesma do Recalcular), a mesa que será a F1.1
+e uma mesa da última fileira, e devolve fileira e número de cada mesa:
+agrupa por azimute (1°), por reta (afastamento perpendicular do centro,
+meio fundo de tolerância) e por continuidade (vão entre mesas acima do
+"vão que abre fileira" da configuração, `MaxGapBeforeBreak`, separa);
+ordena as fileiras pela perpendicular à F1.1, no sentido da última; dentro
+da fileira as mesas correm a partir da ponta em que está a F1.1. Mesa
+girada de 180° (cópia virada) é a mesma reta. Avisos quando a F1.1
+indicada não é ponta, ou há fileira antes dela ou depois da última.
+`UFV_NUMERAR` (seção Numeração, botão "Gerar numeração") lê toda mesa,
+pede as duas por clique ou pela opção Letreiro, e regrava o letreiro no
+XData do contorno e no aviso "NÃO CABE" (pilar e módulo têm número dentro
+da mesa, que é a mesma). Nível 2: a usina inteira (80 mesas, 16 fileiras)
+invertida com a F1.1 na antiga F16.5: toda F(r).(n) vira F(17-r).(6-n),
+80 trocados; numerar de novo com os letreiros novos troca zero.
+
+### Decisões que são minhas
+
+- a numeração é de TODAS as mesas do desenho (o plano diz "gerar
+  numeração"); se uma mesa não dá para ler (sem contorno, duplicada, ou
+  contorno que não bate com o perfil), nada é numerado: numerar metade
+  daria letreiro em dobro;
+- "usuário indica a F1 e a última": pede a MESA que será a F1.1 (fixa a
+  fileira e a ponta) e uma mesa qualquer da última fileira (fixa o
+  sentido); a opção Letreiro existe para o teste e para quem prefere
+  digitar;
+- não há letreiro de fileira ("F1") desenhado: o letreiro mora no XData e
+  aparece no aviso, no Recontar e no Estado. Texto de fileira na planta é
+  pedido à parte, se o Renan quiser;
+- renumerar não suja mesa nem mexe em GUID: grupos e removidas seguem
+  valendo.
+
+### O que o revisor achou e o que mudou
+
+- **Bloqueante, corrigido**: duas fileiras colineares (o caso "vão acima
+  do limite abre fileira nova") ficavam à mesma distância da F1.1 e a
+  ordem entre elas era decidida pelo ruído do ponto flutuante das
+  coordenadas UTM; e o desempate ignorava o sentido da fileira. Agora as
+  fileiras à mesma distância (meio fundo de tolerância) formam uma faixa,
+  e dentro dela vem primeiro a da F1.1 e depois as mais próximas dela ao
+  longo da reta. Teste novo em coordenadas UTM, com a F1.1 na ponta final
+  de um trecho e no início do outro.
+- **Importante, corrigido**: faltava o aviso de fileiras com número de
+  mesas diferente da maioria ("F3 tem 4"), que é o sintoma visível de
+  mesa girada, vão ou reta mal agrupada.
+- **Importante, corrigido**: o nível 2 não exercitava a troca do letreiro
+  no aviso "NÃO CABE" (a usina não tem mesa marcada). O LISP planta um
+  aviso com a identidade de nota do plugin na F16.5 e confere que ele
+  passa a começar por "F1.1 "; confere também que os outros campos do
+  XData da mesa (cota, giro, marcada, suja, potência, âncora) ficaram
+  iguais em todas as 80.
+- **Menor, corrigido**: a tolerância de azimute se acumulava em cadeia
+  (0°, 0,9°, 1,8°… viravam um grupo); agora compara com a primeira do
+  grupo (teste). `Fileira.Direcao` morto removido; "duma mesa" na
+  mensagem; regex do aviso no rodar.ps1 tolerante a acento.
+
+### Observações que ficam
+
+- Numerar exige que a borda baixa feche com o comprimento do perfil atual
+  (é o `TableCells.FromCorners` do Recalcular); quem trocar de perfil
+  depois de desenhar recebe "Trocou de mesa?" e precisa do Refazer.
+  Numerar só precisa de direção e cantos; uma versão sem essa exigência
+  é barata se incomodar.
+- O registro de removidas guarda o letreiro que a mesa tinha ao ser
+  removida: é histórico, não é renumerado.
+- Mesa a exatamente 90° da F1.1 não se junta com a sua vizinha a −90°
+  (dobra ambígua); fileira perpendicular é fileira à parte de qualquer
+  jeito.
+- O clique de mesa (`MesaEscolhida`) repete o do Recalcular; um helper
+  serviria aos dois.
+- No Core Console, a opção Letreiro com um letreiro que não existe deixa
+  o comando esperando entrada até o timeout (o teste acusa como
+  "estourou").
 

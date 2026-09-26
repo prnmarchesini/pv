@@ -189,6 +189,9 @@ public static class PluginInfo
     /// <summary>Comando que abre o painel dos grupos.</summary>
     public const string ComandoGruposPainel = "UFV_GRUPOS_PAINEL";
 
+    /// <summary>Comando que gera a numeração das mesas (F1.1, F1.2…) a partir da F1.1 e da última fileira.</summary>
+    public const string ComandoNumerar = "UFV_NUMERAR";
+
     /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).
