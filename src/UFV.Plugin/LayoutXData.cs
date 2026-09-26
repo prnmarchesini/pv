@@ -14,12 +14,20 @@ namespace UFV.Plugin;
 /// </summary>
 internal static class LayoutXData
 {
-    private const int VersaoDaMesa = 1;
+    /// <summary>
+    /// Versão 2 desde o 7.1: ganhou o estado sujo e o motivo. A versão 1
+    /// (etapa 5) continua a ser lida, como limpa.
+    /// </summary>
+    private const int VersaoDaMesa = 2;
+    private const int VersaoDaMesaAntiga = 1;
     private const int VersaoDoPilar = 1;
     private const int VersaoDoModulo = 1;
 
-    /// <summary>GUID, letreiro, cota inicial, cota final, inclinação, marcada, motivo.</summary>
-    private const int CamposDaMesa = 7;
+    /// <summary>GUID, letreiro, cota inicial, cota final, inclinação, marcada, motivo, suja, motivo da sujeira.</summary>
+    private const int CamposDaMesa = 9;
+
+    /// <summary>Os sete primeiros, na versão 1.</summary>
+    private const int CamposDaMesaAntiga = 7;
 
     /// <summary>GUID, mesa, número, estação, comprimento, enterro, altura livre, problema, terreno.</summary>
     private const int CamposDoPilar = 9;
@@ -41,17 +49,27 @@ internal static class LayoutXData
             Numero(mesa.EndElevation),
             Numero(mesa.TiltRadians),
             mesa.Marked ? "1" : "0",
-            mesa.Reason ?? string.Empty);
+            mesa.Reason ?? string.Empty,
+            mesa.Dirty ? "1" : "0",
+            mesa.DirtyReason ?? string.Empty);
 
     internal static TableIdentity? LoadTable(Entity entidade)
     {
-        var c = PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesa, CamposDaMesa);
+        var c = PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesa, CamposDaMesa)
+            ?? PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesaAntiga, CamposDaMesaAntiga);
         if (c is null) return null;
 
         if (!Guid.TryParse(c[0], out var id)) return null;
         if (!Real(c[2], out var z0) || !Real(c[3], out var z1) || !Real(c[4], out var tilt)) return null;
 
-        var mesa = new TableIdentity(id, c[1], z0, z1, tilt, c[5] == "1", c[6].Length == 0 ? null : c[6]);
+        // Leitura tolerante: suja é "1", e uma suja sem motivo ganha um motivo
+        // genérico; limpa ignora o que houver no motivo. Rejeitar aqui apagaria
+        // a identidade da mesa inteira por dois caracteres errados no XData,
+        // e a identidade é o que a regra sagrada 3 protege.
+        var suja = c.Count >= CamposDaMesa && c[7] == "1";
+        var motivo = suja ? (c[8].Length > 0 ? c[8] : "motivo perdido") : null;
+
+        var mesa = new TableIdentity(id, c[1], z0, z1, tilt, c[5] == "1", c[6].Length == 0 ? null : c[6], suja, motivo);
 
         return mesa.IsValid ? mesa : null;
     }

@@ -47,6 +47,16 @@ Só o Renan marca VALIDADO.
 | 6.3 | Validação no PVsyst | AGUARDANDO VALIDAÇÃO | Renan importa o DAE no PVsyst, escolhe o material `MARCHENG_UFV_FACE`, confere contagem e orientação |
 | 6.4 | Estudo do formato PVC | AGUARDANDO VALIDAÇÃO | Resumo entregue em 26/09/2026 (seção "6.4: o formato PVC"); o plano manda PARAR aqui |
 | 6.5 | Escritor PVC | PENDENTE | |
+| 7.1 | Estado sujo | AGUARDANDO VALIDAÇÃO | `TableIdentity.Dirty` no XData (versão 2, lê a 1); `UFV_SUJAR` pinta contorno, pilares e módulos de vermelho; `UFV_ESTADO` lista; nível 2 confere cor e XData |
+| 7.2 | O vigia | PENDENTE | |
+| 7.3 | Recalcular mesa | PENDENTE | |
+| 7.4 | Recalcular tudo | PENDENTE | |
+| 7.5 | Cópia | PENDENTE | |
+| 7.6 | Apagar e recontar | PENDENTE | |
+| 7.7 | Validação | PENDENTE | |
+| 7.8 | Auto-seleção | PENDENTE | |
+| 7.9 | Grupos e painel de informações | PENDENTE | |
+| 7.10 | Numeração | PENDENTE | |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -74,8 +84,11 @@ lê isto primeiro, e depois `CLAUDE.md`.**
 Etapas 0, 1, 2 e 3 **validadas pelo Renan**. Etapa 4: 4.1 e 4.3 fechados
 automaticamente (só modelo), 4.2 validado pelo Renan em 26/09/2026, 4.4
 aguardando validação na tela. Etapa 5: 5.1 a 5.6 fechados automaticamente
-(só modelo), 5.7, 5.8 e 5.9 aguardando validação na tela. A etapa 5 inteira
-foi feita em 26/09/2026, sem o Renan ver uma mesa na tela. Placar na última
+(só modelo), 5.7, 5.8 e 5.9 aguardando validação na tela. Etapa 6: 6.1
+fechado automaticamente, 6.2 e 6.3 aguardando validação (no PVsyst), 6.4
+entregue e PARADO por ordem do plano, 6.5 pendente das respostas dele.
+Etapa 7: 7.1 aguardando validação na tela. As etapas 5, 6 e o 7.1 foram
+feitos em 26/09/2026, sem o Renan ver uma mesa na tela. Placar na última
 execução:
 
 ```
@@ -85,16 +98,25 @@ Etapa 2   24/24    OK
 Etapa 3   335/335  OK
 Etapa 4   242/242  OK
 Etapa 5   250/250  OK
-Nivel 2   11/11    OK
+Etapa 6   19/19    OK
+Etapa 7   5/5      OK
+Nivel 2   13/13    OK
 Acervo             OK
 ```
 
-### A etapa 6 está no 6.4: estudo entregue, PARADO por ordem do plano
+### O próximo passo é o 7.2 (o vigia); o 6.5 espera as respostas do 6.4
 
 6.1 fechado, 6.2 e 6.3 aguardando validação (o DAE no PVsyst), 6.4 é o
 resumo do formato PVC ("Entregar um resumo ao Renan e PARAR"). O 6.5 só
 começa depois que o Renan ler o resumo e decidir as três perguntas dele. A
-etapa 7 (edição) não depende da 6 e é o próximo trabalho se ele preferir.
+etapa 7 (edição) não depende da 6 e seguiu: 7.1 (estado sujo) feito,
+aguardando validação. O 7.2 é o vigia de eventos do banco (mover, apagar,
+copiar mesa só marca e pinta), com nível 2 por MOVE e ERASE via script.
+Antes de começar o 7.2, ler `plano/etapas/etapa-7-edicao.md` e a seção
+"7.1: o estado sujo" no fim deste arquivo, que diz onde o estado mora
+(`TableIdentity.Dirty`, XData versão 2 no contorno), como se acham as peças
+de uma mesa (`LayoutScan.Tables`, pelo GUID) e como se pinta
+(`TableState.MarkDirty`). O vigia usa exatamente isso.
 
 Antes de começar, ler `plano/etapas/etapa-6-pvsyst.md`. O que a etapa 6
 recebe da 5: as faces superiores dos módulos são entidades `3DFACE` na
@@ -171,6 +193,16 @@ teste: a etapa 6 é onde passa a ter.
    testar as duas e dizer qual ficou certa.
 6. **Ler o resumo do 6.4** (seção "6.4: o formato PVC" no fim deste arquivo)
    e responder as três perguntas do fim dele. Sem isso o 6.5 não começa.
+7. **Testar o 7.1 (estado sujo)**: com uma fileira desenhada, botão "Sujar"
+   na seção Edição (ou `UFV_SUJAR`) e clicar num pilar, num módulo ou no
+   contorno de uma mesa: a mesa inteira (contorno, pilares, módulos) fica
+   vermelha; as faces superiores NÃO mudam (são o que o PVsyst recebe).
+   Botão "Estado" (ou `UFV_ESTADO`): "N mesa(s), N−1 limpa(s), 1 suja(s)" e
+   a linha "F1.x: SUJA (pedido do usuário)". Salvar, fechar, reabrir: a mesa
+   continua suja no Estado (o estado mora no XData do contorno). Clicar
+   numa entidade que não é do plugin: "Isso não é uma peça de mesa do
+   plugin". Não há "limpar": quem limpa é o recálculo (7.3/7.4), que
+   redesenha a mesa com as cores certas.
 5. **Conferir a mesa do 3.7 contra um projeto de fabricante.** Ele aprovou a
    etapa 3 sem relatar essa conferência, que é o que o plano pede como
    validação do 3.7 — é o único jeito de saber se o motor acerta o número, e
@@ -199,12 +231,16 @@ teste: a etapa 6 é onde passa a ter.
   `PorHandle` duplica o de `TerrenoEnvelhecido`: consolidar;
 - rodar `UFV_FILEIRA` ou `UFV_USINA` duas vezes desenha por cima (o comando
   avisa); apagar e substituir é assunto da etapa 7;
+- os textos de altura (`_ALTURAS`) e o aviso de marcada (`_MARCADA`) não
+  carregam XData: não pertencem a mesa nenhuma para o `LayoutScan`, e o
+  recálculo (7.3) não vai saber apagá-los por mesa. Dar-lhes identidade
+  (GUID da mesa) no `LayoutDrawer` antes do 7.3;
 - `UFV_EXPORTAR` derruba a exportação inteira se uma 3DFACE nossa foi
   escalada até ficar sem área ou vertical (mensagem do Core); pular a face
   e contá-la seria melhor;
-- `RowSolverTests.EDeterministaERapido` mede 200 mesas contra 2 s e marcou
-  2017 ms em 26/09/2026 com a máquina sob carga (passou na rodada seguinte):
-  medir o menor de três execuções, em vez de afrouxar o limite;
+- ~~`RowSolverTests.EDeterministaERapido` oscilava perto de 2 s sob carga~~
+  Resolvido em 26/09/2026: mede o menor de três execuções; o limite de 2 s
+  ficou;
 - o teste de nível 2 carrega a DLL de **Debug**, onde o inlining está
   desligado: ele guarda o sintoma da janela sem interface, não a regra do
   `[MethodImpl(NoInlining)]`;
@@ -2613,4 +2649,80 @@ PVsyst do Renan permitir (pergunta 1).
    para lat/long/alt por ele. Se não, você digita lat/long de um ponto
    conhecido do desenho (e eu registro qual) — ou aceita que a cena vá
    com a `GeoLocation` do sítio como origem, sem a conversão exata.
+
+## 7.1: o estado sujo
+
+Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO` (a cor na tela). Nível 1:
+cinco testes na etapa 7 (`LayoutIdentitiesTests`). Nível 2: `ufv-sujo.scr`
+processa a fileira do 5.8, suja a primeira mesa com `UFV_SUJAR_AUTO` e lê
+em LISP, pelo XData: exatamente um contorno com suja=1 e motivo; as 36
+peças pintáveis dessa mesa (contorno, 7 pilares, 28 módulos) vermelhas; as
+28 faces dela intactas; `UFV_ESTADO` contando 1 suja de 6.
+
+### Onde o estado mora, e por quê
+
+`TableIdentity` ganhou `Dirty` e `DirtyReason` (Core), com `AsDirty(motivo)`,
+`AsClean()` e `DescribeState()`. Suja sem motivo, ou limpa com motivo, não
+é válida: é XData corrompido, e a mesa deixa de ser reconhecida (como
+qualquer XData ilegível). O estado é gravado no XData do CONTORNO da mesa,
+que é a entidade que carrega a identidade dela desde o 5.7; pilares e
+módulos só apontam para a mesa. XData da mesa passou à **versão 2** (nove
+campos); a versão 1 (sete campos, etapa 5) continua a ser lida, como limpa,
+para os desenhos de antes não perderem as mesas.
+
+### As peças de uma mesa: `LayoutScan`
+
+`LayoutScan.Tables` varre o espaço do modelo uma vez e agrupa as nossas
+entidades por GUID de mesa, lido do XData (contorno → id; pilar, módulo e
+face → campo "mesa"). Devolve `TableParts` (identidade, contorno, pilares,
+módulos, faces), inclusive mesas cujo contorno sumiu (peças órfãs, que o
+`UFV_ESTADO` conta). Nunca pela camada. É a base do resto da etapa 7:
+vigia, recalcular, cópia, validar e numerar precisam de "quais peças são
+desta mesa". É varredura inteira a cada chamada; um índice fica para
+quando medir mostrar que precisa.
+
+### A pintura
+
+`TableState.MarkDirty` grava o XData e põe vermelho (cor na instância) no
+contorno, nos pilares e nos módulos, por cima da cor de análise que a peça
+tinha. **A face nunca é pintada**: a camada de faces é o que o PVsyst
+recebe. Não há "despintar" nem "limpar" neste passo: quem limpa é o
+recálculo (7.3/7.4), que redesenha a mesa inteira com as cores certas.
+Sujar de novo uma mesa suja só troca o motivo.
+
+### Decisões que são minhas
+
+- os comandos chamam-se `UFV_SUJAR` e `UFV_ESTADO` (botões "Sujar" e
+  "Estado" numa seção Edição): "sujo" é a palavra do plano, e "marcar" já
+  significa outra coisa (a mesa que o alinhamento marcou);
+- o motivo do sujar manual é "pedido do usuário"; o vigia (7.2) vai gravar
+  "movida", "copiada", "editada";
+- o vermelho é o `RgbColor.Red` do Core, o mesmo da camada de marcadas;
+- os textos de altura e o aviso de marcada não têm identidade (não
+  carregam XData) e por isso não fazem parte da mesa para o `LayoutScan`;
+  não são pintados nem serão apagados por mesa até ganharem identidade
+  (anotado em Dívidas).
+
+### O que a revisão do 7.1 apontou, e o que foi feito
+
+Nenhum bloqueante. Um importante, corrigido: `LoadTable` rejeitava a mesa
+inteira quando o par suja/motivo do XData vinha incoerente (dois caracteres
+errados apagavam a identidade que a regra sagrada 3 protege); a leitura do
+desenho agora é tolerante (suja é "1"; suja sem motivo ganha "motivo
+perdido"; limpa ignora o motivo) e a coerência estrita fica só no `IsValid`
+do Core. Menores corrigidos: o nível 2 não comparava o GUID que o comando
+disse ter sujado com o que o XData mostra (agora compara) nem provava que
+as outras mesas ficaram como estavam (agora guarda os handles do que já
+era vermelho antes de sujar, e exige zero vermelho novo fora da mesa
+suja: pilares com problema já nascem vermelhos no 5.7 e enganavam a
+primeira versão); o vermelho é conferido pela cor verdadeira (420) além do
+índice; `LayoutScan` filtra pela classe do `ObjectId` antes de abrir
+(bloco, polilinha 3D, face), sem abrir a superfície nem os textos;
+`TableParts.Count` sem uso, apagado; camada bloqueada tem mensagem
+própria. Anotado para os próximos passos: `PluginXData.Load` é chamado até
+quatro vezes por entidade na varredura (um leitor único que despache pelo
+tipo resolve); o 7.2 não pode chamar `LayoutScan.Tables` a cada evento
+(usar `TableOf` do objeto modificado, ou um índice em memória); a cópia
+(7.5) hoje agrupa as peças de dois contornos sob um GUID; e os textos de
+altura e de marcada precisam de identidade antes do 7.3 (Dívidas).
 

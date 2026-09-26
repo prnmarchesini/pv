@@ -120,6 +120,7 @@ internal static class RibbonUfv
         aba.Panels.Add(MontarPainelUfv());
         aba.Panels.Add(MontarPainelProcessar());
         aba.Panels.Add(MontarPainelPvsyst());
+        aba.Panels.Add(MontarPainelEdicao());
         ribbon.Tabs.Add(aba);
 
         var temDocumento = AcadApp.DocumentManager.MdiActiveDocument is not null;
@@ -257,6 +258,28 @@ internal static class RibbonUfv
             IconesDaRibbon.Exportar(),
             PluginInfo.ComandoExportar,
             "Exporta os módulos selecionados como cena 3D para o PVsyst (DAE)."));
+
+        return new RibbonPanel { Source = origem };
+    }
+
+    /// <summary>
+    /// Seção Edição: o que acontece com a usina depois de desenhada.
+    /// </summary>
+    private static RibbonPanel MontarPainelEdicao()
+    {
+        var origem = new RibbonPanelSource { Title = "Edição" };
+
+        origem.Items.Add(BotaoPequeno(
+            "Sujar",
+            IconesDaRibbon.Sujar(),
+            PluginInfo.ComandoSujar,
+            "Marca uma mesa como suja (precisa de recálculo) e a pinta de vermelho."));
+
+        origem.Items.Add(BotaoPequeno(
+            "Estado",
+            IconesDaRibbon.Estado(),
+            PluginInfo.ComandoEstado,
+            "Diz quantas mesas estão limpas e quais estão sujas, e por quê."));
 
         return new RibbonPanel { Source = origem };
     }

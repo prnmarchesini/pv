@@ -11,6 +11,13 @@ namespace UFV.Core;
 /// <param name="TiltRadians">A inclinação transversal.</param>
 /// <param name="Marked">Se a fileira marcou a mesa.</param>
 /// <param name="Reason">O motivo da marca, ou null.</param>
+/// <param name="Dirty">
+/// Se a mesa está SUJA: o que está desenhado não corresponde mais ao que o
+/// motor calculou (foi movida, copiada, editada, ou o usuário mandou
+/// recalcular). Suja é pintada de vermelho e entra no "recalcular tudo"
+/// (etapa 7). Nasce limpa.
+/// </param>
+/// <param name="DirtyReason">Por que está suja ("movida", "copiada", "pedido do usuário"), ou null quando limpa.</param>
 public sealed record TableIdentity(
     Guid Id,
     string Label,
@@ -18,15 +25,33 @@ public sealed record TableIdentity(
     double EndElevation,
     double TiltRadians,
     bool Marked,
-    string? Reason)
+    string? Reason,
+    bool Dirty = false,
+    string? DirtyReason = null)
 {
     /// <summary>O tipo, como vai no XData.</summary>
     public const string Tipo = "Mesa";
 
-    /// <summary>Se a identidade é utilizável.</summary>
+    /// <summary>Se a identidade é utilizável: suja sem motivo, ou limpa com motivo, não é.</summary>
     public bool IsValid =>
         Id != Guid.Empty && !string.IsNullOrWhiteSpace(Label)
-        && double.IsFinite(StartElevation) && double.IsFinite(EndElevation) && double.IsFinite(TiltRadians);
+        && double.IsFinite(StartElevation) && double.IsFinite(EndElevation) && double.IsFinite(TiltRadians)
+        && Dirty == !string.IsNullOrWhiteSpace(DirtyReason);
+
+    /// <summary>A mesma mesa, suja por este motivo. O motivo é obrigatório.</summary>
+    /// <exception cref="ArgumentException">Motivo em branco.</exception>
+    public TableIdentity AsDirty(string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        return this with { Dirty = true, DirtyReason = reason.Trim() };
+    }
+
+    /// <summary>A mesma mesa, limpa.</summary>
+    public TableIdentity AsClean() => this with { Dirty = false, DirtyReason = null };
+
+    /// <summary>"F1.3: limpa" ou "F1.3: SUJA (movida)".</summary>
+    public string DescribeState() => Dirty ? $"{Label}: SUJA ({DirtyReason})" : $"{Label}: limpa";
 }
 
 /// <summary>A identidade de um pilar desenhado.</summary>

@@ -135,6 +135,15 @@ public static class PluginInfo
     /// </summary>
     public const string ComandoExportarAutomatico = "UFV_EXPORTAR_AUTO";
 
+    /// <summary>Comando que marca uma mesa como suja (precisa de recálculo) e a pinta de vermelho.</summary>
+    public const string ComandoSujar = "UFV_SUJAR";
+
+    /// <summary>Comando que suja a primeira mesa do desenho sem perguntar. Existe para o teste de nível 2.</summary>
+    public const string ComandoSujarAutomatico = "UFV_SUJAR_AUTO";
+
+    /// <summary>Comando que diz quantas mesas estão limpas e quais estão sujas, e por quê.</summary>
+    public const string ComandoEstado = "UFV_ESTADO";
+
     /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).

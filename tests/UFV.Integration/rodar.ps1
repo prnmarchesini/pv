@@ -1579,6 +1579,115 @@ function Testar-Exportar {
     return $true
 }
 
+<#
+    O estado sujo (7.1): processa uma fileira, suja a primeira mesa e le do
+    desenho: exatamente um contorno com suja=1 e motivo no XData; contorno,
+    pilares e modulos dessa mesa vermelhos; nenhuma face vermelha; e o
+    UFV_ESTADO conta uma suja. Tudo lido em LISP pelo XData, nunca por camada.
+#>
+function Testar-Sujo {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-sujo--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-sujo: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-sujo' `
+        -Script (Join-Path $PSScriptRoot 'ufv-sujo.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3  50 -50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-sujo terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'SUJAR_GUID ([0-9a-fA-F-]+) pecas=(\d+)') {
+        $problemas.Add("ufv-sujo: o comando nao sujou a mesa. Veja $($r.Saida)")
+        return $false
+    }
+
+    $guidRelatado = $Matches[1].ToLowerInvariant()
+    $pecasRelatadas = [int] $Matches[2]
+
+    if ($r.Texto -notmatch '(?m)^ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), (\d+) suja\(s\)') {
+        $problemas.Add("ufv-sujo: UFV_ESTADO nao respondeu. Veja $($r.Saida)")
+        return $false
+    }
+
+    $mesasEstado = [int] $Matches[1]
+    $limpasEstado = [int] $Matches[2]
+    $sujasEstado = [int] $Matches[3]
+
+    if ($r.Texto -notmatch 'UFV_SUJO contornos=(\d+) sujas=(\d+) motivo=(sim|nao) pecas=(\d+) pecasverm=(\d+) faces=(\d+) facesverm=(\d+) outrasverm=(\d+) guid=([0-9a-fA-F-]+)') {
+        $problemas.Add("ufv-sujo: nao consegui ler o estado em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $contornos = [int] $Matches[1]
+    $sujas = [int] $Matches[2]
+    $motivo = $Matches[3]
+    $pecas = [int] $Matches[4]
+    $pecasVermelhas = [int] $Matches[5]
+    $faces = [int] $Matches[6]
+    $facesVermelhas = [int] $Matches[7]
+    $outrasVermelhas = [int] $Matches[8]
+    $guidLisp = $Matches[9].ToLowerInvariant()
+
+    if ($guidLisp -ne $guidRelatado) {
+        $problemas.Add("ufv-sujo: o comando disse ter sujado $guidRelatado e o XData mostra $guidLisp suja. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($outrasVermelhas -ne 0) {
+        $problemas.Add("ufv-sujo: $outrasVermelhas peca(s) de outras mesas ficaram vermelhas. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($sujas -ne 1 -or $motivo -ne 'sim') {
+        $problemas.Add("ufv-sujo: esperava exatamente 1 contorno sujo com motivo no XData; ha $sujas (motivo: $motivo). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($sujasEstado -ne 1 -or $mesasEstado -ne $contornos -or $limpasEstado -ne ($contornos - 1)) {
+        $problemas.Add("ufv-sujo: UFV_ESTADO disse $mesasEstado mesa(s), $limpasEstado limpa(s), $sujasEstado suja(s); o desenho tem $contornos contorno(s). Veja $($r.Saida)")
+        return $false
+    }
+
+    # Uma mesa de exemplo tem contorno + 7 pilares + 28 modulos = 36 pecas pintaveis.
+    if ($pecas -lt 3 -or $pecasVermelhas -ne $pecas -or $pecasRelatadas -ne $pecas) {
+        $problemas.Add("ufv-sujo: a mesa suja tem $pecas peca(s) pintavel(is), $pecasVermelhas vermelha(s), comando relatou $pecasRelatadas. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($faces -lt 1 -or $facesVermelhas -ne 0) {
+        $problemas.Add("ufv-sujo: a mesa suja tem $faces face(s) e $facesVermelhas vermelha(s); face nunca se pinta. Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (sujo: 1 de $contornos mesas suja, $pecas pecas vermelhas, $faces faces intactas)" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -1656,6 +1765,10 @@ else {
     # A exportacao para o PVsyst, lendo o DAE de volta.
     $total++
     if (Testar-Exportar -Desenho $desenhos[0]) { $passaram++ }
+
+    # O estado sujo da mesa, lido do XData e da cor.
+    $total++
+    if (Testar-Sujo -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

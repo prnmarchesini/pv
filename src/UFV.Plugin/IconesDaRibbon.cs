@@ -127,6 +127,22 @@ internal static class IconesDaRibbon
         Traco("M9,18 V26", Ambar, 2.0),
         Traco("M17,10 H28 M23,5 L28,10 L23,15", Neutro, 2.2));
 
+    /// <summary>Uma mesa com um ponto de exclamação: a mesa suja.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Sujar() => Montar(
+        Traco("M4,22 L16,17", Azul, 3.0),
+        Traco("M10,20 V27", Ambar, 2.0),
+        Traco("M24,5 V15", Neutro, 2.6),
+        Preenchimento("M24,21 A1.8,1.8 0 1 1 23.99,21 Z", Neutro));
+
+    /// <summary>Uma lista com um visto: o estado das mesas.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Estado() => Montar(
+        Traco("M12,8 H28 M12,16 H28 M12,24 H28", Azul, 2.4),
+        Traco("M3,8 L5.5,10.5 L9,6", Neutro, 2.0),
+        Traco("M3,16 L5.5,18.5 L9,14", Neutro, 2.0),
+        Traco("M3,24 L5.5,26.5 L9,22", Neutro, 2.0));
+
     /// <summary>Contorno fechado sobre o relevo: a área de implantação.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static ImageSource Area() => Montar(

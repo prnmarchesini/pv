@@ -1,0 +1,72 @@
+; Teste de nivel 2 do passo 7.1: processa uma fileira (como no 5.8), suja a
+; primeira mesa (UFV_SUJAR_AUTO) e le do desenho:
+;   - o contorno da mesa suja tem, no XData (versao 2), suja=1 e um motivo;
+;   - contorno, pilares e modulos da mesa suja estao vermelhos (62 = 1);
+;     as faces dela NAO (a camada de faces e o que o PVsyst recebe);
+;   - nenhuma outra mesa esta suja no XData;
+;   - UFV_ESTADO conta 1 suja.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_TERRENO_AUTO")
+(setq ufv:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "UFV_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area do estado")
+(command "UFV_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento do estado")
+(command "UFV_FILEIRA_AUTO")
+(setvar "OSMODE" ufv:osmode)
+(defun ufv:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("MARCHENG_UFV")))))))
+(defun ufv:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun ufv:tipo (xd) (cdr (nth 0 xd)))
+; Vermelho: cor verdadeira (420 = 255*65536) ou o indice 1 que o AutoCAD deriva dela.
+(defun ufv:vermelho (e) (if (or (= (cdr (assoc 420 (entget e))) 16711680) (= (cdr (assoc 62 (entget e))) 1)) 1 0))
+
+; ANTES de sujar: os handles do que ja e vermelho (pilar com problema, peca
+; pintada por analise com vermelho). So o que ficar vermelho DEPOIS conta.
+(setq ufv:tudo (ssget "_X" (list (cons -3 (list (list "MARCHENG_UFV"))))))
+(setq ufv:n (if ufv:tudo (sslength ufv:tudo) 0))
+(setq ufv:antes nil ufv:i 0)
+(while (< ufv:i ufv:n)
+  (setq ufv:en (ssname ufv:tudo ufv:i))
+  (if (= (ufv:vermelho ufv:en) 1) (setq ufv:antes (cons (cdr (assoc 5 (entget ufv:en))) ufv:antes)))
+  (setq ufv:i (1+ ufv:i)))
+(defun ufv:novovermelho (e) (if (and (= (ufv:vermelho e) 1) (not (member (cdr (assoc 5 (entget e))) ufv:antes))) 1 0))
+
+(command "UFV_SUJAR_AUTO")
+(command "UFV_ESTADO")
+
+; A mesa suja: o contorno com suja=1.
+(setq ufv:tudo (ssget "_X" (list (cons -3 (list (list "MARCHENG_UFV"))))))
+(setq ufv:n (if ufv:tudo (sslength ufv:tudo) 0))
+(setq ufv:guid nil ufv:motivo "" ufv:sujas 0 ufv:contornos 0 ufv:i 0)
+(while (< ufv:i ufv:n)
+  (setq ufv:en (ssname ufv:tudo ufv:i) ufv:xd (ufv:xdata ufv:en))
+  (if (= (ufv:tipo ufv:xd) "Mesa")
+    (progn
+      (setq ufv:contornos (1+ ufv:contornos))
+      (if (= (ufv:campo ufv:xd 7) "1")
+        (progn (setq ufv:sujas (1+ ufv:sujas)) (setq ufv:guid (ufv:campo ufv:xd 0) ufv:motivo (ufv:campo ufv:xd 8))))))
+  (setq ufv:i (1+ ufv:i)))
+
+; As pecas da mesa suja: vermelhas, menos as faces. Das outras mesas: nada
+; que nao fosse vermelho antes.
+(setq ufv:pecas 0 ufv:pecasverm 0 ufv:faces 0 ufv:facesverm 0 ufv:outrasverm 0 ufv:i 0)
+(while (< ufv:i ufv:n)
+  (setq ufv:en (ssname ufv:tudo ufv:i) ufv:xd (ufv:xdata ufv:en) ufv:t (ufv:tipo ufv:xd))
+  (setq ufv:mesa (cond ((= ufv:t "Mesa") (ufv:campo ufv:xd 0)) ((= ufv:t "Face") (ufv:campo ufv:xd 2)) (T (ufv:campo ufv:xd 1))))
+  (if (and ufv:guid (= ufv:mesa ufv:guid))
+    (if (= ufv:t "Face")
+      (setq ufv:faces (1+ ufv:faces) ufv:facesverm (+ ufv:facesverm (ufv:vermelho ufv:en)))
+      (setq ufv:pecas (1+ ufv:pecas) ufv:pecasverm (+ ufv:pecasverm (ufv:vermelho ufv:en))))
+    (setq ufv:outrasverm (+ ufv:outrasverm (ufv:novovermelho ufv:en))))
+  (setq ufv:i (1+ ufv:i)))
+
+(princ (strcat "\nUFV_SUJO contornos=" (itoa ufv:contornos) " sujas=" (itoa ufv:sujas)
+               " motivo=" (if (> (strlen ufv:motivo) 0) "sim" "nao")
+               " pecas=" (itoa ufv:pecas) " pecasverm=" (itoa ufv:pecasverm)
+               " faces=" (itoa ufv:faces) " facesverm=" (itoa ufv:facesverm)
+               " outrasverm=" (itoa ufv:outrasverm) " guid=" (if ufv:guid ufv:guid "-")))
+(setvar "SECURELOAD" ufv:secureload)
+(princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)
