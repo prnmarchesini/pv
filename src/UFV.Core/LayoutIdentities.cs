@@ -91,7 +91,9 @@ public sealed record PillarIdentity(
     double Embedment,
     double? FreeHeight,
     string? Problem,
-    double? GroundZ)
+    double? GroundZ,
+    double? LowEdgeClearance = null,
+    double? HighEdgeClearance = null)
 {
     /// <summary>O tipo, como vai no XData.</summary>
     public const string Tipo = "Pilar";
@@ -128,6 +130,20 @@ public sealed record NoteIdentity(Guid Id, Guid Table)
     public const string Tipo = "Nota";
 
     public bool IsValid => Id != Guid.Empty && Table != Guid.Empty;
+}
+
+/// <summary>
+/// A marca de um grupo no desenho (7.9): o contorno, o hachurado e o
+/// letreiro com o número, todos com o GUID do grupo. Apagar o grupo apaga
+/// a marca; a marca não é peça de mesa.
+/// </summary>
+/// <param name="Group">O GUID do grupo.</param>
+public sealed record GroupMarkIdentity(Guid Group)
+{
+    /// <summary>O tipo, como vai no XData.</summary>
+    public const string Tipo = "Grupo";
+
+    public bool IsValid => Group != Guid.Empty;
 }
 
 /// <summary>

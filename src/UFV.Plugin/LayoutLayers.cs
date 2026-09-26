@@ -38,6 +38,9 @@ internal static class LayoutLayers
     /// <summary>O aviso das mesas marcadas (e dos pilares com problema).</summary>
     internal const string Marcada = Prefixo + "MARCADA";
 
+    /// <summary>A marca dos grupos: contorno, hachura e número (7.9).</summary>
+    internal const string Grupo = Prefixo + "GRUPO";
+
     /// <summary>
     /// Garante a camada e devolve o nome dela. A cor e o estado ligado só
     /// valem quando a camada é criada: se ela já existe, é do usuário, e o

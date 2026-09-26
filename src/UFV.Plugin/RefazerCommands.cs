@@ -110,12 +110,15 @@ public static class RefazerCommands
         }
 
         var apagadas = LayoutEraser.ApagarDentro(documento.Database, area.Vertices);
+        var orfas = LayoutEraser.ApagarOrfasDentro(documento.Database, area.Vertices);
 
         if (apagadas.Tables.Count > 0) RemovalStore.Remove(documento.Database, apagadas.Tables);
 
         editor.WriteMessage(
             $"\nREFAZER {apagadas.Tables.Count} mesa(s) apagada(s) dentro de {area.Nome} "
-            + $"({apagadas.Entities} entidade(s)); desenhando de novo com a configuração atual (se algo falhar, U devolve as apagadas)...\n");
+            + $"({apagadas.Entities} entidade(s)"
+            + (orfas > 0 ? $", mais {orfas} nota(s) órfã(s) de desenho antigo" : string.Empty)
+            + "); desenhando de novo com a configuração atual (se algo falhar, U devolve as apagadas)...\n");
 
         UsinaCommands.Desenhar(editor, documento, plano);
     }
@@ -187,6 +190,55 @@ internal static class LayoutEraser
 
         return new Erased(mesas, entidades);
     }
+
+    /// <summary>
+    /// Apaga, dentro da área, as notas SEM identidade nas nossas camadas de
+    /// alturas e de marcadas (riscos e textos de desenho feito antes de as
+    /// notas ganharem XData, 26/09/2026): ninguém as reconhece como peça de
+    /// mesa, e elas ficavam para trás no Refazer. Quantas foram.
+    /// </summary>
+    internal static int ApagarOrfasDentro(Database database, IReadOnlyList<Point3> area)
+    {
+        var apagadas = 0;
+
+        using var transacao = database.TransactionManager.StartTransaction();
+
+        var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForRead);
+        var espaco = (BlockTableRecord)transacao.GetObject(tabela[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+
+        foreach (ObjectId id in espaco)
+        {
+            if (id.ObjectClass != ClasseDoTexto && id.ObjectClass != ClasseDaLinha) continue;
+            if (transacao.GetObject(id, OpenMode.ForRead) is not Entity entidade) continue;
+
+            var nossaCamada = string.Equals(entidade.Layer, LayoutLayers.Alturas, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entidade.Layer, LayoutLayers.Marcada, StringComparison.OrdinalIgnoreCase);
+            if (!nossaCamada) continue;
+
+            using (var dados = entidade.GetXDataForApplication(PluginXData.Aplicativo))
+                if (dados is not null) continue;
+
+            var ponto = entidade switch
+            {
+                MText texto => new Point3(texto.Location.X, texto.Location.Y, 0),
+                Line linha => new Point3((linha.StartPoint.X + linha.EndPoint.X) / 2, (linha.StartPoint.Y + linha.EndPoint.Y) / 2, 0),
+                _ => (Point3?)null,
+            } ?? new Point3(double.NaN, double.NaN, 0);
+
+            if (!ponto.IsFinite || !Polygons.Contains(area, ponto.X, ponto.Y)) continue;
+
+            entidade.UpgradeOpen();
+            entidade.Erase();
+            apagadas++;
+        }
+
+        transacao.Commit();
+
+        return apagadas;
+    }
+
+    private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDoTexto = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(MText));
+    private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDaLinha = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Line));
 
     /// <summary>Os pontos de referência da entidade, em planta: os vértices do contorno, ou um ponto da peça.</summary>
     private static IEnumerable<Point3> Pontos(Transaction transacao, ObjectId id)

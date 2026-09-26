@@ -27,7 +27,8 @@ internal static class LayoutXData
     private const int VersaoDaMesaTres = 3;
     private const int VersaoDaMesaDois = 2;
     private const int VersaoDaMesaAntiga = 1;
-    private const int VersaoDoPilar = 1;
+    private const int VersaoDoPilar = 2;
+    private const int VersaoDoPilarAntiga = 1;
     private const int VersaoDoModulo = 1;
 
     /// <summary>GUID, letreiro, cota inicial, cota final, inclinação, marcada, motivo, suja, motivo da sujeira, potência do módulo, âncora X, Y, Z.</summary>
@@ -42,8 +43,11 @@ internal static class LayoutXData
     /// <summary>Os sete primeiros, na versão 1.</summary>
     private const int CamposDaMesaAntiga = 7;
 
-    /// <summary>GUID, mesa, número, estação, comprimento, enterro, altura livre, problema, terreno.</summary>
-    private const int CamposDoPilar = 9;
+    /// <summary>GUID, mesa, número, estação, comprimento, enterro, altura livre, problema, terreno, altura livre na ponta baixa, na ponta alta.</summary>
+    private const int CamposDoPilar = 11;
+
+    /// <summary>Os nove primeiros, na versão 1 (sem as pontas).</summary>
+    private const int CamposDoPilarAntigo = 9;
 
     /// <summary>GUID, mesa, coluna, fileira, altura livre.</summary>
     private const int CamposDoModulo = 5;
@@ -115,11 +119,14 @@ internal static class LayoutXData
             Numero(pilar.Embedment),
             Opcional(pilar.FreeHeight),
             pilar.Problem ?? string.Empty,
-            Opcional(pilar.GroundZ));
+            Opcional(pilar.GroundZ),
+            Opcional(pilar.LowEdgeClearance),
+            Opcional(pilar.HighEdgeClearance));
 
     internal static PillarIdentity? LoadPillar(Entity entidade)
     {
-        var c = PluginXData.Load(entidade, PillarIdentity.Tipo, VersaoDoPilar, CamposDoPilar);
+        var c = PluginXData.Load(entidade, PillarIdentity.Tipo, VersaoDoPilar, CamposDoPilar)
+            ?? PluginXData.Load(entidade, PillarIdentity.Tipo, VersaoDoPilarAntiga, CamposDoPilarAntigo);
         if (c is null) return null;
 
         if (!Guid.TryParse(c[0], out var id) || !Guid.TryParse(c[1], out var mesa)) return null;
@@ -128,7 +135,9 @@ internal static class LayoutXData
 
         var pilar = new PillarIdentity(
             id, mesa, numero, estacao, RealOpcional(c[4]), enterro, RealOpcional(c[6]),
-            c[7].Length == 0 ? null : c[7], RealOpcional(c[8]));
+            c[7].Length == 0 ? null : c[7], RealOpcional(c[8]),
+            c.Count >= CamposDoPilar ? RealOpcional(c[9]) : null,
+            c.Count >= CamposDoPilar ? RealOpcional(c[10]) : null);
 
         return pilar.IsValid ? pilar : null;
     }
@@ -183,6 +192,26 @@ internal static class LayoutXData
         var nota = new NoteIdentity(id, mesa);
 
         return nota.IsValid ? nota : null;
+    }
+
+    private const int VersaoDaMarca = 1;
+
+    /// <summary>GUID do grupo.</summary>
+    private const int CamposDaMarca = 1;
+
+    internal static void SaveGroupMark(Transaction transacao, Entity entidade, GroupMarkIdentity marca) =>
+        PluginXData.Save(transacao, entidade, GroupMarkIdentity.Tipo, VersaoDaMarca, marca.Group.ToString("D"));
+
+    internal static GroupMarkIdentity? LoadGroupMark(Entity entidade)
+    {
+        var c = PluginXData.Load(entidade, GroupMarkIdentity.Tipo, VersaoDaMarca, CamposDaMarca);
+        if (c is null) return null;
+
+        if (!Guid.TryParse(c[0], out var grupo)) return null;
+
+        var marca = new GroupMarkIdentity(grupo);
+
+        return marca.IsValid ? marca : null;
     }
 
     internal static ModuleIdentity? LoadModule(Entity entidade)

@@ -120,6 +120,7 @@ internal static class RibbonUfv
         aba.Panels.Add(MontarPainelUfv());
         aba.Panels.Add(MontarPainelProcessar());
         aba.Panels.Add(MontarPainelPvsyst());
+        aba.Panels.Add(MontarPainelAnalises());
         aba.Panels.Add(MontarPainelEdicao());
         aba.Panels.Add(MontarPainelNumeracao());
         ribbon.Tabs.Add(aba);
@@ -244,12 +245,6 @@ internal static class RibbonUfv
             PluginInfo.ComandoRefazer,
             "Apaga as mesas de uma área e as desenha de novo com a configuração atual (também no botão direito sobre a área)."));
 
-        origem.Items.Add(BotaoPequeno(
-            "Alturas",
-            IconesDaRibbon.Alturas(),
-            PluginInfo.ComandoAlturas,
-            "Mostra ou esconde as alturas dos pilares."));
-
         return new RibbonPanel { Source = origem };
     }
 
@@ -328,18 +323,43 @@ internal static class RibbonUfv
     }
 
     /// <summary>
-    /// Seção Numeração (7.10): gerar a numeração das mesas a partir da F1.1
-    /// e de uma mesa da última fileira.
+    /// Seção Análises: o que se liga, desliga e regera sobre as mesas
+    /// desenhadas (pedido do Renan em 26/09/2026). Hoje, as alturas dos
+    /// pilares.
+    /// </summary>
+    private static RibbonPanel MontarPainelAnalises()
+    {
+        var origem = new RibbonPanelSource { Title = "Análises" };
+
+        origem.Items.Add(BotaoGrande(
+            "Alturas",
+            IconesDaRibbon.Alturas(),
+            PluginInfo.ComandoAlturas,
+            "Mostra ou esconde as alturas dos pilares (PB na ponta baixa, PA na ponta alta, P3 no pilar)."));
+
+        origem.Items.Add(BotaoPequeno(
+            "Regerar alturas",
+            IconesDaRibbon.RegerarAlturas(),
+            PluginInfo.ComandoAlturasRegerar,
+            "Apaga tudo o que está na camada das alturas (inclusive texto órfão) e redesenha as cotas de todas as mesas a partir do que está gravado nos pilares."));
+
+        return new RibbonPanel { Source = origem };
+    }
+
+    /// <summary>
+    /// Seção Numeração (7.10): numerar as fileiras e as mesas a partir da
+    /// F1.1 e de uma mesa da última fileira.
     /// </summary>
     private static RibbonPanel MontarPainelNumeracao()
     {
         var origem = new RibbonPanelSource { Title = "Numeração" };
 
         origem.Items.Add(BotaoGrande(
-            "Gerar numeração",
+            "Numerar fileiras",
             IconesDaRibbon.Numerar(),
             PluginInfo.ComandoNumerar,
-            "Renumera todas as mesas: você indica a F1.1 e uma mesa da última fileira; fileira é mesa contínua na mesma reta e azimute."));
+            "Numera as fileiras (F1, F2…) e as mesas de cada uma (F1.1, F1.2…). Você clica na mesa que será a F1.1 e numa mesa da última fileira; "
+            + "as fileiras crescem de uma para a outra, e as mesas correm a partir da F1.1. Mesa contínua na mesma reta e azimute é a mesma fileira."));
 
         return new RibbonPanel { Source = origem };
     }

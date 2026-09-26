@@ -54,7 +54,11 @@ internal static class MenuDeContexto
 
     private static void Registrar(Type tipo, params (string Rotulo, string Comando)[] itens)
     {
+        // Um submenu "UFV" com os itens dentro (o Title da extensão não vira
+        // submenu sozinho: o AutoCAD despeja os itens soltos no menu, como
+        // o Renan viu em 26/09/2026).
         var menu = new ContextMenuExtension { Title = "UFV" };
+        var raiz = new MenuItem("UFV");
 
         foreach (var (rotulo, comando) in itens)
         {
@@ -73,8 +77,10 @@ internal static class MenuDeContexto
                 }
             };
 
-            menu.MenuItems.Add(item);
+            raiz.MenuItems.Add(item);
         }
+
+        menu.MenuItems.Add(raiz);
 
         var classe = RXObject.GetClass(tipo);
         Autodesk.AutoCAD.ApplicationServices.Application.AddObjectContextMenuExtension(classe, menu);

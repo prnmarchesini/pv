@@ -228,6 +228,20 @@ teste: a etapa 6 é onde passa a ter.
    pela paleta de propriedades: também suja ("movida ou editada"). Rodar
    `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
    nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
+16. **Testar a rodada de 26/09 à noite (seis reprovações)**, ver "Terceira
+   reprovação: seis pontos da tela" no fim deste arquivo:
+   a) botão direito na área → submenu **UFV** → "Refazer as mesas desta
+      área"; b) Recalcular uma mesa: os textos de cota ficam legíveis
+      (nunca de cabeça para baixo); c) Criar grupo: contorno com hachura
+      translúcida e o número do grupo no centro (camada
+      `MARCHENG_UFV_GRUPO`); Apagar o grupo tira a marca; d) "Numerar
+      fileiras" na seção Numeração: clique na mesa que será a F1.1 e numa
+      mesa da última fileira (ou digite L e o letreiro); e) seção
+      **Análises**: "Alturas" liga/desliga; "Regerar alturas" apaga tudo da
+      camada das alturas (inclusive os textos velhos que ficaram para trás)
+      e redesenha; o Refazer também limpa esses órfãos dentro da área;
+      f) Usina/Refazer no terreno com o buraco: a mesa marcada assenta no
+      próprio chão, não na cota das vizinhas.
 15. **Testar o 7.10 (numeração)**: com a usina desenhada (e depois de
    apagar, copiar ou mover mesas), clique "Gerar numeração" na seção
    Numeração. Ele pede a mesa que será a F1.1 (clique numa peça, ou
@@ -3463,4 +3477,97 @@ invertida com a F1.1 na antiga F16.5: toda F(r).(n) vira F(17-r).(6-n),
 - No Core Console, a opção Letreiro com um letreiro que não existe deixa
   o comando esperando entrada até o timeout (o teste acusa como
   "estourou").
+
+## Terceira reprovação: seis pontos da tela (26/09/2026, noite)
+
+O Renan instalou o bundle do 7.10 e reprovou seis coisas, com prints. O
+desenho dele foi feito às 11:18 com a versão do 5.7 (antes de as cotas
+ganharem identidade), o que explica os textos que ficavam para trás.
+
+1. **Botão direito na área sem submenu UFV.** O `Title` da extensão de
+   menu não vira submenu; os itens saíam soltos. Agora há um `MenuItem`
+   "UFV" com os itens dentro.
+2. **Textos de cota de cabeça para baixo depois do Recalcular.** A célula
+   reconstruída do contorno pode vir com a direção invertida em 180° (a
+   colocação escolhe o canto de origem pela subida); o texto usava essa
+   direção como rotação. Agora o rumo do texto sai do eixo X local da
+   colocação e é trazido para (-90°, 90°], sempre legível; o risco da cota
+   recebe a direção, não a colocação.
+3. **Grupo com contorno, hachura e número, como o PVcase.** `TableGroup`
+   ganhou `Number` (o próximo livre ao criar; apagar não renumera);
+   `ConvexHull` (Core, 2 testes) dá a casca dos cantos das mesas;
+   `GroupDrawer` desenha a polilinha fechada, o hachurado sólido 80 %
+   translúcido e o letreiro "N \ nome" no centro, na camada
+   `MARCHENG_UFV_GRUPO`, com o GUID do grupo no XData (`GroupMarkIdentity`).
+   Apagar o grupo apaga a marca; criar com nome repetido troca a marca. A
+   marca NÃO acompanha mesa movida ou apagada: recriar o grupo redesenha.
+4. **"Gerar numeração não está funcionando".** Sem erro no log (quatro
+   cliques em um minuto). A hipótese forte é a exigência do perfil: o
+   comando reconstruía a célula com `FromCorners`, que recusa contorno cuja
+   borda baixa não fecha com o comprimento do perfil ATUAL ("Trocou de
+   mesa?"), e ele tinha mexido na configuração. Agora `FromDrawnCorners`
+   mede dos cantos, sem perfil. O botão virou "Numerar fileiras", com a
+   dica explicando o que ele pede.
+5. **Refazer e Recalcular deixavam textos para trás; as alturas como
+   análise.** As cotas sem identidade (versão antiga) não eram de ninguém.
+   O Refazer agora apaga também as notas órfãs (sem XData) das camadas de
+   alturas e de marcadas dentro da área. E a ribbon ganhou a seção
+   **Análises**: "Alturas" (liga/desliga, saiu de Processar) e "Regerar
+   alturas" (`UFV_ALTURAS_REGERAR`: apaga TUDO da camada das alturas e
+   redesenha as cotas a partir do XData dos pilares e do contorno). Para
+   isso o pilar passou a gravar as alturas de ponta baixa e alta (XData
+   v2; v1 lido sem elas, e aí só o P3 é regerado, com aviso). Nível 2
+   `ufv-alturas.scr`: 210 cotas apagadas à mão, um órfão plantado, regerar
+   devolve 210 com identidade e nenhuma virada.
+6. **"Mesas na altura das nuvens".** Mesa marcada (não cabe) num buraco de
+   10 m ficava na cota das vizinhas, porque a opção marcada da programação
+   dinâmica existe em toda cota e a mais barata era a das vizinhas. Regra
+   nova no `RowSolver`: marcada com terreno cujas DUAS pontas ficam mais
+   que um degrau acima do próprio ponto mais alto assenta nivelada nele
+   (terreno + ponta baixa mínima). A "escada" (marcada inclinada que liga
+   dois patamares, enterrada numa ponta) não muda. Teste
+   `MesaNoBuracoAssentaNoProprioTerreno`; o teste de força bruta compara a
+   solução crua (`Solve(..., seatMarked: false)`).
+
+Placar: Core 894 (etapa 5 256, etapa 7 46), nível 2 23/23, tudo verde.
+
+### O que o revisor achou e o que mudou
+
+- **Importante, corrigido**: a mesa assentada ficava com o motivo velho
+  ("3 módulos fora da faixa") mesmo nivelada com zero estouros. Agora o
+  motivo é "assentada no próprio terreno: o desnível até a vizinha (X m)
+  passa do degrau máximo", e `SolvedTable.Seated` diz que foi assentada;
+  `Steps` só pula a junta com assentada (a junta com a escada volta a ser
+  conferida pelos testes, como sempre foi).
+- **Importante, corrigido**: o Regerar apagava qualquer classe da camada
+  das alturas (uma polilinha do usuário iria junto), e, na primeira
+  correção, também o aviso "NÃO CABE" (nota de outra camada, que o nível
+  2 pegou: "2 apagadas"). Agora apaga só texto e linha da camada das
+  alturas, com identidade de nota ou sem XData nosso; outra classe fica e
+  vai para o log.
+- **Importante, corrigido**: a hachura chamava `SetDatabaseDefaults`
+  depois de receber a camada, o que pode devolvê-la à camada corrente;
+  agora os padrões vêm antes.
+- **Importante, corrigido**: numerar abortava tudo por um GUID sem
+  contorno (peças órfãs do desenho velho), que é a hipótese mais forte
+  para o "não está funcionando"; agora pula com aviso e segue.
+- **Importante, corrigido**: a reprovação dos textos virados não tinha
+  teste; o `ufv-recalcular.scr` agora lê a rotação dos textos da mesa
+  recalculada (≥ 21 textos, nenhum fora de (-90°, 90°]).
+- **Menores**: summary órfão no LayoutDrawer, `Find` duplicado ao criar
+  grupo.
+
+### Observações que ficam
+
+- A marca do grupo não acompanha mesa movida, apagada ou que saiu do
+  grupo; recriar o grupo redesenha. Redesenhar no Recalcular do grupo e
+  no listar custaria pouco.
+- A hachura e o número ficam na cota média dos cantos: em 3D ficam sob
+  as mesas; em planta é o que se vê.
+- "Recalcular esta mesa" continua no submenu da área (área e contorno
+  são a mesma classe de entidade); clicando na área ele pede uma peça.
+- O Refazer com órfãos e o conteúdo da marca (número, padrão SOLID) não
+  têm teste de nível 2.
+- As classes RXClass de texto/linha/polilinha estão repetidas em três
+  arquivos.
 

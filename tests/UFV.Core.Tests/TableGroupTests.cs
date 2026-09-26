@@ -9,7 +9,7 @@ public class TableGroupTests
     [Trait("Etapa", "7")]
     public void VaiEVoltaPeloTexto()
     {
-        var grupo = new TableGroup(Guid.NewGuid(), "Bloco A", [Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()], Quando);
+        var grupo = new TableGroup(Guid.NewGuid(), "Bloco A", [Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()], Quando, 3);
 
         var campos = grupo.ToFields();
         Assert.Equal(TableGroup.FieldCount, campos.Count);
@@ -20,6 +20,15 @@ public class TableGroupTests
         Assert.Equal(grupo.Name, lido.Name);
         Assert.Equal(grupo.CreatedAt, lido.CreatedAt);
         Assert.Equal(grupo.Tables, lido.Tables);
+        Assert.Equal(3, lido.Number);
+        Assert.Equal("3\\PBloco A", lido.Caption);
+
+        // Registro antigo, sem o número: lê com número zero.
+        var antigo = TableGroup.Parse(campos.Take(4).ToList());
+        Assert.NotNull(antigo);
+        Assert.Equal(0, antigo.Number);
+        Assert.Equal("Bloco A", antigo.Caption);
+        Assert.Null(TableGroup.Parse([.. campos.Take(4), "x"]));
 
         // E pelo registro do plugin.
         var texto = RecordTable.Write(1, TableGroup.FieldCount, [grupo], g => g.ToFields());

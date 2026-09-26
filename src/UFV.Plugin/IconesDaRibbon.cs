@@ -176,6 +176,13 @@ internal static class IconesDaRibbon
         Traco("M9,5 V27 M5,5 H13 M5,27 H13", Neutro, 2.0),
         Traco("M17,12 H27 M17,17 H24 M17,22 H27", Azul, 2.4));
 
+    /// <summary>As três cotas com uma seta circular: regerar as alturas.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource RegerarAlturas() => Montar(
+        Traco("M5,10 H13 M5,16 H11 M5,22 H13", Azul, 2.4),
+        Traco("M24,9 A7,7 0 1 0 27,16", Neutro, 2.2),
+        Traco("M24,6 L24,10 L20,10", Neutro, 2.2));
+
     /// <summary>Uma mesa e uma seta saindo para a direita: a exportação para o PVsyst.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static ImageSource Exportar() => Montar(

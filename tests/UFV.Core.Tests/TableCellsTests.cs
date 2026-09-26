@@ -26,6 +26,31 @@ public class TableCellsTests
         return (layout.Rows[1].Tables[2], azimute);
     }
 
+    /// <summary>
+    /// A célula como desenhada: mede dos cantos, sem perfil; com o perfil
+    /// trocado (mesa mais curta) ela ainda sai, com as medidas do desenho.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "7")]
+    public void ComoDesenhadaMedeDosCantosSemPerfil()
+    {
+        var (original, azimute) = Original(180);
+        var orientacao = RowOrientation.Resolve(original, azimute);
+        var cantos = CantosDesenhados(TablePlacement.Plan(original, orientacao, Tilt, 700));
+
+        var celula = TableCells.FromDrawnCorners(cantos, original.Label);
+
+        Assert.Equal(original.Row, celula.Row);
+        Assert.Equal(original.Number, celula.Number);
+        Assert.Equal(Comprimento, celula.Length, 6);
+        Assert.Equal(FundoEmPlanta, celula.PlanDepth, 6);
+        Assert.Equal(original.Origin.X, celula.Origin.X, 6);
+        Assert.Equal(original.Origin.Y, celula.Origin.Y, 6);
+
+        Assert.Throws<ArgumentException>(() => TableCells.FromDrawnCorners(cantos, "mesa 3"));
+        Assert.Throws<ArgumentException>(() => TableCells.FromDrawnCorners(cantos.Take(3).ToList(), "F1.1"));
+    }
+
     /// <summary>Os cantos como o LayoutDrawer grava: (0,0), (L,0), (L,D), (0,D) locais, pela colocação.</summary>
     private static List<Point3> CantosDesenhados(Transform colocacao) =>
         new Point3[] { new(0, 0, 0), new(Comprimento, 0, 0), new(Comprimento, Fundo, 0), new(0, Fundo, 0) }

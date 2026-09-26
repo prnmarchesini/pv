@@ -4,6 +4,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using UFV.Core;
+using UFV.Geo;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
 [assembly: CommandClass(typeof(UFV.Plugin.GrupoCommands))]
@@ -61,17 +62,26 @@ public static class GrupoCommands
             var nome = Perguntas.Nome(editor, "grupo", "O grupo");
             if (nome is null) return;
 
-            if (GroupStore.Find(documento.Database, nome) is { } existente && !ConfirmarSubstituir(editor, existente))
+            var anterior = GroupStore.Find(documento.Database, nome);
+
+            if (anterior is not null && !ConfirmarSubstituir(editor, anterior))
             {
-                editor.WriteMessage($"\nGRUPO \"{existente.Name}\" mantido como estava.\n");
+                editor.WriteMessage($"\nGRUPO \"{anterior.Name}\" mantido como estava.\n");
                 return;
             }
 
-            var grupo = new TableGroup(Guid.NewGuid(), nome, mesas.OrderBy(g => g).ToList(), DateTime.UtcNow);
+            var grupo = new TableGroup(anterior?.Id ?? Guid.NewGuid(), nome, mesas.OrderBy(g => g).ToList(), DateTime.UtcNow);
             var problema = GroupStore.Upsert(documento.Database, grupo, out var substituiu);
+            grupo = GroupStore.Find(documento.Database, nome) ?? grupo;
+
+            // A marca no desenho: contorno, hachura e número (apaga a antiga
+            // ao substituir).
+            if (anterior is not null) GroupDrawer.Apagar(documento.Database, anterior.Id);
+            var marca = GroupDrawer.Desenhar(documento.Database, grupo, CantosDasMesas(documento, grupo));
 
             editor.WriteMessage(
-                $"\nGRUPO \"{nome}\" {(substituiu ? "substituído" : "criado")} com {mesas.Count} mesa(s). {Resumir(documento, grupo).Describe()}\n");
+                $"\nGRUPO {grupo.Number} \"{nome}\" {(substituiu ? "substituído" : "criado")} com {mesas.Count} mesa(s). {Resumir(documento, grupo).Describe()}"
+                + (marca > 0 ? $" Marca desenhada na camada {LayoutLayers.Grupo}." : string.Empty) + "\n");
 
             if (problema is not null) editor.WriteMessage($"  ATENÇÃO: {problema}.\n");
 
@@ -171,9 +181,15 @@ public static class GrupoCommands
 
             var grupo = GroupStore.Find(documento.Database, nome);
 
-            editor.WriteMessage(grupo is not null && GroupStore.Remove(documento.Database, grupo.Name)
-                ? $"\nGRUPO \"{grupo.Name}\" apagado. As mesas continuam no desenho.\n"
-                : $"\nGRUPO Não há grupo \"{nome}\".\n");
+            if (grupo is not null && GroupStore.Remove(documento.Database, grupo.Name))
+            {
+                var marca = GroupDrawer.Apagar(documento.Database, grupo.Id);
+                editor.WriteMessage($"\nGRUPO \"{grupo.Name}\" apagado, com {marca} entidade(s) da marca. As mesas continuam no desenho.\n");
+            }
+            else
+            {
+                editor.WriteMessage($"\nGRUPO Não há grupo \"{nome}\".\n");
+            }
 
             AtualizarPainel();
         }
@@ -291,6 +307,26 @@ public static class GrupoCommands
         }
 
         return new GroupSummary(grupo, LayoutCensus.Count(contadas, reserva), faltando);
+    }
+
+    /// <summary>Os cantos dos contornos das mesas do grupo (para a casca da marca).</summary>
+    private static List<Point3> CantosDasMesas(Document documento, TableGroup grupo)
+    {
+        var cantos = new List<Point3>();
+
+        using var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction();
+
+        var mesas = LayoutScan.Tables(transacao, documento.Database);
+
+        foreach (var guid in grupo.Tables)
+        {
+            if (!mesas.TryGetValue(guid, out var partes)) continue;
+
+            foreach (var id in partes.Contours)
+                cantos.AddRange(FileiraCommands.Vertices((Polyline3d)transacao.GetObject(id, OpenMode.ForRead), transacao));
+        }
+
+        return cantos;
     }
 
     internal static void RecalcularGrupo(Document documento, string nome)

@@ -33,8 +33,15 @@ internal static class GroupStore
 
         substituiu = posicao >= 0;
 
-        if (substituiu) atuais[posicao] = grupo;
-        else atuais.Add(grupo);
+        // O número: o do grupo substituído, ou o próximo livre (quem apaga
+        // não renumera os outros; o número escrito no desenho não muda).
+        var numero = substituiu ? atuais[posicao].Number : 0;
+        if (numero <= 0) numero = atuais.Select(g => g.Number).DefaultIfEmpty(0).Max() + 1;
+
+        var numerado = grupo with { Number = numero };
+
+        if (substituiu) atuais[posicao] = numerado;
+        else atuais.Add(numerado);
 
         Save(database, atuais);
 

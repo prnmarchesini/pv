@@ -88,6 +88,55 @@ public static class TableCells
         return new PlacedTable(fileira, numero, origem, Math.Atan2(direcao.Y, direcao.X), length, planDepth, cantos, false);
     }
 
+    /// <summary>
+    /// A célula COMO ESTÁ DESENHADA: comprimento da borda baixa e fundo em
+    /// planta medidos dos cantos, sem conferir com o perfil. Serve a quem
+    /// só precisa de posição, direção e cantos (a numeração do 7.10): trocar
+    /// de perfil depois de desenhar não pode impedir de numerar.
+    /// </summary>
+    /// <exception cref="ArgumentException">Cantos que não descrevem uma mesa, ou letreiro ilegível.</exception>
+    public static PlacedTable FromDrawnCorners(IReadOnlyList<Point3> corners, string label)
+    {
+        ArgumentNullException.ThrowIfNull(corners);
+
+        if (corners.Count != 4 || corners.Any(c => !c.IsFinite))
+            throw new ArgumentException("O contorno da mesa precisa de quatro cantos finitos.", nameof(corners));
+
+        if (!TryParseLabel(label, out var fileira, out var numero))
+            throw new ArgumentException($"O letreiro \"{label}\" não é F<fileira>.<mesa>.", nameof(label));
+
+        var origem = new Point3(corners[0].X, corners[0].Y, 0);
+
+        var dx = corners[1].X - origem.X;
+        var dy = corners[1].Y - origem.Y;
+        var comprimento = Math.Sqrt(dx * dx + dy * dy);
+
+        if (comprimento < RowDistributor.MenorMedida)
+            throw new ArgumentException("A borda baixa do contorno não tem comprimento em planta.", nameof(corners));
+
+        var direcao = new Point3(dx / comprimento, dy / comprimento, 0);
+
+        var ax = corners[3].X - origem.X;
+        var ay = corners[3].Y - origem.Y;
+        var lado = -direcao.Y * ax + direcao.X * ay;
+
+        if (Math.Abs(lado) < RowDistributor.MenorMedida)
+            throw new ArgumentException("A borda alta do contorno está em cima da borda baixa.", nameof(corners));
+
+        var fundo = Math.Abs(lado);
+        var normal = lado > 0 ? new Point3(-direcao.Y, direcao.X, 0) : new Point3(direcao.Y, -direcao.X, 0);
+
+        Point3[] cantos =
+        [
+            origem,
+            new(origem.X + direcao.X * comprimento, origem.Y + direcao.Y * comprimento, 0),
+            new(origem.X + direcao.X * comprimento + normal.X * fundo, origem.Y + direcao.Y * comprimento + normal.Y * fundo, 0),
+            new(origem.X + normal.X * fundo, origem.Y + normal.Y * fundo, 0),
+        ];
+
+        return new PlacedTable(fileira, numero, origem, Math.Atan2(direcao.Y, direcao.X), comprimento, fundo, cantos, false);
+    }
+
     /// <summary>Lê "F1.3" como fileira 1, mesa 3.</summary>
     public static bool TryParseLabel(string? label, out int row, out int number)
     {

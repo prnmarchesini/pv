@@ -1967,8 +1967,15 @@ function Testar-Recalcular {
 
     $mesasEstado = [int] $estados[$estados.Count - 1].Groups[1].Value
 
-    if ($r.Texto -notmatch 'UFV_RECALC_LISP antes=(\d+) contornos=(\d+) guid=([0-9a-fA-F-]+) cont=(\d+) suja=(\S+) pilares=(\d+) modulos=(\d+) faces=(\d+) vermelhas=(\d+)') {
+    if ($r.Texto -notmatch 'UFV_RECALC_LISP antes=(\d+) contornos=(\d+) guid=([0-9a-fA-F-]+) cont=(\d+) suja=(\S+) pilares=(\d+) modulos=(\d+) faces=(\d+) vermelhas=(\d+) notas=(\d+) viradas=(\d+)') {
         $problemas.Add("ufv-recalcular: nao consegui ler o desenho em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    # A reprovacao de 26/09: os textos de cota da mesa recalculada nunca de
+    # cabeca para baixo (rumo em (-90, 90]).
+    if ([int] $Matches[10] -lt 21 -or [int] $Matches[11] -ne 0) {
+        $problemas.Add("ufv-recalcular: esperava >= 21 textos de cota na mesa recalculada, nenhum virado; deu $($Matches[10]) e $($Matches[11]) virados. Veja $($r.Saida)")
         return $false
     }
 
@@ -2415,7 +2422,7 @@ function Testar-Grupos {
         return $false
     }
 
-    if ($r.Texto -notmatch '(?m)^GRUPO "Bloco A" criado com 2 mesa\(s\)') {
+    if ($r.Texto -notmatch '(?m)^GRUPO \d+ "Bloco A" criado com 2 mesa\(s\)') {
         $problemas.Add("ufv-grupos: o grupo nao foi criado com 2 mesas. Veja $($r.Saida)")
         return $false
     }
@@ -2447,13 +2454,20 @@ function Testar-Grupos {
         return $false
     }
 
-    if ($r.Texto -notmatch 'UFV_GRUPOS_LISP mesas=(\d+) so2=(\d+)') {
+    if ($r.Texto -notmatch 'UFV_GRUPOS_LISP mesas=(\d+) so2=(\d+) marca=(\d+) marcaApagada=(\d+)') {
         $problemas.Add("ufv-grupos: nao consegui ler o LISP. Veja $($r.Saida)")
         return $false
     }
 
     $entidadesDasDuas = [int] $Matches[1]
     $entidadesDaF12 = [int] $Matches[2]
+    $marca = [int] $Matches[3]
+    $marcaApagada = [int] $Matches[4]
+
+    if ($marca -ne 3 -or $marcaApagada -ne 0) {
+        $problemas.Add("ufv-grupos: a marca do grupo devia ter 3 entidades (contorno, hachura, numero) e sumir ao apagar; deu $marca e $marcaApagada. Veja $($r.Saida)")
+        return $false
+    }
 
     $selecoes = @([regex]::Matches($r.Texto, '(?m)^GRUPO "Bloco A": (\d+) entidade\(s\) selecionada\(s\)'))
     if ($selecoes.Count -ne 2 -or [int] $selecoes[0].Groups[1].Value -ne $entidadesDasDuas -or [int] $selecoes[1].Groups[1].Value -ne $entidadesDaF12) {
@@ -2466,7 +2480,7 @@ function Testar-Grupos {
         return $false
     }
 
-    Write-Host "  (grupos: Bloco A com 2 mesas, 56 modulos, 40,3 kWp; recalculado, selecionado, com 1 sumida e apagado)" -ForegroundColor DarkGray
+    Write-Host "  (grupos: Bloco A com 2 mesas, 56 modulos, 40,3 kWp, marca de 3 entidades; recalculado, selecionado, com 1 sumida e apagado)" -ForegroundColor DarkGray
     return $true
 }
 
@@ -2570,6 +2584,79 @@ function Testar-Numerar {
     }
 
     Write-Host "  (numerar: 80 mesas em 16 fileiras invertidas, F16.5 virou F1.1, aviso NAO CABE renomeado; de novo, zero trocas)" -ForegroundColor DarkGray
+    return $true
+}
+
+<#
+    Alturas como analise (26/09/2026): a fileira desenha N entidades na
+    camada das alturas; o usuario apaga todas e um texto orfao sem
+    identidade e plantado; UFV_ALTURAS_REGERAR deixa a camada com as mesmas
+    N entidades, todas com identidade, nenhum texto de cabeca para baixo.
+#>
+function Testar-Alturas {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-alturas--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-alturas: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-alturas' `
+        -Script (Join-Path $PSScriptRoot 'ufv-alturas.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-alturas terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'UFV_ALTURAS_LISP antes=(\d+) zerado=(\d+) comOrfao=(\d+) depois=(\d+) semId=(\d+) viradas=(\d+)') {
+        $problemas.Add("ufv-alturas: nao consegui ler o LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $antes    = [int] $Matches[1]
+    $zerado   = [int] $Matches[2]
+    $comOrfao = [int] $Matches[3]
+    $depois   = [int] $Matches[4]
+    $semId    = [int] $Matches[5]
+    $viradas  = [int] $Matches[6]
+
+    if ($antes -lt 30 -or $zerado -ne 0 -or $comOrfao -ne 1) {
+        $problemas.Add("ufv-alturas: esperava a camada cheia, depois vazia, depois so com o orfao; deu $antes/$zerado/$comOrfao. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($depois -ne $antes -or $semId -ne 0 -or $viradas -ne 0) {
+        $problemas.Add("ufv-alturas: depois de regerar esperava $antes entidades com identidade e legiveis; deu $depois, $semId sem identidade, $viradas viradas. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^ALTURAS 1 entidade\(s\) apagada\(s\)') {
+        $problemas.Add("ufv-alturas: o regerar devia apagar o orfao (1 entidade). Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (alturas: $antes cotas apagadas a mao e regeradas, orfao apagado, nenhuma virada)" -ForegroundColor DarkGray
     return $true
 }
 
@@ -2690,6 +2777,10 @@ else {
     # Numerar: a usina invertida pela F1.1 e pela ultima fileira.
     $total++
     if (Testar-Numerar -Desenho $desenhos[0]) { $passaram++ }
+
+    # Alturas: apagadas a mao e regeradas, sem orfao.
+    $total++
+    if (Testar-Alturas -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

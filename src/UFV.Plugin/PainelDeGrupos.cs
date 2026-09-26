@@ -105,7 +105,7 @@ internal static class PainelDeGrupos
         var resumos = GrupoCommands.Resumir(documento);
 
         _lista.ItemsSource = resumos.Select(r => new Linha(
-            r.Group.Name, r.Census.Tables, r.Census.Modules, r.Census.Pillars,
+            r.Group.Number, r.Group.Name, r.Census.Tables, r.Census.Modules, r.Census.Pillars,
             r.Census.PowerKwp.ToString("0.#", System.Globalization.CultureInfo.GetCultureInfo("pt-BR")),
             r.Census.Dirty, r.MissingTables)).ToList();
 
@@ -133,6 +133,7 @@ internal static class PainelDeGrupos
         raiz.Children.Add(_rodape);
 
         var grade = new GridView();
+        grade.Columns.Add(Coluna("Nº", nameof(Linha.Numero), 35));
         grade.Columns.Add(Coluna("Grupo", nameof(Linha.Nome), 120));
         grade.Columns.Add(Coluna("Mesas", nameof(Linha.Mesas), 50));
         grade.Columns.Add(Coluna("Módulos", nameof(Linha.Modulos), 60));
@@ -195,5 +196,5 @@ internal static class PainelDeGrupos
     }
 
     /// <summary>Uma linha da lista.</summary>
-    private sealed record Linha(string Nome, int Mesas, int Modulos, int Pilares, string Kwp, int Sujas, int Sumidas);
+    private sealed record Linha(int Numero, string Nome, int Mesas, int Modulos, int Pilares, string Kwp, int Sujas, int Sumidas);
 }

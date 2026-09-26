@@ -313,7 +313,9 @@ public class RowSolverTests
                 mesas.Add(new RowTable($"F1.{i + 1}", i == 0 ? 0 : Vao, ViableElevations.Compute(new TableSamples([], pontaBaixa), Comprimento, config, passo)));
             }
 
-            var dp = RowSolver.Solve(mesas, config);
+            // A solução crua: assentar a marcada que flutua é regra de
+            // desenho, fora da conta que a força bruta reproduz.
+            var dp = RowSolver.Solve(mesas, config, seatMarked: false);
             var custoDp = Custo(dp.Runs[0], mesas);
 
             var custoBruto = ForcaBruta(mesas, config, passo);
@@ -335,7 +337,7 @@ public class RowSolverTests
             custo += (t.Marked ? marca : 0) + estouros * 1e5 + Math.Abs(t.EndElevation - t.StartElevation) * 1e-3;
         }
 
-        foreach (var d in trecho.Steps) custo += Math.Abs(d);
+        foreach (var d in trecho.AllSteps) custo += Math.Abs(d);
 
         return custo;
     }
@@ -464,6 +466,37 @@ public class RowSolverTests
         Assert.True(trecho.Tables[2].Marked);
         Assert.Contains("sem terreno", trecho.Tables[2].Reason!);
         Assert.Equal(1, trecho.MarkedCount);
+        DegrausPermitidos(solucao, Config());
+    }
+
+    /// <summary>
+    /// Mesa num buraco de 10 m no meio da fileira (26/09/2026, "mesas na
+    /// altura das nuvens"): fica marcada e ASSENTADA no próprio terreno,
+    /// nivelada, e não na cota das vizinhas; as vizinhas seguem no plano.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "5")]
+    public void MesaNoBuracoAssentaNoProprioTerreno()
+    {
+        var inicio = 2 * (Comprimento + Vao);
+        var fim = inicio + Comprimento;
+
+        var solucao = RowSolver.Solve(Fileira(5, s => s >= inicio - 0.01 && s <= fim + 0.01 ? 690 : 700, Config()), Config());
+        var trecho = Assert.Single(solucao.Runs);
+
+        Assert.True(trecho.Tables[2].Marked);
+        Assert.True(trecho.Tables[2].Seated);
+        Assert.Contains("assentada no próprio terreno", trecho.Tables[2].Reason!);
+        Assert.Equal(trecho.Tables[2].StartElevation, trecho.Tables[2].EndElevation, 9);
+        Assert.Equal(690 + Config().MinLowEdge, trecho.Tables[2].StartElevation, 2);
+        Assert.All(trecho.Tables.Where(t => !t.Seated), t => Assert.False(t.Seated));
+
+        foreach (var i in new[] { 0, 1, 3, 4 })
+        {
+            Assert.False(trecho.Tables[i].Marked);
+            Assert.Equal(700 + Config().MinLowEdge, trecho.Tables[i].StartElevation, 1);
+        }
+
         DegrausPermitidos(solucao, Config());
     }
 

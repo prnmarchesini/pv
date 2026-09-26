@@ -192,6 +192,9 @@ public static class PluginInfo
     /// <summary>Comando que gera a numeração das mesas (F1.1, F1.2…) a partir da F1.1 e da última fileira.</summary>
     public const string ComandoNumerar = "UFV_NUMERAR";
 
+    /// <summary>Comando que apaga e redesenha as cotas de altura de todas as mesas.</summary>
+    public const string ComandoAlturasRegerar = "UFV_ALTURAS_REGERAR";
+
     /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).

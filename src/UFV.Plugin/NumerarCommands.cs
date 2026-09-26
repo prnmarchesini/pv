@@ -29,11 +29,10 @@ public static class NumerarCommands
 
         try
         {
-            var perfil = FileiraCommands.PerfilDaMesa(editor);
             var settings = ConfigCommands.Inicial(documento, out var avisoDaConfig);
             if (avisoDaConfig is not null) editor.WriteMessage($"\n  ATENÇÃO: {avisoDaConfig}\n");
 
-            var celulas = Celulas(editor, documento, perfil);
+            var celulas = Celulas(editor, documento);
             if (celulas is null) return;
 
             editor.WriteMessage($"\nNUMERAR {celulas.Count} mesa(s) no desenho.\n");
@@ -71,12 +70,8 @@ public static class NumerarCommands
     /// Toda mesa do desenho com a célula. Nulo, com mensagem, se alguma mesa
     /// não dá para ler: numerar metade daria letreiro em dobro.
     /// </summary>
-    private static Dictionary<Guid, MesaLida>? Celulas(Editor editor, Document documento, TableProfile perfil)
+    private static Dictionary<Guid, MesaLida>? Celulas(Editor editor, Document documento)
     {
-        var pilares = PillarTable.Distribute(perfil.Layout.Length, perfil.Frame.PillarSpanTarget, perfil.Frame.PillarCantilever);
-        var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
-        var fundoEmPlanta = geometria.Depth * Math.Cos(perfil.TiltRadians);
-
         var lidas = new Dictionary<Guid, MesaLida>();
 
         using var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction();
@@ -93,8 +88,10 @@ public static class NumerarCommands
         {
             if (partes.Identity is null || partes.Contour is not { } contorno)
             {
-                editor.WriteMessage($"\nNUMERAR A mesa {guid:D} não tem contorno; use o Validar e o Refazer da área antes.\n");
-                return null;
+                // Peças cujo contorno foi apagado à mão (órfãs do 7.7): não
+                // há letreiro para regravar. Segue sem elas.
+                editor.WriteMessage($"\n  ATENÇÃO: {partes.All.Count()} peça(s) sem contorno de mesa (GUID {guid:D}) ficam fora da numeração; o Validar lista as órfãs.\n");
+                continue;
             }
 
             if (partes.IsDuplicated)
@@ -109,13 +106,20 @@ public static class NumerarCommands
 
             try
             {
-                lidas[guid] = new MesaLida(partes, TableCells.FromCorners(cantos, partes.Identity.Label, geometria.Length, fundoEmPlanta));
+                // Como está desenhada: numerar não depende do perfil atual.
+                lidas[guid] = new MesaLida(partes, TableCells.FromDrawnCorners(cantos, partes.Identity.Label));
             }
             catch (ArgumentException erro)
             {
                 editor.WriteMessage($"\nNUMERAR {partes.Identity.Label}: {erro.Message} Use o Refazer da área.\n");
                 return null;
             }
+        }
+
+        if (lidas.Count == 0)
+        {
+            editor.WriteMessage("\nNUMERAR Nenhuma mesa com contorno para numerar.\n");
+            return null;
         }
 
         return lidas;

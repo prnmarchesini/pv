@@ -91,6 +91,14 @@ internal static class LayoutDrawer
         {
             var colocacao = mesa.Placement;
 
+            // O eixo X local da colocação corre com a fileira: é a direção
+            // do risco de cota, e dela sai o rumo do texto, sempre legível.
+            // A célula reconstruída de um contorno (Recalcular) pode vir com
+            // a direção invertida; o texto nunca deve ficar de cabeça para
+            // baixo (Renan, 26/09/2026: "os textos ficam todos zuados").
+            var direcaoDaFileira = DirecaoDoEixoX(colocacao);
+            var rumo = RumoLegivel(direcaoDaFileira.X, direcaoDaFileira.Y);
+
             var identidade = new TableIdentity(
                 idDaMesa?.Invoke(mesa) ?? Guid.NewGuid(), mesa.Label,
                 mesa.Solved.StartElevation, mesa.Solved.EndElevation, tiltRadians,
@@ -141,7 +149,8 @@ internal static class LayoutDrawer
                 transacao.AddNewlyCreatedDBObject(bloco, true);
 
                 LayoutXData.SavePillar(transacao, bloco, new PillarIdentity(
-                    Guid.NewGuid(), identidade.Id, i + 1, pilar.Station, pilar.Length, pilar.Embedment, pilar.FreeHeight, pilar.Problem, pilar.GroundZ));
+                    Guid.NewGuid(), identidade.Id, i + 1, pilar.Station, pilar.Length, pilar.Embedment, pilar.FreeHeight, pilar.Problem, pilar.GroundZ,
+                    pilar.LowEdgeClearance, pilar.HighEdgeClearance));
 
                 pilares++;
 
@@ -155,25 +164,13 @@ internal static class LayoutDrawer
 
                 if (pilar.Problem is null)
                 {
-                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.LowEdgeClearance, "PB", pontaBaixa, colocacao, mesa.Cell.DirectionRadians);
-                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.HighEdgeClearance, "PA", pontaAlta, colocacao, mesa.Cell.DirectionRadians);
-                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.FreeHeight, "P3", new Point3(pilar.X, pilar.Y, pilar.TopZ), colocacao, mesa.Cell.DirectionRadians);
+                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.LowEdgeClearance, "PB", pontaBaixa, direcaoDaFileira, rumo);
+                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.HighEdgeClearance, "PA", pontaAlta, direcaoDaFileira, rumo);
+                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.FreeHeight, "P3", new Point3(pilar.X, pilar.Y, pilar.TopZ), direcaoDaFileira, rumo);
                 }
                 else
                 {
-                    var aviso = new MText
-                    {
-                        Location = new Point3d(pilar.X, pilar.Y, pilar.TopZ + AlturaDoTexto),
-                        TextHeight = AlturaDoTexto,
-                        Layer = camadaAlturas,
-                        Attachment = AttachmentPoint.MiddleCenter,
-                        Rotation = mesa.Cell.DirectionRadians,
-                        Contents = $"PILAR: {pilar.Problem}",
-                    };
-
-                    espaco.AppendEntity(aviso);
-                    transacao.AddNewlyCreatedDBObject(aviso, true);
-                    LayoutXData.SaveNote(transacao, aviso, new NoteIdentity(Guid.NewGuid(), identidade.Id));
+                    AvisoDePilar(transacao, espaco, camadaAlturas, identidade.Id, pilar.Problem, new Point3(pilar.X, pilar.Y, pilar.TopZ), rumo);
                 }
             }
 
@@ -270,7 +267,7 @@ internal static class LayoutDrawer
                     Layer = camadaMarcada,
                     Color = CorDeNaoCabe,
                     Attachment = AttachmentPoint.MiddleCenter,
-                    Rotation = mesa.Cell.DirectionRadians,
+                    Rotation = rumo,
                     Contents = $"{mesa.Label} NÃO CABE NO TERRENO\\P{motivo}",
                 };
 
@@ -292,21 +289,63 @@ internal static class LayoutDrawer
     /// <summary>Magenta: a cor da mesa que não cabe no terreno, inteira.</summary>
     private static readonly Color CorDeNaoCabe = Color.FromRgb(255, 0, 255);
 
+    /// <summary>A direção (unitária, 3D) do eixo X local da colocação: ao longo da fileira, no plano da mesa.</summary>
+    private static Point3 DirecaoDoEixoX(Transform colocacao)
+    {
+        var a = colocacao.Apply(new Point3(0, 0, 0));
+        var b = colocacao.Apply(new Point3(1, 0, 0));
+        var d = new Point3(b.X - a.X, b.Y - a.Y, b.Z - a.Z);
+        var n = Math.Sqrt(d.X * d.X + d.Y * d.Y + d.Z * d.Z);
+
+        return n < 1e-12 ? new Point3(1, 0, 0) : new Point3(d.X / n, d.Y / n, d.Z / n);
+    }
+
+    /// <summary>
+    /// O rumo de texto que se lê: o ângulo em planta da direção, trazido
+    /// para (-90°, 90°] (texto virado para o leitor, nunca de cabeça para
+    /// baixo).
+    /// </summary>
+    internal static double RumoLegivel(double dx, double dy)
+    {
+        var rumo = Math.Atan2(dy, dx);
+
+        if (rumo > Math.PI / 2 + 1e-9) rumo -= Math.PI;
+        else if (rumo <= -Math.PI / 2 + 1e-9) rumo += Math.PI;
+
+        return rumo;
+    }
+
+    /// <summary>O aviso de pilar com problema, no topo dele, na camada das alturas.</summary>
+    internal static void AvisoDePilar(Transaction transacao, BlockTableRecord espaco, string camada, Guid mesa, string problema, Point3 topo, double rumo)
+    {
+        var aviso = new MText
+        {
+            Location = new Point3d(topo.X, topo.Y, topo.Z + AlturaDoTexto),
+            TextHeight = AlturaDoTexto,
+            Layer = camada,
+            Attachment = AttachmentPoint.MiddleCenter,
+            Rotation = rumo,
+            Contents = $"PILAR: {problema}",
+        };
+
+        espaco.AppendEntity(aviso);
+        transacao.AddNewlyCreatedDBObject(aviso, true);
+        LayoutXData.SaveNote(transacao, aviso, new NoteIdentity(Guid.NewGuid(), mesa));
+    }
+
     /// <summary>
     /// Uma cota: um risco vermelho no ponto, atravessado no sentido da
     /// fileira, e o valor ao lado ("PB 0,45"). Sem valor (sem terreno ali) o
     /// texto diz "PB s/ terreno".
     /// </summary>
-    private static void Cota(
+    internal static void Cota(
         Transaction transacao, BlockTableRecord espaco, string camada, Guid mesa,
-        double? valor, string sigla, Point3 ponto, Transform colocacao, double rumo)
+        double? valor, string sigla, Point3 ponto, Point3 direcaoDoRisco, double rumo)
     {
-        // O risco corre no eixo local X (ao longo da fileira), no plano da mesa.
-        var deslocamento = colocacao.Apply(new Point3(MeioRisco, 0, 0));
-        var origemLocal = colocacao.Apply(new Point3(0, 0, 0));
-        var dx = deslocamento.X - origemLocal.X;
-        var dy = deslocamento.Y - origemLocal.Y;
-        var dz = deslocamento.Z - origemLocal.Z;
+        // O risco corre ao longo da fileira, no plano da mesa.
+        var dx = direcaoDoRisco.X * MeioRisco;
+        var dy = direcaoDoRisco.Y * MeioRisco;
+        var dz = direcaoDoRisco.Z * MeioRisco;
 
         var risco = new Line(
             new Point3d(ponto.X - dx, ponto.Y - dy, ponto.Z - dz),

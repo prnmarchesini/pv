@@ -21,23 +21,42 @@ public sealed record RowTable(string Label, double GapBefore, ViableElevations V
 /// Se a mesa não cabe: mais módulos fora que a tolerância, declividade
 /// acima do limite, ou sem terreno. A mesa fica assim mesmo, com cota, e é
 /// marcada — o motor não move nem apaga. Uma marcada pode ficar inclinada
-/// quando isso serve de escada para as vizinhas caberem.
+/// quando isso serve de escada para as vizinhas caberem; a que FLUTUARIA
+/// acima do próprio terreno é assentada nele, nivelada (26/09/2026).
 /// </param>
 /// <param name="Reason">Por que foi marcada, ou null.</param>
+/// <param name="Seated">
+/// Se é marcada que flutuaria e foi assentada nivelada no próprio terreno
+/// (26/09/2026): o degrau até ela não é degrau de fileira.
+/// </param>
 public sealed record SolvedTable(
     string Label,
     double StartElevation,
     double EndElevation,
     int Violations,
     bool Marked,
-    string? Reason);
+    string? Reason,
+    bool Seated = false);
 
 /// <summary>Um trecho contínuo de fileira, resolvido de uma vez.</summary>
 /// <param name="Tables">As mesas, na ordem da fileira.</param>
 public sealed record SolvedRun(IReadOnlyList<SolvedTable> Tables)
 {
-    /// <summary>Os degraus entre mesas vizinhas: cota inicial da seguinte menos cota final da anterior.</summary>
+    /// <summary>
+    /// Os degraus entre mesas vizinhas: cota inicial da seguinte menos cota
+    /// final da anterior. Só a junta com mesa ASSENTADA não entra: ela foi
+    /// tirada da cota que a programação escolheu, e o degrau até ela não é
+    /// degrau de fileira. A junta com a escada (marcada inclinada) entra,
+    /// como sempre entrou.
+    /// </summary>
     public IReadOnlyList<double> Steps =>
+        Tables.Zip(Tables.Skip(1), (a, b) => (a, b))
+            .Where(par => !par.a.Seated && !par.b.Seated)
+            .Select(par => par.b.StartElevation - par.a.EndElevation)
+            .ToList();
+
+    /// <summary>Os degraus de TODA junta, inclusive com assentada (a régua de custo do solver, na solução crua).</summary>
+    public IReadOnlyList<double> AllSteps =>
         Tables.Zip(Tables.Skip(1), (a, b) => b.StartElevation - a.EndElevation).ToList();
 
     /// <summary>Quantas mesas foram marcadas.</summary>
@@ -130,7 +149,15 @@ public static class RowSolver
     /// <param name="configuration">Degrau mínimo e máximo, vão que quebra a fileira.</param>
     /// <exception cref="ArgumentException">Lista vazia, ou mesas com passos de grade diferentes.</exception>
     /// <exception cref="InvalidOperationException">Configuração que não fecha.</exception>
-    public static RowSolution Solve(IReadOnlyList<RowTable> tables, SystemConfiguration configuration)
+    public static RowSolution Solve(IReadOnlyList<RowTable> tables, SystemConfiguration configuration) =>
+        Solve(tables, configuration, seatMarked: true);
+
+    /// <summary>
+    /// O mesmo, com a opção de NÃO assentar a marcada que flutua no próprio
+    /// terreno (<paramref name="seatMarked"/> falso): a solução crua da
+    /// programação dinâmica, para comparar com a força bruta no teste.
+    /// </summary>
+    public static RowSolution Solve(IReadOnlyList<RowTable> tables, SystemConfiguration configuration, bool seatMarked)
     {
         ArgumentNullException.ThrowIfNull(tables);
         ArgumentNullException.ThrowIfNull(configuration);
@@ -160,14 +187,14 @@ public static class RowSolver
         {
             if (atual.Count > 0 && mesa.GapBefore > configuration.MaxGapBeforeBreak + 1e-9)
             {
-                trechos.Add(ResolverTrecho(atual, configuration, passo));
+                trechos.Add(ResolverTrecho(atual, configuration, passo, seatMarked));
                 atual = [];
             }
 
             atual.Add(mesa);
         }
 
-        trechos.Add(ResolverTrecho(atual, configuration, passo));
+        trechos.Add(ResolverTrecho(atual, configuration, passo, seatMarked));
 
         return new RowSolution(trechos);
     }
@@ -186,7 +213,7 @@ public static class RowSolver
         return aoLongo - before.Length;
     }
 
-    private static SolvedRun ResolverTrecho(List<RowTable> mesas, SystemConfiguration config, double passo)
+    private static SolvedRun ResolverTrecho(List<RowTable> mesas, SystemConfiguration config, double passo, bool assentarMarcadas)
     {
         // Degraus em chaves da grade. Para baixo no máximo (0,5 / 0,01 dá
         // 50,000000000001 e o teto seria 51) e para cima no mínimo.
@@ -438,6 +465,43 @@ public static class RowSolver
                 viavel ? null : mesa.Viable.Problem ?? Motivo(mesa.Viable, z0, z1, estouros));
 
             if (i > 0) fim = deFim[i - 1][inicio];
+        }
+
+        // A marcada que FLUTUA (as duas pontas mais que um degrau acima do
+        // ponto mais alto do próprio terreno) assenta no próprio terreno,
+        // nivelada, e não na cota que a programação escolheu para ligar as
+        // vizinhas. Renan, 26/09/2026: "tem mesas na altura das nuvens" —
+        // eram mesas marcadas num buraco de 10 m, deixadas na cota das
+        // vizinhas. A escada (marcada inclinada, enterrada numa ponta, que
+        // liga dois patamares) não flutua e fica como está. As vizinhas não
+        // mudam: a viabilidade delas não depende da marcada, e o degrau até
+        // uma mesa que não cabe não é degrau de fileira.
+        if (assentarMarcadas)
+        {
+            for (var i = 0; i < resolvidas.Length; i++)
+            {
+                var r = resolvidas[i];
+                if (!r.Marked || mesas[i].Viable.HighestGroundOrNull() is not { } terreno) continue;
+
+                var ancora = Math.Round((terreno + config.MinLowEdge) / passo) * passo;
+                if (Math.Min(r.StartElevation, r.EndElevation) <= ancora + config.MaxStep + 1e-9) continue;
+
+                var estouros = mesas[i].Viable.Problem is null ? mesas[i].Viable.Violations(ancora, ancora) : mesas[i].Viable.ModuleCount;
+
+                // O motivo velho falava da cota em que ela flutuava; o de
+                // agora é o desnível até a vizinha mais próxima.
+                var vizinhas = new List<double>();
+                if (i > 0) vizinhas.Add(Math.Abs(resolvidas[i - 1].EndElevation - ancora));
+                if (i < resolvidas.Length - 1) vizinhas.Add(Math.Abs(resolvidas[i + 1].StartElevation - ancora));
+                var desnivel = vizinhas.DefaultIfEmpty(0).Max();
+
+                var motivo = mesas[i].Viable.Problem
+                    ?? (estouros > mesas[i].Viable.ToleratedModules
+                        ? Motivo(mesas[i].Viable, ancora, ancora, estouros)
+                        : $"assentada no próprio terreno: o desnível até a vizinha ({desnivel.ToString("0.##", CultureInfo.GetCultureInfo("pt-BR"))} m) passa do degrau máximo ({config.MaxStep.ToString("0.##", CultureInfo.GetCultureInfo("pt-BR"))} m)");
+
+                resolvidas[i] = r with { StartElevation = ancora, EndElevation = ancora, Violations = estouros, Reason = motivo, Seated = true };
+            }
         }
 
         return new SolvedRun(resolvidas);
