@@ -1415,6 +1415,170 @@ function Testar-Usina {
     return $true
 }
 
+<#
+    A exportacao para o PVsyst (6.2): processa uma fileira, exporta em DAE e
+    LE O ARQUIVO: XML valido, uma geometria por face do desenho, material com
+    o nome da camada, unidade metro, e o primeiro vertice da primeira face do
+    desenho (menos a origem local lida do CABECALHO do arquivo, que tem que
+    ser a mesma que o comando disse) esta na geometria cujo id e o GUID
+    daquela face (lido do XData em LISP), ao milimetro. O numero de faces
+    vem do LISP, nao do relatorio do plugin.
+#>
+function Testar-Exportar {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-exportar--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-exportar: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $dae = Join-Path $saida 'nivel2-ufv-exportar.dae'
+    if (Test-Path $dae) { Remove-Item $dae -Force }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-exportar' `
+        -Script (Join-Path $PSScriptRoot 'ufv-exportar.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3  50 -50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+            '{{DAE}}'  = $dae
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-exportar terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^EXPORTAR (\d+) face\(s\) de módulo gravada\(s\)') {
+        $problemas.Add("ufv-exportar: o comando nao gravou. Veja $($r.Saida)")
+        return $false
+    }
+
+    $relatadas = [int] $Matches[1]
+
+    if ($r.Texto -notmatch 'ORIGEM E=(-?[\d.E+-]+) N=(-?[\d.E+-]+) Z=(-?[\d.E+-]+)') {
+        $problemas.Add("ufv-exportar: o comando nao disse a origem local. Veja $($r.Saida)")
+        return $false
+    }
+
+    $origemX = [double]::Parse($Matches[1], $invariante)
+    $origemY = [double]::Parse($Matches[2], $invariante)
+    $origemZ = [double]::Parse($Matches[3], $invariante)
+
+    if ($r.Texto -notmatch 'UFV_EXPORTAR_LISP faces=(\d+) v0=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+) guid=([0-9A-Fa-f-]+)') {
+        $problemas.Add("ufv-exportar: nao consegui ler as faces em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $faces = [int] $Matches[1]
+    $v0xDesenho = [double]::Parse($Matches[2], $invariante)
+    $v0yDesenho = [double]::Parse($Matches[3], $invariante)
+    $v0zDesenho = [double]::Parse($Matches[4], $invariante)
+    $guid0 = $Matches[5].Replace('-', '').ToLowerInvariant()
+
+    if ($faces -lt 1 -or $relatadas -ne $faces) {
+        $problemas.Add("ufv-exportar: o desenho tem $faces face(s) e o comando relatou $relatadas. Veja $($r.Saida)")
+        return $false
+    }
+
+    if (-not (Test-Path $dae)) {
+        $problemas.Add("ufv-exportar: o arquivo $dae nao foi criado. Veja $($r.Saida)")
+        return $false
+    }
+
+    try {
+        [xml] $xml = Get-Content $dae -Raw -Encoding UTF8
+    }
+    catch {
+        $problemas.Add("ufv-exportar: o DAE nao e XML valido: $($_.Exception.Message)")
+        return $false
+    }
+
+    $ns = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
+    $ns.AddNamespace('c', 'http://www.collada.org/2005/11/COLLADASchema')
+
+    $geometrias = @($xml.SelectNodes('//c:library_geometries/c:geometry', $ns))
+    $nos = @($xml.SelectNodes('//c:visual_scene/c:node', $ns))
+    $materiais = @($xml.SelectNodes('//c:library_materials/c:material', $ns))
+    $unidade = $xml.SelectSingleNode('//c:asset/c:unit', $ns)
+
+    if ($geometrias.Count -ne $faces -or $nos.Count -ne $faces) {
+        $problemas.Add("ufv-exportar: o desenho tem $faces face(s), o DAE tem $($geometrias.Count) geometria(s) e $($nos.Count) no(s)")
+        return $false
+    }
+
+    if ($materiais.Count -ne 1 -or $materiais[0].name -ne 'MARCHENG_UFV_FACE') {
+        $problemas.Add("ufv-exportar: esperava um material chamado MARCHENG_UFV_FACE no DAE")
+        return $false
+    }
+
+    if ($null -eq $unidade -or $unidade.meter -ne '1') {
+        $problemas.Add("ufv-exportar: a unidade do DAE nao e o metro")
+        return $false
+    }
+
+    # A origem que vale e a do CABECALHO do arquivo (e o que o usuario tera
+    # em maos); ela tem que ser a mesma que o comando disse.
+    $comentario = $xml.SelectSingleNode('//c:asset/c:contributor/c:comments', $ns)
+    if ($null -eq $comentario -or $comentario.InnerText -notmatch 'E=(-?[\d.E+-]+) N=(-?[\d.E+-]+) Z=(-?[\d.E+-]+)\.') {
+        $problemas.Add("ufv-exportar: o cabecalho do DAE nao traz a origem local")
+        return $false
+    }
+
+    $arqX = [double]::Parse($Matches[1], $invariante)
+    $arqY = [double]::Parse($Matches[2], $invariante)
+    $arqZ = [double]::Parse($Matches[3], $invariante)
+
+    if ([math]::Abs($arqX - $origemX) -gt 1e-6 -or [math]::Abs($arqY - $origemY) -gt 1e-6 -or [math]::Abs($arqZ - $origemZ) -gt 1e-6) {
+        $problemas.Add("ufv-exportar: a origem do cabecalho ($arqX, $arqY, $arqZ) difere da dita pelo comando ($origemX, $origemY, $origemZ)")
+        return $false
+    }
+
+    $v0x = $v0xDesenho - $arqX
+    $v0y = $v0yDesenho - $arqY
+    $v0z = $v0zDesenho - $arqZ
+
+    # O primeiro vertice da primeira face do desenho, relativo a origem, tem
+    # que estar NA GEOMETRIA DAQUELA FACE (id = GUID do XData), ao milimetro.
+    $fa = $xml.SelectSingleNode("//c:float_array[@id='face-$guid0-pos-array']", $ns)
+    if ($null -eq $fa) {
+        $problemas.Add("ufv-exportar: o DAE nao tem geometria para a face $guid0 do desenho")
+        return $false
+    }
+
+    $achou = $false
+    $n = @($fa.InnerText.Trim() -split '\s+' | ForEach-Object { [double]::Parse($_, $invariante) })
+    for ($i = 0; $i + 2 -lt $n.Count; $i += 3) {
+        if ([math]::Abs($n[$i] - $v0x) -lt 0.001 -and [math]::Abs($n[$i + 1] - $v0y) -lt 0.001 -and [math]::Abs($n[$i + 2] - $v0z) -lt 0.001) {
+            $achou = $true
+            break
+        }
+    }
+
+    if (-not $achou) {
+        $problemas.Add("ufv-exportar: o vertice ($v0x, $v0y, $v0z) do desenho (menos a origem) nao esta na geometria da face $guid0")
+        return $false
+    }
+
+    Write-Host "  (exportar: $faces faces no DAE, origem E=$origemX N=$origemY Z=$origemZ)" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -1488,6 +1652,10 @@ else {
     # E a area inteira, com o tempo medido.
     $total++
     if (Testar-Usina -Desenho $desenhos[0]) { $passaram++ }
+
+    # A exportacao para o PVsyst, lendo o DAE de volta.
+    $total++
+    if (Testar-Exportar -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

@@ -1,0 +1,35 @@
+; Teste de nivel 2 do passo 6.2: processa uma fileira (como no 5.8) e exporta
+; todas as faces de modulo em DAE, sem janela (UFV_EXPORTAR_AUTO). O LISP le
+; do desenho o que o arquivo tem que refletir:
+;   - quantas faces de modulo existem;
+;   - o primeiro vertice da primeira face e o GUID dela (XData), para o
+;     PowerShell achar o mesmo ponto (menos a origem local lida do CABECALHO
+;     do DAE) na geometria daquele GUID, ao milimetro: vertice, identidade e
+;     arquivo amarrados numa afirmacao so (regra sagrada 3 atravessando).
+; O resto (XML, contagem de geometrias, material, unidade) e conferido pelo
+; PowerShell lendo o arquivo.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_TERRENO_AUTO")
+(setq ufv:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "UFV_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area da exportacao")
+(command "UFV_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento da exportacao")
+(command "UFV_FILEIRA_AUTO")
+(setvar "OSMODE" ufv:osmode)
+(command "UFV_EXPORTAR_AUTO" "{{DAE}}")
+
+(defun ufv:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("MARCHENG_UFV")))))))
+(defun ufv:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(setq ufv:faces (ssget "_X" (list (cons 0 "3DFACE") (cons 8 "MARCHENG_UFV_FACE"))))
+(setq ufv:nf (if ufv:faces (sslength ufv:faces) 0))
+(setq ufv:v0 (if ufv:faces (cdr (assoc 10 (entget (ssname ufv:faces 0)))) '(0 0 0)))
+(setq ufv:g0 (if ufv:faces (ufv:campo (ufv:xdata (ssname ufv:faces 0)) 0) "-"))
+(princ (strcat "\nUFV_EXPORTAR_LISP faces=" (itoa ufv:nf)
+               " v0=" (rtos (car ufv:v0) 2 4) "," (rtos (cadr ufv:v0) 2 4) "," (rtos (caddr ufv:v0) 2 4)
+               " guid=" ufv:g0))
+(setvar "SECURELOAD" ufv:secureload)
+(princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

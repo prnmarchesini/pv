@@ -43,9 +43,9 @@ Só o Renan marca VALIDADO.
 | 5.8 | Uma fileira no CAD | AGUARDANDO VALIDAÇÃO | `UFV_FILEIRA`; nível 2 com 6 mesas, 42 pilares e 168 faces sobre o Itatiba, cotas lidas em LISP |
 | 5.9 | Área inteira | AGUARDANDO VALIDAÇÃO | `UFV_USINA`; nível 2 com 102 mesas em 17 fileiras sobre o Itatiba: motor 0,6 s, desenho 0,2 s |
 | 6.1 | Escritor DAE puro | VALIDADO (automático) | `ColladaWriter` no Core: Collada 1.4.1, uma geometria e um nó por face, material com o nome da camada (é por ele que o PVsyst reconhece módulos); 16 testes; fechado em 26/09/2026 |
-| 6.2 | Botão Exportar para PVsyst | PENDENTE | |
-| 6.3 | Validação no PVsyst | PENDENTE | |
-| 6.4 | Estudo do formato PVC | PENDENTE | |
+| 6.2 | Botão Exportar para PVsyst | AGUARDANDO VALIDAÇÃO | `UFV_EXPORTAR` (seleção por XData, formato, janela de arquivo, DAE com origem local); nível 2 relê o DAE: 168 faces, vértice ao milímetro |
+| 6.3 | Validação no PVsyst | AGUARDANDO VALIDAÇÃO | Renan importa o DAE no PVsyst, escolhe o material `MARCHENG_UFV_FACE`, confere contagem e orientação |
+| 6.4 | Estudo do formato PVC | AGUARDANDO VALIDAÇÃO | Resumo entregue em 26/09/2026 (seção "6.4: o formato PVC"); o plano manda PARAR aqui |
 | 6.5 | Escritor PVC | PENDENTE | |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
@@ -89,7 +89,12 @@ Nivel 2   11/11    OK
 Acervo             OK
 ```
 
-### O próximo passo é a etapa 6 (PVsyst): 6.1 fechado, seguir pelo 6.2
+### A etapa 6 está no 6.4: estudo entregue, PARADO por ordem do plano
+
+6.1 fechado, 6.2 e 6.3 aguardando validação (o DAE no PVsyst), 6.4 é o
+resumo do formato PVC ("Entregar um resumo ao Renan e PARAR"). O 6.5 só
+começa depois que o Renan ler o resumo e decidir as três perguntas dele. A
+etapa 7 (edição) não depende da 6 e é o próximo trabalho se ele preferir.
 
 Antes de começar, ler `plano/etapas/etapa-6-pvsyst.md`. O que a etapa 6
 recebe da 5: as faces superiores dos módulos são entidades `3DFACE` na
@@ -150,6 +155,22 @@ teste: a etapa 6 é onde passa a ter.
    faixa de comprimentos de pilar (média também). O tempo do motor e do
    desenho aparecem no fim. Rodar duas vezes desenha por cima (o comando
    avisa); apagar antes de repetir.
+5. **Testar o 6.2 e o 6.3 (PVsyst)**: com a usina desenhada, botão
+   "Exportar" na seção PVsyst (ou `UFV_EXPORTAR`). Selecionar com uma janela
+   sobre a área (só as faces de módulo entram, o resto da seleção é
+   ignorado), responder DAE ao formato, escolher o arquivo. A linha de
+   comando diz quantas faces foram, o material e a ORIGEM LOCAL (as
+   coordenadas do arquivo são relativas a ela; está também no cabeçalho do
+   arquivo). No PVsyst: Arquivo > Importar > Importar cena 3D, escolher o
+   .dae; na janela de importação, marcar o material `MARCHENG_UFV_FACE` e
+   "mesas fixas". Conferir: número de objetos = número de faces dito pelo
+   comando; as mesas com a face para cima e inclinadas para o norte
+   (azimute); e se cada face virou UM campo PV ou DOIS triângulos (se dois,
+   me diga: troco `triangles` por `polylist`). O PVsyst desde a 7.x pode
+   perguntar "usar a maior aresta" ou "melhor azimute" para a orientação:
+   testar as duas e dizer qual ficou certa.
+6. **Ler o resumo do 6.4** (seção "6.4: o formato PVC" no fim deste arquivo)
+   e responder as três perguntas do fim dele. Sem isso o 6.5 não começa.
 5. **Conferir a mesa do 3.7 contra um projeto de fabricante.** Ele aprovou a
    etapa 3 sem relatar essa conferência, que é o que o plano pede como
    validação do 3.7 — é o único jeito de saber se o motor acerta o número, e
@@ -2389,4 +2410,64 @@ escrever (E ≈ 300 000 e N ≈ 7 400 000 em float32 perdem o milímetro) e
 registrar a origem; conferir no PVsyst (6.3) se os dois triângulos de cada
 face viram um campo PV só; e que um nó por módulo numa usina grande são
 dezenas de milhares de objetos, que o PVsyst importa devagar.
+
+## 6.2: o botão Exportar
+
+Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO` (é tela: seleção, janela de
+arquivo, e o resultado só se vê no PVsyst, que é o 6.3). Nível 1: 19 testes
+na etapa 6. Nível 2: `ufv-exportar.scr` processa a fileira do 5.8, exporta
+com `UFV_EXPORTAR_AUTO` e o PowerShell RELÊ O ARQUIVO: XML válido, uma
+geometria e um nó por face contada em LISP (168), material único chamado
+`MARCHENG_UFV_FACE`, unidade metro, e o primeiro vértice da primeira face
+do desenho (menos a origem dita pelo comando) achado no DAE ao milímetro.
+
+### O que o comando faz
+
+- `UFV_EXPORTAR` (botão "Exportar", seção PVsyst): pede uma seleção com um
+  filtro de 3DFACE que tenham o nosso XData (código 1001, nome de
+  aplicativo `MARCHENG_UFV`); aceita seleção prévia (`UsePickSet`). Cada
+  face é lida pelo `LayoutXData.LoadFace` (que passa a ter uso e teste de
+  nível 2); face sem identidade é ignorada e contada. Pergunta o formato
+  (`DAE`/`PVC`; PVC responde "ainda não, é o 6.5"), abre a janela padrão de
+  salvar do AutoCAD (`GetFileNameForSave`, sugere o nome do desenho), grava
+  sem BOM e diz: faces, material, origem local;
+- `UFV_EXPORTAR_AUTO`: todas as faces do espaço do modelo, caminho pedido na
+  linha de comando, sem janela. Só para o nível 2.
+
+### Decisões que são minhas
+
+- **origem local**: as coordenadas UTM do desenho (E ≈ 314 000, N ≈
+  7 456 000) perdem o milímetro em float32, que é o que leitores de cena 3D
+  usam. O arquivo vai relativo ao menor X, menor Y e menor Z das faces
+  arredondados ao metro inteiro (E=314018 N=7456163 Z=718 no Itatiba); a
+  origem está no `<comments>` do cabeçalho, legível de volta
+  (`ColladaWriter.ParseOriginComment`), e na linha de comando. Se o Renan
+  precisar do arquivo nas coordenadas do desenho (PVsyst não precisa: a
+  cena dele é local), é um campo a mais na tela;
+- o GUID da face é o id da geometria e do nó no arquivo: a regra sagrada 3
+  atravessa para o PVsyst;
+- o material leva o nome da camada das faces (`MARCHENG_UFV_FACE`) como
+  RÓTULO; quem diz que a face é nossa é o XData, e a seleção filtra por ele;
+- o formato é perguntado mesmo só havendo DAE, para o botão não mudar de
+  comportamento quando o PVC chegar.
+
+### O que a revisão do 6.2 apontou, e o que foi feito
+
+Nenhum bloqueante. Três importantes, corrigidos: (1) mesa copiada e colada
+dá duas faces com o mesmo GUID e a exportação caía no catch genérico com a
+mensagem do Core; agora `Recolher` conta as repetidas e o comando diz
+"apague as cópias ou reprocesse a fileira" e não grava; (2) o nível 2 lia a
+origem só da linha de comando; agora lê do `<comments>` do arquivo, exige
+que seja igual à dita, e usa a do arquivo; (3) o vértice era procurado em
+qualquer geometria; agora o LISP imprime o GUID da face (XData) e o
+PowerShell procura o vértice na geometria `face-<guid>` daquela face.
+Menores corrigidos: `Path.HasExtension` aceitava "usina.v2" (agora só
+`.dae` conta); caminho resolvido com `GetFullPath` uma vez e usado em tudo;
+`InitialDirectory` na pasta do desenho quando ele tem nome; o `<summary>`
+de `Geometria` estava em cima de `LocalOrigin`; o prompt do formato deixava
+o AutoCAD repetir "[DAE/PVC]" (agora só "Formato" e o AutoCAD monta o
+resto); a linha `ORIGEM` invariante só sai no comando automático. Anotado,
+não feito: uma 3DFACE nossa que o usuário escalou até ficar sem área ou
+vertical derruba a exportação inteira com a mensagem do Core; pular e
+contar seria melhor (Observações).
 

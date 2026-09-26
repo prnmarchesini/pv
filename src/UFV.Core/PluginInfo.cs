@@ -124,6 +124,18 @@ public static class PluginInfo
     public const string ComandoUsinaAutomatico = "UFV_USINA_AUTO";
 
     /// <summary>
+    /// Comando que exporta os módulos selecionados para o PVsyst: seleção,
+    /// formato, arquivo.
+    /// </summary>
+    public const string ComandoExportar = "UFV_EXPORTAR";
+
+    /// <summary>
+    /// Comando que exporta TODOS os módulos do desenho em DAE para o caminho
+    /// pedido na linha de comando, sem janela. Existe para o teste de nível 2.
+    /// </summary>
+    public const string ComandoExportarAutomatico = "UFV_EXPORTAR_AUTO";
+
+    /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).
     /// </summary>

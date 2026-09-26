@@ -120,6 +120,13 @@ internal static class IconesDaRibbon
         Traco("M9,5 V27 M5,5 H13 M5,27 H13", Neutro, 2.0),
         Traco("M17,12 H27 M17,17 H24 M17,22 H27", Azul, 2.4));
 
+    /// <summary>Uma mesa e uma seta saindo para a direita: a exportação para o PVsyst.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Exportar() => Montar(
+        Traco("M4,20 L14,16", Azul, 3.0),
+        Traco("M9,18 V26", Ambar, 2.0),
+        Traco("M17,10 H28 M23,5 L28,10 L23,15", Neutro, 2.2));
+
     /// <summary>Contorno fechado sobre o relevo: a área de implantação.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static ImageSource Area() => Montar(

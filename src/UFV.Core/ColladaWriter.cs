@@ -34,6 +34,12 @@ public sealed record ModuleFace(Guid Id, IReadOnlyList<Point3> Corners)
 /// Unidade metro, eixo Z para cima, como o desenho. Os números vão com
 /// ponto e em formato redondo: o arquivo é lido noutra máquina, noutra
 /// cultura, e "0,5" seria dois números.
+///
+/// As coordenadas do desenho são UTM (E ≈ 300 000, N ≈ 7 400 000): em
+/// float32, que é o que a maioria dos leitores de cena 3D usa, isso perde o
+/// milímetro. Por isso o escritor recebe uma ORIGEM LOCAL, subtrai dela
+/// todos os cantos e a registra no cabeçalho (comments), para quem precisar
+/// voltar ao sistema do desenho. <see cref="LocalOrigin"/> escolhe uma.
 /// </summary>
 public static class ColladaWriter
 {
@@ -51,11 +57,23 @@ public static class ColladaWriter
     /// <param name="createdAt">A data do arquivo, gravada no cabeçalho.</param>
     /// <param name="author">Quem gerou, gravado no cabeçalho.</param>
     /// <exception cref="ArgumentException">Nenhuma face, face sem quatro cantos finitos, GUID repetido, ou camada sem nome.</exception>
-    public static XDocument Write(IReadOnlyList<ModuleFace> faces, string layerName, DateTime createdAt, string author)
+    public static XDocument Write(IReadOnlyList<ModuleFace> faces, string layerName, DateTime createdAt, string author) =>
+        Write(faces, layerName, createdAt, author, new Point3(0, 0, 0));
+
+    /// <summary>
+    /// Escreve o documento com as coordenadas relativas a uma origem local,
+    /// registrada no cabeçalho.
+    /// </summary>
+    /// <param name="origin">A origem local, em metro, no sistema do desenho; subtraída de todos os cantos.</param>
+    /// <exception cref="ArgumentException">Origem não finita, ou o que <see cref="Write(IReadOnlyList{ModuleFace}, string, DateTime, string)"/> recusa.</exception>
+    public static XDocument Write(IReadOnlyList<ModuleFace> faces, string layerName, DateTime createdAt, string author, Point3 origin)
     {
         ArgumentNullException.ThrowIfNull(faces);
         ArgumentException.ThrowIfNullOrWhiteSpace(layerName);
         ArgumentException.ThrowIfNullOrWhiteSpace(author);
+
+        if (!origin.IsFinite)
+            throw new ArgumentException("A origem local não é finita.", nameof(origin));
 
         // Sem face o documento seria inválido pelo esquema (biblioteca e cena
         // sem filhos) e inútil no PVsyst: quem chama diz "nenhum módulo".
@@ -81,7 +99,7 @@ public static class ColladaWriter
         {
             var id = "face-" + face.Id.ToString("N");
 
-            geometrias.Add(Geometria(id, face));
+            geometrias.Add(Geometria(id, face, origin));
             cena.Add(new XElement(Ns + "node",
                 new XAttribute("id", "no-" + face.Id.ToString("N")),
                 new XAttribute("name", layerName),
@@ -119,7 +137,8 @@ public static class ColladaWriter
             new XElement(Ns + "asset",
                 new XElement(Ns + "contributor",
                     new XElement(Ns + "author", author),
-                    new XElement(Ns + "authoring_tool", PluginInfo.Nome)),
+                    new XElement(Ns + "authoring_tool", PluginInfo.Nome),
+                    new XElement(Ns + "comments", OriginComment(origin))),
                 new XElement(Ns + "created", quando),
                 new XElement(Ns + "modified", quando),
                 new XElement(Ns + "unit", new XAttribute("name", "meter"), new XAttribute("meter", "1")),
@@ -135,13 +154,51 @@ public static class ColladaWriter
     }
 
     /// <summary>
-    /// Uma face como geometria: os quatro vértices, a normal (para cima, a
+    /// Uma origem local para as faces: o menor X, o menor Y e o menor Z entre
+    /// todos os cantos, arredondados para baixo ao metro inteiro. Números
+    /// redondos, fáceis de somar de volta à mão.
+    /// </summary>
+    public static Point3 LocalOrigin(IReadOnlyList<ModuleFace> faces)
+    {
+        ArgumentNullException.ThrowIfNull(faces);
+
+        var cantos = faces.Where(f => f is not null).SelectMany(f => f.Corners).Where(c => c.IsFinite).ToList();
+
+        if (cantos.Count == 0) return new Point3(0, 0, 0);
+
+        return new Point3(Math.Floor(cantos.Min(c => c.X)), Math.Floor(cantos.Min(c => c.Y)), Math.Floor(cantos.Min(c => c.Z)));
+    }
+
+    /// <summary>O texto que registra a origem no cabeçalho, com os três números invariantes.</summary>
+    public static string OriginComment(Point3 origin) =>
+        $"Origem local no sistema do desenho (metro): E={N(origin.X)} N={N(origin.Y)} Z={N(origin.Z)}. Some estes valores as coordenadas para voltar ao desenho.";
+
+    /// <summary>Lê a origem de volta de um comentário escrito por <see cref="OriginComment"/>; null se não é um.</summary>
+    public static Point3? ParseOriginComment(string? comment)
+    {
+        if (comment is null) return null;
+
+        var m = System.Text.RegularExpressions.Regex.Match(comment, @"E=(\S+) N=(\S+) Z=(\S+)\.");
+        if (!m.Success) return null;
+
+        if (!double.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !double.TryParse(m.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !double.TryParse(m.Groups[3].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var z))
+            return null;
+
+        var origem = new Point3(x, y, z);
+
+        return origem.IsFinite ? origem : null;
+    }
+
+    /// <summary>
+    /// Uma face como geometria, relativa à origem: os quatro vértices, a normal (para cima, a
     /// mesma para os quatro), e dois triângulos (0 1 2) e (0 2 3) que cobrem
     /// o quadrilátero mantendo a orientação anti-horária.
     /// </summary>
-    private static XElement Geometria(string id, ModuleFace face)
+    private static XElement Geometria(string id, ModuleFace face, Point3 origin)
     {
-        var c = face.Corners;
+        IReadOnlyList<Point3> c = face.Corners.Select(p => new Point3(p.X - origin.X, p.Y - origin.Y, p.Z - origin.Z)).ToList();
 
         // A normal do plano: (c1 − c0) × (c3 − c0), unitária. Para cima quando
         // os cantos são anti-horários vistos de cima; se vierem horários, a

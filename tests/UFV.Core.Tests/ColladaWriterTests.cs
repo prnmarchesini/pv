@@ -260,6 +260,67 @@ public class ColladaWriterTests
         Assert.Throws<ArgumentException>(() => ColladaWriter.Write(Faces(1), "FACE", DateTime.UtcNow, ""));
     }
 
+    /// <summary>
+    /// A origem local é o menor canto arredondado para baixo ao metro; as
+    /// coordenadas gravadas são relativas a ela e o cabeçalho a registra,
+    /// legível de volta. Somar os dois devolve o canto original ao milímetro.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "6")]
+    public void OrigemLocalESubtraidaERegistrada()
+    {
+        var faces = Enumerable.Range(0, 3).Select(i => Face(Guid.NewGuid(), 312_345.678 + i * 1.323, 7_412_345.912, 703.25 + i * 0.01)).ToList();
+        var origem = ColladaWriter.LocalOrigin(faces);
+
+        Assert.Equal(312_345, origem.X);
+        Assert.Equal(7_412_345, origem.Y);
+        Assert.Equal(703, origem.Z);
+
+        var doc = ColladaWriter.Write(faces, "MARCHENG_UFV_FACE", DateTime.UtcNow, "Renan", origem);
+
+        var comentario = doc.Descendants(Ns + "comments").Single().Value;
+        var lida = ColladaWriter.ParseOriginComment(comentario);
+        Assert.NotNull(lida);
+        Assert.Equal(origem, lida.Value);
+
+        foreach (var face in faces)
+        {
+            var id = "face-" + face.Id.ToString("N");
+            var posicoes = doc.Descendants(Ns + "float_array").Single(a => a.Attribute("id")!.Value == id + "-pos-array");
+            var numeros = posicoes.Value.Split(' ').Select(t => double.Parse(t, CultureInfo.InvariantCulture)).ToList();
+
+            // Tudo pequeno (cabe em float32 com folga) e volta ao original.
+            Assert.All(numeros, v => Assert.True(Math.Abs(v) < 100));
+
+            for (var i = 0; i < 4; i++)
+            {
+                Assert.Equal(face.Corners[i].X, numeros[3 * i] + lida.Value.X, 6);
+                Assert.Equal(face.Corners[i].Y, numeros[3 * i + 1] + lida.Value.Y, 6);
+                Assert.Equal(face.Corners[i].Z, numeros[3 * i + 2] + lida.Value.Z, 6);
+            }
+        }
+    }
+
+    /// <summary>Sem origem (a sobrecarga curta), as coordenadas ficam as do desenho e o cabeçalho diz origem zero.</summary>
+    [Fact]
+    [Trait("Etapa", "6")]
+    public void SemOrigemAsCoordenadasFicamAsDoDesenho()
+    {
+        var doc = Escrever(Faces(1));
+
+        Assert.Equal(new Point3(0, 0, 0), ColladaWriter.ParseOriginComment(doc.Descendants(Ns + "comments").Single().Value));
+        Assert.Null(ColladaWriter.ParseOriginComment("outra coisa"));
+        Assert.Null(ColladaWriter.ParseOriginComment(null));
+    }
+
+    [Fact]
+    [Trait("Etapa", "6")]
+    public void OrigemNaoFinitaERecusadaEListaVaziaDaOrigemZero()
+    {
+        Assert.Throws<ArgumentException>(() => ColladaWriter.Write(Faces(1), "FACE", DateTime.UtcNow, "Renan", new Point3(double.NaN, 0, 0)));
+        Assert.Equal(new Point3(0, 0, 0), ColladaWriter.LocalOrigin([]));
+    }
+
     /// <summary>Mil faces cabem num arquivo de alguns megabytes e saem em menos de cinco segundos.</summary>
     [Fact]
     [Trait("Etapa", "6")]

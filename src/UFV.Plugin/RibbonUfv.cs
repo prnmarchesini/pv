@@ -119,6 +119,7 @@ internal static class RibbonUfv
         aba.Panels.Add(MontarPainelTerreno());
         aba.Panels.Add(MontarPainelUfv());
         aba.Panels.Add(MontarPainelProcessar());
+        aba.Panels.Add(MontarPainelPvsyst());
         ribbon.Tabs.Add(aba);
 
         var temDocumento = AcadApp.DocumentManager.MdiActiveDocument is not null;
@@ -240,6 +241,22 @@ internal static class RibbonUfv
             IconesDaRibbon.Alturas(),
             PluginInfo.ComandoAlturas,
             "Mostra ou esconde as alturas dos pilares."));
+
+        return new RibbonPanel { Source = origem };
+    }
+
+    /// <summary>
+    /// Seção PVsyst: o que sai do desenho para a simulação.
+    /// </summary>
+    private static RibbonPanel MontarPainelPvsyst()
+    {
+        var origem = new RibbonPanelSource { Title = "PVsyst" };
+
+        origem.Items.Add(BotaoGrande(
+            "Exportar",
+            IconesDaRibbon.Exportar(),
+            PluginInfo.ComandoExportar,
+            "Exporta os módulos selecionados como cena 3D para o PVsyst (DAE)."));
 
         return new RibbonPanel { Source = origem };
     }
