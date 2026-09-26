@@ -1213,7 +1213,7 @@ function Testar-Fileira {
         return $false
     }
 
-    if ($pilares -ne $pilaresRelatados -or $faces -ne $modulosRelatados -or $alturas -ne $pilares) {
+    if ($pilares -ne $pilaresRelatados -or $faces -ne $modulosRelatados -or $alturas -ne 3 * $pilares) {
         $problemas.Add(
             "ufv-fileira: o desenho tem $pilares pilar(es), $faces face(s) e $alturas altura(s); " +
             "o plugin relatou $pilaresRelatados e $modulosRelatados. Veja $($r.Saida)")

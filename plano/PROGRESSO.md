@@ -174,11 +174,13 @@ teste: a etapa 6 é onde passa a ter.
    usa a área e o alinhamento se houver um de cada, pergunta o número da
    fileira (1 é a que encosta na linha), processa e desenha. Orbitar em 3D:
    os pilares (blocos) do terreno até a mesa, os módulos (blocos) e as faces
-   em cima, o contorno da mesa. Botão "Alturas" (ou `UFV_ALTURAS`) liga os
-   textos com P1, P3 e P2 de cada pilar. **Conferir à mão três ou quatro
-   pilares** (é a validação do plano): P3 = altura livre da ponta baixa +
-   (sobra + T2) × sen(tilt); P1 = P3 + P2. A linha de comando diz mesa a mesa
-   o que estourou e por quê.
+   em cima, o contorno da mesa. Botão "Alturas" (ou `UFV_ALTURAS`) liga as
+   cotas: em cada pilar, um risco vermelho na ponta baixa com "PB" (altura
+   livre da ponta baixa), outro na ponta alta com "PA", e no centro "P3" (a
+   altura livre do pilar), como no seu print de 26/09. P1 e P2 ficam no
+   relatório e no XData. **Conferir à mão três ou quatro pilares** (é a
+   validação do plano): P3 = PB + (sobra + T2) × sen(tilt); P1 = P3 + P2.
+   A linha de comando diz mesa a mesa o que estourou e por quê.
 4. **Testar o 5.9 (área inteira)**: botão "Usina" (ou `UFV_USINA`) na mesma
    área. Comparar com o PVcase: fileiras, mesas, módulos, kWp, pilares e a
    faixa de comprimentos de pilar (média também). O tempo do motor e do
@@ -2872,4 +2874,20 @@ corre ao longo da linha; e a linha deve ser traçada paralela ao azimute
   vai indicar a F1 à mão;
 - linha 2 mm atrás da borda não marca mais nada: as mesas começam onde a
   área começa.
+
+### As cotas, como no print do Renan (26/09/2026)
+
+Na mesma reprovação do 5.8 o Renan mandou um print: "as alturas também
+ficaram estranhas, vc precisa colocar igual no print, os riscos vermelhos,
+a ponta baixa, ponta alta, e no centro a altura livre do pilar". O texto
+empilhado "P1 … (P3 … + P2 …)" em cima de cada pilar saiu. Em cada pilar
+o desenho passa a ter três cotas na camada de alturas: um risco vermelho
+de 1 m (no plano da mesa, ao longo da fileira) na ponta baixa com o texto
+"PB 0,45", outro na ponta alta com "PA 1,23", e no centro (o pilar) o texto
+"P3 0,85"; texto girado com a fileira e centrado. Para isso o Core passou a
+calcular, por pilar, `LowEdgeClearance` e `HighEdgeClearance` (o plano dos
+módulos em y = 0 e y = fundo na estação do pilar, menos o terreno ali),
+com teste. Pilar com problema leva só o motivo, no centro. O nível 2
+conta três textos por pilar. Siglas PB/PA/P3 são minhas; se ele preferir
+M1 (a nomenclatura do desenho de 23/09) para a ponta baixa, é uma string.
 

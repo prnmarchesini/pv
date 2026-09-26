@@ -22,6 +22,13 @@ namespace UFV.Core;
 /// que não tem altura livre (a mesa desce até o chão ali) ou que não tem
 /// terreno. Marcado, nunca escondido.
 /// </param>
+/// <param name="LowEdgeClearance">
+/// A altura livre da PONTA BAIXA da mesa na estação deste pilar (M1 do
+/// desenho do Renan): a cota do plano dos módulos na borda baixa menos o
+/// terreno ali. Null sem terreno. É a cota que o desenho mostra com um
+/// risco vermelho na borda baixa.
+/// </param>
+/// <param name="HighEdgeClearance">A mesma coisa na PONTA ALTA. Null sem terreno.</param>
 public sealed record PillarResult(
     double Station,
     double X,
@@ -31,7 +38,9 @@ public sealed record PillarResult(
     double? FreeHeight,
     double Embedment,
     double? Length,
-    string? Problem)
+    string? Problem,
+    double? LowEdgeClearance = null,
+    double? HighEdgeClearance = null)
 {
     /// <summary>Se o pilar está de pé como deve: tem terreno, altura livre e enterro.</summary>
     public bool IsSound => Problem is null;
@@ -178,6 +187,12 @@ public static class PillarCalculator
 
                 var livre = topo.Z - terreno;
 
+                // As pontas baixa e alta da mesa nesta estação: o plano dos
+                // módulos em y = 0 e y = fundo, levados ao mundo e comparados
+                // com o terreno debaixo de cada uma.
+                var pontaBaixa = Altura(colocacao.Apply(new Point3(p.Station, 0, 0)), terrain);
+                var pontaAlta = Altura(colocacao.Apply(new Point3(p.Station, geometry.Depth, 0)), terrain);
+
                 // Regra sagrada 1: o pilar nunca flutua. Aqui o enterro é o
                 // mínimo por construção; o que pode faltar é a altura livre,
                 // quando a mesa desce até o chão naquele pé. E acima da
@@ -190,10 +205,15 @@ public static class PillarCalculator
 
                 double? comprimento = problema is null ? PillarSizing.Length(livre, enterro) : null;
 
-                return new PillarResult(p.Station, topo.X, topo.Y, terreno, topo.Z, livre, enterro, comprimento, problema);
+                return new PillarResult(
+                    p.Station, topo.X, topo.Y, terreno, topo.Z, livre, enterro, comprimento, problema, pontaBaixa, pontaAlta);
             })
             .ToList();
 
         return new TablePillars(colocacao, giro, pilares);
     }
+
+    /// <summary>A altura de um ponto sobre o terreno, ou null fora dele.</summary>
+    private static double? Altura(Point3 ponto, Tin terrain) =>
+        terrain.TryGetZ(ponto.X, ponto.Y, out var z) ? ponto.Z - z : null;
 }

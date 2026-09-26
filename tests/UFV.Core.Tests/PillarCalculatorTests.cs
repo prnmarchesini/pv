@@ -97,6 +97,27 @@ public class PillarCalculatorTests
         Assert.Equal(livreEsperada + 0.90, pilares.LongestPillar!.Value, 9);
     }
 
+    /// <summary>
+    /// As alturas livres das pontas, em cada pilar: na mesa nivelada em
+    /// 700,50 sobre o plano em 700, a ponta baixa está a 0,50 e a ponta alta
+    /// a 0,50 + fundo × sen(tilt). São as cotas dos riscos vermelhos do
+    /// desenho.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "5")]
+    public void AsPontasBaixaEAltaTemAlturaLivreEmCadaPilar()
+    {
+        var geo = Geometria();
+        var (cell, orientacao) = Celula();
+        var pilares = PillarCalculator.Compute(geo, cell, orientacao, Tilt, Resolvida(700.50, 700.50), Plano(700), Config());
+
+        Assert.All(pilares.Pillars, p =>
+        {
+            Assert.Equal(0.50, p.LowEdgeClearance!.Value, 6);
+            Assert.Equal(0.50 + geo.Depth * Math.Sin(Tilt), p.HighEdgeClearance!.Value, 6);
+        });
+    }
+
     /// <summary>O pé de cada pilar fica dentro da célula, e a estação é a da tabela.</summary>
     [Fact]
     [Trait("Etapa", "5")]

@@ -130,19 +130,35 @@ internal static class LayoutDrawer
 
                 pilares++;
 
-                // O texto da altura, na camada desligada.
-                var texto = new MText
-                {
-                    Location = new Point3d(pilar.X, pilar.Y, pilar.TopZ + AlturaDoTexto),
-                    TextHeight = AlturaDoTexto,
-                    Layer = camadaAlturas,
-                    Contents = pilar.Length is { } p1
-                        ? $"P1 {p1.ToString("0.00", Brasil)} m\\P(P3 {pilar.FreeHeight!.Value.ToString("0.00", Brasil)} + P2 {pilar.Embedment.ToString("0.00", Brasil)})"
-                        : $"PILAR: {pilar.Problem}",
-                };
+                // As cotas, na camada desligada, como no desenho do Renan
+                // (26/09/2026): um risco vermelho na ponta baixa com a altura
+                // livre dela, outro na ponta alta com a dela, e no centro (o
+                // pilar) a altura livre do pilar, P3. Pilar com problema leva
+                // só o motivo, no centro.
+                var pontaBaixa = colocacao.Apply(new Point3(pilar.Station, 0, 0));
+                var pontaAlta = colocacao.Apply(new Point3(pilar.Station, geometria.Depth, 0));
 
-                espaco.AppendEntity(texto);
-                transacao.AddNewlyCreatedDBObject(texto, true);
+                if (pilar.Problem is null)
+                {
+                    Cota(transacao, espaco, camadaAlturas, pilar.LowEdgeClearance, "PB", pontaBaixa, colocacao, mesa.Cell.DirectionRadians);
+                    Cota(transacao, espaco, camadaAlturas, pilar.HighEdgeClearance, "PA", pontaAlta, colocacao, mesa.Cell.DirectionRadians);
+                    Cota(transacao, espaco, camadaAlturas, pilar.FreeHeight, "P3", new Point3(pilar.X, pilar.Y, pilar.TopZ), colocacao, mesa.Cell.DirectionRadians);
+                }
+                else
+                {
+                    var aviso = new MText
+                    {
+                        Location = new Point3d(pilar.X, pilar.Y, pilar.TopZ + AlturaDoTexto),
+                        TextHeight = AlturaDoTexto,
+                        Layer = camadaAlturas,
+                        Attachment = AttachmentPoint.MiddleCenter,
+                        Rotation = mesa.Cell.DirectionRadians,
+                        Contents = $"PILAR: {pilar.Problem}",
+                    };
+
+                    espaco.AppendEntity(aviso);
+                    transacao.AddNewlyCreatedDBObject(aviso, true);
+                }
             }
 
             // 2. Módulos: o bloco e a face superior.
@@ -232,6 +248,50 @@ internal static class LayoutDrawer
         transacao.Commit();
 
         return new DrawnRow(fileira.Tables.Count, pilares, modulos, pintadas, marcadas);
+    }
+
+    /// <summary>Metade do comprimento do risco vermelho de cota, em metro, ao longo da fileira.</summary>
+    private const double MeioRisco = 0.50;
+
+    /// <summary>
+    /// Uma cota: um risco vermelho no ponto, atravessado no sentido da
+    /// fileira, e o valor ao lado ("PB 0,45"). Sem valor (sem terreno ali) o
+    /// texto diz "PB s/ terreno".
+    /// </summary>
+    private static void Cota(
+        Transaction transacao, BlockTableRecord espaco, string camada,
+        double? valor, string sigla, Point3 ponto, Transform colocacao, double rumo)
+    {
+        // O risco corre no eixo local X (ao longo da fileira), no plano da mesa.
+        var deslocamento = colocacao.Apply(new Point3(MeioRisco, 0, 0));
+        var origemLocal = colocacao.Apply(new Point3(0, 0, 0));
+        var dx = deslocamento.X - origemLocal.X;
+        var dy = deslocamento.Y - origemLocal.Y;
+        var dz = deslocamento.Z - origemLocal.Z;
+
+        var risco = new Line(
+            new Point3d(ponto.X - dx, ponto.Y - dy, ponto.Z - dz),
+            new Point3d(ponto.X + dx, ponto.Y + dy, ponto.Z + dz))
+        {
+            Layer = camada,
+            Color = Color.FromRgb(255, 0, 0),
+        };
+
+        espaco.AppendEntity(risco);
+        transacao.AddNewlyCreatedDBObject(risco, true);
+
+        var texto = new MText
+        {
+            Location = new Point3d(ponto.X, ponto.Y, ponto.Z + AlturaDoTexto),
+            TextHeight = AlturaDoTexto,
+            Layer = camada,
+            Attachment = AttachmentPoint.MiddleCenter,
+            Rotation = rumo,
+            Contents = valor is { } v ? $"{sigla} {v.ToString("0.00", Brasil)}" : $"{sigla} s/ terreno",
+        };
+
+        espaco.AppendEntity(texto);
+        transacao.AddNewlyCreatedDBObject(texto, true);
     }
 
     /// <summary>Camada e cor da peça: a da análise quando ela pinta, a fixa quando não.</summary>
