@@ -87,6 +87,18 @@ internal static class IconesDaRibbon
         Preenchimento("M21,9 H26 V17 H21 Z", Azul),
         Traco("M5,24 H27", Neutro, 1.2));
 
+    /// <summary>
+    /// Três cursores deslizantes, cada um numa posição: a tela de limites. É
+    /// o desenho que todo programa usa para "configurações", e o projetista
+    /// reconhece de longe.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Configuracao() => Montar(
+        Traco("M4,9 H28 M4,16 H28 M4,23 H28", Neutro, 2.0),
+        Preenchimento("M10,9 A2.6,2.6 0 1 1 9.99,9 Z", Azul),
+        Preenchimento("M21,16 A2.6,2.6 0 1 1 20.99,16 Z", Ambar),
+        Preenchimento("M14,23 A2.6,2.6 0 1 1 13.99,23 Z", Azul));
+
     /// <summary>Contorno fechado sobre o relevo: a área de implantação.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static ImageSource Area() => Montar(

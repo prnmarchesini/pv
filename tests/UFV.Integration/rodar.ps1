@@ -1048,6 +1048,94 @@ function Testar-Alinhamento {
     return $true
 }
 
+<#
+    A configuracao do projeto (4.4): grava a amostra do Core em que todo campo
+    difere do padrao (ProjectSettings.SampleAllDifferent, conferida campo a
+    campo em nivel 1), salva, reabre e exige que cada campo volte igual.
+    Comparar o conjunto inteiro, e nao um ou dois, e o que pega um campo
+    esquecido na gravacao ou na leitura.
+#>
+function Testar-Config {
+    param([string] $Desenho)
+
+    $copia = Join-Path $saida 'config.dwg'
+    if (Test-Path $copia) { Remove-Item $copia -Force }
+
+    $gravar = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-config-gravar' `
+                                 -Script (Join-Path $PSScriptRoot 'ufv-config-gravar.scr') `
+                                 -Substituicoes @{ '{{SAIDA}}' = $copia }
+
+    if ($gravar.Texto -notmatch 'UFV_GRAVADO') {
+        $problemas.Add("ufv-config: a primeira metade nao terminou. Veja $($gravar.Saida)")
+        return $false
+    }
+
+    # UFV_CONFIG num host sem interface tem que avisar, nao estourar.
+    if ($gravar.Texto -notmatch 'A tela de configura\S+ precisa da interface') {
+        $problemas.Add("ufv-config: UFV_CONFIG sem interface nao avisou que precisa dela. Veja $($gravar.Saida)")
+        return $false
+    }
+
+    if ($gravar.Texto -notmatch 'CONFIG Gravada para teste') {
+        $problemas.Add("ufv-config: a configuracao de teste nao foi gravada. Veja $($gravar.Saida)")
+        return $false
+    }
+
+    if (-not (Test-Path $copia)) {
+        $problemas.Add("ufv-config: o desenho nao foi salvo em $copia. Veja $($gravar.Saida)")
+        return $false
+    }
+
+    $gravados = @([regex]::Matches($gravar.Texto, '(?m)^CONFIG_CAMPO ([^\r\n]+?)\s*$') | ForEach-Object { $_.Groups[1].Value })
+
+    # 32 campos, o mesmo numero que o teste de nivel 1 exige: um campo a menos
+    # na gravacao passaria por "preservou tudo" se so o conjunto fosse comparado.
+    if ($gravados.Count -ne 32) {
+        $problemas.Add("ufv-config: a primeira metade escreveu $($gravados.Count) campos, e sao 32. Veja $($gravar.Saida)")
+        return $false
+    }
+
+    # A configuracao de teste precisa ser mesmo diferente do padrao: se o
+    # PITCH gravado for 6, um plugin que perdesse o registro e caisse no padrao
+    # passaria o resto do teste.
+    if ($gravados -notcontains 'PITCH=7.5') {
+        $problemas.Add("ufv-config: a configuracao de teste nao difere do padrao (PITCH). Veja $($gravar.Saida)")
+        return $false
+    }
+
+    $ler = Invoke-CoreConsole -Desenho $copia -Rotulo 'ufv-config-ler' `
+                              -Script (Join-Path $PSScriptRoot 'ufv-config-ler.scr')
+
+    if ($ler.Texto -match '(?m)^CONFIG Ausente') {
+        $problemas.Add("ufv-config: a configuracao nao sobreviveu ao arquivo ser salvo e reaberto. Veja $($ler.Saida)")
+        return $false
+    }
+
+    if ($ler.Texto -match '(?m)^CONFIG Problema: (.+)$') {
+        $problemas.Add("ufv-config: depois de reabrir, a leitura reclamou: $($Matches[1]). Veja $($ler.Saida)")
+        return $false
+    }
+
+    if ($ler.Texto -notmatch '(?m)^CONFIG Gravada no desenho') {
+        $problemas.Add("ufv-config: a segunda metade nao respondeu. Veja $($ler.Saida)")
+        return $false
+    }
+
+    $lidos = @([regex]::Matches($ler.Texto, '(?m)^CONFIG_CAMPO ([^\r\n]+?)\s*$') | ForEach-Object { $_.Groups[1].Value })
+
+    $faltando = @($gravados | Where-Object { $lidos -notcontains $_ })
+    $sobrando = @($lidos | Where-Object { $gravados -notcontains $_ })
+
+    if ($faltando.Count -gt 0 -or $sobrando.Count -gt 0) {
+        $problemas.Add(
+            "ufv-config: a configuracao voltou diferente. Faltando: [$($faltando -join ', ')]. " +
+            "Sobrando: [$($sobrando -join ', ')]. Veja $($ler.Saida)")
+        return $false
+    }
+
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -1070,6 +1158,11 @@ if (Testar-Caso -Rotulo 'ufv-mesa-sem-interface' -Desenho $desenhoVazio `
                     [regex]::Escape('A janela da mesa precisa da interface do Civil 3D'))) {
     $passaram++
 }
+
+# A configuracao do projeto (4.4) nao precisa de terreno: roda no desenho
+# vazio, salvando e reabrindo.
+$total++
+if (Testar-Config -Desenho $desenhoVazio) { $passaram++ }
 
 # O caso do terreno conta no total SEMPRE. Antes ele era simplesmente pulado
 # quando o desenho nao estava la, e o placar saia "1/1 OK", verde, afirmando

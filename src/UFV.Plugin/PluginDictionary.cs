@@ -61,6 +61,33 @@ internal static class PluginDictionary
     }
 
     /// <summary>
+    /// Se existe registro sob a chave, legível ou não. É o que separa "nunca
+    /// gravado" de "gravado e ilegível" para quem precisa avisar o usuário.
+    /// </summary>
+    internal static bool Contains(Database database, string chave)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+        ArgumentException.ThrowIfNullOrWhiteSpace(chave);
+
+        try
+        {
+            using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+
+            var raiz = (DBDictionary)transacao.GetObject(database.NamedObjectsDictionaryId, OpenMode.ForRead);
+            if (!raiz.Contains(Nome)) return false;
+
+            var nosso = (DBDictionary)transacao.GetObject(raiz.GetAt(Nome), OpenMode.ForRead);
+
+            return nosso.Contains(chave);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar($"Não consegui conferir se '{chave}' existe no dicionário.", erro);
+            return false;
+        }
+    }
+
+    /// <summary>
     /// O registro gravado sob a chave, ou null se não houver — ou se o que
     /// estiver lá não puder ser lido.
     /// </summary>

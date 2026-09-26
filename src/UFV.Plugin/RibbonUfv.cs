@@ -206,6 +206,12 @@ internal static class RibbonUfv
             PluginInfo.ComandoAlinhamento,
             "Traça a linha de referência das fileiras e guarda de que lado ficam as mesas."));
 
+        origem.Items.Add(BotaoGrande(
+            "Configuração",
+            IconesDaRibbon.Configuracao(),
+            PluginInfo.ComandoConfig,
+            "Os limites do projeto e as regras de análise, gravados no desenho."));
+
         return new RibbonPanel { Source = origem };
     }
 

@@ -84,6 +84,25 @@ public static class PluginInfo
     public const string ComandoAlinhamentos = "UFV_ALINHAMENTOS";
 
     /// <summary>
+    /// Comando que abre a tela única de configuração: os limites do sistema e
+    /// as regras de análise, gravados no desenho.
+    /// </summary>
+    public const string ComandoConfig = "UFV_CONFIG";
+
+    /// <summary>
+    /// Comando que escreve, campo a campo, a configuração gravada no desenho.
+    /// É por onde o teste de nível 2 confere que salvar e reabrir preserva
+    /// tudo.
+    /// </summary>
+    public const string ComandoConfigStatus = "UFV_CONFIG_STATUS";
+
+    /// <summary>
+    /// Comando que grava uma configuração de teste, toda diferente do padrão,
+    /// sem perguntar nada. Existe para o Core Console, que não abre janela.
+    /// </summary>
+    public const string ComandoConfigTeste = "UFV_CONFIG_TESTE";
+
+    /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).
     /// </summary>

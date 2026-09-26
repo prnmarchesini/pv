@@ -32,6 +32,7 @@ Só o Renan marca VALIDADO.
 | 4.1 | Modelo de configuração | VALIDADO (automático) | Sem tela; fechado em 25/09/2026 pela regra "só valido no CAD". Cinco padrões continuam meus |
 | 4.2 | Linha de alinhamento | VALIDADO | Renan aprovou em 26/09/2026 ("deu certo o alinhamento"), depois de 2 reprovações em 25/09 |
 | 4.3 | Regras de análise | VALIDADO (automático) | Modelo no Core, sem tela; fechado em 26/09/2026 pela regra "só valido no CAD". A tela é o 4.4, a pintura é a etapa 5 |
+| 4.4 | Modal | AGUARDANDO VALIDAÇÃO | `UFV_CONFIG`: tela única, grava no desenho; nível 2 salva, reabre e compara campo a campo |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -1341,4 +1342,123 @@ Placar final do passo: **82 testes** em `AnalysisRulesTests`, etapa 4 com
   sagrada 4 conta módulos por mesa com tolerância. A ligação entre o veredito
   por módulo e a marcação da mesa (`BumpToleranceFor`) é da etapa 5, e o
   comentário de `AnalysisKind.LowEdge` não diz isso — fica aqui.
+
+## 4.4: a tela de configuração
+
+`UFV_CONFIG`, botão "Configuração" na ribbon. Uma janela só: os limites do
+sistema (4.1) à esquerda, as regras de análise (4.3) à direita, e "Salvar no
+desenho" grava tudo no dicionário nomeado do DWG, ao lado do carimbo do
+terreno. É do desenho, não do usuário: a faixa da ponta baixa é deste projeto
+e viaja com o arquivo para quem o receber. O perfil de mesa (3.6) continua
+sendo do usuário, em disco, porque vale para todo desenho.
+
+### Graus e centímetros onde couber
+
+O plano pede "graus e centímetros ligados onde couber". Ficou assim:
+
+| campo | unidade na tela | no motor |
+|---|---|---|
+| azimute, declividade máxima | graus | radiano |
+| ponta baixa, enterro, degrau, espaçamento que quebra | **centímetros** | metro |
+| pitch, comprimento de pilar a partir do qual pintar | **metro** | metro |
+
+Pitch e pilar em metro porque é assim que se fala deles ("pitch de 6 m",
+"pilar de 2,5 m"); "600 cm" ninguém diz. A conversão acontece só nas bordas
+da janela (`Preencher` e `Ler`); o registro no desenho é sempre metro e
+radiano, invariante, formato redondo (`R`), para o número voltar exatamente
+igual noutra máquina.
+
+### O formato no desenho: `ProjectSettings` (Core)
+
+Pares nome/valor em texto, com `FORMATO=1` primeiro, os 12 campos da
+configuração e 4 por análise (ligada, camada, cor abaixo, cor acima; a borda
+tem 3). Cor em `#RRGGBB`. Os dois opcionais (declividade máxima, pilar a
+pintar) vão em branco quando não há.
+
+Garantias, todas com teste de nível 1 (22 testes):
+
+- **todo campo diferente do padrão vai e volta igual**, comparado por
+  igualdade do record inteiro. Um campo esquecido na gravação voltaria com o
+  padrão, e o teste acusa;
+- versão diferente é recusada com o motivo; **campo faltando ou ilegível
+  nomeia o campo** e nada é preenchido com o padrão em silêncio; campo
+  desconhecido é ignorado (versão futura que só acrescente campo não torna o
+  registro ilegível para esta);
+- configuração que não fecha não é gravada: gravar estado inválido faria a
+  próxima abertura recusar o que o próprio plugin escreveu.
+
+### Teste de nível 2: salvar e reabrir preserva tudo
+
+`ufv-config-gravar.scr` chama `UFV_CONFIG` (num host sem interface tem que
+avisar e seguir, não derrubar o plugin), depois `UFV_CONFIG_TESTE`, que grava
+uma configuração em que **todo campo difere do padrão**, e salva o DWG numa
+cópia. `ufv-config-ler.scr` reabre e chama `UFV_CONFIG_STATUS`, que escreve
+campo a campo. O runner compara o conjunto inteiro de `CONFIG_CAMPO` das duas
+metades, e exige que o pitch gravado seja 7,5 (um plugin que perdesse o
+registro e caísse no padrão, 6, passaria o resto).
+
+Dois tropeços meus no runner, ambos do PowerShell e não do plugin: `.Count`
+numa lista de um elemento (modo estrito) e `$` de regex que não casa antes do
+CR nas linhas do Core Console.
+
+### Decisões miúdas
+
+- **a tela abre no padrão quando o registro está ilegível**, e avisa: recusar
+  abrir deixaria o usuário sem como consertar. Salvar grava por cima;
+- **cor fora da paleta** (gravada por outra versão, ou editada no registro)
+  entra na caixa como "Outra (#RRGGBB)", para não ser trocada em silêncio
+  pela primeira da lista;
+- **a coluna "abaixo do mínimo" fica vazia** para pilar e declividade, que só
+  têm máximo (`AnalysisRules.HasMinimum`), e a borda tem uma cor só;
+- **"Restaurar padrão"** repõe os dois padrões sem gravar; só "Salvar no
+  desenho" grava;
+- **a configuração vai junto com o arquivo**: o comando lembra que é preciso
+  salvar o desenho. Sem isso, o Renan configuraria, fecharia sem salvar e
+  concluiria que a tela não guarda nada.
+
+### O que a revisão do 4.4 apontou, e o que foi feito
+
+Nenhum bloqueante. Quatro importantes, todos corrigidos:
+
+- **a conversão de unidade da tela não tinha teste nenhum.** Trocar `/100`
+  por `/10` na ponta baixa passava em todos os testes; só o Renan pegaria,
+  se olhasse o resumo em metros enquanto digitava centímetros. A lógica do
+  formulário saiu da janela e virou `ProjectSettingsForm` no Core: os campos
+  em texto nas unidades da tela, `From(ProjectSettings)` para mostrar e
+  `TryParse` para ler, com 17 testes (ida e volta exata, cm→m, grau→rad,
+  caixa desmarcada ignora o texto ao lado, cada campo em branco nomeado). A
+  janela agora só liga caixa de texto a campo. Duas mutações conferidas
+  depois: `/100`→`/10` derruba 10 testes, tirar o `* Grau` do azimute
+  derruba 4;
+- **"todo campo difere do padrão" era mentira** na configuração de teste do
+  nível 2: quatro camadas, seis cores e quatro "ligada" eram o padrão, e o
+  teste não provava preservação deles. A amostra virou
+  `ProjectSettings.SampleAllDifferent()` no Core, com teste que compara
+  campo a campo contra o padrão e exige diferença em todos; o nível 2 usa a
+  mesma amostra e exige os 32 campos, não "pelo menos 20". Quarta vez em
+  quatro passos que o achado mais grave é um comentário meu prometendo mais
+  do que o código faz;
+- **Xrecord corrompido virava "nunca gravado"**: o dicionário devolve null
+  nos dois casos, e a tela abria no padrão sem aviso — o "preencher calado"
+  que o próprio comentário dizia nunca fazer. `PluginDictionary.Contains`
+  separa os dois, e registro que existe e não abre é problema com aviso;
+- **`Confirmar` era evento do WPF sem try.** Agora todos os três têm.
+
+Menores, também corrigidos: `Preencher` arredondava a 4 casas, e abrir e
+salvar sem tocar em nada regravava valores arredondados (o formulário usa 12
+casas, com teste de que a segunda volta é idêntica à primeira); a cor
+"abaixo" de pilar e declividade, que a tela não mostra, era trocada por
+vermelho ao salvar (agora volta a que veio); `ResultBuffer` criado antes de
+`ToFields` vazava quando ele recusava; a paleta acumulava um item "Outra" a
+cada preenchimento; ramo morto em `Prefixo(EdgeTable)`; e o teste de cores
+conferia valor sem chave (uma troca de prefixo entre análises passava).
+
+Placar final do passo: Etapa 4 com 242/242, nível 2 com 9/9.
+
+### Pendências do 4.4
+
+- a janela em si (`JanelaDeConfiguracao`) continua sem teste, por ser WPF;
+  o que restou nela é ligar caixa a campo e a paleta de cores;
+- o azimute 360 é recusado ("fora de uma volta") e a tela diz "0 = norte":
+  seria mais amigável normalizar. Fica para o Renan dizer se incomoda.
 
