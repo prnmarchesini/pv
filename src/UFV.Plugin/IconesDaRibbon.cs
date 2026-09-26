@@ -138,6 +138,12 @@ internal static class IconesDaRibbon
         Traco("M24,9 A6,6 0 1 0 27.5,15", Neutro, 2.2),
         Traco("M24,5 L24,9.5 L19.5,9.5", Neutro, 2.2));
 
+    /// <summary>Um escudo com um visto: validar.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Validar() => Montar(
+        Traco("M16,4 L26,8 V16 C26,22 21,26 16,28 C11,26 6,22 6,16 V8 Z", Azul, 2.0),
+        Traco("M11,16 L15,20 L22,12", Neutro, 2.4));
+
     /// <summary>Um somatório sobre três mesas: recontar.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static ImageSource Recontar() => Montar(

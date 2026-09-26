@@ -34,6 +34,7 @@ public sealed class UfvExtension : IExtensionApplication
         try
         {
             LayoutWatcher.Instalar();
+            ValidacaoAoAbrir.Instalar();
         }
         catch (System.Exception erro)
         {
@@ -64,6 +65,7 @@ public sealed class UfvExtension : IExtensionApplication
     {
         try
         {
+            ValidacaoAoAbrir.Desinstalar();
             LayoutWatcher.Desinstalar();
         }
         catch (System.Exception erro)

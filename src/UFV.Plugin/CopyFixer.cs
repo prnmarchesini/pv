@@ -191,7 +191,7 @@ internal static class CopyFixer
     }
 
     /// <summary>O GUID próprio da peça (mesa, pilar, módulo, face ou nota).</summary>
-    private static Guid? PieceId(Entity entidade) =>
+    internal static Guid? PieceId(Entity entidade) =>
         LayoutXData.LoadTable(entidade)?.Id
         ?? LayoutXData.LoadPillar(entidade)?.Id
         ?? LayoutXData.LoadModule(entidade)?.Id

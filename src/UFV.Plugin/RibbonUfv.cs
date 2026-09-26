@@ -300,6 +300,12 @@ internal static class RibbonUfv
             "Recalcula só as mesas sujas."));
 
         origem.Items.Add(BotaoPequeno(
+            "Validar",
+            IconesDaRibbon.Validar(),
+            PluginInfo.ComandoValidar,
+            "Confere registros, mesas sujas, identidades repetidas, removidas e o carimbo do terreno; diz o que achou e o que fazer."));
+
+        origem.Items.Add(BotaoPequeno(
             "Recontar",
             IconesDaRibbon.Recontar(),
             PluginInfo.ComandoRecontar,

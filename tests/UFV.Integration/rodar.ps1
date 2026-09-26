@@ -2224,6 +2224,88 @@ function Testar-Recontar {
     return $true
 }
 
+<#
+    Validar (7.7): valida limpo, faz quatro estragos (area apagada com o
+    registro ficando, mesa sujada, contorno apagado, mesa copiada) e valida
+    de novo: 1 area faltando, 2 sujas, 0 duplicadas, 0 pecas repetidas, 1
+    orfa, 1 removida nao recontada, terreno ok.
+#>
+function Testar-Validar {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-validar--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-validar: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-validar' `
+        -Script (Join-Path $PSScriptRoot 'ufv-validar.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-validar terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    $totais = @([regex]::Matches($r.Texto, 'VALIDAR_TOTAIS areas=(\d+) alinhamentos=(\d+) sujas=(\d+) movidas=(\d+) areasdup=(\d+) alinhdup=(\d+) duplicadas=(\d+) pecas=(\d+) orfas=(\d+) removidas=(\d+) terreno=(\w+)'))
+
+    if ($totais.Count -ne 2) {
+        $problemas.Add("ufv-validar: esperava duas validacoes, achei $($totais.Count). Veja $($r.Saida)")
+        return $false
+    }
+
+    $limpa = $totais[0]
+    if ($limpa.Value -notmatch 'areas=0 alinhamentos=0 sujas=0 movidas=0 areasdup=0 alinhdup=0 duplicadas=0 pecas=0 orfas=0 removidas=0 terreno=ok') {
+        $problemas.Add("ufv-validar: a primeira validacao devia ser limpa: '$($limpa.Value)'. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^VALIDAR nada a apontar') {
+        $problemas.Add("ufv-validar: a validacao limpa nao disse 'nada a apontar'. Veja $($r.Saida)")
+        return $false
+    }
+
+    $suja = $totais[1]
+    if ($suja.Value -notmatch 'areas=1 alinhamentos=0 sujas=2 movidas=1 areasdup=0 alinhdup=1 duplicadas=0 pecas=0 orfas=1 removidas=1 terreno=ok') {
+        $problemas.Add("ufv-validar: depois dos estragos esperava areas=1 sujas=2 movidas=1 alinhdup=1 orfas=1 removidas=1: '$($suja.Value)'. Veja $($r.Saida)")
+        return $false
+    }
+
+    # A validacao ao carregar (o desenho ja aberto no Core Console) nao
+    # imprime nada num desenho sem coisas nossas.
+    if ($r.Texto -match '(?m)^AO ABRIR') {
+        $problemas.Add("ufv-validar: a validacao ao abrir falou num desenho sem nada nosso. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'Area da validacao\)') {
+        $problemas.Add("ufv-validar: a area apagada nao foi nomeada. Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (validar: limpa antes; depois 1 area faltando, 1 alinhamento duplicado, 2 sujas, 1 movida, 1 orfa, 1 removida)" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -2325,6 +2407,10 @@ else {
     # Recontar: conta pelo XData e consome as removidas.
     $total++
     if (Testar-Recontar -Desenho $desenhos[0]) { $passaram++ }
+
+    # Validar: registros, sujas, duplicadas, orfas, removidas, terreno.
+    $total++
+    if (Testar-Validar -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

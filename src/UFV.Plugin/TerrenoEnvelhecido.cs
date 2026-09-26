@@ -55,13 +55,15 @@ internal static class TerrenoEnvelhecido
     /// O identificador do objeto com esse handle, ou null se ele não existir
     /// neste desenho.
     /// </summary>
-    private static ObjectId? AcharPorHandle(Database database, string handle)
+    internal static ObjectId? AcharPorHandle(Database database, string handle)
     {
         try
         {
             // O handle é texto hexadecimal no desenho; aqui ele volta a ser o
-            // identificador do objeto.
-            var id = database.GetObjectId(false, new Handle(Convert.ToInt64(handle, 16)), 0);
+            // identificador do objeto. TryGetObjectId, e não GetObjectId: um
+            // handle que sumiu (objeto apagado e desenho salvo) é o caso
+            // normal, e não pode virar exceção no diagnóstico.
+            if (!database.TryGetObjectId(new Handle(Convert.ToInt64(handle, 16)), out var id)) return null;
 
             return id.IsNull || id.IsErased ? null : id;
         }

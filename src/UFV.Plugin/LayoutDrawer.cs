@@ -89,13 +89,15 @@ internal static class LayoutDrawer
 
         foreach (var mesa in fileira.Tables)
         {
+            var colocacao = mesa.Placement;
+
             var identidade = new TableIdentity(
                 idDaMesa?.Invoke(mesa) ?? Guid.NewGuid(), mesa.Label,
                 mesa.Solved.StartElevation, mesa.Solved.EndElevation, tiltRadians,
                 mesa.Solved.Marked, mesa.Solved.Reason,
-                ModulePowerWatts: modulo.PowerWatts);
+                ModulePowerWatts: modulo.PowerWatts,
+                Anchor: colocacao.Apply(new Point3(0, 0, 0)));
 
-            var colocacao = mesa.Placement;
             var matriz = Matriz(colocacao);
 
             // A mesa que não cabe no terreno (o alinhamento a marcou, ou um

@@ -18,15 +18,23 @@ internal static class LayoutXData
     /// Versão 2 desde o 7.1: ganhou o estado sujo e o motivo. A versão 1
     /// (etapa 5) continua a ser lida, como limpa.
     /// </summary>
-    /// <summary>Versão 3 desde o 7.6: ganhou a potência do módulo. A 2 (estado sujo) e a 1 (etapa 5) continuam a ser lidas.</summary>
-    private const int VersaoDaMesa = 3;
+    /// <summary>
+    /// Versão 4 desde o 7.7: ganhou a âncora (onde a mesa foi desenhada). A
+    /// 3 (potência), a 2 (estado sujo) e a 1 (etapa 5) continuam a ser lidas.
+    /// Sempre acrescentar no fim: os testes de nível 2 leem campo por posição.
+    /// </summary>
+    private const int VersaoDaMesa = 4;
+    private const int VersaoDaMesaTres = 3;
     private const int VersaoDaMesaDois = 2;
     private const int VersaoDaMesaAntiga = 1;
     private const int VersaoDoPilar = 1;
     private const int VersaoDoModulo = 1;
 
-    /// <summary>GUID, letreiro, cota inicial, cota final, inclinação, marcada, motivo, suja, motivo da sujeira, potência do módulo.</summary>
-    private const int CamposDaMesa = 10;
+    /// <summary>GUID, letreiro, cota inicial, cota final, inclinação, marcada, motivo, suja, motivo da sujeira, potência do módulo, âncora X, Y, Z.</summary>
+    private const int CamposDaMesa = 13;
+
+    /// <summary>Os dez primeiros, na versão 3.</summary>
+    private const int CamposDaMesaTres = 10;
 
     /// <summary>Os nove primeiros, na versão 2.</summary>
     private const int CamposDaMesaDois = 9;
@@ -57,11 +65,15 @@ internal static class LayoutXData
             mesa.Reason ?? string.Empty,
             mesa.Dirty ? "1" : "0",
             mesa.DirtyReason ?? string.Empty,
-            Opcional(mesa.ModulePowerWatts));
+            Opcional(mesa.ModulePowerWatts),
+            Opcional(mesa.Anchor?.X),
+            Opcional(mesa.Anchor?.Y),
+            Opcional(mesa.Anchor?.Z));
 
     internal static TableIdentity? LoadTable(Entity entidade)
     {
         var c = PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesa, CamposDaMesa)
+            ?? PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesaTres, CamposDaMesaTres)
             ?? PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesaDois, CamposDaMesaDois)
             ?? PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesaAntiga, CamposDaMesaAntiga);
         if (c is null) return null;
@@ -75,11 +87,19 @@ internal static class LayoutXData
         // e a identidade é o que a regra sagrada 3 protege.
         var suja = c.Count >= CamposDaMesaDois && c[7] == "1";
         var motivo = suja ? (c[8].Length > 0 ? c[8] : "motivo perdido") : null;
-        var potencia = c.Count >= CamposDaMesa ? RealOpcional(c[9]) : null;
+        var potencia = c.Count >= CamposDaMesaTres ? RealOpcional(c[9]) : null;
 
         if (potencia is { } w && (!double.IsFinite(w) || w <= 0)) potencia = null;
 
-        var mesa = new TableIdentity(id, c[1], z0, z1, tilt, c[5] == "1", c[6].Length == 0 ? null : c[6], suja, motivo, potencia);
+        UFV.Geo.Point3? ancora = null;
+
+        if (c.Count >= CamposDaMesa && RealOpcional(c[10]) is { } ax && RealOpcional(c[11]) is { } ay && RealOpcional(c[12]) is { } az)
+        {
+            var p = new UFV.Geo.Point3(ax, ay, az);
+            if (p.IsFinite) ancora = p;
+        }
+
+        var mesa = new TableIdentity(id, c[1], z0, z1, tilt, c[5] == "1", c[6].Length == 0 ? null : c[6], suja, motivo, potencia, ancora);
 
         return mesa.IsValid ? mesa : null;
     }

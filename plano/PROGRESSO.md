@@ -53,7 +53,7 @@ Só o Renan marca VALIDADO.
 | 7.4 | Recalcular tudo | AGUARDANDO VALIDAÇÃO | `UFV_RECALCULAR_SUJAS` (botão "Recalcular sujas"); nível 2: suja uma, recalcula, mesmo GUID limpo, 7/28/28 peças |
 | 7.5 | Cópia | AGUARDANDO VALIDAÇÃO | `CopyFixer` no fim do comando que copiou: mesa nova e peças novas (agrupadas pelo deslocamento), suja "copiada"; `UFV_RENOMEAR` para blocos com sufixo; nível 2 com COPY e -RENAME |
 | 7.6 | Apagar e recontar | AGUARDANDO VALIDAÇÃO | remoção já era do vigia (7.2); `UFV_RECONTAR` (botão Recontar) conta pelo XData (`LayoutCensus`, Core, 3 testes) e consome as removidas; nível 2 com ERASE |
-| 7.7 | Validação | PENDENTE | |
+| 7.7 | Validação | AGUARDANDO VALIDAÇÃO | `UFV_VALIDAR` (botão Validar) e ao abrir o desenho: registros que sumiram, sujas, duplicadas (mesa e peça), órfãs, removidas não recontadas, carimbo do terreno (`LayoutValidation`, Core, 3 testes); nível 2 com quatro estragos |
 | 7.8 | Auto-seleção | PENDENTE | |
 | 7.9 | Grupos e painel de informações | PENDENTE | |
 | 7.10 | Numeração | PENDENTE | |
@@ -106,27 +106,28 @@ Nivel 2   16/16    OK
 Acervo             OK
 ```
 
-### O próximo passo é o 7.7 (validação); o 6.5 espera as respostas do 6.4
+### O próximo passo é o 7.8 (auto-seleção); o 6.5 espera as respostas do 6.4
 
 6.1 fechado, 6.2 e 6.3 aguardando validação (o DAE no PVsyst), 6.4 é o
 resumo do formato PVC ("Entregar um resumo ao Renan e PARAR"). O 6.5 só
 começa depois que o Renan ler o resumo e decidir as três perguntas dele. A
 etapa 7 (edição) não depende da 6 e seguiu: 7.1 (estado sujo), 7.2 (o
-vigia), 7.3 (recalcular mesa), 7.4 (recalcular sujas), 7.5 (cópia) e 7.6
-(recontar) feitos, aguardando validação. Fora do plano, a pedido do Renan na tela em 26/09/2026, a
+vigia), 7.3 (recalcular mesa), 7.4 (recalcular sujas), 7.5 (cópia), 7.6
+(recontar) e 7.7 (validação) feitos, aguardando validação. Fora do plano, a pedido do Renan na tela em 26/09/2026, a
 etapa 5 foi refeita duas vezes no mesmo dia (fileira pelo azimute, mesa
 dentro da área, mesa que não cabe pintada, Refazer, janela de nome,
 terreno que não se perde): ver "Segunda reprovação do 5.8". O 7.5 é a
 cópia: detectar GUID duplicado (o vigia já suja original e cópia com
 "copiada"), dar identidade nova à cópia e a cada peça dela. Antes de
 começar, ler `plano/etapas/etapa-7-edicao.md` e as seções 7.1 a 7.4 no
-fim deste arquivo. O 7.7 é a validação: ao abrir o desenho e pelo botão
-**Validar**, conferir se o registrado existe (áreas, alinhamentos, mesas
-do registro de remoções), se algo mudou de posição (mesa suja sem
-recálculo), GUID duplicado (o `LayoutScan.IsDuplicated` já sabe) e o
-carimbo da superfície (`TerrenoEnvelhecido` já confere), e dizer o que
-achou. "Ao abrir o desenho" é um evento de documento (`DocumentCreated`
-ou o primeiro comando): cuidado com o Core Console, onde não há tela.
+fim deste arquivo. O 7.8 é a auto-seleção: ao selecionar mesas
+(arrastando ou clicando), uma caixa flutuante semitransparente com o kWp
+da seleção. É tela pura (WPF sobre o editor, ou um tooltip na posição do
+cursor) ligada ao evento de seleção do editor (`SelectionAdded` /
+`PromptingForSelection`, ou o `Idle` conferindo `SelectImplied`); a conta
+é a do `LayoutCensus` (Core) sobre as mesas cujas peças estão na seleção.
+Sem tela não há como testar em nível 2 além de "a conta da seleção está
+certa": separar a conta (comando `UFV_KWP_SELECAO` que imprime) da caixa.
 
 Antes de começar, ler `plano/etapas/etapa-6-pvsyst.md`. O que a etapa 6
 recebe da 5: as faces superiores dos módulos são entidades `3DFACE` na
@@ -230,6 +231,16 @@ teste: a etapa 6 é onde passa a ter.
    pela paleta de propriedades: também suja ("movida ou editada"). Rodar
    `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
    nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
+12. **Testar o 7.7 (validação)**: abra o desenho da usina: a linha de
+   comando diz "AO ABRIR nada a apontar" ou lista os achados. Faça
+   estragos e clique "Validar" na seção Edição: apague a polilinha da área
+   (o registro fica) → "1 área registrada não está no desenho"; mova uma
+   mesa → "1 mesa suja"; apague um contorno → "1 mesa só com peças" e "1
+   removida não recontada"; copie uma mesa → ela entra como suja, NÃO
+   como duplicada (a cópia já tem identidade própria). Cada linha diz o
+   que fazer (Reindexar, Recalcular sujas, Recontar, Refazer). Reprocesse
+   a superfície depois de mexer nela: a linha "terreno:" aparece quando o
+   carimbo não bate.
 11. **Testar o 7.6 (recontar)**: apague uma mesa inteira com o Delete
    (janela sobre ela) e outra só o contorno. Botão "Recontar" na seção
    Edição: diz mesas, módulos, kWp (com a potência do módulo do perfil
@@ -3171,4 +3182,58 @@ formato do relatório da usina; comprimento não finito conta como "sem
 comprimento" em vez de sumir; registro de removidas ilegível é descartado
 com aviso, em vez de avisar para sempre; `Lines()` chamado uma vez; a
 linha das órfãs diz quantos módulos delas entraram no total.
+
+## 7.7: validação
+
+Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO`. `LayoutValidation` (Core, 3
+testes) recebe os achados e monta o relatório, uma linha por tipo, cada
+uma com o que fazer. `UFV_VALIDAR` (botão Validar) coleta: áreas e
+alinhamentos registrados cujo handle não aponta mais para uma entidade
+com a identidade registrada; mesas sujas (é assim que "algo mudou de
+posição" chega: pelo vigia); mesas com mais de um contorno na mesma
+identidade; peças (pilar, módulo, face, nota) com GUID repetido; mesas só
+com peças; removidas não recontadas; e o carimbo da superfície
+(`TerrenoEnvelhecido`, que já existia). `ValidacaoAoAbrir` roda a mesma
+conferência em `DocumentCreated`, só em desenho que tem área, alinhamento
+ou registro de removidas nosso, e escreve "AO ABRIR …". Nível 2
+(`ufv-validar.scr`): valida limpo, apaga a polilinha da área, suja uma
+mesa, apaga um contorno e copia uma mesa; a segunda validação diz 1 área
+faltando, 2 sujas (a sujada e a cópia), 0 duplicadas, 0 peças repetidas, 1
+órfã, 1 removida, terreno ok.
+
+### Decisões que são minhas
+
+- "algo mudou de posição" tem duas fontes: o estado sujo do vigia e a
+  âncora gravada na identidade (o primeiro vértice do contorno): mesa
+  limpa fora da âncora foi movida sem o plugin ver;
+- a validação nunca conserta: só diz e aponta o comando certo;
+- ao abrir, desenho sem nada nosso não recebe linha nenhuma.
+
+### O que a revisão do 7.7 apontou, e o que foi feito
+
+Nenhum bloqueante. Três importantes, corrigidos: (1) "algo mudou de
+posição" era só o estado sujo do vigia: uma mesa movida com o plugin
+descarregado (ou noutra máquina) passava como limpa. Agora a identidade
+da mesa guarda ONDE ela foi desenhada (`TableIdentity.Anchor`, o primeiro
+vértice do contorno; XData da mesa na versão 4, lendo 3, 2 e 1), o
+`LayoutDrawer` e o Recalcular a gravam, e a validação compara com o
+vértice atual: mesa limpa fora do lugar sai como "movida sem o vigia
+ver". O nível 2 move uma mesa e apaga a marca de suja no XData com
+`entmod`, simulando o plugin descarregado, e a validação a pega; (2) a
+validação "ao abrir" não cobria o desenho já aberto na hora do
+carregamento (NETLOAD, Core Console com /i): `Instalar` passa a validar os
+documentos abertos, como o vigia faz; o nível 2 confere que num desenho
+sem nada nosso ela fica calada; (3) área ou alinhamento copiado (mesma
+identidade em duas polilinhas) não era detectado, porque o registro guarda
+um handle por GUID; agora as varreduras do Reindexar são reaproveitadas
+e o relatório conta identidades duplicadas de área e de alinhamento
+(nível 2 copia o alinhamento). Menores corrigidos: handle que sumiu
+(objeto apagado e desenho salvo) não vira mais exceção no diagnóstico
+(`TryGetObjectId`, num só lugar, `TerrenoEnvelhecido.AcharPorHandle`);
+`CopyFixer.PieceId` reaproveitado; o filtro do "ao abrir" olha também o
+carimbo do terreno; a frase da linha das sujas diz "marcada suja pelo
+vigia". Anotado, não feito: a validação faz duas passadas pelas peças
+(`LayoutScan` e a busca de GUID repetido); `FingerprintReader` dentro do
+`DocumentCreated` pode reconstruir uma superfície marcada para
+reconstruir, e se travar ao abrir o remédio é adiar para `Idle`.
 

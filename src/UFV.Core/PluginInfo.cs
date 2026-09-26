@@ -165,6 +165,9 @@ public static class PluginInfo
     /// <summary>Comando que conta a usina como está no desenho (mesas, módulos, kWp, pilares) e consome as remoções registradas.</summary>
     public const string ComandoRecontar = "UFV_RECONTAR";
 
+    /// <summary>Comando que confere registros, mesas, identidades e o carimbo da superfície, e diz o que achou.</summary>
+    public const string ComandoValidar = "UFV_VALIDAR";
+
     /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).

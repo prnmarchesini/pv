@@ -1,3 +1,5 @@
+using UFV.Geo;
+
 namespace UFV.Core;
 
 /// <summary>
@@ -24,6 +26,12 @@ namespace UFV.Core;
 /// que faz o kWp do recontar ser o dos módulos que ESTÃO no desenho, e não
 /// o do perfil que estiver escolhido no dia.
 /// </param>
+/// <param name="Anchor">
+/// Onde a mesa foi desenhada: o primeiro vértice do contorno (o canto da
+/// borda baixa no início), no mundo. A validação (7.7) compara com o
+/// vértice atual: se difere, a mesa foi movida sem o vigia ver (plugin
+/// descarregado, outra máquina). Null numa mesa de antes do 7.7.
+/// </param>
 public sealed record TableIdentity(
     Guid Id,
     string Label,
@@ -34,7 +42,8 @@ public sealed record TableIdentity(
     string? Reason,
     bool Dirty = false,
     string? DirtyReason = null,
-    double? ModulePowerWatts = null)
+    double? ModulePowerWatts = null,
+    Point3? Anchor = null)
 {
     /// <summary>O tipo, como vai no XData.</summary>
     public const string Tipo = "Mesa";
@@ -44,7 +53,8 @@ public sealed record TableIdentity(
         Id != Guid.Empty && !string.IsNullOrWhiteSpace(Label)
         && double.IsFinite(StartElevation) && double.IsFinite(EndElevation) && double.IsFinite(TiltRadians)
         && Dirty == !string.IsNullOrWhiteSpace(DirtyReason)
-        && (ModulePowerWatts is null || (double.IsFinite(ModulePowerWatts.Value) && ModulePowerWatts > 0));
+        && (ModulePowerWatts is null || (double.IsFinite(ModulePowerWatts.Value) && ModulePowerWatts > 0))
+        && (Anchor is null || Anchor.Value.IsFinite);
 
     /// <summary>A mesma mesa, suja por este motivo. O motivo é obrigatório.</summary>
     /// <exception cref="ArgumentException">Motivo em branco.</exception>

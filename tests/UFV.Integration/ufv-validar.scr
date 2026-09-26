@@ -1,0 +1,70 @@
+; Teste de nivel 2 do 7.7: processa uma fileira e faz estragos que a
+; validacao tem que apontar: apaga a polilinha da area (o registro fica),
+; copia a polilinha do alinhamento (identidade repetida), suja uma mesa,
+; apaga o contorno de outra (removida + pecas orfas), copia uma terceira (a
+; copia ganha identidade, entao NAO e duplicada) e move uma quarta apagando
+; depois a marca de suja no XData (como se o plugin nao estivesse
+; carregado: a validacao pega pela ancora). UFV_VALIDAR tem que dizer: 1
+; area faltando, 0 alinhamentos faltando, 1 alinhamento duplicado, 2 sujas
+; (a sujada e a copia), 1 movida, 0 duplicadas, 0 pecas repetidas, 1 orfa,
+; 1 removida nao recontada, terreno ok. Antes de estragar, valida limpo.
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_TERRENO_AUTO")
+(setq ufv:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "UFV_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area da validacao")
+(command "UFV_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento da validacao")
+(command "UFV_FILEIRA_AUTO")
+(command "UFV_VALIDAR")
+(defun ufv:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("MARCHENG_UFV")))))))
+(defun ufv:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun ufv:tipo (xd) (cdr (nth 0 xd)))
+(defun ufv:mesa (xd) (cond ((= (ufv:tipo xd) "Mesa") (ufv:campo xd 0)) ((= (ufv:tipo xd) "Face") (ufv:campo xd 2)) (T (ufv:campo xd 1))))
+(setq ufv:tudo (ssget "_X" (list (cons -3 (list (list "MARCHENG_UFV"))))))
+(setq ufv:n (if ufv:tudo (sslength ufv:tudo) 0))
+; A area, o alinhamento, o segundo, o terceiro e o quarto contornos.
+(setq ufv:area nil ufv:alin nil ufv:e2 nil ufv:g3 nil ufv:e4 nil ufv:g4 nil ufv:vistos 0 ufv:i 0)
+(while (< ufv:i ufv:n)
+  (setq ufv:en (ssname ufv:tudo ufv:i) ufv:xd (ufv:xdata ufv:en) ufv:t (ufv:tipo ufv:xd))
+  (if (= ufv:t "Area") (setq ufv:area ufv:en))
+  (if (= ufv:t "Alinhamento") (setq ufv:alin ufv:en))
+  (if (= ufv:t "Mesa")
+    (progn (setq ufv:vistos (1+ ufv:vistos))
+           (if (= ufv:vistos 2) (setq ufv:e2 ufv:en))
+           (if (= ufv:vistos 3) (setq ufv:g3 (ufv:campo ufv:xd 0)))
+           (if (= ufv:vistos 4) (setq ufv:e4 ufv:en ufv:g4 (ufv:campo ufv:xd 0)))))
+  (setq ufv:i (1+ ufv:i)))
+(setq ufv:ss3 (ssadd) ufv:ss4 (ssadd) ufv:i 0)
+(while (< ufv:i ufv:n)
+  (setq ufv:en (ssname ufv:tudo ufv:i) ufv:m (ufv:mesa (ufv:xdata ufv:en)))
+  (if (= ufv:m ufv:g3) (ssadd ufv:en ufv:ss3))
+  (if (= ufv:m ufv:g4) (ssadd ufv:en ufv:ss4))
+  (setq ufv:i (1+ ufv:i)))
+(setq ufv:ssa (ssadd ufv:area))
+(command "_.ERASE" ufv:ssa "")
+(setq ufv:copymode (getvar "COPYMODE"))
+(setvar "COPYMODE" 1)
+(setq ufv:ssl (ssadd ufv:alin))
+(command "_.COPY" ufv:ssl "" "0,0,0" "3,0,0")
+(command "UFV_SUJAR_AUTO")
+(setq ufv:ss2 (ssadd ufv:e2))
+(command "_.ERASE" ufv:ss2 "")
+(command "_.COPY" ufv:ss3 "" "0,0,0" "0,300,0")
+(command "_.MOVE" ufv:ss4 "" "0,0,0" "0,-120,0")
+(setvar "COPYMODE" ufv:copymode)
+; A mesa 4 ficou suja pelo vigia; apaga a marca no XData, como se o plugin nao estivesse carregado.
+(setq ufv:e (entget ufv:e4 '("MARCHENG_UFV")))
+(setq ufv:xd (cdr (car (cdr (assoc -3 ufv:e)))))
+(setq ufv:novo nil ufv:i 0)
+(foreach ufv:par ufv:xd
+  (setq ufv:novo (append ufv:novo (list (cond ((= ufv:i 9) (cons 1000 "0")) ((= ufv:i 10) (cons 1000 "")) (T ufv:par)))))
+  (setq ufv:i (1+ ufv:i)))
+(setq ufv:e (subst (list -3 (cons "MARCHENG_UFV" ufv:novo)) (assoc -3 ufv:e) ufv:e))
+(entmod ufv:e)
+(setvar "OSMODE" ufv:osmode)
+(command "UFV_VALIDAR")
+(setvar "SECURELOAD" ufv:secureload)
+(princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)
