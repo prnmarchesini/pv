@@ -68,20 +68,26 @@ public static class RecontarCommands
 
         foreach (var partes in LayoutScan.Tables(transacao, database).Values)
         {
-            var comprimentos = new List<double>();
-            var semComprimento = 0;
-
-            foreach (var id in partes.Pillars)
-            {
-                var pilar = LayoutXData.LoadPillar((Entity)transacao.GetObject(id, OpenMode.ForRead));
-
-                if (pilar?.Length is { } p1) comprimentos.Add(p1);
-                else semComprimento++;
-            }
-
-            mesas.Add(new CountedTable(partes.Identity, partes.Contours.Count, partes.Modules.Count, comprimentos, semComprimento));
+            mesas.Add(Contar(transacao, partes));
         }
 
         return LayoutCensus.Count(mesas, potenciaDoModuloWatts);
+    }
+
+    /// <summary>Uma mesa contada com os comprimentos dos pilares (lidos do XData de cada um).</summary>
+    internal static CountedTable Contar(Transaction transacao, TableParts partes)
+    {
+        var comprimentos = new List<double>();
+        var semComprimento = 0;
+
+        foreach (var id in partes.Pillars)
+        {
+            var pilar = LayoutXData.LoadPillar((Entity)transacao.GetObject(id, OpenMode.ForRead));
+
+            if (pilar?.Length is { } p1) comprimentos.Add(p1);
+            else semComprimento++;
+        }
+
+        return new CountedTable(partes.Identity, partes.Contours.Count, partes.Modules.Count, comprimentos, semComprimento);
     }
 }

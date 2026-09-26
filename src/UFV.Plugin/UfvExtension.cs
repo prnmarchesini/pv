@@ -78,6 +78,7 @@ public sealed class UfvExtension : IExtensionApplication
         {
             AutoSelecao.Desinstalar();
             MenuDeContexto.Desinstalar();
+            if (TemInterface()) FecharPainelDeGrupos();
         }
         catch (System.Exception erro)
         {
@@ -116,4 +117,9 @@ public sealed class UfvExtension : IExtensionApplication
             return false;
         }
     }
+
+    /// <summary>Tocar em <see cref="PainelDeGrupos"/> carrega o tipo da paleta; fora do método embutido.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void FecharPainelDeGrupos() => PainelDeGrupos.Desinstalar();
+
 }

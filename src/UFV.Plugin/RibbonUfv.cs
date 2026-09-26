@@ -300,6 +300,12 @@ internal static class RibbonUfv
             "Recalcula só as mesas sujas."));
 
         origem.Items.Add(BotaoPequeno(
+            "Grupos",
+            IconesDaRibbon.Grupos(),
+            PluginInfo.ComandoGruposPainel,
+            "Abre o painel dos grupos: criar a partir da seleção, listar com mesas, módulos, pilares e kWp, selecionar, recalcular e apagar."));
+
+        origem.Items.Add(BotaoPequeno(
             "Validar",
             IconesDaRibbon.Validar(),
             PluginInfo.ComandoValidar,

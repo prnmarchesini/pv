@@ -55,7 +55,7 @@ Só o Renan marca VALIDADO.
 | 7.6 | Apagar e recontar | AGUARDANDO VALIDAÇÃO | remoção já era do vigia (7.2); `UFV_RECONTAR` (botão Recontar) conta pelo XData (`LayoutCensus`, Core, 3 testes) e consome as removidas; nível 2 com ERASE |
 | 7.7 | Validação | AGUARDANDO VALIDAÇÃO | `UFV_VALIDAR` (botão Validar) e ao abrir o desenho: registros que sumiram, sujas, duplicadas (mesa e peça), órfãs, removidas não recontadas, carimbo do terreno (`LayoutValidation`, Core, 3 testes); nível 2 com quatro estragos |
 | 7.8 | Auto-seleção | AGUARDANDO VALIDAÇÃO | caixa flutuante semitransparente com mesas, módulos e kWp da seleção (`AutoSelecao`, na folga do AutoCAD); a conta é o `UFV_KWP_SELECAO`, com nível 2 |
-| 7.9 | Grupos e painel de informações | PENDENTE | |
+| 7.9 | Grupos e painel de informações | AGUARDANDO VALIDAÇÃO | `TableGroup` (Core, 3 testes) no registro `GRUPOS`; `UFV_GRUPO_CRIAR`/`GRUPOS`/`GRUPO_RECALCULAR`/`GRUPO_SELECIONAR`/`GRUPO_APAGAR` com nível 2; painel (paleta WPF) com lista e botões |
 | 7.10 | Numeração | PENDENTE | |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
@@ -106,30 +106,31 @@ Nivel 2   16/16    OK
 Acervo             OK
 ```
 
-### O próximo passo é o 7.9 (grupos e painel); o 6.5 espera as respostas do 6.4
+### O próximo passo é o 7.10 (numeração); o 6.5 espera as respostas do 6.4
 
 6.1 fechado, 6.2 e 6.3 aguardando validação (o DAE no PVsyst), 6.4 é o
 resumo do formato PVC ("Entregar um resumo ao Renan e PARAR"). O 6.5 só
 começa depois que o Renan ler o resumo e decidir as três perguntas dele. A
 etapa 7 (edição) não depende da 6 e seguiu: 7.1 (estado sujo), 7.2 (o
 vigia), 7.3 (recalcular mesa), 7.4 (recalcular sujas), 7.5 (cópia), 7.6
-(recontar), 7.7 (validação) e 7.8 (auto-seleção) feitos, aguardando
-validação. Fora do plano, a pedido do Renan na tela em 26/09/2026, a
+(recontar), 7.7 (validação), 7.8 (auto-seleção) e 7.9 (grupos) feitos,
+aguardando validação. Fora do plano, a pedido do Renan na tela em 26/09/2026, a
 etapa 5 foi refeita duas vezes no mesmo dia (fileira pelo azimute, mesa
 dentro da área, mesa que não cabe pintada, Refazer, janela de nome,
 terreno que não se perde): ver "Segunda reprovação do 5.8". O 7.5 é a
 cópia: detectar GUID duplicado (o vigia já suja original e cópia com
 "copiada"), dar identidade nova à cópia e a cada peça dela. Antes de
 começar, ler `plano/etapas/etapa-7-edicao.md` e as seções 7.1 a 7.4 no
-fim deste arquivo. O 7.9 são os grupos e o painel de informações: formar
-um grupo com nome a partir da seleção (um registro no dicionário do
-desenho, GUID do grupo + lista de GUIDs de mesa, e o nome; a mesa não
-precisa saber do grupo), um painel (paleta WPF do AutoCAD, `PaletteSet`)
-que lista os grupos com mesas, módulos, pilares e kWp (a conta é o
-`LayoutCensus` filtrado pelas mesas do grupo, como a seleção faz), e
-"recalcular por grupo" (o `RecalcularMesas` recebendo a lista do grupo).
-Separar o registro e a conta (comandos `UFV_GRUPO_CRIAR`, `UFV_GRUPOS`,
-`UFV_GRUPO_RECALCULAR`, testáveis no nível 2) do painel (só tela).
+fim deste arquivo. O 7.10 é a numeração, o último passo da etapa 7:
+botão "Gerar numeração" numa seção própria; fileira = mesas contínuas na
+mesma reta e mesmo azimute (espaçamento acima do limite, ou azimute
+diferente, abre fileira nova); o usuário indica a F1 e a última; letreiros
+F1, F2… e mesas F1.1, F1.2…; módulos e pilares numerados em consequência.
+É o passo que renumera depois de apagar, copiar e mover: o Core recebe as
+células (`TableCells.FromCorners` dos contornos) e devolve os letreiros
+novos (puro, com teste); o plugin regrava o XData (letreiro da mesa;
+pilar e módulo já têm número na mesa) e os avisos. **Validação do Renan
+na tela antes de fechar**, diz o plano.
 
 Antes de começar, ler `plano/etapas/etapa-6-pvsyst.md`. O que a etapa 6
 recebe da 5: as faces superiores dos módulos são entidades `3DFACE` na
@@ -233,6 +234,16 @@ teste: a etapa 6 é onde passa a ter.
    pela paleta de propriedades: também suja ("movida ou editada"). Rodar
    `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
    nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
+14. **Testar o 7.9 (grupos)**: selecione algumas mesas e clique "Grupos"
+   na seção Edição → no painel, "Criar grupo" pede o nome (janela) e a
+   lista mostra mesas, módulos, pilares e kWp do grupo. Escolha o grupo na
+   lista: "Selecionar" põe as mesas dele na seleção (a caixa do 7.8 mostra
+   o kWp), "Recalcular" refaz só elas, "Apagar" tira o registro (as mesas
+   ficam). **Os três botões com nome só existem na tela** (o nível 2 não
+   passa pelo painel), então veja se cada um acha o grupo. Criar com um
+   nome que já existe pergunta se substitui. Apague uma
+   mesa do grupo e clique "Atualizar": a coluna "Sumidas" conta. Os
+   mesmos comandos existem na linha de comando (`UFV_GRUPOS` lista).
 13. **Testar o 7.8 (auto-seleção)**: clique numa mesa, ou arraste uma
    janela sobre várias: aparece, no canto de cima à esquerda da área de
    desenho, uma caixa azul semitransparente "Seleção: N mesa(s), M
@@ -3298,4 +3309,76 @@ a linha do `LayoutCensus`; a busca das mesas tocadas separou-se da conta
 (`MesasTocadas` e `Resumir`). Anotado, não feito: a caixa em si (dona,
 foco, posição, DPI) só se prova na tela, e o roteiro do Renan pede zoom
 e grip com seleção viva, minimizar e clicar sobre a caixa.
+
+## 7.9: grupos e painel
+
+Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO`. `TableGroup` (Core, 3
+testes): GUID, nome, GUIDs das mesas e data, no registro `GRUPOS` do
+dicionário do desenho (`GroupStore`, nome único sem distinguir
+maiúsculas; criar com nome que existe substitui). A mesa não sabe do
+grupo; o grupo aponta para as mesas, e mesa que sumiu é contada como
+"sumida" na lista. Comandos: `UFV_GRUPO_CRIAR` (a seleção prévia, ou
+uma pedida, vira grupo com o nome perguntado; mesa inteira com qualquer
+peça, como no 7.8), `UFV_GRUPOS` (lista com mesas, módulos, pilares e kWp
+pelo `LayoutCensus`), `UFV_GRUPO_RECALCULAR` (o `RecalcularMesas` do 7.3
+com as mesas do grupo), `UFV_GRUPO_SELECIONAR` (põe as peças do grupo na
+seleção), `UFV_GRUPO_APAGAR` (só o registro). O painel (`PainelDeGrupos`,
+paleta do AutoCAD com uma lista WPF e botões) chama esses comandos pela
+linha de comando com o nome entre aspas, e é atualizado por eles; só
+com interface (tocar no tipo da paleta derruba o Core Console, que foi
+o crash pego no nível 2). Nível 2 (`ufv-grupos.scr`): cria "Bloco A" com
+F1.1 e F1.2, lista 2/56/14/40,3 kWp, suja F1.1 e recalcula o grupo (2 de
+2, ESTADO sem suja), seleciona (as entidades das duas mesas) e apaga.
+
+### Decisões que são minhas
+
+- criar com nome repetido substitui sem perguntar (é o jeito de refazer
+  o grupo com outra seleção);
+- apagar o grupo não apaga mesa; apagar mesa não mexe no grupo (ela vira
+  "sumida" na lista, até alguém recriar o grupo);
+- a mesa recalculada mantém o GUID e continua no grupo; a cópia de uma
+  mesa do grupo NÃO entra (é outra mesa).
+
+### O que o revisor achou e o que mudou
+
+- **Bloqueante, corrigido**: os botões Selecionar, Recalcular e Apagar do
+  painel mandavam o nome entre aspas, e o prompt com espaço permitido
+  devolve a linha inteira, aspas incluídas; nenhum botão achava o grupo.
+  O painel manda o nome cru e o prompt tolera aspas envolventes. O nível 2
+  não pegou porque o LISP entrega o texto sem aspas; **é o primeiro item
+  do roteiro do Renan**.
+- **Importante, corrigido**: `UFV_GRUPOS_PAINEL` tocava a paleta no corpo
+  do comando (a segunda porta do crash do Core Console); agora por método
+  não embutido, como o Atualizar.
+- **Importante, corrigido**: o painel não escutava a troca de documento e
+  mostrava os grupos do desenho anterior; agora recarrega em
+  `DocumentActivated`, limpa ao fechar o último e é fechado no Terminate.
+- **Importante, corrigido**: criar com nome que já existe substituía sem
+  perguntar; agora pergunta "Substituir pela seleção? [Sim/Não]" (o Enter
+  mantém).
+- **Importante, decidido**: `TableGroup.Without` estava morto e o
+  comentário prometia limpeza que não acontecia. Tirei o método e o
+  comentário diz o que vale: mesa apagada continua no grupo como "sumida",
+  e desfazer o apagar a devolve sem o grupo mudar.
+- **Menores corrigidos**: "O grupo não foi criada" (o erro já existia com
+  "O alinhamento") virou "ficou sem nome; nada foi feito"; o laço dos
+  pilares agora é um só (`RecontarCommands.Contar(transacao, partes)`); o
+  perfil só é lido do disco se alguma mesa não tem potência gravada; a
+  lista mostra duplicadas e mesas sem potência; Apagar responde com o nome
+  como foi gravado.
+- **Nível 2 ampliado**: entidades contadas depois do recalcular; ERASE da
+  F1.1 faz a lista dizer "1 mesa, 28 módulos, 7 pilares, 20,2 kWp, 1 que
+  não está mais no desenho" e selecionar dá só a F1.2; apagar pelo nome em
+  minúsculas.
+
+### Observações que ficam
+
+- **Refazer da área esvazia os grupos daquela área**: o Refazer redesenha
+  com GUIDs novos, então todo grupo de lá passa a "Sumidas = N". Não é
+  deste passo; ou o Refazer avisa quantos grupos perdeu, ou devolve o mapa
+  GUID velho → novo e o grupo é atualizado. Fica para o Renan decidir.
+- A cópia de uma mesa do grupo não entra no grupo; a mesma mesa pode estar
+  em dois grupos, sem aviso.
+- O painel não se atualiza sozinho depois de Refazer, Recontar, cópia ou
+  ERASE (o botão Atualizar existe); escutar `CommandEnded` resolveria.
 

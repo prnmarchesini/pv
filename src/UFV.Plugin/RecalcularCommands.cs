@@ -121,7 +121,7 @@ public static class RecalcularCommands
             .ToList();
     }
 
-    private static void RecalcularMesas(Editor editor, Document documento, ProcessedTerrain terreno, IReadOnlyList<Guid> mesas, TableProfile perfil)
+    internal static void RecalcularMesas(Editor editor, Document documento, ProcessedTerrain terreno, IReadOnlyList<Guid> mesas, TableProfile perfil)
     {
         var settings = ConfigCommands.Inicial(documento, out var avisoDaConfig);
         if (avisoDaConfig is not null) editor.WriteMessage($"\n  ATENÇÃO: {avisoDaConfig}\n");

@@ -138,6 +138,13 @@ internal static class IconesDaRibbon
         Traco("M24,9 A6,6 0 1 0 27.5,15", Neutro, 2.2),
         Traco("M24,5 L24,9.5 L19.5,9.5", Neutro, 2.2));
 
+    /// <summary>Três mesas dentro de uma moldura tracejada: os grupos.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Grupos() => Montar(
+        Traco("M4,6 H28 V26 H4 Z", Neutro, 1.4),
+        Traco("M8,12 L16,10 M8,17 L16,15 M8,22 L16,20", Azul, 2.4),
+        Traco("M19,12 L25,10.5 M19,17 L25,15.5 M19,22 L25,20.5", Azul, 2.4));
+
     /// <summary>Um escudo com um visto: validar.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static ImageSource Validar() => Montar(

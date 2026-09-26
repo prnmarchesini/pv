@@ -2371,6 +2371,105 @@ function Testar-Selecao {
     return $true
 }
 
+<#
+    Grupos (7.9): cria "Bloco A" com F1.1 e F1.2 pela selecao previa; a
+    lista diz 2 mesas, 56 modulos, 14 pilares e 40,3 kWp; sujar a F1.1 e
+    recalcular o grupo refaz 2 de 2 e o ESTADO fica sem suja; selecionar o
+    grupo poe as entidades das duas mesas na selecao; apagar a F1.1 faz a
+    lista dizer que 1 nao esta mais no desenho e selecionar so da a F1.2;
+    apagar o grupo pelo nome em minusculas deixa a lista vazia.
+#>
+function Testar-Grupos {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-grupos--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-grupos: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-grupos' `
+        -Script (Join-Path $PSScriptRoot 'ufv-grupos.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-grupos terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^GRUPO "Bloco A" criado com 2 mesa\(s\)') {
+        $problemas.Add("ufv-grupos: o grupo nao foi criado com 2 mesas. Veja $($r.Saida)")
+        return $false
+    }
+
+    $listas = @([regex]::Matches($r.Texto, '(?m)^GRUPOS (\d+) grupo\(s\)\.'))
+    if ($listas.Count -ne 3 -or [int] $listas[0].Groups[1].Value -ne 1 -or [int] $listas[1].Groups[1].Value -ne 1 -or [int] $listas[2].Groups[1].Value -ne 0) {
+        $problemas.Add("ufv-grupos: esperava a lista com 1 grupo, 1 grupo e depois 0. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^\s+Bloco A: 1 mesa\(s\), 28 módulo\(s\), 7 pilar\(es\), 20,2 kWp, 1 que não está\(ão\) mais no desenho') {
+        $problemas.Add("ufv-grupos: depois de apagar a F1.1 a lista devia dizer 1 mesa e 1 sumida. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^\s+Bloco A: 2 mesa\(s\), 56 módulo\(s\), 14 pilar\(es\), 40,3 kWp') {
+        $problemas.Add("ufv-grupos: a contagem do grupo nao e 2/56/14/40,3. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^RECALCULAR 2 de 2 mesa\(s\) recalculada\(s\)') {
+        $problemas.Add("ufv-grupos: o recalcular por grupo nao refez 2 de 2. Veja $($r.Saida)")
+        return $false
+    }
+
+    $estados = @([regex]::Matches($r.Texto, '(?m)^ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), (\d+) suja\(s\)'))
+    if ($estados.Count -lt 1 -or [int] $estados[$estados.Count - 1].Groups[3].Value -ne 0) {
+        $problemas.Add("ufv-grupos: depois do recalcular por grupo ainda ha mesa suja. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'UFV_GRUPOS_LISP mesas=(\d+) so2=(\d+)') {
+        $problemas.Add("ufv-grupos: nao consegui ler o LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $entidadesDasDuas = [int] $Matches[1]
+    $entidadesDaF12 = [int] $Matches[2]
+
+    $selecoes = @([regex]::Matches($r.Texto, '(?m)^GRUPO "Bloco A": (\d+) entidade\(s\) selecionada\(s\)'))
+    if ($selecoes.Count -ne 2 -or [int] $selecoes[0].Groups[1].Value -ne $entidadesDasDuas -or [int] $selecoes[1].Groups[1].Value -ne $entidadesDaF12) {
+        $problemas.Add("ufv-grupos: selecionar o grupo devia dar $entidadesDasDuas e depois $entidadesDaF12 entidade(s). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^GRUPO "Bloco A" apagado') {
+        $problemas.Add("ufv-grupos: o grupo nao foi apagado. Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (grupos: Bloco A com 2 mesas, 56 modulos, 40,3 kWp; recalculado, selecionado, com 1 sumida e apagado)" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -2480,6 +2579,10 @@ else {
     # A conta da selecao (a caixa flutuante usa a mesma).
     $total++
     if (Testar-Selecao -Desenho $desenhos[0]) { $passaram++ }
+
+    # Grupos: criar, listar, recalcular, selecionar, apagar.
+    $total++
+    if (Testar-Grupos -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

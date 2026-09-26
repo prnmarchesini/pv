@@ -41,7 +41,7 @@ internal static class Perguntas
         {
             var nome = NomePelaJanela(oQue);
 
-            if (nome is null) editor.WriteMessage($"\n{oQueMaiusculo} não foi criada.\n");
+            if (nome is null) editor.WriteMessage($"\n{oQueMaiusculo} ficou sem nome; nada foi feito.\n");
 
             return nome;
         }
@@ -55,7 +55,7 @@ internal static class Perguntas
 
             if (resposta.Status != PromptStatus.OK)
             {
-                editor.WriteMessage($"\n{oQueMaiusculo} não foi criada.\n");
+                editor.WriteMessage($"\n{oQueMaiusculo} ficou sem nome; nada foi feito.\n");
                 return null;
             }
 

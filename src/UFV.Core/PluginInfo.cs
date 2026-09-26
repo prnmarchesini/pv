@@ -171,6 +171,24 @@ public static class PluginInfo
     /// <summary>Comando que diz mesas, módulos e kWp da seleção (a conta da caixa flutuante).</summary>
     public const string ComandoKwpSelecao = "UFV_KWP_SELECAO";
 
+    /// <summary>Comando que cria um grupo com nome a partir da seleção.</summary>
+    public const string ComandoGrupoCriar = "UFV_GRUPO_CRIAR";
+
+    /// <summary>Comando que lista os grupos com mesas, módulos, pilares e kWp.</summary>
+    public const string ComandoGrupos = "UFV_GRUPOS";
+
+    /// <summary>Comando que recalcula as mesas de um grupo.</summary>
+    public const string ComandoGrupoRecalcular = "UFV_GRUPO_RECALCULAR";
+
+    /// <summary>Comando que põe as mesas de um grupo na seleção.</summary>
+    public const string ComandoGrupoSelecionar = "UFV_GRUPO_SELECIONAR";
+
+    /// <summary>Comando que apaga o registro de um grupo (as mesas ficam).</summary>
+    public const string ComandoGrupoApagar = "UFV_GRUPO_APAGAR";
+
+    /// <summary>Comando que abre o painel dos grupos.</summary>
+    public const string ComandoGruposPainel = "UFV_GRUPOS_PAINEL";
+
     /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).
