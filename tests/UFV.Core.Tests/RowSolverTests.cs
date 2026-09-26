@@ -344,7 +344,7 @@ public class RowSolverTests
     private static double ForcaBruta(List<RowTable> mesas, SystemConfiguration config, double passo)
     {
         var marca = 1e5 * (mesas.Sum(m => m.Viable.ModuleCount) + 1);
-        var giroChaves = (long)Math.Floor(Math.Tan(config.MaxLongitudinalSlope!.Value) * Comprimento / passo + 1e-9);
+        var giroChaves = (long)Math.Floor(Math.Sin(config.MaxLongitudinalSlope!.Value) * Comprimento / passo + 1e-9);
         long[] giros = [0, giroChaves / 2, giroChaves, -giroChaves / 2, -giroChaves];
 
         // As opções de cada mesa: (z0, z1, custo da mesa).

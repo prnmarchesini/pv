@@ -211,7 +211,7 @@ public static class RowSolver
             // O giro que uma mesa marcada pode usar para servir de escada:
             // até o limite de declividade; sem limite, até um degrau.
             giros[i] = viavel.Configuration.MaxLongitudinalSlope is { } limite
-                ? (long)Math.Floor(Math.Tan(limite) * viavel.Length / passo + 1e-9)
+                ? (long)Math.Floor(Math.Sin(limite) * viavel.Length / passo + 1e-9)
                 : degrauMax;
 
             if (viavel.Starts.Count > 0)

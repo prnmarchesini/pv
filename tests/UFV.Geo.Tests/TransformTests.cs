@@ -122,6 +122,60 @@ public class TransformTests
     ///                 leste: (√3; 0; 1)
     ///   translação → (10 + √3; 20; 31)
     /// </summary>
+    /// <summary>
+    /// O giro longitudinal faz o comprimento subir: a ponta final da mesa
+    /// (x = L) vai para (L·cos, 0, L·sin), e o eixo Y não se mexe.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "5")]
+    public void OGiroLongitudinalFazOComprimentoSubir()
+    {
+        var giro = Transform.LongitudinalTilt(5 * Math.PI / 180);
+
+        var ponta = giro.Apply(new Point3(20, 0, 0));
+        Assert.Equal(20 * Math.Cos(5 * Math.PI / 180), ponta.X, 9);
+        Assert.Equal(0, ponta.Y, 9);
+        Assert.Equal(20 * Math.Sin(5 * Math.PI / 180), ponta.Z, 9);
+
+        var lado = giro.Apply(new Point3(0, 3, 0));
+        Assert.Equal(0, lado.X, 9);
+        Assert.Equal(3, lado.Y, 9);
+        Assert.Equal(0, lado.Z, 9);
+
+        Assert.True(giro.IsRigid);
+    }
+
+    /// <summary>
+    /// Na colocação resolvida a ponta baixa sobe ao longo da fileira sem sair
+    /// dela em planta, e a ponta alta se desloca só um pouco ao longo da
+    /// fileira. Fileira para o leste (azimute de subida 180°, mesa olhando o
+    /// norte): +X local vai para oeste.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "5")]
+    public void AColocacaoResolvidaMantemAPontaBaixaNaFileira()
+    {
+        var tilt = 20 * Math.PI / 180;
+        var giro = 3 * Math.PI / 180;
+        var matriz = Transform.PlaceSolved(tilt, giro, Math.PI, new Point3(100, 200, 700));
+
+        // Ponta baixa: x = 18 sobe 18·sen(3°) e anda 18·cos(3°) para oeste, sem sair de y = 200.
+        var pontaBaixa = matriz.Apply(new Point3(18, 0, 0));
+        Assert.Equal(100 - 18 * Math.Cos(giro), pontaBaixa.X, 9);
+        Assert.Equal(200, pontaBaixa.Y, 9);
+        Assert.Equal(700 + 18 * Math.Sin(giro), pontaBaixa.Z, 9);
+
+        // Ponta alta na origem: sobe D·sen(tilt)·cos(giro), vai D·cos(tilt) para o sul
+        // e se desloca D·sen(tilt)·sen(giro) ao longo da fileira.
+        var pontaAlta = matriz.Apply(new Point3(0, 4, 0));
+        Assert.Equal(200 - 4 * Math.Cos(tilt), pontaAlta.Y, 9);
+        Assert.Equal(700 + 4 * Math.Sin(tilt) * Math.Cos(giro), pontaAlta.Z, 9);
+        Assert.Equal(4 * Math.Sin(tilt) * Math.Sin(giro), Math.Abs(pontaAlta.X - 100), 9);
+
+        Assert.True(matriz.IsRigid);
+        Assert.Equal(Transform.Place(tilt, Math.PI, new Point3(100, 200, 700)), Transform.PlaceSolved(tilt, 0, Math.PI, new Point3(100, 200, 700)));
+    }
+
     [Fact]
     [Trait("Etapa", "3")]
     public void AColocacaoEhTiltDepoisAzimuteDepoisTranslacao()

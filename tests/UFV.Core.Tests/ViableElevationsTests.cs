@@ -88,7 +88,7 @@ public class ViableElevationsTests
         var viaveis = ViableElevations.Compute(Amostra(_ => 700), Comprimento, config);
         var inicio = viaveis.Starts.Single(s => Math.Abs(s.StartElevation - 700.50) < 1e-9);
 
-        var giro = Math.Tan(0.5 * Grau) * Comprimento;
+        var giro = Math.Sin(0.5 * Grau) * Comprimento;
         var faixa = Assert.Single(inicio.EndRanges);
 
         Assert.Equal(700.50 - giro, faixa.Min, 6);
@@ -327,8 +327,8 @@ public class ViableElevationsTests
         var livre = ViableElevations.Compute(todosFixos, Comprimento, Config());
         var em700_50 = livre.Starts.Single(s => Math.Abs(s.StartElevation - 700.50) < 1e-9);
         var faixa = Assert.Single(em700_50.EndRanges);
-        Assert.Equal(700.50 - Math.Tan(10 * Grau) * Comprimento, faixa.Min, 9);
-        Assert.Equal(700.50 + Math.Tan(10 * Grau) * Comprimento, faixa.Max, 9);
+        Assert.Equal(700.50 - Math.Sin(10 * Grau) * Comprimento, faixa.Min, 9);
+        Assert.Equal(700.50 + Math.Sin(10 * Grau) * Comprimento, faixa.Max, 9);
     }
 
     /// <summary>
@@ -495,8 +495,9 @@ public class ViableElevationsTests
     {
         var viaveis = ViableElevations.Compute(Amostra(_ => 700), Comprimento, Config());
 
-        Assert.Equal(Math.Atan(0.5 / Comprimento), viaveis.LongitudinalSlope(700, 700.5), 12);
-        Assert.Equal(Math.Atan(0.5 / Comprimento), viaveis.LongitudinalSlope(700.5, 700), 12);
+        Assert.Equal(Math.Asin(0.5 / Comprimento), viaveis.LongitudinalSlope(700, 700.5), 12);
+        Assert.Equal(Math.Asin(0.5 / Comprimento), viaveis.LongitudinalSlope(700.5, 700), 12);
+        Assert.Equal(Math.PI / 2, viaveis.LongitudinalSlope(700, 800), 12);
         Assert.Equal(0.3, new ElevationRange(1.2, 1.5).Width, 9);
     }
 

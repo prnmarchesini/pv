@@ -57,7 +57,7 @@ public sealed record ViableStart(double StartElevation, IReadOnlyList<ElevationR
 /// final.
 ///
 /// A grade cobre todas as cotas iniciais viáveis quando o conjunto é
-/// limitado: com limite de declividade, o giro máximo é tan(limite) × L;
+/// limitado: com limite de declividade, o giro máximo é sen(limite) × L;
 /// sem limite, o giro é limitado pelos módulos que precisam ficar dentro —
 /// com m = n − k deles, o mais íngreme que a mesa consegue ficar é o
 /// desnível máximo da faixa sobre o menor vão que m estações consecutivas
@@ -93,7 +93,10 @@ public sealed class ViableElevations
         ModuleCount = moduleCount;
         _modulos = modulos;
         _toleradas = configuration.BumpToleranceFor(moduleCount);
-        _maxDeclive = configuration.MaxLongitudinalSlope is { } inclinacao ? Math.Tan(inclinacao) : null;
+        // Seno, e não tangente: a mesa é rígida e gira, então o desnível
+        // entre as pontas é L·sen(giro), e o limite configurado é do giro.
+        // Com tangente, 10° configurados viravam 10,15° de mesa.
+        _maxDeclive = configuration.MaxLongitudinalSlope is { } inclinacao ? Math.Sin(inclinacao) : null;
         Starts = starts;
         Problem = problem;
         IsUnbounded = unbounded;
@@ -278,9 +281,13 @@ public sealed class ViableElevations
         return fora;
     }
 
-    /// <summary>A declividade longitudinal destas cotas, em radianos, sempre positiva.</summary>
+    /// <summary>
+    /// A declividade longitudinal destas cotas, em radianos, nunca negativa:
+    /// o giro de uma mesa rígida de comprimento L com desnível Δz é
+    /// asen(Δz/L). Desnível maior que L não é mesa: devolve 90°.
+    /// </summary>
     public double LongitudinalSlope(double startElevation, double endElevation) =>
-        Math.Atan(Math.Abs(endElevation - startElevation) / Length);
+        Math.Asin(Math.Clamp(Math.Abs(endElevation - startElevation) / Length, 0, 1));
 
     /// <summary>
     /// Se a mesa é viável com estas cotas: no máximo a tolerância de módulos

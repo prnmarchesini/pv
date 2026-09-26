@@ -34,7 +34,32 @@ public static class TablePlacement
     /// perpendicular à célula (resolvida a partir de outra fileira): a mesa
     /// sairia girada dentro da célula, amostrando terreno sob a vizinha.
     /// </exception>
-    public static Transform Plan(PlacedTable table, RowOrientation orientation, double tiltRadians, double elevation)
+    public static Transform Plan(PlacedTable table, RowOrientation orientation, double tiltRadians, double elevation) =>
+        PlanSolved(table, orientation, tiltRadians, elevation, elevation, table.Length, out _);
+
+    /// <summary>
+    /// A colocação da mesa resolvida: com a cota da ponta baixa no início e
+    /// no fim escolhidas pela fileira (5.4). O giro longitudinal sai do
+    /// desnível sobre o comprimento LOCAL da mesa (seno, e não tangente):
+    /// assim a cota da ponta baixa na estação local s é exatamente
+    /// início + (fim − início)·s/L, a reta que o 5.3 usou para contar
+    /// módulos fora da faixa. O que o 5.3 NÃO tem é a posição em planta com
+    /// giro: a estação s fica em s·cos(giro) ao longo da fileira, até 28 cm
+    /// antes de onde o terreno foi amostrado a 10°; por isso o relatório
+    /// (5.6) reamostra a ponta baixa na posição final. O comprimento em
+    /// planta encurta para L·cos(giro), que é o preço de a mesa ser rígida.
+    /// </summary>
+    /// <param name="table">A célula em planta.</param>
+    /// <param name="orientation">Para que lado a mesa sobe.</param>
+    /// <param name="tiltRadians">A inclinação transversal.</param>
+    /// <param name="startElevation">A cota da ponta baixa na estação zero.</param>
+    /// <param name="endElevation">A cota da ponta baixa na estação final.</param>
+    /// <param name="length">O comprimento local da mesa (o da geometria, não o da célula).</param>
+    /// <param name="longitudinalTilt">O giro aplicado, em radianos.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Cotas não finitas, ou desnível maior que o comprimento.</exception>
+    public static Transform PlanSolved(
+        PlacedTable table, RowOrientation orientation, double tiltRadians,
+        double startElevation, double endElevation, double length, out double longitudinalTilt)
     {
         ArgumentNullException.ThrowIfNull(table);
         ArgumentNullException.ThrowIfNull(orientation);
@@ -42,6 +67,39 @@ public static class TablePlacement
         if (table.Corners.Count != 4 || !(table.Length >= RowDistributor.MenorMedida))
             throw new ArgumentException("A célula da mesa não tem quatro cantos ou é curta demais.", nameof(table));
 
+        if (!double.IsFinite(startElevation))
+            throw new ArgumentOutOfRangeException(nameof(startElevation), startElevation, "A cota não é um número.");
+
+        if (!double.IsFinite(endElevation))
+            throw new ArgumentOutOfRangeException(nameof(endElevation), endElevation, "A cota não é um número.");
+
+        if (!double.IsFinite(length) || length < RowDistributor.MenorMedida)
+            throw new ArgumentOutOfRangeException(nameof(length), length, "O comprimento da mesa não é uma medida válida.");
+
+        if (Math.Abs(length - table.Length) > 1e-6)
+        {
+            throw new ArgumentException(
+                $"A célula tem {table.Length:0.###} m e a mesa {length:0.###} m: a célula é de outra mesa.",
+                nameof(length));
+        }
+
+        var desnivel = endElevation - startElevation;
+
+        // Igual ao comprimento seria a mesa em pé, com comprimento em planta
+        // zero; recusado com folga.
+        if (Math.Abs(desnivel) >= length - 1e-9)
+        {
+            throw new ArgumentOutOfRangeException(nameof(endElevation), desnivel,
+                "O desnível entre as pontas é maior que o comprimento da mesa: não há giro que o produza.");
+        }
+
+        longitudinalTilt = Math.Asin(desnivel / length);
+
+        return Montar(table, orientation, tiltRadians, startElevation, longitudinalTilt);
+    }
+
+    private static Transform Montar(PlacedTable table, RowOrientation orientation, double tiltRadians, double elevation, double giro)
+    {
         if (!double.IsFinite(tiltRadians) || tiltRadians < 0 || tiltRadians >= Math.PI / 2)
         {
             throw new ArgumentOutOfRangeException(nameof(tiltRadians), tiltRadians,
@@ -82,8 +140,9 @@ public static class TablePlacement
             ? (xLocalComD ? c[0] : c[1])
             : (xLocalComD ? c[3] : c[2]);
 
-        return Transform.Place(
+        return Transform.PlaceSolved(
             tiltRadians,
+            giro,
             orientation.UpslopeAzimuthRadians,
             new Point3(origem.X, origem.Y, elevation));
     }

@@ -37,7 +37,7 @@ public static class PillarSizing
     /// Maiores medidas aceitas, em metro. Rede para erro de escala, como nas
     /// outras classes: quem digitar 300 achando que o campo era centímetro.
     /// </summary>
-    private const double MaiorAlturaLivre = 20.0;
+    public const double MaiorAlturaLivre = 20.0;
 
     private const double MaiorDistancia = 50.0;
 

@@ -103,6 +103,28 @@ public readonly struct Transform : IEquatable<Transform>
             0, 0, 1, 0);
     }
 
+    /// <summary>
+    /// A inclinação longitudinal da mesa: giro em torno do eixo Y local (o
+    /// da subida), que faz o comprimento da mesa subir. Positivo, a ponta
+    /// final (x = L) fica mais alta que a inicial: (L, 0, 0) vai para
+    /// (L·cos, 0, L·sin).
+    ///
+    /// É o que a fileira alinhada (5.4) escolhe para cada mesa: início e fim
+    /// da ponta baixa em cotas diferentes. A mesa continua rígida — o giro é
+    /// uma rotação, e o comprimento em planta encurta para L·cos, que é o
+    /// preço de a mesa ser um monolito e não uma sanfona.
+    /// </summary>
+    public static Transform LongitudinalTilt(double radianos)
+    {
+        var c = Math.Cos(radianos);
+        var s = Math.Sin(radianos);
+
+        return new Transform(
+            c, 0, -s, 0,
+            0, 1, 0, 0,
+            s, 0, c, 0);
+    }
+
     /// <summary>O deslocamento puro.</summary>
     public static Transform Translation(Point3 deslocamento) => new(
         1, 0, 0, deslocamento.X,
@@ -118,6 +140,22 @@ public readonly struct Transform : IEquatable<Transform>
     /// </summary>
     public static Transform Place(double tilt, double azimute, Point3 origem) =>
         Tilt(tilt).Then(Azimuth(azimute)).Then(Translation(origem));
+
+    /// <summary>
+    /// A colocação da mesa resolvida: inclina (transversal), gira no sentido
+    /// da fileira (longitudinal), orienta e leva para o lugar, nesta ordem.
+    ///
+    /// O giro longitudinal vem DEPOIS da inclinação transversal de propósito:
+    /// assim a ponta baixa (y = 0) sobe ao longo do comprimento sem sair da
+    /// direção da fileira em planta, e é a ponta alta que se desloca ao
+    /// longo da fileira, por y·sen(tilt)·sen(giro) — com fundo de 4,8 m,
+    /// 20° e 10° de giro são 0,30 m, o que pode entrar na célula vizinha
+    /// pela borda alta; quem coloca mesas em fileira confere isso contra o
+    /// espaçamento entre elas. Na ordem inversa a ponta baixa entortaria em
+    /// planta, saindo da célula.
+    /// </summary>
+    public static Transform PlaceSolved(double tilt, double longitudinalTilt, double azimute, Point3 origem) =>
+        Tilt(tilt).Then(LongitudinalTilt(longitudinalTilt)).Then(Azimuth(azimute)).Then(Translation(origem));
 
     /// <summary>
     /// Esta transformação seguida da outra: <c>a.Then(b)</c> aplica primeiro a
