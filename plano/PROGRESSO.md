@@ -37,8 +37,8 @@ Só o Renan marca VALIDADO.
 | 5.2 | Amostragem | VALIDADO (automático) | `TablePlacement` e `TerrainSampler` no Core; a ponta baixa é amostrada na aresta inteira (`Tin.TryGetMaxZAlong`); fechado em 26/09/2026 |
 | 5.3 | Cotas viáveis por mesa | VALIDADO (automático) | `ViableElevations` no Core; grade de 1 cm, intervalos por varredura; fechado em 26/09/2026 |
 | 5.4 | Alinhamento na fileira | VALIDADO (automático) | `RowSolver` no Core: programação dinâmica, não iterativo (divergência do plano, registrada); fechado em 26/09/2026. **Renan confirma no 5.8** o "degrau mínimo = 0 ou ≥ mínimo" e a ausência do campo de iterações |
-| 5.5 | Pilares | PENDENTE | |
-| 5.6 | Resultado das análises | PENDENTE | |
+| 5.5 | Pilares | VALIDADO (automático) | `PillarCalculator` no Core; comprimento ideal, sem arredondamento comercial (decisão do Renan no 4.1); fechado em 26/09/2026 |
+| 5.6 | Resultado das análises | VALIDADO (automático) | `TableAnalysis` e `RowPipeline` no Core; fechado em 26/09/2026 |
 | 5.7 | Desenho | PENDENTE | |
 | 5.8 | Uma fileira no CAD | PENDENTE | |
 | 5.9 | Área inteira | PENDENTE | |
@@ -1769,11 +1769,13 @@ cota final viável. É esse teste que dá confiança na varredura.
 
 - **o pilar não entra aqui.** A ponta baixa manda, o pilar é consequência
   (5.5), e estoura se tiver que estourar;
-- **o giro longitudinal não reamostra o terreno** (anotação do 5.2): a
-  amostra sob a ponta baixa é da mesa com cota zero e sem giro; o giro
-  move o pé dos pilares em planta por centímetros, e a ponta baixa não
-  muda de lugar em planta (gira em torno de si). Para a ponta baixa a
-  aproximação é exata; para os pilares, a decisão fica no 5.5;
+- **o giro longitudinal não reamostra o terreno para decidir** (anotação
+  do 5.2): a amostra sob a ponta baixa é da mesa sem giro. ~~Para a ponta
+  baixa a aproximação é exata~~ **Retificado no 5.5:** não é. A mesa é
+  rígida e gira por seno, então a estação local s fica em planta em
+  s·cos(giro), até 28 cm antes da posição sem giro a 10°. A decisão (5.3 e
+  5.4) usa a amostra sem giro, declarada como aproximação; o relatório
+  (5.6, via a orquestração) reamostra na posição final, e é ele que pinta;
 - módulo sem terreno embaixo é `Problem`, nunca vazio calado.
 
 ### O que a revisão do 5.3 apontou, e o que foi feito
@@ -1939,4 +1941,162 @@ Registrado como limitação conhecida: `IsUnbounded` do 5.3 é ignorado; a DP
 só explora a janela declarada.
 
 Placar do passo: 31 testes de solver (65 com os do 5.3); etapa 5 com 223/223 na árvore, já contando os testes do 5.5 e do 5.6, começados antes deste commit.
+
+## 5.5: os pilares
+
+`PillarCalculator` no Core, só modelo. Para uma mesa resolvida (5.4), por
+pilar: onde fura o chão (a posição real, em planta), a cota do terreno ali,
+a cota de topo, a altura livre, o enterro e o comprimento.
+
+### A divergência do plano, já decidida no 4.1
+
+O passo pede "comprimento arredondado para o comercial". **Não há
+arredondamento nem lista comercial**: o Renan disse em 23/09/2026 que o
+plugin "deve calcular o pilar ideal apenas", e o 4.1 tirou o teto e a lista
+por isso. O comprimento é a altura livre mais o enterro mínimo
+(`PillarSizing.Length`), e o enterro é sempre o mínimo — `MaxEmbedment` só
+morde com comprimento imposto de fora, que não acontece aqui. Teste guarda
+a ausência de arredondamento.
+
+### O giro longitudinal na matriz
+
+A fileira (5.4) escolhe início e fim da ponta baixa em cotas diferentes: a
+mesa inclina no sentido da fileira. Isso entrou na matriz como uma rotação
+a mais (`Transform.LongitudinalTilt`, em torno do eixo Y local), aplicada
+DEPOIS da inclinação transversal e ANTES do azimute (`Transform.PlaceSolved`).
+A ordem importa: assim a ponta baixa sobe ao longo do comprimento sem sair
+da direção da fileira em planta, e é a ponta alta que se desloca um pouco
+ao longo da fileira (fundo × sen(tilt) × sen(giro): 8 cm para 20° e 3°).
+Na ordem inversa a ponta baixa entortaria em planta e sairia da célula.
+
+O giro sai do desnível sobre o comprimento LOCAL, por seno e não por
+tangente: `giro = asin((z1 − z0)/L)`. Assim a cota da ponta baixa na
+estação local s é exatamente z0 + (z1 − z0)·s/L, que é o que o 5.3 supôs. O
+preço é que o comprimento em planta encurta para L·cos(giro) (0,3 m a 10°
+numa mesa de 18,7), o que é a mesa ser rígida e não uma sanfona. Declarado.
+
+### O pé do pilar é reamostrado na posição real
+
+O giro desloca o pé de cada pilar em planta por centímetros (a pendência do
+5.2). Aqui a mesa é colocada com a matriz de verdade e o terreno é
+consultado onde o pé realmente cai. Teste: num plano inclinado, a cota do
+terreno do pilar é a do plano no X e Y reportados, e o último pilar anda
+mais de 5 cm com um giro de 3 m em 18,7.
+
+### O que estoura é marcado, nunca escondido
+
+Pilar sem altura livre (a mesa desce até o chão naquele pé, ou abaixo) é a
+regra sagrada 1 violada: `FloatingPillar.Check` diz o motivo, o pilar fica
+sem comprimento e com o problema escrito, e a mesa não é movida por causa
+dele — a ponta baixa manda, o pilar é consequência. Pé fora do terreno é
+problema distinto, também marcado. Teste de propriedade: em cotas e
+terrenos aleatórios, todo pilar sem problema passa no verificador da regra
+1, e todo pilar com altura livre abaixo da tolerância tem problema.
+
+## 5.6: o resultado das análises
+
+`TableAnalysis.Evaluate` no Core, só modelo. Para uma mesa resolvida, com
+os pilares calculados: cada módulo da fileira de baixo carrega a altura
+livre da ponta baixa (cota na estação dele menos o terreno mais alto sob a
+aresta) e o veredito da análise de ponta baixa; cada pilar carrega o
+`PillarResult` do 5.5 e os vereditos de comprimento e de enterro; a mesa
+carrega a declividade longitudinal com o veredito, o veredito de borda (da
+célula do 5.1) e a marca da fileira (5.4) com o motivo. Nada aqui decide
+geometria: só se pergunta às regras do 4.3 o que pintar e se guarda a
+resposta ao lado do valor, que é o que o desenho (5.7) lê.
+
+Peça sem o que medir sai **Off, nunca Inside**: módulo sem terreno, pilar
+sem comprimento. "Dentro" numa peça sem medida seria dizer que conferiu.
+
+Testes: dentro da faixa nada pintado; abaixo do mínimo vermelho na camada
+da análise; mesa girada com vermelho num lado e azul no outro, com o valor
+de cada módulo sendo o da estação dele; comprimento de pilar Off sem
+limite e azul com limite de 1,50; pilar sem comprimento Off com o problema
+junto; declividade pintada só acima do limite, com os graus no texto; borda
+com a cor da borda; análise desligada Off mesmo com valor fora; marca da
+fileira passando com o motivo.
+
+### O que a revisão do 5.5 apontou, e o que foi feito
+
+Nenhum bloqueante; três importantes, corrigidos, e um deles mudou o 5.3 e o
+5.4 também.
+
+- **altura livre acima de 20 m virava exceção**, não marca: um vértice
+  espúrio da superfície em z = 0 sob um pilar derrubava a mesa, a fileira e
+  a área. "Estouro marcado, nunca escondido" vale também para o absurdo:
+  agora é problema por pilar ("fora de escala, o terreno sob este pé não é
+  confiável"), sem comprimento. O mesmo para desnível maior que o
+  comprimento (só possível sem limite de declividade): a mesa sai com todo
+  pilar marcado e a matriz nivelada, sem exceção;
+- **seno de um lado, tangente do outro.** O giro da matriz é asen(Δz/L),
+  mas o limite de declividade era conferido com tangente no 5.3 e no 5.4:
+  10° configurados viravam 10,15° de mesa, reportados como 10,0°. Agora é
+  seno em todo lugar (`ViableElevations`, `RowSolver`, `TableAnalysis`, e
+  `LongitudinalSlope` é asen). E a nota do 5.3 dizia que a amostra da ponta
+  baixa era exata para qualquer giro; **era falsa**: a estação local s fica
+  em planta em s·cos(giro), até 28 cm antes da posição sem giro a 10°. A
+  nota foi retificada; a decisão (5.3/5.4) continua usando a amostra sem
+  giro, declarada como aproximação, e o relatório (5.6) reamostra a ponta
+  baixa na posição final — é ele que pinta;
+- **a ponta alta avança sobre a vizinha.** O deslocamento da ponta alta ao
+  longo da fileira é fundo × sen(tilt) × sen(giro): 0,30 m com os padrões,
+  e não "centímetros" como o comentário dizia. Com espaçamento zero entre
+  mesas e giro forte, duas mesas se cruzam pela borda alta em 3D. A
+  orquestração agora confere junta a junta o avanço contra o vão e avisa
+  (`ProcessedRow.Warnings`), sem marcar; com o espaçamento padrão de 0,50 m
+  o aviso não aparece. Comentário corrigido.
+
+Menores, corrigidos: `LongestPillar` com teste de comprimentos distintos;
+enterro testado com mínimo fora do padrão (um literal 0,90 passava);
+célula de outro comprimento que a geometria recusada; cota inicial não
+finita conferida antes do desnível; desnível igual ao comprimento (mesa
+em pé) recusado com folga; `AllSound` falso para mesa sem pilar;
+`Embedment` de pilar com problema declarado como "o mínimo que ele
+teria", não medida.
+
+### O que a revisão do 5.6 apontou, e o que foi feito
+
+Nenhum bloqueante. O que mudou:
+
+- **o veredito de enterro nunca pinta por construção** (o comprimento é o
+  ideal, o enterro é o mínimo, e a configuração válida garante mínimo ≤
+  máximo), e a doc apresentava a análise como viva. Declarado, com teste
+  em cotas aleatórias (Inside ou Off, nunca cor). A análise fica para o dia
+  em que houver comprimento imposto de fora; a camada `_ENTERRO` vai
+  existir vazia até lá;
+- **módulo sem terreno sai Off** estava escrito em três lugares e sem
+  teste. Agora tem, com o terreno recortado no meio da mesa;
+- **um pilar é uma entidade com uma cor**: `PillarReport.PaintVerdict` é o
+  veredito único de pintura (comprimento vence; enterro só se o
+  comprimento não pintou), e `Painted` conta uma peça uma vez;
+- testes que faltavam: `PaintedByKind` da declividade; `ModulesOutsideBand`
+  contando os dois lados; tudo pintado ao mesmo tempo com contagem exata;
+  estação e coluna vindas da amostra; configuração quebrada chegando
+  direto ao `Evaluate`; comprimento de pilar conferido no valor (2,56 m), não
+  só "> 1,50"; amostra de outra mesa (estação além do comprimento) recusada.
+
+**Como a mesa marcada aparece na tela é decisão do 5.7.** No plano, a "cor
+própria" é da mesa na borda; a marcada "é estudada à mão", sem cor nem
+camada. O relatório traz `Marked` e o motivo; rótulo, hachura ou cor é o
+desenho que escolhe, e o Renan vê no 5.8.
+
+Observação para o 5.9: `AnalysisRules.Evaluate` reconfere `WhyInvalid`
+(cinco nomes de camada e um agrupamento) a cada chamada, umas vinte vezes
+por mesa. É desenho do 4.3; vai aparecer na medição de tempo.
+
+### A orquestração da fileira (`RowPipeline`)
+
+Entrou junto com o 5.6, porque é o que o desenho (5.7) e o comando de uma
+fileira (5.8) consomem: célula → amostra → cotas viáveis → alinhamento →
+pilares → reamostragem final → análises, na ordem, sem decidir nada por
+conta própria. Um erro que só ela podia pegar, e pegou: na configuração
+padrão (fileira para o leste, mesa olhando para o norte) o comprimento
+local corre para OESTE, então a junta entre mesas vizinhas é entre o
+início local de uma e o fim local da outra — e o solver encadeia fim →
+início. Mesa sim, mesa não saía marcada numa rampa. `RowOrientation` ganhou
+`LengthRunsWithRow`, e a orquestração entrega as mesas ao solver na ordem
+das estações locais (invertida quando o comprimento corre contra a
+fileira), devolvendo na ordem da fileira. Teste de ponta a ponta com rampa
+longitudinal: nenhuma marcada, e as juntas em planta fecham dentro de um
+degrau.
 

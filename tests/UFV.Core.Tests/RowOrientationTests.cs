@@ -28,6 +28,21 @@ public class RowOrientationTests
         Assert.Equal(180 * Grau, orientacao.UpslopeAzimuthRadians, 9);
         Assert.False(orientacao.LowEdgeOnNearSide);
         Assert.Equal(0, orientacao.DivergenceRadians, 9);
+
+        // Mesa olhando para o norte: o +X local corre para oeste, contra a
+        // fileira que vai para o leste.
+        Assert.False(orientacao.LengthRunsWithRow);
+    }
+
+    /// <summary>Com a mesa olhando para o sul (subida para o norte), o +X local corre para o leste, com a fileira.</summary>
+    [Fact]
+    [Trait("Etapa", "5")]
+    public void ComAMesaOlhandoParaOSulOComprimentoCorreComAFileira()
+    {
+        var orientacao = RowOrientation.Resolve(0, LineSide.Left, 0);
+
+        Assert.True(orientacao.LengthRunsWithRow);
+        Assert.True(orientacao.LowEdgeOnNearSide);
     }
 
     /// <summary>Mesmas fileiras, mesas à direita (sul): a subida é +normal, e a ponta baixa fica de cá.</summary>
@@ -99,11 +114,11 @@ public class RowOrientationTests
             Assert.Equal(orientacao.LowEdgeOnNearSide ? 1 : -1, paraOLado, 9);
 
             // E o comprimento da fileira (eixo +X local) é a própria direção,
-            // num sentido ou no outro.
+            // num sentido ou no outro — e LengthRunsWithRow diz qual.
             var comprimento = Transform.Azimuth(orientacao.UpslopeAzimuthRadians).Apply(new Point3(1, 0, 0));
-            var alinhado = Math.Abs(comprimento.X * Math.Cos(direcao) + comprimento.Y * Math.Sin(direcao));
+            var alinhado = comprimento.X * Math.Cos(direcao) + comprimento.Y * Math.Sin(direcao);
 
-            Assert.Equal(1, alinhado, 9);
+            Assert.Equal(orientacao.LengthRunsWithRow ? 1 : -1, alinhado, 9);
         }
     }
 

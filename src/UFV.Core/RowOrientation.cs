@@ -22,10 +22,20 @@ namespace UFV.Core;
 /// perto de 90° quando ela foi traçada quase paralela a ele, e aí a mesa vai
 /// olhar para um lado bem diferente do configurado — é para avisar.
 /// </param>
+/// <param name="LengthRunsWithRow">
+/// Se o comprimento local da mesa (+X, da estação zero à final) corre no
+/// sentido da fileira. Quando não, a estação zero de cada mesa fica na
+/// ponta de LÁ da célula, e a junta com a mesa seguinte na fileira é entre
+/// o início local desta e o fim local daquela — quem encadeia cotas ao
+/// longo da fileira (5.4) precisa saber. Na configuração padrão (fileira
+/// para o leste, mesa olhando para o norte) é falso: +X local corre para
+/// oeste.
+/// </param>
 public sealed record RowOrientation(
     double UpslopeAzimuthRadians,
     bool LowEdgeOnNearSide,
-    double DivergenceRadians)
+    double DivergenceRadians,
+    bool LengthRunsWithRow)
 {
     /// <summary>
     /// Resolve a orientação de uma mesa a partir da direção da fileira e do
@@ -75,6 +85,9 @@ public sealed record RowOrientation(
 
         var divergencia = Math.Acos(Math.Clamp(Math.Abs(produto), 0, 1));
 
-        return new RowOrientation(azimute, pontaBaixaDeCa, divergencia);
+        // O +X local é a subida girada 90° no sentido horário: (uy, −ux).
+        var comprimentoComAFileira = (uy * dx - ux * dy) > 0;
+
+        return new RowOrientation(azimute, pontaBaixaDeCa, divergencia, comprimentoComAFileira);
     }
 }
