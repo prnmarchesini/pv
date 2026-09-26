@@ -39,19 +39,26 @@ Só o Renan marca VALIDADO.
 | 5.4 | Alinhamento na fileira | VALIDADO (automático) | `RowSolver` no Core: programação dinâmica, não iterativo (divergência do plano, registrada); fechado em 26/09/2026. **Renan confirma no 5.8** o "degrau mínimo = 0 ou ≥ mínimo" e a ausência do campo de iterações |
 | 5.5 | Pilares | VALIDADO (automático) | `PillarCalculator` no Core; comprimento ideal, sem arredondamento comercial (decisão do Renan no 4.1); fechado em 26/09/2026 |
 | 5.6 | Resultado das análises | VALIDADO (automático) | `TableAnalysis` e `RowPipeline` no Core; fechado em 26/09/2026 |
-| 5.7 | Desenho | PENDENTE | |
-| 5.8 | Uma fileira no CAD | PENDENTE | |
-| 5.9 | Área inteira | PENDENTE | |
+| 5.7 | Desenho | AGUARDANDO VALIDAÇÃO | `LayoutDrawer`: pilares (bloco escalado), módulos (bloco por modelo) + face separada, contorno da mesa, alturas em camada desligada, aviso de marcada; uma transação |
+| 5.8 | Uma fileira no CAD | AGUARDANDO VALIDAÇÃO | `UFV_FILEIRA`; nível 2 com 6 mesas, 42 pilares e 168 faces sobre o Itatiba, cotas lidas em LISP |
+| 5.9 | Área inteira | AGUARDANDO VALIDAÇÃO | `UFV_USINA`; nível 2 com 102 mesas em 17 fileiras sobre o Itatiba: motor 0,6 s, desenho 0,2 s |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
 ## POR ONDE CONTINUAR
 
-Atualizado em 26/09/2026, depois de fechar o 4.3.
+Atualizado em 26/09/2026, depois de fechar a etapa 5 inteira (5.7, 5.8 e
+5.9 aguardando validação na tela).
 
 **Regra nova, 25/09/2026: o Renan só valida o que se vê no Civil 3D.**
 Arquivos, acervo, manifesto e valores padrão são do Claude Code. Pedido a
 ele só em forma de roteiro de tela: comando, o que clicar, o que deve aparecer.
+
+**Regra nova, 26/09/2026: seguir sem perguntar.** O Renan pediu "faça o
+máximo que puder sem me pedir nada". Passo com tela fica `AGUARDANDO
+VALIDAÇÃO` e o trabalho continua; passo só de modelo fecha sozinho; decisão
+de regra de negócio tomada sozinha fica registrada aqui como "o Renan
+confirma na tela", nunca vira pergunta bloqueante.
 
 Esta seção existe porque o resto do arquivo é diário de decisões, e diário não
 responde "e agora?". Ela fica no topo de propósito. **Quem retomar o trabalho
@@ -60,71 +67,112 @@ lê isto primeiro, e depois `CLAUDE.md`.**
 ### Estado
 
 Etapas 0, 1, 2 e 3 **validadas pelo Renan**. Etapa 4: 4.1 e 4.3 fechados
-automaticamente (só modelo), 4.2 validado pelo Renan em 26/09/2026. Placar na
-última execução:
+automaticamente (só modelo), 4.2 validado pelo Renan em 26/09/2026, 4.4
+aguardando validação na tela. Etapa 5: 5.1 a 5.6 fechados automaticamente
+(só modelo), 5.7, 5.8 e 5.9 aguardando validação na tela. A etapa 5 inteira
+foi feita em 26/09/2026, sem o Renan ver uma mesa na tela. Placar na última
+execução:
 
 ```
 Etapa 0   45/45    OK
 Etapa 1   126/126  OK
 Etapa 2   24/24    OK
 Etapa 3   335/335  OK
-Etapa 4   201/201  OK
-Nivel 2   8/8      OK
+Etapa 4   242/242  OK
+Etapa 5   250/250  OK
+Nivel 2   11/11    OK
 Acervo             OK
 ```
 
-### O próximo passo é o 4.4
+### O próximo passo é a etapa 6 (PVsyst), começando pelo 6.1
 
-**Modal**: tela única com a configuração do sistema (4.1) e as regras de
-análise (4.3), graus e centímetros ligados onde couber. Validação do Renan:
-configura um projeto real e confere que salvar e reabrir preserva tudo.
+Antes de começar, ler `plano/etapas/etapa-6-pvsyst.md`. O que a etapa 6
+recebe da 5: as faces superiores dos módulos são entidades `3DFACE` na
+camada `MARCHENG_UFV_FACE`, cada uma com `FaceIdentity` em XData (GUID
+próprio, GUID do módulo, GUID da mesa, coluna, fileira), cantos em ordem
+anti-horária vistos de cima (normal para cima, conferida no nível 2).
+`LayoutXData.LoadFace` lê a identidade de volta e ainda não tem uso nem
+teste: a etapa 6 é onde passa a ter.
 
-O que a tela precisa saber, já decidido:
+**Decisões da etapa 5 tomadas sem o Renan, que ele confirma na tela (5.8):**
 
-- **cores**: cada análise tem paleta de seleção; padrão vermelho abaixo, azul
-  acima (Renan, 25/09/2026). A borda tem uma cor só. Pilar e declividade não
-  têm mínimo (`AnalysisRules.HasMinimum`), então a cor "abaixo" some nelas;
-- **o limite de pilar da análise se chama `PaintPillarsLongerThan`** e nasce
-  vazio; não é teto, é cor;
-- **gravar e ler**: `RgbColor.ToHex`/`TryParseHex` e `LayerName.WhyInvalid`
-  já existem para o arquivo e para a validação na tela;
-- é onde o Renan vê os cinco padrões que são meus (pitch, enterro máximo,
-  degrau, espaçamento, tolerância) e troca o que estiver errado.
+- a fileira segue a DIREÇÃO da linha de alinhamento; o azimute da
+  configuração só escolhe para que lado a mesa sobe, e o comando avisa
+  quando a linha diverge mais de 5° dele;
+- o alinhamento na fileira é programação dinâmica, não iterativo: não há
+  campo "máximo de iterações" (o plano de execução pedia; o de requisitos já
+  registrava a DP como alternativa exata);
+- "degrau mínimo" = ou não há degrau, ou ele tem pelo menos o mínimo;
+- espaçamento entre mesas de 0,50 m e quebra de fileira em 5 m (exemplo do
+  plano de requisitos) são padrões meus, editáveis na tela do 4.4;
+- a mesa que não cabe fica marcada com um texto vermelho no meio (camada
+  `MARCHENG_UFV_MARCADA`), podendo ficar inclinada como escada para as
+  vizinhas caberem;
+- a mesa não virou bloco (é o contorno + blocos de pilar e módulo em volta,
+  todos com o GUID da mesa); o bloco por mesa fica para a etapa 7;
+- pilar com problema (sem altura livre, fora de escala, fora do terreno) é
+  desenhado com 1 m, vermelho, com o motivo no texto de altura;
+- o comprimento do pilar é o ideal (P3 + enterro mínimo), sem arredondamento
+  comercial, como ele decidiu no 4.1.
 
 ### O que está travado no Renan
 
-1. **Instalar o bundle novo e testar o 4.4**: o Civil 3D estava aberto quando
-   tentei instalar (o instalador recusa, código 5). Fechar o Civil 3D e rodar
-   `.\tools\instalar.ps1` (o bundle já está montado em `artefatos\UFV.bundle`,
-   em Release). Depois: botão "Configuração" na aba UFV, ou `UFV_CONFIG`;
-   trocar alguns números, "Salvar no desenho", salvar o DWG, fechar, reabrir,
-   abrir a tela de novo e conferir que está tudo como deixou. `UFV_CONFIG_STATUS`
-   mostra o gravado na linha de comando.
-2. ~~Testar o 4.2 no CAD~~ Feito em 26/09/2026: "deu certo o alinhamento".
-2. ~~`terreno-esperado.psd1`~~ Resolvido em 25/09/2026: o Renan decidiu que
-   só valida o que se vê no CAD, e o arquivo foi congelado em
-   `tests/acervo/etapa-1/` pelo Claude Code, com o Porto Feliz marcado como
-   não conferido (trava regressão, não prova acerto).
-3. **Conferir a mesa do 3.7 contra um projeto de fabricante.** Ele aprovou a
+1. **Instalar o bundle novo**: fechar o Civil 3D e rodar
+   `.\tools\instalar.ps1` (o bundle está montado em `artefatos\UFV.bundle`,
+   em Release, com tudo até o 5.9). Com o Civil 3D aberto o instalador recusa
+   (código 5); é só fechar e rodar de novo.
+2. **Testar o 4.4**: botão "Configuração" na aba UFV, ou `UFV_CONFIG`;
+   trocar alguns números, "Salvar no desenho", salvar o DWG, fechar,
+   reabrir, abrir a tela de novo e conferir que está tudo como deixou.
+   `UFV_CONFIG_STATUS` mostra o gravado na linha de comando. Ali estão os
+   padrões que são meus (pitch 6 m, enterro máximo 2 m, degrau 0 a 50 cm,
+   espaçamento entre mesas 50 cm, quebra de fileira 5 m, tolerância de lombo
+   0): trocar o que estiver errado.
+3. **Testar o 5.8 (uma fileira)**: num desenho com terreno processado
+   (botão Terreno), traçar uma área (botão Área) e um alinhamento (botão
+   Alinhamento, clicando o lado das mesas). Salvar uma mesa pela janela Mesa
+   se quiser outra que não a de exemplo. Botão "Fileira" (ou `UFV_FILEIRA`):
+   usa a área e o alinhamento se houver um de cada, pergunta o número da
+   fileira (1 é a que encosta na linha), processa e desenha. Orbitar em 3D:
+   os pilares (blocos) do terreno até a mesa, os módulos (blocos) e as faces
+   em cima, o contorno da mesa. Botão "Alturas" (ou `UFV_ALTURAS`) liga os
+   textos com P1, P3 e P2 de cada pilar. **Conferir à mão três ou quatro
+   pilares** (é a validação do plano): P3 = altura livre da ponta baixa +
+   (sobra + T2) × sen(tilt); P1 = P3 + P2. A linha de comando diz mesa a mesa
+   o que estourou e por quê.
+4. **Testar o 5.9 (área inteira)**: botão "Usina" (ou `UFV_USINA`) na mesma
+   área. Comparar com o PVcase: fileiras, mesas, módulos, kWp, pilares e a
+   faixa de comprimentos de pilar (média também). O tempo do motor e do
+   desenho aparecem no fim. Rodar duas vezes desenha por cima (o comando
+   avisa); apagar antes de repetir.
+5. **Conferir a mesa do 3.7 contra um projeto de fabricante.** Ele aprovou a
    etapa 3 sem relatar essa conferência, que é o que o plano pede como
    validação do 3.7 — é o único jeito de saber se o motor acerta o número, e
    não só a forma.
+6. ~~Testar o 4.2 no CAD~~ Feito em 26/09/2026: "deu certo o alinhamento".
+7. ~~`terreno-esperado.psd1`~~ Resolvido em 25/09/2026 (congelado pelo Claude
+   Code, Porto Feliz marcado como não conferido).
 
 ### Perguntas abertas, nenhuma delas bloqueante
 
-- **Cinco valores da configuração são meus, não dele** (pitch 6,0 m; enterro
-  máximo 2,00 m; degrau 0 a 0,50 m; espaçamento que quebra fileira 0,50 m; e a
-  tolerância de invasão, que ele já respondeu que é contagem e está em zero).
-  Ele não vai conferir tabela de número. A hora de ele ver isso é o 4.4, na
-  tela de configuração: se um padrão estiver errado, ele troca lá;
-- **relação entre degrau, espaçamento e pitch**: hoje os três são validados
-  isoladamente e nada confere um contra o outro. Se existe relação real, ela
-  não está escrita nem como comentário.
+- **a etapa 5 inteira foi feita sem o Renan ver uma mesa na tela.** As
+  decisões de regra de negócio que tomei sozinho estão listadas acima. Se
+  alguma estiver errada, é no 5.8 que aparece, e o conserto é no Core, com
+  teste;
+- **relação entre degrau, espaçamento e pitch**: a única conferência cruzada
+  é quebra de fileira ≥ espaçamento entre mesas (5.1). Se existe relação real
+  entre degrau e pitch, ela não está escrita;
+- **o acervo do 5.8 e do 5.9**: o plano diz que o resultado, conferido pelo
+  Renan, vira referência congelada. Fica para depois da conferência dele.
 
 ### Dívidas técnicas que valem lembrar
 
 - `AlignmentStore`, `AlignmentXData` e `AlignmentScan` não têm teste de nível 1
-  (são do plugin) nem de nível 2 (não há `.scr` de alinhamento);
+  (são do plugin); o nível 2 os exercita desde o 4.2 (`ufv-alinhamento.scr`);
+- `GarantirLayer` existe em três lugares (área, alinhamento, `LayoutLayers`) e
+  `PorHandle` duplica o de `TerrenoEnvelhecido`: consolidar;
+- rodar `UFV_FILEIRA` ou `UFV_USINA` duas vezes desenha por cima (o comando
+  avisa); apagar e substituir é assunto da etapa 7;
 - o teste de nível 2 carrega a DLL de **Debug**, onde o inlining está
   desligado: ele guarda o sintoma da janela sem interface, não a regra do
   `[MethodImpl(NoInlining)]`;
@@ -2099,4 +2147,188 @@ das estações locais (invertida quando o comprimento corre contra a
 fileira), devolvendo na ordem da fileira. Teste de ponta a ponta com rampa
 longitudinal: nenhuma marcada, e as juntas em planta fecham dentro de um
 degrau.
+
+## 5.7 e 5.8: o desenho e a primeira fileira no CAD
+
+Feitos juntos, porque um sem o outro não se vê: `LayoutDrawer` desenha uma
+fileira processada e `UFV_FILEIRA` é o comando que a processa e chama o
+desenho. Botão "Fileira" na aba UFV, seção Processar, com o botão pequeno
+"Alturas" ao lado.
+
+### O que é desenhado, e como
+
+Tudo numa transação só, na ordem do plano: pilares, depois módulos, depois
+o resto.
+
+- **pilar**: um bloco só, `MARCHENG_UFV_PILAR`, caixa unitária com o topo na
+  origem; cada instância é escalada para a largura e a profundidade da
+  seção e o comprimento do pilar, inserida no topo (onde encosta na mesa) e
+  girada com a fileira. O comprimento varia pilar a pilar, e um bloco por
+  comprimento seria um bloco por pilar. Pilar com problema (regra sagrada 1,
+  fora de escala, fora do terreno) é desenhado com 1 m, vermelho, na camada
+  de marcadas, com o motivo no texto de altura;
+- **módulo**: um bloco por modelo (`MARCHENG_UFV_MODULO_<modelo>`), caixa de
+  largura × altura × espessura com a face superior em z = 0 e o canto da
+  ponta baixa esquerda na origem, como a geometria local; cada instância
+  leva a matriz da mesa. **A face superior é entidade separada** (`3DFACE`),
+  na camada `MARCHENG_UFV_FACE`, com a mesma identidade do módulo — é a
+  decisão do Renan sobre o PVsyst: a camada de face tem só faces, e a face
+  nunca é pintada por análise;
+- **mesa**: o contorno do plano dos módulos (`Polyline3d` fechada) na camada
+  de mesa, carregando a identidade da mesa (GUID, letreiro, cotas,
+  inclinação, marca e motivo). **Divergência declarada:** a mesa não virou
+  bloco neste passo. O Renan pediu "mesa é bloco próprio, contendo a
+  estrutura e os módulos"; o bloco por mesa exige decidir o que acontece ao
+  copiar, mover e explodir, que é a etapa 7, e foi deixado para lá. Hoje a
+  mesa é o contorno mais os blocos de módulo e pilar em volta, todos com o
+  GUID da mesa no XData;
+- **cores e camadas das análises**: peça pintada vai para a camada da
+  análise com a cor do veredito (5.6); o resto fica nas camadas fixas
+  (`_MESA`, `_PILAR`, `_MODULO`, `_FACE`), cor por camada. As cinco camadas
+  de análise são criadas mesmo quando nada as pinta, para o usuário ligar e
+  desligar;
+- **"Mostrar alturas"**: um texto por pilar (P1, e entre parênteses P3 + P2,
+  a nomenclatura do desenho do Renan) na camada `MARCHENG_UFV_ALTURAS`, que
+  **nasce desligada**. `UFV_ALTURAS` (botão "Alturas") liga e desliga;
+- **mesa marcada**: um texto no meio dela, na camada `MARCHENG_UFV_MARCADA`,
+  com o letreiro e o motivo. Era a decisão pendente do 5.6: sem cor de
+  análise (no plano a "cor própria" é da borda), o aviso é o que se vê;
+- **identidade** (regra sagrada 3): GUID próprio por mesa, pilar e módulo,
+  em XData, com os números que o plano de requisitos pede na mesa (cotas,
+  tilt) e no pilar (estação, P1, P2, P3, problema). A face carrega o GUID do
+  módulo dela, com outro tipo.
+
+### O comando
+
+`UFV_FILEIRA` pede o mínimo: a área (se houver uma só, nem pergunta), o
+alinhamento (idem) e o número da fileira (1 é a que encosta na linha). A
+mesa é o primeiro perfil salvo, ou a de exemplo; a configuração e as regras
+vêm do desenho (4.4) ou do padrão. Tudo isso é dito na linha de comando,
+com a distribuição inteira (quantas fileiras, quantas mesas, quantas na
+borda), o relatório por mesa e a faixa de cotas de topo dos pilares. Avisa
+quando a linha diverge mais de 5° do azimute configurado.
+
+`UFV_FILEIRA_AUTO` (primeira área, primeiro alinhamento, fileira 1, sem
+perguntar) existe para o nível 2.
+
+### O que o nível 2 pegou antes do Renan
+
+A polilinha de alinhamento gravada no desenho é a **drapejada**, com um
+vértice em cada aresta do terreno: 43 vértices num traçado de dois pontos.
+O distribuidor tratou cada trechinho como um trecho com família própria de
+fileiras: **85 fileiras, 85 mesas, 595 sobreposições**, uma mesa desenhada.
+Os vértices do drapeamento estão exatamente na reta do traçado em planta,
+e `PlanPaths.SimplifyCollinear` (Geo, 9 testes) os tira antes da
+distribuição. Vale para a área também (180 vértices → 4, com a volta do
+polígono fechado tratada).
+
+Com isso, no terreno de Itatiba, área de 100 m em volta do centro,
+alinhamento na borda sul e mesas ao norte:
+
+```
+FILEIRA F1: 6 mesa(s) em 1 trecho(s): 1 marcada(s), maior degrau 0,41 m
+  distribuição: 17 fileira(s), 102 mesa(s), 22 na borda
+  desenhado: 6 mesa(s), 42 pilar(es), 168 módulo(s) com face, 9 pintada(s)
+  topo dos pilares: 719,37 a 732,58 m; tempo: 0,1 s
+  F1.1 MARCADA (nenhuma cota da ponta baixa respeita a faixa), 5 pontas fora
+  F1.6 na borda da área; pilares de 1,88 a 2,49 m
+```
+
+O LISP contou 42 blocos de pilar, 168 blocos de módulo, 168 faces e 42
+textos de altura, com o topo dos pilares entre 719,4 e 732,6 m — dentro da
+faixa do terreno. A prova fina da regra sagrada 5 é outra: em cada pilar,
+topo − terreno = P3, lidos do XData e da geometria, pilar a pilar (o Z =
+9999 no alinhamento é prova do 4.2, que o drapeia antes de gravar; fica
+como segunda linha de defesa).
+
+A F1.1 marcada é o terreno de verdade: a mesa cai num trecho em que
+nenhuma cota da ponta baixa respeita a faixa com a inclinação máxima de
+10°. É o que o plano quer: encaixa o máximo, marca o resto.
+
+## 5.9: a área inteira
+
+`PlantPipeline.ProcessAll` no Core (todas as fileiras da distribuição, uma
+a uma, com o tempo medido e os totais: mesas, módulos, potência como soma
+dos módulos — regra sagrada 3 —, pilares, marcadas, pilares com problema)
+e `UFV_USINA` no plugin, botão "Usina" na seção Processar. O comando mede
+o motor e o desenho em separado e diz os dois.
+
+As fileiras são independentes (o plano diz que as pontas baixas de
+fileiras vizinhas não precisam casar), então a área inteira é o 5.8
+repetido. Uma exceção numa fileira derruba o processamento inteiro de
+propósito: o que o terreno tem de errado vira marca; exceção é defeito
+nosso, e esconder defeito atrás de "marcada" seria mentir.
+
+### Os números no Core Console (terreno de Itatiba, área de 100 × 100 m)
+
+```
+USINA 17 fileira(s), 102 mesa(s), 2856 módulo(s), 2056,3 kWp, 714 pilar(es);
+      14 mesa(s) marcada(s), 23 pilar(es) com problema, 22 na borda; 0,6 s
+  desenhado: 102 mesa(s), 714 pilar(es), 2856 módulo(s) com face, 140 pintada(s)
+  comprimento de pilar: de 1,41 a 3,28 m, média 2,20 m
+  tempo: motor 0,6 s, desenho 0,2 s
+```
+
+O LISP contou 714 blocos de pilar, 2856 faces e 102 contornos, com o topo
+dos pilares entre 714,3 e 732,6 m, dentro da faixa do terreno. Do lado do
+motor, o teste de nível 1 processa 1300 mesas (36 mil módulos) sobre
+relevo ondulado em poucos segundos.
+
+Os 23 pilares com problema estão nas fileiras 11 a 17, na ponta norte da
+área, onde um vértice da área caiu fora do terreno: são pés fora do terreno,
+marcados como tal, e não defeito de conta. As 14 mesas marcadas são o
+terreno real com 10° de limite: encaixou o máximo, marcou o resto.
+
+**O que fica para o Renan (validação do 5.9 pelo plano):** rodar numa usina
+que ele conhece do PVcase e comparar contagens e alturas. O relatório dá
+mesas, módulos, kWp, pilares e a faixa de comprimentos; os textos de altura
+(`UFV_ALTURAS`) dão P1, P2 e P3 pilar a pilar.
+
+**Acervo:** o plano diz que o resultado da 5.8 e da 5.9, conferido pelo
+Renan, vira referência congelada. Fica para depois da conferência dele.
+
+### O que a revisão do 5.7/5.8 apontou, e o que foi feito
+
+Um bloqueante, três importantes, todos corrigidos.
+
+- **Bloqueante: a cor de análise não aparecia nos blocos.** A caixa dentro
+  da definição do bloco estava na camada 0 com cor "por camada", e a regra
+  do AutoCAD é que entidade aninhada por camada na camada 0 toma a cor da
+  CAMADA da instância, não a cor posta na instância. Módulo com ponta baixa
+  fora e pilar com problema sairiam brancos; o nível 2 dizia "9 pintadas" e
+  o Renan veria nada. Agora a caixa é "por bloco" (índice 0), e o LISP lê o
+  62 da caixa da definição;
+- **o nível 2 dependia do estado da máquina**: `UFV_FILEIRA_AUTO` usava o
+  primeiro perfil salvo, e o teste fixava 7 pilares e 28 módulos. Com um
+  perfil salvo do 3.6, quebrava ou passava por sorte. Os comandos
+  automáticos usam sempre a mesa de exemplo; os do produto continuam com o
+  perfil salvo;
+- **a face tinha o mesmo GUID do módulo**, contra o "identidade própria" que
+  o próprio diário registrava, e um verificador literal da regra sagrada 3
+  ("nenhum GUID repetido") reprovaria. Agora `FaceIdentity` tem GUID próprio
+  e o GUID do módulo como campo;
+- **o nível 2 não provava a matriz nem a orientação das faces**: só as faces
+  (que usam a `Transform` do Geo) eram contadas; o bloco do módulo (que usa
+  a `Matrix3d` do AutoCAD) podia estar transposto e o teste passava. Agora o
+  LISP leva o ponto de inserção de cada bloco de módulo ao WCS (`trans`) e
+  exige que coincida com um vértice de face a 1 mm; confere que toda face
+  aponta para cima; a seção e o comprimento de cada pilar; XData em pilar,
+  módulo, face e contorno; **topo − terreno = P3 em cada pilar** (o
+  `GroundZ` entrou no XData do pilar para isso); a camada de alturas
+  desligada; um aviso por marcada.
+
+Menores, corrigidos: `PlanPaths` comparava tolerância em metro com um
+parâmetro adimensional (um ponto um metro além da ponta de um trecho de um
+quilômetro contava como em cima); a área é gravada fechada sem repetir o
+primeiro vértice e o último vértice do drapeamento ficava (parâmetro
+`closed`, com a volta tratada; 180 → 4 de verdade); o prompt do número da
+fileira mostraria "<1>: <1>"; `UpgradeOpen` sem guarda; a inclinação
+gravada na identidade da mesa vinha recomposta da matriz quando o chamador
+a tinha na mão; o comando avisa quando o desenho já tem mesas nossas (ele
+desenha por cima; limpar é assunto da etapa 7).
+
+Anotado, não feito: `GarantirLayer` existe em três lugares (área,
+alinhamento, layout) e `PorHandle` duplica o do terreno envelhecido — vale
+consolidar; `LayoutXData.Load*` não tem uso nem teste ainda (é o par
+simétrico, para as etapas 6 e 7).
 
