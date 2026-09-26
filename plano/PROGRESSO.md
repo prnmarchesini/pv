@@ -30,13 +30,14 @@ Só o Renan marca VALIDADO.
 | 3.6 | Perfil nomeado | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
 | 3.7 | Modal | VALIDADO | Aprovado pelo Renan em 23/09/2026 |
 | 4.1 | Modelo de configuração | VALIDADO (automático) | Sem tela; fechado em 25/09/2026 pela regra "só valido no CAD". Cinco padrões continuam meus |
-| 4.2 | Linha de alinhamento | AGUARDANDO VALIDAÇÃO | REPROVADO 2x em 25/09; agora é polilinha de vários pontos, drapejada, com rastro; teste de nível 2 lê os vértices |
+| 4.2 | Linha de alinhamento | VALIDADO | Renan aprovou em 26/09/2026 ("deu certo o alinhamento"), depois de 2 reprovações em 25/09 |
+| 4.3 | Regras de análise | VALIDADO (automático) | Modelo no Core, sem tela; fechado em 26/09/2026 pela regra "só valido no CAD". A tela é o 4.4, a pintura é a etapa 5 |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
 ## POR ONDE CONTINUAR
 
-Atualizado em 25/09/2026, depois de congelar o terreno-esperado no acervo.
+Atualizado em 26/09/2026, depois de fechar o 4.3.
 
 **Regra nova, 25/09/2026: o Renan só valida o que se vê no Civil 3D.**
 Arquivos, acervo, manifesto e valores padrão são do Claude Code. Pedido a
@@ -48,37 +49,41 @@ lê isto primeiro, e depois `CLAUDE.md`.**
 
 ### Estado
 
-Etapas 0, 1, 2 e 3 **validadas pelo Renan**. Etapa 4 com 4.1 e 4.2 prontos,
-aguardando validação. Placar na última execução:
+Etapas 0, 1, 2 e 3 **validadas pelo Renan**. Etapa 4: 4.1 e 4.3 fechados
+automaticamente (só modelo), 4.2 validado pelo Renan em 26/09/2026. Placar na
+última execução:
 
 ```
 Etapa 0   45/45    OK
 Etapa 1   126/126  OK
 Etapa 2   24/24    OK
 Etapa 3   335/335  OK
-Etapa 4   111/111  OK
-Nivel 2   7/7      OK
+Etapa 4   201/201  OK
+Nivel 2   8/8      OK
 Acervo             OK
 ```
 
-### O próximo passo é o 4.3
+### O próximo passo é o 4.4
 
-**Regras de análise**: cada análise (ponta baixa, altura de pilar, embutimento,
-declividade longitudinal, mesa na borda) com limites e cores configuráveis,
-cada uma em camada própria.
+**Modal**: tela única com a configuração do sistema (4.1) e as regras de
+análise (4.3), graus e centímetros ligados onde couber. Validação do Renan:
+configura um projeto real e confere que salvar e reabrir preserva tudo.
 
-**Cores, respondidas pelo Renan em 25/09/2026:** cada análise tem paleta de
-seleção (o usuário escolhe a cor), e o padrão é **vermelho para valor abaixo
-do limite** e **azul para valor acima**. Não perguntar de novo.
+O que a tela precisa saber, já decidido:
 
-O 4.4 (a tela única de configuração) vem depois e é o que torna o 4.1
-palpável: hoje a configuração existe no motor e não tem onde ser editada.
+- **cores**: cada análise tem paleta de seleção; padrão vermelho abaixo, azul
+  acima (Renan, 25/09/2026). A borda tem uma cor só. Pilar e declividade não
+  têm mínimo (`AnalysisRules.HasMinimum`), então a cor "abaixo" some nelas;
+- **o limite de pilar da análise se chama `PaintPillarsLongerThan`** e nasce
+  vazio; não é teto, é cor;
+- **gravar e ler**: `RgbColor.ToHex`/`TryParseHex` e `LayerName.WhyInvalid`
+  já existem para o arquivo e para a validação na tela;
+- é onde o Renan vê os cinco padrões que são meus (pitch, enterro máximo,
+  degrau, espaçamento, tolerância) e troca o que estiver errado.
 
 ### O que está travado no Renan
 
-1. **Testar o 4.2 no CAD**: `UFV_ALINHAMENTO` — traçar a linha, clicar o lado,
-   conferir em `UFV_ALINHAMENTOS`; depois copiar a linha para outro desenho e
-   rodar `UFV_REINDEXAR`. O bundle já está instalado.
+1. ~~Testar o 4.2 no CAD~~ Feito em 26/09/2026: "deu certo o alinhamento".
 2. ~~`terreno-esperado.psd1`~~ Resolvido em 25/09/2026: o Renan decidiu que
    só valida o que se vê no CAD, e o arquivo foi congelado em
    `tests/acervo/etapa-1/` pelo Claude Code, com o Porto Feliz marcado como
@@ -1216,3 +1221,124 @@ Renan teve que me pedir o óbvio.
 - `SignedDistance` devolve **negativo à esquerda**, que é o inverso da
   convenção usual da regra da mão direita. Está documentado e testado, mas quem
   usar isso na etapa 5 para ordenar mesas vai se enganar uma vez.
+
+## 4.3: as regras de análise
+
+`AnalysisRules` no Core: o que se pinta, de que cor, em que camada. É modelo
+puro, sem tela (a tela é o 4.4) e sem pintura (a pintura é a etapa 5, quando
+houver mesa para pintar). Pela regra de 25/09/2026, fecha com os testes
+automáticos, como o 4.1.
+
+**Análise não trava nada.** A regra sagrada 4 continua mandando: a ponta baixa
+manda, o pilar estoura se tiver que estourar. Isto só diz de que cor o estouro
+aparece — o plano de requisitos é explícito nisso ("isso não trava o sistema:
+é só análise").
+
+### Os limites vêm da configuração, não de uma segunda cópia
+
+O passo diz "cada análise com limites e cores configuráveis". Três das cinco
+análises já têm faixa em `SystemConfiguration`: ponta baixa, enterro e
+declividade. Repetir esses números nas regras de análise seria criar um
+segundo dono — o defeito que a revisão do 3.5 e a do 4.1 mandaram tirar. Então
+a regra de análise guarda **só ligado/desligado, camada e as duas cores**; os
+limites são lidos da configuração na hora de avaliar. Mudar a faixa da ponta
+baixa na configuração muda a análise junto, e há teste disso.
+
+O único limite que é só da análise é o de **comprimento de pilar**
+(`PaintPillarsLongerThan`), porque a configuração não tem teto de pilar por decisão
+do Renan ("vc deve calcular o pilar ideal apenas"). O exemplo do plano é
+"pintar tudo acima de 2,50 m, porque compra pilar de 2,20, 2,50 e 3,00 m".
+Não contradiz a decisão dele: não há teto, só cor.
+
+### Os padrões que são meus
+
+| campo | valor | de quem |
+|---|---|---|
+| cor abaixo do limite | vermelho | Renan (25/09/2026) |
+| cor acima do limite | azul | Renan (25/09/2026) |
+| **cor da mesa na borda** | **magenta** | **meu** (precisa se distinguir das outras duas) |
+| **pintar pilar mais comprido que** (`PaintPillarsLongerThan`) | **desligado (null)** | **meu**: o número de onde a cor começa é dele, e ele põe na tela do 4.4 |
+| **todas as análises ligadas** | **sim** | **meu** |
+| **camadas** | `MARCHENG_UFV_ANALISE_PONTA_BAIXA`, `_PILAR`, `_ENTERRO`, `_DECLIVIDADE`, `_BORDA` | **meu** |
+
+### Decisões miúdas que valem registrar
+
+- **a mesa na borda não é análise de faixa**: não tem mínimo nem máximo, só
+  "caiu fora ou não", e uma cor só (`EdgeRule`). Forçá-la no mesmo molde das
+  outras daria uma cor "abaixo" que nunca seria usada;
+- **a declividade vale pelo módulo**: o sentido da fileira é arbitrário, e a
+  mesa que desce 12° para o leste é a que sobe 12° para o oeste;
+- **valor no limite é dentro**, com a tolerância geométrica de 1e-6: 0,30 m
+  calculado por um seno sai 0,2999999, e isso não é "abaixo";
+- **análise desligada devolve `Off`, não `Inside`**: quem lê "dentro" numa
+  análise desligada acha que conferiu. Sem limite (declividade sem limite na
+  configuração, pilar sem `MaxPillarLength`) também é `Off`;
+- **NaN e infinito são recusados** com exceção, como no resto do Core: "não
+  sei medir" não vira "está bom";
+- **camada repetida entre duas análises é recusada**, sem distinguir caixa,
+  porque o AutoCAD também não distingue; e o nome de camada é conferido no
+  Core (`LayerName`) contra a regra do AutoCAD, para a tela do 4.4 recusar na
+  hora e não dentro de uma transação, no meio da pintura;
+- **cor é RGB, não índice ACI** (`RgbColor`): o índice muda de aparência com
+  o fundo e a tabela do desenho, e "vermelho" precisa ser o mesmo vermelho em
+  qualquer máquina. O plugin traduz com `Color.FromRgb` quando pintar.
+
+### O que fica para a etapa 5
+
+Quem mede é a etapa 5: a altura livre da ponta baixa **da primeira fileira**
+("vale só para a primeira fileira de módulos, a que fica junto ao solo"), o
+comprimento e o enterro de cada pilar, a declividade por mesa, e se a mesa cai
+fora da área. `Evaluate` recebe o número pronto e devolve o veredito; aqui não
+há geometria.
+
+### O que a revisão do 4.3 apontou, e o que foi feito
+
+Nenhum bloqueante. Três importantes, todos corrigidos:
+
+- **um comentário meu afirmava registro que não existia** (terceira vez em
+  três passos, e exatamente a lição escrita mais acima). O campo do limite de
+  pilar dizia "registrado em PROGRESSO.md", e o diário ainda não tinha a
+  seção. Pior: o campo se chamava `MaxPillarLength`, o mesmo nome que o 4.1
+  apagou da configuração por palavra do Renan. Renomeado para
+  `PaintPillarsLongerThan`, que diz "cor, não teto", e o teste duplicado que
+  eu tinha copiado do 4.1 virou um que confere que **nenhum campo de dado
+  das regras tem o nome de um campo da configuração**;
+- **regra ausente (null) derrubava `WhyInvalid` com exceção de referência
+  nula**, sem nomear campo. Importa porque o 4.4 vai ler isto de arquivo, e
+  campo faltando vira null. Agora é motivo nomeado ("a regra da análise de
+  enterro está ausente"), com teste para as cinco;
+- **a tolerância de 1e-6 só era testada do lado "dentro"**: uma tolerância
+  de um centímetro passava a suíte. Teste novo com dez micrômetros além do
+  limite, dos dois lados e na declividade. Mutação conferida: cai.
+
+Menores, também corrigidos: `TryParseHex` aceitava "#FF 000" como vermelho
+(`NumberStyles.HexNumber` tolera espaço em cada par; agora só o
+especificador); `AnalysisVerdict.Paints` estava sem uso e sem teste, removido;
+a cor "abaixo" de pilar e declividade nunca é usada, agora documentado e
+exposto em `HasMinimum` para a tela do 4.4 esconder o campo; o comentário da
+tolerância chamava de "geométrica em metro" o que também vale em radiano; um
+comentário de `RgbColor` descrevia tradução no plugin que ainda não existe;
+`LayerName` afirmava comportamento do AutoCAD (aparar espaço) sem teste de
+nível 2 possível, agora marcado como "a confirmar" com a instrução de o
+plugin também validar por `SymbolUtilityServices.ValidateSymbolName` quando
+criar a camada; e `MaiorNome` público virou `MaxLength`, código em inglês.
+Testes acrescentados para ordem de `Layers`, motivo nomeando a análise,
+`Describe` com limite ("2,5 m"), borda desligada com mesa dentro, e enum fora
+da faixa.
+
+Placar final do passo: **82 testes** em `AnalysisRulesTests`, etapa 4 com
+201/201.
+
+### Pendências do 4.3
+
+- na etapa 5, quem criar as camadas passa o nome também por
+  `SymbolUtilityServices.ValidateSymbolName`, porque a regra de nome do Core
+  é a da documentação e não foi conferida no AutoCAD;
+- `MaiorMedida = 50` agora tem **quatro** donos no Core (`PillarSizing`,
+  `PillarTable`, `SystemConfiguration`, `AnalysisRules`). A pendência do 4.1
+  dizia "centralizar antes de virar quatro". Virou;
+- a ponta baixa é analisada **por módulo da primeira fileira**, e a regra
+  sagrada 4 conta módulos por mesa com tolerância. A ligação entre o veredito
+  por módulo e a marcação da mesa (`BumpToleranceFor`) é da etapa 5, e o
+  comentário de `AnalysisKind.LowEdge` não diz isso — fica aqui.
+
