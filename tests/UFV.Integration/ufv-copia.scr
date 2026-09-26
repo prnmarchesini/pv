@@ -1,0 +1,106 @@
+; Teste de nivel 2 do 7.5: a copia. Processa uma fileira, copia a mesa A
+; inteira (todas as entidades com o GUID dela, pelo XData) 300 m para o
+; norte com o COPY do proprio AutoCAD, e le do desenho:
+;   - so um contorno continua com o GUID de A, limpo;
+;   - existe um contorno novo, sujo com o motivo "copiada", e as pecas dele
+;     (7 pilares, 28 modulos, 28 faces) apontam para o GUID novo;
+;   - nenhum GUID de peca se repete no desenho inteiro (regra sagrada 3);
+;   - U desfaz a copia sem registrar a original como removida; REDO a traz
+;     de volta ainda unica.
+; Depois renomeia o bloco do pilar com sufixo de outro desenho, desenha de
+; novo (o bloco padrao renasce) e manda UFV_RENOMEAR trocar as referencias.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_TERRENO_AUTO")
+(setq ufv:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "UFV_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area da copia")
+(command "UFV_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento da copia")
+(command "UFV_FILEIRA_AUTO")
+(defun ufv:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("MARCHENG_UFV")))))))
+(defun ufv:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun ufv:tipo (xd) (cdr (nth 0 xd)))
+(defun ufv:mesa (xd) (cond ((= (ufv:tipo xd) "Mesa") (ufv:campo xd 0)) ((= (ufv:tipo xd) "Face") (ufv:campo xd 2)) (T (ufv:campo xd 1))))
+; A mesa A: o primeiro contorno; todas as entidades dela.
+(setq ufv:tudo (ssget "_X" (list (cons -3 (list (list "MARCHENG_UFV"))))))
+(setq ufv:n (if ufv:tudo (sslength ufv:tudo) 0))
+(setq ufv:ga nil ufv:i 0)
+(while (and (< ufv:i ufv:n) (not ufv:ga))
+  (setq ufv:xd (ufv:xdata (ssname ufv:tudo ufv:i)))
+  (if (= (ufv:tipo ufv:xd) "Mesa") (setq ufv:ga (ufv:campo ufv:xd 0)))
+  (setq ufv:i (1+ ufv:i)))
+(setq ufv:ssa (ssadd) ufv:i 0)
+(while (< ufv:i ufv:n)
+  (setq ufv:en (ssname ufv:tudo ufv:i))
+  (if (= (ufv:mesa (ufv:xdata ufv:en)) ufv:ga) (ssadd ufv:en ufv:ssa))
+  (setq ufv:i (1+ ufv:i)))
+(setq ufv:nssa (sslength ufv:ssa))
+(setq ufv:copymode (getvar "COPYMODE"))
+(setvar "COPYMODE" 1)
+(command "_.COPY" ufv:ssa "" "0,0,0" "0,300,0")
+(setvar "COPYMODE" ufv:copymode)
+(setvar "OSMODE" ufv:osmode)
+(command "UFV_ESTADO")
+; O que ficou.
+(setq ufv:tudo (ssget "_X" (list (cons -3 (list (list "MARCHENG_UFV"))))))
+(setq ufv:n (if ufv:tudo (sslength ufv:tudo) 0))
+(setq ufv:conta 0 ufv:sujaa "-" ufv:gb nil ufv:sujab "-" ufv:motivob "-" ufv:contb 0 ufv:pilb 0 ufv:modb 0 ufv:facb 0 ufv:ids nil ufv:repetidos 0 ufv:i 0)
+(while (< ufv:i ufv:n)
+  (setq ufv:en (ssname ufv:tudo ufv:i) ufv:xd (ufv:xdata ufv:en) ufv:t (ufv:tipo ufv:xd))
+  (setq ufv:id (ufv:campo ufv:xd 0))
+  (if (member ufv:id ufv:ids) (setq ufv:repetidos (1+ ufv:repetidos)) (setq ufv:ids (cons ufv:id ufv:ids)))
+  (if (= ufv:t "Mesa")
+    (if (= ufv:id ufv:ga)
+      (setq ufv:conta (1+ ufv:conta) ufv:sujaa (ufv:campo ufv:xd 7))
+      (if (= (ufv:campo ufv:xd 7) "1") (setq ufv:gb ufv:id ufv:sujab "1" ufv:motivob (ufv:campo ufv:xd 8)))))
+  (setq ufv:i (1+ ufv:i)))
+(setq ufv:i 0)
+(while (< ufv:i ufv:n)
+  (setq ufv:en (ssname ufv:tudo ufv:i) ufv:xd (ufv:xdata ufv:en) ufv:t (ufv:tipo ufv:xd))
+  (if (and ufv:gb (= (ufv:mesa ufv:xd) ufv:gb))
+    (cond ((= ufv:t "Mesa") (setq ufv:contb (1+ ufv:contb)))
+          ((= ufv:t "Pilar") (setq ufv:pilb (1+ ufv:pilb)))
+          ((= ufv:t "Modulo") (setq ufv:modb (1+ ufv:modb)))
+          ((= ufv:t "Face") (setq ufv:facb (1+ ufv:facb)))))
+  (setq ufv:i (1+ ufv:i)))
+(princ (strcat "\nUFV_COPIA copiadas=" (itoa ufv:nssa) " conta=" (itoa ufv:conta) " sujaa=" ufv:sujaa
+               " contb=" (itoa ufv:contb) " sujab=" ufv:sujab " motivob=" ufv:motivob
+               " pilb=" (itoa ufv:pilb) " modb=" (itoa ufv:modb) " facb=" (itoa ufv:facb) " repetidos=" (itoa ufv:repetidos)))
+; U: a copia some; a original continua unica e NAO e registrada como removida.
+(command "_.U")
+(command "UFV_ESTADO")
+(defun ufv:conta-por-guid (g / ss n i c xd)
+  (setq ss (ssget "_X" (list (cons -3 (list (list "MARCHENG_UFV"))))) n (if ss (sslength ss) 0) i 0 c 0)
+  (while (< i n)
+    (setq xd (ufv:xdata (ssname ss i)))
+    (if (and (= (ufv:tipo xd) "Mesa") (= (ufv:campo xd 0) g)) (setq c (1+ c)))
+    (setq i (1+ i)))
+  c)
+(defun ufv:repetidos-no-desenho ( / ss n i id ids r)
+  (setq ss (ssget "_X" (list (cons -3 (list (list "MARCHENG_UFV"))))) n (if ss (sslength ss) 0) i 0 ids nil r 0)
+  (while (< i n)
+    (setq id (ufv:campo (ufv:xdata (ssname ss i)) 0))
+    (if (member id ids) (setq r (1+ r)) (setq ids (cons id ids)))
+    (setq i (1+ i)))
+  r)
+(princ (strcat "\nUFV_COPIA_U conta=" (itoa (ufv:conta-por-guid ufv:ga)) " contb=" (itoa (if ufv:gb (ufv:conta-por-guid ufv:gb) 0)) " repetidos=" (itoa (ufv:repetidos-no-desenho))))
+; REDO: a copia volta, e continua sem GUID repetido.
+(command "_.REDO")
+(princ (strcat "\nUFV_COPIA_REDO conta=" (itoa (ufv:conta-por-guid ufv:ga)) " repetidos=" (itoa (ufv:repetidos-no-desenho))))
+; Renomear: o bloco do pilar ganha sufixo de outro desenho; a fileira
+; desenhada de novo recria o padrao; o comando troca as referencias e apaga
+; a definicao com sufixo.
+(command "_.-RENAME" "_B" "MARCHENG_UFV_PILAR" "MARCHENG_UFV_PILAR$0$")
+(setq ufv:antes (if (tblsearch "block" "MARCHENG_UFV_PILAR$0$") 1 0))
+(setvar "OSMODE" 0)
+(command "UFV_FILEIRA_AUTO")
+(setvar "OSMODE" ufv:osmode)
+(command "UFV_RENOMEAR")
+(setq ufv:depois (if (tblsearch "block" "MARCHENG_UFV_PILAR") 1 0))
+(setq ufv:sufixo (if (tblsearch "block" "MARCHENG_UFV_PILAR$0$") 1 0))
+(princ (strcat "\nUFV_RENOMEAR_LISP antes=" (itoa ufv:antes) " padrao=" (itoa ufv:depois) " sufixo=" (itoa ufv:sufixo)))
+(setvar "SECURELOAD" ufv:secureload)
+(princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

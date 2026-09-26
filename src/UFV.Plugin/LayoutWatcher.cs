@@ -100,6 +100,9 @@ internal static class LayoutWatcher
         private readonly Database _banco;
         private readonly PendingChanges _livro = new();
 
+        /// <summary>As entidades nossas acrescentadas durante o comando (cópias), para ganharem identidade no fim.</summary>
+        private readonly HashSet<ObjectId> _acrescentadas = [];
+
         /// <summary>Profundidade de comandos calados (nossos ou de desfazer) em andamento.</summary>
         private int _calados;
 
@@ -157,7 +160,7 @@ internal static class LayoutWatcher
 
         private void AoModificar(object? sender, ObjectEventArgs e) => Anotar(e.DBObject, ChangeKind.Modified);
 
-        private void AoAcrescentar(object? sender, ObjectEventArgs e) => Anotar(e.DBObject, ChangeKind.Appended);
+        private void AoAcrescentar(object? sender, ObjectEventArgs e) => Anotar(e.DBObject, ChangeKind.Appended, mesmoCalado: true);
 
         /// <summary>Apagar, ou desapagar (undo de um apagar) quando Erased é falso.</summary>
         private void AoApagar(object? sender, ObjectErasedEventArgs e) =>
@@ -176,6 +179,21 @@ internal static class LayoutWatcher
 
             try
             {
+                // Entidade acrescentada: guardada SEMPRE, porque a cópia nasce
+                // sem XData e só o ganha em seguida (num "modificado" que
+                // chega ainda com o GUID da original). No fim do comando, as
+                // que tiverem XData nosso ganham identidade nova (7.5); a
+                // mesa nova é que fica suja.
+                if (tipo == ChangeKind.Appended)
+                {
+                    _acrescentadas.Add(entidade.ObjectId);
+                    return;
+                }
+
+                // Modificação numa peça que nasceu neste comando é a cópia
+                // ganhando o XData: não é sujeira da original.
+                if (_acrescentadas.Contains(entidade.ObjectId)) return;
+
                 using var dados = entidade.GetXDataForApplication(PluginXData.Aplicativo);
                 if (dados is null) return;
 
@@ -206,17 +224,24 @@ internal static class LayoutWatcher
                 if (_calados > 0) _calados--;
                 if (_calados == 0) _desfazendo = false;
 
-                // Nosso comando: o que ele desenhou não é sujeira. Desfazer:
-                // só o registro de remoções acompanha o contorno.
+                // Nosso comando: o que ele desenhou não é sujeira nem cópia.
+                // Desfazer/refazer: só o registro de remoções acompanha o
+                // contorno, e uma cópia que o REDO devolveu com o GUID da
+                // original ganha identidade de novo.
                 var decisao = _livro.Resolve(DateTime.UtcNow);
+                var desfazer = PluginInfo.IsUndoCommand(nome) && _calados == 0;
 
-                if (PluginInfo.IsUndoCommand(nome) && _calados == 0 && (decisao.Removed.Count > 0 || decisao.Restored.Count > 0))
+                if (!desfazer) _acrescentadas.Clear();
+
+                if (desfazer && (decisao.Removed.Count > 0 || decisao.Restored.Count > 0 || _acrescentadas.Count > 0))
                     Descarregar(decisao, nome, soRegistro: true);
+                else if (desfazer)
+                    _acrescentadas.Clear();
 
                 return;
             }
 
-            if (_calados > 0 || _livro.IsEmpty) return;
+            if (_calados > 0 || (_livro.IsEmpty && _acrescentadas.Count == 0)) return;
 
             Descarregar(_livro.Resolve(DateTime.UtcNow), nome, soRegistro: false);
         }
@@ -228,7 +253,7 @@ internal static class LayoutWatcher
         /// </summary>
         private void AgendarFolgaSeSemComando()
         {
-            if (_folgaAgendada || _livro.IsEmpty) return;
+            if (_folgaAgendada || (_livro.IsEmpty && _acrescentadas.Count == 0)) return;
 
             try
             {
@@ -248,7 +273,7 @@ internal static class LayoutWatcher
             AcadApp.Idle -= NaFolga;
             _folgaAgendada = false;
 
-            if (_calados > 0 || _executando || _livro.IsEmpty) return;
+            if (_calados > 0 || _executando || (_livro.IsEmpty && _acrescentadas.Count == 0)) return;
             if (!string.IsNullOrEmpty(_documento.CommandInProgress)) return;
 
             using var trava = _documento.LockDocument();
@@ -287,16 +312,53 @@ internal static class LayoutWatcher
 
             using var transacao = _banco.TransactionManager.StartTransaction();
 
+            // As cópias ganham identidade ANTES da varredura: a mesa nova é a
+            // que fica suja ("copiada"); a original não foi tocada.
+            var sujas = new Dictionary<Guid, string>(decisao.Dirty);
+            var acrescentadas = _acrescentadas.ToList();
+            _acrescentadas.Clear();
+
+            if (acrescentadas.Count > 0)
+            {
+                try
+                {
+                    foreach (var copia in CopyFixer.Reidentify(transacao, _banco, acrescentadas))
+                    {
+                        sujas[copia.Table] = PendingChanges.ReasonAppended;
+                        editor.WriteMessage(
+                            $"\nVIGIA cópia de {copia.Label}: {copia.Pieces} peça(s) com identidade nova"
+                            + (copia.HasContour ? string.Empty : " (sem contorno: peças órfãs)") + $" (comando {comando}).\n");
+                    }
+                }
+                catch (System.Exception erro)
+                {
+                    RegistroDeDiagnostico.Registrar("Não consegui dar identidade à cópia.", erro);
+                    editor.WriteMessage(
+                        $"\nVIGIA ATENÇÃO: a cópia ficou com a identidade da original ({erro.Message}). "
+                        + "Apague a cópia, ou use o Refazer da área.\n");
+                }
+            }
+
+            // Nada nosso foi tocado (o usuário desenhou uma linha): sem varredura.
+            if (sujas.Count == 0 && decisao.Removed.Count == 0 && decisao.Restored.Count == 0)
+            {
+                transacao.Commit();
+                return;
+            }
+
             var mesas = LayoutScan.Tables(transacao, _banco);
 
             if (!soRegistro)
             {
-                foreach (var (guid, motivo) in decisao.Dirty)
+                foreach (var (guid, motivo) in sujas)
                 {
                     if (!mesas.TryGetValue(guid, out var mesa) || mesa.Identity is null) continue;
 
                     TableState.MarkDirty(transacao, mesa, motivo);
-                    editor.WriteMessage($"\nVIGIA {mesa.Identity.Label} suja ({motivo}, comando {comando}).\n");
+
+                    editor.WriteMessage(motivo == PendingChanges.ReasonAppended
+                        ? $"\nVIGIA cópia de {mesa.Identity.Label} suja (copiada, comando {comando}).\n"
+                        : $"\nVIGIA {mesa.Identity.Label} suja ({motivo}, comando {comando}).\n");
                 }
             }
 
@@ -311,11 +373,17 @@ internal static class LayoutWatcher
                     editor.WriteMessage($"\nVIGIA {mesas[guid].Identity!.Label} voltou (comando {comando}); saiu das removidas.\n");
             }
 
-            if (decisao.Removed.Count > 0)
-            {
-                var problema = RemovalStore.Add(_banco, decisao.Removed);
+            // Só é removida a mesa que de fato não tem mais contorno. O undo
+            // de uma cópia devolve o XData da cópia ao GUID da original ANTES
+            // de apagá-la, e o evento chega com o GUID da original, que
+            // continua no desenho.
+            var removidas = decisao.Removed.Where(r => !mesas.TryGetValue(r.Id, out var m) || m.Identity is null).ToList();
 
-                foreach (var remocao in decisao.Removed)
+            if (removidas.Count > 0)
+            {
+                var problema = RemovalStore.Add(_banco, removidas);
+
+                foreach (var remocao in removidas)
                     editor.WriteMessage($"\nVIGIA {remocao.Label} removida (comando {comando}); {PluginInfo.ComandoEstado} lista.\n");
 
                 if (problema is not null) editor.WriteMessage($"\n  ATENÇÃO: {problema}.\n");

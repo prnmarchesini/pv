@@ -2001,6 +2001,139 @@ function Testar-Recalcular {
     return $true
 }
 
+<#
+    A copia (7.5): copia a mesa A inteira com o COPY do AutoCAD e le do
+    desenho: o GUID de A continua num contorno so, limpo; a copia tem
+    contorno com GUID novo, sujo "copiada", com 7 pilares, 28 modulos e 28
+    faces apontando para ela; nenhum GUID de peca se repete. Depois renomeia
+    o bloco do pilar com sufixo e o UFV_RENOMEAR devolve o nome padrao.
+#>
+function Testar-Copia {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-copia--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-copia: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-copia' `
+        -Script (Join-Path $PSScriptRoot 'ufv-copia.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-copia terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^VIGIA cópia de (\S+): (\d+) peça\(s\) com identidade nova') {
+        $problemas.Add("ufv-copia: o vigia nao deu identidade a copia. Veja $($r.Saida)")
+        return $false
+    }
+
+    $pecasNovas = [int] $Matches[2]
+
+    if ($r.Texto -notmatch 'UFV_COPIA copiadas=(\d+) conta=(\d+) sujaa=(\S+) contb=(\d+) sujab=(\S+) motivob=(.*?) pilb=(\d+) modb=(\d+) facb=(\d+) repetidos=(\d+)') {
+        $problemas.Add("ufv-copia: nao consegui ler o desenho em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $copiadas = [int] $Matches[1]
+    $conta = [int] $Matches[2]
+    $sujaA = $Matches[3]
+    $contB = [int] $Matches[4]
+    $sujaB = $Matches[5]
+    $motivoB = $Matches[6]
+    $pilB = [int] $Matches[7]
+    $modB = [int] $Matches[8]
+    $facB = [int] $Matches[9]
+    $repetidos = [int] $Matches[10]
+
+    if ($copiadas -lt 36 -or $pecasNovas -ne $copiadas) {
+        $problemas.Add("ufv-copia: $copiadas entidade(s) copiada(s), $pecasNovas com identidade nova. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($conta -ne 1 -or $sujaA -ne '0') {
+        $problemas.Add("ufv-copia: a mesa original tem $conta contorno(s) com o GUID dela (suja=$sujaA); esperava 1, limpa. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($contB -ne 1 -or $sujaB -ne '1' -or $motivoB -ne 'copiada' -or $pilB -ne 7 -or $modB -ne 28 -or $facB -ne 28) {
+        $problemas.Add("ufv-copia: a copia tem $contB contorno(s), suja=$sujaB ($motivoB), $pilB pilar(es), $modB modulo(s), $facB face(s); esperava 1/1/copiada/7/28/28. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($repetidos -ne 0) {
+        $problemas.Add("ufv-copia: $repetidos GUID(s) de peca repetido(s) no desenho (regra sagrada 3). Veja $($r.Saida)")
+        return $false
+    }
+
+    # U: a copia some, a original fica unica, nada registrado como removida.
+    if ($r.Texto -notmatch 'UFV_COPIA_U conta=(\d+) contb=(\d+) repetidos=(\d+)') {
+        $problemas.Add("ufv-copia: nao consegui ler o desenho depois do U. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ([int] $Matches[1] -ne 1 -or [int] $Matches[2] -ne 0 -or [int] $Matches[3] -ne 0) {
+        $problemas.Add("ufv-copia: depois do U, original=$($Matches[1]) copia=$($Matches[2]) repetidos=$($Matches[3]); esperava 1/0/0. Veja $($r.Saida)")
+        return $false
+    }
+
+    $estados = @([regex]::Matches($r.Texto, '(?m)^ESTADO [^\r\n]*[\s\S]*?(\d+) removida\(s\)'))
+    if ($estados.Count -lt 2 -or [int] $estados[1].Groups[1].Value -ne 0) {
+        $problemas.Add("ufv-copia: depois do U o ESTADO registra remocao (a original nao foi removida). Veja $($r.Saida)")
+        return $false
+    }
+
+    # REDO: a copia volta, ainda sem GUID repetido.
+    if ($r.Texto -notmatch 'UFV_COPIA_REDO conta=(\d+) repetidos=(\d+)') {
+        $problemas.Add("ufv-copia: nao consegui ler o desenho depois do REDO. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ([int] $Matches[1] -ne 1 -or [int] $Matches[2] -ne 0) {
+        $problemas.Add("ufv-copia: depois do REDO, original=$($Matches[1]) repetidos=$($Matches[2]); esperava 1/0. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^RENOMEAR 0 definição\(ões\) renomeada\(s\), (\d+) referência\(s\) trocada\(s\) para o bloco padrão, 1 definição\(ões\) apagada\(s\)') {
+        $problemas.Add("ufv-copia: o UFV_RENOMEAR nao trocou as referencias para o padrao. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ([int] $Matches[1] -lt 7) {
+        $problemas.Add("ufv-copia: so $($Matches[1]) referencia(s) trocada(s). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'UFV_RENOMEAR_LISP antes=1 padrao=1 sufixo=0') {
+        $problemas.Add("ufv-copia: o UFV_RENOMEAR nao devolveu o bloco ao padrao. Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (copia: $copiadas pecas copiadas, todas com identidade nova; bloco renomeado de volta)" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -2094,6 +2227,10 @@ else {
     # Recalcular uma mesa suja onde ela esta, com o mesmo GUID.
     $total++
     if (Testar-Recalcular -Desenho $desenhos[0]) { $passaram++ }
+
+    # A copia ganha identidade propria; blocos com sufixo voltam ao padrao.
+    $total++
+    if (Testar-Copia -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

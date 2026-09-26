@@ -161,7 +161,7 @@ public static class RecalcularCommands
         {
             editor.WriteMessage(
                 $"\nRECALCULAR {mesa.Identity.Label} tem {mesa.Contours.Count} contornos com a mesma identidade (mesa copiada e colada). "
-                + "Apague a cópia, ou use o Refazer da área; dar identidade à cópia é o passo 7.5.\n");
+                + "Apague a cópia, ou use o Refazer da área.\n");
             return false;
         }
 

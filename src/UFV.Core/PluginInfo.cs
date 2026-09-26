@@ -159,6 +159,9 @@ public static class PluginInfo
     /// <summary>Comando que recalcula as sujas com a mesa de exemplo, sem perguntar. Para o nível 2.</summary>
     public const string ComandoRecalcularAutomatico = "UFV_RECALCULAR_AUTO";
 
+    /// <summary>Comando que devolve ao padrão do plugin os blocos que chegaram de outro desenho com sufixo ($0$).</summary>
+    public const string ComandoRenomear = "UFV_RENOMEAR";
+
     /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).

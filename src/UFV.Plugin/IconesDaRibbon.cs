@@ -138,6 +138,12 @@ internal static class IconesDaRibbon
         Traco("M24,9 A6,6 0 1 0 27.5,15", Neutro, 2.2),
         Traco("M24,5 L24,9.5 L19.5,9.5", Neutro, 2.2));
 
+    /// <summary>Uma etiqueta com um traço: renomear os blocos.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Renomear() => Montar(
+        Traco("M5,9 H22 L28,16 L22,23 H5 Z", Azul, 2.0),
+        Traco("M9,16 H19", Neutro, 2.2));
+
     /// <summary>Uma cota vertical com o número ao lado: as alturas dos pilares.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static ImageSource Alturas() => Montar(

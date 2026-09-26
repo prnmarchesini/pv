@@ -299,6 +299,12 @@ internal static class RibbonUfv
             PluginInfo.ComandoRecalcularSujas,
             "Recalcula só as mesas sujas."));
 
+        origem.Items.Add(BotaoPequeno(
+            "Renomear",
+            IconesDaRibbon.Renomear(),
+            PluginInfo.ComandoRenomear,
+            "Devolve ao padrão do plugin os blocos que chegaram de outro desenho com sufixo ($0$)."));
+
         return new RibbonPanel { Source = origem };
     }
 

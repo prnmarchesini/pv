@@ -51,7 +51,7 @@ Só o Renan marca VALIDADO.
 | 7.2 | O vigia | AGUARDANDO VALIDAÇÃO | `LayoutWatcher` por desenho: eventos do banco + fim de comando; `PendingChanges` (Core) decide; MOVE suja, ERASE do contorno registra remoção (`RemovalStore`); nível 2 com MOVE e ERASE por script |
 | 7.3 | Recalcular mesa | AGUARDANDO VALIDAÇÃO | `UFV_RECALCULAR` (botão e botão direito sobre a peça): célula dos cantos do contorno (`TableCells`), reamostra, refaz pilares e pontas baixas, mesmo GUID, nasce limpa |
 | 7.4 | Recalcular tudo | AGUARDANDO VALIDAÇÃO | `UFV_RECALCULAR_SUJAS` (botão "Recalcular sujas"); nível 2: suja uma, recalcula, mesmo GUID limpo, 7/28/28 peças |
-| 7.5 | Cópia | PENDENTE | |
+| 7.5 | Cópia | AGUARDANDO VALIDAÇÃO | `CopyFixer` no fim do comando que copiou: mesa nova e peças novas (agrupadas pelo deslocamento), suja "copiada"; `UFV_RENOMEAR` para blocos com sufixo; nível 2 com COPY e -RENAME |
 | 7.6 | Apagar e recontar | PENDENTE | |
 | 7.7 | Validação | PENDENTE | |
 | 7.8 | Auto-seleção | PENDENTE | |
@@ -106,23 +106,26 @@ Nivel 2   16/16    OK
 Acervo             OK
 ```
 
-### O próximo passo é o 7.5 (cópia); o 6.5 espera as respostas do 6.4
+### O próximo passo é o 7.6 (apagar e recontar); o 6.5 espera as respostas do 6.4
 
 6.1 fechado, 6.2 e 6.3 aguardando validação (o DAE no PVsyst), 6.4 é o
 resumo do formato PVC ("Entregar um resumo ao Renan e PARAR"). O 6.5 só
 começa depois que o Renan ler o resumo e decidir as três perguntas dele. A
 etapa 7 (edição) não depende da 6 e seguiu: 7.1 (estado sujo), 7.2 (o
-vigia), 7.3 (recalcular mesa) e 7.4 (recalcular sujas) feitos, aguardando
-validação. Fora do plano, a pedido do Renan na tela em 26/09/2026, a
+vigia), 7.3 (recalcular mesa), 7.4 (recalcular sujas) e 7.5 (cópia)
+feitos, aguardando validação. Fora do plano, a pedido do Renan na tela em 26/09/2026, a
 etapa 5 foi refeita duas vezes no mesmo dia (fileira pelo azimute, mesa
 dentro da área, mesa que não cabe pintada, Refazer, janela de nome,
 terreno que não se perde): ver "Segunda reprovação do 5.8". O 7.5 é a
 cópia: detectar GUID duplicado (o vigia já suja original e cópia com
 "copiada"), dar identidade nova à cópia e a cada peça dela. Antes de
 começar, ler `plano/etapas/etapa-7-edicao.md` e as seções 7.1 a 7.4 no
-fim deste arquivo. O `LayoutScan.Tables` hoje agrupa as peças de dois
-contornos com o mesmo GUID sob um só: o 7.5 tem que separá-las (pela
-proximidade ao contorno, ou pela ordem de criação).
+fim deste arquivo. O 7.6 é "apagar e recontar": a remoção já é detectada
+e registrada pelo vigia (7.2, `RemovalStore`); falta o botão **Recontar**,
+que refaz as listas e a potência (o que "lista" significa aqui: o
+`UFV_ESTADO` já conta; talvez a saída seja um relatório da usina: mesas,
+módulos, kWp, pilares por comprimento) e limpa as remoções consumidas.
+Buraco na numeração fica até o 7.10.
 
 Antes de começar, ler `plano/etapas/etapa-6-pvsyst.md`. O que a etapa 6
 recebe da 5: as faces superiores dos módulos são entidades `3DFACE` na
@@ -226,6 +229,15 @@ teste: a etapa 6 é onde passa a ter.
    pela paleta de propriedades: também suja ("movida ou editada"). Rodar
    `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
    nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
+10. **Testar o 7.5 (cópia)**: COPY de uma mesa inteira (janela sobre ela)
+   para outro lugar: ao terminar, "VIGIA cópia de F1.x: N peça(s) com
+   identidade nova", a CÓPIA fica vermelha com motivo "copiada" e a
+   original continua como estava; "Estado" conta uma suja a mais. Botão
+   direito na cópia → Recalcular: ela é recalculada onde está, limpa. COPY
+   com várias cópias de uma vez (opção Múltiplo): cada cópia vira uma
+   mesa. Renomear: se um bloco chegou de outro desenho como
+   `MARCHENG_UFV_PILAR$0$`, o botão "Renomear" o devolve ao padrão; sem
+   sufixo nenhum, diz que não há o que renomear.
 9. **Testar o 7.3 e o 7.4 (recalcular)**: MOVE numa mesa inteira (janela
    sobre ela) para um lugar onde o terreno é outro: fica vermelha. Botão
    direito sobre qualquer peça dela → UFV → "Recalcular esta mesa" (ou
@@ -3036,4 +3048,74 @@ zigue-zague documentado no distribuidor. Anotado, não feito:
 usam; `LayoutScan` abre toda `Line` e `MText` do desenho (medir numa usina
 grande); linha que recua e depois avança faz F1 não ser a do primeiro
 clique (sem teste).
+
+## 7.5: a cópia
+
+Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO`. Nível 2: `ufv-copia.scr`
+copia a mesa F1.x inteira (106 entidades: contorno, 7 pilares, 28 módulos,
+28 faces, cotas e riscos) 300 m para o norte com o COPY do AutoCAD e lê
+pelo XData: a original continua única e limpa; a cópia tem contorno com
+GUID novo, suja "copiada", com 7/28/28 peças apontando para ela; nenhum
+GUID de peça se repete no desenho (regra sagrada 3 conferida
+literalmente). Depois renomeia o bloco do pilar para `…$0$` com o -RENAME
+e o `UFV_RENOMEAR` o devolve ao padrão.
+
+### Como a cópia ganha identidade
+
+O vigia (7.2) guarda toda entidade acrescentada durante um comando que não
+é nosso. No fim do comando, `CopyFixer.Reidentify` pega as que têm XData
+nosso e as agrupa por (mesa de origem, deslocamento em relação à original
+ao milímetro): cada grupo é uma cópia (o COPY múltiplo faz várias de uma
+vez). Cada grupo ganha um GUID novo de mesa; cada pilar, módulo, face e
+nota ganha GUID próprio novo, com a mesa apontando para a nova e a face
+apontando para o módulo novo. O contorno da cópia nasce sujo "copiada"; a
+original não é tocada. Uma peça acrescentada que dispara "modificado" no
+mesmo comando (a cópia ganhando o XData) não suja a original: o vigia
+ignora modificações em peças que ele viu nascer no comando.
+
+### Decisões que são minhas
+
+- cópia sem original no desenho (colada de outro desenho) forma uma cópia
+  só por mesa de origem, com deslocamento zero;
+- cópia espelhada ou girada não tem deslocamento único: cada peça vira o
+  seu grupo, sem contorno, e aparece como "peças órfãs" no Estado. É
+  raro, e o Refazer da área resolve;
+- o letreiro da cópia é o da original (F1.3 e F1.3); renumerar é o 7.10;
+- `UFV_RENOMEAR` age só em definições com o nosso prefixo e sufixo
+  `$n$`: renomeia se o padrão não existe, senão passa as referências para
+  o padrão e apaga a definição. Nunca sozinho: só pelo botão.
+
+### O que a revisão do 7.5 apontou, e o que foi feito
+
+Um bloqueante, corrigido: desfazer a cópia (Ctrl+Z) registrava a mesa
+ORIGINAL como removida, porque o undo devolve o XData da cópia ao GUID da
+original antes de apagá-la, e o evento de apagar chegava com esse GUID. O
+vigia agora só registra remoção de mesa que de fato não tem mais contorno.
+Conferido no nível 2 com `_.U` e `_.REDO` depois do COPY: o U desfaz a
+cópia e a identidade nova num passo só (a gravação do vigia no fim do
+comando entra no grupo de undo do comando), a original fica única e nada
+é registrado como removida; o REDO devolve a cópia ainda sem GUID
+repetido. Importantes, corrigidos: (1) MIRROR/ROTATE com cópia, e a
+colagem de uma mesa recalculada, viravam dezenas de "mesas" de uma peça
+porque o agrupamento era só por deslocamento; agora, se nenhum GUID de
+peça se repete entre as acrescentadas de uma mesa, é UMA cópia seja qual
+for a transformação, e o deslocamento só separa cópias múltiplas (COPY
+múltiplo, ARRAY); (2) o vigia varria o desenho inteiro ao fim de qualquer
+comando que acrescentasse qualquer coisa (uma linha do usuário); agora,
+sem peça nossa tocada, sai antes da varredura, e a busca dos originais
+usa o filtro de classe do `LayoutScan`; (3) o caminho "trocar as
+referências para o bloco padrão e apagar a definição" do Renomear não
+tinha teste; o nível 2 agora desenha de novo depois do -RENAME (o padrão
+renasce) e o comando troca 42 referências e apaga a definição; (4) falha
+na reidentificação avisava só "não consegui marcar as mesas"; agora diz
+que a cópia ficou com a identidade da original e o que fazer. Menores:
+`Has` com registro apagado e referências apagadas no Renomear; `COPYMODE`
+forçado no script; mensagem "cópia de F1.x suja" em vez de "F1.x suja";
+textos "até o 7.5" atualizados. Anotado, não feito: duas cópias múltiplas
+no mesmo ponto dividem um GUID de mesa; o nome que o AutoCAD 2026 dá a um
+bloco colado de outro desenho com conflito (`$0$`? `A$C$…`?) não foi
+visto no CAD — o Renomear só trata `NOME$n$`, e o Renan confere ao colar;
+ARRAY associativo e INSERT de bloco com mesa dentro não são cobertos;
+`ChangeKind.Appended` no livro do Core virou ramo só de teste (a cópia
+é decidida pelo `CopyFixer`).
 

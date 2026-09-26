@@ -6,9 +6,9 @@ namespace UFV.Plugin;
 /// <summary>As peças de uma mesa no desenho, achadas pelo GUID dela no XData.</summary>
 /// <param name="Identity">A identidade lida do contorno, ou null se o contorno sumiu.</param>
 /// <param name="Contours">
-/// Os contornos com este GUID: um, normalmente; dois ou mais quando o
-/// usuário copiou a mesa (a cópia leva o XData junto). Até o 7.5 dar
-/// identidade nova à cópia, quem recalcula ou pinta precisa saber.
+/// Os contornos com este GUID: um, normalmente. Dois ou mais só se a cópia
+/// (7.5) não conseguiu dar identidade nova (falha na transação) ou num
+/// desfazer parcial; quem recalcula ou pinta precisa saber.
 /// </param>
 /// <param name="Pillars">Os blocos de pilar.</param>
 /// <param name="Modules">Os blocos de módulo.</param>
@@ -137,7 +137,7 @@ internal static class LayoutScan
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDaLinha = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Line));
 
     /// <summary>Bloco (pilar, módulo), polilinha 3D (contorno), face, texto ou linha (notas): o que pode ser peça nossa.</summary>
-    private static bool ENossaClasse(ObjectId id) =>
+    internal static bool ENossaClasse(ObjectId id) =>
         id.ObjectClass == ClasseDoBloco || id.ObjectClass == ClasseDaPolilinha || id.ObjectClass == ClasseDaFace
         || id.ObjectClass == ClasseDoTexto || id.ObjectClass == ClasseDaLinha;
 
