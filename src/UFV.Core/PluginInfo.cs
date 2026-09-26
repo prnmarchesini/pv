@@ -103,6 +103,27 @@ public static class PluginInfo
     public const string ComandoConfigTeste = "UFV_CONFIG_TESTE";
 
     /// <summary>
+    /// Comando que processa e desenha uma fileira: escolhe área, alinhamento
+    /// e o número da fileira, distribui, alinha, calcula os pilares e desenha.
+    /// </summary>
+    public const string ComandoFileira = "UFV_FILEIRA";
+
+    /// <summary>
+    /// Comando que processa a fileira 1 da primeira área com o primeiro
+    /// alinhamento, sem perguntar. Existe para o teste de nível 2.
+    /// </summary>
+    public const string ComandoFileiraAutomatico = "UFV_FILEIRA_AUTO";
+
+    /// <summary>Comando que liga e desliga os textos de altura dos pilares ("Mostrar alturas").</summary>
+    public const string ComandoAlturas = "UFV_ALTURAS";
+
+    /// <summary>Comando que processa e desenha a área inteira: todas as fileiras, com o tempo medido.</summary>
+    public const string ComandoUsina = "UFV_USINA";
+
+    /// <summary>Comando que processa a área inteira sem perguntar. Existe para o teste de nível 2.</summary>
+    public const string ComandoUsinaAutomatico = "UFV_USINA_AUTO";
+
+    /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).
     /// </summary>

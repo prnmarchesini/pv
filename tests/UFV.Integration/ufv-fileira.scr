@@ -1,0 +1,106 @@
+; Teste de nivel 2 dos passos 5.7 e 5.8: processa o terreno, traca uma area
+; e um alinhamento, processa a fileira 1 e le do proprio desenho o que foi
+; criado.
+;
+; O que se confere em LISP, e nao pelo relatorio do plugin (um numero tirado
+; do plugin concorda com o plugin mesmo quando ele erra):
+;   - quantos blocos de pilar, blocos de modulo e faces existem;
+;   - cada bloco de modulo esta onde a face dele esta: o ponto de insercao
+;     (levado ao WCS com trans, porque o 10 do INSERT e no OCS do bloco
+;     inclinado) coincide com um vertice de alguma 3DFACE. E a unica prova de
+;     que a matriz do Geo virou Matrix3d do AutoCAD na ordem certa;
+;   - toda face aponta para cima (produto vetorial dos dois primeiros lados
+;     com Z positivo), senao o PVsyst le a face virada para o chao;
+;   - a secao do pilar e a da mesa de exemplo (0,15 x 0,07) e o comprimento
+;     e positivo;
+;   - pilar, modulo, face e contorno carregam XData nosso (regra sagrada 3);
+;   - em cada pilar com terreno, topo - terreno = P3 (os tres numeros do
+;     XData e a geometria tem que fechar; regra sagrada 5 de verdade);
+;   - a camada das alturas nasce desligada; ha um aviso por mesa marcada;
+;   - a caixa dentro do bloco do pilar e "por bloco" (62 = 0): senao a cor de
+;     analise posta na instancia nao aparece.
+;
+; O OSNAP e desligado para os pontos digitados chegarem crus.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_TERRENO_AUTO")
+(setq ufv:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "UFV_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area da fileira")
+(command "UFV_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento da fileira")
+(command "UFV_FILEIRA_AUTO")
+(setvar "OSMODE" ufv:osmode)
+
+(defun ufv:conta (ss) (if ss (sslength ss) 0))
+(defun ufv:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("MARCHENG_UFV")))))))
+(defun ufv:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun ufv:temxdata (e) (if (assoc -3 (entget e '("MARCHENG_UFV"))) 1 0))
+
+(setq ufv:pilares (ssget "_X" (list (cons 0 "INSERT") (cons 2 "MARCHENG_UFV_PILAR"))))
+(setq ufv:modulos (ssget "_X" (list (cons 0 "INSERT") (cons 2 "MARCHENG_UFV_MODULO_*"))))
+(setq ufv:faces (ssget "_X" (list (cons 0 "3DFACE") (cons 8 "MARCHENG_UFV_FACE"))))
+(setq ufv:alturas (ssget "_X" (list (cons 0 "MTEXT") (cons 8 "MARCHENG_UFV_ALTURAS"))))
+(setq ufv:marcadas (ssget "_X" (list (cons 0 "MTEXT") (cons 8 "MARCHENG_UFV_MARCADA"))))
+(setq ufv:contornos (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "MARCHENG_UFV_MESA,MARCHENG_UFV_ANALISE_BORDA,MARCHENG_UFV_ANALISE_DECLIVIDADE"))))
+(setq ufv:np (ufv:conta ufv:pilares) ufv:nm (ufv:conta ufv:modulos) ufv:nf (ufv:conta ufv:faces)
+      ufv:na (ufv:conta ufv:alturas) ufv:nk (ufv:conta ufv:marcadas) ufv:nc (ufv:conta ufv:contornos))
+
+; Os vertices das faces, para casar com os modulos.
+(setq ufv:vertices nil ufv:normais 0 ufv:i 0)
+(while (< ufv:i ufv:nf)
+  (setq ufv:e (entget (ssname ufv:faces ufv:i)))
+  (setq ufv:v0 (cdr (assoc 10 ufv:e)) ufv:v1 (cdr (assoc 11 ufv:e)) ufv:v2 (cdr (assoc 12 ufv:e)))
+  (setq ufv:vertices (cons ufv:v0 ufv:vertices))
+  (setq ufv:cz (- (* (- (car ufv:v1) (car ufv:v0)) (- (cadr ufv:v2) (cadr ufv:v0)))
+                  (* (- (cadr ufv:v1) (cadr ufv:v0)) (- (car ufv:v2) (car ufv:v0)))))
+  (if (> ufv:cz 0) (setq ufv:normais (1+ ufv:normais)))
+  (setq ufv:i (1+ ufv:i)))
+
+(defun ufv:perto (p q) (and (< (abs (- (car p) (car q))) 0.001) (< (abs (- (cadr p) (cadr q))) 0.001) (< (abs (- (caddr p) (caddr q))) 0.001)))
+(defun ufv:casa (p lista) (if lista (if (ufv:perto p (car lista)) 1 (ufv:casa p (cdr lista))) 0))
+
+(setq ufv:casados 0 ufv:xdok 0 ufv:i 0)
+(while (< ufv:i ufv:nm)
+  (setq ufv:en (ssname ufv:modulos ufv:i) ufv:e (entget ufv:en))
+  (setq ufv:p (trans (cdr (assoc 10 ufv:e)) ufv:en 0))
+  (setq ufv:casados (+ ufv:casados (ufv:casa ufv:p ufv:vertices)))
+  (setq ufv:xdok (+ ufv:xdok (ufv:temxdata ufv:en)))
+  (setq ufv:i (1+ ufv:i)))
+
+(setq ufv:secao 0 ufv:p3ok 0 ufv:p3total 0 ufv:zmin 1e99 ufv:zmax -1e99 ufv:i 0)
+(while (< ufv:i ufv:np)
+  (setq ufv:en (ssname ufv:pilares ufv:i) ufv:e (entget ufv:en))
+  (setq ufv:z (caddr (cdr (assoc 10 ufv:e))))
+  (setq ufv:zmin (min ufv:zmin ufv:z) ufv:zmax (max ufv:zmax ufv:z))
+  (if (and (< (abs (- (cdr (assoc 41 ufv:e)) 0.15)) 0.0001) (< (abs (- (cdr (assoc 42 ufv:e)) 0.07)) 0.0001) (> (cdr (assoc 43 ufv:e)) 0))
+    (setq ufv:secao (1+ ufv:secao)))
+  (setq ufv:xdok (+ ufv:xdok (ufv:temxdata ufv:en)))
+  (setq ufv:xd (ufv:xdata ufv:en))
+  (if (and ufv:xd (> (strlen (ufv:campo ufv:xd 6)) 0) (> (strlen (ufv:campo ufv:xd 8)) 0))
+    (progn
+      (setq ufv:p3total (1+ ufv:p3total))
+      (if (< (abs (- (- ufv:z (atof (ufv:campo ufv:xd 8))) (atof (ufv:campo ufv:xd 6)))) 0.001)
+        (setq ufv:p3ok (1+ ufv:p3ok)))))
+  (setq ufv:i (1+ ufv:i)))
+
+(setq ufv:i 0)
+(while (< ufv:i ufv:nf) (setq ufv:xdok (+ ufv:xdok (ufv:temxdata (ssname ufv:faces ufv:i))) ufv:i (1+ ufv:i)))
+(setq ufv:i 0)
+(while (< ufv:i ufv:nc) (setq ufv:xdok (+ ufv:xdok (ufv:temxdata (ssname ufv:contornos ufv:i))) ufv:i (1+ ufv:i)))
+
+(setq ufv:camada (tblsearch "layer" "MARCHENG_UFV_ALTURAS"))
+(setq ufv:desligada (if (and ufv:camada (< (cdr (assoc 62 ufv:camada)) 0)) 1 0))
+(setq ufv:bloco (tblsearch "block" "MARCHENG_UFV_PILAR"))
+(setq ufv:caixa62 (if ufv:bloco (cdr (assoc 62 (entget (cdr (assoc -2 ufv:bloco))))) -1))
+
+(princ (strcat "\nUFV_DESENHO pilares=" (itoa ufv:np) " faces=" (itoa ufv:nf) " alturas=" (itoa ufv:na)
+               " zmin=" (rtos ufv:zmin 2 3) " zmax=" (rtos ufv:zmax 2 3)))
+(princ (strcat "\nUFV_DESENHO2 modulos=" (itoa ufv:nm) " casados=" (itoa ufv:casados) " normais=" (itoa ufv:normais)
+               " secao=" (itoa ufv:secao) " xdata=" (itoa ufv:xdok) " contornos=" (itoa ufv:nc)
+               " p3ok=" (itoa ufv:p3ok) " p3total=" (itoa ufv:p3total)
+               " alturasoff=" (itoa ufv:desligada) " marcadas=" (itoa ufv:nk) " caixa62=" (itoa ufv:caixa62)))
+(setvar "SECURELOAD" ufv:secureload)
+(princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

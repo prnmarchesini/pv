@@ -1136,6 +1136,285 @@ function Testar-Config {
     return $true
 }
 
+<#
+    Uma fileira no CAD (5.7 e 5.8): area de 100 m em volta do centro do
+    terreno, alinhamento na borda sul com as mesas ao norte, fileira 1
+    processada e desenhada. O que se le e da entidade, em LISP: contagem de
+    pilares e faces, e a cota de topo de cada pilar dentro da faixa do
+    terreno (regra sagrada 5).
+#>
+function Testar-Fileira {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-fileira--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-fileira: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-fileira' `
+        -Script (Join-Path $PSScriptRoot 'ufv-fileira.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 9999)
+            '{{L2}}'   = (Ponto3  50 -50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-fileira terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^FILEIRA F1:') {
+        $problemas.Add("ufv-fileira: a fileira nao foi processada. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'desenhado: (\d+) mesa\(s\), (\d+) pilar\(es\), (\d+) módulo\(s\) com face') {
+        $problemas.Add("ufv-fileira: nao achei o resumo do desenho. Veja $($r.Saida)")
+        return $false
+    }
+
+    $mesas = [int] $Matches[1]
+    $pilaresRelatados = [int] $Matches[2]
+    $modulosRelatados = [int] $Matches[3]
+
+    if ($r.Texto -notmatch 'UFV_DESENHO pilares=(\d+) faces=(\d+) alturas=(\d+) zmin=(-?[\d.]+) zmax=(-?[\d.]+)') {
+        $problemas.Add("ufv-fileira: nao consegui ler as entidades em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $pilares = [int] $Matches[1]
+    $faces = [int] $Matches[2]
+    $alturas = [int] $Matches[3]
+    $zmin = [double]::Parse($Matches[4], $invariante)
+    $zmax = [double]::Parse($Matches[5], $invariante)
+
+    # Numa area de 100 m com a mesa de exemplo (18,7 m, 7 pilares, 28
+    # modulos; UFV_FILEIRA_AUTO usa sempre ela, para nao depender de perfil
+    # salvo na maquina) e 0,5 m de vao cabem cinco inteiras e uma na borda.
+    if ($mesas -lt 5) {
+        $problemas.Add("ufv-fileira: so $mesas mesa(s) na fileira, esperava pelo menos 5. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($pilares -ne $pilaresRelatados -or $faces -ne $modulosRelatados -or $alturas -ne $pilares) {
+        $problemas.Add(
+            "ufv-fileira: o desenho tem $pilares pilar(es), $faces face(s) e $alturas altura(s); " +
+            "o plugin relatou $pilaresRelatados e $modulosRelatados. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($pilares -ne 7 * $mesas -or $faces -ne 28 * $mesas) {
+        $problemas.Add(
+            "ufv-fileira: $mesas mesa(s) deviam dar $(7 * $mesas) pilares e $(28 * $mesas) faces, " +
+            "e sao $pilares e $faces. Veja $($r.Saida)")
+        return $false
+    }
+
+    # As conferencias finas, lidas das entidades: modulo no lugar da face
+    # (a matriz), face para cima, secao do pilar, XData em tudo, P3 fechando
+    # com topo e terreno, camada de alturas desligada, aviso por marcada, e
+    # a caixa do bloco do pilar "por bloco" (a cor da instancia aparece).
+    if ($r.Texto -notmatch 'UFV_DESENHO2 modulos=(\d+) casados=(\d+) normais=(\d+) secao=(\d+) xdata=(\d+) contornos=(\d+) p3ok=(\d+) p3total=(\d+) alturasoff=(\d) marcadas=(\d+) caixa62=(-?\d+)') {
+        $problemas.Add("ufv-fileira: nao consegui ler as conferencias finas em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $modulosInsert = [int] $Matches[1]
+    $casados = [int] $Matches[2]
+    $normais = [int] $Matches[3]
+    $secao = [int] $Matches[4]
+    $xdata = [int] $Matches[5]
+    $contornos = [int] $Matches[6]
+    $p3ok = [int] $Matches[7]
+    $p3total = [int] $Matches[8]
+    $alturasOff = [int] $Matches[9]
+    $marcadasTexto = [int] $Matches[10]
+    $caixa62 = [int] $Matches[11]
+
+    if ($modulosInsert -ne $faces -or $casados -ne $modulosInsert) {
+        $problemas.Add(
+            "ufv-fileira: $modulosInsert bloco(s) de modulo para $faces face(s), e so $casados no lugar da face. " +
+            "A matriz da mesa nao chegou certa ao AutoCAD. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($normais -ne $faces) {
+        $problemas.Add("ufv-fileira: $($faces - $normais) face(s) apontam para baixo. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($secao -ne $pilares) {
+        $problemas.Add("ufv-fileira: $($pilares - $secao) pilar(es) com secao ou comprimento errados. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($contornos -ne $mesas -or $xdata -ne ($pilares + $modulosInsert + $faces + $contornos)) {
+        $problemas.Add(
+            "ufv-fileira: $contornos contorno(s) para $mesas mesa(s), e $xdata entidade(s) com XData de " +
+            "$($pilares + $modulosInsert + $faces + $contornos). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($p3total -lt 1 -or $p3ok -ne $p3total) {
+        $problemas.Add(
+            "ufv-fileira: em $($p3total - $p3ok) de $p3total pilar(es) topo - terreno nao da P3. " +
+            "As cotas nao fecham entre si. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($alturasOff -ne 1) {
+        $problemas.Add("ufv-fileira: a camada das alturas nasceu ligada. Veja $($r.Saida)")
+        return $false
+    }
+
+    $marcadasRelatadas = ([regex]::Matches($r.Texto, 'MARCADA \(')).Count
+    if ($marcadasTexto -ne $marcadasRelatadas) {
+        $problemas.Add("ufv-fileira: $marcadasTexto aviso(s) de marcada para $marcadasRelatadas mesa(s) marcada(s). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($caixa62 -ne 0) {
+        $problemas.Add("ufv-fileira: a caixa do bloco do pilar nao e 'por bloco' (62 = $caixa62): a cor de analise nao apareceria. Veja $($r.Saida)")
+        return $false
+    }
+
+    # Regra sagrada 5: o topo de todo pilar esta entre a cota minima do
+    # terreno e a maxima mais a altura de uma mesa (uns 5 m). E grosseiro;
+    # a conferencia fina e a de P3 acima, que fecha topo, terreno e altura
+    # livre pilar a pilar. (O Z = 9999 no alinhamento e prova do 4.2, que o
+    # drapeia antes de gravar; fica como segunda linha de defesa.)
+    if ($r.Texto -notmatch 'cotas:\s+(-?[\d.,]+) m a (-?[\d.,]+) m\s+\(desn') {
+        $problemas.Add("ufv-fileira: nao achei as cotas do resumo do terreno. Veja $($r.Saida)")
+        return $false
+    }
+
+    $minima = [double]::Parse($Matches[1], $ptbr)
+    $maxima = [double]::Parse($Matches[2], $ptbr)
+
+    if ($zmin -lt $minima -or $zmax -gt ($maxima + 5)) {
+        $problemas.Add(
+            "ufv-fileira: os topos dos pilares vao de $zmin a $zmax, fora da faixa do terreno ($minima a $maxima). " +
+            "Algo foi desenhado sem acompanhar o terreno. Veja $($r.Saida)")
+        return $false
+    }
+
+    return $true
+}
+
+<#
+    A area inteira (5.9): mesma area e alinhamento da fileira, todas as
+    fileiras processadas e desenhadas. Contagens por mesa e cotas dos
+    pilares lidas em LISP; o tempo do motor e do desenho e relatado.
+#>
+function Testar-Usina {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-usina--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-usina: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-usina' `
+        -Script (Join-Path $PSScriptRoot 'ufv-usina.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3  50 -50 9999)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-usina terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^USINA (\d+) fileira\(s\), (\d+) mesa\(s\), (\d+) módulo\(s\)') {
+        $problemas.Add("ufv-usina: a usina nao foi processada. Veja $($r.Saida)")
+        return $false
+    }
+
+    $fileiras = [int] $Matches[1]
+    $mesas = [int] $Matches[2]
+    $modulos = [int] $Matches[3]
+
+    if ($r.Texto -notmatch 'UFV_USINA_DESENHO pilares=(\d+) faces=(\d+) contornos=(\d+) zmin=(-?[\d.]+) zmax=(-?[\d.]+)') {
+        $problemas.Add("ufv-usina: nao consegui ler as entidades em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $pilares = [int] $Matches[1]
+    $faces = [int] $Matches[2]
+    $contornos = [int] $Matches[3]
+    $zmin = [double]::Parse($Matches[4], $invariante)
+    $zmax = [double]::Parse($Matches[5], $invariante)
+
+    # Uma area de 100 x 100 com pitch 6 da mais de dez fileiras de seis mesas.
+    if ($fileiras -lt 10 -or $mesas -lt 50) {
+        $problemas.Add("ufv-usina: so $fileiras fileira(s) e $mesas mesa(s). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($contornos -ne $mesas -or $pilares -ne 7 * $mesas -or $faces -ne 28 * $mesas -or $modulos -ne 28 * $mesas) {
+        $problemas.Add(
+            "ufv-usina: $mesas mesa(s) deviam dar $mesas contornos, $(7 * $mesas) pilares e $(28 * $mesas) faces; " +
+            "o desenho tem $contornos, $pilares e $faces, e o relatorio diz $modulos modulos. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'cotas:\s+(-?[\d.,]+) m a (-?[\d.,]+) m\s+\(desn') {
+        $problemas.Add("ufv-usina: nao achei as cotas do resumo do terreno. Veja $($r.Saida)")
+        return $false
+    }
+
+    $minima = [double]::Parse($Matches[1], $ptbr)
+    $maxima = [double]::Parse($Matches[2], $ptbr)
+
+    if ($zmin -lt $minima -or $zmax -gt ($maxima + 5)) {
+        $problemas.Add(
+            "ufv-usina: os topos dos pilares vao de $zmin a $zmax, fora da faixa do terreno ($minima a $maxima). " +
+            "Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -match 'tempo: motor ([\d,]+) s, desenho ([\d,]+) s') {
+        Write-Host "  (usina: $mesas mesas em $fileiras fileiras; motor $($Matches[1]) s, desenho $($Matches[2]) s)" -ForegroundColor DarkGray
+    }
+
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -1201,6 +1480,14 @@ else {
 
     $total++
     if (Testar-Alinhamento -Desenho $desenhos[0]) { $passaram++ }
+
+    # A fileira inteira no CAD: distribuicao, alinhamento, pilares, desenho.
+    $total++
+    if (Testar-Fileira -Desenho $desenhos[0]) { $passaram++ }
+
+    # E a area inteira, com o tempo medido.
+    $total++
+    if (Testar-Usina -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

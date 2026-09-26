@@ -114,7 +114,7 @@ public static class MesaCommands
     /// motivo vai para o log. Recusar-se a abrir por causa de um arquivo
     /// estragado deixaria o usuário sem saída nenhuma.
     /// </summary>
-    private static TableProfile? PrimeiroPerfil(TableProfileStore perfis)
+    internal static TableProfile? PrimeiroPerfil(TableProfileStore perfis)
     {
         try
         {

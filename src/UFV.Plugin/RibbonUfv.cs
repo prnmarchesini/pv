@@ -118,6 +118,7 @@ internal static class RibbonUfv
         aba.Panels.Add(MontarPainelInicio());
         aba.Panels.Add(MontarPainelTerreno());
         aba.Panels.Add(MontarPainelUfv());
+        aba.Panels.Add(MontarPainelProcessar());
         ribbon.Tabs.Add(aba);
 
         var temDocumento = AcadApp.DocumentManager.MdiActiveDocument is not null;
@@ -211,6 +212,34 @@ internal static class RibbonUfv
             IconesDaRibbon.Configuracao(),
             PluginInfo.ComandoConfig,
             "Os limites do projeto e as regras de análise, gravados no desenho."));
+
+        return new RibbonPanel { Source = origem };
+    }
+
+    /// <summary>
+    /// Seção Processar: o que põe mesa no terreno.
+    /// </summary>
+    private static RibbonPanel MontarPainelProcessar()
+    {
+        var origem = new RibbonPanelSource { Title = "Processar" };
+
+        origem.Items.Add(BotaoGrande(
+            "Fileira",
+            IconesDaRibbon.Fileira(),
+            PluginInfo.ComandoFileira,
+            "Processa e desenha uma fileira: distribui, alinha as mesas, calcula os pilares e pinta as análises."));
+
+        origem.Items.Add(BotaoGrande(
+            "Usina",
+            IconesDaRibbon.Usina(),
+            PluginInfo.ComandoUsina,
+            "Processa e desenha a área inteira: todas as fileiras, com o tempo medido."));
+
+        origem.Items.Add(BotaoPequeno(
+            "Alturas",
+            IconesDaRibbon.Alturas(),
+            PluginInfo.ComandoAlturas,
+            "Mostra ou esconde as alturas dos pilares."));
 
         return new RibbonPanel { Source = origem };
     }
