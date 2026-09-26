@@ -152,7 +152,7 @@ public static class RowDistributor
     public const double MenorMedida = LineSides.ComprimentoMinimo;
 
     /// <summary>Maior medida aceita, em metro, como rede para erro de escala.</summary>
-    private const double MaiorMedida = 50.0;
+    public const double MaiorMedida = 50.0;
 
     /// <summary>
     /// Distribui as mesas.

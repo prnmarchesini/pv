@@ -35,7 +35,7 @@ Só o Renan marca VALIDADO.
 | 4.4 | Modal | AGUARDANDO VALIDAÇÃO | `UFV_CONFIG`: tela única, grava no desenho; nível 2 salva, reabre e compara campo a campo |
 | 5.1 | Distribuição em planta | VALIDADO (automático) | `RowDistributor` no Core, `Polygons` no Geo; só modelo, fechado em 26/09/2026. A fileira segue a linha de alinhamento: **Renan confirma no 5.8** |
 | 5.2 | Amostragem | VALIDADO (automático) | `TablePlacement` e `TerrainSampler` no Core; a ponta baixa é amostrada na aresta inteira (`Tin.TryGetMaxZAlong`); fechado em 26/09/2026 |
-| 5.3 | Cotas viáveis por mesa | PENDENTE | |
+| 5.3 | Cotas viáveis por mesa | VALIDADO (automático) | `ViableElevations` no Core; grade de 1 cm, intervalos por varredura; fechado em 26/09/2026 |
 | 5.4 | Alinhamento na fileira | PENDENTE | |
 | 5.5 | Pilares | PENDENTE | |
 | 5.6 | Resultado das análises | PENDENTE | |
@@ -1718,4 +1718,105 @@ que o 5.3 precisa para a cota da ponta baixa variar ao longo da mesa.
   diz "contando da ponta esquerda", que é a esquerda do sistema local. Não
   afeta a amostragem; afeta rótulo e a tolerância "5 em 20" se alguém
   assumir que coluna 0 é a esquerda vista de frente.
+
+## 5.3: as cotas viáveis por mesa
+
+`ViableElevations` no Core, só modelo. Para uma mesa sobre o terreno
+amostrado (5.2), o conjunto de pares (cota da ponta baixa no início, cota
+no fim) em que a mesa é viável: no máximo a tolerância de lombo de módulos
+fora da faixa da ponta baixa, e a declividade longitudinal dentro do limite,
+se houver. A regra sagrada 4 ao pé da letra, com a exceção única dela.
+
+### Como é calculado
+
+A mesa é rígida (regra 2): a cota da ponta baixa varia linearmente da
+estação 0 à estação L, e a altura livre de cada módulo da fileira de baixo
+é a cota na estação dele menos o terreno mais alto sob a ponta baixa dele.
+"Fora da faixa" conta abaixo do mínimo E acima do máximo — a regra diz
+"faixa respeitada", não "mínimo respeitado".
+
+Não se testa par a par. A cota inicial anda numa **grade de 1 cm alinhada
+ao múltiplo do passo** (e não ao terreno), para mesas vizinhas de uma
+fileira falarem da mesma grade quando a otimização (5.4) casar as juntas.
+Para cada cota inicial, a cota final viável sai como **intervalos
+contínuos**: cada módulo, com a cota inicial fixa, aceita a cota final num
+intervalo (a cota dele é afim na cota final), e "no máximo k fora" é
+"coberto por pelo menos n − k intervalos", que uma varredura pelas pontas
+resolve. O limite de declividade é mais um intervalo, esse obrigatório.
+
+`IsViable` e `Violations` são a definição direta, módulo a módulo, e o
+teste de propriedade compara os intervalos com a definição numa malha fina
+de cotas finais, em 30 terrenos aleatórios com e sem tolerância, com e sem
+limite — e confere também que nenhuma cota inicial fora de `Starts` tem
+cota final viável. É esse teste que dá confiança na varredura.
+
+### Números conferidos à mão
+
+- plano em 700, faixa 0,30 a 0,80: mesa nivelada viável de 700,30 a 700,80;
+  com a cota inicial em 700,50, a final vai de onde o último módulo
+  (estação 17,9 de 18,7) chega a 0,30 até onde chega a 0,80;
+- limite de 0,5° sobre 18,7 m: a final fica a no máximo 0,163 m da inicial;
+- rampa de 5 cm/m: a mesa paralela ao terreno é viável, a nivelada não;
+  com limite de 1° não há cota nenhuma (0,50 m de faixa não absorve 0,935 m
+  de desnível com 0,33 m de giro);
+- calombo de 0,60 m sob a coluna 7: sem tolerância não há cota (a coluna 7
+  pede ≥ 700,90 e as outras ≤ 700,80; a mesa é rígida); com tolerância de
+  um módulo, a nivelada volta. Dois calombos com tolerância um: não;
+- rampa com a mesa nivelada em 700,80: estouram exatamente as colunas 7 a
+  13 (sete); tolerância 7 aceita, 6 não.
+
+### O que fica declarado
+
+- **o pilar não entra aqui.** A ponta baixa manda, o pilar é consequência
+  (5.5), e estoura se tiver que estourar;
+- **o giro longitudinal não reamostra o terreno** (anotação do 5.2): a
+  amostra sob a ponta baixa é da mesa com cota zero e sem giro; o giro
+  move o pé dos pilares em planta por centímetros, e a ponta baixa não
+  muda de lugar em planta (gira em torno de si). Para a ponta baixa a
+  aproximação é exata; para os pilares, a decisão fica no 5.5;
+- módulo sem terreno embaixo é `Problem`, nunca vazio calado.
+
+### O que a revisão do 5.3 apontou, e o que foi feito
+
+Sem bloqueante. Três importantes, corrigidos:
+
+- **sem limite de declividade, a grade de cotas iniciais era heurística**
+  e o comentário de `Starts` prometia "todas as cotas iniciais viáveis".
+  Contraexemplo do revisor: plano, sem limite, tolerância 12 em 14, a mesa
+  íngreme com a inicial em 706 e a final em 700,109 (só as colunas 12 e 13
+  dentro) era viável e não estava na grade — a otimização perderia
+  soluções em silêncio. Agora o giro máximo sem limite é derivado: com
+  m = n − k módulos exigidos dentro, o mais íngreme possível é o desnível
+  máximo da faixa sobre o menor vão que m estações consecutivas cobrem.
+  Com m ≤ 1 nada limita o giro: o conjunto é **ilimitado**, `IsUnbounded`
+  diz isso, e a grade cobre uma janela declarada. Teste do contraexemplo,
+  teste do ilimitado, e um teste de propriedade sem limite varrendo 20 m
+  de cota inicial;
+- **NaN no terreno passava como cota** (comparar com NaN é sempre falso,
+  e o módulo nunca contava como violação). Agora é "sem terreno", com
+  `Problem`;
+- **o ramo do módulo na estação zero e a ordem de empate das pontas não
+  tinham teste.** Agora têm: módulo na estação zero como violação fixa
+  (com e sem tolerância, e todos fixos → cota final livre no giro), e o
+  empate (estações 1 e 6 numa mesa de 10 m, inicial 700,20: um único z1
+  em 701,20, preservado porque abrir vem antes de fechar).
+
+Menores, corrigidos: a união de intervalos era código morto (a ordem de
+empate garante que dois intervalos nunca se tocam), removida com o motivo
+escrito; `Contains` dizia "um milímetro" e usa um nanômetro; o comentário
+de um teste dizia 2° e o código usava 1° (com 2° a mesa cabe; a conta
+refeita usa o vão dos módulos, 17,2 m, não o da mesa); intervalo invertido
+por 1e-9 não passa mais; `ModuleCount` conta a mesa inteira mesmo com
+`Problem`; `fixos` contado no laço; `MaiorMedida` compartilhada com o
+distribuidor; `ViableStart.Key(step)` expõe a chave inteira da grade para
+o 5.4 casar juntas por inteiro, nunca por igualdade de double; `Width`,
+`LongitudinalSlope` e tolerância maior que a mesa com teste.
+
+Sobre reamostrar quando a mesa gira (pendência do 5.2): decidido que **não**
+para a ponta baixa, porque ela gira em torno de si mesma e não muda de
+lugar em planta — a amostra sob ela é exata para qualquer giro. Para os
+pilares o giro desloca o pé em planta por centímetros; a decisão de
+reamostrar fica para o 5.5, onde o pilar é calculado.
+
+Placar do passo: 32 testes; etapa 5 com 166/166.
 
