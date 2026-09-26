@@ -29,6 +29,17 @@ public sealed class UfvExtension : IExtensionApplication
 
     public void Initialize()
     {
+        // O vigia (7.2) vale em todo host, com ou sem interface: é o banco do
+        // desenho que ele escuta, e o nível 2 roda no Core Console.
+        try
+        {
+            LayoutWatcher.Instalar();
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não foi possível ligar o vigia.", erro);
+        }
+
         if (!TemInterface())
         {
             Debug.WriteLine("UFV: host sem interface, ribbon não montada.");
@@ -50,6 +61,15 @@ public sealed class UfvExtension : IExtensionApplication
 
     public void Terminate()
     {
+        try
+        {
+            LayoutWatcher.Desinstalar();
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao desligar o vigia.", erro);
+        }
+
         try
         {
             RibbonUfv.Desinstalar();

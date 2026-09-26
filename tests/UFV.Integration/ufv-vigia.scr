@@ -1,0 +1,74 @@
+; Teste de nivel 2 do passo 7.2: o vigia. Processa uma fileira (como no 5.8)
+; e, com comandos do AutoCAD (nao nossos):
+;   - MOVE num pilar da mesa A: a mesa A tem que ficar suja no XData com o
+;     motivo "movida ou editada", e as pecas dela vermelhas;
+;   - ERASE no contorno da mesa B: a remocao tem que ser registrada, e o
+;     UFV_ESTADO tem que listar B como removida;
+;   - U (desfazer o ERASE): o contorno de B volta, sai das removidas, e B
+;     NAO fica suja (o vigia se cala no desfazer);
+;   - nenhuma outra mesa muda de estado.
+; O LISP escolhe A e B pelos GUIDs do XData, nunca pela camada.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_TERRENO_AUTO")
+(setq ufv:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "UFV_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area do vigia")
+(command "UFV_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento do vigia")
+(command "UFV_FILEIRA_AUTO")
+
+(defun ufv:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("MARCHENG_UFV")))))))
+(defun ufv:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun ufv:tipo (xd) (cdr (nth 0 xd)))
+(defun ufv:vermelho (e) (if (or (= (cdr (assoc 420 (entget e))) 16711680) (= (cdr (assoc 62 (entget e))) 1)) 1 0))
+
+; A e B: os dois primeiros contornos; um pilar de A.
+(setq ufv:tudo (ssget "_X" (list (cons -3 (list (list "MARCHENG_UFV"))))))
+(setq ufv:n (if ufv:tudo (sslength ufv:tudo) 0))
+(setq ufv:ea nil ufv:eb nil ufv:ga nil ufv:gb nil ufv:i 0)
+(while (< ufv:i ufv:n)
+  (setq ufv:en (ssname ufv:tudo ufv:i) ufv:xd (ufv:xdata ufv:en))
+  (if (= (ufv:tipo ufv:xd) "Mesa")
+    (cond ((not ufv:ea) (setq ufv:ea ufv:en ufv:ga (ufv:campo ufv:xd 0)))
+          ((not ufv:eb) (setq ufv:eb ufv:en ufv:gb (ufv:campo ufv:xd 0)))))
+  (setq ufv:i (1+ ufv:i)))
+(setq ufv:pilar nil ufv:i 0)
+(while (and (< ufv:i ufv:n) (not ufv:pilar))
+  (setq ufv:en (ssname ufv:tudo ufv:i) ufv:xd (ufv:xdata ufv:en))
+  (if (and (= (ufv:tipo ufv:xd) "Pilar") (= (ufv:campo ufv:xd 1) ufv:ga)) (setq ufv:pilar ufv:en))
+  (setq ufv:i (1+ ufv:i)))
+(setq ufv:labelb (ufv:campo (ufv:xdata ufv:eb) 1))
+
+; Os comandos do AutoCAD, como o usuario faria.
+(setq ufv:ssa (ssadd ufv:pilar))
+(command "_.MOVE" ufv:ssa "" "0,0,0" "1,0,0")
+(setq ufv:ssb (ssadd ufv:eb))
+(command "_.ERASE" ufv:ssb "")
+(setvar "OSMODE" ufv:osmode)
+(command "UFV_ESTADO")
+(command "_.U")
+(command "UFV_ESTADO")
+
+; O que ficou: estado de A no XData, pecas de A vermelhas, outras mesas limpas.
+(setq ufv:xda (ufv:xdata ufv:ea))
+(setq ufv:sujaa (ufv:campo ufv:xda 7) ufv:motivoa (ufv:campo ufv:xda 8))
+(setq ufv:pecasa 0 ufv:vermelhasa 0 ufv:outrassujas 0 ufv:contornos 0 ufv:i 0)
+(setq ufv:tudo (ssget "_X" (list (cons -3 (list (list "MARCHENG_UFV"))))))
+(setq ufv:n (if ufv:tudo (sslength ufv:tudo) 0))
+(while (< ufv:i ufv:n)
+  (setq ufv:en (ssname ufv:tudo ufv:i) ufv:xd (ufv:xdata ufv:en) ufv:t (ufv:tipo ufv:xd))
+  (if (= ufv:t "Mesa")
+    (progn (setq ufv:contornos (1+ ufv:contornos))
+           (if (and (/= (ufv:campo ufv:xd 0) ufv:ga) (= (ufv:campo ufv:xd 7) "1")) (setq ufv:outrassujas (1+ ufv:outrassujas)))))
+  (if (and (/= ufv:t "Face") (= (if (= ufv:t "Mesa") (ufv:campo ufv:xd 0) (ufv:campo ufv:xd 1)) ufv:ga))
+    (setq ufv:pecasa (1+ ufv:pecasa) ufv:vermelhasa (+ ufv:vermelhasa (ufv:vermelho ufv:en))))
+  (setq ufv:i (1+ ufv:i)))
+
+(setq ufv:sujab (if (entget ufv:eb) (ufv:campo (ufv:xdata ufv:eb) 7) "apagada"))
+(princ (strcat "\nUFV_VIGIA sujaa=" ufv:sujaa " motivoa=" ufv:motivoa " pecasa=" (itoa ufv:pecasa) " vermelhasa=" (itoa ufv:vermelhasa)
+               " outrassujas=" (itoa ufv:outrassujas) " contornos=" (itoa ufv:contornos) " labelb=" ufv:labelb " sujab=" ufv:sujab))
+(setvar "SECURELOAD" ufv:secureload)
+(princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

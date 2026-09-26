@@ -150,6 +150,27 @@ public static class PluginInfo
     /// </summary>
     public const string PrefixoDeDados = "MARCHENG_UFV";
 
+    /// <summary>
+    /// Prefixo de todos os comandos do plugin. O vigia (7.2) usa para saber
+    /// que o comando que está rodando é nosso e ficar calado.
+    /// </summary>
+    public const string PrefixoDeComando = "UFV_";
+
+    /// <summary>
+    /// Os comandos de desfazer e refazer do AutoCAD. Durante eles o vigia não
+    /// suja mesa: o banco volta a um estado que já foi decidido.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ComandosDeDesfazer = ["U", "UNDO", "REDO", "MREDO", "OOPS"];
+
+    /// <summary>Se é um comando de desfazer/refazer (nome global, sem distinguir maiúsculas).</summary>
+    public static bool IsUndoCommand(string? globalName) =>
+        globalName is not null && ComandosDeDesfazer.Contains(globalName.Trim(), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Se o vigia fica calado durante este comando: os nossos (UFV_*) e os de desfazer.</summary>
+    public static bool IsSilencedCommand(string? globalName) =>
+        globalName is not null
+        && (globalName.TrimStart().StartsWith(PrefixoDeComando, StringComparison.OrdinalIgnoreCase) || IsUndoCommand(globalName));
+
     /// <summary>Texto usado quando a versao nao pode ser lida da assembly.</summary>
     public const string VersaoDesconhecida = "desconhecida";
 

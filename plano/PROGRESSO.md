@@ -48,7 +48,7 @@ Só o Renan marca VALIDADO.
 | 6.4 | Estudo do formato PVC | AGUARDANDO VALIDAÇÃO | Resumo entregue em 26/09/2026 (seção "6.4: o formato PVC"); o plano manda PARAR aqui |
 | 6.5 | Escritor PVC | PENDENTE | |
 | 7.1 | Estado sujo | AGUARDANDO VALIDAÇÃO | `TableIdentity.Dirty` no XData (versão 2, lê a 1); `UFV_SUJAR` pinta contorno, pilares e módulos de vermelho; `UFV_ESTADO` lista; nível 2 confere cor e XData |
-| 7.2 | O vigia | PENDENTE | |
+| 7.2 | O vigia | AGUARDANDO VALIDAÇÃO | `LayoutWatcher` por desenho: eventos do banco + fim de comando; `PendingChanges` (Core) decide; MOVE suja, ERASE do contorno registra remoção (`RemovalStore`); nível 2 com MOVE e ERASE por script |
 | 7.3 | Recalcular mesa | PENDENTE | |
 | 7.4 | Recalcular tudo | PENDENTE | |
 | 7.5 | Cópia | PENDENTE | |
@@ -104,19 +104,23 @@ Nivel 2   13/13    OK
 Acervo             OK
 ```
 
-### O próximo passo é o 7.2 (o vigia); o 6.5 espera as respostas do 6.4
+### O próximo passo é o 7.3 (recalcular mesa); o 6.5 espera as respostas do 6.4
 
 6.1 fechado, 6.2 e 6.3 aguardando validação (o DAE no PVsyst), 6.4 é o
 resumo do formato PVC ("Entregar um resumo ao Renan e PARAR"). O 6.5 só
 começa depois que o Renan ler o resumo e decidir as três perguntas dele. A
-etapa 7 (edição) não depende da 6 e seguiu: 7.1 (estado sujo) feito,
-aguardando validação. O 7.2 é o vigia de eventos do banco (mover, apagar,
-copiar mesa só marca e pinta), com nível 2 por MOVE e ERASE via script.
-Antes de começar o 7.2, ler `plano/etapas/etapa-7-edicao.md` e a seção
-"7.1: o estado sujo" no fim deste arquivo, que diz onde o estado mora
-(`TableIdentity.Dirty`, XData versão 2 no contorno), como se acham as peças
-de uma mesa (`LayoutScan.Tables`, pelo GUID) e como se pinta
-(`TableState.MarkDirty`). O vigia usa exatamente isso.
+etapa 7 (edição) não depende da 6 e seguiu: 7.1 (estado sujo) e 7.2 (o
+vigia) feitos, aguardando validação. O 7.3 é "recalcular mesa" (item de
+menu de botão direito sobre a mesa: reamostra o terreno e refaz pilares e
+pontas baixas daquela mesa). Antes de começar, ler
+`plano/etapas/etapa-7-edicao.md` e as seções "7.1: o estado sujo" e "7.2:
+o vigia" no fim deste arquivo. **Antes do 7.3 há uma dívida a pagar**: os
+textos de altura e o aviso de marcada não têm identidade (XData), e o
+recálculo precisa apagá-los por mesa (ver Dívidas). Também vale decidir
+ali o que "recalcular" significa para uma mesa MOVIDA: ela é reprocessada
+onde está agora (a posição nova é a vontade do usuário), com a cota vinda
+do terreno (regra sagrada 5), e o alinhamento de fileira (5.4) não é
+refeito para as vizinhas, que é o "recalcular tudo" do 7.4.
 
 Antes de começar, ler `plano/etapas/etapa-6-pvsyst.md`. O que a etapa 6
 recebe da 5: as faces superiores dos módulos são entidades `3DFACE` na
@@ -203,6 +207,18 @@ teste: a etapa 6 é onde passa a ter.
    numa entidade que não é do plugin: "Isso não é uma peça de mesa do
    plugin". Não há "limpar": quem limpa é o recálculo (7.3/7.4), que
    redesenha a mesa com as cores certas.
+8. **Testar o 7.2 (o vigia)**: com uma fileira desenhada, sem usar botão
+   nenhum do plugin: MOVE num pilar ou módulo (ou arrastar pelo grip) e
+   confirmar: ao terminar o comando, a linha de comando diz "VIGIA F1.x
+   suja (movida ou editada, comando MOVE)" e a mesa inteira fica vermelha.
+   ERASE no contorno de outra mesa: "VIGIA F1.y removida (comando ERASE)";
+   `UFV_ESTADO` lista "1 removida(s): F1.y removida em <data>" e conta as
+   peças que sobraram como órfãs. COPY de uma mesa (janela sobre ela, base
+   e destino): as duas (original e cópia, que ainda compartilham GUID até
+   o 7.5) ficam vermelhas com motivo "copiada". Mudar a cor de um módulo
+   pela paleta de propriedades: também suja ("movida ou editada"). Rodar
+   `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
+   nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
 5. **Conferir a mesa do 3.7 contra um projeto de fabricante.** Ele aprovou a
    etapa 3 sem relatar essa conferência, que é o que o plano pede como
    validação do 3.7 — é o único jeito de saber se o motor acerta o número, e
@@ -2725,4 +2741,86 @@ tipo resolve); o 7.2 não pode chamar `LayoutScan.Tables` a cada evento
 (usar `TableOf` do objeto modificado, ou um índice em memória); a cópia
 (7.5) hoje agrupa as peças de dois contornos sob um GUID; e os textos de
 altura e de marcada precisam de identidade antes do 7.3 (Dívidas).
+
+## 7.2: o vigia
+
+Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO` (é comportamento de tela:
+mover, apagar, copiar). Nível 1: sete testes (`TableChangesTests`). Nível 2:
+`ufv-vigia.scr` processa a fileira do 5.8 e, com comandos do PRÓPRIO
+AutoCAD (`_.MOVE` num pilar da mesa A, `_.ERASE` no contorno da mesa B),
+lê pelo XData: A suja com motivo "movida ou editada" e as 36 peças
+vermelhas; nenhuma outra mesa suja; um contorno a menos; o vigia anunciou
+as duas coisas; `UFV_ESTADO` conta 1 suja, 1 órfã e lista B como removida.
+Os eventos do banco e de comando disparam no Core Console, o que não era
+garantido antes de rodar.
+
+### A divisão: o Core decide, o plugin escuta
+
+`PendingChanges` (Core, puro) é o livro de mudanças: durante um comando,
+recebe "peça da mesa X foi modificada / acrescentada / apagada, e é ou não
+o contorno"; ao fim, `Resolve` devolve mesa → motivo (copiada > peça
+apagada > movida ou editada, o mais grave vence) e a lista de removidas
+(contorno apagado; removida não fica suja, porque não há onde gravar). O
+plugin (`LayoutWatcher`) só escuta `ObjectModified`, `ObjectAppended` e
+`ObjectErased` do banco e `CommandWillStart`/`CommandEnded`/`Cancelled`/
+`Failed` do documento, lendo o XData da peça dentro do evento (só leitura)
+e executando a decisão no fim do comando, numa transação: `MarkDirty` do
+7.1 nas sujas e `RemovalStore.Add` nas removidas, com uma linha "VIGIA …"
+por mesa. Um vigia por documento, ligado no `Initialize` (todo host,
+inclusive sem interface) e nos que abrirem depois.
+
+### Os dois silêncios
+
+Sem eles o vigia se morde: (1) durante um comando NOSSO (nome começa com
+`UFV_`, `PluginInfo.PrefixoDeComando`) nada é anotado, e o livro é
+esvaziado no fim, senão `UFV_FILEIRA` sujaria tudo que desenha; (2)
+enquanto o próprio vigia pinta nada é anotado, porque pintar é modificar.
+
+### Decisões que são minhas
+
+- "apagar mesa" = apagar o CONTORNO. Apagar só pilares ou módulos suja a
+  mesa com "peça apagada"; apagar o contorno registra a remoção e deixa as
+  peças que sobraram como órfãs (o `UFV_ESTADO` as conta; o 7.6 reconta);
+- a remoção mora no dicionário do desenho (`REMOVIDAS`, GUID, letreiro,
+  data), no mesmo formato de registro das áreas e alinhamentos, sem
+  repetir mesa. Consumir é do 7.6;
+- "desapagar" (UNDO de um apagar) conta como modificada; UNDO de um MOVE
+  deixa a mesa suja (ela foi tocada duas vezes; recalcular resolve);
+- cópia (7.5 ainda não) suja original e cópia com "copiada", porque as
+  duas têm o mesmo GUID e o `LayoutScan` as agrupa;
+- o motivo do vigia é curto e fixo; o nome do comando vai na linha de
+  comando, não no XData.
+- **o que o vigia grava no fim do comando NÃO entra no grupo de undo do
+  comando** (visto no nível 2: depois do `_.U` do ERASE o contorno voltou
+  mas o registro de remoção ficou, e foi o vigia quem o tirou). Logo um U
+  depois de um MOVE devolve a mesa ao lugar e ela CONTINUA suja e
+  vermelha; é conservador e o recálculo resolve. O Renan confere na tela.
+
+### O que a revisão do 7.2 apontou, e o que foi feito
+
+Nenhum bloqueante. Quatro importantes, corrigidos: (1) desfazer e refazer
+(U, UNDO, REDO, MREDO, OOPS) sujavam a mesa que o banco só devolvia a um
+estado já decidido; agora são comandos calados (`PluginInfo.IsSilencedCommand`,
+com teste), em que nada suja e só o registro de remoções acompanha o
+contorno que some ou volta; (2) UNDO de um ERASE deixava a mesa registrada
+como removida e presente ao mesmo tempo; agora `ObjectErased` com
+`Erased=false` é `ChangeKind.Restored`, o livro devolve `Restored`, e o
+vigia tira a mesa do registro (`RemovalStore.Remove`), com o nível 2
+provando com um `_.U` depois do ERASE (contorno de volta, 0 removidas, B
+limpa); (3) o bool "comando nosso" virou contador de profundidade, para
+comando nosso que chame outro comando não destravar o vigia no meio; (4) a
+paleta de Propriedades altera entidade sem comando e a anotação ficava
+esperando o próximo `CommandEnded` (podia ser o salvar); agora, sem comando
+em andamento, o descarregamento é agendado para a folga do AutoCAD
+(`Application.Idle`, com a trava do documento). Menores corrigidos:
+`ResultBuffer` do XData com `using`; `RemovalStore.Load` e
+`PendingChanges.Count` sem uso, apagados; `Anotar` reaproveita
+`LayoutScan.TableOf`; os handlers do `DocumentManager` são guardados e
+desassinados. Descoberto no nível 2: `UFV_ESTADO` deixava marca de undo e
+um `U` depois dele desfazia o ESTADO em vez do ERASE; comando que só lê
+agora leva `NoUndoMarker`. Anotado, não feito: cancelar um comando no meio
+deixa a mesa suja (conservador); o 7.4 é o lugar de medir a varredura
+(`LayoutScan.Tables`) numa usina inteira e decidir sobre um índice em
+memória; o COPY suja original e cópia sob o mesmo GUID até o 7.5 (está no
+roteiro de tela).
 

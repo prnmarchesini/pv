@@ -110,8 +110,12 @@ public static class EstadoCommands
         }
     }
 
-    /// <summary>UFV_ESTADO: quantas mesas limpas, quais sujas e por quê.</summary>
-    [CommandMethod(PluginInfo.ComandoEstado)]
+    /// <summary>
+    /// UFV_ESTADO: quantas mesas limpas, quais sujas e por quê, e as
+    /// removidas. Só lê: sem marca de undo, para um U depois dele desfazer o
+    /// comando anterior do usuário, e não este.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoEstado, CommandFlags.Modal | CommandFlags.NoUndoMarker)]
     public static void Estado()
     {
         var documento = AcadApp.DocumentManager.MdiActiveDocument;
@@ -124,6 +128,7 @@ public static class EstadoCommands
             using var transacao = documento.Database.TransactionManager.StartTransaction();
 
             var mesas = LayoutScan.Tables(transacao, documento.Database).Values.ToList();
+            var removidas = RemovalStore.Ler(documento.Database);
             transacao.Commit();
 
             var comContorno = mesas.Where(m => m.Identity is not null).OrderBy(m => m.Identity!.Label, StringComparer.Ordinal).ToList();
@@ -136,6 +141,13 @@ public static class EstadoCommands
 
             foreach (var mesa in sujas)
                 editor.WriteMessage($"  {mesa.Identity!.DescribeState()}\n");
+
+            editor.WriteMessage($"  {removidas.Items.Count} removida(s)" + (removidas.Items.Count > 0 ? ":" : ".") + "\n");
+
+            foreach (var remocao in removidas.Items)
+                editor.WriteMessage($"  {remocao.Describe()}\n");
+
+            if (removidas.Problem is not null) editor.WriteMessage($"  ATENÇÃO: {removidas.Problem}.\n");
         }
         catch (System.Exception erro)
         {

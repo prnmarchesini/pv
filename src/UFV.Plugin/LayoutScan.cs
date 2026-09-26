@@ -54,7 +54,9 @@ internal static class LayoutScan
             // abertas; superfície, curvas de nível e textos ficam fechados.
             if (!ENossaClasse(id)) continue;
             if (transacao.GetObject(id, OpenMode.ForRead) is not Entity entidade) continue;
-            if (entidade.GetXDataForApplication(PluginXData.Aplicativo) is null) continue;
+
+            using (var dados = entidade.GetXDataForApplication(PluginXData.Aplicativo))
+                if (dados is null) continue;
 
             if (LayoutXData.LoadTable(entidade) is { } mesa)
             {
@@ -98,7 +100,8 @@ internal static class LayoutScan
     {
         ArgumentNullException.ThrowIfNull(entidade);
 
-        if (entidade.GetXDataForApplication(PluginXData.Aplicativo) is null) return null;
+        using (var dados = entidade.GetXDataForApplication(PluginXData.Aplicativo))
+            if (dados is null) return null;
 
         return LayoutXData.LoadTable(entidade)?.Id
             ?? LayoutXData.LoadPillar(entidade)?.Table

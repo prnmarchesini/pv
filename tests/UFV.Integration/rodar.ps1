@@ -1688,6 +1688,121 @@ function Testar-Sujo {
     return $true
 }
 
+<#
+    O vigia (7.2): processa uma fileira e, com MOVE e ERASE do proprio
+    AutoCAD, toca um pilar da mesa A e apaga o contorno da mesa B. Le do
+    desenho: A suja no XData com o motivo "movida ou editada" e as pecas
+    vermelhas; nenhuma outra mesa suja; um contorno a menos; UFV_ESTADO
+    lista B como removida; depois de U, o contorno de B volta, sai das
+    removidas e B continua limpa.
+#>
+function Testar-Vigia {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-vigia--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-vigia: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-vigia' `
+        -Script (Join-Path $PSScriptRoot 'ufv-vigia.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3  50 -50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-vigia terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'UFV_VIGIA sujaa=(\d) motivoa=(.*?) pecasa=(\d+) vermelhasa=(\d+) outrassujas=(\d+) contornos=(\d+) labelb=([A-Za-z0-9.]+) sujab=([0-9a-z]+)') {
+        $problemas.Add("ufv-vigia: nao consegui ler o resultado em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $sujaA = $Matches[1]
+    $motivoA = $Matches[2]
+    $pecasA = [int] $Matches[3]
+    $vermelhasA = [int] $Matches[4]
+    $outrasSujas = [int] $Matches[5]
+    $contornos = [int] $Matches[6]
+    $labelB = $Matches[7]
+    $sujaB = $Matches[8]
+
+    if ($sujaA -ne '1' -or $motivoA -ne 'movida ou editada') {
+        $problemas.Add("ufv-vigia: depois do MOVE a mesa A esta suja=$sujaA motivo='$motivoA'. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($pecasA -lt 3 -or $vermelhasA -ne $pecasA) {
+        $problemas.Add("ufv-vigia: a mesa A tem $pecasA peca(s) e $vermelhasA vermelha(s). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($outrasSujas -ne 0) {
+        $problemas.Add("ufv-vigia: $outrasSujas outra(s) mesa(s) ficaram sujas sem motivo. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch "(?m)^VIGIA \S+ suja \(movida ou editada, comando MOVE\)") {
+        $problemas.Add("ufv-vigia: o vigia nao anunciou a mesa movida. Veja $($r.Saida)")
+        return $false
+    }
+
+    # Dois ESTADOs: depois do ERASE e depois do U.
+    $estados = @([regex]::Matches($r.Texto, '(?m)^ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), (\d+) suja\(s\)(, (\d+) com peças órfãs \(sem contorno\))?[\s\S]*?(\d+) removida\(s\)'))
+
+    if ($estados.Count -ne 2) {
+        $problemas.Add("ufv-vigia: esperava dois UFV_ESTADO, achei $($estados.Count). Veja $($r.Saida)")
+        return $false
+    }
+
+    $depoisDoErase = $estados[0]
+    $depoisDoU = $estados[1]
+
+    $orfas = if ($depoisDoErase.Groups[5].Success) { [int] $depoisDoErase.Groups[5].Value } else { 0 }
+    if ([int] $depoisDoErase.Groups[1].Value -ne ($contornos - 1) -or [int] $depoisDoErase.Groups[3].Value -ne 1 -or $orfas -ne 1 -or [int] $depoisDoErase.Groups[6].Value -ne 1) {
+        $problemas.Add("ufv-vigia: depois do ERASE, UFV_ESTADO disse '$($depoisDoErase.Value)'; esperava $($contornos - 1) mesa(s), 1 suja, 1 orfa, 1 removida. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch "1 removida\(s\):\s*\r?\n\s*$([regex]::Escape($labelB)) removida em") {
+        $problemas.Add("ufv-vigia: UFV_ESTADO nao listou $labelB como removida. Veja $($r.Saida)")
+        return $false
+    }
+
+    $orfasU = if ($depoisDoU.Groups[5].Success) { [int] $depoisDoU.Groups[5].Value } else { 0 }
+    if ([int] $depoisDoU.Groups[1].Value -ne $contornos -or [int] $depoisDoU.Groups[3].Value -ne 1 -or $orfasU -ne 0 -or [int] $depoisDoU.Groups[6].Value -ne 0) {
+        $problemas.Add("ufv-vigia: depois do U, UFV_ESTADO disse '$($depoisDoU.Value)'; esperava $contornos mesa(s), 1 suja, 0 orfa, 0 removida. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($sujaB -ne '0') {
+        $problemas.Add("ufv-vigia: depois do U a mesa B esta suja=$sujaB; o desfazer nao pode sujar. Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (vigia: A suja por MOVE com $pecasA pecas vermelhas; $labelB removida por ERASE e de volta com U)" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -1769,6 +1884,10 @@ else {
     # O estado sujo da mesa, lido do XData e da cor.
     $total++
     if (Testar-Sujo -Desenho $desenhos[0]) { $passaram++ }
+
+    # O vigia: MOVE suja, ERASE registra.
+    $total++
+    if (Testar-Vigia -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------
