@@ -18,13 +18,18 @@ internal static class LayoutXData
     /// Versão 2 desde o 7.1: ganhou o estado sujo e o motivo. A versão 1
     /// (etapa 5) continua a ser lida, como limpa.
     /// </summary>
-    private const int VersaoDaMesa = 2;
+    /// <summary>Versão 3 desde o 7.6: ganhou a potência do módulo. A 2 (estado sujo) e a 1 (etapa 5) continuam a ser lidas.</summary>
+    private const int VersaoDaMesa = 3;
+    private const int VersaoDaMesaDois = 2;
     private const int VersaoDaMesaAntiga = 1;
     private const int VersaoDoPilar = 1;
     private const int VersaoDoModulo = 1;
 
-    /// <summary>GUID, letreiro, cota inicial, cota final, inclinação, marcada, motivo, suja, motivo da sujeira.</summary>
-    private const int CamposDaMesa = 9;
+    /// <summary>GUID, letreiro, cota inicial, cota final, inclinação, marcada, motivo, suja, motivo da sujeira, potência do módulo.</summary>
+    private const int CamposDaMesa = 10;
+
+    /// <summary>Os nove primeiros, na versão 2.</summary>
+    private const int CamposDaMesaDois = 9;
 
     /// <summary>Os sete primeiros, na versão 1.</summary>
     private const int CamposDaMesaAntiga = 7;
@@ -51,11 +56,13 @@ internal static class LayoutXData
             mesa.Marked ? "1" : "0",
             mesa.Reason ?? string.Empty,
             mesa.Dirty ? "1" : "0",
-            mesa.DirtyReason ?? string.Empty);
+            mesa.DirtyReason ?? string.Empty,
+            Opcional(mesa.ModulePowerWatts));
 
     internal static TableIdentity? LoadTable(Entity entidade)
     {
         var c = PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesa, CamposDaMesa)
+            ?? PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesaDois, CamposDaMesaDois)
             ?? PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesaAntiga, CamposDaMesaAntiga);
         if (c is null) return null;
 
@@ -66,10 +73,13 @@ internal static class LayoutXData
         // genérico; limpa ignora o que houver no motivo. Rejeitar aqui apagaria
         // a identidade da mesa inteira por dois caracteres errados no XData,
         // e a identidade é o que a regra sagrada 3 protege.
-        var suja = c.Count >= CamposDaMesa && c[7] == "1";
+        var suja = c.Count >= CamposDaMesaDois && c[7] == "1";
         var motivo = suja ? (c[8].Length > 0 ? c[8] : "motivo perdido") : null;
+        var potencia = c.Count >= CamposDaMesa ? RealOpcional(c[9]) : null;
 
-        var mesa = new TableIdentity(id, c[1], z0, z1, tilt, c[5] == "1", c[6].Length == 0 ? null : c[6], suja, motivo);
+        if (potencia is { } w && (!double.IsFinite(w) || w <= 0)) potencia = null;
+
+        var mesa = new TableIdentity(id, c[1], z0, z1, tilt, c[5] == "1", c[6].Length == 0 ? null : c[6], suja, motivo, potencia);
 
         return mesa.IsValid ? mesa : null;
     }

@@ -18,6 +18,12 @@ namespace UFV.Core;
 /// (etapa 7). Nasce limpa.
 /// </param>
 /// <param name="DirtyReason">Por que está suja ("movida", "copiada", "pedido do usuário"), ou null quando limpa.</param>
+/// <param name="ModulePowerWatts">
+/// A potência do módulo com que a mesa foi desenhada, em W, ou null numa
+/// mesa de antes do 7.6 (a recontagem usa a do perfil atual e avisa). É o
+/// que faz o kWp do recontar ser o dos módulos que ESTÃO no desenho, e não
+/// o do perfil que estiver escolhido no dia.
+/// </param>
 public sealed record TableIdentity(
     Guid Id,
     string Label,
@@ -27,7 +33,8 @@ public sealed record TableIdentity(
     bool Marked,
     string? Reason,
     bool Dirty = false,
-    string? DirtyReason = null)
+    string? DirtyReason = null,
+    double? ModulePowerWatts = null)
 {
     /// <summary>O tipo, como vai no XData.</summary>
     public const string Tipo = "Mesa";
@@ -36,7 +43,8 @@ public sealed record TableIdentity(
     public bool IsValid =>
         Id != Guid.Empty && !string.IsNullOrWhiteSpace(Label)
         && double.IsFinite(StartElevation) && double.IsFinite(EndElevation) && double.IsFinite(TiltRadians)
-        && Dirty == !string.IsNullOrWhiteSpace(DirtyReason);
+        && Dirty == !string.IsNullOrWhiteSpace(DirtyReason)
+        && (ModulePowerWatts is null || (double.IsFinite(ModulePowerWatts.Value) && ModulePowerWatts > 0));
 
     /// <summary>A mesma mesa, suja por este motivo. O motivo é obrigatório.</summary>
     /// <exception cref="ArgumentException">Motivo em branco.</exception>

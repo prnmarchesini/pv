@@ -300,6 +300,12 @@ internal static class RibbonUfv
             "Recalcula só as mesas sujas."));
 
         origem.Items.Add(BotaoPequeno(
+            "Recontar",
+            IconesDaRibbon.Recontar(),
+            PluginInfo.ComandoRecontar,
+            "Conta a usina como está no desenho: mesas, módulos, kWp e pilares; lista e limpa as removidas."));
+
+        origem.Items.Add(BotaoPequeno(
             "Renomear",
             IconesDaRibbon.Renomear(),
             PluginInfo.ComandoRenomear,

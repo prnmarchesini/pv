@@ -138,6 +138,12 @@ internal static class IconesDaRibbon
         Traco("M24,9 A6,6 0 1 0 27.5,15", Neutro, 2.2),
         Traco("M24,5 L24,9.5 L19.5,9.5", Neutro, 2.2));
 
+    /// <summary>Um somatório sobre três mesas: recontar.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Recontar() => Montar(
+        Traco("M3,10 L11,7 M3,17 L11,14 M3,24 L11,21", Azul, 2.4),
+        Traco("M17,6 H28 L21,15 L28,24 H17", Neutro, 2.4));
+
     /// <summary>Uma etiqueta com um traço: renomear os blocos.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static ImageSource Renomear() => Montar(

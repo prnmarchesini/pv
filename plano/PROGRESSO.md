@@ -52,7 +52,7 @@ Só o Renan marca VALIDADO.
 | 7.3 | Recalcular mesa | AGUARDANDO VALIDAÇÃO | `UFV_RECALCULAR` (botão e botão direito sobre a peça): célula dos cantos do contorno (`TableCells`), reamostra, refaz pilares e pontas baixas, mesmo GUID, nasce limpa |
 | 7.4 | Recalcular tudo | AGUARDANDO VALIDAÇÃO | `UFV_RECALCULAR_SUJAS` (botão "Recalcular sujas"); nível 2: suja uma, recalcula, mesmo GUID limpo, 7/28/28 peças |
 | 7.5 | Cópia | AGUARDANDO VALIDAÇÃO | `CopyFixer` no fim do comando que copiou: mesa nova e peças novas (agrupadas pelo deslocamento), suja "copiada"; `UFV_RENOMEAR` para blocos com sufixo; nível 2 com COPY e -RENAME |
-| 7.6 | Apagar e recontar | PENDENTE | |
+| 7.6 | Apagar e recontar | AGUARDANDO VALIDAÇÃO | remoção já era do vigia (7.2); `UFV_RECONTAR` (botão Recontar) conta pelo XData (`LayoutCensus`, Core, 3 testes) e consome as removidas; nível 2 com ERASE |
 | 7.7 | Validação | PENDENTE | |
 | 7.8 | Auto-seleção | PENDENTE | |
 | 7.9 | Grupos e painel de informações | PENDENTE | |
@@ -106,26 +106,27 @@ Nivel 2   16/16    OK
 Acervo             OK
 ```
 
-### O próximo passo é o 7.6 (apagar e recontar); o 6.5 espera as respostas do 6.4
+### O próximo passo é o 7.7 (validação); o 6.5 espera as respostas do 6.4
 
 6.1 fechado, 6.2 e 6.3 aguardando validação (o DAE no PVsyst), 6.4 é o
 resumo do formato PVC ("Entregar um resumo ao Renan e PARAR"). O 6.5 só
 começa depois que o Renan ler o resumo e decidir as três perguntas dele. A
 etapa 7 (edição) não depende da 6 e seguiu: 7.1 (estado sujo), 7.2 (o
-vigia), 7.3 (recalcular mesa), 7.4 (recalcular sujas) e 7.5 (cópia)
-feitos, aguardando validação. Fora do plano, a pedido do Renan na tela em 26/09/2026, a
+vigia), 7.3 (recalcular mesa), 7.4 (recalcular sujas), 7.5 (cópia) e 7.6
+(recontar) feitos, aguardando validação. Fora do plano, a pedido do Renan na tela em 26/09/2026, a
 etapa 5 foi refeita duas vezes no mesmo dia (fileira pelo azimute, mesa
 dentro da área, mesa que não cabe pintada, Refazer, janela de nome,
 terreno que não se perde): ver "Segunda reprovação do 5.8". O 7.5 é a
 cópia: detectar GUID duplicado (o vigia já suja original e cópia com
 "copiada"), dar identidade nova à cópia e a cada peça dela. Antes de
 começar, ler `plano/etapas/etapa-7-edicao.md` e as seções 7.1 a 7.4 no
-fim deste arquivo. O 7.6 é "apagar e recontar": a remoção já é detectada
-e registrada pelo vigia (7.2, `RemovalStore`); falta o botão **Recontar**,
-que refaz as listas e a potência (o que "lista" significa aqui: o
-`UFV_ESTADO` já conta; talvez a saída seja um relatório da usina: mesas,
-módulos, kWp, pilares por comprimento) e limpa as remoções consumidas.
-Buraco na numeração fica até o 7.10.
+fim deste arquivo. O 7.7 é a validação: ao abrir o desenho e pelo botão
+**Validar**, conferir se o registrado existe (áreas, alinhamentos, mesas
+do registro de remoções), se algo mudou de posição (mesa suja sem
+recálculo), GUID duplicado (o `LayoutScan.IsDuplicated` já sabe) e o
+carimbo da superfície (`TerrenoEnvelhecido` já confere), e dizer o que
+achou. "Ao abrir o desenho" é um evento de documento (`DocumentCreated`
+ou o primeiro comando): cuidado com o Core Console, onde não há tela.
 
 Antes de começar, ler `plano/etapas/etapa-6-pvsyst.md`. O que a etapa 6
 recebe da 5: as faces superiores dos módulos são entidades `3DFACE` na
@@ -229,6 +230,13 @@ teste: a etapa 6 é onde passa a ter.
    pela paleta de propriedades: também suja ("movida ou editada"). Rodar
    `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
    nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
+11. **Testar o 7.6 (recontar)**: apague uma mesa inteira com o Delete
+   (janela sobre ela) e outra só o contorno. Botão "Recontar" na seção
+   Edição: diz mesas, módulos, kWp (com a potência do módulo do perfil
+   atual), pilares com faixa e média de comprimento, e "N removida(s)
+   desde a última recontagem: F1.x, F1.y. Registro limpo"; a mesa que
+   ficou só com as peças aparece como "com peças órfãs". "Estado" depois
+   diz 0 removidas. Recontar de novo: "nenhuma removida desde a última".
 10. **Testar o 7.5 (cópia)**: COPY de uma mesa inteira (janela sobre ela)
    para outro lugar: ao terminar, "VIGIA cópia de F1.x: N peça(s) com
    identidade nova", a CÓPIA fica vermelha com motivo "copiada" e a
@@ -3118,4 +3126,49 @@ visto no CAD — o Renomear só trata `NOME$n$`, e o Renan confere ao colar;
 ARRAY associativo e INSERT de bloco com mesa dentro não são cobertos;
 `ChangeKind.Appended` no livro do Core virou ramo só de teste (a cópia
 é decidida pelo `CopyFixer`).
+
+## 7.6: apagar e recontar
+
+Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO`. A metade "apagar" já era do
+vigia (7.2): apagar o contorno registra a remoção, apagar peças suja a
+mesa, desfazer devolve. A metade nova é o botão **Recontar**
+(`UFV_RECONTAR`): conta a usina como ela ESTÁ no desenho, pelo XData, e
+não pelo que o motor calculou. `LayoutCensus` (Core, 3 testes) recebe uma
+lista de mesas contadas (identidade ou null se órfã, módulos, comprimentos
+de pilar, pilares sem comprimento) e devolve mesas, órfãs, sujas, que não
+cabem, módulos, kWp, pilares com faixa e média, em linhas prontas. O
+comando lista as removidas registradas desde a última recontagem e limpa o
+registro. Nível 2 (`ufv-recontar.scr`): apaga o contorno de uma mesa com
+ERASE e reconta: os totais batem com o que o LISP conta pelo XData (uma
+mesa a menos, mesma quantidade de módulos e pilares, uma órfã), a removida
+é listada e o `UFV_ESTADO` depois diz 0.
+
+### Decisões que são minhas
+
+- a potência é a de cada mesa (gravada na identidade dela desde o 7.6);
+  mesa desenhada antes usa a do perfil atual, com aviso;
+- "recontar" não renumera (7.10) nem apaga peças órfãs: só conta e diz;
+- o registro de removidas é consumido pelo Recontar (é o que "refaz as
+  listas" significa aqui); o `UFV_ESTADO` continua mostrando as removidas
+  enquanto ninguém recontar.
+
+### O que a revisão do 7.6 apontou, e o que foi feito
+
+Nenhum bloqueante. Quatro importantes, corrigidos: (1) o comando tinha
+`NoUndoMarker` e grava (limpa o registro de removidas): um U depois dele
+desfaria o comando anterior do usuário junto com a limpeza; a marca saiu;
+(2) o kWp usava a potência do módulo do PERFIL ATUAL para todo módulo do
+desenho; agora a potência do módulo vai gravada na identidade da mesa
+(`TableIdentity.ModulePowerWatts`, XData da mesa na versão 3, lendo a 2 e
+a 1), a contagem soma mesa a mesa, e a mesa sem potência gravada
+(desenhada antes) usa a do perfil atual com um aviso dizendo quantas; (3)
+mesa duplicada (dois contornos, um GUID) era contada como uma mesa com o
+dobro de peças; agora conta pelos contornos e o relatório avisa; (4) o
+nível 2 só apagava o contorno, e módulos e pilares não mudavam; agora
+apaga também uma mesa inteira e exige duas mesas, 28 módulos e 7 pilares a
+menos, e duas removidas listadas. Menores corrigidos: kWp com o mesmo
+formato do relatório da usina; comprimento não finito conta como "sem
+comprimento" em vez de sumir; registro de removidas ilegível é descartado
+com aviso, em vez de avisar para sempre; `Lines()` chamado uma vez; a
+linha das órfãs diz quantos módulos delas entraram no total.
 

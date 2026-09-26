@@ -162,6 +162,9 @@ public static class PluginInfo
     /// <summary>Comando que devolve ao padrão do plugin os blocos que chegaram de outro desenho com sufixo ($0$).</summary>
     public const string ComandoRenomear = "UFV_RENOMEAR";
 
+    /// <summary>Comando que conta a usina como está no desenho (mesas, módulos, kWp, pilares) e consome as remoções registradas.</summary>
+    public const string ComandoRecontar = "UFV_RECONTAR";
+
     /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).

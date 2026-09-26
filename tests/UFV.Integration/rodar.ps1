@@ -2134,6 +2134,96 @@ function Testar-Copia {
     return $true
 }
 
+<#
+    Recontar (7.6): apaga o contorno de uma mesa e reconta. O total do
+    RECONTAR tem que bater com o que o LISP conta pelo XData (mesas uma a
+    menos, modulos e pilares iguais, uma orfa), a removida tem que ser
+    listada, e o registro limpo (UFV_ESTADO diz 0 removidas depois).
+#>
+function Testar-Recontar {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-recontar--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-recontar: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-recontar' `
+        -Script (Join-Path $PSScriptRoot 'ufv-recontar.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-recontar terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'RECONTAR_TOTAIS mesas=(\d+) modulos=(\d+) pilares=(\d+) orfas=(\d+)') {
+        $problemas.Add("ufv-recontar: o comando nao contou. Veja $($r.Saida)")
+        return $false
+    }
+
+    $mesas = [int] $Matches[1]
+    $modulos = [int] $Matches[2]
+    $pilares = [int] $Matches[3]
+    $orfas = [int] $Matches[4]
+
+    if ($r.Texto -notmatch 'UFV_RECONTAR_LISP antes=(\d+) modantes=(\d+) pilantes=(\d+) mesas=(\d+) modulos=(\d+) pilares=(\d+)') {
+        $problemas.Add("ufv-recontar: nao consegui ler o desenho em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $antes = [int] $Matches[1]
+    $modAntes = [int] $Matches[2]
+    $pilAntes = [int] $Matches[3]
+    $mesasLisp = [int] $Matches[4]
+    $modulosLisp = [int] $Matches[5]
+    $pilaresLisp = [int] $Matches[6]
+
+    # Uma mesa perdeu so o contorno (orfa), outra foi apagada inteira (28 modulos, 7 pilares).
+    if ($mesasLisp -ne ($antes - 2) -or $modulosLisp -ne ($modAntes - 28) -or $pilaresLisp -ne ($pilAntes - 7)) {
+        $problemas.Add("ufv-recontar: o LISP conta $mesasLisp/$modulosLisp/$pilaresLisp depois de $antes/$modAntes/$pilAntes; esperava -2/-28/-7. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($mesas -ne $mesasLisp -or $modulos -ne $modulosLisp -or $pilares -ne $pilaresLisp -or $orfas -ne 1) {
+        $problemas.Add("ufv-recontar: RECONTAR disse $mesas/$modulos/$pilares/$orfas (mesas/modulos/pilares/orfas); o LISP conta $mesasLisp/$modulosLisp/$pilaresLisp. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '2 removida\(s\) desde a última recontagem: (\S+), (\S+)\. Registro limpo\.') {
+        $problemas.Add("ufv-recontar: as duas removidas nao foram listadas e limpas. Veja $($r.Saida)")
+        return $false
+    }
+
+    $estados = @([regex]::Matches($r.Texto, '(?m)^ESTADO [^\r\n]*[\s\S]*?(\d+) removida\(s\)'))
+    if ($estados.Count -lt 1 -or [int] $estados[$estados.Count - 1].Groups[1].Value -ne 0) {
+        $problemas.Add("ufv-recontar: depois do RECONTAR o ESTADO ainda lista removida. Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (recontar: $mesas mesas, $modulos modulos, $pilares pilares, 1 orfa; 2 removidas consumidas)" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -2231,6 +2321,10 @@ else {
     # A copia ganha identidade propria; blocos com sufixo voltam ao padrao.
     $total++
     if (Testar-Copia -Desenho $desenhos[0]) { $passaram++ }
+
+    # Recontar: conta pelo XData e consome as removidas.
+    $total++
+    if (Testar-Recontar -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

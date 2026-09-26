@@ -92,7 +92,8 @@ internal static class LayoutDrawer
             var identidade = new TableIdentity(
                 idDaMesa?.Invoke(mesa) ?? Guid.NewGuid(), mesa.Label,
                 mesa.Solved.StartElevation, mesa.Solved.EndElevation, tiltRadians,
-                mesa.Solved.Marked, mesa.Solved.Reason);
+                mesa.Solved.Marked, mesa.Solved.Reason,
+                ModulePowerWatts: modulo.PowerWatts);
 
             var colocacao = mesa.Placement;
             var matriz = Matriz(colocacao);
