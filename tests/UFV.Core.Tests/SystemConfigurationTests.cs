@@ -357,6 +357,48 @@ public class SystemConfigurationTests
         Assert.Contains("espaçamento", config.WhyInvalid!);
     }
 
+    [Theory]
+    [Trait("Etapa", "5")]
+    [InlineData(-0.1)]
+    [InlineData(double.NaN)]
+    [InlineData(500)]
+    public void EspacamentoEntreMesasImpossivelERecusado(double gap)
+    {
+        var config = Padrao() with { TableGap = gap };
+
+        Assert.False(config.IsValid);
+        Assert.Contains("espaçamento entre mesas", config.WhyInvalid!);
+    }
+
+    /// <summary>
+    /// Mesa encostada na outra é permitido: espaçamento zero. E o padrão de
+    /// quebra é o exemplo do plano de requisitos, 5 m.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "5")]
+    public void EspacamentoZeroEAceitoEOPadraoDeQuebraECincoMetros()
+    {
+        Assert.True((Padrao() with { TableGap = 0 }).IsValid);
+        Assert.Equal(5.0, Padrao().MaxGapBeforeBreak, 9);
+        Assert.Equal(0.50, Padrao().TableGap, 9);
+    }
+
+    /// <summary>
+    /// A primeira conferência cruzada: quebrar fileira num espaçamento menor
+    /// que o de distribuição faria toda fileira nascer quebrada em cada mesa.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "5")]
+    public void QuebraMenorQueOEspacamentoERecusada()
+    {
+        var config = Padrao() with { TableGap = 1.0, MaxGapBeforeBreak = 0.5 };
+
+        Assert.False(config.IsValid);
+        Assert.Contains("menor", config.WhyInvalid!);
+
+        Assert.True((Padrao() with { TableGap = 1.0, MaxGapBeforeBreak = 1.0 }).IsValid);
+    }
+
     // ------------------------------------------------------------- texto
 
     [Fact]

@@ -24,6 +24,7 @@ namespace UFV.Core;
 /// <param name="Pitch">Pitch entre mesas, em metro.</param>
 /// <param name="MinStepCm">Degrau mínimo entre mesas vizinhas, em cm.</param>
 /// <param name="MaxStepCm">Degrau máximo entre mesas vizinhas, em cm.</param>
+/// <param name="TableGapCm">Espaçamento entre mesas vizinhas da fileira, em cm.</param>
 /// <param name="BreakGapCm">Espaçamento que quebra a fileira, em cm.</param>
 /// <param name="MinLowEdgeCm">Altura livre mínima da ponta baixa, em cm.</param>
 /// <param name="MaxLowEdgeCm">Altura livre máxima da ponta baixa, em cm.</param>
@@ -41,6 +42,7 @@ public sealed record ProjectSettingsForm(
     string Pitch,
     string MinStepCm,
     string MaxStepCm,
+    string TableGapCm,
     string BreakGapCm,
     string MinLowEdgeCm,
     string MaxLowEdgeCm,
@@ -68,6 +70,7 @@ public sealed record ProjectSettingsForm(
         (nameof(Pitch), "Pitch entre mesas"),
         (nameof(MinStepCm), "Degrau mínimo"),
         (nameof(MaxStepCm), "Degrau máximo"),
+        (nameof(TableGapCm), "Espaçamento entre mesas"),
         (nameof(BreakGapCm), "Espaçamento que quebra a fileira"),
         (nameof(MinLowEdgeCm), "Altura livre mínima"),
         (nameof(MaxLowEdgeCm), "Altura livre máxima"),
@@ -100,6 +103,7 @@ public sealed record ProjectSettingsForm(
             Pitch: Numero(c.Pitch),
             MinStepCm: Centimetros(c.MinStep),
             MaxStepCm: Centimetros(c.MaxStep),
+            TableGapCm: Centimetros(c.TableGap),
             BreakGapCm: Centimetros(c.MaxGapBeforeBreak),
             MinLowEdgeCm: Centimetros(c.MinLowEdge),
             MaxLowEdgeCm: Centimetros(c.MaxLowEdge),
@@ -146,6 +150,7 @@ public sealed record ProjectSettingsForm(
         NumberInput.TryParseMeasure(Pitch, out var pitch);
         NumberInput.TryParseMeasure(MinStepCm, out var degrauMin);
         NumberInput.TryParseMeasure(MaxStepCm, out var degrauMax);
+        NumberInput.TryParseMeasure(TableGapCm, out var espacamentoMesas);
         NumberInput.TryParseMeasure(BreakGapCm, out var espacamento);
         NumberInput.TryParseMeasure(MinLowEdgeCm, out var pontaMin);
         NumberInput.TryParseMeasure(MaxLowEdgeCm, out var pontaMax);
@@ -180,6 +185,7 @@ public sealed record ProjectSettingsForm(
             MaxStep: degrauMax / 100,
             BumpToleranceModules: lombo,
             MaxLongitudinalSlope: declividade,
+            TableGap: espacamentoMesas / 100,
             MaxGapBeforeBreak: espacamento / 100);
 
         foreach (var kind in AnalysisRules.RangedKinds)
@@ -223,6 +229,7 @@ public sealed record ProjectSettingsForm(
         nameof(Pitch) => Pitch,
         nameof(MinStepCm) => MinStepCm,
         nameof(MaxStepCm) => MaxStepCm,
+        nameof(TableGapCm) => TableGapCm,
         nameof(BreakGapCm) => BreakGapCm,
         nameof(MinLowEdgeCm) => MinLowEdgeCm,
         nameof(MaxLowEdgeCm) => MaxLowEdgeCm,

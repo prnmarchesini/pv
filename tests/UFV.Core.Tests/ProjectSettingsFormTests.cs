@@ -32,7 +32,8 @@ public class ProjectSettingsFormTests
         Assert.Equal("200", form.MaxEmbedmentCm);
         Assert.Equal("0", form.MinStepCm);
         Assert.Equal("50", form.MaxStepCm);
-        Assert.Equal("50", form.BreakGapCm);
+        Assert.Equal("50", form.TableGapCm);
+        Assert.Equal("500", form.BreakGapCm);
         Assert.Equal("6", form.Pitch);
         Assert.Equal("0", form.AzimuthDegrees);
         Assert.True(form.LimitSlope);
@@ -208,6 +209,7 @@ public class ProjectSettingsFormTests
             nameof(ProjectSettingsForm.Pitch) => f with { Pitch = "   " },
             nameof(ProjectSettingsForm.MinStepCm) => f with { MinStepCm = "   " },
             nameof(ProjectSettingsForm.MaxStepCm) => f with { MaxStepCm = "   " },
+            nameof(ProjectSettingsForm.TableGapCm) => f with { TableGapCm = "   " },
             nameof(ProjectSettingsForm.BreakGapCm) => f with { BreakGapCm = "   " },
             nameof(ProjectSettingsForm.MinLowEdgeCm) => f with { MinLowEdgeCm = "   " },
             nameof(ProjectSettingsForm.MaxLowEdgeCm) => f with { MaxLowEdgeCm = "   " },

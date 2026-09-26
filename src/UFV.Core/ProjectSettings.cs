@@ -52,6 +52,7 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
     private const string CampoDegrauMax = "DEGRAU_MAX";
     private const string CampoLombo = "LOMBO_MODULOS";
     private const string CampoDeclividadeMax = "DECLIVIDADE_MAX_RAD";
+    private const string CampoEspacamentoMesas = "ESPACAMENTO_MESAS";
     private const string CampoEspacamento = "ESPACAMENTO_QUEBRA";
     private const string CampoPilarPintarAcima = "PILAR_PINTAR_ACIMA";
 
@@ -87,7 +88,8 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
             MaxStep: 0.65,
             BumpToleranceModules: 3,
             MaxLongitudinalSlope: 12 * grau,
-            MaxGapBeforeBreak: 0.75);
+            TableGap: 0.8,
+            MaxGapBeforeBreak: 6.5);
 
         // Cores diferentes de análise para análise: com todas iguais, uma
         // leitura que trocasse o prefixo de uma análise pelo de outra passaria
@@ -155,6 +157,7 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
             Par(CampoDegrauMax, Numero(c.MaxStep)),
             Par(CampoLombo, c.BumpToleranceModules.ToString(CultureInfo.InvariantCulture)),
             Par(CampoDeclividadeMax, Opcional(c.MaxLongitudinalSlope)),
+            Par(CampoEspacamentoMesas, Numero(c.TableGap)),
             Par(CampoEspacamento, Numero(c.MaxGapBeforeBreak)),
             Par(CampoPilarPintarAcima, Opcional(a.PaintPillarsLongerThan)),
         };
@@ -222,6 +225,7 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
             MaxStep: leitor.Real(CampoDegrauMax),
             BumpToleranceModules: leitor.Inteiro(CampoLombo),
             MaxLongitudinalSlope: leitor.RealOpcional(CampoDeclividadeMax),
+            TableGap: leitor.Real(CampoEspacamentoMesas),
             MaxGapBeforeBreak: leitor.Real(CampoEspacamento));
 
         AnalysisRule Regra(AnalysisKind kind)

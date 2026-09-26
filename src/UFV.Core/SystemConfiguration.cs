@@ -67,9 +67,16 @@ namespace UFV.Core;
 /// Declividade longitudinal máxima da mesa, em radianos, ou null para não
 /// haver limite. O Renan pediu 10° em 23/09/2026.
 /// </param>
+/// <param name="TableGap">
+/// O espaçamento entre mesas vizinhas de uma fileira, em metro, com que a
+/// distribuição as coloca. É o vão de passagem entre uma mesa e a seguinte;
+/// zero é mesa encostada na outra.
+/// </param>
 /// <param name="MaxGapBeforeBreak">
 /// Maior espaçamento entre mesas de uma fileira antes de a fileira ser
-/// quebrada em duas.
+/// quebrada em duas. O plano de requisitos dá 5 m como exemplo, e é o
+/// padrão. Precisa ser pelo menos o <paramref name="TableGap"/>: senão toda
+/// fileira que a distribuição criasse já nasceria quebrada em cada mesa.
 /// </param>
 public sealed record SystemConfiguration(
     double FacingAzimuthRadians,
@@ -82,6 +89,7 @@ public sealed record SystemConfiguration(
     double MaxStep,
     int BumpToleranceModules,
     double? MaxLongitudinalSlope,
+    double TableGap,
     double MaxGapBeforeBreak)
 {
     private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
@@ -120,7 +128,8 @@ public sealed record SystemConfiguration(
         MaxStep: 0.50,                      // meu
         BumpToleranceModules: 0,            // meu, o mais restritivo
         MaxLongitudinalSlope: 10 * Grau,    // Renan
-        MaxGapBeforeBreak: 0.50);           // meu
+        TableGap: 0.50,                     // meu
+        MaxGapBeforeBreak: 5.0);            // exemplo do plano de requisitos ("ex.: 5 m")
 
     /// <summary>
     /// O azimute do eixo que sobe a inclinação da mesa, em radianos.
@@ -185,10 +194,22 @@ public sealed record SystemConfiguration(
                 return "o limite de declividade longitudinal precisa ficar entre 0 e 90 graus";
             }
 
+            if (!double.IsFinite(TableGap) || TableGap < 0 || TableGap > MaiorMedida)
+                return "o espaçamento entre mesas não é uma medida válida";
+
             if (!double.IsFinite(MaxGapBeforeBreak)
                 || MaxGapBeforeBreak < 0 || MaxGapBeforeBreak > MaiorMedida)
             {
                 return "o limite de espaçamento que quebra fileira não é uma medida válida";
+            }
+
+            // A primeira conferência cruzada da configuração: com o limite de
+            // quebra menor que o espaçamento de distribuição, toda fileira
+            // nasceria quebrada em cada mesa.
+            if (MaxGapBeforeBreak < TableGap)
+            {
+                return $"o limite de espaçamento que quebra fileira ({Texto(MaxGapBeforeBreak)} m) é menor "
+                    + $"que o espaçamento entre mesas ({Texto(TableGap)} m)";
             }
 
             return null;

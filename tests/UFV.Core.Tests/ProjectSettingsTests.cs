@@ -46,15 +46,15 @@ public class ProjectSettingsTests
     }
 
     /// <summary>
-    /// O número de campos é fixo e conhecido: 1 de versão, 12 da configuração,
+    /// O número de campos é fixo e conhecido: 1 de versão, 13 da configuração,
     /// 4 por análise de faixa e 3 da borda. O teste de nível 2 exige o mesmo
     /// número; um campo a menos aqui tem que doer aqui também.
     /// </summary>
     [Fact]
     [Trait("Etapa", "4")]
-    public void SaoTrintaEDoisCampos()
+    public void SaoTrintaETresCampos()
     {
-        Assert.Equal(32, Padrao().ToFields().Count);
+        Assert.Equal(33, Padrao().ToFields().Count);
     }
 
     // ------------------------------------------------------------- padrão

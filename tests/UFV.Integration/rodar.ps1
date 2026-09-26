@@ -1088,10 +1088,10 @@ function Testar-Config {
 
     $gravados = @([regex]::Matches($gravar.Texto, '(?m)^CONFIG_CAMPO ([^\r\n]+?)\s*$') | ForEach-Object { $_.Groups[1].Value })
 
-    # 32 campos, o mesmo numero que o teste de nivel 1 exige: um campo a menos
+    # 33 campos, o mesmo numero que o teste de nivel 1 exige: um campo a menos
     # na gravacao passaria por "preservou tudo" se so o conjunto fosse comparado.
-    if ($gravados.Count -ne 32) {
-        $problemas.Add("ufv-config: a primeira metade escreveu $($gravados.Count) campos, e sao 32. Veja $($gravar.Saida)")
+    if ($gravados.Count -ne 33) {
+        $problemas.Add("ufv-config: a primeira metade escreveu $($gravados.Count) campos, e sao 33. Veja $($gravar.Saida)")
         return $false
     }
 

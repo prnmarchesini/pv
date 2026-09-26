@@ -58,6 +58,7 @@ internal sealed class JanelaDeConfiguracao : Window
     private readonly TextBox _degrauMin = Campo();
     private readonly TextBox _degrauMax = Campo();
     private readonly TextBox _lombo = Campo();
+    private readonly TextBox _espacamentoMesas = Campo();
     private readonly CheckBox _temDeclividade = new()
     {
         Content = "Limitar a declividade longitudinal",
@@ -243,6 +244,7 @@ internal sealed class JanelaDeConfiguracao : Window
         Linha("Pitch entre mesas (m)", _pitch);
         Linha("Degrau mínimo entre mesas vizinhas (cm)", _degrauMin);
         Linha("Degrau máximo entre mesas vizinhas (cm)", _degrauMax);
+        Linha("Espaçamento entre mesas da fileira (cm)", _espacamentoMesas);
         Linha("Espaçamento que quebra a fileira (cm)", _espacamento);
 
         pilha.Children.Add(Secao("Ponta baixa do módulo"));
@@ -445,6 +447,7 @@ internal sealed class JanelaDeConfiguracao : Window
         yield return _pitch;
         yield return _degrauMin;
         yield return _degrauMax;
+        yield return _espacamentoMesas;
         yield return _espacamento;
         yield return _pontaBaixaMin;
         yield return _pontaBaixaMax;
@@ -463,6 +466,7 @@ internal sealed class JanelaDeConfiguracao : Window
         _pitch.Text = form.Pitch;
         _degrauMin.Text = form.MinStepCm;
         _degrauMax.Text = form.MaxStepCm;
+        _espacamentoMesas.Text = form.TableGapCm;
         _espacamento.Text = form.BreakGapCm;
         _pontaBaixaMin.Text = form.MinLowEdgeCm;
         _pontaBaixaMax.Text = form.MaxLowEdgeCm;
@@ -518,6 +522,7 @@ internal sealed class JanelaDeConfiguracao : Window
             Pitch = _pitch.Text,
             MinStepCm = _degrauMin.Text,
             MaxStepCm = _degrauMax.Text,
+            TableGapCm = _espacamentoMesas.Text,
             BreakGapCm = _espacamento.Text,
             MinLowEdgeCm = _pontaBaixaMin.Text,
             MaxLowEdgeCm = _pontaBaixaMax.Text,

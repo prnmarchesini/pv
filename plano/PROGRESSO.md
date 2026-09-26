@@ -33,6 +33,15 @@ Só o Renan marca VALIDADO.
 | 4.2 | Linha de alinhamento | VALIDADO | Renan aprovou em 26/09/2026 ("deu certo o alinhamento"), depois de 2 reprovações em 25/09 |
 | 4.3 | Regras de análise | VALIDADO (automático) | Modelo no Core, sem tela; fechado em 26/09/2026 pela regra "só valido no CAD". A tela é o 4.4, a pintura é a etapa 5 |
 | 4.4 | Modal | AGUARDANDO VALIDAÇÃO | `UFV_CONFIG`: tela única, grava no desenho; nível 2 salva, reabre e compara campo a campo |
+| 5.1 | Distribuição em planta | VALIDADO (automático) | `RowDistributor` no Core, `Polygons` no Geo; só modelo, fechado em 26/09/2026. A fileira segue a linha de alinhamento: **Renan confirma no 5.8** |
+| 5.2 | Amostragem | PENDENTE | |
+| 5.3 | Cotas viáveis por mesa | PENDENTE | |
+| 5.4 | Alinhamento na fileira | PENDENTE | |
+| 5.5 | Pilares | PENDENTE | |
+| 5.6 | Resultado das análises | PENDENTE | |
+| 5.7 | Desenho | PENDENTE | |
+| 5.8 | Uma fileira no CAD | PENDENTE | |
+| 5.9 | Área inteira | PENDENTE | |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -84,7 +93,14 @@ O que a tela precisa saber, já decidido:
 
 ### O que está travado no Renan
 
-1. ~~Testar o 4.2 no CAD~~ Feito em 26/09/2026: "deu certo o alinhamento".
+1. **Instalar o bundle novo e testar o 4.4**: o Civil 3D estava aberto quando
+   tentei instalar (o instalador recusa, código 5). Fechar o Civil 3D e rodar
+   `.\tools\instalar.ps1` (o bundle já está montado em `artefatos\UFV.bundle`,
+   em Release). Depois: botão "Configuração" na aba UFV, ou `UFV_CONFIG`;
+   trocar alguns números, "Salvar no desenho", salvar o DWG, fechar, reabrir,
+   abrir a tela de novo e conferir que está tudo como deixou. `UFV_CONFIG_STATUS`
+   mostra o gravado na linha de comando.
+2. ~~Testar o 4.2 no CAD~~ Feito em 26/09/2026: "deu certo o alinhamento".
 2. ~~`terreno-esperado.psd1`~~ Resolvido em 25/09/2026: o Renan decidiu que
    só valida o que se vê no CAD, e o arquivo foi congelado em
    `tests/acervo/etapa-1/` pelo Claude Code, com o Porto Feliz marcado como
@@ -1461,4 +1477,155 @@ Placar final do passo: Etapa 4 com 242/242, nível 2 com 9/9.
   o que restou nela é ligar caixa a campo e a paleta de cores;
 - o azimute 360 é recusado ("fora de uma volta") e a tela diz "0 = norte":
   seria mais amigável normalizar. Fica para o Renan dizer se incomoda.
+
+## 5.1: a distribuição em planta
+
+`RowDistributor` no Core e `Polygons` no Geo. Só planta: Z entra zero e sai
+zero; a cota é da amostragem (5.2). Fecha com testes automáticos.
+
+### A fileira segue a linha, não o azimute da configuração
+
+O passo diz "fileiras a partir da linha de alinhamento, com pitch e azimute",
+e havia duas leituras: a fileira é perpendicular ao azimute de mira da
+configuração e a linha só marca onde começa; ou a fileira segue a direção da
+linha. Fiquei com a segunda, e o motivo está no plano de requisitos: "azimute
+diferente, fileira diferente (linhas de alinhamento distintas na mesma área,
+ou o terreno pedindo orientações diferentes em trechos diferentes)". Se
+linhas distintas dão azimutes distintos, é a linha que orienta a fileira. É
+também a única leitura em que a linha de vários pontos do 4.2 faz sentido.
+
+O azimute da configuração continua valendo para o que ele diz: para onde a
+mesa OLHA. Ele gira a mesa dentro da fileira, no desenho (5.7), e escolhe
+qual dos dois lados perpendiculares à fileira é a frente. **Fica para o
+Renan confirmar quando vir a fileira no CAD (5.8).**
+
+### Como se distribui
+
+- a fileira 1 encosta na linha, do lado clicado; a fileira k está a (k − 1)
+  pitches, **medidos de borda a borda** (o pitch é a distância entre a mesma
+  borda de fileiras vizinhas, que é como o projetista mede);
+- cada fileira é cortada pela área em trechos; em cada trecho as mesas
+  entram do início para o fim, no sentido da linha, com o espaçamento entre
+  elas; a última, que passa da borda, **fica e é marcada** (`PartlyOutside`),
+  como o plano manda;
+- linha reta gera fileiras infinitas, cortadas só pela área. Linha quebrada
+  gera uma família por trecho, limitada à faixa do trecho (as perpendiculares
+  pelas pontas); onde as faixas se cruzam, a segunda família **não pisa na
+  primeira**: a mesa que pisaria é pulada e contada em `SkippedForOverlap`.
+  O motor não move mesa para caber, e o usuário fica sabendo que ali ficou
+  vazio;
+- numeração do plano de requisitos: F1, F2… no sentido do afastamento da
+  linha; F1.1, F1.2… no sentido da linha. Fileira sem mesa não recebe número.
+
+### O corte da fileira pela área: três linhas, não uma
+
+A primeira versão cortava a faixa da fileira pela linha central e perdia a
+última fileira inteira: com a área terminando em y = 50 e a faixa em
+[48, 52], a linha central em 50 é tangente à borda, e tangente não entra.
+Justamente a fileira que precisava ficar marcada sumia. Cortar pela borda de
+cá também não serve: na fileira 1 ela está em cima da linha de alinhamento,
+que quase sempre é a borda da área, e é tangente do mesmo jeito.
+
+Agora a faixa é cortada em três linhas (1 mm para dentro de cada borda e o
+meio) e os intervalos são a união. Toda fileira que toca a área por qualquer
+parte ganha o seu intervalo, e a mesa que só entra por uma beirada sai
+marcada.
+
+### A borda conta como dentro
+
+O canto de uma mesa encostada na borda da área é o caso mais comum que
+existe, e pelo critério par-ímpar ele cai de qualquer lado. `Polygons.Contains`
+confere a borda à parte e a considera dentro, com teste nos quatro lados e
+nos vértices, horário e anti-horário.
+
+### Um campo novo na configuração, e um padrão que mudou
+
+A distribuição precisa do **espaçamento entre mesas** de uma fileira, e a
+configuração do 4.1 não o tinha. Entrou `TableGap` (padrão 0,50 m, meu). E o
+limite de quebra de fileira, que era 0,50 m (meu), passou a **5 m**, que é o
+exemplo do próprio plano de requisitos ("quando o espaçamento entre duas
+mesas consecutivas passa de um limite configurável (ex.: 5 m)"). Com isso
+nasceu a primeira conferência cruzada da configuração, que a pendência do
+4.1 cobrava: quebra menor que o espaçamento é recusada, porque toda fileira
+nasceria quebrada em cada mesa. O registro do desenho ganhou o campo
+`ESPACAMENTO_MESAS` (33 campos; a versão do formato continua 1 porque
+nenhum desenho real tem o registro ainda), e a tela do 4.4 ganhou a caixa.
+
+### Duas contas minhas erradas nos testes, corrigidas pelo código
+
+Contei "9 fileiras inteiras até y = 46 + 4 = 50" com pitch 6; 46 não é
+múltiplo de 6. São 8 inteiras (a oitava em [42, 46]) e a nona parcial. E
+escolhi como "reta tangente por fora" uma que na verdade atravessava o
+retângulo pela diagonal. Nos dois casos o código estava certo e o teste
+errado; corrigi o teste, com a conta refeita no comentário.
+
+### O que a revisão do 5.1 apontou, e o que foi feito
+
+Um bloqueante, seis importantes, todos corrigidos. O revisor sondou o
+código com um programa próprio, e os achados vieram com entradas concretas.
+
+- **Bloqueante: mesa atravessada por um recorte da área não era marcada.**
+  A conferência de "parcialmente fora" olhava só os quatro cantos; uma área
+  com um dente triangular entrando 3 m pela borda, inteiro dentro de F1.1,
+  dava mesa inteira. Agora são três perguntas: canto fora, vértice da área
+  dentro da mesa, aresta da área atravessando aresta da mesa
+  (`Polygons.SegmentsCross`). Dois testes: o dente e um canal que atravessa
+  a mesa sem deixar vértice dentro;
+- **a tangente do lado positivo em `Crossings` devolvia um intervalo de
+  100 m.** A meia-abertura do par-ímpar agrupava "vértice em cima da reta"
+  com um lado só, e com o polígono do outro lado as duas arestas vizinhas
+  da colinear contavam. Agora vértice em cima da reta herda o lado do último
+  vértice antes dele que não está em cima, e o cruzamento acontece só onde o
+  lado muda: tangente não entra de nenhum lado, vértice atravessado conta
+  uma vez, vértice encostado por fora não conta. Sete testes novos, dos dois
+  lados e nos dois sentidos;
+- **"toda fileira que toca a área ganha o seu intervalo" era mentira** para
+  uma área fininha dentro da faixa sem tocar nenhuma das três linhas de
+  corte. Agora os intervalos são a projeção da parte da área que cai na
+  faixa: cruzamentos das três linhas mais **as arestas da área recortadas
+  pela faixa**, em união. Testes: área fininha, topo em 49 (pega a mutação
+  "só linha central"), área rasa com a linha na borda (pega a mutação "sem
+  recuo");
+- **mesa pulada por sobreposição sumia com só uma contagem.** Num "L" de
+  90° a segunda família inteira desaparecia e o usuário via um número.
+  Agora `PlanLayout.Overlapping` devolve as puladas com posição, para o 5.7
+  pintá-las com cor própria; teste com contas à mão (45 colocadas, 51
+  puladas, cada pulada pisa em alguma colocada);
+- **o comentário dizia que o azimute da configuração "gira a mesa dentro da
+  fileira"**, o que invadiria a vizinha: a célula reservada tem exatamente o
+  comprimento por o fundo. Decidido e escrito: a mesa fica alinhada com a
+  fileira, sempre; o azimute da configuração escolhe qual dos dois lados
+  perpendiculares é a subida e avisa quando a linha diverge. `RowOrientation`
+  faz isso num lugar só, com a conversão direção matemática → azimute
+  topográfico testada contra `Transform.Azimuth` (7 testes);
+- **medida sem piso**: mesa de 1e-15 m travava o laço (o passo somado some
+  abaixo da precisão do double); mesa de 0,1 mm dava dez mil por metro.
+  Piso de 10 cm (`MenorMedida`, o mesmo da linha de referência) em
+  comprimento, fundo e pitch;
+- **custo quadrático sempre**, inclusive com um trecho só. Agora a
+  conferência de sobreposição só roda com mais de um trecho, contra as
+  famílias anteriores, com prefiltro por distância entre centros.
+
+Menores, também corrigidos: trecho de 5 mm (clique duplo com tremor) gerava
+uma família com o rumo do tremor, agora o piso é `ComprimentoMinimo`;
+`PlanLayout` era record com campo mutável (quebrava a igualdade), virou
+classe; `SignedArea` sem consumidor, removida; doc de `Row` dizia "a partir
+de 1 na linha", e é na primeira fileira com mesa; `Overlap` ganhou testes
+diretos e um verificador independente por pontos, para um `Overlap` frouxo
+não esconder sobreposição de todos os testes; teste do "L" aberto agora
+afirma faixa, puladas e sobreposição.
+
+Comportamentos registrados como esperados, com teste: linha traçada 2 mm
+fora da borda (clique à mão, sem OSNAP) marca a fileira 1 inteira, e é
+assim que se percebe que o clique não pegou a borda; coordenadas UTM
+giradas 30° dão a mesma contagem do retângulo na origem.
+
+Não feito, anotado: área auto-intersectante (gravata) é aceita em silêncio
+pelo par-ímpar. A área vem de polilinha fechada pelo usuário; a conferência
+cabe no comando de área, não aqui. E o formato do registro de configuração
+continua na versão 1 com o campo novo obrigatório: nenhum DWG real tem o
+registro (o 4.4 ainda não foi instalado), então não há o que migrar.
+
+Placar do passo: Geo 41 testes de polígono; Core 47 de distribuição e
+orientação; etapa 5 com 93/93.
 
