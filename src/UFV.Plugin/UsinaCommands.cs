@@ -128,7 +128,7 @@ public static class UsinaCommands
         if (orientacao.DivergenceRadians > 5 * Math.PI / 180)
         {
             editor.WriteMessage(
-                $"\n  ATENÇÃO: a linha de alinhamento diverge {orientacao.DivergenceRadians * 180 / Math.PI:0.#}° do azimute configurado.\n");
+                $"\n  ATENÇÃO: a linha de alinhamento diverge {orientacao.DivergenceRadians * 180 / Math.PI:0.#}° do azimute configurado (a linha de alinhamento deve ser paralela ao azimute: norte-sul numa usina que olha para o norte).\n");
         }
 
         editor.WriteMessage($"\nProcessando {layout.Rows.Count} fileira(s), {layout.Tables.Count} mesa(s)...\n");

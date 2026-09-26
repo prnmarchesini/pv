@@ -12,15 +12,16 @@ namespace UFV.Core;
 /// configuração pede.
 /// </param>
 /// <param name="LowEdgeOnNearSide">
-/// Se a ponta baixa da mesa fica na borda mais próxima da linha de
-/// alinhamento (a origem de <see cref="PlacedTable"/>). Quando não, a ponta
-/// baixa está na borda de lá, e a mesa olha para a linha.
+/// Se a ponta baixa da mesa fica na borda da célula voltada para o início da
+/// linha de alinhamento (a origem de <see cref="PlacedTable"/>). Quando não,
+/// a ponta baixa está na borda de lá, um fundo adiante ao longo da linha.
 /// </param>
 /// <param name="DivergenceRadians">
 /// Quanto a subida escolhida difere da que a configuração pede, em radianos,
-/// de 0 a 90°. Zero quando a linha foi traçada perpendicular ao azimute;
-/// perto de 90° quando ela foi traçada quase paralela a ele, e aí a mesa vai
-/// olhar para um lado bem diferente do configurado — é para avisar.
+/// de 0 a 90°. Zero quando a linha de alinhamento foi traçada paralela ao
+/// azimute (norte-sul numa usina que olha para o norte); perto de 90° quando
+/// ela foi traçada quase perpendicular a ele, e aí a mesa vai olhar para um
+/// lado bem diferente do configurado — é para avisar.
 /// </param>
 /// <param name="LengthRunsWithRow">
 /// Se o comprimento local da mesa (+X, da estação zero à final) corre no
@@ -43,13 +44,14 @@ public sealed record RowOrientation(
     ///
     /// A mesa fica alinhada com a fileira, sempre: a célula reservada pela
     /// distribuição tem exatamente o comprimento por o fundo, e girá-la
-    /// invadiria a vizinha. O que o azimute da configuração decide é qual dos
-    /// dois lados perpendiculares à fileira é a subida — e é aqui, num lugar
-    /// só, que a direção matemática da fileira (do +X, anti-horária) vira
-    /// azimute topográfico (do norte, horário).
+    /// invadiria a vizinha. Os dois lados perpendiculares à fileira são os
+    /// dois sentidos da linha de alinhamento; o azimute da configuração
+    /// decide qual deles é a subida — e é aqui, num lugar só, que a direção
+    /// matemática da fileira (do +X, anti-horária) vira azimute topográfico
+    /// (do norte, horário).
     /// </summary>
     /// <param name="directionRadians">A direção da fileira, como em <see cref="PlacedTable.DirectionRadians"/>.</param>
-    /// <param name="side">De que lado da linha ficam as mesas, como em <see cref="RowDistributor.Distribute"/>.</param>
+    /// <param name="side">Para que lado da linha correm as fileiras, como em <see cref="RowDistributor.Distribute"/>.</param>
     /// <param name="preferredUpslopeAzimuthRadians">O azimute de subida da configuração.</param>
     public static RowOrientation Resolve(double directionRadians, LineSide side, double preferredUpslopeAzimuthRadians)
     {
@@ -65,9 +67,11 @@ public sealed record RowOrientation(
         var dx = Math.Cos(directionRadians);
         var dy = Math.Sin(directionRadians);
 
-        // A normal para o lado das mesas, a mesma convenção do distribuidor:
-        // a direita do sentido da linha é (dy, −dx).
-        var (nx, ny) = side == LineSide.Right ? (dy, -dx) : (-dy, dx);
+        // A normal da célula é o eixo da linha de alinhamento, a mesma
+        // convenção do distribuidor: a fileira é a direita da linha quando
+        // side é Right, logo a linha é a ESQUERDA da fileira, (−dy, dx); e
+        // vice-versa.
+        var (nx, ny) = side == LineSide.Right ? (-dy, dx) : (dy, -dx);
 
         // O vetor do azimute pedido, em (X = leste, Y = norte).
         var px = Math.Sin(preferredUpslopeAzimuthRadians);

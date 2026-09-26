@@ -33,14 +33,18 @@ public class RowPipelineTests
 
     private static ProjectSettings Settings() => ProjectSettings.Default;
 
-    /// <summary>Um retângulo de 200 × 60 com a linha na borda de baixo, fileiras para o norte.</summary>
+    /// <summary>
+    /// Um retângulo de 200 × 60 com a linha de alinhamento norte-sul na borda
+    /// oeste e as fileiras à direita dela: nascem em y = 0, 6, 12… e correm
+    /// 200 m para o leste.
+    /// </summary>
     private static PlanLayout Layout(TableGeometry geo, double? gap = null)
     {
         var area = new[] { new Point3(0, 0, 0), new Point3(200, 0, 0), new Point3(200, 60, 0), new Point3(0, 60, 0) };
-        var alinhamento = new[] { new Point3(0, 0, 0), new Point3(200, 0, 0) };
+        var alinhamento = new[] { new Point3(0, 0, 0), new Point3(0, 60, 0) };
 
         return RowDistributor.Distribute(
-            area, alinhamento, LineSide.Left, Settings().Configuration.Pitch, gap ?? Settings().Configuration.TableGap,
+            area, alinhamento, LineSide.Right, Settings().Configuration.Pitch, gap ?? Settings().Configuration.TableGap,
             new TableFootprint(geo.Length, geo.Depth * Math.Cos(Tilt)));
     }
 
@@ -54,7 +58,7 @@ public class RowPipelineTests
     {
         var geo = Geometria();
         var layout = Layout(geo);
-        var fileira = RowPipeline.ProcessRow(layout.Rows[0], LineSide.Left, geo, Tilt, Plano((_, _) => 700), Settings());
+        var fileira = RowPipeline.ProcessRow(layout.Rows[0], LineSide.Right, geo, Tilt, Plano((_, _) => 700), Settings());
 
         Assert.Equal(layout.Rows[0].Tables.Count, fileira.Tables.Count);
         Assert.Equal(0, fileira.MarkedCount);
@@ -104,8 +108,8 @@ public class RowPipelineTests
         var layout = Layout(geo);
         var terreno = Plano((_, y) => 700 + 0.04 * y);
 
-        var primeira = RowPipeline.ProcessRow(layout.Rows[0], LineSide.Left, geo, Tilt, terreno, Settings());
-        var segunda = RowPipeline.ProcessRow(layout.Rows[1], LineSide.Left, geo, Tilt, terreno, Settings());
+        var primeira = RowPipeline.ProcessRow(layout.Rows[0], LineSide.Right, geo, Tilt, terreno, Settings());
+        var segunda = RowPipeline.ProcessRow(layout.Rows[1], LineSide.Right, geo, Tilt, terreno, Settings());
 
         Assert.Equal(0, primeira.MarkedCount + segunda.MarkedCount);
         Assert.Equal(0, primeira.PillarProblemCount + segunda.PillarProblemCount);
@@ -130,7 +134,7 @@ public class RowPipelineTests
         var layout = Layout(geo);
         var terreno = Plano((x, _) => 700 + 0.05 * x);
 
-        var fileira = RowPipeline.ProcessRow(layout.Rows[0], LineSide.Left, geo, Tilt, terreno, Settings());
+        var fileira = RowPipeline.ProcessRow(layout.Rows[0], LineSide.Right, geo, Tilt, terreno, Settings());
 
         Assert.True(fileira.MarkedCount == 0, string.Join("; ", fileira.Tables.Where(t => t.Solved.Marked)
             .Select(t => $"{t.Label}: {t.Solved.Reason}")));
@@ -192,11 +196,11 @@ public class RowPipelineTests
         var geo = Geometria();
         var terreno = Plano((x, _) => 700 + 0.15 * x);
 
-        var semVao = RowPipeline.ProcessRow(Layout(geo, 0).Rows[0], LineSide.Left, geo, Tilt, terreno, Settings());
+        var semVao = RowPipeline.ProcessRow(Layout(geo, 0).Rows[0], LineSide.Right, geo, Tilt, terreno, Settings());
         Assert.NotEmpty(semVao.Warnings);
         Assert.Contains("se cruzarem", semVao.Warnings[0]);
 
-        var comVao = RowPipeline.ProcessRow(Layout(geo, 0.5).Rows[0], LineSide.Left, geo, Tilt, terreno, Settings());
+        var comVao = RowPipeline.ProcessRow(Layout(geo, 0.5).Rows[0], LineSide.Right, geo, Tilt, terreno, Settings());
         Assert.Empty(comVao.Warnings);
     }
 
@@ -219,7 +223,7 @@ public class RowPipelineTests
             new Triangle(P(-100, -100), P(100, 400), P(-100, 400)),
         ]);
 
-        var fileira = RowPipeline.ProcessRow(layout.Rows[0], LineSide.Left, geo, Tilt, metade, Settings());
+        var fileira = RowPipeline.ProcessRow(layout.Rows[0], LineSide.Right, geo, Tilt, metade, Settings());
 
         var dentro = fileira.Tables.Where(t => t.Cell.Origin.X + geo.Length < 100).ToList();
         var fora = fileira.Tables.Where(t => t.Cell.Origin.X > 100).ToList();
@@ -243,11 +247,11 @@ public class RowPipelineTests
         var layout = Layout(geo);
 
         Assert.Throws<ArgumentException>(() => RowPipeline.ProcessRow(
-            new PlanRow(1, 0, []), LineSide.Left, geo, Tilt, Plano((_, _) => 700), Settings()));
+            new PlanRow(1, 0, []), LineSide.Right, geo, Tilt, Plano((_, _) => 700), Settings()));
 
         var quebrada = Settings() with { Configuration = Settings().Configuration with { MinLowEdge = 9 } };
 
         Assert.Throws<InvalidOperationException>(() => RowPipeline.ProcessRow(
-            layout.Rows[0], LineSide.Left, geo, Tilt, Plano((_, _) => 700), quebrada));
+            layout.Rows[0], LineSide.Right, geo, Tilt, Plano((_, _) => 700), quebrada));
     }
 }

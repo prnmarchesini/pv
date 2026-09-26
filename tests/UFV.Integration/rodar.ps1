@@ -1171,7 +1171,7 @@ function Testar-Fileira {
             '{{A3}}'   = (Ponto3  50  50 0)
             '{{A4}}'   = (Ponto3 -50  50 0)
             '{{L1}}'   = (Ponto3 -50 -50 9999)
-            '{{L2}}'   = (Ponto3  50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
             '{{LADO}}' = (Ponto3   0   0 0)
         }
 
@@ -1351,7 +1351,7 @@ function Testar-Usina {
             '{{A3}}'   = (Ponto3  50  50 0)
             '{{A4}}'   = (Ponto3 -50  50 0)
             '{{L1}}'   = (Ponto3 -50 -50 0)
-            '{{L2}}'   = (Ponto3  50 -50 9999)
+            '{{L2}}'   = (Ponto3 -50  50 9999)
             '{{LADO}}' = (Ponto3   0   0 0)
         }
 
@@ -1454,7 +1454,7 @@ function Testar-Exportar {
             '{{A3}}'   = (Ponto3  50  50 0)
             '{{A4}}'   = (Ponto3 -50  50 0)
             '{{L1}}'   = (Ponto3 -50 -50 0)
-            '{{L2}}'   = (Ponto3  50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
             '{{LADO}}' = (Ponto3   0   0 0)
             '{{DAE}}'  = $dae
         }
@@ -1612,7 +1612,7 @@ function Testar-Sujo {
             '{{A3}}'   = (Ponto3  50  50 0)
             '{{A4}}'   = (Ponto3 -50  50 0)
             '{{L1}}'   = (Ponto3 -50 -50 0)
-            '{{L2}}'   = (Ponto3  50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
             '{{LADO}}' = (Ponto3   0   0 0)
         }
 
@@ -1723,7 +1723,7 @@ function Testar-Vigia {
             '{{A3}}'   = (Ponto3  50  50 0)
             '{{A4}}'   = (Ponto3 -50  50 0)
             '{{L1}}'   = (Ponto3 -50 -50 0)
-            '{{L2}}'   = (Ponto3  50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
             '{{LADO}}' = (Ponto3   0   0 0)
         }
 

@@ -46,16 +46,16 @@ public class PillarCalculatorTests
 
     private static SystemConfiguration Config() => SystemConfiguration.Default;
 
-    /// <summary>A terceira mesa da segunda fileira de um retângulo, com a fileira para o leste.</summary>
+    /// <summary>A terceira mesa da segunda fileira de um retângulo: linha norte-sul na borda oeste, fileiras para o leste.</summary>
     private static (PlacedTable Cell, RowOrientation Orientation) Celula()
     {
         var geo = Geometria();
         var area = new[] { new Point3(0, 0, 0), new Point3(200, 0, 0), new Point3(200, 200, 0), new Point3(0, 200, 0) };
-        var alinhamento = new[] { new Point3(10, 10, 0), new Point3(190, 10, 0) };
+        var alinhamento = new[] { new Point3(10, 10, 0), new Point3(10, 190, 0) };
 
-        var layout = RowDistributor.Distribute(area, alinhamento, LineSide.Left, 8, 0.5, new TableFootprint(geo.Length, geo.Depth * Math.Cos(Tilt)));
+        var layout = RowDistributor.Distribute(area, alinhamento, LineSide.Right, 8, 0.5, new TableFootprint(geo.Length, geo.Depth * Math.Cos(Tilt)));
         var cell = layout.Rows[1].Tables[2];
-        var orientacao = RowOrientation.Resolve(cell.DirectionRadians, LineSide.Left, Config().UpslopeAzimuthRadians);
+        var orientacao = RowOrientation.Resolve(cell.DirectionRadians, LineSide.Right, Config().UpslopeAzimuthRadians);
 
         return (cell, orientacao);
     }

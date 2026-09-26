@@ -49,11 +49,11 @@ public class TableAnalysisTests
         var geo = Geometria();
         var cfg = config ?? Config();
         var area = new[] { new Point3(0, 0, 0), new Point3(200, 0, 0), new Point3(200, 200, 0), new Point3(0, 200, 0) };
-        var alinhamento = new[] { new Point3(10, 10, 0), new Point3(190, 10, 0) };
+        var alinhamento = new[] { new Point3(10, 10, 0), new Point3(10, 190, 0) };
 
-        var layout = RowDistributor.Distribute(area, alinhamento, LineSide.Left, 8, 0.5, new TableFootprint(geo.Length, geo.Depth * Math.Cos(Tilt)));
+        var layout = RowDistributor.Distribute(area, alinhamento, LineSide.Right, 8, 0.5, new TableFootprint(geo.Length, geo.Depth * Math.Cos(Tilt)));
         var cell = layout.Rows[1].Tables[2] with { PartlyOutside = naBorda };
-        var orientacao = RowOrientation.Resolve(cell.DirectionRadians, LineSide.Left, cfg.UpslopeAzimuthRadians);
+        var orientacao = RowOrientation.Resolve(cell.DirectionRadians, LineSide.Right, cfg.UpslopeAzimuthRadians);
 
         tin ??= Plano(terreno);
         amostras = TerrainSampler.Sample(geo, TablePlacement.Plan(cell, orientacao, Tilt, 0), tin);
@@ -147,7 +147,7 @@ public class TableAnalysisTests
     /// pintado. O terreno acaba em x = 100 e a mesa, olhando para o norte,
     /// cresce para oeste a partir da célula; com o terreno só a leste de
     /// x = 100... a célula está em x ≈ 38 a 57, então o terreno é recortado
-    /// para acabar em x = 45: os módulos a oeste ficam sem terreno.
+    /// para acabar em x = 55 (a mesa F2.3 vai de x ≈ 48 a 67): os módulos a oeste ficam sem terreno.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
@@ -156,8 +156,8 @@ public class TableAnalysisTests
         Point3 P(double x, double y) => new(x, y, 700);
         var recortado = new Tin(
         [
-            new Triangle(P(45, -100), P(300, -100), P(300, 300)),
-            new Triangle(P(45, -100), P(300, 300), P(45, 300)),
+            new Triangle(P(55, -100), P(300, -100), P(300, 300)),
+            new Triangle(P(55, -100), P(300, 300), P(55, 300)),
         ]);
 
         var relatorio = Relatorio(out _, 700.50, 700.50, tin: recortado);
@@ -342,7 +342,7 @@ public class TableAnalysisTests
         var area = new[] { new Point3(0, 0, 0), new Point3(200, 0, 0), new Point3(200, 200, 0), new Point3(0, 200, 0) };
         var layout = RowDistributor.Distribute(area, [new Point3(10, 10, 0), new Point3(190, 10, 0)], LineSide.Left, 8, 0.5, new TableFootprint(geo.Length, geo.Depth * Math.Cos(Tilt)));
         var cell = layout.Rows[1].Tables[2];
-        var orientacao = RowOrientation.Resolve(cell.DirectionRadians, LineSide.Left, Config().UpslopeAzimuthRadians);
+        var orientacao = RowOrientation.Resolve(cell.DirectionRadians, LineSide.Right, Config().UpslopeAzimuthRadians);
         var amostras = TerrainSampler.Sample(geo, TablePlacement.Plan(cell, orientacao, Tilt, 0), Plano(700));
         var resolvida = new SolvedTable("F2.3", 700.5, 700.5, 0, false, null);
         var pilares = PillarCalculator.Compute(geo, cell, orientacao, Tilt, resolvida, Plano(700), Config());

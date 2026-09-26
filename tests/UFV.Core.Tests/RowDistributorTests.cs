@@ -3,26 +3,33 @@ using UFV.Geo;
 namespace UFV.Core.Tests;
 
 /// <summary>
-/// A distribuição em planta: fileiras a partir da linha de alinhamento, com
-/// pitch e o lado escolhido, mesas enfileiradas dentro da área.
+/// A distribuição em planta: a linha de alinhamento é o eixo transversal;
+/// toda fileira nasce nela, uma a cada pitch, e corre a 90° para o lado
+/// escolhido, com as mesas enfileiradas da linha para fora, dentro da área.
 ///
 /// O que se trava aqui é contagem e posição, em casos em que a resposta se
 /// calcula à mão: retângulo dá a contagem exata; a mesa que sobra na borda
 /// fica e é marcada; nenhuma mesa pisa em outra. O terreno não entra: isto é
 /// planta, e a cota é da amostragem (5.2).
+///
+/// Reescrito em 26/09/2026, quando o Renan reprovou a primeira versão (que
+/// punha as fileiras paralelas à linha): "o alinhamento é uma linha
+/// perpendicular às fileiras, toda fileira nasce nele e vai a 90 graus".
 /// </summary>
 public class RowDistributorTests
 {
     private static Point3 P(double x, double y) => new(x, y, 0);
 
-    /// <summary>Retângulo de 100 m no sentido da fileira por 50 m para o lado.</summary>
+    /// <summary>Retângulo de 100 m ao longo da linha por 50 m no sentido das fileiras.</summary>
     private static readonly Point3[] Retangulo = [P(0, 0), P(100, 0), P(100, 50), P(0, 50)];
 
-    /// <summary>A linha de alinhamento na borda de baixo, da esquerda para a direita.</summary>
+    /// <summary>A linha de alinhamento na borda de baixo, da esquerda para a direita: as fileiras sobem para o norte.</summary>
     private static readonly Point3[] Alinhamento = [P(0, 0), P(100, 0)];
 
-    /// <summary>Mesa de 20 m de comprimento ocupando 4 m em planta na inclinação.</summary>
+    /// <summary>Mesa de 20 m de comprimento (ao longo da fileira) ocupando 4 m em planta (ao longo da linha).</summary>
     private static readonly TableFootprint Mesa = new(Length: 20, PlanDepth: 4);
+
+    private const double Norte = Math.PI / 2;
 
     private static PlanLayout Distribuir(
         IReadOnlyList<Point3>? area = null,
@@ -36,11 +43,11 @@ public class RowDistributorTests
     // ----------------------------------------------------- o retângulo
 
     /// <summary>
-    /// Com a linha em y = 0 e as mesas à esquerda (y crescente), pitch 6 e
-    /// mesa de 4 m de fundo: as fileiras ocupam [0,4], [6,10], ..., [42,46],
-    /// [48,52]. São 8 inteiras (a oitava termina em 46) e a nona, em [48,52],
-    /// passa da borda: fica, marcada. A décima, em [54,58], nem toca a área.
-    /// No comprimento, 100/20 = 5 mesas exatas.
+    /// Linha de (0,0) a (100,0), fileiras à esquerda (para o norte), pitch 6
+    /// e mesa de 4 m de fundo: as fileiras nascem em x = 0, 6, 12, …, 96 (17
+    /// estações dentro dos 100 m) e ocupam [x, x+4]. Cada uma corre de y = 0
+    /// a 50: mesas em [0,20] e [20,40] inteiras, e a de [40,60] passa da
+    /// borda: fica, marcada. 17 × 3 = 51 mesas, 17 marcadas.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
@@ -48,24 +55,24 @@ public class RowDistributorTests
     {
         var layout = Distribuir();
 
-        Assert.Equal(9, layout.Rows.Count);
-        Assert.All(layout.Rows, fileira => Assert.Equal(5, fileira.Tables.Count));
-        Assert.Equal(45, layout.Tables.Count);
+        Assert.Equal(17, layout.Rows.Count);
+        Assert.All(layout.Rows, fileira => Assert.Equal(3, fileira.Tables.Count));
+        Assert.Equal(51, layout.Tables.Count);
 
-        // As oito primeiras inteiras, a nona inteira marcada.
-        Assert.Equal(5, layout.PartlyOutsideCount);
-        Assert.All(layout.Rows.Take(8).SelectMany(f => f.Tables), m => Assert.False(m.PartlyOutside));
-        Assert.All(layout.Rows[8].Tables, m => Assert.True(m.PartlyOutside));
+        Assert.Equal(17, layout.PartlyOutsideCount);
+        Assert.All(layout.Rows, f => Assert.False(f.Tables[0].PartlyOutside));
+        Assert.All(layout.Rows, f => Assert.False(f.Tables[1].PartlyOutside));
+        Assert.All(layout.Rows, f => Assert.True(f.Tables[2].PartlyOutside));
         Assert.Equal(0, layout.SkippedForOverlap);
     }
 
     /// <summary>
-    /// Fileira 1 encosta na linha: o canto de partida da primeira mesa é a
-    /// origem, e a mesa vai de y = 0 a y = 4. Os cantos são quatro, no plano.
+    /// A fileira 1 nasce no início da linha e corre a 90° dela: a primeira
+    /// mesa parte da origem para o norte, com o fundo ao longo da linha.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
-    public void APrimeiraFileiraEncostaNaLinha()
+    public void APrimeiraFileiraNasceNoInicioDaLinhaECorreANoventaGraus()
     {
         var primeira = Distribuir().Rows[0].Tables[0];
 
@@ -73,29 +80,46 @@ public class RowDistributorTests
         Assert.Equal(1, primeira.Number);
         Assert.Equal(0, primeira.Origin.X, 9);
         Assert.Equal(0, primeira.Origin.Y, 9);
-        Assert.Equal(0, primeira.DirectionRadians, 9);
+        Assert.Equal(Norte, primeira.DirectionRadians, 9);
 
         Assert.Equal(4, primeira.Corners.Count);
         Assert.Contains(primeira.Corners, c => Perto(c, 0, 0));
-        Assert.Contains(primeira.Corners, c => Perto(c, 20, 0));
-        Assert.Contains(primeira.Corners, c => Perto(c, 20, 4));
-        Assert.Contains(primeira.Corners, c => Perto(c, 0, 4));
+        Assert.Contains(primeira.Corners, c => Perto(c, 0, 20));
+        Assert.Contains(primeira.Corners, c => Perto(c, 4, 20));
+        Assert.Contains(primeira.Corners, c => Perto(c, 4, 0));
     }
 
-    /// <summary>A segunda fileira começa um pitch adiante, medido de borda a borda.</summary>
+    /// <summary>A segunda fileira nasce um pitch adiante, medido ao longo da linha.</summary>
     [Fact]
     [Trait("Etapa", "5")]
-    public void OPitchEMedidoDeBordaABorda()
+    public void OPitchEMedidoAoLongoDaLinha()
     {
         var segunda = Distribuir().Rows[1].Tables[0];
 
-        Assert.Equal(6, segunda.Origin.Y, 9);
-        Assert.Contains(segunda.Corners, c => Perto(c, 0, 10));
+        Assert.Equal(6, segunda.Origin.X, 9);
+        Assert.Equal(0, segunda.Origin.Y, 9);
+        Assert.Contains(segunda.Corners, c => Perto(c, 10, 20));
     }
 
     /// <summary>
-    /// Com espaçamento de 1 m: mesas em 0, 21, 42, 63 e 84. A quinta termina
-    /// em 104, fora do retângulo: fica e é marcada.
+    /// Só nascem fileiras ao longo do comprimento traçado: uma linha de 30 m
+    /// dá as estações 0, 6, 12, 18, 24 e 30, seis fileiras, mesmo com a área
+    /// seguindo por mais 70 m.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "5")]
+    public void ALinhaCurtaDaMenosFileiras()
+    {
+        var curta = new[] { P(0, 0), P(30, 0) };
+        var layout = Distribuir(alinhamento: curta);
+
+        Assert.Equal(6, layout.Rows.Count);
+        Assert.Equal(30, layout.Rows[5].Tables[0].Origin.X, 9);
+    }
+
+    /// <summary>
+    /// Com espaçamento de 1 m: mesas em y = 0, 21 e 42. A terceira termina
+    /// em 62, fora do retângulo: fica e é marcada.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
@@ -103,10 +127,10 @@ public class RowDistributorTests
     {
         var fileira = Distribuir(gap: 1).Rows[0];
 
-        Assert.Equal(5, fileira.Tables.Count);
-        Assert.Equal([0, 21, 42, 63, 84], fileira.Tables.Select(m => Math.Round(m.Origin.X, 6)));
-        Assert.False(fileira.Tables[3].PartlyOutside);
-        Assert.True(fileira.Tables[4].PartlyOutside);
+        Assert.Equal(3, fileira.Tables.Count);
+        Assert.Equal([0, 21, 42], fileira.Tables.Select(m => Math.Round(m.Origin.Y, 6)));
+        Assert.False(fileira.Tables[1].PartlyOutside);
+        Assert.True(fileira.Tables[2].PartlyOutside);
     }
 
     /// <summary>Numeração do plano de requisitos: F1.1, F1.2 ..., F2.1 ...</summary>
@@ -117,9 +141,9 @@ public class RowDistributorTests
         var layout = Distribuir();
 
         Assert.Equal("F1.1", layout.Rows[0].Tables[0].Label);
-        Assert.Equal("F1.5", layout.Rows[0].Tables[4].Label);
+        Assert.Equal("F1.3", layout.Rows[0].Tables[2].Label);
         Assert.Equal("F2.1", layout.Rows[1].Tables[0].Label);
-        Assert.Equal("F9.3", layout.Rows[8].Tables[2].Label);
+        Assert.Equal("F17.2", layout.Rows[16].Tables[1].Label);
     }
 
     // -------------------------------------------------------------- lado
@@ -139,36 +163,45 @@ public class RowDistributorTests
         Assert.Empty(layout.Tables);
     }
 
-    /// <summary>Linha traçada ao contrário: o lado direito é que dá as mesmas fileiras.</summary>
+    /// <summary>
+    /// Linha traçada ao contrário: o lado direito é que dá as mesmas
+    /// fileiras, e a fileira 1 passa a nascer em x = 100.
+    /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
-    public void InverterALinhaInverteOLado()
+    public void InverterALinhaInverteOLadoEAOrdemDasFileiras()
     {
         var aoContrario = Alinhamento.Reverse().ToArray();
+        var layout = Distribuir(alinhamento: aoContrario, lado: LineSide.Right);
 
-        Assert.Equal(45, Distribuir(alinhamento: aoContrario, lado: LineSide.Right).Tables.Count);
+        Assert.Equal(51, layout.Tables.Count);
+        Assert.Equal(100, layout.Rows[0].Tables[0].Origin.X, 9);
+        Assert.Equal(Norte, layout.Rows[0].Tables[0].DirectionRadians, 9);
         Assert.Empty(Distribuir(alinhamento: aoContrario, lado: LineSide.Left).Rows);
     }
 
     /// <summary>
-    /// A linha no meio da área: as fileiras só vão para o lado escolhido, e
-    /// a metade de trás fica vazia. O motor não adivinha que o usuário
+    /// A linha no meio da área: as fileiras nascem nela e só vão para o
+    /// lado escolhido; a metade de trás fica vazia. As mesas começam na
+    /// linha, não na borda da área. O motor não adivinha que o usuário
     /// queria os dois lados.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
-    public void ALinhaNoMeioSoEnchOLadoEscolhido()
+    public void ALinhaNoMeioSoEnchOLadoEscolhidoEAsMesasComecamNela()
     {
         var meio = new[] { P(0, 25), P(100, 25) };
         var layout = Distribuir(alinhamento: meio);
 
+        Assert.Equal(17, layout.Rows.Count);
+        Assert.All(layout.Rows, f => Assert.Equal(25, f.Tables[0].Origin.Y, 9));
         Assert.All(layout.Tables, m => Assert.True(m.Origin.Y >= 25 - 1e-9));
-        Assert.Equal(5, layout.Rows.Count);
+        Assert.All(layout.Rows, f => Assert.Equal(2, f.Tables.Count));
     }
 
     /// <summary>
-    /// A linha fora e longe da área, do lado escolhido: as fileiras vêm em
-    /// pitch a partir dela e só as que entram na área geram mesa.
+    /// A linha fora e longe da área, do lado de trás: as fileiras nascem
+    /// nela e as mesas começam onde a área começa, não atrás.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
@@ -177,20 +210,18 @@ public class RowDistributorTests
         var abaixo = new[] { P(0, -12), P(100, -12) };
         var layout = Distribuir(alinhamento: abaixo);
 
-        // Fileiras em -12, -6, 0, 6, ...: as duas primeiras ficam fora, e a
-        // numeração começa na primeira que tem mesa.
+        Assert.Equal(17, layout.Rows.Count);
         Assert.Equal(1, layout.Rows[0].Number);
-        Assert.Equal(0, layout.Rows[0].Tables[0].Origin.Y, 9);
-        Assert.Equal(9, layout.Rows.Count);
+        Assert.All(layout.Rows, f => Assert.Equal(0, f.Tables[0].Origin.Y, 9));
+        Assert.Equal(51, layout.Tables.Count);
     }
 
     // ----------------------------------------------------- área irregular
 
     /// <summary>
-    /// Triângulo retângulo: 100 m na base e 50 m de altura. A fileira em
-    /// [y, y+4] cabe até x = 100·(1 − y/50) na borda de cima... a contagem
-    /// de mesas inteiras por fileira cai de 5 para 1, e a última de cada
-    /// fileira (quando não cabe inteira) fica marcada.
+    /// Triângulo retângulo: 100 m na base (a linha) e 50 m de altura. A
+    /// hipotenusa é y = 50 − x/2: a fileira em [x, x+4] alcança menos a
+    /// cada estação, e a contagem de mesas por fileira não cresce.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
@@ -202,22 +233,21 @@ public class RowDistributorTests
         var porFileira = layout.Rows.Select(f => f.Tables.Count).ToList();
 
         Assert.Equal(porFileira.OrderByDescending(n => n), porFileira);
-        Assert.True(porFileira[0] >= porFileira[^1]);
 
-        // Fileira 1 em [0,4]: a hipotenusa está em x = 100 − 2y; no topo da
-        // mesa (y = 4) x = 92. Mesas em 0, 20, 40, 60 inteiras (60+20 = 80 < 92)
-        // e a de 80 a 100 sai pela hipotenusa: fica, marcada.
-        Assert.Equal(5, porFileira[0]);
-        Assert.True(layout.Rows[0].Tables[4].PartlyOutside);
-        Assert.False(layout.Rows[0].Tables[3].PartlyOutside);
+        // Fileira 1 em [0,4]: no fundo da mesa (x = 4) a hipotenusa está em
+        // y = 48. Mesas em 0 e 20 inteiras (20+20 = 40 < 48) e a de 40 a 60
+        // sai pela hipotenusa: fica, marcada.
+        Assert.Equal(3, porFileira[0]);
+        Assert.True(layout.Rows[0].Tables[2].PartlyOutside);
+        Assert.False(layout.Rows[0].Tables[1].PartlyOutside);
 
         Assert.Equal(0, layout.SkippedForOverlap);
         NenhumaSobreposta(layout);
     }
 
     /// <summary>
-    /// O "L" é côncavo: a fileira alta cruza a área num trecho só, a baixa
-    /// no retângulo inteiro. Nenhuma mesa nasce no quadrante que falta.
+    /// O "L" é côncavo: as fileiras da esquerda vão até y = 50, as da direita
+    /// só até y = 25. Nenhuma mesa inteira nasce no quadrante que falta.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
@@ -231,32 +261,36 @@ public class RowDistributorTests
             Assert.All(mesa.Corners, c => Assert.True(Polygons.Contains(ele, c.X, c.Y)));
         }
 
-        // Fileiras de y ≥ 25 só têm a perna esquerda: 50/20 = 2 inteiras e
+        // Fileiras de x ≥ 54 só têm a perna de baixo: 25/20 = 1 inteira e
         // uma marcada.
-        var alta = layout.Rows.First(f => f.Tables[0].Origin.Y >= 30);
-        Assert.Equal(3, alta.Tables.Count);
-        Assert.True(alta.Tables[2].PartlyOutside);
+        var direita = layout.Rows.First(f => f.Tables[0].Origin.X >= 54);
+        Assert.Equal(2, direita.Tables.Count);
+        Assert.True(direita.Tables[1].PartlyOutside);
 
         NenhumaSobreposta(layout);
     }
 
     /// <summary>
-    /// Área com um furo em forma de "U": a fileira que cruza o vão nasce em
-    /// dois trechos, e a numeração continua de um para o outro.
+    /// Área com um recorte entrando pela esquerda entre y = 20 e y = 30: a
+    /// fileira 1 cruza o vão e nasce em dois trechos, e a numeração continua
+    /// de um para o outro.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
     public void AFileiraQueCruzaUmVaoNasceEmDoisTrechos()
     {
-        var u = new[] { P(0, 0), P(40, 0), P(40, 30), P(60, 30), P(60, 0), P(100, 0), P(100, 50), P(0, 50) };
-        var layout = Distribuir(area: u);
+        var recortada = new[] { P(0, 0), P(100, 0), P(100, 50), P(0, 50), P(0, 30), P(10, 30), P(10, 20), P(0, 20) };
+        var layout = Distribuir(area: recortada);
 
-        var baixa = layout.Rows[0];
+        var primeira = layout.Rows[0];
 
-        // Trecho [0,40]: mesas em 0 e 20. Trecho [60,100]: mesas em 60 e 80.
-        Assert.Equal([0, 20, 60, 80], baixa.Tables.Select(m => Math.Round(m.Origin.X, 6)));
-        Assert.Equal([1, 2, 3, 4], baixa.Tables.Select(m => m.Number));
-        Assert.All(baixa.Tables, m => Assert.False(m.PartlyOutside));
+        // Trecho [0,20]: mesa em 0. Trecho [30,50]: mesa em 30.
+        Assert.Equal([0, 30], primeira.Tables.Select(m => Math.Round(m.Origin.Y, 6)));
+        Assert.Equal([1, 2], primeira.Tables.Select(m => m.Number));
+        Assert.All(primeira.Tables, m => Assert.False(m.PartlyOutside));
+
+        // A fileira 3 (x de 12 a 16) não é atingida pelo recorte.
+        Assert.Equal(3, layout.Rows[2].Tables.Count);
 
         NenhumaSobreposta(layout);
     }
@@ -270,7 +304,7 @@ public class RowDistributorTests
     [Trait("Etapa", "5")]
     public void RecorteDaAreaDentroDaMesaMarcaAMesa()
     {
-        var comDente = new[] { P(0, 0), P(5, 0), P(10, 3), P(15, 0), P(100, 0), P(100, 50), P(0, 50) };
+        var comDente = new[] { P(0, 0), P(1, 0), P(2, 3), P(3, 0), P(100, 0), P(100, 50), P(0, 50) };
         var layout = Distribuir(area: comDente);
 
         var primeira = layout.Rows[0].Tables[0];
@@ -283,20 +317,19 @@ public class RowDistributorTests
     }
 
     /// <summary>
-    /// O recorte que entra e sai da mesa sem deixar vértice dentro: um
-    /// dente que atravessa a mesa de lado a lado no fundo, de 1 a 3 m. Só a
-    /// aresta cruzando pega.
+    /// O recorte que entra e sai da mesa sem deixar vértice dentro: uma
+    /// fenda de x = 1 a 3 subindo até y = 45, que atravessa as mesas da
+    /// fileira 1 de lado a lado. Só a aresta cruzando pega.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
     public void RecorteQueAtravessaAMesaSemVerticeDentroTambemMarca()
     {
-        var comCanal = new[] { P(0, 0), P(100, 0), P(100, 1), P(-5, 1), P(-5, 3), P(100, 3), P(100, 50), P(0, 50), P(0, 3), P(0, 1) };
-        var layout = Distribuir(area: comCanal);
+        var comFenda = new[] { P(0, 0), P(1, 0), P(1, 45), P(3, 45), P(3, 0), P(100, 0), P(100, 50), P(0, 50) };
+        var layout = Distribuir(area: comFenda);
 
-        // Toda mesa da fileira 1 é atravessada pelo canal, e as demais não.
         Assert.All(layout.Rows[0].Tables, m => Assert.True(m.PartlyOutside));
-        Assert.All(layout.Rows[1].Tables, m => Assert.False(m.PartlyOutside));
+        Assert.All(layout.Rows[1].Tables.Take(2), m => Assert.False(m.PartlyOutside));
     }
 
     /// <summary>
@@ -308,69 +341,73 @@ public class RowDistributorTests
     [Trait("Etapa", "5")]
     public void AreaFininhaDentroDaFaixaAindaGanhaFileira()
     {
-        var fininha = new[] { P(0, 1), P(100, 1), P(100, 1.8), P(0, 1.8) };
+        var fininha = new[] { P(1, 0), P(1.8, 0), P(1.8, 50), P(1, 50) };
         var layout = Distribuir(area: fininha);
 
         Assert.Single(layout.Rows);
-        Assert.Equal(5, layout.Rows[0].Tables.Count);
+        Assert.Equal(3, layout.Rows[0].Tables.Count);
         Assert.All(layout.Rows[0].Tables, m => Assert.True(m.PartlyOutside));
     }
 
     /// <summary>
-    /// Topo em 49: a faixa da fileira 9 é [48,52], e a linha central em 50
-    /// está fora. Só a borda de cá pega a fileira; cortar pela linha central
-    /// perderia justamente a fileira que precisa ficar marcada.
+    /// Área até x = 97: a faixa da fileira 17 é [96,100], e a linha central
+    /// em 98 está fora. Só a borda de cá pega a fileira; cortar pela linha
+    /// central perderia justamente a fileira que precisa ficar marcada.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
     public void AUltimaFileiraComALinhaCentralForaAindaNasce()
     {
-        var baixo = new[] { P(0, 0), P(100, 0), P(100, 49), P(0, 49) };
-        var layout = Distribuir(area: baixo);
+        var estreita = new[] { P(0, 0), P(97, 0), P(97, 50), P(0, 50) };
+        var layout = Distribuir(area: estreita);
 
-        Assert.Equal(9, layout.Rows.Count);
-        Assert.All(layout.Rows[8].Tables, m => Assert.True(m.PartlyOutside));
-        Assert.Equal(48, layout.Rows[8].Tables[0].Origin.Y, 9);
+        Assert.Equal(17, layout.Rows.Count);
+        Assert.All(layout.Rows[16].Tables, m => Assert.True(m.PartlyOutside));
+        Assert.Equal(96, layout.Rows[16].Tables[0].Origin.X, 9);
     }
 
     /// <summary>
-    /// Área de 1,5 m de fundo com a linha na borda: a borda de cá da faixa
-    /// coincide com a borda da área (tangente) e a linha central passa fora.
-    /// O recuo de 1 mm é o que faz a fileira existir.
+    /// Área de 1,5 m ao longo da linha, com a linha começando na borda: a
+    /// borda de cá da faixa coincide com a borda da área (tangente) e a
+    /// linha central passa fora. O recuo de 1 mm é o que faz a fileira
+    /// existir.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
     public void ALinhaNaBordaDeUmaAreaRasaAindaDaFileira()
     {
-        var rasa = new[] { P(0, 0), P(100, 0), P(100, 1.5), P(0, 1.5) };
+        var rasa = new[] { P(0, 0), P(1.5, 0), P(1.5, 50), P(0, 50) };
         var layout = Distribuir(area: rasa);
 
         Assert.Single(layout.Rows);
-        Assert.Equal(5, layout.Rows[0].Tables.Count);
+        Assert.Equal(3, layout.Rows[0].Tables.Count);
         Assert.All(layout.Rows[0].Tables, m => Assert.True(m.PartlyOutside));
     }
 
     /// <summary>
-    /// Linha traçada 2 mm fora da borda da área (clique à mão, sem OSNAP): a
-    /// fileira 1 nasce com 2 mm para fora, e é marcada inteira. É o
-    /// comportamento esperado — a marca é o aviso de que o clique não pegou
-    /// a borda — e fica registrado aqui para ninguém "consertar" com uma
-    /// tolerância que esconderia mesas de verdade fora da área.
+    /// Linha traçada 2 mm atrás da borda da área (clique à mão, sem OSNAP):
+    /// as mesas começam onde a área começa, na borda, e a primeira de cada
+    /// fileira é inteira. A linha manda nas estações; a área manda em onde a
+    /// mesa começa. (Na versão de fileiras paralelas à linha esses 2 mm
+    /// marcavam a fileira inteira.)
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
-    public void LinhaDoisMilimetrosForaDaBordaMarcaAPrimeiraFileira()
+    public void LinhaDoisMilimetrosAtrasDaBordaNaoMudaNada()
     {
         var quaseNaBorda = new[] { P(0, -0.002), P(100, -0.002) };
         var layout = Distribuir(alinhamento: quaseNaBorda);
 
-        Assert.All(layout.Rows[0].Tables, m => Assert.True(m.PartlyOutside));
-        Assert.All(layout.Rows[1].Tables, m => Assert.False(m.PartlyOutside));
+        Assert.Equal(17, layout.Rows.Count);
+        Assert.All(layout.Rows, f => Assert.Equal(0, f.Tables[0].Origin.Y, 6));
+        Assert.All(layout.Rows, f => Assert.False(f.Tables[0].PartlyOutside));
+        Assert.All(layout.Rows, f => Assert.False(f.Tables[1].PartlyOutside));
     }
 
     /// <summary>
     /// Coordenadas UTM e tudo girado 30°: o caso real. Mesma contagem do
-    /// retângulo na origem, sem falso "parcial" por arredondamento.
+    /// retângulo na origem, sem falso "parcial" por arredondamento, e a
+    /// fileira a 90° da linha.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
@@ -388,10 +425,10 @@ public class RowDistributorTests
 
         var layout = Distribuir(area: area, alinhamento: alinhamento);
 
-        Assert.Equal(9, layout.Rows.Count);
-        Assert.Equal(45, layout.Tables.Count);
-        Assert.Equal(5, layout.PartlyOutsideCount);
-        Assert.Equal(angulo, layout.Tables[0].DirectionRadians, 9);
+        Assert.Equal(17, layout.Rows.Count);
+        Assert.Equal(51, layout.Tables.Count);
+        Assert.Equal(17, layout.PartlyOutsideCount);
+        Assert.Equal(angulo + Norte, layout.Tables[0].DirectionRadians, 9);
     }
 
     // ------------------------------------------------------- sobreposição
@@ -496,16 +533,17 @@ public class RowDistributorTests
     // ------------------------------------------------ alinhamento quebrado
 
     /// <summary>
-    /// Alinhamento em "V" aberto: dois trechos com direções diferentes, cada
-    /// um com a sua família de fileiras (azimute diferente, fileira
-    /// diferente). Onde as famílias se encontram, a segunda não pisa na
-    /// primeira: a mesa que pisaria é pulada e contada.
+    /// Alinhamento em "V" invertido: dois trechos com direções diferentes,
+    /// cada um com a sua família de fileiras (azimute diferente, fileira
+    /// diferente). As duas famílias convergem para dentro da área; onde se
+    /// encontram, a segunda não pisa na primeira: a mesa que pisaria é
+    /// pulada e contada. Toda fileira nasce no seu trecho.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
     public void AlinhamentoQuebradoDaDuasFamiliasSemSobreposicao()
     {
-        var quebrado = new[] { P(0, 0), P(50, 10), P(100, 0) };
+        var quebrado = new[] { P(0, 10), P(50, 0), P(100, 10) };
         var layout = Distribuir(alinhamento: quebrado);
 
         Assert.NotEmpty(layout.Tables);
@@ -515,15 +553,15 @@ public class RowDistributorTests
         var direcoes = layout.Tables.Select(m => Math.Round(m.DirectionRadians, 6)).Distinct().ToList();
         Assert.Equal(2, direcoes.Count);
 
-        // Cada família fica na faixa do seu trecho: a do primeiro trecho não
-        // tem mesa começando além da perpendicular pelo vértice (50, 10).
-        foreach (var f in layout.Rows.Where(f => f.Segment == 0))
+        // A primeira mesa de cada fileira nasce em cima do trecho da linha.
+        foreach (var f in layout.Rows)
         {
-            foreach (var m in f.Tables)
-            {
-                var aoLongo = (m.Origin.X - 0) * Math.Cos(m.DirectionRadians) + (m.Origin.Y - 0) * Math.Sin(m.DirectionRadians);
-                Assert.InRange(aoLongo, -1e-9, Math.Sqrt(50 * 50 + 10 * 10) + 1e-9);
-            }
+            var (a, b) = f.Segment == 0 ? (quebrado[0], quebrado[1]) : (quebrado[1], quebrado[2]);
+            var comprimento = Distancia(a, b);
+            var origem = f.Tables[0].Origin;
+
+            var afastamento = ((b.X - a.X) * (origem.Y - a.Y) - (b.Y - a.Y) * (origem.X - a.X)) / comprimento;
+            Assert.Equal(0, afastamento, 6);
         }
 
         // Houve mesa pulada na junta, e cada uma pisa em alguma colocada.
@@ -544,7 +582,7 @@ public class RowDistributorTests
     {
         var comRepetido = new[] { P(0, 0), P(0, 0), P(100, 0) };
 
-        Assert.Equal(45, Distribuir(alinhamento: comRepetido).Tables.Count);
+        Assert.Equal(51, Distribuir(alinhamento: comRepetido).Tables.Count);
     }
 
     /// <summary>
@@ -559,17 +597,18 @@ public class RowDistributorTests
         var comTremor = new[] { P(0, 0), P(100, 0), P(100.004, 0.003) };
         var layout = Distribuir(alinhamento: comTremor);
 
-        Assert.Equal(45, layout.Tables.Count);
-        Assert.All(layout.Tables, m => Assert.Equal(0, m.DirectionRadians, 9));
+        Assert.Equal(51, layout.Tables.Count);
+        Assert.All(layout.Tables, m => Assert.Equal(Norte, m.DirectionRadians, 9));
         Assert.Empty(layout.Overlapping);
     }
 
     /// <summary>
-    /// Alinhamento em "L" de 90° pelas bordas de baixo e da direita: a
-    /// família do trecho vertical cai inteira em cima da família do
-    /// horizontal. Nenhuma é colocada, todas voltam em Overlapping com a
-    /// posição em que teriam ficado. Contas: horizontal 9 fileiras × 5 = 45;
-    /// vertical 17 fileiras (100/6) × 3 mesas (50/20, a última parcial) = 51.
+    /// Alinhamento em "L" de 90° pelas bordas de baixo e da direita: as
+    /// fileiras do trecho vertical (que correm para oeste) caem inteiras em
+    /// cima das do horizontal (que correm para o norte). Nenhuma é colocada,
+    /// todas voltam em Overlapping com a posição em que teriam ficado.
+    /// Contas: horizontal 17 fileiras × 3 = 51; vertical 9 estações (50/6)
+    /// × 5 mesas (100/20 exatas) = 45.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
@@ -578,15 +617,15 @@ public class RowDistributorTests
         var ele = new[] { P(0, 0), P(100, 0), P(100, 50) };
         var layout = Distribuir(alinhamento: ele);
 
-        Assert.Equal(45, layout.Tables.Count);
-        Assert.Equal(51, layout.SkippedForOverlap);
-        Assert.Equal(51, layout.Overlapping.Count);
+        Assert.Equal(51, layout.Tables.Count);
+        Assert.Equal(45, layout.SkippedForOverlap);
+        Assert.Equal(45, layout.Overlapping.Count);
         Assert.All(layout.Rows, f => Assert.Equal(0, f.Segment));
 
         foreach (var pulada in layout.Overlapping)
         {
             Assert.Equal("(sobreposta)", pulada.Label);
-            Assert.Equal(Math.PI / 2, pulada.DirectionRadians, 9);
+            Assert.Equal(Math.PI, Math.Abs(pulada.DirectionRadians), 9);
             Assert.InRange(pulada.Origin.X, 0 - 1e-9, 100 + 1e-9);
             Assert.InRange(pulada.Origin.Y, 0 - 1e-9, 50 + 1e-9);
             Assert.Contains(layout.Tables, colocada => RowDistributor.Overlap(pulada, colocada));

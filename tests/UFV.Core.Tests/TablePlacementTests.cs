@@ -13,12 +13,17 @@ public class TablePlacementTests
 
     private static Point3 P(double x, double y) => new(x, y, 0);
 
-    /// <summary>Uma célula de 20 × 4 (fundo em planta), tirada do distribuidor.</summary>
+    /// <summary>
+    /// Uma célula de 20 × 4 (fundo em planta), tirada do distribuidor, com a
+    /// fileira correndo no rumo pedido: a linha de alinhamento é traçada
+    /// perpendicular a ele, para o lado que faz a fileira sair no rumo.
+    /// </summary>
     private static PlacedTable Celula(LineSide lado, double rumoGraus)
     {
         var rumo = rumoGraus * Grau;
+        var linha = lado == LineSide.Right ? rumo + Math.PI / 2 : rumo - Math.PI / 2;
         var area = new[] { P(-500, -500), P(500, -500), P(500, 500), P(-500, 500) };
-        var alinhamento = new[] { P(0, 0), P(100 * Math.Cos(rumo), 100 * Math.Sin(rumo)) };
+        var alinhamento = new[] { P(0, 0), P(100 * Math.Cos(linha), 100 * Math.Sin(linha)) };
 
         return RowDistributor.Distribute(area, alinhamento, lado, 6, 0, new TableFootprint(20, 4))
             .Rows[0].Tables[0];
@@ -63,16 +68,17 @@ public class TablePlacementTests
     }
 
     /// <summary>
-    /// Fileira para o leste, mesas ao norte, mesa olhando para o norte (a
-    /// configuração padrão): a subida é para o sul, então a ponta baixa fica
-    /// na borda de LÁ (y = 4), e a alta na de cá (y = 0).
+    /// Fileira para o leste (linha norte-sul, fileiras à direita), célula
+    /// crescendo para o norte, mesa olhando para o norte (a configuração
+    /// padrão): a subida é para o sul, então a ponta baixa fica na borda de
+    /// LÁ (y = 4), e a alta na de cá (y = 0).
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
     public void ComAMesaOlhandoParaONorteAPontaBaixaFicaNaBordaDeLa()
     {
-        var celula = Celula(LineSide.Left, 0);
-        var orientacao = RowOrientation.Resolve(0, LineSide.Left, SystemConfiguration.Default.UpslopeAzimuthRadians);
+        var celula = Celula(LineSide.Right, 0);
+        var orientacao = RowOrientation.Resolve(0, LineSide.Right, SystemConfiguration.Default.UpslopeAzimuthRadians);
         var matriz = TablePlacement.Plan(celula, orientacao, 20 * Grau, 0);
 
         var pontaBaixa = matriz.Apply(new Point3(10, 0, 0));
@@ -88,8 +94,8 @@ public class TablePlacementTests
     [Trait("Etapa", "5")]
     public void ComAMesaOlhandoParaOSulAPontaBaixaFicaNaBordaDeCa()
     {
-        var celula = Celula(LineSide.Left, 0);
-        var orientacao = RowOrientation.Resolve(0, LineSide.Left, 0);
+        var celula = Celula(LineSide.Right, 0);
+        var orientacao = RowOrientation.Resolve(0, LineSide.Right, 0);
         var matriz = TablePlacement.Plan(celula, orientacao, 20 * Grau, 0);
 
         Assert.Equal(0, matriz.Apply(new Point3(10, 0, 0)).Y, 6);
@@ -113,8 +119,8 @@ public class TablePlacementTests
     [InlineData(double.NaN)]
     public void InclinacaoImpossivelERecusada(double graus)
     {
-        var celula = Celula(LineSide.Left, 0);
-        var orientacao = RowOrientation.Resolve(0, LineSide.Left, 0);
+        var celula = Celula(LineSide.Right, 0);
+        var orientacao = RowOrientation.Resolve(0, LineSide.Right, 0);
 
         Assert.Throws<ArgumentOutOfRangeException>(() => TablePlacement.Plan(celula, orientacao, graus * Grau, 0));
     }
@@ -128,8 +134,8 @@ public class TablePlacementTests
     [Trait("Etapa", "5")]
     public void OrientacaoDeOutraFileiraERecusada()
     {
-        var celula = Celula(LineSide.Left, 0);
-        var deOutra = RowOrientation.Resolve(30 * Grau, LineSide.Left, Math.PI);
+        var celula = Celula(LineSide.Right, 0);
+        var deOutra = RowOrientation.Resolve(30 * Grau, LineSide.Right, Math.PI);
 
         Assert.Throws<ArgumentException>(() => TablePlacement.Plan(celula, deOutra, 20 * Grau, 0));
     }
@@ -139,8 +145,8 @@ public class TablePlacementTests
     [Trait("Etapa", "5")]
     public void CelulaDegeneradaERecusada()
     {
-        var boa = Celula(LineSide.Left, 0);
-        var orientacao = RowOrientation.Resolve(0, LineSide.Left, 0);
+        var boa = Celula(LineSide.Right, 0);
+        var orientacao = RowOrientation.Resolve(0, LineSide.Right, 0);
 
         var semCantos = boa with { Corners = [boa.Corners[0], boa.Corners[1]] };
         var curta = boa with { Length = 0 };
@@ -153,8 +159,8 @@ public class TablePlacementTests
     [Trait("Etapa", "5")]
     public void CotaNaoFinitaERecusada()
     {
-        var celula = Celula(LineSide.Left, 0);
-        var orientacao = RowOrientation.Resolve(0, LineSide.Left, 0);
+        var celula = Celula(LineSide.Right, 0);
+        var orientacao = RowOrientation.Resolve(0, LineSide.Right, 0);
 
         Assert.Throws<ArgumentOutOfRangeException>(() => TablePlacement.Plan(celula, orientacao, 0.1, double.NaN));
     }

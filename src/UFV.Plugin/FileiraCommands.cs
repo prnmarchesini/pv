@@ -192,7 +192,7 @@ public static class FileiraCommands
         if (orientacao.DivergenceRadians > 5 * Math.PI / 180)
         {
             editor.WriteMessage(
-                $"\n  ATENÇÃO: a linha de alinhamento diverge {orientacao.DivergenceRadians * 180 / Math.PI:0.#}° do azimute configurado. "
+                $"\n  ATENÇÃO: a linha de alinhamento diverge {orientacao.DivergenceRadians * 180 / Math.PI:0.#}° do azimute configurado (a linha de alinhamento deve ser paralela ao azimute: norte-sul numa usina que olha para o norte). "
                 + "A mesa segue a fileira, e vai olhar para um lado diferente do configurado.\n");
         }
 
@@ -340,7 +340,7 @@ public static class FileiraCommands
     {
         // O AutoCAD acrescenta o valor padrão entre <> sozinho; escrevê-lo no
         // texto daria "<1>: <1>".
-        var opcoes = new PromptIntegerOptions("\nNúmero da fileira (1 é a que encosta na linha)")
+        var opcoes = new PromptIntegerOptions("\nNúmero da fileira (1 nasce no início da linha de alinhamento)")
         {
             AllowNegative = false,
             AllowZero = false,

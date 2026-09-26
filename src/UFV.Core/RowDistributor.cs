@@ -15,16 +15,18 @@ public sealed record TableFootprint(double Length, double PlanDepth);
 
 /// <summary>Uma mesa colocada em planta, ainda sem cota.</summary>
 /// <param name="Row">
-/// O número da fileira, a partir de 1 na primeira fileira que tem mesa (uma
-/// linha de alinhamento afastada da área gera fileiras vazias antes dela, e
-/// elas não recebem número). Zero numa mesa pulada por sobreposição.
+/// O número da fileira, a partir de 1 na primeira fileira que tem mesa (a
+/// fileira nasce numa estação da linha de alinhamento; estação cuja fileira
+/// não entra na área não recebe número). Zero numa mesa pulada por
+/// sobreposição.
 /// </param>
-/// <param name="Number">O número da mesa na fileira, a partir de 1 no sentido da linha. Zero numa mesa pulada.</param>
-/// <param name="Origin">O canto de partida: início da mesa, na borda mais próxima da linha.</param>
+/// <param name="Number">O número da mesa na fileira, a partir de 1 na mesa que nasce na linha. Zero numa mesa pulada.</param>
+/// <param name="Origin">O canto de partida: início da mesa, na borda voltada para o início da linha.</param>
 /// <param name="DirectionRadians">
 /// A direção da fileira, em radianos a partir do +X, anti-horário (a
-/// convenção matemática, a mesma de <c>Math.Atan2</c>). NÃO é azimute: o
-/// azimute topográfico, do norte e horário, é o que <see cref="Transform.Azimuth"/>
+/// convenção matemática, a mesma de <c>Math.Atan2</c>): perpendicular à
+/// linha de alinhamento, para o lado das mesas. NÃO é azimute: o azimute
+/// topográfico, do norte e horário, é o que <see cref="Transform.Azimuth"/>
 /// espera, e a conversão mora em <see cref="RowOrientation"/>, num lugar só.
 /// </param>
 /// <param name="Length">O comprimento ao longo da fileira.</param>
@@ -56,7 +58,7 @@ public sealed record PlacedTable(
 /// <summary>Uma fileira: as mesas em sequência sobre a mesma reta.</summary>
 /// <param name="Number">O número da fileira, a partir de 1.</param>
 /// <param name="Segment">O trecho da linha de alinhamento de que ela nasce.</param>
-/// <param name="Tables">As mesas, no sentido da linha.</param>
+/// <param name="Tables">As mesas, da linha para fora.</param>
 public sealed record PlanRow(int Number, int Segment, IReadOnlyList<PlacedTable> Tables);
 
 /// <summary>O resultado da distribuição em planta.</summary>
@@ -92,34 +94,33 @@ public sealed class PlanLayout
 }
 
 /// <summary>
-/// A distribuição em planta: fileiras a partir da linha de alinhamento, em
-/// pitch, para o lado que o usuário clicou, com mesas enfileiradas dentro da
-/// área.
+/// A distribuição em planta: a linha de alinhamento é o EIXO TRANSVERSAL da
+/// usina. Toda fileira nasce nela, uma a cada pitch ao longo dela, e corre a
+/// 90° para o lado que o usuário clicou, com mesas enfileiradas da linha para
+/// fora, dentro da área.
 ///
-/// A regra é a do plano de requisitos: "o usuário desenha uma linha e diz: as
-/// mesas começam aqui e seguem para aquele lado". A fileira 1 encosta na
-/// linha; a fileira seguinte está a um pitch dela, medido de borda a borda.
-/// Cada fileira é cortada pela área em trechos, e em cada trecho as mesas
-/// entram do início para o fim, com o espaçamento entre elas; a última, que
-/// passa da borda, fica e é marcada.
+/// É a regra que o Renan deu em 26/09/2026, ao reprovar a primeira versão
+/// (que punha as fileiras paralelas à linha): "o alinhamento é uma linha
+/// perpendicular às fileiras; toda fileira nasce nele e vai a 90 graus". A
+/// fileira 1 nasce no início da linha; a fileira k nasce a (k−1) pitches
+/// dali, medido ao longo da linha. A mesa 1 de cada fileira começa na linha
+/// (ou onde a área começa, se a linha está fora dela); a seguinte vem depois
+/// do espaçamento; a última, que passa da borda, fica e é marcada. Só nascem
+/// fileiras ao longo do comprimento traçado da linha: a linha define até onde
+/// vão as fileiras, e a área define até onde vai cada fileira.
 ///
-/// <b>A fileira segue a linha, e não o azimute da configuração.</b> O plano
-/// diz "azimute diferente, fileira diferente (linhas de alinhamento distintas
-/// na mesma área)": a orientação de cada fileira vem do trecho da linha de
-/// que ela nasce, e é a única convenção em que uma linha quebrada faz sentido.
-/// A mesa fica alinhada com a fileira, sempre: a célula que a distribuição
-/// reserva tem exatamente o comprimento por o fundo, e girá-la por qualquer
-/// ângulo invadiria a vizinha. O azimute da configuração serve para uma
-/// coisa só: escolher, entre os dois lados perpendiculares à fileira, qual é
-/// a subida da mesa (<see cref="RowOrientation"/>), e avisar quando a linha
-/// traçada diverge muito dele.
+/// <b>A fileira é perpendicular à linha, e não ao azimute da configuração.</b>
+/// A célula que a distribuição reserva tem exatamente o comprimento (ao longo
+/// da fileira) por o fundo (ao longo da linha), e girá-la invadiria a vizinha.
+/// O azimute da configuração serve para uma coisa só: escolher, entre os dois
+/// sentidos da linha, qual é a subida da mesa (<see cref="RowOrientation"/>),
+/// e avisar quando a linha traçada diverge muito dele (a linha deve ser
+/// paralela ao azimute: norte-sul numa usina que olha para o norte).
 ///
-/// Uma linha reta gera fileiras infinitas, cortadas só pela área. Uma linha
-/// quebrada gera uma família de fileiras por trecho, cada família limitada à
-/// faixa do seu trecho (as perpendiculares pelas pontas); onde as faixas se
-/// cruzam, a segunda família não pisa na primeira — a mesa que pisaria é
-/// devolvida em <see cref="PlanLayout.Overlapping"/>, com posição, e não
-/// colocada. O motor não move mesa para caber.
+/// Uma linha quebrada gera uma família de fileiras por trecho, cada trecho com
+/// as suas estações; onde as famílias se cruzam, a segunda não pisa na
+/// primeira — a mesa que pisaria é devolvida em <see cref="PlanLayout.Overlapping"/>,
+/// com posição, e não colocada. O motor não move mesa para caber.
 ///
 /// Tudo aqui é planta: Z entra zero e sai zero. A cota é da amostragem (5.2).
 /// </summary>
@@ -130,10 +131,10 @@ public static class RowDistributor
 
     /// <summary>
     /// Quanto as linhas de corte da fileira se afastam das bordas da faixa,
-    /// em metro. A fileira 1 encosta na linha de alinhamento, que quase sempre
-    /// é a borda da área: cortar exatamente na borda é tangente, e tangente
-    /// não entra. Um milímetro para dentro resolve sem mudar nada que se
-    /// enxergue.
+    /// em metro. A fileira 1 nasce no início da linha de alinhamento, que
+    /// quase sempre está numa borda da área: cortar exatamente na borda é
+    /// tangente, e tangente não entra. Um milímetro para dentro resolve sem
+    /// mudar nada que se enxergue.
     /// </summary>
     private const double Recuo = 1e-3;
 
@@ -158,9 +159,9 @@ public static class RowDistributor
     /// Distribui as mesas.
     /// </summary>
     /// <param name="area">O contorno da área de implantação, em planta.</param>
-    /// <param name="alignment">A linha de alinhamento, no sentido em que foi traçada.</param>
-    /// <param name="side">De que lado da linha ficam as mesas.</param>
-    /// <param name="pitch">A distância entre fileiras, de borda a borda, em metro.</param>
+    /// <param name="alignment">A linha de alinhamento (o eixo transversal), no sentido em que foi traçada: a fileira 1 nasce no início.</param>
+    /// <param name="side">Para que lado da linha correm as fileiras.</param>
+    /// <param name="pitch">A distância entre fileiras, de início a início, medida ao longo da linha, em metro.</param>
     /// <param name="gap">O espaçamento entre mesas vizinhas de uma fileira, em metro.</param>
     /// <param name="table">O que a mesa ocupa em planta.</param>
     /// <exception cref="ArgumentOutOfRangeException">
@@ -201,44 +202,43 @@ public static class RowDistributor
             var dy = b.Y - a.Y;
             var comprimento = Math.Sqrt(dx * dx + dy * dy);
 
-            var direcao = new Point3(dx / comprimento, dy / comprimento, 0);
+            // O eixo da linha: é ao longo dele que as fileiras se sucedem, e
+            // é o fundo da célula de cada mesa.
+            var eixo = new Point3(dx / comprimento, dy / comprimento, 0);
 
-            // A normal para o lado das mesas. LineSides.SignedDistance é
-            // positiva à direita do sentido a→b: a direita é (dy, −dx).
-            var normal = side == LineSide.Right
-                ? new Point3(direcao.Y, -direcao.X, 0)
-                : new Point3(-direcao.Y, direcao.X, 0);
+            // A direção da fileira: perpendicular à linha, para o lado das
+            // mesas. LineSides.SignedDistance é positiva à direita do sentido
+            // a→b: a direita é (dy, −dx).
+            var direcao = side == LineSide.Right
+                ? new Point3(eixo.Y, -eixo.X, 0)
+                : new Point3(-eixo.Y, eixo.X, 0);
 
             var rumo = Math.Atan2(direcao.Y, direcao.X);
 
-            // Até onde a área vai para o lado das mesas, medido da linha.
-            var alcance = area.Max(v => (v.X - a.X) * normal.X + (v.Y - a.Y) * normal.Y);
-
-            // Linha reta: fileiras infinitas. Linha quebrada: cada família
-            // fica na faixa do seu trecho.
-            var inicioDaFaixa = trechos.Count == 1 ? double.NegativeInfinity : 0;
-            var fimDaFaixa = trechos.Count == 1 ? double.PositiveInfinity : comprimento;
-
-            for (var k = 0; k * pitch < alcance - Tolerancia; k++)
+            // Uma fileira por estação da linha, a cada pitch, enquanto a
+            // estação estiver no trecho traçado.
+            for (var k = 0; k * pitch <= comprimento + Tolerancia; k++)
             {
-                var afastamento = k * pitch;
+                var estacao = k * pitch;
                 var mesas = new List<PlacedTable>();
 
-                foreach (var (inicioDoTrecho, fimDoTrecho) in Trechos(area, a, direcao, normal, afastamento, table.PlanDepth))
+                foreach (var (inicioDoTrecho, fimDoTrecho) in Trechos(area, a, direcao, eixo, estacao, table.PlanDepth))
                 {
-                    var inicio = Math.Max(inicioDoTrecho, inicioDaFaixa);
-                    var fim = Math.Min(fimDoTrecho, fimDaFaixa);
+                    // As mesas começam na linha (u = 0), nunca atrás dela; se
+                    // a área começa mais adiante, começam onde ela começa.
+                    var inicio = Math.Max(inicioDoTrecho, 0);
+                    var fim = fimDoTrecho;
 
                     if (fim - inicio <= Tolerancia) continue;
 
                     for (var s = inicio; s < fim - Tolerancia; s += table.Length + gap)
                     {
                         var origem = new Point3(
-                            a.X + direcao.X * s + normal.X * afastamento,
-                            a.Y + direcao.Y * s + normal.Y * afastamento,
+                            a.X + direcao.X * s + eixo.X * estacao,
+                            a.Y + direcao.Y * s + eixo.Y * estacao,
                             0);
 
-                        var mesa = Montar(fileiras.Count + 1, mesas.Count + 1, origem, direcao, normal, rumo, table, area);
+                        var mesa = Montar(fileiras.Count + 1, mesas.Count + 1, origem, direcao, eixo, rumo, table, area);
 
                         if (t > 0 && PisaEmOutraFamilia(mesa, familias))
                         {
@@ -293,22 +293,24 @@ public static class RowDistributor
 
     /// <summary>
     /// Onde a faixa da fileira está dentro da área, como intervalos do
-    /// parâmetro ao longo da direção.
+    /// parâmetro ao longo da direção da fileira (u, da linha para fora).
     ///
-    /// É a projeção, sobre a direção da fileira, da parte da área que cai
-    /// dentro da faixa. Essa parte é limitada por pedaços de aresta da área
-    /// que estão na faixa e por pedaços das bordas da faixa que estão na
-    /// área, e a projeção de uma região é a projeção do seu contorno: então
-    /// os intervalos são a união (1) dos cruzamentos das bordas da faixa com
-    /// a área e (2) das arestas da área recortadas pela faixa.
+    /// A faixa é a tira de largura igual ao fundo da mesa, a partir da
+    /// estação, ao longo da direção. É a projeção, sobre a direção da
+    /// fileira, da parte da área que cai dentro da faixa. Essa parte é
+    /// limitada por pedaços de aresta da área que estão na faixa e por
+    /// pedaços das bordas da faixa que estão na área, e a projeção de uma
+    /// região é a projeção do seu contorno: então os intervalos são a união
+    /// (1) dos cruzamentos das bordas da faixa com a área e (2) das arestas
+    /// da área recortadas pela faixa.
     ///
     /// As bordas são cortadas um milímetro para dentro (<see cref="Recuo"/>)
-    /// porque a fileira 1 tem a borda de cá em cima da linha de alinhamento,
-    /// que costuma ser a borda da área, e tangente não entra; a linha do meio
-    /// entra também, por redundância barata. As arestas recortadas são o que
-    /// garante que toda parte da área dentro da faixa, por menor que seja,
-    /// ganha o seu intervalo — inclusive uma área fininha que não toca
-    /// nenhuma das três linhas.
+    /// porque a fileira 1 nasce no início da linha, que costuma estar numa
+    /// borda da área, e tangente não entra; a linha do meio entra também,
+    /// por redundância barata. As arestas recortadas são o que garante que
+    /// toda parte da área dentro da faixa, por menor que seja, ganha o seu
+    /// intervalo — inclusive uma área fininha que não toca nenhuma das três
+    /// linhas.
     /// </summary>
     private static List<(double Inicio, double Fim)> Trechos(
         IReadOnlyList<Point3> area, Point3 a, Point3 direcao, Point3 normal, double afastamento, double fundo)

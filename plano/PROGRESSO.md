@@ -33,14 +33,14 @@ Só o Renan marca VALIDADO.
 | 4.2 | Linha de alinhamento | VALIDADO | Renan aprovou em 26/09/2026 ("deu certo o alinhamento"), depois de 2 reprovações em 25/09 |
 | 4.3 | Regras de análise | VALIDADO (automático) | Modelo no Core, sem tela; fechado em 26/09/2026 pela regra "só valido no CAD". A tela é o 4.4, a pintura é a etapa 5 |
 | 4.4 | Modal | AGUARDANDO VALIDAÇÃO | `UFV_CONFIG`: tela única, grava no desenho; nível 2 salva, reabre e compara campo a campo |
-| 5.1 | Distribuição em planta | VALIDADO (automático) | `RowDistributor` no Core, `Polygons` no Geo; só modelo, fechado em 26/09/2026. A fileira segue a linha de alinhamento: **Renan confirma no 5.8** |
+| 5.1 | Distribuição em planta | VALIDADO (automático) | `RowDistributor` no Core, `Polygons` no Geo; só modelo. **Refeito em 26/09/2026**: a linha de alinhamento é o eixo transversal, toda fileira nasce nela a cada pitch e corre a 90° (a primeira versão punha as fileiras paralelas à linha; o Renan reprovou no CAD) |
 | 5.2 | Amostragem | VALIDADO (automático) | `TablePlacement` e `TerrainSampler` no Core; a ponta baixa é amostrada na aresta inteira (`Tin.TryGetMaxZAlong`); fechado em 26/09/2026 |
 | 5.3 | Cotas viáveis por mesa | VALIDADO (automático) | `ViableElevations` no Core; grade de 1 cm, intervalos por varredura; fechado em 26/09/2026 |
 | 5.4 | Alinhamento na fileira | VALIDADO (automático) | `RowSolver` no Core: programação dinâmica, não iterativo (divergência do plano, registrada); fechado em 26/09/2026. **Renan confirma no 5.8** o "degrau mínimo = 0 ou ≥ mínimo" e a ausência do campo de iterações |
 | 5.5 | Pilares | VALIDADO (automático) | `PillarCalculator` no Core; comprimento ideal, sem arredondamento comercial (decisão do Renan no 4.1); fechado em 26/09/2026 |
 | 5.6 | Resultado das análises | VALIDADO (automático) | `TableAnalysis` e `RowPipeline` no Core; fechado em 26/09/2026 |
 | 5.7 | Desenho | AGUARDANDO VALIDAÇÃO | `LayoutDrawer`: pilares (bloco escalado), módulos (bloco por modelo) + face separada, contorno da mesa, alturas em camada desligada, aviso de marcada; uma transação |
-| 5.8 | Uma fileira no CAD | AGUARDANDO VALIDAÇÃO | `UFV_FILEIRA`; nível 2 com 6 mesas, 42 pilares e 168 faces sobre o Itatiba, cotas lidas em LISP |
+| 5.8 | Uma fileira no CAD | AGUARDANDO VALIDAÇÃO | `UFV_FILEIRA`; REPROVADO em 26/09/2026 (fileira paralela à linha; alturas ilegíveis) e refeito no mesmo dia; nível 2 com 6 mesas, 42 pilares e 168 faces sobre o Itatiba |
 | 5.9 | Área inteira | AGUARDANDO VALIDAÇÃO | `UFV_USINA`; nível 2 com 102 mesas em 17 fileiras sobre o Itatiba: motor 0,6 s, desenho 0,2 s |
 | 6.1 | Escritor DAE puro | VALIDADO (automático) | `ColladaWriter` no Core: Collada 1.4.1, uma geometria e um nó por face, material com o nome da camada (é por ele que o PVsyst reconhece módulos); 16 testes; fechado em 26/09/2026 |
 | 6.2 | Botão Exportar para PVsyst | AGUARDANDO VALIDAÇÃO | `UFV_EXPORTAR` (seleção por XData, formato, janela de arquivo, DAE com origem local); nível 2 relê o DAE: 168 faces, vértice ao milímetro |
@@ -132,9 +132,12 @@ teste: a etapa 6 é onde passa a ter.
 
 **Decisões da etapa 5 tomadas sem o Renan, que ele confirma na tela (5.8):**
 
-- a fileira segue a DIREÇÃO da linha de alinhamento; o azimute da
-  configuração só escolhe para que lado a mesa sobe, e o comando avisa
-  quando a linha diverge mais de 5° dele;
+- ~~a fileira segue a DIREÇÃO da linha de alinhamento~~ **Errado, reprovado
+  em 26/09/2026.** A linha de alinhamento é o eixo TRANSVERSAL: toda
+  fileira nasce nela, uma a cada pitch ao longo dela, e corre a 90° para o
+  lado clicado. O azimute só escolhe para que lado a mesa sobe (um dos dois
+  sentidos da linha), e o comando avisa quando a linha diverge mais de 5°
+  dele (a linha deve ser paralela ao azimute);
 - o alinhamento na fileira é programação dinâmica, não iterativo: não há
   campo "máximo de iterações" (o plano de execução pedia; o de requisitos já
   registrava a DP como alternativa exata);
@@ -2823,4 +2826,50 @@ deixa a mesa suja (conservador); o 7.4 é o lugar de medir a varredura
 (`LayoutScan.Tables`) numa usina inteira e decidir sobre um índice em
 memória; o COPY suja original e cópia sob o mesmo GUID até o 7.5 (está no
 roteiro de tela).
+
+## Reprovação do 5.8 em 26/09/2026: a fileira estava invertida
+
+O Renan instalou o bundle, pôs a área e o alinhamento e disse: "vc fez
+invertido, o alinhamento é uma linha perpendicular às fileiras, toda
+fileira nasce nele, e vai a 90 graus, vc fez a fileira seguindo o
+alinhamento". Eu tinha lido "as mesas começam aqui e seguem para aquele
+lado" como fileiras paralelas à linha, afastadas a cada pitch. O modelo
+certo: a linha é o eixo transversal da usina; as fileiras nascem nas
+estações da linha (0, pitch, 2·pitch…) e correm perpendiculares a ela,
+para o lado clicado; a mesa 1 de cada fileira começa na linha (ou onde a
+área começa) e as seguintes vêm depois do espaçamento; o fundo da célula
+corre ao longo da linha; e a linha deve ser traçada paralela ao azimute
+(norte-sul numa usina que olha para o norte).
+
+### O que mudou
+
+- `RowDistributor.Distribute`: uma fileira por estação da linha enquanto a
+  estação estiver no trecho traçado (a linha define até onde vão as
+  fileiras; a área define até onde vai cada fileira); direção da fileira =
+  perpendicular ao trecho para o lado clicado; célula com comprimento ao
+  longo da fileira e fundo ao longo da linha; as mesas nunca começam atrás
+  da linha. A conferência de sobreposição entre famílias de uma linha
+  quebrada ficou igual;
+- `RowOrientation.Resolve`: a normal da célula passou a ser o eixo da
+  linha (esquerda da fileira quando as fileiras vão para a direita da
+  linha, e vice-versa). O resto do pipeline (5.2 a 5.9) não mudou: só
+  recebe células e orientações;
+- os testes do 5.1 foram reescritos para o modelo certo (retângulo de
+  100 × 50 com a linha na borda de baixo dá 17 fileiras de 3 mesas, 51
+  mesas, 17 parciais); os testes das etapas seguintes que montavam uma
+  fileira para o leste passaram a traçar a linha norte-sul na borda oeste
+  com as fileiras à direita, e ficaram com as mesmas células e as mesmas
+  expectativas; o nível 2 idem (a linha do Itatiba virou norte-sul);
+- textos dos comandos: "1 nasce no início da linha"; o aviso de
+  divergência diz que a linha deve ser paralela ela ao azimute.
+
+### Decisões minhas nesse conserto (Renan confirma na tela)
+
+- fileiras só nas estações do comprimento traçado da linha: linha curta,
+  poucas fileiras. Se ele preferir que a linha reta gere fileiras até a
+  área acabar, é uma linha no distribuidor;
+- a fileira 1 é a do INÍCIO da linha (primeiro clique). O 7.10 é onde ele
+  vai indicar a F1 à mão;
+- linha 2 mm atrás da borda não marca mais nada: as mesas começam onde a
+  área começa.
 
