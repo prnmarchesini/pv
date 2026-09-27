@@ -108,6 +108,15 @@ Acervo             OK
 
 ### A etapa 7 está inteira aguardando validação; o 6.5 espera as respostas do 6.4
 
+**Onde parou (26/09/2026, noite, commit `edaf9cb`, push feito, bundle
+instalado):** etapa 7 fechada (7.1 a 7.10), mais o lote das seis
+reprovações da tela ("Terceira reprovação", fim deste arquivo). Nada
+PENDENTE para o Claude Code. Ao reabrir: 1) perguntar ao Renan o que ele
+validou dos itens 1 a 16 de "O que está travado no Renan"; 2) se algo
+reprovou, tratar como reprovação (seção nova, testes, revisor, commit,
+bundle); 3) o 6.5 (escrever o .pvc) só depois das três respostas do 6.4.
+Dívidas conhecidas estão nas "Observações que ficam" de cada seção.
+
 6.1 fechado, 6.2 e 6.3 aguardando validação (o DAE no PVsyst), 6.4 é o
 resumo do formato PVC ("Entregar um resumo ao Renan e PARAR"). O 6.5 só
 começa depois que o Renan ler o resumo e decidir as três perguntas dele. A
