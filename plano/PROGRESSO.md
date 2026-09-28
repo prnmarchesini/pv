@@ -244,8 +244,9 @@ teste: a etapa 6 é onde passa a ter.
    `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
    nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
 17. **Testar a rodada de 27/09 (motor por pesos, pontas, Análises, grupo)**,
-   ver "Quarta rodada" no fim deste arquivo. Primeiro fechar o Civil 3D e
-   rodar `.\tools\instalar.ps1`. Depois:
+   ver "Quarta rodada" no fim deste arquivo. O bundle Release (commit
+   `d5163a6`) já está instalado desde 27/09 22:23; é só abrir o Civil 3D
+   (pode pedir "Always Load" por ser DLL nova). Depois:
    a) **Regerar** (seção Análises) no desenho do Itatiba: as mesas que
       não cabem (magenta) não enfiam mais ponta na terra; a PB mínima delas
       fica em 0,30 ou mais, e o que passa da faixa é para CIMA (pilar mais
