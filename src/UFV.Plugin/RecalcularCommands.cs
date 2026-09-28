@@ -185,23 +185,49 @@ public static class RecalcularCommands
             return false;
         }
 
-        var fileira = RowPipeline.ProcessRow(new PlanRow(celula.Row, [celula]), geometria, perfil.TiltRadians, terreno.Mesh, settings);
+        // Mesa com as pontas escolhidas à mão (botão Pontas): refeita com as
+        // mesmas alturas, no terreno de onde ela estiver agora. As cotas de
+        // partida vêm dos cantos da borda baixa do contorno.
+        ProcessedRow fileira;
+        (double, double)? pontas = null;
+        var avisos = new List<string>();
 
-        using (var transacao = documento.Database.TransactionManager.StartTransaction())
+        if (mesa.Identity.HasManualEnds)
         {
-            foreach (var peca in mesa.All)
+            ManualEndsResult ajuste;
+
+            // Uma mesa cujas pontas não se consegue refazer (ponta fora do
+            // terreno no lugar novo, conta que não converge) não derruba o
+            // lote: é pulada, dita, e as outras seguem.
+            try
             {
-                var entidade = (Entity)transacao.GetObject(peca, OpenMode.ForWrite);
-                entidade.Erase();
+                ajuste = ManualEnds.Apply(
+                    celula, geometria, perfil.TiltRadians, terreno.Mesh, settings, cantos[0].Z, cantos[1].Z,
+                    mesa.Identity.ManualFirstLowEdge, mesa.Identity.ManualLastLowEdge);
+            }
+            catch (InvalidOperationException erro)
+            {
+                editor.WriteMessage($"\nRECALCULAR {mesa.Identity.Label} tem as pontas escolhidas à mão e não deu para refazê-las: {erro.Message} Use Pontas > Automatico.\n");
+                return false;
             }
 
-            transacao.Commit();
+            fileira = ajuste.Row;
+            pontas = (mesa.Identity.ManualFirstLowEdge!.Value, mesa.Identity.ManualLastLowEdge!.Value);
+            avisos.AddRange(ajuste.Warnings);
+            editor.WriteMessage($"\n  {mesa.Identity.Label} tem as pontas escolhidas à mão: mantidas.\n");
+        }
+        else
+        {
+            fileira = RowPipeline.ProcessRow(new PlanRow(celula.Row, [celula]), geometria, perfil.TiltRadians, terreno.Mesh, settings);
         }
 
-        var desenho = LayoutDrawer.Draw(documento.Database, fileira, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses, _ => guid);
+        Apagar(documento, mesa);
+
+        var desenho = LayoutDrawer.Draw(
+            documento.Database, fileira, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses, _ => guid, _ => pontas);
         var processada = fileira.Tables[0];
 
-        foreach (var aviso in fileira.Warnings) editor.WriteMessage($"\n  ATENÇÃO: {aviso}\n");
+        foreach (var aviso in fileira.Warnings.Concat(avisos)) editor.WriteMessage($"\n  ATENÇÃO: {aviso}\n");
 
         if (processada.Orientation.DivergenceRadians > 5 * Math.PI / 180)
         {
@@ -217,7 +243,28 @@ public static class RecalcularCommands
         return true;
     }
 
-    private static Guid? MesaDaSelecao(Editor editor, Document documento)
+    /// <summary>Apaga todas as peças de uma mesa, numa transação.</summary>
+    internal static void Apagar(Document documento, TableParts mesa) => Apagar(documento, [mesa]);
+
+    /// <summary>Apaga todas as peças destas mesas, e os grupos que ficarem vazios, numa transação só.</summary>
+    internal static void Apagar(Document documento, IReadOnlyCollection<TableParts> mesas)
+    {
+        using var transacao = documento.Database.TransactionManager.StartTransaction();
+
+        var pecas = mesas.SelectMany(m => m.All).ToList();
+        var grupos = LayoutGroups.GruposDe(transacao, pecas);
+
+        foreach (var peca in pecas)
+        {
+            var entidade = (Entity)transacao.GetObject(peca, OpenMode.ForWrite);
+            entidade.Erase();
+        }
+
+        LayoutGroups.ApagarVazios(transacao, grupos);
+        transacao.Commit();
+    }
+
+    internal static Guid? MesaDaSelecao(Editor editor, Document documento)
     {
         var selecao = editor.SelectImplied();
         if (selecao.Status != PromptStatus.OK) return null;
@@ -238,9 +285,9 @@ public static class RecalcularCommands
         return null;
     }
 
-    private static Guid? MesaClicada(Editor editor, Document documento)
+    internal static Guid? MesaClicada(Editor editor, Document documento, string pergunta = "\nClique numa peça da mesa a recalcular: ")
     {
-        var opcoes = new PromptEntityOptions("\nClique numa peça da mesa a recalcular: ");
+        var opcoes = new PromptEntityOptions(pergunta);
         opcoes.SetRejectMessage("\nIsso não é uma peça de mesa do plugin.");
         opcoes.AddAllowedClass(typeof(Entity), false);
 

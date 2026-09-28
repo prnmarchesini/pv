@@ -45,9 +45,9 @@ public sealed record SolvedRun(IReadOnlyList<SolvedTable> Tables)
     /// <summary>
     /// Os degraus entre mesas vizinhas: cota inicial da seguinte menos cota
     /// final da anterior. Só a junta com mesa ASSENTADA não entra: ela foi
-    /// tirada da cota que a programação escolheu, e o degrau até ela não é
-    /// degrau de fileira. A junta com a escada (marcada inclinada) entra,
-    /// como sempre entrou.
+    /// posta pela análise de pesos (27/09/2026), fora da cota que a
+    /// programação escolheu, e o degrau até uma mesa que não cabe não é
+    /// degrau de fileira. Desde então toda marcada é assentada.
     /// </summary>
     public IReadOnlyList<double> Steps =>
         Tables.Zip(Tables.Skip(1), (a, b) => (a, b))
@@ -130,6 +130,8 @@ public sealed record RowSolution(IReadOnlyList<SolvedRun> Runs)
 /// </summary>
 public static class RowSolver
 {
+    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
+
     /// <summary>
     /// O custo de um módulo fora da faixa. Vale mais que qualquer soma de
     /// degraus: com degrau máximo de 0,5 m, são 200 mil juntas até empatar.
@@ -467,40 +469,75 @@ public static class RowSolver
             if (i > 0) fim = deFim[i - 1][inicio];
         }
 
-        // A marcada que FLUTUA (as duas pontas mais que um degrau acima do
-        // ponto mais alto do próprio terreno) assenta no próprio terreno,
-        // nivelada, e não na cota que a programação escolheu para ligar as
-        // vizinhas. Renan, 26/09/2026: "tem mesas na altura das nuvens" —
-        // eram mesas marcadas num buraco de 10 m, deixadas na cota das
-        // vizinhas. A escada (marcada inclinada, enterrada numa ponta, que
-        // liga dois patamares) não flutua e fica como está. As vizinhas não
-        // mudam: a viabilidade delas não depende da marcada, e o degrau até
-        // uma mesa que não cabe não é degrau de fileira.
+        // A marcada é posta pela análise de pesos (27/09/2026), e não na
+        // cota que a programação escolheu para ela servir de escada entre as
+        // vizinhas. Renan: "enfiou a ponta na terra sendo que poderia ter
+        // levantado" — a escada era um de cinco giros na cota da junta, sem
+        // olhar quanto enterrava. Agora: acima da faixa é barato, abaixo é
+        // caro, enterrado é muito caro, e o degrau até a vizinha só pesa no
+        // que passa do máximo (a mesa num buraco fica no próprio chão, e não
+        // "na altura das nuvens", 26/09/2026). As vizinhas não mudam: a
+        // viabilidade delas não depende da marcada, e o degrau até uma mesa
+        // que não cabe não é degrau de fileira. Só as vizinhas não marcadas
+        // servem de âncora: a cota de outra marcada é chute da programação.
         if (assentarMarcadas)
         {
             for (var i = 0; i < resolvidas.Length; i++)
             {
                 var r = resolvidas[i];
-                if (!r.Marked || mesas[i].Viable.HighestGroundOrNull() is not { } terreno) continue;
+                if (!r.Marked) continue;
 
-                var ancora = Math.Round((terreno + config.MinLowEdge) / passo) * passo;
-                if (Math.Min(r.StartElevation, r.EndElevation) <= ancora + config.MaxStep + 1e-9) continue;
+                var viavel = mesas[i].Viable;
+                double? antes = i > 0 && !resolvidas[i - 1].Marked ? resolvidas[i - 1].EndElevation : null;
+                double? depois = i < resolvidas.Length - 1 && !resolvidas[i + 1].Marked ? resolvidas[i + 1].StartElevation : null;
 
-                var estouros = mesas[i].Viable.Problem is null ? mesas[i].Viable.Violations(ancora, ancora) : mesas[i].Viable.ModuleCount;
+                // Sem terreno sob parte dos módulos, os pesos só veriam os que
+                // têm chão e a mesa poderia girar para qualquer lado sobre o
+                // resto: ela fica nivelada no ponto mais alto do que existe.
+                if (viavel.Problem is not null)
+                {
+                    if (viavel.HighestGroundOrNull() is not { } alto) continue;
 
-                // O motivo velho falava da cota em que ela flutuava; o de
-                // agora é o desnível até a vizinha mais próxima.
-                var vizinhas = new List<double>();
-                if (i > 0) vizinhas.Add(Math.Abs(resolvidas[i - 1].EndElevation - ancora));
-                if (i < resolvidas.Length - 1) vizinhas.Add(Math.Abs(resolvidas[i + 1].StartElevation - ancora));
-                var desnivel = vizinhas.DefaultIfEmpty(0).Max();
+                    var ancora = Math.Round((alto + config.MinLowEdge) / passo) * passo;
+                    resolvidas[i] = r with { StartElevation = ancora, EndElevation = ancora, Violations = viavel.ModuleCount, Reason = viavel.Problem, Seated = true };
+                    continue;
+                }
 
-                var motivo = mesas[i].Viable.Problem
-                    ?? (estouros > mesas[i].Viable.ToleratedModules
-                        ? Motivo(mesas[i].Viable, ancora, ancora, estouros)
-                        : $"assentada no próprio terreno: o desnível até a vizinha ({desnivel.ToString("0.##", CultureInfo.GetCultureInfo("pt-BR"))} m) passa do degrau máximo ({config.MaxStep.ToString("0.##", CultureInfo.GetCultureInfo("pt-BR"))} m)");
+                if (viavel.Compromise(antes, depois) is not { } posicao) continue;
 
-                resolvidas[i] = r with { StartElevation = ancora, EndElevation = ancora, Violations = estouros, Reason = motivo, Seated = true };
+                var (z0, z1) = posicao;
+                var estouros = viavel.Violations(z0, z1);
+                var cabe = viavel.IsViable(z0, z1);
+
+                bool Permitido(double? vizinha, double cota)
+                {
+                    if (vizinha is not { } v) return true;
+
+                    var d = Math.Abs(cota - v);
+
+                    return d < 1e-9 || (d >= config.MinStep - 1e-9 && d <= config.MaxStep + 1e-9);
+                }
+
+                // Coube no próprio terreno e os degraus até as vizinhas são
+                // permitidos: não é mesa marcada. A programação a marcou só
+                // porque a olhava como escada numa grade de giros.
+                if (cabe && Permitido(antes, z0) && Permitido(depois, z1))
+                {
+                    resolvidas[i] = r with { StartElevation = z0, EndElevation = z1, Violations = estouros, Marked = false, Reason = null, Seated = false };
+                    continue;
+                }
+
+                // Coube no próprio terreno: o que a marca é o degrau até a
+                // vizinha, e o motivo diz o desnível de verdade.
+                var desnivel = Math.Max(
+                    antes is { } a ? Math.Abs(z0 - a) : 0,
+                    depois is { } b ? Math.Abs(z1 - b) : 0);
+
+                var motivo = cabe
+                    ? $"assentada no próprio terreno: o degrau até a vizinha ({desnivel.ToString("0.##", Brasil)} m) não é permitido (de {config.MinStep.ToString("0.##", Brasil)} a {config.MaxStep.ToString("0.##", Brasil)} m, ou zero)"
+                    : Motivo(viavel, z0, z1, estouros);
+
+                resolvidas[i] = r with { StartElevation = z0, EndElevation = z1, Violations = estouros, Reason = motivo, Seated = true };
             }
         }
 
@@ -521,7 +558,7 @@ public static class RowSolver
 
     private static string Motivo(ViableElevations viavel, double z0, double z1, int estouros)
     {
-        if (viavel.IsEmpty) return "nenhuma cota da ponta baixa respeita a faixa nesta mesa";
+        if (viavel.IsEmpty) return viavel.WhyItDoesNotFit() ?? "nenhuma cota da ponta baixa respeita a faixa nesta mesa";
 
         if (viavel.Configuration.MaxLongitudinalSlope is { } limite && viavel.LongitudinalSlope(z0, z1) > limite)
             return "a declividade longitudinal passa do limite";

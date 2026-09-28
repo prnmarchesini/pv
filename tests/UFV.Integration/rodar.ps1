@@ -62,13 +62,20 @@ function Escrever-Linha {
     acessar a propriedade direto quebra com Set-StrictMode.
 #>
 function Ler-SecureLoad {
-    param([string] $Perfil)
+    param([string] $Perfil, [string] $Nome = 'SecureLoad')
 
     $item = Get-ItemProperty -LiteralPath $Perfil -ErrorAction SilentlyContinue
     if ($null -eq $item) { return $null }
-    if (-not ($item.PSObject.Properties.Name -contains 'SecureLoad')) { return $null }
-    return $item.SecureLoad
+    if (-not ($item.PSObject.Properties.Name -contains $Nome)) { return $null }
+    return $item.$Nome
 }
+
+# As variaveis do registro que os scripts mexem e o finally devolve. PickStyle
+# desde 27/09/2026: a mesa virou grupo, e os casos que simulam o usuario
+# apagando UMA peca desligam a selecao por grupo (PICKSTYLE 0), que o
+# AutoCAD grava no perfil. Se o script morresse no meio, o Civil 3D do Renan
+# ficaria sem selecao por grupo.
+$script:variaveisGuardadas = @('SecureLoad', 'PickStyle')
 
 function Parar-Com {
     param([string] $Motivo)
@@ -111,7 +118,11 @@ function Invoke-CoreConsole {
     $perfisAntes = @{}
     Get-ChildItem 'HKCU:\SOFTWARE\Autodesk\AutoCAD' -Recurse -ErrorAction SilentlyContinue |
         Where-Object { $_.PSChildName -eq 'Variables' } |
-        ForEach-Object { $perfisAntes[$_.PSPath] = Ler-SecureLoad $_.PSPath }
+        ForEach-Object {
+            foreach ($nome in $script:variaveisGuardadas) {
+                $perfisAntes["$($_.PSPath)|$nome"] = Ler-SecureLoad $_.PSPath $nome
+            }
+        }
 
     $estourou = $false
     $codigo = $null
@@ -152,26 +163,29 @@ function Invoke-CoreConsole {
         }
     }
     finally {
-        foreach ($perfil in @($perfisAntes.Keys)) {
-            $antes = $perfisAntes[$perfil]
-            $agora = Ler-SecureLoad $perfil
+        foreach ($chave in @($perfisAntes.Keys)) {
+            $perfil, $nome = $chave -split '\|', 2
+            $antes = $perfisAntes[$chave]
+            $agora = Ler-SecureLoad $perfil $nome
 
             if ($antes -eq $agora) { continue }
 
             if ($null -eq $antes) {
-                Remove-ItemProperty -LiteralPath $perfil -Name 'SecureLoad' -ErrorAction SilentlyContinue
+                Remove-ItemProperty -LiteralPath $perfil -Name $nome -ErrorAction SilentlyContinue
             }
             elseif (Test-Path -LiteralPath $perfil) {
                 # -Type DWord porque o valor pode ter sido apagado no meio: sem
                 # isso o Set-ItemProperty recriaria como String.
-                Set-ItemProperty -LiteralPath $perfil -Name 'SecureLoad' -Value $antes -Type DWord
+                Set-ItemProperty -LiteralPath $perfil -Name $nome -Value $antes -Type DWord
             }
         }
 
         # E conferimos o registro, que e onde o estrago ficaria.
-        foreach ($perfil in @($perfisAntes.Keys)) {
-            if ((Ler-SecureLoad $perfil) -ne $perfisAntes[$perfil]) {
-                $problemas.Add("SECURELOAD continua diferente no registro: $perfil")
+        foreach ($chave in @($perfisAntes.Keys)) {
+            $perfil, $nome = $chave -split '\|', 2
+
+            if ((Ler-SecureLoad $perfil $nome) -ne $perfisAntes[$chave]) {
+                $problemas.Add("$($nome.ToUpperInvariant()) continua diferente no registro: $perfil")
             }
         }
     }
@@ -1899,6 +1913,227 @@ function Testar-Refazer {
 }
 
 <#
+    Pontas a mao (27/09/2026): processa uma fileira e muda as pontas da F1.2
+    (PB 0,55 no primeiro pilar e 1,10 no ultimo); depois trava a primeira e
+    muda so a ultima para 0,70. A mesa continua a mesma (um contorno, mesmo
+    GUID, 7 pilares), as alturas medidas nos pilares batem ao centimetro, e
+    as pontas ficam gravadas no contorno.
+#>
+function Testar-Pontas {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-pontas--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-pontas: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-pontas' `
+        -Script (Join-Path $PSScriptRoot 'ufv-pontas.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-pontas terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    $leituras = @{}
+
+    foreach ($m in [regex]::Matches($r.Texto, 'UFV_PONTAS_LISP (\w+) guid=([-0-9a-fA-F]+) cont=(\d+) pilares=(\d+) pb1=([-\d.]+) pb7=([-\d.]+) m1=([-\d.]*) m2=([-\d.]*)')) {
+        $leituras[$m.Groups[1].Value] = $m
+    }
+
+    foreach ($fase in 'antes', 'duas', 'travada') {
+        if (-not $leituras.ContainsKey($fase)) {
+            $problemas.Add("ufv-pontas: nao li a fase '$fase' em LISP. Veja $($r.Saida)")
+            return $false
+        }
+    }
+
+    function Numero($texto) { [double]::Parse($texto, $invariante) }
+
+    $guid = $leituras['antes'].Groups[2].Value
+
+    foreach ($fase in 'duas', 'travada') {
+        $l = $leituras[$fase]
+
+        if ($l.Groups[2].Value -ne $guid -or $l.Groups[3].Value -ne '1' -or $l.Groups[4].Value -ne '7') {
+            $problemas.Add("ufv-pontas ($fase): a F1.2 tem guid $($l.Groups[2].Value) (antes $guid), $($l.Groups[3].Value) contorno(s), $($l.Groups[4].Value) pilar(es); esperava o mesmo guid, 1 e 7. Veja $($r.Saida)")
+            return $false
+        }
+    }
+
+    $antes = $leituras['antes']
+    $duas = $leituras['duas']
+    $travada = $leituras['travada']
+
+    if ([math]::Abs((Numero $duas.Groups[5].Value) - 0.55) -gt 0.01 -or [math]::Abs((Numero $duas.Groups[6].Value) - 1.10) -gt 0.01) {
+        $problemas.Add("ufv-pontas: pedi PB 0,55 e 1,10; os pilares 1 e 7 ficaram com $($duas.Groups[5].Value) e $($duas.Groups[6].Value). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ([math]::Abs((Numero $travada.Groups[5].Value) - 0.55) -gt 0.01 -or [math]::Abs((Numero $travada.Groups[6].Value) - 0.70) -gt 0.01) {
+        $problemas.Add("ufv-pontas: travei a primeira (0,55) e pedi 0,70 na ultima; ficaram $($travada.Groups[5].Value) e $($travada.Groups[6].Value). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($antes.Groups[7].Value -ne '' -or [math]::Abs((Numero $travada.Groups[7].Value) - 0.55) -gt 0.01 -or [math]::Abs((Numero $travada.Groups[8].Value) - 0.70) -gt 0.01) {
+        $problemas.Add("ufv-pontas: as pontas gravadas no contorno sao '$($antes.Groups[7].Value)' antes e $($travada.Groups[7].Value)/$($travada.Groups[8].Value) depois; esperava vazio e 0,55/0,70. Veja $($r.Saida)")
+        return $false
+    }
+
+    # Regra sagrada 5, lida da entidade e nao do relatorio: topo do pilar
+    # menos o terreno gravado fecha com a altura livre; o terreno sob os
+    # pilares e as cotas da borda baixa caem dentro da faixa do terreno.
+    if ($sonda.Texto -notmatch 'cotas:\s+(-?[\d.,]+) m a (-?[\d.,]+) m') {
+        $problemas.Add("ufv-pontas: nao achei a faixa de cotas do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $brasil = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
+    $terrenoMin = [double]::Parse($Matches[1], $brasil)
+    $terrenoMax = [double]::Parse($Matches[2], $brasil)
+
+    foreach ($fase in 'duas', 'travada') {
+        $c = [regex]::Match($r.Texto, "UFV_PONTAS_COTA $fase z0=(-?[\d.]+) z1=(-?[\d.]+) chaoMin=(-?[\d.]+) chaoMax=(-?[\d.]+) fecha=(-?[\d.]+)")
+
+        if (-not $c.Success) {
+            $problemas.Add("ufv-pontas ($fase): nao li as cotas da entidade em LISP. Veja $($r.Saida)")
+            return $false
+        }
+
+        $z0 = Numero $c.Groups[1].Value
+        $z1 = Numero $c.Groups[2].Value
+        $chaoMin = Numero $c.Groups[3].Value
+        $chaoMax = Numero $c.Groups[4].Value
+        $fecha = Numero $c.Groups[5].Value
+
+        if ($fecha -gt 0.005 -or $chaoMin -lt $terrenoMin - 0.01 -or $chaoMax -gt $terrenoMax + 0.01 -or
+            $z0 -lt $terrenoMin -or $z0 -gt $terrenoMax + 5 -or $z1 -lt $terrenoMin -or $z1 -gt $terrenoMax + 5) {
+            $problemas.Add("ufv-pontas ($fase): cota fora do terreno ($terrenoMin a $terrenoMax): borda baixa $z0/$z1, chao $chaoMin a $chaoMax, topo-chao-P3 = $fecha. Veja $($r.Saida)")
+            return $false
+        }
+    }
+
+    Write-Host "  (pontas: F1.2 com PB $($duas.Groups[5].Value)/$($duas.Groups[6].Value), depois $($travada.Groups[5].Value)/$($travada.Groups[6].Value) com a primeira travada)" -ForegroundColor DarkGray
+    return $true
+}
+
+<#
+    Pintar estouros (27/09/2026): processa uma fileira e repinta todas as
+    mesas como estao. Mesmas mesas, mesmos GUIDs, mesmas pecas: repintar nao
+    move, nao duplica e nao troca identidade.
+#>
+function Testar-Pintar {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-pintar--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-pintar: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-pintar' `
+        -Script (Join-Path $PSScriptRoot 'ufv-pintar.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-pintar terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^PINTAR (\d+) mesa\(s\) repintada\(s\)') {
+        $problemas.Add("ufv-pintar: o comando nao repintou. Veja $($r.Saida)")
+        return $false
+    }
+
+    $antes = [regex]::Match($r.Texto, 'UFV_PINTAR_LISP antes mesas=(\d+) pilares=(\d+) modulos=(\d+) faces=(\d+)')
+    $depois = [regex]::Match($r.Texto, 'UFV_PINTAR_LISP depois mesas=(\d+) pilares=(\d+) modulos=(\d+) faces=(\d+)')
+    $guids = [regex]::Match($r.Texto, 'UFV_PINTAR_GUIDS mesmos=(\d+) de=(\d+)')
+
+    if (-not $antes.Success -or -not $depois.Success -or -not $guids.Success) {
+        $problemas.Add("ufv-pintar: nao consegui ler o desenho em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $mesas = [int] $antes.Groups[1].Value
+
+    if ($mesas -lt 2) {
+        $problemas.Add("ufv-pintar: a fileira tem $mesas mesa(s); esperava pelo menos 2. Veja $($r.Saida)")
+        return $false
+    }
+
+    foreach ($g in 1..4) {
+        if ($antes.Groups[$g].Value -ne $depois.Groups[$g].Value) {
+            $problemas.Add("ufv-pintar: antes $($antes.Value), depois $($depois.Value); repintar mudou a contagem. Veja $($r.Saida)")
+            return $false
+        }
+    }
+
+    if ($guids.Groups[1].Value -ne $guids.Groups[2].Value -or [int] $guids.Groups[2].Value -ne $mesas) {
+        $problemas.Add("ufv-pintar: $($guids.Groups[1].Value) de $($guids.Groups[2].Value) GUIDs de mesa sobreviveram ao repintar. Veja $($r.Saida)")
+        return $false
+    }
+
+    # "Nao move nada", lido da entidade: a cota dos cantos da borda baixa de
+    # cada mesa e a mesma antes e depois de repintar.
+    $cotas = [regex]::Match($r.Texto, 'UFV_PINTAR_COTAS dz=(-?[\d.]+)')
+
+    if (-not $cotas.Success -or [double]::Parse($cotas.Groups[1].Value, $invariante) -gt 0.0005) {
+        $problemas.Add("ufv-pintar: a cota da borda baixa mudou ao repintar (dz=$($cotas.Groups[1].Value) m). Veja $($r.Saida)")
+        return $false
+    }
+
+    # Um grupo por mesa (o clique pega a mesa inteira), e nenhum vazio
+    # sobrando dos que foram repintados.
+    $grupos = [regex]::Match($r.Texto, 'UFV_PINTAR_GRUPOS (\d+)')
+
+    if (-not $grupos.Success -or [int] $grupos.Groups[1].Value -ne $mesas) {
+        $problemas.Add("ufv-pintar: $($grupos.Groups[1].Value) grupo(s) anonimo(s) para $mesas mesa(s); esperava um por mesa. Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (pintar: $mesas mesas repintadas com os mesmos GUIDs, um grupo por mesa, $($depois.Groups[2].Value) pilares e $($depois.Groups[3].Value) modulos, nada em dobro)" -ForegroundColor DarkGray
+    return $true
+}
+
+<#
     Recalcular (7.3/7.4): processa uma fileira, suja a primeira mesa e manda
     recalcular as sujas. O comando diz o GUID sujado; depois a mesa com esse
     GUID tem que existir limpa, com 7 pilares, 28 modulos e 28 faces, sem
@@ -2753,6 +2988,14 @@ else {
     # Recalcular uma mesa suja onde ela esta, com o mesmo GUID.
     $total++
     if (Testar-Recalcular -Desenho $desenhos[0]) { $passaram++ }
+
+    # As pontas a mao: duas alturas, depois uma travada.
+    $total++
+    if (Testar-Pontas -Desenho $desenhos[0]) { $passaram++ }
+
+    # Pintar estouros: repinta sem mover, duplicar nem trocar identidade.
+    $total++
+    if (Testar-Pintar -Desenho $desenhos[0]) { $passaram++ }
 
     # A copia ganha identidade propria; blocos com sufixo voltam ao padrao.
     $total++

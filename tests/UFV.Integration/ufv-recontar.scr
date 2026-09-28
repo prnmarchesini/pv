@@ -6,6 +6,11 @@
 (setq ufv:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
 (command "_.NETLOAD" "{{DLL}}")
+; A mesa e um grupo (27/09/2026): este caso simula o usuario mexendo em UMA
+; peca, entao desliga a selecao por grupo (Ctrl+Shift+A na tela). O
+; rodar.ps1 devolve o PICKSTYLE do registro no fim, como o SECURELOAD.
+(setq ufv:pickstyle (getvar "PICKSTYLE"))
+(setvar "PICKSTYLE" 0)
 (command "UFV_TERRENO_AUTO")
 (setq ufv:osmode (getvar "OSMODE"))
 (setvar "OSMODE" 0)
@@ -47,6 +52,7 @@
 (command "UFV_ESTADO")
 (princ (strcat "\nUFV_RECONTAR_LISP antes=" (itoa ufv:antes) " modantes=" (itoa ufv:modantes) " pilantes=" (itoa ufv:pilantes)
                " mesas=" (itoa (ufv:conta-tipo "Mesa")) " modulos=" (itoa (ufv:conta-tipo "Modulo")) " pilares=" (itoa (ufv:conta-tipo "Pilar"))))
+(setvar "PICKSTYLE" ufv:pickstyle)
 (setvar "SECURELOAD" ufv:secureload)
 (princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
 (princ)

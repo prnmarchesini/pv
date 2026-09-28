@@ -290,6 +290,12 @@ internal static class RibbonUfv
             "Recalcula uma mesa onde ela está: reamostra o terreno e refaz pilares e pontas baixas (também no botão direito sobre a mesa)."));
 
         origem.Items.Add(BotaoPequeno(
+            "Pontas",
+            IconesDaRibbon.Pontas(),
+            PluginInfo.ComandoPontas,
+            "Muda a altura da ponta baixa de uma mesa à mão: clique perto da ponta que vai mudar (a outra fica travada), ou \"Duas\" para dar as duas; \"Automatico\" devolve a mesa ao motor (também no botão direito sobre a mesa)."));
+
+        origem.Items.Add(BotaoPequeno(
             "Recalcular sujas",
             IconesDaRibbon.RecalcularSujas(),
             PluginInfo.ComandoRecalcularSujas,
@@ -330,6 +336,24 @@ internal static class RibbonUfv
     private static RibbonPanel MontarPainelAnalises()
     {
         var origem = new RibbonPanelSource { Title = "Análises" };
+
+        origem.Items.Add(BotaoGrande(
+            "Parâmetros",
+            IconesDaRibbon.Parametros(),
+            PluginInfo.ComandoAnalisesParametros,
+            "Os limites que decidem o que estoura e as cores de cada análise: faixa da ponta baixa, módulos que podem estourar (lombo), degraus entre mesas, declividade máxima. Grava no desenho."));
+
+        origem.Items.Add(BotaoGrande(
+            "Pintar estouros",
+            IconesDaRibbon.PintarEstouros(),
+            PluginInfo.ComandoPintar,
+            "Repinta todas as mesas como estão (sem mover nada) com os parâmetros gravados: módulo com a ponta baixa abaixo ou acima da faixa, pilar, declividade."));
+
+        origem.Items.Add(BotaoGrande(
+            "Regerar",
+            IconesDaRibbon.RegerarTudo(),
+            PluginInfo.ComandoRegerar,
+            "Refaz todas as áreas com os parâmetros atuais: o motor escolhe de novo a cota de cada mesa. Pontas escolhidas à mão voltam ao motor (U desfaz)."));
 
         origem.Items.Add(BotaoGrande(
             "Alturas",

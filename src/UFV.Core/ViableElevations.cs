@@ -282,6 +282,16 @@ public sealed class ViableElevations
     }
 
     /// <summary>
+    /// A menor altura livre da ponta baixa entre os módulos com terreno,
+    /// com estas cotas; null sem módulo com terreno. Negativa é módulo
+    /// enterrado.
+    /// </summary>
+    public double? LowestClearance(double startElevation, double endElevation) =>
+        _modulos.Count == 0
+            ? null
+            : _modulos.Min(m => startElevation + (endElevation - startElevation) * m.Station / Length - m.Ground);
+
+    /// <summary>
     /// A declividade longitudinal destas cotas, em radianos, nunca negativa:
     /// o giro de uma mesa rígida de comprimento L com desnível Δz é
     /// asen(Δz/L). Desnível maior que L não é mesa: devolve 90°.
@@ -338,6 +348,216 @@ public sealed class ViableElevations
 
         return $"cota inicial de {Starts[0].StartElevation.ToString("0.00", Brasil)} a "
             + $"{Starts[^1].StartElevation.ToString("0.00", Brasil)} m, {Starts.Count} posições";
+    }
+
+    /// <summary>
+    /// A melhor posição para uma mesa que NÃO CABE, pela análise de pesos
+    /// (Renan, 27/09/2026: "o motor preferiu enfiar na terra do que estourar
+    /// a altura do meio, é preciso pesos"). Cada módulo da fileira de baixo
+    /// custa pelo quanto a ponta baixa dele sai da faixa: acima da faixa é
+    /// barato (é só pilar mais alto), abaixo é caro, e enterrado é muito
+    /// caro. A junta com a vizinha custa pelo quanto o degrau passa do
+    /// máximo. O giro nunca passa do limite de declividade (é estrutura).
+    ///
+    /// O custo é linear por trechos nas duas cotas, então o mínimo sai exato
+    /// na grade: o desnível é varrido inteiro, e, para cada desnível, o
+    /// mínimo em z0 cai num dos pontos de quebra (cada módulo quebra em três
+    /// cotas, cada junta em quatro).
+    /// </summary>
+    /// <param name="before">A cota da vizinha na junta do início (o fim dela), ou null.</param>
+    /// <param name="after">A cota da vizinha na junta do fim (o início dela), ou null.</param>
+    /// <param name="weights">Os pesos; null usa <see cref="CompromiseWeights.Default"/>.</param>
+    /// <returns>As cotas da ponta baixa no início e no fim, na grade; null sem módulo com terreno.</returns>
+    public (double Start, double End)? Compromise(double? before, double? after, CompromiseWeights? weights = null)
+    {
+        if (_modulos.Count == 0) return null;
+
+        var w = weights ?? CompromiseWeights.Default;
+        var min = Configuration.MinLowEdge;
+        var max = Configuration.MaxLowEdge;
+        var degrau = Configuration.MaxStep;
+        var pesoDaJunta = w.StepPerModule * _modulos.Count;
+
+        // Abaixo da faixa e enterrado pesam vezes o número de módulos: um
+        // módulo abaixo vale mais que levantar a mesa inteira. Sem isso,
+        // numa mesa de mais de 50 módulos um lombo pequeno deixaria um
+        // módulo abaixo da faixa para não subir os outros.
+        var pesoAbaixo = w.BelowBand * _modulos.Count;
+        var pesoEnterrado = w.Buried * _modulos.Count;
+
+        // E cada módulo abaixo custa, só por estar abaixo, subir a mesa
+        // inteira alguns centímetros: na grade de 1 cm, 2 mm abaixo sairia
+        // mais barato que 1 cm acima, e a mesa ficaria rente sem precisar.
+        var pesoFixoAbaixo = w.BelowBandEach * _modulos.Count;
+
+        // O degrau só puxa enquanto dá para consertá-lo: até um alcance além
+        // do máximo. Mais longe que isso (a mesa num buraco de 10 m) o degrau
+        // não tem conserto, e puxar a mesa para cima só a deixaria alta sem
+        // resolver nada.
+        double Junta(double desnivel) => Math.Min(Math.Max(0, desnivel - degrau), w.StepReach);
+
+        double Custo(double z0, double d)
+        {
+            var custo = 0.0;
+
+            foreach (var (estacao, terreno) in _modulos)
+            {
+                var c = z0 + d * estacao / Length - terreno;
+
+                if (c > max) custo += w.AboveBand * (c - max);
+                else if (c < min - 1e-9) custo += pesoFixoAbaixo + pesoAbaixo * (min - c) + (c < 0 ? pesoEnterrado * -c : 0);
+
+                // Desempate dentro da faixa: a mais baixa (pilar mais curto).
+                custo += w.Tiebreak * c;
+            }
+
+            if (before is { } a) custo += pesoDaJunta * Junta(Math.Abs(z0 - a));
+            if (after is { } b) custo += pesoDaJunta * Junta(Math.Abs(z0 + d - b));
+
+            return custo;
+        }
+
+        (double Z0, double Custo) MelhorZ0(double d)
+        {
+            var quebras = new List<double>(_modulos.Count * 3 + 4);
+
+            foreach (var (estacao, terreno) in _modulos)
+            {
+                var f = d * estacao / Length;
+                quebras.Add(terreno + min - f);
+                quebras.Add(terreno + max - f);
+                quebras.Add(terreno - f);
+            }
+
+            if (before is { } a)
+            {
+                quebras.Add(a - degrau);
+                quebras.Add(a + degrau);
+                quebras.Add(a - degrau - w.StepReach);
+                quebras.Add(a + degrau + w.StepReach);
+            }
+
+            if (after is { } b)
+            {
+                quebras.Add(b - d - degrau);
+                quebras.Add(b - d + degrau);
+                quebras.Add(b - d - degrau - w.StepReach);
+                quebras.Add(b - d + degrau + w.StepReach);
+            }
+
+            var melhor = (Z0: double.NaN, Custo: double.PositiveInfinity);
+
+            foreach (var q in quebras)
+            {
+                // Na grade: o chão e o teto do ponto de quebra.
+                var chao = Math.Floor(q / Step) * Step;
+                var teto = Math.Ceiling(q / Step) * Step;
+
+                var custoChao = Custo(chao, d);
+                if (custoChao < melhor.Custo) melhor = (chao, custoChao);
+
+                var custoTeto = Custo(teto, d);
+                if (custoTeto < melhor.Custo) melhor = (teto, custoTeto);
+            }
+
+            return melhor;
+        }
+
+        // O giro, na grade: até o limite de declividade; sem limite, até
+        // nove décimos do comprimento (desnível maior não é mesa).
+        var giro = (long)Math.Floor((_maxDeclive is { } sen ? sen * Length : 0.9 * Length) / Step + 1e-9);
+
+        // Varredura do desnível inteiro, na grade: com o alcance do degrau o
+        // custo deixa de ser convexo no desnível, e a ternária poderia parar
+        // num mínimo local. Em z0 os pontos de quebra continuam exatos (o
+        // custo é linear por trechos, convexo ou não).
+        var escolha = (Z0: double.NaN, D: 0.0, Custo: double.PositiveInfinity);
+
+        for (var k = -giro; k <= giro; k++)
+        {
+            var (z0, custo) = MelhorZ0(k * Step);
+
+            // Empate: o menor giro.
+            if (custo < escolha.Custo - 1e-9 || (custo < escolha.Custo + 1e-9 && Math.Abs(k * Step) < Math.Abs(escolha.D)))
+                escolha = (z0, k * Step, custo);
+        }
+
+        var inicio = Math.Round(escolha.Z0 / Step) * Step;
+
+        return (inicio, Math.Round((escolha.Z0 + escolha.D) / Step) * Step);
+    }
+
+    /// <summary>
+    /// Por que a mesa não cabe, com o número que o projetista precisa ver
+    /// (Renan, 27/09/2026: "Porque? Porque não inclinou mais a mesa?"). Só
+    /// com tolerância zero, que é quando "cabe" quer dizer "todo módulo na
+    /// faixa": a dispersão das cotas exigidas ao longo da mesa, convexa no
+    /// desnível, diz se alguma inclinação resolve e qual. Null quando a
+    /// conta não se aplica (há tolerância, ou a mesa cabe).
+    /// </summary>
+    public string? WhyItDoesNotFit()
+    {
+        if (Problem is not null || _modulos.Count < 2 || _toleradas > 0) return null;
+
+        var faixa = Configuration.MaxLowEdge - Configuration.MinLowEdge;
+
+        // A dispersão com desnível d: max − min de (terreno − d·f).
+        double Dispersao(double d)
+        {
+            var maior = double.NegativeInfinity;
+            var menor = double.PositiveInfinity;
+
+            foreach (var (estacao, terreno) in _modulos)
+            {
+                var v = terreno - d * estacao / Length;
+                maior = Math.Max(maior, v);
+                menor = Math.Min(menor, v);
+            }
+
+            return maior - menor;
+        }
+
+        // O desnível que minimiza a dispersão (ternária: ela é convexa).
+        double baixo = -Length, alto = Length;
+
+        for (var i = 0; i < 200; i++)
+        {
+            var m1 = baixo + (alto - baixo) / 3;
+            var m2 = alto - (alto - baixo) / 3;
+
+            if (Dispersao(m1) <= Dispersao(m2)) alto = m2;
+            else baixo = m1;
+        }
+
+        var melhor = (baixo + alto) / 2;
+        var menorDispersao = Dispersao(melhor);
+
+        if (menorDispersao > faixa + 1e-6)
+        {
+            return $"o terreno sob a ponta baixa tem um lombo ou vale de {(menorDispersao * 100).ToString("0", Brasil)} cm que nenhuma "
+                + $"inclinação vence (a faixa da ponta baixa aceita {(faixa * 100).ToString("0", Brasil)} cm)";
+        }
+
+        if (Dispersao(0) <= faixa + 1e-6) return null;
+
+        // O menor desnível que cabe: a fronteira entre zero (fora) e o
+        // ótimo (dentro), pela convexidade.
+        double dentro = melhor, fora = 0;
+
+        for (var i = 0; i < 100; i++)
+        {
+            var meio = (dentro + fora) / 2;
+
+            if (Dispersao(meio) <= faixa + 1e-6) dentro = meio;
+            else fora = meio;
+        }
+
+        var precisa = Math.Asin(Math.Clamp(Math.Abs(dentro) / Length, 0, 1)) * 180 / Math.PI;
+
+        // Cabe dentro do limite: não há o que explicar por aqui.
+        if (Configuration.MaxLongitudinalSlopeDegrees is not { } limite || precisa <= limite + 1e-6) return null;
+
+        return $"o terreno pede {precisa.ToString("0.#", Brasil)}° de inclinação ao longo da mesa e o limite é {limite.ToString("0.#", Brasil)}°";
     }
 
     /// <summary>

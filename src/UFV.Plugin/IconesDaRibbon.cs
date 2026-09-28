@@ -129,6 +129,36 @@ internal static class IconesDaRibbon
         Traco("M24,7 A5,5 0 1 0 27,12", Neutro, 2.0),
         Traco("M24,4 L24,7.5 L20.5,7.5", Neutro, 2.0));
 
+    /// <summary>Uma mesa inclinada presa num pino à esquerda e uma seta subindo e descendo à direita: as pontas à mão.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Pontas() => Montar(
+        Traco("M5,20 L25,13", Azul, 3.0),
+        Preenchimento("M5,20 m-2.5,0 a2.5,2.5 0 1 0 5,0 a2.5,2.5 0 1 0 -5,0 Z", Neutro),
+        Traco("M27,4 V24 M24,7 L27,4 L30,7 M24,21 L27,24 L30,21", Ambar, 1.8));
+
+    /// <summary>Três réguas com cursores: os parâmetros das análises.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Parametros() => Montar(
+        Traco("M4,8 H28 M4,16 H28 M4,24 H28", Neutro, 2.0),
+        Preenchimento("M10,5 h4 v6 h-4 Z", Azul),
+        Preenchimento("M19,13 h4 v6 h-4 Z", Ambar),
+        Preenchimento("M7,21 h4 v6 h-4 Z", Azul));
+
+    /// <summary>Uma mesa com um módulo vermelho e outro azul: pintar o que estourou.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource PintarEstouros() => Montar(
+        Traco("M3,12 H29 V22 H3 Z", Neutro, 1.6),
+        Preenchimento("M5,14 h6 v6 h-6 Z", new SolidColorBrush(Color.FromRgb(200, 40, 40))),
+        Preenchimento("M13,14 h6 v6 h-6 Z", Azul),
+        Preenchimento("M21,14 h6 v6 h-6 Z", AzulTranslucido));
+
+    /// <summary>Uma fileira de mesas e a seta circular grande: regerar tudo com a configuração nova.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource RegerarTudo() => Montar(
+        Traco("M3,26 L12,23 M14,26 L23,23", Azul, 2.6),
+        Traco("M22,6 A8,8 0 1 0 27,14", Ambar, 2.4),
+        Traco("M22,2 L22,6.5 L17.5,6.5", Ambar, 2.4));
+
     /// <summary>Três mesas, uma vermelha, e a seta circular: recalcular as sujas.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static ImageSource RecalcularSujas() => Montar(

@@ -106,6 +106,12 @@ Nivel 2   16/16    OK
 Acervo             OK
 ```
 
+### 27/09/2026: quarta rodada instalada (motor por pesos, pontas, Análises, grupo)
+
+Pedidos da tela de 27/09 feitos, `AGUARDANDO VALIDAÇÃO` (item 17 de "O
+que está travado no Renan"; detalhes em "Quarta rodada", no fim). Decisão
+pendente dele: grupo resolve o "clicar na mesa", ou quer bloco de verdade?
+
 ### A etapa 7 está inteira aguardando validação; o 6.5 espera as respostas do 6.4
 
 **Onde parou (26/09/2026, noite, commit `edaf9cb`, push feito, bundle
@@ -237,6 +243,33 @@ teste: a etapa 6 é onde passa a ter.
    pela paleta de propriedades: também suja ("movida ou editada"). Rodar
    `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
    nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
+17. **Testar a rodada de 27/09 (motor por pesos, pontas, Análises, grupo)**,
+   ver "Quarta rodada" no fim deste arquivo. Primeiro fechar o Civil 3D e
+   rodar `.\tools\instalar.ps1`. Depois:
+   a) **Regerar** (seção Análises) no desenho do Itatiba: as mesas que
+      não cabem (magenta) não enfiam mais ponta na terra; a PB mínima delas
+      fica em 0,30 ou mais, e o que passa da faixa é para CIMA (pilar mais
+      alto). O aviso diz o porquê com número ("o terreno pede 15,5° e o
+      limite é 10°", ou "lombo ou vale de 123 cm que nenhuma inclinação
+      vence"). F41.1, F40.1, F40.2, F11.4, F16.3 e F10.6 são as dos prints;
+      os letreiros podem ter mudado se renumerou;
+   b) **Pintar estouros**: os módulos com a PB abaixo da faixa ficam
+      vermelhos e os acima azuis, também dentro da mesa que não cabe;
+      a cor aparece por cima da face;
+   c) **Parâmetros**: abre só faixa da PB, lombo, degraus, declividade e as
+      cores; mudar a declividade para 15° e Regerar deve fazer a F41.1
+      caber;
+   d) **Pontas** (Edição, ou botão direito na mesa > UFV > "Alturas das
+      pontas desta mesa"): clique perto de uma ponta, digite a PB (em
+      metro, ex. 0,40): a outra ponta fica como estava. "Duas" pede as
+      duas. As cotas PB do primeiro e do último pilar mostram o que foi
+      pedido. Mova a mesa e Recalcular: as PB continuam as pedidas.
+      "Automatico" devolve ao motor. Pedir uma PB que estoura a faixa
+      deixa a mesa marcada (regra 4), com os módulos pintados;
+   e) **Clique numa peça de uma mesa**: a mesa inteira é selecionada (é
+      um grupo). MOVE e COPY levam a mesa toda. Ctrl+Shift+A desliga a
+      seleção por grupo para pegar uma peça só. Dizer se o grupo resolve
+      ou se ainda quer bloco de verdade.
 16. **Testar a rodada de 26/09 à noite (seis reprovações)**, ver "Terceira
    reprovação: seis pontos da tela" no fim deste arquivo:
    a) botão direito na área → submenu **UFV** → "Refazer as mesas desta
@@ -3580,3 +3613,164 @@ Placar: Core 894 (etapa 5 256, etapa 7 46), nível 2 23/23, tudo verde.
 - As classes RXClass de texto/linha/polilinha estão repetidas em três
   arquivos.
 
+
+## Quarta rodada: motor por pesos, pontas à mão, Análises, mesa que se clica inteira (27/09/2026)
+
+Pedidos do Renan na tela, com quatro prints (F41.1, F40.1/F40.2, F11.4,
+F10.6, F16.3): "Porque não inclinou mais a mesa para poder caber?"; "o
+motor preferiu enfiar na terra do que estourar a altura do meio, é preciso
+pesos"; "quero ter a liberdade de escolher a altura de cada ponta da mesa";
+"a mesa precisaria ser BLOCO" (para clicar nela); "falta o menu análises...
+alterar os parâmetros, um clique pinta o que estourou, outro regera"; e "a
+ponta ficou fora do padrão mas não pintou o módulo".
+
+Status: `AGUARDANDO VALIDAÇÃO` (é tela).
+
+### O diagnóstico, com números (bancada)
+
+Novo comando `UFV_BANCADA` exporta terreno, configuração, perfil e os
+contornos de todas as mesas para um JSON (`%LOCALAPPDATA%\MarchEng\UFV\bancada`).
+Rodado no Core Console sobre uma cópia do `0 - Assets\Curvas Itatiba.dwg`
+(salvo em 26/09 21:25), o motor fora do CAD reproduz o desenho exatamente
+(52 marcadas nos dois). O que ele mostrou:
+
+- **F41.1**: o terreno cai ~14° sob a ponta baixa (pede 15,5° pela régua do
+  motor, seno); o limite é 10°, e a mesa JÁ estava no limite. Não é que o
+  motor não quis inclinar: a declividade máxima (10°, do Renan em 23/09) é
+  que segura.
+- **F40.1**: pede ~19°. Não cabe nem sozinha; a F40.2 não a "matou".
+- **F40.2**: plana 12 m e depois um barranco; vale de 123 cm que nenhuma
+  reta vence com a faixa de 50 cm.
+- **O defeito de verdade**: a mesa que não cabe era posta numa de cinco
+  inclinações fixas, na cota da junta com a vizinha, sem olhar quanto
+  enterrava. Na usina inteira: **132 módulos enterrados e 69 abaixo da
+  faixa**, todos em mesas marcadas.
+
+### O que mudou
+
+1. **Motor por pesos** (`ViableElevations.Compromise`, `CompromiseWeights`).
+   A marcada é posta minimizando, módulo a módulo da ponta baixa: acima da
+   faixa custa 1 por metro (é só pilar mais alto); abaixo da faixa custa
+   4 × n por metro mais 0,05 × n fixo (n = módulos da fileira de baixo: um
+   módulo abaixo vale mais que subir a mesa inteira); enterrado mais
+   40 × n por metro; degrau acima do máximo 0,35 × n por metro, só até 1 m
+   além do máximo (mais longe que isso o degrau não tem conserto e não
+   puxa: a mesa no buraco fica no próprio chão). O giro nunca passa do
+   limite. Exato na grade de 1 cm (varredura do desnível, pontos de quebra
+   em z0). Mesa marcada que, posta assim, cabe no próprio terreno com
+   degraus permitidos deixa de ser marcada. Mesa com trecho sem terreno
+   fica nivelada no próprio chão, como antes. **Resultado no Itatiba: 0
+   enterrados, 0 abaixo da faixa, 49 marcadas (eram 52).**
+2. **O motivo diz o número** (`WhyItDoesNotFit`): "o terreno pede 15,5° de
+   inclinação ao longo da mesa e o limite é 10°" ou "o terreno sob a ponta
+   baixa tem um lombo ou vale de 123 cm que nenhuma inclinação vence (a
+   faixa da ponta baixa aceita 50 cm)".
+3. **Pontas à mão** (`UFV_PONTAS`, botão "Pontas" na Edição e no botão
+   direito "Alturas das pontas desta mesa"; `ManualEnds` no Core). Clique
+   perto da ponta que vai mudar (a outra fica travada) e digite a PB, ou
+   "Duas" para as duas, ou "Automatico" para devolver ao motor. A PB é a
+   do primeiro e do último pilar, a que as cotas mostram; a conta refaz a
+   mesa até bater em 0,2 mm (o pé do pilar anda com o giro). A mesa não é
+   marcada: o que ficar fora da faixa é pintado pela análise, e a linha de
+   comando avisa giro acima do limite, módulo enterrado e fora da faixa.
+   As alturas ficam no XData da mesa (versão 5; 4, 3, 2 e 1 continuam
+   lidas) e o **Recalcular as mantém** no terreno de onde a mesa estiver.
+   O **Refazer/Regerar avisa** quais mesas com pontas à mão voltam ao motor.
+4. **Seção Análises** na ribbon: "Parâmetros" (a tela de configuração só
+   com faixa da ponta baixa, lombo, degraus, declividade e as cores),
+   "Pintar estouros" (`UFV_PINTAR`: repinta toda mesa como está, com as
+   regras gravadas; mesa suja fica de fora) e "Regerar" (`UFV_REGERAR`:
+   o Refazer de cada área registrada, com o alinhamento mais perto dela).
+5. **O módulo fora da faixa é pintado também na mesa que não cabe**: a
+   peça pintada pela análise leva a cor dela (na camada de marcadas, para
+   desligar a mesa inteira de uma vez); o resto continua magenta. E a
+   caixa do bloco do módulo subiu 2 cm acima da face: no mesmo plano, a
+   face (que nunca é pintada, é o que vai ao PVsyst) cobria a cor. A
+   definição antiga é refeita no lugar na próxima vez que o plugin desenha.
+6. **A mesa se clica inteira**: cada mesa desenhada vira um grupo anônimo
+   do AutoCAD com todas as peças. Um clique seleciona a mesa, MOVE e COPY
+   levam tudo, o botão direito vale para ela. Grupo vazio é apagado junto
+   com a mesa. **Não virou bloco** (ver "Decisão que o Renan confirma").
+
+### Decisões minhas que o Renan confirma na tela
+
+- **Grupo, e não bloco, para "clicar na mesa"**. Um bloco por mesa troca a
+  estrutura em que cada peça carrega a identidade no XData do espaço do
+  modelo: vigia, cópia, recontar, validar, numerar, grupos, exportar e os
+  23 testes de nível 2 (que leem as peças por `ssget` no espaço do modelo)
+  teriam de ser refeitos. O grupo entrega o que foi pedido (clicar, mover,
+  copiar a mesa inteira) sem isso. Se ele quiser o bloco de verdade (nome
+  próprio na paleta de propriedades, um objeto só), é um passo à parte.
+- Os pesos são meus, calibrados na frase dele ("é melhor levantar pilar e
+  deixar as pontas iguais do que enfiar a ponta na terra") e no Itatiba.
+  Ficam em `CompromiseWeights.Default`; se ele quiser mexer, vão para a
+  tela dos Parâmetros.
+- "Nivelada" deixou de ser regra para a marcada (era minha, de 26/09): os
+  testes `CalomboForaDaToleranciaMarcaSoAquelaMesa` e
+  `ParedaoMaiorQueODegrauMarcaSoAEscada` passaram a exigir o que ele pediu
+  (nenhum módulo abaixo da faixa) no lugar de "nivelada" e "a escada
+  inclina". Continuam exigindo uma marcada só e as vizinhas inteiras.
+- O Pintar repinta, não remarca: a marca é do alinhamento, que só o
+  Regerar refaz.
+
+### O que os dois revisores acharam e o que mudou
+
+Primeiro revisor (motor por pesos, pintura, bancada):
+- **Corrigido**: o motivo "passa do degrau máximo" saía sem conferir (0 m
+  com as vizinhas marcadas; degrau abaixo do mínimo). Agora confere o
+  degrau de verdade (zero ou entre o mínimo e o máximo) e, cabendo, a mesa
+  deixa de ser marcada.
+- **Corrigido**: mesa com trecho sem terreno girava sobre os módulos que
+  sobraram; fica nivelada no próprio chão.
+- **Corrigido**: "nunca abaixo da faixa" só valia com menos de 50 módulos;
+  abaixo e enterrado passaram a pesar vezes o número de módulos, mais um
+  custo fixo por módulo abaixo (a grade de 1 cm deixava 2 mm abaixo).
+- **Corrigido**: a definição antiga do bloco do módulo só é refeita quando
+  tem a caixa antiga, e só a caixa sai.
+- **Corrigido**: a peça pintada de mesa marcada fica na camada de marcadas.
+- **Corrigido**: bancada com `as` no contorno e perfil como JSON aninhado;
+  sorteio fora da função de terreno no teste.
+- **Fica**: o motivo em graus usa a régua do motor (seno do desnível sobre
+  o comprimento em planta): numa rampa de 20° diz 21,3°.
+
+Segundo revisor (pontas, Análises, grupos):
+- **Regra sagrada 4, corrigido**: mesa refeita com cotas impostas (Pontas,
+  Pintar) é marcada quando passa do lombo; o motivo junta a nota e a
+  contagem. Teste novo (`DentroDaFaixaNaoMarca`, e a marca conferida em
+  `OQueFogeDaRegraEDito` e `NoPlanoAsDuasAlturasSaemAoMilimetro`).
+- **Regra 5, corrigido**: o Pontas recusa mesa suja (a cota do contorno de
+  uma mesa movida pode ter vindo de um MOVE com Z). E os testes de nível 2
+  passaram a ler a cota da entidade: no `ufv-pontas.scr`, topo do pilar
+  menos o terreno gravado fecha com a altura livre, e as cotas da borda
+  baixa e do chão caem na faixa do terreno; no `ufv-pintar.scr`, a cota da
+  borda baixa de cada mesa não muda ao repintar.
+- **Corrigido**: o ajuste das pontas que não converge recusa (não grava
+  uma altura que ninguém pediu); um pilar só com duas alturas diferentes
+  é recusado; o Recalcular em lote pula a mesa com pontas impossíveis e
+  segue; a PB digitada vai de 0 a 5 m (a tela dos Parâmetros fala em cm).
+- **Corrigido**: o Repintar apaga tudo numa transação só; dicionários por
+  referência; mesa sem contorno entra na lista das puladas; o aviso "NÃO
+  CABE" de mesa não marcada mostra o problema do pilar, e não a nota.
+- **Corrigido**: grupos só são apagados se forem nossos (anônimos, com a
+  descrição "UFV: mesa"); reator nulo não derruba.
+- **Os scripts que apagam UMA peça** (vigia, recontar, validar) desligam a
+  seleção por grupo durante o estrago (`PICKSTYLE 0`, como Ctrl+Shift+A na
+  tela), e o `rodar.ps1` guarda e devolve o `PickStyle` de todos os perfis
+  do registro, como já fazia com o `SecureLoad`: se o Core Console morrer
+  no meio, o Civil 3D do Renan não fica sem seleção por grupo. As cotas de
+  altura ficaram FORA do grupo: apagar uma cota não pode levar a mesa.
+
+### Observações que ficam
+
+- O Pintar não olha degrau entre mesas (repinta mesa a mesa); mudar o
+  degrau nos Parâmetros só aparece no Regerar.
+- O Regerar escolhe o alinhamento de cada área pelo mais perto (não há
+  registro de qual alinhamento gerou qual área); a linha de comando diz
+  qual usou.
+- A cópia de uma mesa com pontas à mão leva as pontas junto (o `CopyFixer`
+  copia a identidade); recalculada no lugar novo, fica com as mesmas PB.
+- `UFV_ALTURAS_REGERAR` refaz as cotas fora do grupo (de propósito).
+- Os pesos não estão na tela; se o Renan quiser mexer, vão para os
+  Parâmetros.
+- O motor por pesos só reposiciona a MARCADA; as viáveis continuam pela
+  programação dinâmica (todas dentro da faixa por definição).

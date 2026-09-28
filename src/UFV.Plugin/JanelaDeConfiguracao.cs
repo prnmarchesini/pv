@@ -106,13 +106,22 @@ internal sealed class JanelaDeConfiguracao : Window
     /// <summary>A configuração que o usuário mandou gravar, ou null se fechou sem salvar.</summary>
     internal ProjectSettings? Escolhida { get; private set; }
 
-    internal JanelaDeConfiguracao(ProjectSettings inicial, string? aviso)
+    /// <summary>
+    /// Só os parâmetros que as análises e o motor usam para decidir o que
+    /// estoura (botão Parâmetros da seção Análises, 27/09/2026): faixa da
+    /// ponta baixa, lombo, degraus, declividade e as cores. O resto
+    /// (azimute, pitch, espaçamentos, enterro) fica como está no desenho.
+    /// </summary>
+    private readonly bool _soAnalises;
+
+    internal JanelaDeConfiguracao(ProjectSettings inicial, string? aviso, bool soAnalises = false)
     {
         ArgumentNullException.ThrowIfNull(inicial);
 
         _base = ProjectSettingsForm.From(inicial);
+        _soAnalises = soAnalises;
 
-        Title = "UFV — Configuração do projeto";
+        Title = soAnalises ? "UFV — Parâmetros das análises" : "UFV — Configuração do projeto";
         Width = 980;
         Height = 700;
         MinWidth = 860;
@@ -237,24 +246,34 @@ internal sealed class JanelaDeConfiguracao : Window
             pilha.Children.Add(campo);
         }
 
-        pilha.Children.Add(Secao("Orientação"));
-        Linha("Azimute para onde a mesa olha (graus, 0 = norte)", _azimute);
+        if (!_soAnalises)
+        {
+            pilha.Children.Add(Secao("Orientação"));
+            Linha("Azimute para onde a mesa olha (graus, 0 = norte)", _azimute);
+        }
 
-        pilha.Children.Add(Secao("Mesas"));
-        Linha("Pitch entre mesas (m)", _pitch);
+        pilha.Children.Add(Secao(_soAnalises ? "Degrau entre mesas vizinhas" : "Mesas"));
+        if (!_soAnalises) Linha("Pitch entre mesas (m)", _pitch);
         Linha("Degrau mínimo entre mesas vizinhas (cm)", _degrauMin);
         Linha("Degrau máximo entre mesas vizinhas (cm)", _degrauMax);
-        Linha("Espaçamento entre mesas da fileira (cm)", _espacamentoMesas);
-        Linha("Espaçamento que quebra a fileira (cm)", _espacamento);
+
+        if (!_soAnalises)
+        {
+            Linha("Espaçamento entre mesas da fileira (cm)", _espacamentoMesas);
+            Linha("Espaçamento que quebra a fileira (cm)", _espacamento);
+        }
 
         pilha.Children.Add(Secao("Ponta baixa do módulo"));
         Linha("Altura livre mínima (cm)", _pontaBaixaMin);
         Linha("Altura livre máxima (cm)", _pontaBaixaMax);
         Linha("Módulos por mesa que podem estourar (lombo)", _lombo);
 
-        pilha.Children.Add(Secao("Pilar"));
-        Linha("Enterro mínimo (cm)", _enterroMin);
-        Linha("Enterro máximo (cm)", _enterroMax);
+        if (!_soAnalises)
+        {
+            pilha.Children.Add(Secao("Pilar"));
+            Linha("Enterro mínimo (cm)", _enterroMin);
+            Linha("Enterro máximo (cm)", _enterroMax);
+        }
 
         pilha.Children.Add(Secao("Declividade longitudinal"));
         pilha.Children.Add(_temDeclividade);

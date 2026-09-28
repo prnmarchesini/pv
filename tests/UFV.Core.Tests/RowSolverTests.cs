@@ -59,6 +59,16 @@ public class RowSolverTests
         }
     }
 
+    /// <summary>Nenhum módulo da mesa com a ponta baixa abaixo da faixa, nem enterrado.</summary>
+    private static void NenhumModuloAbaixoDaFaixa(ViableElevations viavel, SolvedTable mesa, SystemConfiguration config)
+    {
+        // Um milímetro: a tolerância de regra (a cota anda na grade de 1 cm).
+        var menor = viavel.LowestClearance(mesa.StartElevation, mesa.EndElevation);
+
+        Assert.NotNull(menor);
+        Assert.True(menor >= config.MinLowEdge - 1e-3, $"{mesa.Label}: ponta baixa a {menor:0.###} m, abaixo da faixa ({config.MinLowEdge} m)");
+    }
+
     // ------------------------------------------------------- os do plano
 
     /// <summary>Terreno plano: toda mesa cabe, nenhuma marcada, degrau zero em toda junta.</summary>
@@ -147,7 +157,8 @@ public class RowSolverTests
 
     /// <summary>
     /// O mesmo calombo com tolerância zero: a terceira mesa não cabe, fica
-    /// nivelada e marcada com o motivo, e as outras quatro seguem inteiras.
+    /// marcada com o motivo, sem módulo abaixo da faixa, e as outras quatro
+    /// seguem inteiras.
     /// O motor não move nem apaga.
     /// </summary>
     [Fact]
@@ -156,14 +167,19 @@ public class RowSolverTests
     {
         var calombo = 2 * (Comprimento + Vao) + Estacao(7);
 
-        var solucao = RowSolver.Solve(Fileira(5, s => Math.Abs(s - calombo) < 0.01 ? 700.60 : 700, Config()), Config());
+        var mesas = Fileira(5, s => Math.Abs(s - calombo) < 0.01 ? 700.60 : 700, Config());
+        var solucao = RowSolver.Solve(mesas, Config());
 
         var trecho = Assert.Single(solucao.Runs);
 
         Assert.Equal(1, trecho.MarkedCount);
         Assert.True(trecho.Tables[2].Marked);
         Assert.NotNull(trecho.Tables[2].Reason);
-        Assert.Equal(trecho.Tables[2].StartElevation, trecho.Tables[2].EndElevation, 9);
+
+        // Até 26/09/2026 a marcada ficava nivelada; desde 27/09 é a análise
+        // de pesos que a põe, e o que se exige é o que o Renan pediu: nenhum
+        // módulo abaixo da faixa quando levantar resolve.
+        NenhumModuloAbaixoDaFaixa(mesas[2].Viable, trecho.Tables[2], Config());
 
         foreach (var i in new[] { 0, 1, 3, 4 })
         {
@@ -204,8 +220,9 @@ public class RowSolverTests
     /// <summary>
     /// Um paredão entre a terceira e a quarta mesa, degrau máximo de 0,50:
     /// não dá para subir tudo numa junta, então UMA mesa é marcada — a
-    /// quarta, que serve de escada inclinada — e as outras cinco ficam
-    /// inteiras. Todo degrau continua permitido e toda mesa tem cota. A
+    /// quarta — e as outras cinco ficam inteiras. Até 26/09/2026 a marcada
+    /// era uma escada inclinada, enterrada numa ponta; desde 27/09 ela é
+    /// posta pela análise de pesos e não desce abaixo da faixa. Todo degrau continua permitido e toda mesa tem cota. A
     /// primeira versão marcava duas (a terceira, que cabia, a 1,28 m do
     /// chão) e, com 2,1 m ou mais, lançava exceção.
     /// </summary>
@@ -218,13 +235,18 @@ public class RowSolverTests
     {
         var paredao = 3 * (Comprimento + Vao) - Vao / 2;
 
-        var solucao = RowSolver.Solve(Fileira(6, s => s < paredao ? 700 : 700 + altura, Config()), Config());
+        var mesas = Fileira(6, s => s < paredao ? 700 : 700 + altura, Config());
+        var solucao = RowSolver.Solve(mesas, Config());
 
         var trecho = Assert.Single(solucao.Runs);
 
         Assert.Equal(1, trecho.MarkedCount);
-        Assert.True(trecho.Tables[3].Marked, "a escada devia ser a quarta mesa");
-        Assert.True(trecho.Tables[3].EndElevation > trecho.Tables[3].StartElevation, "a escada devia inclinar");
+        Assert.True(trecho.Tables[3].Marked, "a marcada devia ser a quarta mesa");
+
+        // Regra de 27/09/2026 (pesos): a marcada não desce abaixo da faixa
+        // no próprio terreno para servir de escada — "enfiou a ponta na
+        // terra sendo que poderia ter levantado".
+        NenhumModuloAbaixoDaFaixa(mesas[3].Viable, trecho.Tables[3], Config());
 
         foreach (var i in new[] { 0, 1, 2, 4, 5 })
         {
@@ -234,6 +256,108 @@ public class RowSolverTests
 
         Assert.All(trecho.Tables, t => Assert.True(double.IsFinite(t.StartElevation) && double.IsFinite(t.EndElevation)));
         DegrausPermitidos(solucao, Config());
+    }
+
+    /// <summary>
+    /// Pesos (27/09/2026), o caso da F41.1 do Itatiba: a última mesa está
+    /// numa rampa de 15°, e o limite é 10°. Ela não cabe; a marcada fica
+    /// inclinada no limite, com todo módulo acima da faixa (levantar pilar
+    /// é melhor que enterrar a ponta), e o motivo diz quantos graus o
+    /// terreno pede. A vizinha plana não muda.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "5")]
+    public void RampaAcimaDoLimiteLevantaEmVezDeEnterrar()
+    {
+        var inicio = Comprimento + Vao;
+        var rampa = Math.Tan(15 * Grau);
+
+        var mesas = Fileira(2, s => s < inicio ? 700 : 700 - rampa * (s - inicio), Config());
+        var trecho = Assert.Single(RowSolver.Solve(mesas, Config()).Runs);
+
+        Assert.False(trecho.Tables[0].Marked);
+        Assert.True(trecho.Tables[1].Marked);
+        NenhumModuloAbaixoDaFaixa(mesas[1].Viable, trecho.Tables[1], Config());
+
+        var giro = mesas[1].Viable.LongitudinalSlope(trecho.Tables[1].StartElevation, trecho.Tables[1].EndElevation);
+        Assert.InRange(giro / Grau, 9.9, 10.0 + 1e-6);
+        Assert.Contains("pede", trecho.Tables[1].Reason!);
+        Assert.Contains("limite é 10°", trecho.Tables[1].Reason!);
+    }
+
+    /// <summary>
+    /// Pesos, o caso da F40.2: plano por dois terços e um barranco de 2 m no
+    /// fim. Nenhuma reta cabe na faixa; a marcada não enterra nada e o
+    /// motivo fala do vale que nenhuma inclinação vence, em centímetros.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "5")]
+    public void BarrancoNaPontaNaoEnterraEDizOVale()
+    {
+        var mesas = Fileira(1, s => s < 12 ? 700 : 700 - (s - 12) * 0.35, Config());
+        var trecho = Assert.Single(RowSolver.Solve(mesas, Config()).Runs);
+
+        Assert.True(trecho.Tables[0].Marked);
+        NenhumModuloAbaixoDaFaixa(mesas[0].Viable, trecho.Tables[0], Config());
+        Assert.Contains("nenhuma inclinação vence", trecho.Tables[0].Reason!);
+    }
+
+    /// <summary>O motivo com número só aparece quando a mesa não cabe; numa rampa de 5° ele é null.</summary>
+    [Fact]
+    [Trait("Etapa", "5")]
+    public void MotivoComNumeroSoQuandoNaoCabe()
+    {
+        var cabe = Fileira(1, s => 700 + Math.Tan(5 * Grau) * s, Config());
+        Assert.Null(cabe[0].Viable.WhyItDoesNotFit());
+
+        var ingreme = Fileira(1, s => 700 + Math.Tan(20 * Grau) * s, Config());
+        var motivo = ingreme[0].Viable.WhyItDoesNotFit();
+
+        Assert.NotNull(motivo);
+        Assert.Matches(@"pede (19|20|21)(,\d)?°", motivo!);
+    }
+
+    /// <summary>
+    /// Propriedade: em terrenos sorteados (rampas, saltos e calombos), a
+    /// marcada posta pelos pesos nunca tem módulo abaixo da faixa quando
+    /// existe posição, dentro do giro, que não tenha — e as não marcadas
+    /// continuam viáveis como antes.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "5")]
+    public void MarcadaNaoDesceQuandoLevantarResolve()
+    {
+        var sorteio = new Random(2709);
+
+        for (var caso = 0; caso < 25; caso++)
+        {
+            var rampa = (sorteio.NextDouble() - 0.5) * 0.5;
+            var salto = sorteio.NextDouble() * 3;
+            var onde = sorteio.NextDouble() * 4 * (Comprimento + Vao);
+
+            // Os calombos sorteados antes: o terreno é função da posição, e
+            // a mesma estação consultada duas vezes dá a mesma cota.
+            var calombos = Enumerable.Range(0, 4 * 14).Where(_ => sorteio.NextDouble() < 0.1).ToHashSet();
+            var mesas = Fileira(4, s => 700 + rampa * s + (s > onde ? salto : 0) + (calombos.Contains((int)Math.Round(s / 1.335)) ? 0.6 : 0), Config());
+            var trecho = RowSolver.Solve(mesas, Config()).Tables;
+
+            for (var i = 0; i < mesas.Count; i++)
+            {
+                var v = mesas[i].Viable;
+                var t = trecho[i];
+
+                if (!t.Marked)
+                {
+                    Assert.True(v.IsViable(t.StartElevation, t.EndElevation));
+                    continue;
+                }
+
+                // Existe posição sem módulo abaixo da faixa? Levantar sem
+                // girar sempre existe; o que se confere é que os pesos a
+                // preferiram a enterrar.
+                NenhumModuloAbaixoDaFaixa(v, t, Config());
+            }
+        }
     }
 
     /// <summary>

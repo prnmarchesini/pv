@@ -12,7 +12,8 @@ namespace UFV.Plugin;
 /// escala para a largura, a profundidade e o comprimento dele — o comprimento
 /// varia pilar a pilar, e um bloco por comprimento seria um bloco por pilar.
 /// O módulo é um bloco por modelo (largura × altura × espessura), com a face
-/// superior em z = 0, e cada instância leva a matriz da mesa.
+/// superior em z = 0 (a caixa sobe <see cref="FolgaSobreAFace"/> acima dela,
+/// só para aparecer), e cada instância leva a matriz da mesa.
 ///
 /// A face superior NÃO fica dentro do bloco: é entidade separada, na camada
 /// de face, com identidade própria (a decisão do Renan sobre o PVsyst, em
@@ -53,7 +54,7 @@ internal static class LayoutBlocks
 
     /// <summary>
     /// Garante o bloco do módulo deste modelo e devolve o id da definição.
-    /// A caixa vai de (0, 0, −espessura) a (largura, altura, 0): a face
+    /// A caixa vai de (0, 0, folga − espessura) a (largura, altura, folga): a face
     /// superior em z = 0 e o canto da ponta baixa esquerda na origem, como a
     /// geometria local da mesa.
     /// </summary>
@@ -64,7 +65,24 @@ internal static class LayoutBlocks
         var nome = PrefixoDoModulo + NomeSeguro(modulo.Model);
         var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForRead);
 
-        if (tabela.Has(nome)) return tabela[nome];
+        if (tabela.Has(nome))
+        {
+            var existente = (BlockTableRecord)transacao.GetObject(tabela[nome], OpenMode.ForRead);
+
+            // Definição de antes de 27/09/2026, com o topo da caixa no plano
+            // da face: refeita no lugar, e toda instância já desenhada passa
+            // a mostrar a cor.
+            // Só a caixa antiga é trocada: o que mais houver na definição (o
+            // usuário pode ter posto algo lá) fica.
+            if (CaixaAntiga(transacao, existente) is { } antiga)
+            {
+                existente.UpgradeOpen();
+                transacao.GetObject(antiga, OpenMode.ForWrite).Erase();
+                Caixa(transacao, existente, modulo);
+            }
+
+            return existente.ObjectId;
+        }
 
         if (!tabela.IsWriteEnabled) tabela.UpgradeOpen();
 
@@ -72,15 +90,41 @@ internal static class LayoutBlocks
         var id = tabela.Add(definicao);
         transacao.AddNewlyCreatedDBObject(definicao, true);
 
+        Caixa(transacao, definicao, modulo);
+
+        return id;
+    }
+
+    /// <summary>
+    /// Quanto o topo da caixa do módulo fica acima da face superior. A face
+    /// (o que o PVsyst recebe) fica no lugar certo; a caixa sobe um pouco
+    /// para não disputar o mesmo plano com ela. No mesmo plano, a face — que
+    /// nunca é pintada — cobria a cor da análise (Renan, 27/09/2026: "não
+    /// pintou o módulo").
+    /// </summary>
+    internal const double FolgaSobreAFace = 0.02;
+
+    private static void Caixa(Transaction transacao, BlockTableRecord definicao, SolarModule modulo)
+    {
         var caixa = new Solid3d();
         caixa.CreateBox(modulo.Width, modulo.Height, modulo.Thickness);
-        caixa.TransformBy(Matrix3d.Displacement(new Vector3d(modulo.Width / 2, modulo.Height / 2, -modulo.Thickness / 2)));
+        caixa.TransformBy(Matrix3d.Displacement(new Vector3d(modulo.Width / 2, modulo.Height / 2, FolgaSobreAFace - modulo.Thickness / 2)));
         CorPorBloco(caixa);
 
         definicao.AppendEntity(caixa);
         transacao.AddNewlyCreatedDBObject(caixa, true);
+    }
 
-        return id;
+    /// <summary>A caixa de antes de 27/09/2026 (topo no plano da face), ou null se não há.</summary>
+    private static ObjectId? CaixaAntiga(Transaction transacao, BlockTableRecord definicao)
+    {
+        foreach (ObjectId filho in definicao)
+        {
+            if (transacao.GetObject(filho, OpenMode.ForRead) is Solid3d caixa && caixa.GeometricExtents.MaxPoint.Z <= FolgaSobreAFace / 2)
+                return filho;
+        }
+
+        return null;
     }
 
     /// <summary>

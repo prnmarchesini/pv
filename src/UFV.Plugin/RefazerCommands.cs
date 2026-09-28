@@ -91,7 +91,7 @@ public static class RefazerCommands
         }
     }
 
-    private static void Executar(
+    internal static void Executar(
         Editor editor,
         Document documento,
         ProcessedTerrain terreno,
@@ -99,6 +99,18 @@ public static class RefazerCommands
         (IReadOnlyList<Point3> Vertices, AlignmentIdentity Identidade) alinhamento,
         TableProfile perfil)
     {
+        // As pontas escolhidas à mão não sobrevivem ao Refazer: a
+        // distribuição nasce de novo e não há como casar mesa velha com
+        // mesa nova. Dito antes, com os letreiros.
+        var aMao = MesasComPontasAMao(documento, area.Vertices);
+
+        if (aMao.Count > 0)
+        {
+            editor.WriteMessage(
+                $"\n  ATENÇÃO: {aMao.Count} mesa(s) com as pontas escolhidas à mão nesta área voltam ao motor: "
+                + $"{string.Join(", ", aMao.Take(12))}{(aMao.Count > 12 ? "…" : string.Empty)}. U desfaz.\n");
+        }
+
         // Planeja ANTES de apagar: se a distribuição não dá fileira (linha
         // paralela, área do outro lado), nada é apagado.
         var plano = UsinaCommands.Planejar(editor, documento, terreno, area, alinhamento, perfil, avisarSeJaHaMesas: false);
@@ -121,6 +133,27 @@ public static class RefazerCommands
             + "); desenhando de novo com a configuração atual (se algo falhar, U devolve as apagadas)...\n");
 
         UsinaCommands.Desenhar(editor, documento, plano);
+    }
+
+    /// <summary>Os letreiros das mesas com pontas à mão cujo contorno começa dentro da área.</summary>
+    private static List<string> MesasComPontasAMao(Document documento, IReadOnlyList<Point3> area)
+    {
+        var letreiros = new List<string>();
+
+        using var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction();
+
+        foreach (var mesa in LayoutScan.Tables(transacao, documento.Database).Values)
+        {
+            if (mesa.Identity is not { HasManualEnds: true } identidade || mesa.Contour is not { } contorno) continue;
+            if (transacao.GetObject(contorno, OpenMode.ForRead) is not Polyline3d polilinha) continue;
+
+            var cantos = FileiraCommands.Vertices(polilinha, transacao);
+
+            if (cantos.Any(p => Polygons.Contains(area, p.X, p.Y))) letreiros.Add(identidade.Label);
+        }
+
+        letreiros.Sort(StringComparer.Ordinal);
+        return letreiros;
     }
 
     /// <summary>A área que veio selecionada antes do comando (o botão direito sobre ela), ou null.</summary>
@@ -167,6 +200,7 @@ internal static class LayoutEraser
 
         var mesas = new List<Guid>();
         var entidades = 0;
+        var grupos = new HashSet<ObjectId>();
 
         using var transacao = database.TransactionManager.StartTransaction();
 
@@ -175,6 +209,8 @@ internal static class LayoutEraser
             var referencias = mesa.Contours.Count > 0 ? mesa.Contours : mesa.All.Take(1).ToList();
 
             if (!referencias.Any(id => Pontos(transacao, id).Any(p => Polygons.Contains(area, p.X, p.Y)))) continue;
+
+            grupos.UnionWith(LayoutGroups.GruposDe(transacao, mesa.All));
 
             foreach (var peca in mesa.All)
             {
@@ -186,6 +222,7 @@ internal static class LayoutEraser
             mesas.Add(guid);
         }
 
+        LayoutGroups.ApagarVazios(transacao, grupos);
         transacao.Commit();
 
         return new Erased(mesas, entidades);

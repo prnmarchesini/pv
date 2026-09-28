@@ -195,6 +195,27 @@ public static class PluginInfo
     /// <summary>Comando que apaga e redesenha as cotas de altura de todas as mesas.</summary>
     public const string ComandoAlturasRegerar = "UFV_ALTURAS_REGERAR";
 
+    /// <summary>Exporta terreno, configuração, perfil e mesas para a bancada do motor (diagnóstico).</summary>
+    public const string ComandoBancada = "UFV_BANCADA";
+
+    /// <summary>Muda a altura das pontas de uma mesa à mão (uma travada, ou as duas).</summary>
+    public const string ComandoPontas = "UFV_PONTAS";
+
+    /// <summary>O mesmo, por letreiro e alturas na linha de comando, sem clique (nível 2).</summary>
+    public const string ComandoPontasAutomatico = "UFV_PONTAS_AUTO";
+
+    /// <summary>A tela dos parâmetros das análises (faixa, lombo, degraus, declividade, cores).</summary>
+    public const string ComandoAnalisesParametros = "UFV_ANALISES_PARAMETROS";
+
+    /// <summary>Repinta todas as mesas como estão, com as regras gravadas.</summary>
+    public const string ComandoPintar = "UFV_PINTAR";
+
+    /// <summary>O mesmo com a mesa de exemplo (nível 2).</summary>
+    public const string ComandoPintarAutomatico = "UFV_PINTAR_AUTO";
+
+    /// <summary>Refaz todas as áreas com a configuração atual.</summary>
+    public const string ComandoRegerar = "UFV_REGERAR";
+
     /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).

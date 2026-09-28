@@ -174,6 +174,75 @@ public static class RowPipeline
     }
 
     /// <summary>
+    /// Processa UMA mesa com as cotas da ponta baixa impostas (27/09/2026,
+    /// "quero essa ponta com essa altura e essa com essa"): sem alinhamento
+    /// de fileira, os pilares e as análises saem das cotas dadas. O que
+    /// ficou fora da faixa é pintado pelas análises, módulo a módulo; e,
+    /// passando do lombo, a mesa é marcada (regra sagrada 4), quem quer que
+    /// tenha escolhido as cotas.
+    /// </summary>
+    /// <param name="cell">A célula em planta.</param>
+    /// <param name="geometry">A mesa em coordenadas locais.</param>
+    /// <param name="tiltRadians">A inclinação transversal.</param>
+    /// <param name="terrain">O terreno.</param>
+    /// <param name="settings">Configuração e regras de análise.</param>
+    /// <param name="startElevation">A cota da ponta baixa na estação zero.</param>
+    /// <param name="endElevation">A cota da ponta baixa na estação final.</param>
+    /// <param name="note">O motivo que a mesa carrega (quem pôs as cotas), ou null.</param>
+    /// <param name="marked">
+    /// Se a mesa continua marcada (o Pintar das análises repinta a mesa como
+    /// está, e a marca é do alinhamento, que ele não refaz).
+    /// </param>
+    public static ProcessedRow ProcessFixed(
+        PlacedTable cell,
+        TableGeometry geometry,
+        double tiltRadians,
+        Tin terrain,
+        ProjectSettings settings,
+        double startElevation,
+        double endElevation,
+        string? note,
+        bool marked = false)
+    {
+        ArgumentNullException.ThrowIfNull(cell);
+        ArgumentNullException.ThrowIfNull(geometry);
+        ArgumentNullException.ThrowIfNull(terrain);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (settings.WhyInvalid is { } motivo)
+            throw new InvalidOperationException($"A configuração não fecha: {motivo}.");
+
+        if (!double.IsFinite(startElevation) || !double.IsFinite(endElevation))
+            throw new ArgumentOutOfRangeException(nameof(startElevation), "As cotas da mesa precisam ser números.");
+
+        var config = settings.Configuration;
+        var orientacao = RowOrientation.Resolve(cell, config.UpslopeAzimuthRadians);
+        var amostra = TerrainSampler.Sample(geometry, TablePlacement.Plan(cell, orientacao, tiltRadians, 0), terrain);
+        var viavel = ViableElevations.Compute(amostra, geometry.Length, config);
+
+        var estouros = viavel.Problem is null ? viavel.Violations(startElevation, endElevation) : viavel.ModuleCount;
+
+        // Regra sagrada 4: mais módulos fora da faixa que o lombo permite é
+        // mesa marcada, quem quer que tenha escolhido as cotas. O motivo
+        // junta a nota (quem escolheu) com a contagem.
+        var estourou = viavel.Problem is not null || estouros > viavel.ToleratedModules;
+        var motivoDaMarca = estourou && !marked
+            ? string.Join("; ", new[] { note, viavel.Problem ?? $"{estouros} módulo(s) fora da faixa, e a tolerância é {viavel.ToleratedModules}" }.Where(t => !string.IsNullOrWhiteSpace(t)))
+            : note;
+
+        var resolvida = new SolvedTable(cell.Label, startElevation, endElevation, estouros, marked || estourou, motivoDaMarca, Seated: marked || estourou);
+
+        var pilares = PillarCalculator.Compute(geometry, cell, orientacao, tiltRadians, resolvida, terrain, config);
+        var finais = TerrainSampler.Sample(geometry, pilares.Placement, terrain);
+        var relatorio = TableAnalysis.Evaluate(resolvida, finais, geometry.Length, pilares, cell, settings.Analyses, config);
+
+        var mesa = new ProcessedTable(cell, orientacao, amostra, finais, viavel, resolvida, pilares, relatorio);
+        var solucao = new RowSolution([new SolvedRun([resolvida])]);
+
+        return new ProcessedRow(new PlanRow(cell.Row, [cell]), solucao, [mesa], []);
+    }
+
+    /// <summary>
     /// Os avisos de pontas altas que se aproximam além do espaçamento.
     ///
     /// Com o giro g, o canto alto do início local sai da célula por

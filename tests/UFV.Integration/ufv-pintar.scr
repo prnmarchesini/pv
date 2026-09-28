@@ -1,0 +1,56 @@
+; Teste de nivel 2 do Pintar estouros (27/09/2026): processa uma fileira,
+; conta as pecas por tipo e soma os GUIDs das mesas; repinta
+; (UFV_PINTAR_AUTO) e conta de novo. Repintar nao move, nao duplica e nao
+; troca identidade: mesmas mesas, mesmos GUIDs, mesmas pecas.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_TERRENO_AUTO")
+(setq ufv:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "UFV_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area do pintar")
+(command "UFV_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento do pintar")
+(command "UFV_FILEIRA_AUTO")
+(setvar "OSMODE" ufv:osmode)
+
+(defun ufv:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("MARCHENG_UFV")))))))
+(defun ufv:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun ufv:tipo (xd) (cdr (nth 0 xd)))
+
+(defun ufv:contar (rotulo / tudo n i xd tp mesas pil mod fac)
+  (setq tudo (ssget "_X" (list (cons -3 (list (list "MARCHENG_UFV"))))))
+  (setq n (if tudo (sslength tudo) 0) i 0 mesas 0 pil 0 mod 0 fac 0 ufv:guids nil ufv:zs nil)
+  (while (< i n)
+    (setq xd (ufv:xdata (ssname tudo i)) tp (ufv:tipo xd))
+    (cond ((= tp "Mesa")
+           (setq mesas (1+ mesas) ufv:guids (cons (ufv:campo xd 0) ufv:guids))
+           ; A cota dos dois cantos da borda baixa, lida da entidade.
+           (setq ufv:v (entnext (ssname tudo i)))
+           (setq ufv:zs (cons (list (ufv:campo xd 0) (cadddr (assoc 10 (entget ufv:v))) (cadddr (assoc 10 (entget (entnext ufv:v))))) ufv:zs)))
+          ((= tp "Pilar") (setq pil (1+ pil)))
+          ((= tp "Modulo") (setq mod (1+ mod)))
+          ((= tp "Face") (setq fac (1+ fac))))
+    (setq i (1+ i)))
+  (princ (strcat "\nUFV_PINTAR_LISP " rotulo " mesas=" (itoa mesas) " pilares=" (itoa pil) " modulos=" (itoa mod) " faces=" (itoa fac))))
+
+(ufv:contar "antes")
+(setq ufv:antes ufv:guids ufv:zsantes ufv:zs)
+(command "UFV_PINTAR_AUTO")
+(ufv:contar "depois")
+(setq ufv:mesmos 0 ufv:dz 0.0)
+(foreach a ufv:zsantes
+  (if (setq ufv:b (assoc (car a) ufv:zs))
+    (setq ufv:dz (max ufv:dz (abs (- (cadr a) (cadr ufv:b))) (abs (- (caddr a) (caddr ufv:b)))))))
+(princ (strcat "\nUFV_PINTAR_COTAS dz=" (rtos ufv:dz 2 6)))
+(foreach g ufv:antes (if (member g ufv:guids) (setq ufv:mesmos (1+ ufv:mesmos))))
+; Os grupos anonimos (um por mesa): depois de repintar, os velhos sumiram
+; (ficaram vazios e foram apagados) e ha um novo por mesa.
+(setq ufv:grupos 0)
+(foreach par (entget (cdr (assoc -1 (dictsearch (namedobjdict) "ACAD_GROUP"))))
+  (if (and (= (car par) 3) (= (substr (cdr par) 1 2) "*A")) (setq ufv:grupos (1+ ufv:grupos))))
+(princ (strcat "\nUFV_PINTAR_GRUPOS " (itoa ufv:grupos)))
+(princ (strcat "\nUFV_PINTAR_GUIDS mesmos=" (itoa ufv:mesmos) " de=" (itoa (length ufv:antes))))
+(setvar "SECURELOAD" ufv:secureload)
+(princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

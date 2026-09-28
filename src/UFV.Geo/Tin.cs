@@ -374,6 +374,9 @@ public sealed class Tin
         foreach (var i in _grid.CandidatesAlong(x0, y0, x1, y1)) yield return _triangles[i];
     }
 
+    /// <summary>Os triângulos aproveitados, na ordem em que entraram. Para exportar a malha (bancada do motor).</summary>
+    public IReadOnlyList<Triangle> Triangles => _triangles;
+
     /// <summary>Quantas células o índice tem. Só para diagnóstico e teste.</summary>
     internal long CellCount => _grid?.CellCount ?? 0;
 

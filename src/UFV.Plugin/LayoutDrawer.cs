@@ -48,6 +48,10 @@ internal static class LayoutDrawer
     /// O GUID a dar a cada mesa; null gera um novo. O recalcular (7.3) passa
     /// o GUID que a mesa já tinha, para ela continuar sendo ela.
     /// </param>
+    /// <param name="pontasAMao">
+    /// As alturas das pontas escolhidas à mão, a gravar na identidade (botão
+    /// Pontas, 27/09/2026); null, ou null para a mesa, é o motor quem decide.
+    /// </param>
     internal static DrawnRow Draw(
         Database database,
         ProcessedRow fileira,
@@ -55,7 +59,8 @@ internal static class LayoutDrawer
         SolarModule modulo,
         double tiltRadians,
         AnalysisRules regras,
-        Func<ProcessedTable, Guid>? idDaMesa = null)
+        Func<ProcessedTable, Guid>? idDaMesa = null,
+        Func<ProcessedTable, (double Primeira, double Ultima)?>? pontasAMao = null)
     {
         ArgumentNullException.ThrowIfNull(database);
         ArgumentNullException.ThrowIfNull(fileira);
@@ -89,6 +94,12 @@ internal static class LayoutDrawer
 
         foreach (var mesa in fileira.Tables)
         {
+            // As peças desta mesa, para o grupo (um clique pega a mesa
+            // inteira). As cotas de altura ficam fora: são anotação, que o
+            // Regerar alturas apaga e refaz sozinho, e apagar uma cota não
+            // pode levar a mesa junto.
+            var pecas = new List<ObjectId>();
+
             var colocacao = mesa.Placement;
 
             // O eixo X local da colocação corre com a fileira: é a direção
@@ -99,12 +110,16 @@ internal static class LayoutDrawer
             var direcaoDaFileira = DirecaoDoEixoX(colocacao);
             var rumo = RumoLegivel(direcaoDaFileira.X, direcaoDaFileira.Y);
 
+            var pontasDaMesa = pontasAMao?.Invoke(mesa);
+
             var identidade = new TableIdentity(
                 idDaMesa?.Invoke(mesa) ?? Guid.NewGuid(), mesa.Label,
                 mesa.Solved.StartElevation, mesa.Solved.EndElevation, tiltRadians,
                 mesa.Solved.Marked, mesa.Solved.Reason,
                 ModulePowerWatts: modulo.PowerWatts,
-                Anchor: colocacao.Apply(new Point3(0, 0, 0)));
+                Anchor: colocacao.Apply(new Point3(0, 0, 0)),
+                ManualFirstLowEdge: pontasDaMesa?.Primeira,
+                ManualLastLowEdge: pontasDaMesa?.Ultima);
 
             var matriz = Matriz(colocacao);
 
@@ -136,16 +151,11 @@ internal static class LayoutDrawer
                 };
 
                 if (naoCabe)
-                {
-                    bloco.Layer = camadaMarcada;
-                    bloco.Color = CorDeNaoCabe;
-                }
+                    PintarNaoCabe(bloco, relatorio.PaintVerdict, camadaMarcada);
                 else
-                {
                     Pintar(bloco, relatorio.PaintVerdict, camadaPilar, ref pintadas);
-                }
 
-                espaco.AppendEntity(bloco);
+                pecas.Add(espaco.AppendEntity(bloco));
                 transacao.AddNewlyCreatedDBObject(bloco, true);
 
                 LayoutXData.SavePillar(transacao, bloco, new PillarIdentity(
@@ -191,16 +201,11 @@ internal static class LayoutDrawer
                 };
 
                 if (naoCabe)
-                {
-                    bloco.Layer = camadaMarcada;
-                    bloco.Color = CorDeNaoCabe;
-                }
+                    PintarNaoCabe(bloco, relatorio?.Verdict, camadaMarcada);
                 else
-                {
                     Pintar(bloco, relatorio?.Verdict, camadaModulo, ref pintadas);
-                }
 
-                espaco.AppendEntity(bloco);
+                pecas.Add(espaco.AppendEntity(bloco));
                 transacao.AddNewlyCreatedDBObject(bloco, true);
                 LayoutXData.SaveModule(transacao, bloco, modIdentidade);
 
@@ -212,7 +217,7 @@ internal static class LayoutDrawer
                     Layer = camadaFace,
                 };
 
-                espaco.AppendEntity(face);
+                pecas.Add(espaco.AppendEntity(face));
                 transacao.AddNewlyCreatedDBObject(face, true);
                 LayoutXData.SaveFace(transacao, face, new FaceIdentity(
                     Guid.NewGuid(), modIdentidade.Id, identidade.Id, peca.Column, peca.Row));
@@ -223,7 +228,7 @@ internal static class LayoutDrawer
             // 3. O contorno da mesa: o plano dos módulos, fechado.
             var contorno = new Polyline3d { Closed = true, Layer = camadaMesa };
 
-            espaco.AppendEntity(contorno);
+            pecas.Add(espaco.AppendEntity(contorno));
             transacao.AddNewlyCreatedDBObject(contorno, true);
 
             foreach (var canto in CantosDaMesa(geometria).Select(colocacao.Apply))
@@ -256,8 +261,11 @@ internal static class LayoutDrawer
             // 4. O aviso da mesa que não cabe, no meio dela, na camada de marcadas.
             if (naoCabe)
             {
-                var motivo = mesa.Solved.Reason
-                    ?? mesa.Pillars.Pillars.FirstOrDefault(p => p.Problem is not null)?.Problem
+                // O motivo da marca só vale quando a mesa está marcada: numa
+                // mesa não marcada o Reason é nota (pontas à mão), e o que a
+                // faz não caber é o pilar com problema.
+                var problemaDoPilar = mesa.Pillars.Pillars.FirstOrDefault(p => p.Problem is not null)?.Problem;
+                var motivo = (mesa.Solved.Marked ? mesa.Solved.Reason ?? problemaDoPilar : problemaDoPilar ?? mesa.Solved.Reason)
                     ?? "sem solução";
                 var centro = colocacao.Apply(new Point3(geometria.Length / 2, geometria.Depth / 2, 0));
                 var aviso = new MText
@@ -271,11 +279,13 @@ internal static class LayoutDrawer
                     Contents = $"{mesa.Label} NÃO CABE NO TERRENO\\P{motivo}",
                 };
 
-                espaco.AppendEntity(aviso);
+                pecas.Add(espaco.AppendEntity(aviso));
                 transacao.AddNewlyCreatedDBObject(aviso, true);
                 LayoutXData.SaveNote(transacao, aviso, new NoteIdentity(Guid.NewGuid(), identidade.Id));
                 marcadas++;
             }
+
+            LayoutGroups.Criar(transacao, database, pecas);
         }
 
         transacao.Commit();
@@ -372,6 +382,19 @@ internal static class LayoutDrawer
         espaco.AppendEntity(texto);
         transacao.AddNewlyCreatedDBObject(texto, true);
         LayoutXData.SaveNote(transacao, texto, new NoteIdentity(Guid.NewGuid(), mesa));
+    }
+
+    /// <summary>
+    /// A peça da mesa que não cabe: na camada de marcadas (desligar a camada
+    /// esconde a mesa inteira), com a cor da análise quando ela pinta, e
+    /// magenta quando não. Renan, 27/09/2026: "mostrou que a ponta ficou
+    /// fora do padrão mas não pintou o módulo" — é o módulo pintado que diz
+    /// ONDE a mesa não cabe.
+    /// </summary>
+    private static void PintarNaoCabe(Entity entidade, AnalysisVerdict? veredito, string camadaMarcada)
+    {
+        entidade.Layer = camadaMarcada;
+        entidade.Color = veredito?.Color is { } cor ? Color.FromRgb(cor.R, cor.G, cor.B) : CorDeNaoCabe;
     }
 
     /// <summary>Camada e cor da peça: a da análise quando ela pinta, a fixa quando não.</summary>

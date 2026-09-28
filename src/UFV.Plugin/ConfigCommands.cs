@@ -159,14 +159,14 @@ public static class ConfigCommands
     /// plugin inteiro.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void Abrir(Document documento)
+    internal static void Abrir(Document documento, bool soAnalises = false)
     {
         var editor = documento.Editor;
         var inicial = Inicial(documento, out var aviso);
 
         if (aviso is not null) editor.WriteMessage($"\n{aviso}\n");
 
-        var janela = new JanelaDeConfiguracao(inicial, aviso);
+        var janela = new JanelaDeConfiguracao(inicial, aviso, soAnalises);
 
         AcadApp.ShowModalWindow(janela);
 
@@ -180,5 +180,8 @@ public static class ConfigCommands
 
         editor.WriteMessage($"\nConfiguração gravada no desenho: {configuracao.Describe()}.\n");
         editor.WriteMessage("\n  Ela vai junto com o arquivo: salve o desenho para ela ficar.\n");
+
+        if (soAnalises)
+            editor.WriteMessage("\n  Para ver o efeito: \"Pintar estouros\" repinta as mesas como estão; \"Regerar\" refaz as áreas com os parâmetros novos.\n");
     }
 }

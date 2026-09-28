@@ -19,11 +19,13 @@ internal static class LayoutXData
     /// (etapa 5) continua a ser lida, como limpa.
     /// </summary>
     /// <summary>
-    /// Versão 4 desde o 7.7: ganhou a âncora (onde a mesa foi desenhada). A
-    /// 3 (potência), a 2 (estado sujo) e a 1 (etapa 5) continuam a ser lidas.
-    /// Sempre acrescentar no fim: os testes de nível 2 leem campo por posição.
+    /// Versão 5 desde 27/09/2026: ganhou as alturas das pontas escolhidas à
+    /// mão. A 4 (âncora, 7.7), a 3 (potência), a 2 (estado sujo) e a 1
+    /// (etapa 5) continuam a ser lidas. Sempre acrescentar no fim: os testes
+    /// de nível 2 leem campo por posição.
     /// </summary>
-    private const int VersaoDaMesa = 4;
+    private const int VersaoDaMesa = 5;
+    private const int VersaoDaMesaQuatro = 4;
     private const int VersaoDaMesaTres = 3;
     private const int VersaoDaMesaDois = 2;
     private const int VersaoDaMesaAntiga = 1;
@@ -31,8 +33,11 @@ internal static class LayoutXData
     private const int VersaoDoPilarAntiga = 1;
     private const int VersaoDoModulo = 1;
 
-    /// <summary>GUID, letreiro, cota inicial, cota final, inclinação, marcada, motivo, suja, motivo da sujeira, potência do módulo, âncora X, Y, Z.</summary>
-    private const int CamposDaMesa = 13;
+    /// <summary>GUID, letreiro, cota inicial, cota final, inclinação, marcada, motivo, suja, motivo da sujeira, potência do módulo, âncora X, Y, Z, ponta à mão no primeiro e no último pilar.</summary>
+    private const int CamposDaMesa = 15;
+
+    /// <summary>Os treze primeiros, na versão 4.</summary>
+    private const int CamposDaMesaQuatro = 13;
 
     /// <summary>Os dez primeiros, na versão 3.</summary>
     private const int CamposDaMesaTres = 10;
@@ -72,11 +77,14 @@ internal static class LayoutXData
             Opcional(mesa.ModulePowerWatts),
             Opcional(mesa.Anchor?.X),
             Opcional(mesa.Anchor?.Y),
-            Opcional(mesa.Anchor?.Z));
+            Opcional(mesa.Anchor?.Z),
+            Opcional(mesa.ManualFirstLowEdge),
+            Opcional(mesa.ManualLastLowEdge));
 
     internal static TableIdentity? LoadTable(Entity entidade)
     {
         var c = PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesa, CamposDaMesa)
+            ?? PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesaQuatro, CamposDaMesaQuatro)
             ?? PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesaTres, CamposDaMesaTres)
             ?? PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesaDois, CamposDaMesaDois)
             ?? PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesaAntiga, CamposDaMesaAntiga);
@@ -97,13 +105,21 @@ internal static class LayoutXData
 
         UFV.Geo.Point3? ancora = null;
 
-        if (c.Count >= CamposDaMesa && RealOpcional(c[10]) is { } ax && RealOpcional(c[11]) is { } ay && RealOpcional(c[12]) is { } az)
+        if (c.Count >= CamposDaMesaQuatro && RealOpcional(c[10]) is { } ax && RealOpcional(c[11]) is { } ay && RealOpcional(c[12]) is { } az)
         {
             var p = new UFV.Geo.Point3(ax, ay, az);
             if (p.IsFinite) ancora = p;
         }
 
-        var mesa = new TableIdentity(id, c[1], z0, z1, tilt, c[5] == "1", c[6].Length == 0 ? null : c[6], suja, motivo, potencia, ancora);
+        // As pontas à mão valem aos pares: uma só gravada é lida como nenhuma.
+        double? primeira = c.Count >= CamposDaMesa ? RealOpcional(c[13]) : null;
+        double? ultima = c.Count >= CamposDaMesa ? RealOpcional(c[14]) : null;
+
+        if (primeira is not { } a || ultima is not { } b || !double.IsFinite(a) || !double.IsFinite(b))
+            primeira = ultima = null;
+
+        var mesa = new TableIdentity(
+            id, c[1], z0, z1, tilt, c[5] == "1", c[6].Length == 0 ? null : c[6], suja, motivo, potencia, ancora, primeira, ultima);
 
         return mesa.IsValid ? mesa : null;
     }

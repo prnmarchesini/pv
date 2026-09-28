@@ -32,6 +32,13 @@ namespace UFV.Core;
 /// vértice atual: se difere, a mesa foi movida sem o vigia ver (plugin
 /// descarregado, outra máquina). Null numa mesa de antes do 7.7.
 /// </param>
+/// <param name="ManualFirstLowEdge">
+/// A altura livre da ponta baixa no primeiro pilar escolhida à mão pelo
+/// projetista (27/09/2026, botão Pontas), ou null quando é o motor quem
+/// decide. O recalcular de uma mesa com pontas à mão refaz a mesa com
+/// estas alturas no terreno de onde ela estiver.
+/// </param>
+/// <param name="ManualLastLowEdge">A mesma no último pilar.</param>
 public sealed record TableIdentity(
     Guid Id,
     string Label,
@@ -43,10 +50,15 @@ public sealed record TableIdentity(
     bool Dirty = false,
     string? DirtyReason = null,
     double? ModulePowerWatts = null,
-    Point3? Anchor = null)
+    Point3? Anchor = null,
+    double? ManualFirstLowEdge = null,
+    double? ManualLastLowEdge = null)
 {
     /// <summary>O tipo, como vai no XData.</summary>
     public const string Tipo = "Mesa";
+
+    /// <summary>Se as alturas das pontas foram escolhidas à mão (as duas estão gravadas).</summary>
+    public bool HasManualEnds => ManualFirstLowEdge is not null && ManualLastLowEdge is not null;
 
     /// <summary>Se a identidade é utilizável: suja sem motivo, ou limpa com motivo, não é.</summary>
     public bool IsValid =>
@@ -54,7 +66,9 @@ public sealed record TableIdentity(
         && double.IsFinite(StartElevation) && double.IsFinite(EndElevation) && double.IsFinite(TiltRadians)
         && Dirty == !string.IsNullOrWhiteSpace(DirtyReason)
         && (ModulePowerWatts is null || (double.IsFinite(ModulePowerWatts.Value) && ModulePowerWatts > 0))
-        && (Anchor is null || Anchor.Value.IsFinite);
+        && (Anchor is null || Anchor.Value.IsFinite)
+        && (ManualFirstLowEdge is null || double.IsFinite(ManualFirstLowEdge.Value))
+        && (ManualLastLowEdge is null || double.IsFinite(ManualLastLowEdge.Value));
 
     /// <summary>A mesma mesa, suja por este motivo. O motivo é obrigatório.</summary>
     /// <exception cref="ArgumentException">Motivo em branco.</exception>
