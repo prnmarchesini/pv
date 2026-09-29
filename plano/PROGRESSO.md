@@ -111,6 +111,8 @@ Acervo             OK
 Pedidos da tela de 27/09 feitos, `AGUARDANDO VALIDAÇÃO` (item 17 de "O
 que está travado no Renan"; detalhes em "Quarta rodada", no fim). Decisão
 pendente dele: grupo resolve o "clicar na mesa", ou quer bloco de verdade?
+**Resolvida em 29/09/2026:** o Renan respondeu "o que você fez resolve".
+A mesa continua como grupo anônimo, sem bloco.
 
 ### A etapa 7 está inteira aguardando validação; o 6.5 espera as respostas do 6.4
 
