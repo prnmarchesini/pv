@@ -209,7 +209,7 @@ public static class AnalisesCommands
 
         var todas = new ProcessedRow(
             new PlanRow(0, processadas.Select(p => p.Cell).ToList()),
-            new RowSolution([new SolvedRun(processadas.Select(p => p.Solved).ToList())]),
+            new RowSolution([new SolvedRun(processadas.Select(p => p.Solved).ToList(), [])]),
             processadas,
             []);
 

@@ -74,6 +74,9 @@ public sealed record ProcessedRow(
 /// </summary>
 public static class RowPipeline
 {
+    /// <summary>Quantas vezes, no máximo, a corrente é resolvida de novo sobre o terreno reamostrado com o giro.</summary>
+    private const int MaximoDePassadas = 4;
+
     /// <summary>
     /// Processa uma fileira da distribuição.
     /// </summary>
@@ -83,13 +86,21 @@ public static class RowPipeline
     /// <param name="terrain">O terreno.</param>
     /// <param name="settings">Configuração e regras de análise.</param>
     /// <param name="step">O passo da grade de cotas (5.3).</param>
+    /// <param name="firstTip">
+    /// A PB imposta no primeiro pilar (a menor estação local) da primeira
+    /// mesa na ordem das estações, ou null. É a PB da vizinha que fica onde
+    /// está: o Recalcular de uma mesa não pode abrir a junta com ela.
+    /// </param>
+    /// <param name="lastTip">O mesmo no último pilar da última mesa na ordem das estações.</param>
     public static ProcessedRow ProcessRow(
         PlanRow row,
         TableGeometry geometry,
         double tiltRadians,
         Tin terrain,
         ProjectSettings settings,
-        double step = ViableElevations.DefaultStep)
+        double step = ViableElevations.DefaultStep,
+        double? firstTip = null,
+        double? lastTip = null)
     {
         ArgumentNullException.ThrowIfNull(row);
         ArgumentNullException.ThrowIfNull(geometry);
@@ -104,53 +115,105 @@ public static class RowPipeline
 
         var config = settings.Configuration;
 
-        // 5.1 → 5.2 → 5.3, mesa a mesa.
+        // 5.1 → 5.2, mesa a mesa: a orientação e o terreno na posição sem giro.
         var orientacoes = new List<RowOrientation>();
-        var amostras = new List<TableSamples>();
-        var viaveis = new List<ViableElevations>();
+        var colocacoes = new List<Transform>();
 
         foreach (var celula in row.Tables)
         {
             var orientacao = RowOrientation.Resolve(celula, config.UpslopeAzimuthRadians);
-            var colocacao = TablePlacement.Plan(celula, orientacao, tiltRadians, 0);
-            var amostra = TerrainSampler.Sample(geometry, colocacao, terrain);
 
             orientacoes.Add(orientacao);
-            amostras.Add(amostra);
-            viaveis.Add(ViableElevations.Compute(amostra, geometry.Length, config, step));
+            colocacoes.Add(TablePlacement.Plan(celula, orientacao, tiltRadians, 0));
         }
 
-        // 5.4: a fileira inteira de uma vez, com o vão real entre as células.
-        //
-        // O solver encadeia o FIM local de uma mesa ao INÍCIO local da
-        // seguinte. Quando o comprimento local corre contra a fileira (a
-        // configuração padrão: mesa olhando para o norte, +X local para
-        // oeste), a estação zero de cada mesa está na ponta de lá, e a junta
-        // com a vizinha seguinte na fileira é entre o início desta e o fim
-        // daquela. Então as mesas entram no solver na ordem inversa — na
-        // ordem das estações locais — e os resultados voltam à ordem da
-        // fileira. Sem isto, mesa sim mesa não saía marcada numa rampa.
+        // 5.4: a corrente (29/09/2026). O solver encadeia a ponta do FIM local
+        // de uma mesa à do INÍCIO local da seguinte. Quando o comprimento
+        // local corre contra a fileira (a configuração padrão: mesa olhando
+        // para o norte, +X local para oeste), a estação zero de cada mesa
+        // está na ponta de lá, e a junta com a vizinha seguinte na fileira é
+        // entre o início desta e o fim daquela. Então as mesas entram no
+        // solver na ordem inversa — na ordem das estações locais — e os
+        // resultados voltam à ordem da fileira.
         var ordem = Enumerable.Range(0, row.Tables.Count).ToList();
         if (!orientacoes[0].LengthRunsWithRow) ordem.Reverse();
 
-        var entradas = new List<RowTable>();
+        var vaos = new double[row.Tables.Count];
 
-        for (var j = 0; j < ordem.Count; j++)
+        for (var j = 1; j < ordem.Count; j++)
         {
             var i = ordem[j];
-            var anterior = j == 0 ? -1 : ordem[j - 1];
-
-            var vao = anterior < 0
-                ? 0
-                : Math.Max(0, RowSolver.GapBetween(row.Tables[Math.Min(i, anterior)], row.Tables[Math.Max(i, anterior)]));
-
-            entradas.Add(new RowTable(row.Tables[i].Label, vao, viaveis[i]));
+            var anterior = ordem[j - 1];
+            vaos[i] = Math.Max(0, RowSolver.GapBetween(row.Tables[Math.Min(i, anterior)], row.Tables[Math.Max(i, anterior)]));
         }
 
-        var solucao = RowSolver.Solve(entradas, config);
+        var primeiroPilar = geometry.Pillars.Min(p => p.Station);
+        var ultimoPilar = geometry.Pillars.Max(p => p.Station);
 
+        // A iteração: o giro que a corrente escolhe tira a ponta baixa do
+        // lugar em planta (a estação s cai em s·cos(giro)), e a PB é medida
+        // onde o pilar está de fato. Resolve, reamostra na posição com o
+        // giro, resolve de novo, até as cotas pararem de mudar — para as
+        // pontas vizinhas terem a mesma PB no desenho, e não só na conta.
+        var amostras = new TableSamples[row.Tables.Count];
+        var semGiro = new TableSamples[row.Tables.Count];
         var resolvidas = new SolvedTable[row.Tables.Count];
-        for (var j = 0; j < ordem.Count; j++) resolvidas[ordem[j]] = solucao.Tables[j];
+        RowSolution solucao = null!;
+
+        for (var passada = 0; passada < MaximoDePassadas; passada++)
+        {
+            var elos = new List<ChainTable>(ordem.Count);
+
+            foreach (var i in ordem)
+            {
+                amostras[i] = TerrainSampler.Sample(geometry, colocacoes[i], terrain);
+                if (passada == 0) semGiro[i] = amostras[i];
+
+                double? Chao(double estacao)
+                {
+                    var ponto = colocacoes[i].Apply(new Point3(estacao, 0, 0));
+                    return terrain.TryGetZ(ponto.X, ponto.Y, out var z) ? z : null;
+                }
+
+                elos.Add(new ChainTable(
+                    row.Tables[i].Label, vaos[i], geometry.Length,
+                    amostras[i].LowEdge.Select(m => new ChainModule(m.Station, m.GroundZ)).ToList(),
+                    primeiroPilar, Chao(primeiroPilar), ultimoPilar, Chao(ultimoPilar)));
+            }
+
+            solucao = RowSolver.Solve(elos, config, firstTip: firstTip, lastTip: lastTip);
+
+            var mudou = 0.0;
+
+            for (var j = 0; j < ordem.Count; j++)
+            {
+                var i = ordem[j];
+                var nova = solucao.Tables[j];
+
+                if (resolvidas[i] is { } velha)
+                    mudou = Math.Max(mudou, Math.Max(Math.Abs(nova.StartElevation - velha.StartElevation), Math.Abs(nova.EndElevation - velha.EndElevation)));
+                else
+                    mudou = double.PositiveInfinity;
+
+                resolvidas[i] = nova;
+
+                colocacoes[i] = Math.Abs(nova.EndElevation - nova.StartElevation) < geometry.Length * 0.99
+                    ? TablePlacement.PlanSolved(row.Tables[i], orientacoes[i], tiltRadians, nova.StartElevation, nova.EndElevation, geometry.Length, out _)
+                    : TablePlacement.Plan(row.Tables[i], orientacoes[i], tiltRadians, nova.StartElevation);
+            }
+
+            if (mudou < 0.005) break;
+        }
+
+        var viaveis = semGiro.Select(a => ViableElevations.Compute(a, geometry.Length, config, step)).ToList();
+
+        // A mesa marcada diz o porquê com número; quando é um lombo que
+        // nenhuma inclinação vence, diz também isso.
+        for (var i = 0; i < resolvidas.Length; i++)
+        {
+            if (resolvidas[i] is { Marked: true, Seated: false } marcada && viaveis[i].WhyItDoesNotFit() is { } porque)
+                resolvidas[i] = marcada with { Reason = $"{marcada.Reason}; {porque}" };
+        }
 
         // 5.5 → 5.6. O relatório usa o terreno reamostrado na posição final,
         // com o giro: é onde o módulo está de fato.
@@ -167,7 +230,7 @@ public static class RowPipeline
                 resolvidas[i], finais, geometry.Length, pilares, row.Tables[i], settings.Analyses, config);
 
             mesas.Add(new ProcessedTable(
-                row.Tables[i], orientacoes[i], amostras[i], finais, viaveis[i], resolvidas[i], pilares, relatorio));
+                row.Tables[i], orientacoes[i], semGiro[i], finais, viaveis[i], resolvidas[i], pilares, relatorio));
         }
 
         return new ProcessedRow(row, solucao, mesas, Avisos(mesas, geometry, tiltRadians, orientacoes[0].LengthRunsWithRow));
@@ -237,7 +300,7 @@ public static class RowPipeline
         var relatorio = TableAnalysis.Evaluate(resolvida, finais, geometry.Length, pilares, cell, settings.Analyses, config);
 
         var mesa = new ProcessedTable(cell, orientacao, amostra, finais, viavel, resolvida, pilares, relatorio);
-        var solucao = new RowSolution([new SolvedRun([resolvida])]);
+        var solucao = new RowSolution([new SolvedRun([resolvida], [])]);
 
         return new ProcessedRow(new PlanRow(cell.Row, [cell]), solucao, [mesa], []);
     }

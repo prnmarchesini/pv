@@ -21,6 +21,13 @@ Nenhuma entidade criada pelo plugin (linha, área, mesa, pilar, marcação) leva
 
 **Origem:** 25/09/2026. O alinhamento do 4.2 guardou o Z bruto dos cliques; com OSNAP em planta, uma ponta pegou 700 m de uma curva de nível e a outra ficou em 0. Em planta parecia certo; orbitando, era um poste atravessando o terreno. Chegou ao Renan sem teste. **Passo que desenha no CAD não sai para validação sem teste de nível 2 da cota.**
 
+## 6. Ponta com ponta
+Onde duas mesas vizinhas da mesma fileira se encontram, a PB do pilar da ponta de uma é a PB do pilar da ponta da outra. Cada mesa pode ter PBs diferentes nas suas duas pontas (é o giro dela, até o limite de declividade); o elo com a vizinha não abre. Qual é a melhor PB de cada junta, a otimização decide. Entre voar e enterrar, enterra: ponta acima da faixa é o pior resultado possível, módulo acima da faixa vem em seguida, e o que fica abaixo da faixa ou dentro da terra é pintado e marcado. Verificador: `EqualTips`, PB das pontas vizinhas iguais a 2 cm, em toda fileira processada.
+
+Ficam fora: vão maior que o que quebra a fileira, e mesa posta fora da corrente (pontas à mão, sem terreno), que sai marcada ou foi escolhida pelo usuário.
+
+**Origem:** 29/09/2026. O motor posicionava a mesa que não cabe por uma conta separada, que quase ignorava as vizinhas; no Itatiba, 120 de 230 juntas tinham PB diferente dos dois lados (a pior com 3,83 m de um lado e 0,85 m do outro). Renan: "é regra. NUNCA QUERO PONTA SUPER ALTA DESSA FORMA. Prefiro módulo na terra do que módulo voando." Com isso o degrau entre mesas deixou de existir no motor: não há degrau, há junta.
+
 ## Princípios de comportamento (também invioláveis)
 
 - O motor nunca move nem quebra fileira sozinho. Encaixa o máximo, marca o resto.

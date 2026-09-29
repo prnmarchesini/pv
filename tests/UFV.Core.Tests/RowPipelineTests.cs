@@ -1,4 +1,4 @@
-using UFV.Core.Invariants;
+﻿using UFV.Core.Invariants;
 using UFV.Geo;
 
 namespace UFV.Core.Tests;
@@ -63,7 +63,8 @@ public class RowPipelineTests
         Assert.Equal(layout.Rows[0].Tables.Count, fileira.Tables.Count);
         Assert.Equal(0, fileira.MarkedCount);
         Assert.Equal(0, fileira.PillarProblemCount);
-        Assert.All(fileira.Solution.Runs.SelectMany(r => r.Steps), d => Assert.Equal(0, d, 9));
+        Assert.Empty(EqualTips.Check(fileira, Settings().Configuration));
+        Assert.All(fileira.Tables, t => Assert.Equal(fileira.Tables[0].Solved.StartElevation, t.Solved.EndElevation, 9));
 
         foreach (var mesa in fileira.Tables)
         {
@@ -113,7 +114,9 @@ public class RowPipelineTests
 
         Assert.Equal(0, primeira.MarkedCount + segunda.MarkedCount);
         Assert.Equal(0, primeira.PillarProblemCount + segunda.PillarProblemCount);
-        Assert.All(primeira.Solution.Runs.SelectMany(r => r.Steps), d => Assert.Equal(0, d, 9));
+        Assert.Empty(EqualTips.Check(primeira, Settings().Configuration));
+        Assert.Empty(EqualTips.Check(segunda, Settings().Configuration));
+        Assert.All(primeira.Tables, t => Assert.Equal(primeira.Tables[0].Solved.StartElevation, t.Solved.EndElevation, 9));
 
         // A segunda fileira está um pitch (6 m) ao norte: 0,24 m mais alta.
         var cota1 = primeira.Tables[0].Solved.StartElevation;
@@ -140,6 +143,7 @@ public class RowPipelineTests
             .Select(t => $"{t.Label}: {t.Solved.Reason}")));
         Assert.Equal(0, fileira.PillarProblemCount);
         Assert.All(fileira.Tables, m => Assert.NotEqual(m.Solved.StartElevation, m.Solved.EndElevation));
+        Assert.Empty(EqualTips.Check(fileira, Settings().Configuration));
 
         // A mesa olha para o norte: o comprimento local corre para oeste, e
         // com o terreno subindo para o leste a cota FINAL local é a mais

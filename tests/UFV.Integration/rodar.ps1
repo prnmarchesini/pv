@@ -2277,6 +2277,13 @@ function Testar-Recalcular {
         return $false
     }
 
+    # Regra sagrada 6 (29/09/2026): a mesa recalculada sozinha fica com as
+    # pontas presas na PB das vizinhas da fileira.
+    if ($r.Texto -notmatch 'pontas presas nas vizinhas F\d+\.\d+ \(PB \d+,\d\d\)') {
+        $problemas.Add("ufv-recalcular: a mesa nao prendeu as pontas nas vizinhas. Veja $($r.Saida)")
+        return $false
+    }
+
     if ($r.Texto -notmatch '(?m)^RECALCULAR 1 de 1 mesa\(s\) recalculada\(s\)') {
         $problemas.Add("ufv-recalcular: esperava 1 de 1. Veja $($r.Saida)")
         return $false
@@ -2291,15 +2298,15 @@ function Testar-Recalcular {
 
     $mesasEstado = [int] $estados[$estados.Count - 1].Groups[1].Value
 
-    if ($r.Texto -notmatch 'UFV_RECALC_LISP antes=(\d+) contornos=(\d+) guid=([0-9a-fA-F-]+) cont=(\d+) suja=(\S+) pilares=(\d+) modulos=(\d+) faces=(\d+) vermelhas=(\d+) notas=(\d+) viradas=(\d+)') {
+    if ($r.Texto -notmatch 'UFV_RECALC_LISP antes=(\d+) contornos=(\d+) guid=([0-9a-fA-F-]+) cont=(\d+) suja=(\S+) pilares=(\d+) modulos=(\d+) faces=(\d+) vermelhas=(\d+) vermelhaslimpa=(-?\d+) notas=(\d+) viradas=(\d+)') {
         $problemas.Add("ufv-recalcular: nao consegui ler o desenho em LISP. Veja $($r.Saida)")
         return $false
     }
 
     # A reprovacao de 26/09: os textos de cota da mesa recalculada nunca de
     # cabeca para baixo (rumo em (-90, 90]).
-    if ([int] $Matches[10] -lt 21 -or [int] $Matches[11] -ne 0) {
-        $problemas.Add("ufv-recalcular: esperava >= 21 textos de cota na mesa recalculada, nenhum virado; deu $($Matches[10]) e $($Matches[11]) virados. Veja $($r.Saida)")
+    if ([int] $Matches[11] -lt 21 -or [int] $Matches[12] -ne 0) {
+        $problemas.Add("ufv-recalcular: esperava >= 21 textos de cota na mesa recalculada, nenhum virado; deu $($Matches[11]) e $($Matches[12]) virados. Veja $($r.Saida)")
         return $false
     }
 
@@ -2312,6 +2319,7 @@ function Testar-Recalcular {
     $mod = [int] $Matches[7]
     $fac = [int] $Matches[8]
     $verm = [int] $Matches[9]
+    $vermLimpa = [int] $Matches[10]
 
     if ($guidLisp -ne $guid.ToLowerInvariant()) {
         $problemas.Add("ufv-recalcular: o LISP achou suja a mesa $guidLisp e o comando sujou $guid. Veja $($r.Saida)")
@@ -2323,12 +2331,14 @@ function Testar-Recalcular {
         return $false
     }
 
-    if ($cont -ne 1 -or $suja -ne '0' -or $pil -ne 7 -or $mod -ne 28 -or $fac -ne 28 -or $verm -ne 0) {
-        $problemas.Add("ufv-recalcular: a mesa $guidLisp depois do recalcular tem $cont contorno(s) (suja=$suja), $pil pilar(es), $mod modulo(s), $fac face(s), $verm vermelha(s); esperava 1/0/7/28/28/0. Veja $($r.Saida)")
+    # Vermelho: o da sujeira some; o das analises (modulo abaixo da faixa
+    # numa mesa marcada, 29/09/2026) volta igual ao da mesa antes de suja.
+    if ($cont -ne 1 -or $suja -ne '0' -or $pil -ne 7 -or $mod -ne 28 -or $fac -ne 28 -or $vermLimpa -lt 0 -or $verm -ne $vermLimpa) {
+        $problemas.Add("ufv-recalcular: a mesa $guidLisp depois do recalcular tem $cont contorno(s) (suja=$suja), $pil pilar(es), $mod modulo(s), $fac face(s), $verm vermelha(s); esperava 1/0/7/28/28/$vermLimpa (as vermelhas da mesa limpa). Veja $($r.Saida)")
         return $false
     }
 
-    Write-Host "  (recalcular: mesa $($guid.Substring(0,8)) refeita limpa; $contornos mesas no desenho)" -ForegroundColor DarkGray
+    Write-Host "  (recalcular: mesa $($guid.Substring(0,8)) refeita limpa, pontas presas nas vizinhas, $verm peca(s) pintadas como antes de suja; $contornos mesas no desenho)" -ForegroundColor DarkGray
     return $true
 }
 

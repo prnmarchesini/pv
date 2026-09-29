@@ -106,6 +106,14 @@ Nivel 2   16/16    OK
 Acervo             OK
 ```
 
+### 29/09/2026: motor refeito (a corrente), sexta rodada
+
+O Renan reprovou o motor com prints (pontas a 1,37 m e 2,4 m ao lado de
+vizinhas a 0,45 m): "é regra. NUNCA QUERO PONTA SUPER ALTA", "refatoramento
+COMPLETO". Motor de alinhamento refeito do zero, regra sagrada 6 criada
+(ponta com ponta), `AGUARDANDO VALIDAÇÃO` (item 19 de "O que está travado
+no Renan"; detalhes em "Sexta rodada", no fim).
+
 ### 29/09/2026: respostas do 6.4 e quinta rodada (cores, Apagar tudo)
 
 Respostas do Renan às três perguntas do 6.4: 1) PVsyst **8.1** (falta
@@ -256,6 +264,19 @@ teste: a etapa 6 é onde passa a ter.
    pela paleta de propriedades: também suja ("movida ou editada"). Rodar
    `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
    nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
+19. **Testar o motor novo (29/09, a corrente)**, ver "Sexta rodada" no fim
+   deste arquivo. No desenho do Itatiba, seção Análises → **Regerar**:
+   a) em toda fileira, a PB do último pilar de uma mesa é a PB do primeiro
+      pilar da vizinha (as cotas "PB" das duas pontas mostram o mesmo
+      número). Os lugares dos prints: F30.6, F26.3, F38.1/F38.2, F40.1;
+   b) nenhuma ponta passa de 0,80 (a PB máxima da faixa); acima de 1 m só
+      sobram uns poucos pilares do meio de mesa que passa por cima de vala;
+   c) onde o terreno é mais íngreme que 10° (F38, F40, F41), a mesa fica
+      ENTERRADA e pintada de vermelho, marcada "NÃO CABE", com o aviso
+      dizendo quantos módulos enterrados e quanto; não voa;
+   d) mova uma mesa um pouco e **Recalcular**: a linha de comando diz
+      "pontas presas nas vizinhas F.. (PB ..)" e as duas juntas continuam
+      com a mesma PB dos dois lados.
 18. **Testar a rodada de 29/09 (cores das camadas e Apagar tudo)**, ver
    "Quinta rodada" no fim deste arquivo:
    a) abra o desenho do Itatiba: a linha de comando diz "Camadas
@@ -3831,4 +3852,106 @@ dentro do menu UFV, opção de 'apagar tudo'." `AGUARDANDO VALIDAÇÃO`.
   NETLOAD (como num desenho antigo), traça área e alinhamento, processa uma
   fileira, agrupa todas as mesas e roda `UFV_APAGAR_TUDO_AUTO`: sobram só a
   área e o alinhamento, a marca do grupo some, camadas com ACI 30 e 2.
+
+## Sexta rodada: o motor refeito, a corrente (29/09/2026)
+
+Reprovação do Renan, com quatro prints do Itatiba (F30.6 com PB 1,37 na
+ponta ao lado de 0,45; F26.3 "não respeita nenhum dos lados"; pilares
+longos nas pontas em 3D): "o motor esta falho. é regra. NUNCA QUERO PONTA
+SUPER ALTA DESSA FORMA. Prefiro modulo na terra do que modulo vooando",
+"PONTAS de pilares SEMPRE na mesma altura, e qual a melhor altura? A
+iteração vai nos falar. A primeira e ultima ponta pode ter alturas
+diferentes, mas a primeira ponta de uma mesa e a ultima ponta da outra
+mesa tem que ter a mesma altura", "é preciso refatoramento COMPLETO".
+`AGUARDANDO VALIDAÇÃO` (é tela).
+
+**O defeito de conceito.** O motor antigo tinha duas contas: a mesa
+"viável" era posta pela programação dinâmica com degraus entre mesas, e a
+"marcada" (que não cabe) era reposta depois por uma análise de pesos que
+só olhava a vizinha quando o degrau passava do máximo, e achava barato
+ficar acima da faixa. Com lombo de 0 módulos e faixa de 50 cm, metade das
+mesas do Itatiba eram marcadas, e cada uma ficava solta das vizinhas.
+Medido na bancada, motor antigo: 120 de 230 juntas com PB diferente (pior
+3,83 × 0,85 m), 92 pilares com PB acima de 1 m, nenhum módulo enterrado.
+
+**O conceito novo (`RowSolver`, reescrito).** A fileira é uma corrente. A
+variável é a PB de cada JUNTA (grade de 1 cm): a última ponta de uma mesa
+e a primeira da seguinte são a mesma variável, então a junta não abre por
+construção. A mesa rígida vai de uma PB à outra (a declividade é
+restrição dura); o custo é, módulo a módulo e ponta a ponta, quanto sai da
+faixa: ponta acima 100/m, módulo acima 10/m, abaixo 1/m, enterrado +1/m
+(`ChainWeights`). Programação dinâmica exata numa grade de 5 cm, refinada
+em 1 cm perto da solução (a grade fina inteira levava 33 s na usina de mil
+mesas; agora 1,1 s o Itatiba inteiro). Não há mais viável × marcada:
+marcada é só a que ficou com mais módulos fora da faixa que o lombo
+(regra sagrada 4), com o motivo em número ("12 enterrado(s) (até 178 cm
+abaixo da PB mínima)"). O degrau entre mesas da configuração não é mais
+usado pelo motor. `CompromiseWeights` e `ViableElevations.Compromise`
+foram apagados.
+
+**A iteração (`RowPipeline`).** O giro tira a ponta baixa do lugar em
+planta (a estação s cai em s·cos giro), e a PB é medida onde o pilar está.
+Resolve, reamostra o terreno na posição com o giro, resolve de novo, até
+as cotas mudarem menos de 5 mm (no máximo 4 passadas). No Itatiba a maior
+diferença de PB numa junta, medida nos pilares desenhados, é 0,00 m.
+
+**Recalcular.** A mesa recalculada sozinha tem as pontas presas na PB das
+vizinhas (`PontasVizinhas`: paralela, mesma linha, vão até o que quebra a
+fileira; a PB lida da vizinha como está desenhada). Se a declividade não
+deixa ligar as duas pontas presas, a mesa resolve livre (não derruba o
+lote). Em lote, a varredura é refeita depois de cada mesa.
+
+**Bancada do Itatiba (terreno e mesas de 27/09, 276 mesas), motor novo:**
+juntas com PB diferente 0 de 230; nenhuma ponta acima da faixa; pilares
+com PB acima de 1 m: 6 (pior 1,09, meio de mesa sobre vala); módulos
+acima da faixa 28 (eram 235); abaixo 230 e enterrados 271 — o que não cabe
+agora vai para baixo e é pintado. As mesas mais enterradas são F38.3,
+F40.2 e F41.2: o terreno ali pede 15° a 22° e o limite é 10°, e a mesa
+rígida de 18,7 m não tem como acompanhar. É onde a mesa articulada do
+Renan (quebrar no módulo 14 ou num pilar) faria diferença.
+
+**Testes.** Os 28 testes de `RowSolverTests` eram do conceito abolido
+(degrau mínimo e máximo, marcada como escada, marcada assentada no
+próprio terreno, estouro que vale mais que degrau) e foram substituídos,
+por decisão do Renan de 29/09, por 19 testes da corrente: plano, rampas
+dentro do limite, vale na mesa (ponta não sobe), rampa de 19° (enterra em
+vez de voar), entre voar e afundar afunda, a marca diz a verdade, força
+bruta igual à programação dinâmica, pontas presas, vão que quebra, mesa
+sem terreno, lombo tolerado, determinismo e tempo, recusas. Em todo teste
+da corrente as juntas são conferidas (`CorrenteFechada`), e nos do
+pipeline pelo verificador novo `EqualTips` (regra sagrada 6). Nível 2: o
+`ufv-recalcular` confere que a mesa prendeu as pontas nas vizinhas.
+
+**Revisão independente.** Achou um defeito: na grade grossa a PB presa
+da vizinha era arredondada para 5 cm e, com a declividade no limite, a
+corrente não fechava e as duas pontas eram soltas sem necessidade (com a
+mensagem dizendo "presas"). Corrigido: na grossa a ponta presa é uma faixa
+de dois pontos em volta do valor, a fina prende no valor exato, e se não
+fechar perto da grossa tenta a grade fina inteira antes de soltar; o
+Recalcular diz "presas" só quando o solver as usou, e avisa quando soltou.
+Teste novo `PontaPresaForaDaGradeGrossaNoLimiteDaDeclividade`.
+
+**Nível 2 do Recalcular.** O `ufv-recalcular` exigia "nenhuma peça
+vermelha" na mesa recalculada. Com o motor novo a primeira mesa da fileira
+de teste é marcada (o terreno ali pede 10,9° e o limite é 10°), e a
+pintura das análises deixa 7 módulos vermelhos, legítimos. A exigência
+passou a ser "as mesmas peças vermelhas da mesa antes de ser suja",
+medidas no mesmo script: o vermelho da sujeira tem que sumir, o das
+análises tem que voltar igual. Placar: tudo verde, nível 2 26/26.
+
+### Observações que ficam
+
+- **Mesa articulada** (Renan: "a mesa tem 28 módulos, no módulo 14 ela pode
+  angular, ou a cada pilar"): melhoria pedida, não feita. Com a corrente,
+  basta a mesa virar dois elos (duas meias mesas com a junta no meio); o
+  resto do motor não muda. Precisa de decisão dele: onde pode dobrar, e
+  quanto.
+- O "Degrau mínimo / máximo" continua na tela da Configuração, sem efeito
+  no motor. Tirar da tela ou dar outro uso é decisão dele.
+- As pontas à mão (botão Pontas) continuam fora da corrente: a mesa com
+  pontas à mão não prende as vizinhas no Regerar (elas a ignoram) e a
+  junta com ela pode abrir; `EqualTips` não a confere.
+- A "junta" em cota (e não em PB) difere até 0,49 m no Itatiba: é a
+  diferença do terreno entre os dois pilares das pontas vizinhas (vão de
+  0,5 m mais os dois balanços). A regra é da PB, como o Renan lê na tela.
 

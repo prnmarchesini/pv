@@ -2,32 +2,54 @@ using System.Globalization;
 
 namespace UFV.Core;
 
-/// <summary>Uma mesa a resolver numa fileira.</summary>
+/// <summary>A cota do terreno sob a ponta baixa de um módulo, na estação dele.</summary>
+/// <param name="Station">A estação do meio da ponta baixa ao longo da mesa.</param>
+/// <param name="Ground">O terreno mais alto sob a ponta baixa do módulo, ou null sem terreno.</param>
+public sealed record ChainModule(double Station, double? Ground);
+
+/// <summary>Uma mesa a resolver numa fileira, na ordem das estações locais.</summary>
 /// <param name="Label">O letreiro da mesa (F1.3), só para o relatório.</param>
 /// <param name="GapBefore">
-/// O vão em planta entre o fim da mesa anterior e o início desta, em metro.
-/// Zero na primeira. Vão maior que <see cref="SystemConfiguration.MaxGapBeforeBreak"/>
-/// quebra a fileira ali.
+/// O vão em planta entre esta mesa e a anterior, em metro. Zero na primeira.
+/// Vão maior que <see cref="SystemConfiguration.MaxGapBeforeBreak"/> quebra
+/// a fileira ali: as pontas dos dois lados deixam de ser vizinhas.
 /// </param>
-/// <param name="Viable">As cotas viáveis desta mesa (5.3).</param>
-public sealed record RowTable(string Label, double GapBefore, ViableElevations Viable);
+/// <param name="Length">O comprimento da mesa, da estação zero à final.</param>
+/// <param name="Modules">Os módulos da fileira de baixo.</param>
+/// <param name="FirstStation">A estação do primeiro pilar (a ponta que encosta na mesa anterior).</param>
+/// <param name="FirstGround">O terreno sob a ponta baixa no primeiro pilar, ou null.</param>
+/// <param name="LastStation">A estação do último pilar (a ponta que encosta na mesa seguinte).</param>
+/// <param name="LastGround">O terreno sob a ponta baixa no último pilar, ou null.</param>
+public sealed record ChainTable(
+    string Label,
+    double GapBefore,
+    double Length,
+    IReadOnlyList<ChainModule> Modules,
+    double FirstStation,
+    double? FirstGround,
+    double LastStation,
+    double? LastGround)
+{
+    /// <summary>Se a mesa tem terreno em tudo que o motor olha: módulos e as duas pontas.</summary>
+    public bool HasGround =>
+        Modules.Count > 0 && Modules.All(m => m.Ground is { } g && double.IsFinite(g))
+        && FirstGround is { } a && double.IsFinite(a) && LastGround is { } b && double.IsFinite(b);
+}
 
-/// <summary>Uma mesa resolvida: as cotas da ponta baixa e o que estourou.</summary>
+/// <summary>Uma mesa resolvida: as cotas da ponta baixa e o que ficou fora da faixa.</summary>
 /// <param name="Label">O letreiro.</param>
 /// <param name="StartElevation">A cota da ponta baixa na estação zero.</param>
 /// <param name="EndElevation">A cota da ponta baixa na estação final.</param>
 /// <param name="Violations">Quantos módulos da fileira de baixo ficaram fora da faixa.</param>
 /// <param name="Marked">
-/// Se a mesa não cabe: mais módulos fora que a tolerância, declividade
-/// acima do limite, ou sem terreno. A mesa fica assim mesmo, com cota, e é
-/// marcada — o motor não move nem apaga. Uma marcada pode ficar inclinada
-/// quando isso serve de escada para as vizinhas caberem; a que FLUTUARIA
-/// acima do próprio terreno é assentada nele, nivelada (26/09/2026).
+/// Se a mesa não cabe: mais módulos fora que a tolerância de lombo, ou sem
+/// terreno. A mesa fica assim mesmo, na posição que a corrente escolheu, e
+/// é marcada e pintada — o motor não move nem apaga.
 /// </param>
 /// <param name="Reason">Por que foi marcada, ou null.</param>
 /// <param name="Seated">
-/// Se é marcada que flutuaria e foi assentada nivelada no próprio terreno
-/// (26/09/2026): o degrau até ela não é degrau de fileira.
+/// Se a mesa foi posta fora da corrente da fileira (pontas à mão, sem
+/// terreno): as pontas dela não contam como juntas da fileira.
 /// </param>
 public sealed record SolvedTable(
     string Label,
@@ -39,31 +61,20 @@ public sealed record SolvedTable(
     bool Seated = false);
 
 /// <summary>Um trecho contínuo de fileira, resolvido de uma vez.</summary>
-/// <param name="Tables">As mesas, na ordem da fileira.</param>
-public sealed record SolvedRun(IReadOnlyList<SolvedTable> Tables)
+/// <param name="Tables">As mesas, na ordem das estações.</param>
+/// <param name="JointClearances">
+/// A PB de cada junta do trecho (n + 1 para n mesas): a primeira é a da ponta
+/// solta da primeira mesa, a última a da ponta solta da última, e cada uma
+/// do meio é a PB das DUAS pontas que se encontram ali. Vazia num trecho
+/// posto fora da corrente.
+/// </param>
+public sealed record SolvedRun(IReadOnlyList<SolvedTable> Tables, IReadOnlyList<double> JointClearances)
 {
-    /// <summary>
-    /// Os degraus entre mesas vizinhas: cota inicial da seguinte menos cota
-    /// final da anterior. Só a junta com mesa ASSENTADA não entra: ela foi
-    /// posta pela análise de pesos (27/09/2026), fora da cota que a
-    /// programação escolheu, e o degrau até uma mesa que não cabe não é
-    /// degrau de fileira. Desde então toda marcada é assentada.
-    /// </summary>
-    public IReadOnlyList<double> Steps =>
-        Tables.Zip(Tables.Skip(1), (a, b) => (a, b))
-            .Where(par => !par.a.Seated && !par.b.Seated)
-            .Select(par => par.b.StartElevation - par.a.EndElevation)
-            .ToList();
-
-    /// <summary>Os degraus de TODA junta, inclusive com assentada (a régua de custo do solver, na solução crua).</summary>
-    public IReadOnlyList<double> AllSteps =>
-        Tables.Zip(Tables.Skip(1), (a, b) => b.StartElevation - a.EndElevation).ToList();
-
     /// <summary>Quantas mesas foram marcadas.</summary>
     public int MarkedCount => Tables.Count(t => t.Marked);
 
-    /// <summary>Quantos módulos estouraram, somando as mesas não marcadas.</summary>
-    public int ViolationCount => Tables.Where(t => !t.Marked).Sum(t => t.Violations);
+    /// <summary>Quantos módulos ficaram fora da faixa, em todas as mesas.</summary>
+    public int ViolationCount => Tables.Sum(t => t.Violations);
 }
 
 /// <summary>O resultado do alinhamento de uma fileira.</summary>
@@ -76,90 +87,120 @@ public sealed record RowSolution(IReadOnlyList<SolvedRun> Runs)
     /// <summary>Quantas mesas foram marcadas.</summary>
     public int MarkedCount => Runs.Sum(r => r.MarkedCount);
 
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>A linha que descreve o resultado para o usuário.</summary>
     public string Describe()
     {
-        var mesas = Tables.Count;
-        var marcadas = MarkedCount;
-        var estouros = Runs.Sum(r => r.ViolationCount);
+        var fora = Runs.Sum(r => r.ViolationCount);
 
-        return $"{mesas} mesa(s) em {Runs.Count} trecho(s): {marcadas} marcada(s), "
-            + $"{estouros} módulo(s) fora da faixa nas demais"
-            + (Runs.Count > 0 && Runs.Any(r => r.Steps.Count > 0)
-                ? $", maior degrau {Runs.SelectMany(r => r.Steps).Select(Math.Abs).DefaultIfEmpty(0).Max().ToString("0.###", Brasil)} m"
-                : string.Empty);
+        return $"{Tables.Count} mesa(s) em {Runs.Count} trecho(s): {MarkedCount} marcada(s), "
+            + $"{fora} módulo(s) fora da faixa";
     }
 }
 
 /// <summary>
-/// O alinhamento na fileira: escolhe a cota de cada mesa de modo que os
-/// degraus entre mesas vizinhas respeitem a configuração e o estouro seja
-/// o menor possível — a fileira inteira de uma vez.
+/// Os pesos da corrente (29/09/2026). Custo por metro de ponta baixa fora da
+/// faixa, somado módulo a módulo e ponta a ponta.
 ///
-/// É programação dinâmica sobre a grade de cotas das juntas, e não iteração
-/// até convergir como o plano de execução pedia. O plano de requisitos já
-/// registrava a alternativa: "programação dinâmica resolve isso de forma
-/// exata e rápida, sem depender de convergência". Com as cotas viáveis de
-/// cada mesa como intervalos (5.3), o custo de uma mesa é quantos módulos
-/// dela estouram, o custo de uma junta é o degrau, e o ótimo sai numa
-/// passada. Não há "máximo de iterações" porque não há iteração; a
-/// divergência em relação ao plano está registrada em PROGRESSO.md.
+/// A ordem é do Renan: "NUNCA QUERO PONTA SUPER ALTA", "melhor enfiar o
+/// módulo na terra e pintar que ele está na terra do que deixar uma ponta
+/// flutuando". A PONTA acima da faixa é o mais caro de tudo; o módulo do
+/// meio acima da faixa (a mesa passando por cima de uma vala) custa mais
+/// que abaixo, mas não tanto que a corrente afunde as pontas das vizinhas
+/// para baixar o meio de uma mesa.
+/// </summary>
+/// <param name="TipAboveBand">Metro de PB acima da faixa na ponta (no pilar da ponta).</param>
+/// <param name="AboveBand">Metro acima da faixa num módulo.</param>
+/// <param name="BelowBand">Metro abaixo da faixa (ponta ou módulo).</param>
+/// <param name="Buried">Metro abaixo do chão, somado ao de abaixo da faixa.</param>
+/// <param name="OutEach">Custo fixo de cada ponto fora da faixa, para não espalhar estouro pequeno por muitos módulos.</param>
+/// <param name="Tiebreak">Metro de PB dentro da faixa, só para desempatar (a mais baixa: pilar mais curto).</param>
+public sealed record ChainWeights(double TipAboveBand, double AboveBand, double BelowBand, double Buried, double OutEach, double Tiebreak)
+{
+    /// <summary>Os pesos de partida.</summary>
+    public static readonly ChainWeights Default = new(TipAboveBand: 100, AboveBand: 10, BelowBand: 1, Buried: 1, OutEach: 0.05, Tiebreak: 1e-3);
+
+    /// <summary>A folga numérica das comparações com a faixa (a PB 0,30 da grade é 0,29999…).</summary>
+    private const double Folga = 1e-9;
+
+    /// <summary>O custo de um módulo com esta altura livre da ponta baixa.</summary>
+    internal double Cost(double clearance, double min, double max) => Custo(clearance, min, max, AboveBand);
+
+    /// <summary>O custo de uma ponta (pilar da ponta) com esta PB.</summary>
+    internal double TipCost(double clearance, double min, double max) => Custo(clearance, min, max, TipAboveBand);
+
+    private double Custo(double clearance, double min, double max, double acima)
+    {
+        if (clearance > max + Folga) return acima * (clearance - max) + OutEach;
+
+        if (clearance < min - Folga)
+        {
+            var custo = BelowBand * (min - clearance) + OutEach;
+            if (clearance < 0) custo += Buried * -clearance;
+            return custo;
+        }
+
+        return Tiebreak * Math.Max(0, clearance - min);
+    }
+}
+
+/// <summary>
+/// O alinhamento na fileira, refeito do zero em 29/09/2026 (o Renan:
+/// "revisão conceitual completa").
 ///
-/// O espaço de estados é a grade de cotas (1 cm) num alcance limitado: as
-/// cotas viáveis de cada mesa, mais o que os degraus e um giro de mesa
-/// marcada alcançam. A solução é ótima DENTRO desse espaço; uma mesa
-/// marcada só experimenta cinco giros (nivelada, meio giro e giro inteiro
-/// para cada lado), o que basta para ela servir de escada entre vizinhas
-/// mas não é "qualquer giro".
+/// A fileira é uma CORRENTE. Regra absoluta: onde duas mesas se encontram,
+/// a ponta de uma e a ponta da outra têm a mesma altura (a PB do último
+/// pilar de uma é a PB do primeiro pilar da seguinte). Cada mesa pode ter
+/// alturas diferentes nas suas duas pontas — é o giro dela, até o limite de
+/// declividade —, mas o elo com a vizinha não abre. Qual é a melhor altura
+/// de cada junta, quem diz é a otimização.
 ///
-/// O que o resultado garante, sempre: todo degrau está em
-/// {0} ∪ [degrau mínimo, degrau máximo] (um degrau que a estrutura não
-/// consegue fazer não aparece); toda mesa tem cota; a mesa que não cabe
-/// fica marcada. O motor não move mesa, não apaga mesa, não quebra fileira
-/// por conta própria — só quebra onde o vão passa do limite, que é a
-/// definição de fileira do plano.
+/// A variável é a PB de cada junta, numa grade de 1 cm. A mesa é rígida
+/// (regra sagrada 2): com as PBs das duas pontas, a cota de cada módulo
+/// sai por uma reta, e o custo da mesa é a soma, módulo a módulo, do quanto
+/// cada ponta baixa sai da faixa — acima pesa mais que abaixo, e abaixo do
+/// chão soma mais um tanto, mas continua mais barato que voar
+/// (<see cref="ChainWeights"/>). Programação dinâmica ao longo da corrente:
+/// o ótimo exato na grade, numa passada.
 ///
-/// A ordem do que se minimiza: primeiro mesas marcadas, depois módulos
-/// fora da faixa, depois a soma dos degraus, e por fim a inclinação
-/// longitudinal de cada mesa. Cada critério vale mais que todos os
-/// seguintes juntos: o custo de uma marca é escalado pelo total de módulos
-/// do trecho, e o de um módulo fora vale mais que a soma de degraus de
-/// duzentas mil mesas.
+/// Não há mais "mesa viável" e "mesa marcada" posicionadas por contas
+/// diferentes (era isso que deixava a marcada solta das vizinhas): toda mesa
+/// está na corrente, e marcada é só a que ficou com mais módulos fora da
+/// faixa que a tolerância de lombo (regra sagrada 4). O degrau entre mesas
+/// da configuração não entra: não há degrau, há junta.
+///
+/// Fora da corrente: a mesa sem terreno sob algum módulo ou ponta (fica
+/// nivelada sobre o terreno mais alto que tiver, marcada) e o vão maior que
+/// o limite, que quebra a fileira em trechos.
 /// </summary>
 public static class RowSolver
 {
     private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
 
-    /// <summary>
-    /// O custo de um módulo fora da faixa. Vale mais que qualquer soma de
-    /// degraus: com degrau máximo de 0,5 m, são 200 mil juntas até empatar.
-    /// </summary>
-    private const double CustoDoEstouro = 1e5;
+    /// <summary>O passo padrão da grade de PB: um centímetro.</summary>
+    public const double DefaultStep = 0.01;
 
-    /// <summary>O custo de um metro de degrau numa junta.</summary>
-    private const double CustoDoDegrau = 1.0;
+    /// <summary>Quanto a grade de PB vai além da faixa de cada lado, de partida. Alarga se a corrente não fecha.</summary>
+    private const double Margem = 1.5;
 
-    /// <summary>O custo de um metro de desnível dentro da mesa, só para desempate.</summary>
-    private const double CustoDoGiro = 1e-3;
+    /// <summary>O maior alargamento da grade antes de desistir.</summary>
+    private const double MargemMaxima = 24;
 
     /// <summary>
     /// Resolve a fileira.
     /// </summary>
-    /// <param name="tables">As mesas, na ordem da fileira.</param>
-    /// <param name="configuration">Degrau mínimo e máximo, vão que quebra a fileira.</param>
-    /// <exception cref="ArgumentException">Lista vazia, ou mesas com passos de grade diferentes.</exception>
-    /// <exception cref="InvalidOperationException">Configuração que não fecha.</exception>
-    public static RowSolution Solve(IReadOnlyList<RowTable> tables, SystemConfiguration configuration) =>
-        Solve(tables, configuration, seatMarked: true);
-
-    /// <summary>
-    /// O mesmo, com a opção de NÃO assentar a marcada que flutua no próprio
-    /// terreno (<paramref name="seatMarked"/> falso): a solução crua da
-    /// programação dinâmica, para comparar com a força bruta no teste.
-    /// </summary>
-    public static RowSolution Solve(IReadOnlyList<RowTable> tables, SystemConfiguration configuration, bool seatMarked)
+    /// <param name="tables">As mesas, na ordem das estações locais.</param>
+    /// <param name="configuration">Faixa da PB, tolerância de lombo, declividade, vão que quebra.</param>
+    /// <param name="weights">Os pesos; null usa <see cref="ChainWeights.Default"/>.</param>
+    /// <param name="step">O passo da grade de PB.</param>
+    /// <param name="firstTip">
+    /// A PB imposta na primeira ponta da corrente (primeiro pilar da primeira
+    /// mesa), ou null para a otimização escolher. É a PB da vizinha que não
+    /// está sendo recalculada: a junta com ela não pode abrir.
+    /// </param>
+    /// <param name="lastTip">O mesmo na última ponta (último pilar da última mesa).</param>
+    public static RowSolution Solve(
+        IReadOnlyList<ChainTable> tables, SystemConfiguration configuration, ChainWeights? weights = null, double step = DefaultStep,
+        double? firstTip = null, double? lastTip = null)
     {
         ArgumentNullException.ThrowIfNull(tables);
         ArgumentNullException.ThrowIfNull(configuration);
@@ -169,34 +210,57 @@ public static class RowSolver
         if (configuration.WhyInvalid is { } motivo)
             throw new InvalidOperationException($"A configuração não fecha: {motivo}.");
 
+        if (!double.IsFinite(step) || step < 1e-4 || step > 0.5)
+            throw new ArgumentOutOfRangeException(nameof(step), step, "O passo da grade precisa ficar entre 0,1 mm e 50 cm.");
+
         foreach (var mesa in tables)
         {
-            ArgumentNullException.ThrowIfNull(mesa?.Viable, nameof(tables));
+            ArgumentNullException.ThrowIfNull(mesa, nameof(tables));
 
             if (!double.IsFinite(mesa.GapBefore) || mesa.GapBefore < 0)
                 throw new ArgumentException($"O vão antes da mesa {mesa.Label} não é uma medida.", nameof(tables));
+
+            if (!double.IsFinite(mesa.Length) || mesa.Length <= 0)
+                throw new ArgumentException($"O comprimento da mesa {mesa.Label} não é uma medida.", nameof(tables));
+
+            if (!(mesa.LastStation - mesa.FirstStation > 1e-6))
+                throw new ArgumentException($"A mesa {mesa.Label} não tem duas pontas (primeiro e último pilar).", nameof(tables));
         }
 
-        var passo = tables[0].Viable.Step;
-
-        if (tables.Any(t => Math.Abs(t.Viable.Step - passo) > 1e-12))
-            throw new ArgumentException("As mesas da fileira usam passos de grade diferentes.", nameof(tables));
-
+        var w = weights ?? ChainWeights.Default;
         var trechos = new List<SolvedRun>();
-        var atual = new List<RowTable>();
+        var atual = new List<ChainTable>();
+
+        void Fechar()
+        {
+            if (atual.Count > 0)
+            {
+                // A ponta presa só vale para o trecho que tem a primeira (ou
+                // a última) mesa da fileira.
+                var primeira = ReferenceEquals(atual[0], tables[0]) ? firstTip : null;
+                var ultima = ReferenceEquals(atual[^1], tables[^1]) ? lastTip : null;
+
+                trechos.Add(ResolverCorrente(atual, configuration, w, step, primeira, ultima));
+            }
+
+            atual = [];
+        }
 
         foreach (var mesa in tables)
         {
-            if (atual.Count > 0 && mesa.GapBefore > configuration.MaxGapBeforeBreak + 1e-9)
+            if (atual.Count > 0 && mesa.GapBefore > configuration.MaxGapBeforeBreak + 1e-9) Fechar();
+
+            if (!mesa.HasGround)
             {
-                trechos.Add(ResolverTrecho(atual, configuration, passo, seatMarked));
-                atual = [];
+                Fechar();
+                trechos.Add(new SolvedRun([SemTerreno(mesa, configuration)], []));
+                continue;
             }
 
             atual.Add(mesa);
         }
 
-        trechos.Add(ResolverTrecho(atual, configuration, passo, seatMarked));
+        Fechar();
 
         return new RowSolution(trechos);
     }
@@ -215,354 +279,283 @@ public static class RowSolver
         return aoLongo - before.Length;
     }
 
-    private static SolvedRun ResolverTrecho(List<RowTable> mesas, SystemConfiguration config, double passo, bool assentarMarcadas)
+    /// <summary>A mesa sem terreno sob algum ponto: nivelada sobre o mais alto que tiver, marcada. Sem terreno nenhum, cota zero, dita.</summary>
+    private static SolvedTable SemTerreno(ChainTable mesa, SystemConfiguration config)
     {
-        // Degraus em chaves da grade. Para baixo no máximo (0,5 / 0,01 dá
-        // 50,000000000001 e o teto seria 51) e para cima no mínimo.
-        var degrauMax = (long)Math.Floor(config.MaxStep / passo + 1e-9);
-        var degrauMin = (long)Math.Ceiling(config.MinStep / passo - 1e-9);
+        var cotas = mesa.Modules.Select(m => m.Ground).Append(mesa.FirstGround).Append(mesa.LastGround)
+            .Where(g => g is { } z && double.IsFinite(z)).Select(g => g!.Value).ToList();
 
-        // O custo de uma marca: mais que todos os estouros possíveis do
-        // trecho juntos, para uma marca nunca valer a pena.
-        var custoDaMarca = CustoDoEstouro * (mesas.Sum(m => m.Viable.ModuleCount) + 1);
+        var semChao = mesa.Modules.Count(m => m.Ground is not { } g || !double.IsFinite(g));
+        var motivo = mesa.Modules.Count == 0
+            ? "a mesa não tem módulo na fileira de baixo para conferir a ponta baixa"
+            : semChao > 0
+                ? $"{semChao} módulo(s) da fileira de baixo sem terreno embaixo"
+                : "uma ponta da mesa sem terreno embaixo";
 
-        // As cotas que cada mesa alcança: início (as cotas viáveis, ou o
-        // terreno dela se nenhuma cabe) e fim (o que as viáveis alcançam).
-        var inicios = new (long Baixa, long Alta)?[mesas.Count];
-        var fins = new (long Baixa, long Alta)?[mesas.Count];
-        var giros = new long[mesas.Count];
-        var todas = new List<long>();
+        if (cotas.Count == 0) return new SolvedTable(mesa.Label, 0, 0, mesa.Modules.Count, true, motivo, Seated: true);
 
-        for (var i = 0; i < mesas.Count; i++)
+        var cota = cotas.Max() + config.MinLowEdge;
+
+        return new SolvedTable(mesa.Label, cota, cota, mesa.Modules.Count, true, motivo, Seated: true);
+    }
+
+    /// <summary>
+    /// A corrente de um trecho. Primeiro numa grade grossa (5 cm) por toda a
+    /// folga, depois na grade fina só perto do que a grossa achou: a usina de
+    /// mil mesas levava 33 s com a grade fina inteira.
+    /// </summary>
+    private static SolvedRun ResolverCorrente(
+        List<ChainTable> mesas, SystemConfiguration config, ChainWeights w, double passo, double? primeira, double? ultima)
+    {
+        var razao = passo < PassoGrosso ? (long)Math.Max(1, Math.Round(PassoGrosso / passo)) : 1;
+        var grosso = passo * razao;
+
+        for (var margem = Margem; ; margem *= 2)
         {
-            var viavel = mesas[i].Viable;
+            var lo = (long)Math.Floor((config.MinLowEdge - margem) / grosso);
+            var hi = (long)Math.Ceiling((config.MaxLowEdge + margem) / grosso);
+            var faixas = Enumerable.Repeat((Lo: lo, Hi: hi), mesas.Count + 1).ToArray();
+            Prender(faixas, primeira, ultima, grosso, exata: false);
 
-            // O giro que uma mesa marcada pode usar para servir de escada:
-            // até o limite de declividade; sem limite, até um degrau.
-            giros[i] = viavel.Configuration.MaxLongitudinalSlope is { } limite
-                ? (long)Math.Floor(Math.Sin(limite) * viavel.Length / passo + 1e-9)
-                : degrauMax;
+            var juntas = Corrente(mesas, config, w, grosso, faixas);
 
-            if (viavel.Starts.Count > 0)
+            // Junta encostada na borda da grade: a folga pode ter cortado a
+            // solução. Alarga e refaz. Sem solução nenhuma (o terreno é mais
+            // íngreme que a declividade por uma extensão longa), também.
+            var cortada = juntas is null || juntas
+                .Where((_, j) => !(j == 0 && primeira is not null) && !(j == juntas.Length - 1 && ultima is not null))
+                .Any(k => k == lo || k == hi);
+
+            if (cortada && margem < MargemMaxima) continue;
+
+            // Com a ponta presa na vizinha a declividade pode não deixar
+            // corrente nenhuma (a vizinha foi mexida à mão): solta a ponta e
+            // resolve livre. A junta aberta aparece na validação.
+            if (juntas is null && (primeira is not null || ultima is not null))
+                return ResolverCorrente(mesas, config, w, passo, null, null);
+
+            if (juntas is null)
             {
-                var chaves = viavel.Starts.Select(st => st.Key(passo)).ToList();
-                inicios[i] = (chaves.Min(), chaves.Max());
-
-                var fimMin = viavel.Starts.SelectMany(st => st.EndRanges).Min(f => f.Min);
-                var fimMax = viavel.Starts.SelectMany(st => st.EndRanges).Max(f => f.Max);
-                fins[i] = ((long)Math.Floor(fimMin / passo), (long)Math.Ceiling(fimMax / passo));
-
-                todas.Add(inicios[i]!.Value.Baixa);
-                todas.Add(inicios[i]!.Value.Alta);
-                todas.Add(fins[i]!.Value.Baixa);
-                todas.Add(fins[i]!.Value.Alta);
+                throw new InvalidOperationException(
+                    $"A fileira de {mesas[0].Label} a {mesas[^1].Label} não fecha nem com {MargemMaxima:0} m de folga na ponta baixa: "
+                    + "o terreno é mais íngreme que a declividade permite por uma extensão grande demais.");
             }
-            else if (viavel.HighestGroundOrNull() is { } terreno)
+
+            var finas = juntas.Select(k => k * razao).ToArray();
+            var presa = primeira is not null || ultima is not null;
+
+            // A grossa cabe na fina (o passo grosso é múltiplo do fino): a
+            // corrente grossa está dentro das faixas finas, e a fina nunca
+            // sai pior que ela. Com ponta presa a grossa só chegou perto
+            // (o valor preso não está na grade de 5 cm): a fina prende no
+            // valor exato, e se não fechar perto da grossa, tenta a grade
+            // fina inteira antes de soltar a ponta.
+            if (razao > 1 || presa)
             {
-                var ancora = (long)Math.Round((terreno + config.MinLowEdge) / passo);
-                inicios[i] = (ancora, ancora);
-                todas.Add(ancora);
+                var raio = 2 * razao;
+                var faixasFinas = finas.Select(k => (Lo: k - raio, Hi: k + raio)).ToArray();
+                Prender(faixasFinas, primeira, ultima, passo, exata: true);
+
+                var fina = Corrente(mesas, config, w, passo, faixasFinas);
+
+                if (fina is null && presa)
+                {
+                    var inteira = Enumerable.Repeat((Lo: lo * razao, Hi: hi * razao), mesas.Count + 1).ToArray();
+                    Prender(inteira, primeira, ultima, passo, exata: true);
+
+                    fina = Corrente(mesas, config, w, passo, inteira);
+
+                    if (fina is null) return ResolverCorrente(mesas, config, w, passo, null, null);
+                }
+
+                finas = fina ?? finas;
             }
-        }
 
-        if (todas.Count == 0)
+            return Montar(mesas, config, finas.Select(k => k * passo).ToList());
+        }
+    }
+
+    /// <summary>
+    /// Fecha a faixa da primeira e da última junta na PB imposta, se houver:
+    /// no valor exato, ou (na grade grossa, onde o valor não cai num ponto
+    /// da grade) nos dois pontos da grade em volta dele.
+    /// </summary>
+    private static void Prender((long Lo, long Hi)[] faixas, double? primeira, double? ultima, double passo, bool exata)
+    {
+        (long, long) Faixa(double pb) => exata
+            ? ((long)Math.Round(pb / passo), (long)Math.Round(pb / passo))
+            : ((long)Math.Floor(pb / passo + 1e-9), (long)Math.Ceiling(pb / passo - 1e-9));
+
+        if (primeira is { } a) faixas[0] = Faixa(a);
+        if (ultima is { } b) faixas[^1] = Faixa(b);
+    }
+
+    /// <summary>O passo da grade grossa.</summary>
+    private const double PassoGrosso = 0.05;
+
+    /// <summary>
+    /// A programação dinâmica: cada junta com a PB numa faixa de chaves da
+    /// grade. Devolve a chave escolhida de cada junta, ou null se nenhuma
+    /// corrente respeita a declividade dentro das faixas.
+    /// </summary>
+    private static long[]? Corrente(List<ChainTable> mesas, SystemConfiguration config, ChainWeights w, double passo, (long Lo, long Hi)[] faixas)
+    {
+        var min = config.MinLowEdge;
+        var max = config.MaxLowEdge;
+
+        // A declividade: sen(limite) sobre o vão entre as pontas; sem limite,
+        // nove décimos (desnível maior que o comprimento não é mesa).
+        var seno = config.MaxLongitudinalSlope is { } limite ? Math.Sin(limite) : 0.9;
+
+        double[] CustoDasPontas(int j)
         {
-            // Nenhuma mesa tem terreno: não há cota a escolher. Tudo marcado
-            // em cota zero, dita como tal.
-            return new SolvedRun(mesas
-                .Select(m => new SolvedTable(m.Label, 0, 0, m.Viable.ModuleCount, true,
-                    m.Viable.Problem ?? "sem cota viável"))
-                .ToList());
+            var (lo, hi) = faixas[j];
+            var custos = new double[hi - lo + 1];
+
+            for (var k = 0; k < custos.Length; k++) custos[k] = w.TipCost((lo + k) * passo, min, max);
+
+            return custos;
         }
 
-        // A grade do trecho: tudo que alguma mesa alcança, com folga de um
-        // giro e um degrau. Mais que isso não ajuda: uma marcada só serve de
-        // escada ENTRE cotas que alguma mesa alcança, nunca além de todas.
-        var folga = degrauMax + giros.Max() + 1;
-        var chaveMin = todas.Min() - folga;
-        var chaveMax = todas.Max() + folga;
-        var n = (int)(chaveMax - chaveMin + 1);
-
-        // custoInicio[k]: o menor custo até a mesa atual começar na chave k.
-        // A primeira mesa pode começar em qualquer cota da sua janela de
-        // início (viáveis ou âncora) mais um degrau para cada lado.
-        var custoInicio = new double[n];
-        Array.Fill(custoInicio, double.PositiveInfinity);
-
-        {
-            var (baixa, alta) = inicios[0] ?? (todas.Min(), todas.Max());
-
-            for (var k = baixa - degrauMax; k <= alta + degrauMax; k++)
-                custoInicio[(int)(k - chaveMin)] = 0;
-        }
-
-        // Para reconstruir: por mesa, para cada chave de fim, de que início
-        // veio; e por junta, para cada chave de início, de que fim veio.
-        var deInicio = new List<int[]>();
-        var deFim = new List<int[]>();
-        var custoFimDaUltima = Array.Empty<double>();
-        var carimbo = new int[n];
-        var rodada = 0;
+        var custo = CustoDasPontas(0);
+        var origens = new List<int[]>(mesas.Count);
 
         for (var i = 0; i < mesas.Count; i++)
         {
             var mesa = mesas[i];
-            var custoFim = new double[n];
-            var origemDoFim = new int[n];
+            var a = mesa.FirstStation;
+            var vao = mesa.LastStation - a;
+            var ga = mesa.FirstGround!.Value;
+            var gb = mesa.LastGround!.Value;
+            var alcance = seno * vao;
 
-            Array.Fill(custoFim, double.PositiveInfinity);
-            Array.Fill(origemDoFim, -1);
+            var fracoes = mesa.Modules.Select(m => (m.Station - a) / vao).ToArray();
+            var chaos = mesa.Modules.Select(m => m.Ground!.Value).ToArray();
 
-            // As chaves de início em que a mesa tem opção viável.
-            var viaveisBaixa = inicios[i] is { } ini && mesa.Viable.Starts.Count > 0 ? ini.Baixa : long.MaxValue;
-            var viaveisAlta = inicios[i] is { } ini2 && mesa.Viable.Starts.Count > 0 ? ini2.Alta : long.MinValue;
+            var lo0 = faixas[i].Lo;
+            var lo1 = faixas[i + 1].Lo;
+            var pontas = CustoDasPontas(i + 1);
+            var n1 = pontas.Length;
 
-            var giro = giros[i];
-            long[] girosDaMarcada = giro > 0 ? [0, giro / 2, giro, -giro / 2, -giro] : [0];
-
-            // Só o intervalo em que há custo finito: fora dele não há nada
-            // a propagar, e varrer a grade inteira por mesa custava caro.
-            var (kBaixa, kAlta) = Finitos(custoInicio);
-
-            for (var k = kBaixa; k <= kAlta; k++)
-            {
-                var custo = custoInicio[k];
-                if (double.IsPositiveInfinity(custo)) continue;
-
-                var chave = chaveMin + k;
-                var z0 = chave * passo;
-
-                if (chave >= viaveisBaixa && chave <= viaveisAlta)
-                {
-                    // Opções viáveis, do menor estouro para o maior: o primeiro
-                    // custo gravado numa chave de fim é o menor, e as opções com
-                    // mais estouro só preenchem chaves que as anteriores não
-                    // alcançaram.
-                    rodada++;
-
-                    for (var estouro = 0; estouro <= mesa.Viable.ToleratedModules; estouro++)
-                    {
-                        foreach (var faixa in mesa.Viable.EndRanges(z0, estouro))
-                        {
-                            var eMin = (long)Math.Ceiling(faixa.Min / passo - 1e-9) - chaveMin;
-                            var eMax = (long)Math.Floor(faixa.Max / passo + 1e-9) - chaveMin;
-
-                            for (var e = Math.Max(eMin, 0); e <= Math.Min(eMax, n - 1); e++)
-                            {
-                                if (carimbo[e] == rodada) continue;
-                                carimbo[e] = rodada;
-
-                                var z1 = (chaveMin + e) * passo;
-                                var total = custo + estouro * CustoDoEstouro + Math.Abs(z1 - z0) * CustoDoGiro;
-
-                                if (total < custoFim[e])
-                                {
-                                    custoFim[e] = total;
-                                    origemDoFim[e] = k;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // A opção marcada: em qualquer cota alcançável, nivelada ou
-                // com um dos cinco giros, custo da marca mais o estouro que
-                // ela tem assim. Nunca ganha de uma viável, mas mantém a
-                // fileira inteira com cota, e serve de escada quando o
-                // terreno dá um salto que os degraus não vencem.
-                foreach (var d in girosDaMarcada)
-                {
-                    var e = k + d;
-                    if (e < 0 || e >= n) continue;
-
-                    var z1 = (chaveMin + e) * passo;
-                    var estouros = mesa.Viable.Problem is null ? mesa.Viable.Violations(z0, z1) : mesa.Viable.ModuleCount;
-                    var marcada = custo + custoDaMarca + estouros * CustoDoEstouro + Math.Abs(z1 - z0) * CustoDoGiro;
-
-                    if (marcada < custoFim[e])
-                    {
-                        custoFim[e] = marcada;
-                        origemDoFim[e] = k;
-                    }
-                }
-            }
-
-            deInicio.Add(origemDoFim);
-
-            if (i == mesas.Count - 1)
-            {
-                custoFimDaUltima = custoFim;
-                break;
-            }
-
-            // A junta: a próxima mesa começa a um degrau permitido do fim
-            // desta. Degrau zero sempre pode; fora disso, entre o mínimo e o
-            // máximo, para cima ou para baixo.
-            var proximo = new double[n];
-            var origemDoInicio = new int[n];
-
+            var proximo = new double[n1];
+            var origem = new int[n1];
             Array.Fill(proximo, double.PositiveInfinity);
-            Array.Fill(origemDoInicio, -1);
+            Array.Fill(origem, -1);
 
-            var (eBaixa, eAlta) = Finitos(custoFim);
-
-            for (var e = eBaixa; e <= eAlta; e++)
+            for (var k = 0; k < custo.Length; k++)
             {
-                if (double.IsPositiveInfinity(custoFim[e])) continue;
+                var base0 = custo[k];
+                if (double.IsPositiveInfinity(base0)) continue;
 
-                for (var d = -degrauMax; d <= degrauMax; d++)
+                var za = ga + (lo0 + k) * passo;
+
+                // As PBs da outra ponta que a declividade deixa: zb em za ± alcance.
+                var kb0 = (int)Math.Max(0, (long)Math.Ceiling((za - alcance - gb) / passo - 1e-9) - lo1);
+                var kb1 = (int)Math.Min(n1 - 1, (long)Math.Floor((za + alcance - gb) / passo + 1e-9) - lo1);
+
+                for (var kb = kb0; kb <= kb1; kb++)
                 {
-                    if (d != 0 && Math.Abs(d) < degrauMin) continue;
+                    var zb = gb + (lo1 + kb) * passo;
+                    var total = base0 + pontas[kb];
 
-                    var k = e + d;
-                    if (k < 0 || k >= n) continue;
+                    // Todo custo é positivo: passou do melhor, para.
+                    for (var m = 0; m < fracoes.Length && total < proximo[kb]; m++)
+                        total += w.Cost(za + (zb - za) * fracoes[m] - chaos[m], min, max);
 
-                    var total = custoFim[e] + Math.Abs(d) * passo * CustoDoDegrau;
-
-                    if (total < proximo[k])
+                    if (total < proximo[kb])
                     {
-                        proximo[k] = total;
-                        origemDoInicio[k] = e;
+                        proximo[kb] = total;
+                        origem[kb] = k;
                     }
                 }
             }
 
-            deFim.Add(origemDoInicio);
-            custoInicio = proximo;
+            if (Array.TrueForAll(proximo, double.IsPositiveInfinity)) return null;
+
+            origens.Add(origem);
+            custo = proximo;
         }
 
-        // O melhor fim da última mesa, e a volta.
-        var melhor = -1;
+        var melhor = 0;
+        for (var k = 1; k < custo.Length; k++)
+            if (custo[k] < custo[melhor]) melhor = k;
 
-        for (var e = 0; e < n; e++)
+        var indices = new int[mesas.Count + 1];
+        indices[mesas.Count] = melhor;
+
+        for (var i = mesas.Count - 1; i >= 0; i--) indices[i] = origens[i][indices[i + 1]];
+
+        return indices.Select((k, j) => faixas[j].Lo + k).ToArray();
+    }
+
+    /// <summary>As mesas do trecho com as PBs das juntas escolhidas.</summary>
+    private static SolvedRun Montar(List<ChainTable> mesas, SystemConfiguration config, List<double> pbs)
+    {
+        var resolvidas = new List<SolvedTable>(mesas.Count);
+
+        for (var i = 0; i < mesas.Count; i++)
         {
-            if (double.IsPositiveInfinity(custoFimDaUltima[e])) continue;
-            if (melhor < 0 || custoFimDaUltima[e] < custoFimDaUltima[melhor]) melhor = e;
-        }
-
-        if (melhor < 0)
-        {
-            // A opção marcada nivelada existe em toda chave alcançável e o
-            // degrau zero sempre alcança a próxima mesa: isto não acontece.
-            // Fica como rede, com mensagem, e não como silêncio.
-            throw new InvalidOperationException(
-                "A fileira não tem solução, o que não deveria acontecer: a opção marcada e o degrau zero sempre existem.");
-        }
-
-        var resolvidas = new SolvedTable[mesas.Count];
-        var fim = melhor;
-
-        for (var i = mesas.Count - 1; i >= 0; i--)
-        {
-            var inicio = deInicio[i][fim];
-            var z0 = (chaveMin + inicio) * passo;
-            var z1 = (chaveMin + fim) * passo;
             var mesa = mesas[i];
+            var za = mesa.FirstGround!.Value + pbs[i];
+            var zb = mesa.LastGround!.Value + pbs[i + 1];
+            var inclinacao = (zb - za) / (mesa.LastStation - mesa.FirstStation);
 
-            var viavel = mesa.Viable.IsViable(z0, z1);
-            var estouros = mesa.Viable.Problem is null ? mesa.Viable.Violations(z0, z1) : mesa.Viable.ModuleCount;
+            var z0 = za - inclinacao * mesa.FirstStation;
+            var z1 = za + inclinacao * (mesa.Length - mesa.FirstStation);
 
-            resolvidas[i] = new SolvedTable(
-                mesa.Label, z0, z1, estouros, !viavel,
-                viavel ? null : mesa.Viable.Problem ?? Motivo(mesa.Viable, z0, z1, estouros));
-
-            if (i > 0) fim = deFim[i - 1][inicio];
+            resolvidas.Add(Relatar(mesa, z0, z1, config));
         }
 
-        // A marcada é posta pela análise de pesos (27/09/2026), e não na
-        // cota que a programação escolheu para ela servir de escada entre as
-        // vizinhas. Renan: "enfiou a ponta na terra sendo que poderia ter
-        // levantado" — a escada era um de cinco giros na cota da junta, sem
-        // olhar quanto enterrava. Agora: acima da faixa é barato, abaixo é
-        // caro, enterrado é muito caro, e o degrau até a vizinha só pesa no
-        // que passa do máximo (a mesa num buraco fica no próprio chão, e não
-        // "na altura das nuvens", 26/09/2026). As vizinhas não mudam: a
-        // viabilidade delas não depende da marcada, e o degrau até uma mesa
-        // que não cabe não é degrau de fileira. Só as vizinhas não marcadas
-        // servem de âncora: a cota de outra marcada é chute da programação.
-        if (assentarMarcadas)
+        return new SolvedRun(resolvidas, pbs);
+    }
+
+    /// <summary>A mesa resolvida com estas cotas: quantos módulos fora da faixa, e se isso passa do lombo.</summary>
+    private static SolvedTable Relatar(ChainTable mesa, double z0, double z1, SystemConfiguration config)
+    {
+        var enterrados = 0;
+        var abaixo = 0;
+        var acima = 0;
+        var maisFundo = 0.0;
+        var maisAlto = 0.0;
+
+        foreach (var m in mesa.Modules)
         {
-            for (var i = 0; i < resolvidas.Length; i++)
+            var c = z0 + (z1 - z0) * m.Station / mesa.Length - m.Ground!.Value;
+
+            if (c > config.MaxLowEdge + 1e-9)
             {
-                var r = resolvidas[i];
-                if (!r.Marked) continue;
+                acima++;
+                maisAlto = Math.Max(maisAlto, c - config.MaxLowEdge);
+            }
+            else if (c < config.MinLowEdge - 1e-9)
+            {
+                if (c < 0) enterrados++;
+                else abaixo++;
 
-                var viavel = mesas[i].Viable;
-                double? antes = i > 0 && !resolvidas[i - 1].Marked ? resolvidas[i - 1].EndElevation : null;
-                double? depois = i < resolvidas.Length - 1 && !resolvidas[i + 1].Marked ? resolvidas[i + 1].StartElevation : null;
-
-                // Sem terreno sob parte dos módulos, os pesos só veriam os que
-                // têm chão e a mesa poderia girar para qualquer lado sobre o
-                // resto: ela fica nivelada no ponto mais alto do que existe.
-                if (viavel.Problem is not null)
-                {
-                    if (viavel.HighestGroundOrNull() is not { } alto) continue;
-
-                    var ancora = Math.Round((alto + config.MinLowEdge) / passo) * passo;
-                    resolvidas[i] = r with { StartElevation = ancora, EndElevation = ancora, Violations = viavel.ModuleCount, Reason = viavel.Problem, Seated = true };
-                    continue;
-                }
-
-                if (viavel.Compromise(antes, depois) is not { } posicao) continue;
-
-                var (z0, z1) = posicao;
-                var estouros = viavel.Violations(z0, z1);
-                var cabe = viavel.IsViable(z0, z1);
-
-                bool Permitido(double? vizinha, double cota)
-                {
-                    if (vizinha is not { } v) return true;
-
-                    var d = Math.Abs(cota - v);
-
-                    return d < 1e-9 || (d >= config.MinStep - 1e-9 && d <= config.MaxStep + 1e-9);
-                }
-
-                // Coube no próprio terreno e os degraus até as vizinhas são
-                // permitidos: não é mesa marcada. A programação a marcou só
-                // porque a olhava como escada numa grade de giros.
-                if (cabe && Permitido(antes, z0) && Permitido(depois, z1))
-                {
-                    resolvidas[i] = r with { StartElevation = z0, EndElevation = z1, Violations = estouros, Marked = false, Reason = null, Seated = false };
-                    continue;
-                }
-
-                // Coube no próprio terreno: o que a marca é o degrau até a
-                // vizinha, e o motivo diz o desnível de verdade.
-                var desnivel = Math.Max(
-                    antes is { } a ? Math.Abs(z0 - a) : 0,
-                    depois is { } b ? Math.Abs(z1 - b) : 0);
-
-                var motivo = cabe
-                    ? $"assentada no próprio terreno: o degrau até a vizinha ({desnivel.ToString("0.##", Brasil)} m) não é permitido (de {config.MinStep.ToString("0.##", Brasil)} a {config.MaxStep.ToString("0.##", Brasil)} m, ou zero)"
-                    : Motivo(viavel, z0, z1, estouros);
-
-                resolvidas[i] = r with { StartElevation = z0, EndElevation = z1, Violations = estouros, Reason = motivo, Seated = true };
+                maisFundo = Math.Max(maisFundo, config.MinLowEdge - c);
             }
         }
 
-        return new SolvedRun(resolvidas);
+        var fora = enterrados + abaixo + acima;
+        var tolerancia = config.BumpToleranceFor(mesa.Modules.Count);
+        var marcada = fora > tolerancia;
+
+        string? motivo = null;
+
+        if (marcada)
+        {
+            var partes = new List<string>();
+
+            if (enterrados > 0) partes.Add($"{enterrados} enterrado(s)");
+            if (abaixo > 0) partes.Add($"{abaixo} abaixo da faixa");
+            if (enterrados + abaixo > 0) partes[^1] += $" (até {Cm(maisFundo)} cm abaixo da PB mínima)";
+            if (acima > 0) partes.Add($"{acima} acima da faixa (até {Cm(maisAlto)} cm)");
+
+            motivo = $"{fora} módulo(s) fora da faixa, e a tolerância é {tolerancia}: {string.Join(", ", partes)}";
+        }
+
+        return new SolvedTable(mesa.Label, z0, z1, fora, marcada, motivo);
     }
 
-    /// <summary>O primeiro e o último índice com custo finito; (1, 0) se não há nenhum.</summary>
-    private static (int Baixa, int Alta) Finitos(double[] custos)
-    {
-        var baixa = 0;
-        while (baixa < custos.Length && double.IsPositiveInfinity(custos[baixa])) baixa++;
-
-        var alta = custos.Length - 1;
-        while (alta >= 0 && double.IsPositiveInfinity(custos[alta])) alta--;
-
-        return (baixa, alta);
-    }
-
-    private static string Motivo(ViableElevations viavel, double z0, double z1, int estouros)
-    {
-        if (viavel.IsEmpty) return viavel.WhyItDoesNotFit() ?? "nenhuma cota da ponta baixa respeita a faixa nesta mesa";
-
-        if (viavel.Configuration.MaxLongitudinalSlope is { } limite && viavel.LongitudinalSlope(z0, z1) > limite)
-            return "a declividade longitudinal passa do limite";
-
-        return $"{estouros} módulo(s) fora da faixa, e a tolerância é {viavel.ToleratedModules}";
-    }
+    private static string Cm(double metros) => (metros * 100).ToString("0", Brasil);
 }

@@ -129,8 +129,8 @@ public static class RecalcularCommands
         var pilares = PillarTable.Distribute(perfil.Layout.Length, perfil.Frame.PillarSpanTarget, perfil.Frame.PillarCantilever);
         var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
 
-        // Uma varredura só: recalcular uma mesa troca as entidades DELA, e
-        // as das outras continuam válidas.
+        // Recalcular uma mesa troca as entidades DELA; a varredura é refeita
+        // depois de cada uma, porque as vizinhas são lidas dela (as pontas).
         IReadOnlyDictionary<Guid, TableParts> todas;
 
         using (var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction())
@@ -140,7 +140,17 @@ public static class RecalcularCommands
 
         foreach (var guid in mesas)
         {
-            if (RecalcularUma(editor, documento, terreno, guid, todas, perfil, geometria, settings)) feitas++;
+            if (!RecalcularUma(editor, documento, terreno, guid, todas, perfil, geometria, settings)) continue;
+
+            feitas++;
+
+            // A mesa recalculada trocou de entidades: a próxima lê a PB
+            // dela como vizinha, e precisa das novas.
+            if (mesas.Count > 1)
+            {
+                using var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction();
+                todas = LayoutScan.Tables(transacao, documento.Database);
+            }
         }
 
         editor.WriteMessage($"\nRECALCULAR {feitas} de {mesas.Count} mesa(s) recalculada(s) com a configuração atual.\n");
@@ -218,7 +228,42 @@ public static class RecalcularCommands
         }
         else
         {
-            fileira = RowPipeline.ProcessRow(new PlanRow(celula.Row, [celula]), geometria, perfil.TiltRadians, terreno.Mesh, settings);
+            // Regra sagrada 6: as pontas ficam presas na PB das vizinhas,
+            // que continuam onde estão. A corrente escolhe só o giro.
+            var (primeira, ultima) = PontasVizinhas.Ler(
+                documento.Database, terreno.Mesh, guid, celula, todas, geometria, perfil.TiltRadians, settings);
+
+            fileira = RowPipeline.ProcessRow(
+                new PlanRow(celula.Row, [celula]), geometria, perfil.TiltRadians, terreno.Mesh, settings,
+                firstTip: primeira?.Clearance, lastTip: ultima?.Clearance);
+
+            // O que o solver de fato usou: a ponta presa que a declividade
+            // não deixou ligar foi solta, e isso é dito.
+            var brasil = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+            var juntas = fileira.Solution.Runs.Count == 1 ? fileira.Solution.Runs[0].JointClearances : [];
+            var presas = new List<string>();
+            var soltas = new List<string>();
+
+            void Conferir(PontaPresa? ponta, int indice)
+            {
+                if (ponta is null) return;
+
+                var texto = $"{ponta.Label} (PB {ponta.Clearance.ToString("0.00", brasil)})";
+
+                if (juntas.Count == 2 && Math.Abs(juntas[indice] - ponta.Clearance) <= 0.015) presas.Add(texto);
+                else soltas.Add(texto);
+            }
+
+            Conferir(primeira, 0);
+            Conferir(ultima, 1);
+
+            if (presas.Count > 0)
+                editor.WriteMessage($"\n  {mesa.Identity.Label}: pontas presas nas vizinhas {string.Join(" e ", presas)}.\n");
+
+            if (soltas.Count > 0)
+                editor.WriteMessage(
+                    $"\n  ATENÇÃO: {mesa.Identity.Label} não conseguiu prender a ponta em {string.Join(" e ", soltas)}: "
+                    + "a declividade não deixa. A junta ficou aberta; use o Refazer da área.\n");
         }
 
         Apagar(documento, mesa);
