@@ -1913,6 +1913,95 @@ function Testar-Refazer {
 }
 
 <#
+    Apagar tudo (29/09/2026): a camada da area nasce branca antes do
+    NETLOAD, como nos desenhos antigos; area, alinhamento, uma fileira e um
+    grupo com todas as mesas; UFV_APAGAR_TUDO_AUTO. Le do desenho que so
+    ficaram a area e o alinhamento, que a marca do grupo sumiu, e que as
+    camadas ficaram laranja (ACI 30) e amarela (ACI 2).
+#>
+function Testar-ApagarTudo {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-apagar-tudo--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-apagar-tudo: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-apagar-tudo' `
+        -Script (Join-Path $PSScriptRoot 'ufv-apagar-tudo.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-apagar-tudo terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch '(?m)^APAGAR (\d+) mesa\(s\) apagada\(s\)') {
+        $problemas.Add("ufv-apagar-tudo: o comando nao apagou. Veja $($r.Saida)")
+        return $false
+    }
+
+    $apagadas = [int] $Matches[1]
+
+    if ($r.Texto -notmatch 'Grupo\(s\) sem mesa, apagado\(s\): Grupo do apagar') {
+        $problemas.Add("ufv-apagar-tudo: o grupo que ficou sem mesa nao foi apagado. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'UFV_APAGAR_LISP antes=(\d+) marcasAntes=(\d+) areas=(\d+) alinhamentos=(\d+) sobrou=(\d+) marcas=(\d+) corArea=(\d+) corAlinhamento=(\d+)') {
+        $problemas.Add("ufv-apagar-tudo: nao consegui ler o desenho em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $antes = [int] $Matches[1]; $marcasAntes = [int] $Matches[2]
+    $areas = [int] $Matches[3]; $alinhamentos = [int] $Matches[4]
+    $sobrou = [int] $Matches[5]; $marcas = [int] $Matches[6]
+    $corArea = [int] $Matches[7]; $corAlinhamento = [int] $Matches[8]
+
+    if ($apagadas -lt 1 -or $antes -lt 1 -or $marcasAntes -lt 1) {
+        $problemas.Add("ufv-apagar-tudo: nada havia para apagar ($antes pecas, $apagadas mesas, $marcasAntes marcas). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($sobrou -ne 0 -or $marcas -ne 0) {
+        $problemas.Add("ufv-apagar-tudo: sobraram $sobrou peca(s) e $marcas entidade(s) de marca de grupo. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($areas -ne 1 -or $alinhamentos -ne 1) {
+        $problemas.Add("ufv-apagar-tudo: a area e o alinhamento tinham que ficar ($areas area(s), $alinhamentos alinhamento(s)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($corArea -ne 30 -or $corAlinhamento -ne 2) {
+        $problemas.Add("ufv-apagar-tudo: cores das camadas $corArea (area, esperava 30) e $corAlinhamento (alinhamento, esperava 2). Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (apagar tudo: $apagadas mesa(s), $antes peca(s) e o grupo; area laranja e alinhamento amarelo ficaram)" -ForegroundColor DarkGray
+    return $true
+}
+
+<#
     Pontas a mao (27/09/2026): processa uma fileira e muda as pontas da F1.2
     (PB 0,55 no primeiro pilar e 1,10 no ultimo); depois trava a primeira e
     muda so a ultima para 0,70. A mesa continua a mesma (um contorno, mesmo
@@ -3024,6 +3113,10 @@ else {
     # Alturas: apagadas a mao e regeradas, sem orfao.
     $total++
     if (Testar-Alturas -Desenho $desenhos[0]) { $passaram++ }
+
+    # Apagar tudo: so a area e o alinhamento ficam; camadas com cor.
+    $total++
+    if (Testar-ApagarTudo -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

@@ -216,6 +216,12 @@ public static class PluginInfo
     /// <summary>Refaz todas as áreas com a configuração atual.</summary>
     public const string ComandoRegerar = "UFV_REGERAR";
 
+    /// <summary>Apaga tudo que o plugin desenhou dentro de uma área (a área e o alinhamento ficam).</summary>
+    public const string ComandoApagarTudo = "UFV_APAGAR_TUDO";
+
+    /// <summary>O mesmo na primeira área registrada, sem clique (nível 2).</summary>
+    public const string ComandoApagarTudoAutomatico = "UFV_APAGAR_TUDO_AUTO";
+
     /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).

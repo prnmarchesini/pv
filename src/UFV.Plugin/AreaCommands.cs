@@ -20,9 +20,6 @@ namespace UFV.Plugin;
 /// </summary>
 public static class AreaCommands
 {
-    /// <summary>Layer onde as áreas são desenhadas. Aparência, nunca identidade.</summary>
-    private const string LayerDaArea = PluginInfo.PrefixoDeDados + "_AREA";
-
     /// <summary>
     /// UFV_AREA: traça a área de implantação e a assenta no terreno.
     /// </summary>
@@ -271,24 +268,12 @@ public static class AreaCommands
     }
 
     /// <summary>
-    /// Garante a layer das áreas e devolve o nome dela.
+    /// Garante a layer das áreas, laranja, e devolve o nome dela.
     ///
     /// A layer é só aparência — serve para o usuário ligar e desligar o que
     /// vê. Quem diz que a polilinha é uma área nossa é o XData; trocar a layer
     /// não tira a identidade dela (02-arquitetura.md).
     /// </summary>
     private static string GarantirLayer(Transaction transacao, Database database)
-    {
-        var tabela = (LayerTable)transacao.GetObject(database.LayerTableId, OpenMode.ForRead);
-
-        if (tabela.Has(LayerDaArea)) return LayerDaArea;
-
-        tabela.UpgradeOpen();
-
-        var layer = new LayerTableRecord { Name = LayerDaArea };
-        tabela.Add(layer);
-        transacao.AddNewlyCreatedDBObject(layer, true);
-
-        return LayerDaArea;
-    }
+        => LayoutLayers.GarantirComCor(transacao, database, LayoutLayers.Area, LayoutLayers.CorDaArea);
 }

@@ -9,7 +9,7 @@ namespace UFV.Plugin;
 
 /// <summary>
 /// O menu de botão direito do plugin: sobre a polilinha da área, "Refazer
-/// as mesas desta área"; sobre qualquer peça de mesa (contorno, pilar,
+/// as mesas desta área" e "Apagar tudo"; sobre qualquer peça de mesa (contorno, pilar,
 /// módulo, face), "Recalcular esta mesa" e "Alturas das pontas desta mesa". O AutoCAD mostra o item pela
 /// classe da entidade selecionada; o comando confere se ela é nossa.
 ///
@@ -28,6 +28,7 @@ internal static class MenuDeContexto
 
         Registrar(typeof(Polyline3d),
             ("Refazer as mesas desta área", PluginInfo.ComandoRefazer),
+            ("Apagar tudo", PluginInfo.ComandoApagarTudo),
             ("Recalcular esta mesa", PluginInfo.ComandoRecalcular),
             ("Alturas das pontas desta mesa", PluginInfo.ComandoPontas));
 

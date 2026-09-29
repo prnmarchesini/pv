@@ -230,7 +230,7 @@ public static class GrupoCommands
     /// derruba o Core Console.
     /// </summary>
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-    private static void AtualizarPainel()
+    internal static void AtualizarPainel()
     {
         if (UfvExtension.TemInterface()) PainelDeGrupos.Atualizar();
     }
@@ -310,7 +310,7 @@ public static class GrupoCommands
     }
 
     /// <summary>Os cantos dos contornos das mesas do grupo (para a casca da marca).</summary>
-    private static List<Point3> CantosDasMesas(Document documento, TableGroup grupo)
+    internal static List<Point3> CantosDasMesas(Document documento, TableGroup grupo)
     {
         var cantos = new List<Point3>();
 

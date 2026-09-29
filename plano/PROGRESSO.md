@@ -106,6 +106,17 @@ Nivel 2   16/16    OK
 Acervo             OK
 ```
 
+### 29/09/2026: respostas do 6.4 e quinta rodada (cores, Apagar tudo)
+
+Respostas do Renan às três perguntas do 6.4: 1) PVsyst **8.1** (falta
+saber se é 8.1.5 ou mais, que é o que dá o PVC 2.0); 2) prefere **mandar o
+.PAN** (opção a: a biblioteca de módulos ganha o nome do PAN e o PVsyst
+busca o resto); 3) o DWG do Itatiba **tem sistema de coordenadas**
+atribuído. O 6.5 começa quando chegarem o PAN e a versão exata. O
+`.pvc2` do PVcase não foi respondido (ajuda, não bloqueia). Pedido da tela
+feito, `AGUARDANDO VALIDAÇÃO` (item 18 de "O que está travado no Renan";
+detalhes em "Quinta rodada", no fim).
+
 ### 27/09/2026: quarta rodada instalada (motor por pesos, pontas, Análises, grupo)
 
 Pedidos da tela de 27/09 feitos, `AGUARDANDO VALIDAÇÃO` (item 17 de "O
@@ -245,6 +256,16 @@ teste: a etapa 6 é onde passa a ter.
    pela paleta de propriedades: também suja ("movida ou editada"). Rodar
    `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
    nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
+18. **Testar a rodada de 29/09 (cores das camadas e Apagar tudo)**, ver
+   "Quinta rodada" no fim deste arquivo:
+   a) abra o desenho do Itatiba: a linha de comando diz "Camadas
+      MARCHENG_UFV_AREA (laranja) e MARCHENG_UFV_ALINHAMENTO (amarela)
+      acertadas", e a área fica laranja e o alinhamento amarelo. Área e
+      alinhamento novos já nascem nessas cores;
+   b) botão direito na área → **UFV** → "Apagar tudo": somem as mesas
+      (pilares, módulos, faces, cotas, avisos) de dentro dela; a área e o
+      alinhamento ficam. Grupo que perdeu todas as mesas some com a marca;
+      o que perdeu só algumas fica com as outras. U desfaz tudo.
 17. **Testar a rodada de 27/09 (motor por pesos, pontas, Análises, grupo)**,
    ver "Quarta rodada" no fim deste arquivo. O bundle Release (commit
    `d5163a6`) já está instalado desde 27/09 22:23; é só abrir o Civil 3D
@@ -3777,3 +3798,37 @@ Segundo revisor (pontas, Análises, grupos):
   Parâmetros.
 - O motor por pesos só reposiciona a MARCADA; as viáveis continuam pela
   programação dinâmica (todas dentro da faixa por definição).
+
+## Quinta rodada: cores das camadas e Apagar tudo (29/09/2026)
+
+Pedido do Renan: "Quero que a área da usina fique em uma layer com a cor
+laranja, veja um nome. O alinhamento quero outro alinhamento com cor
+amarela. Quero clicar com o botão direito na área da usina e ter a opção
+dentro do menu UFV, opção de 'apagar tudo'." `AGUARDANDO VALIDAÇÃO`.
+
+- **Nomes**: ficaram os que já existiam, `MARCHENG_UFV_AREA` e
+  `MARCHENG_UFV_ALINHAMENTO` (já eram camadas separadas, só sem cor), para
+  não mover entidade de desenho existente. Cores ACI: laranja 30, amarelo 2
+  (`LayoutLayers.GarantirComCor`).
+- **Desenhos antigos**: ao abrir um desenho com área ou alinhamento, a
+  camada que ainda está no branco (ACI 7, a cor com que o plugin criava)
+  passa para a cor nova; cor escolhida pelo usuário fica. Isso deixa o
+  desenho modificado uma vez ao abrir; salvo, não muda mais.
+- **`UFV_APAGAR_TUDO`** (botão direito na área → UFV → "Apagar tudo", ou
+  digitado, pedindo a área): apaga tudo que o plugin desenhou dentro da área
+  (o mesmo apagador do Refazer, com as notas órfãs de desenho antigo) e
+  **deixa a área e o alinhamento**. Decisão tomada sozinha, o Renan
+  confirma na tela: "tudo" é o que o plugin desenhou, não a área; se ele
+  quiser que a área e o alinhamento também saiam, é uma linha. Sem
+  pergunta de confirmação: U desfaz, como no Refazer.
+- As mesas apagadas não vão para o registro de removidas (não há o que
+  recontar); grupo que perde todas as mesas é apagado com a marca, grupo
+  que perde algumas fica com as outras e ganha marca nova.
+- O item aparece também no botão direito de um contorno de mesa (o
+  AutoCAD mostra por classe, e mesa e área são `Polyline3d`); ali ele
+  pergunta a área.
+- Nível 2: `ufv-apagar-tudo.scr` cria a camada da área branca antes do
+  NETLOAD (como num desenho antigo), traça área e alinhamento, processa uma
+  fileira, agrupa todas as mesas e roda `UFV_APAGAR_TUDO_AUTO`: sobram só a
+  área e o alinhamento, a marca do grupo some, camadas com ACI 30 e 2.
+

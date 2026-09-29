@@ -30,9 +30,6 @@ namespace UFV.Plugin;
 /// </summary>
 public static class AlignmentCommands
 {
-    /// <summary>Layer onde os alinhamentos são desenhados. Aparência, nunca identidade.</summary>
-    private const string LayerDoAlinhamento = PluginInfo.PrefixoDeDados + "_ALINHAMENTO";
-
     /// <summary>
     /// UFV_ALINHAMENTO: traça a linha de alinhamento e guarda de que lado
     /// ficam as mesas.
@@ -373,24 +370,12 @@ public static class AlignmentCommands
     }
 
     /// <summary>
-    /// Garante a layer dos alinhamentos e devolve o nome dela.
+    /// Garante a layer dos alinhamentos, amarela, e devolve o nome dela.
     ///
     /// A layer é só aparência: serve para ligar e desligar o que se vê. Quem
     /// diz que a linha é um alinhamento nosso é o XData; trocar a layer não
     /// tira a identidade dela (02-arquitetura.md).
     /// </summary>
     private static string GarantirLayer(Transaction transacao, Database database)
-    {
-        var tabela = (LayerTable)transacao.GetObject(database.LayerTableId, OpenMode.ForRead);
-
-        if (tabela.Has(LayerDoAlinhamento)) return LayerDoAlinhamento;
-
-        tabela.UpgradeOpen();
-
-        var layer = new LayerTableRecord { Name = LayerDoAlinhamento };
-        tabela.Add(layer);
-        transacao.AddNewlyCreatedDBObject(layer, true);
-
-        return LayerDoAlinhamento;
-    }
+        => LayoutLayers.GarantirComCor(transacao, database, LayoutLayers.Alinhamento, LayoutLayers.CorDoAlinhamento);
 }

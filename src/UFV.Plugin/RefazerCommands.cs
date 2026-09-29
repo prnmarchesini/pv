@@ -157,7 +157,7 @@ public static class RefazerCommands
     }
 
     /// <summary>A área que veio selecionada antes do comando (o botão direito sobre ela), ou null.</summary>
-    private static (IReadOnlyList<Point3> Vertices, string Nome)? AreaDaSelecao(Editor editor, Document documento)
+    internal static (IReadOnlyList<Point3> Vertices, string Nome)? AreaDaSelecao(Editor editor, Document documento)
     {
         var selecao = editor.SelectImplied();
         if (selecao.Status != PromptStatus.OK) return null;

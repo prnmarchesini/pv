@@ -203,6 +203,8 @@ internal static class ValidacaoAoAbrir
                 && !PluginDictionary.Contains(database, "REMOVIDAS") && !PluginDictionary.Contains(database, "TERRENO"))
                 return;
 
+            AcertarCores(documento);
+
             var validacao = ValidarCommands.Relatar(documento, "AO ABRIR");
 
             if (!validacao.IsClean)
@@ -211,6 +213,32 @@ internal static class ValidacaoAoAbrir
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao validar ao abrir o desenho.", erro);
+        }
+    }
+
+    /// <summary>
+    /// Desenho de antes de 29/09/2026: as camadas de área e de alinhamento
+    /// nasceram brancas. Passam a laranja e amarela uma vez; depois de
+    /// salvo, o desenho não muda mais ao abrir.
+    /// </summary>
+    private static void AcertarCores(Document documento)
+    {
+        try
+        {
+            using var trava = documento.LockDocument();
+            using var transacao = documento.Database.TransactionManager.StartTransaction();
+
+            var mudaram = LayoutLayers.AcertarCoresDaUsina(transacao, documento.Database);
+
+            transacao.Commit();
+
+            if (mudaram > 0)
+                documento.Editor.WriteMessage(
+                    $"\nUFV Camadas {LayoutLayers.Area} (laranja) e {LayoutLayers.Alinhamento} (amarela) acertadas.\n");
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao acertar as cores das camadas ao abrir.", erro);
         }
     }
 }
