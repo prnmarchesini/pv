@@ -30,6 +30,14 @@
 .PARAMETER Desinstalar
     Chama tools\instalar.ps1 -Desinstalar e sai.
 
+.PARAMETER ParaTodaAMaquina
+    Com -Instalar, instala em %PROGRAMFILES%\Autodesk\ApplicationPlugins,
+    onde o Civil 3D confia no plugin e para de avisar que a DLL nao e
+    assinada (pedido do Renan em 30/09/2026). Pede elevacao sozinho: o
+    Windows mostra o "Deseja permitir...?" na tela. Sem este parametro, se
+    a instalacao da maquina ja existe, e para la que vai, de qualquer jeito:
+    duas copias fariam o AutoCAD carregar a que achasse primeiro.
+
 .EXAMPLE
     .\tools\publicar-bundle.ps1 -Instalar
     .\tools\publicar-bundle.ps1 -Desinstalar
@@ -40,7 +48,8 @@ param(
     [string] $Configuracao = 'Debug',
 
     [switch] $Instalar,
-    [switch] $Desinstalar
+    [switch] $Desinstalar,
+    [switch] $ParaTodaAMaquina
 )
 
 $ErrorActionPreference = 'Stop'
@@ -126,5 +135,43 @@ if (-not $Instalar) {
     exit 0
 }
 
-& (Join-Path $PSScriptRoot 'instalar.ps1') -Bundle $bundle
-exit $LASTEXITCODE
+$instalador = Join-Path $PSScriptRoot 'instalar.ps1'
+$daMaquina = Join-Path $env:ProgramFiles 'Autodesk\ApplicationPlugins\UFV.bundle'
+
+if (-not $ParaTodaAMaquina -and (Test-Path $daMaquina)) {
+    Write-Host "O plugin ja esta instalado para a maquina ($daMaquina): a versao nova vai para la." -ForegroundColor DarkGray
+    $ParaTodaAMaquina = $true
+}
+
+if (-not $ParaTodaAMaquina) {
+    & $instalador -Bundle $bundle
+    exit $LASTEXITCODE
+}
+
+$eu = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
+
+if ($eu.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    & $instalador -Bundle $bundle -ParaTodaAMaquina
+    exit $LASTEXITCODE
+}
+
+# Sem elevacao: o instalador roda elevado numa janela propria, e a saida
+# dele vai para um arquivo, que e mostrado aqui depois.
+$registro = Join-Path $env:TEMP 'ufv-instalar-maquina.txt'
+Remove-Item $registro -ErrorAction SilentlyContinue
+
+Write-Host 'Pedindo elevacao ao Windows para instalar em Arquivos de Programas (responda Sim na tela)...' -ForegroundColor Yellow
+
+$comando = "& '$instalador' -Bundle '$bundle' -ParaTodaAMaquina *> '$registro'; exit `$LASTEXITCODE"
+
+try {
+    $processo = Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden `
+        -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $comando
+}
+catch {
+    Write-Host 'A elevacao foi recusada: nada foi instalado.' -ForegroundColor Red
+    exit 1
+}
+
+if (Test-Path $registro) { Get-Content $registro | Write-Host }
+exit $processo.ExitCode
