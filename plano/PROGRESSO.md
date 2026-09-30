@@ -264,6 +264,13 @@ teste: a etapa 6 é onde passa a ter.
    pela paleta de propriedades: também suja ("movida ou editada"). Rodar
    `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
    nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
+20. **Testar a rodada de 29/09 à noite (botão direito da mesa)**, ver
+   "Sétima rodada" no fim deste arquivo: clique numa mesa com o botão
+   direito → **UFV** → "Mudar inclinação (alturas das pontas)"; Enter e
+   digite as duas PBs (ou clique perto de uma ponta e digite só ela); a
+   mesa se redesenha com as pontas pedidas, pilares e PBs recalculados. O
+   "Recalcular esta mesa" está no mesmo menu. Numa linha qualquer, o
+   botão direito não mostra o UFV.
 19. **Testar o motor novo (29/09, a corrente)**, ver "Sexta rodada" no fim
    deste arquivo. No desenho do Itatiba, seção Análises → **Regerar**:
    a) em toda fileira, a PB do último pilar de uma mesa é a PB do primeiro
@@ -3954,4 +3961,51 @@ análises tem que voltar igual. Placar: tudo verde, nível 2 26/26.
 - A "junta" em cota (e não em PB) difere até 0,49 m no Itatiba: é a
   diferença do terreno entre os dois pilares das pontas vizinhas (vão de
   0,5 m mais os dois balanços). A regra é da PB, como o Renan lê na tela.
+
+## Sétima rodada: botão direito da mesa e perfil da mesa desenhada (29/09/2026, noite)
+
+Renan: "quero clicar na mesa com o botão direito e ter o menu UFV, nesse
+menu quero ter a opção de mudar a inclinação da mesa travando em uma das
+pontas" — e, com print: "negativo, botão direito da mesa não abre nada".
+`AGUARDANDO VALIDAÇÃO` (item 20 de "O que está travado no Renan").
+
+- **O botão direito da mesa estava morto desde 27/09.** Com a mesa em
+  grupo, um clique seleciona contorno, pilares, módulos e faces; o menu
+  era registrado por classe (Polyline3d, BlockReference, Face) e, com
+  classes misturadas, o AutoCAD não mostra nenhum. Nenhum teste pegou (o
+  Core Console não tem menu). Agora é um menu só, registrado para
+  `Entity`, que ao abrir olha a seleção (`Popup`): peça de mesa mostra
+  "Mudar inclinação (alturas das pontas)" e "Recalcular esta mesa"; área
+  mostra "Refazer as mesas desta área" e "Apagar tudo"; seleção sem nada
+  nosso não mostra o submenu UFV.
+- **Mudar inclinação** é o `UFV_PONTAS` de 27/09 (renomeado no menu):
+  clique perto de uma ponta e digite a PB dela (a outra fica travada), ou
+  **Enter** (novo) / D para digitar as duas; A devolve ao motor. As pontas
+  são nomeadas pelo rumo (leste/oeste), não por direita/esquerda, porque a
+  vista do Renan está girada (textos de cabeça para baixo no print).
+- **Perfil da mesa desenhada.** Às 22:54 o Renan salvou "Mesa 14 módulos";
+  o "perfil atual" é o primeiro da biblioteca em ordem alfabética, e o
+  Recalcular, o Pontas e o Recalcular do grupo passaram a recusar as mesas
+  de 28 ("Trocou de mesa?"). Achado pelo nível 2 (`ufv-grupos`), que lê a
+  biblioteca do Renan. Agora quem refaz mesa já desenhada escolhe o perfil
+  pelo comprimento da borda baixa do contorno
+  (`FileiraCommands.PerfilDaMesaDesenhada`: biblioteca e mesa de exemplo,
+  5 cm); o Pintar separa as mesas por tamanho e desenha cada grupo com o
+  seu. Mesa nova (Usina, Fileira, Refazer, Regerar) continua com o
+  primeiro da biblioteca. Placar: tudo verde, nível 2 26/26.
+- **O morro do print** (F33.4, F34.4, F35.3, F35.4): na bancada, o terreno
+  sob a borda baixa sobe e desce de 94 a 149 cm DENTRO de uma mesa, e a
+  faixa aceita 50 cm. Subir a mesa até o topo do morro ficar em 0,30 deixa
+  as pontas a ~1,8 m (F34.4): é a ponta alta que a regra 6 proíbe. O Renan
+  vai testar à mão com o Mudar inclinação e dizer que PB de ponta aceita
+  nesse caso.
+
+### Observações que ficam
+
+- Os testes de nível 2 leem a biblioteca de perfis do Renan (LOCALAPPDATA,
+  MarchEng/UFV/perfis): o placar pode mudar com o que ele salva. Isolar
+  numa pasta de teste é dívida.
+- O "perfil atual" para mesa nova é o primeiro em ordem alfabética, não o
+  escolhido na janela. Se o Renan esperava o de 14 módulos no Regerar, é
+  outro defeito.
 
