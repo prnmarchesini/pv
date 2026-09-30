@@ -146,6 +146,11 @@ public static class AnalisesCommands
         // (recursiva) não é o que se quer para achar a mesa de volta.
         var guids = new Dictionary<ProcessedTable, Guid>(ReferenceEqualityComparer.Instance);
         var pontas = new Dictionary<ProcessedTable, (double, double)>(ReferenceEqualityComparer.Instance);
+
+        // O perfil de cada mesa pelo tamanho desenhado (29/09/2026): numa
+        // usina com mesas de dois tamanhos cada uma se repinta com o seu.
+        var perfilDa = new Dictionary<ProcessedTable, TableProfile>(ReferenceEqualityComparer.Instance);
+        var geometrias = new Dictionary<TableProfile, TableGeometry>(ReferenceEqualityComparer.Instance) { [perfil] = geometria };
         var aApagar = new List<TableParts>();
         var sujas = 0;
         var puladas = new List<string>();
@@ -175,12 +180,19 @@ public static class AnalisesCommands
                 }
 
                 var cantos = FileiraCommands.Vertices(polilinha, transacao);
+                var perfilDela = FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil);
+
+                if (!geometrias.TryGetValue(perfilDela, out var geometriaDela))
+                {
+                    geometriaDela = FileiraCommands.GeometriaDe(perfilDela);
+                    geometrias[perfilDela] = geometriaDela;
+                }
 
                 PlacedTable celula;
 
                 try
                 {
-                    celula = TableCells.FromCorners(cantos, identidade.Label, geometria.Length, geometria.Depth * Math.Cos(perfil.TiltRadians));
+                    celula = TableCells.FromCorners(cantos, identidade.Label, geometriaDela.Length, geometriaDela.Depth * Math.Cos(perfilDela.TiltRadians));
                 }
                 catch (ArgumentException)
                 {
@@ -189,10 +201,11 @@ public static class AnalisesCommands
                 }
 
                 var linha = RowPipeline.ProcessFixed(
-                    celula, geometria, perfil.TiltRadians, terreno.Mesh, settings, cantos[0].Z, cantos[1].Z, identidade.Reason, identidade.Marked);
+                    celula, geometriaDela, perfilDela.TiltRadians, terreno.Mesh, settings, cantos[0].Z, cantos[1].Z, identidade.Reason, identidade.Marked);
 
                 var processada = linha.Tables[0];
                 processadas.Add(processada);
+                perfilDa[processada] = perfilDela;
                 guids[processada] = guid;
                 if (identidade.HasManualEnds) pontas[processada] = (identidade.ManualFirstLowEdge!.Value, identidade.ManualLastLowEdge!.Value);
                 aApagar.Add(mesa);
@@ -207,22 +220,34 @@ public static class AnalisesCommands
 
         RecalcularCommands.Apagar(documento, aApagar);
 
-        var todas = new ProcessedRow(
-            new PlanRow(0, processadas.Select(p => p.Cell).ToList()),
-            new RowSolution([new SolvedRun(processadas.Select(p => p.Solved).ToList(), [])]),
-            processadas,
-            []);
+        var pintadas = 0;
+        var marcadas = 0;
 
-        var desenho = LayoutDrawer.Draw(
-            documento.Database, todas, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses,
-            p => guids[p], p => pontas.TryGetValue(p, out var v) ? v : null);
+        foreach (var grupo in processadas.GroupBy(p => perfilDa[p], ReferenceEqualityComparer.Instance))
+        {
+            var doGrupo = grupo.ToList();
+            var perfilDoGrupo = (TableProfile)grupo.Key!;
+
+            var todas = new ProcessedRow(
+                new PlanRow(0, doGrupo.Select(p => p.Cell).ToList()),
+                new RowSolution([new SolvedRun(doGrupo.Select(p => p.Solved).ToList(), [])]),
+                doGrupo,
+                []);
+
+            var desenho = LayoutDrawer.Draw(
+                documento.Database, todas, geometrias[perfilDoGrupo], perfilDoGrupo.Layout.Module, perfilDoGrupo.TiltRadians, settings.Analyses,
+                p => guids[p], p => pontas.TryGetValue(p, out var v) ? v : null);
+
+            pintadas += desenho.Painted;
+            marcadas += desenho.Marked;
+        }
 
         var abaixo = processadas.Sum(p => p.Report.Modules.Count(m => m.Verdict.Outcome == AnalysisOutcome.Below));
         var acima = processadas.Sum(p => p.Report.Modules.Count(m => m.Verdict.Outcome == AnalysisOutcome.Above));
 
         editor.WriteMessage(
             $"\nPINTAR {processadas.Count} mesa(s) repintada(s) com as regras gravadas: {abaixo} módulo(s) com a ponta baixa abaixo "
-            + $"da faixa, {acima} acima; {desenho.Painted} peça(s) pintada(s); {desenho.Marked} mesa(s) que não cabem.\n");
+            + $"da faixa, {acima} acima; {pintadas} peça(s) pintada(s); {marcadas} mesa(s) que não cabem.\n");
 
         if (sujas > 0) editor.WriteMessage($"  {sujas} mesa(s) suja(s) ficaram como estão: use Recalcular sujas.\n");
         if (puladas.Count > 0) editor.WriteMessage($"  Não repintei {string.Join(", ", puladas)}: sem contorno, contorno repetido ou de outra mesa. Use o Refazer da área.\n");

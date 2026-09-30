@@ -63,7 +63,7 @@ public static class PontasCommands
                 $"\n{contexto.Mesa.Identity!.Label}: PB {Medida(primeiraHoje)} m na ponta {nomePrimeira}, {Medida(ultimaHoje)} m na ponta {nomeUltima}"
                 + (contexto.Mesa.Identity.HasManualEnds ? " (escolhidas à mão)" : string.Empty) + ".\n");
 
-            var opcoes = new PromptPointOptions("\nClique perto da ponta que vai mudar (a outra fica travada) [Duas/Automatico]: ")
+            var opcoes = new PromptPointOptions("\nClique perto da ponta que vai mudar (a outra fica travada), ou Enter para as duas [Duas/Automatico]: ")
             {
                 AllowNone = true,
             };
@@ -81,7 +81,9 @@ public static class PontasCommands
                 return;
             }
 
-            if (resposta.Status == PromptStatus.Keyword && resposta.StringResult == "Duas")
+            // Enter pede as duas (29/09/2026, Renan: "lado direito altura X,
+            // lado esquerdo altura Y").
+            if (resposta.Status == PromptStatus.None || (resposta.Status == PromptStatus.Keyword && resposta.StringResult == "Duas"))
             {
                 primeira = PerguntarAltura(editor, nomePrimeira, primeiraHoje);
                 if (double.IsNaN(primeira ?? 0)) return;
@@ -224,6 +226,15 @@ public static class PontasCommands
             }
 
             cantos = FileiraCommands.Vertices((Polyline3d)transacao.GetObject(contorno, OpenMode.ForRead), transacao).ToList();
+        }
+
+        // O perfil do tamanho da mesa desenhada, não o "atual" da biblioteca.
+        var doDesenho = FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil);
+
+        if (!ReferenceEquals(doDesenho, perfil))
+        {
+            perfil = doDesenho;
+            geometria = FileiraCommands.GeometriaDe(perfil);
         }
 
         PlacedTable celula;

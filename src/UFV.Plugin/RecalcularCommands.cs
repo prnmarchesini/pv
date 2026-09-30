@@ -183,6 +183,16 @@ public static class RecalcularCommands
             cantos = FileiraCommands.Vertices(polilinha, transacao).ToList();
         }
 
+        // O perfil do tamanho da mesa desenhada, não o "atual" da biblioteca:
+        // numa usina com mesas de dois tamanhos, cada uma se refaz com o seu.
+        var doDesenho = FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil);
+
+        if (!ReferenceEquals(doDesenho, perfil))
+        {
+            perfil = doDesenho;
+            geometria = FileiraCommands.GeometriaDe(perfil);
+        }
+
         PlacedTable celula;
 
         try

@@ -261,6 +261,56 @@ public static class FileiraCommands
         return salvo ?? MesaCommands.MesaDeExemplo();
     }
 
+    /// <summary>
+    /// O perfil de uma mesa JÁ DESENHADA, pelo tamanho dela (29/09/2026): o
+    /// comprimento da borda baixa do contorno (em 3D, que não muda com o
+    /// giro) comparado com o de cada perfil da biblioteca e o da mesa de
+    /// exemplo. O "perfil atual" (o primeiro da biblioteca) serve para
+    /// desenhar mesa nova; para refazer uma que está no desenho, ele pode
+    /// ser de outro tamanho — o Renan salvou uma mesa de 14 módulos e o
+    /// Recalcular das de 28 passou a recusar ("Trocou de mesa?").
+    /// Sem nenhum do mesmo tamanho (5 cm), devolve o padrão.
+    /// </summary>
+    internal static TableProfile PerfilDaMesaDesenhada(IReadOnlyList<Point3> cantos, TableProfile padrao)
+    {
+        if (cantos.Count < 2) return padrao;
+
+        var dx = cantos[1].X - cantos[0].X;
+        var dy = cantos[1].Y - cantos[0].Y;
+        var dz = cantos[1].Z - cantos[0].Z;
+        var comprimento = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+
+        bool Serve(TableProfile p) => Math.Abs(p.Layout.Length - comprimento) <= 0.05;
+
+        if (Serve(padrao)) return padrao;
+
+        try
+        {
+            var perfis = new TableProfileStore(MesaCommands.PastaDosPerfis);
+
+            foreach (var nome in perfis.List())
+            {
+                var perfil = perfis.Load(nome);
+                if (Serve(perfil)) return perfil;
+            }
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui procurar o perfil da mesa desenhada.", erro);
+        }
+
+        var exemplo = MesaCommands.MesaDeExemplo();
+
+        return Serve(exemplo) ? exemplo : padrao;
+    }
+
+    /// <summary>A geometria local de um perfil de mesa.</summary>
+    internal static TableGeometry GeometriaDe(TableProfile perfil) =>
+        TableGeometry.Local(
+            perfil.Layout,
+            PillarTable.Distribute(perfil.Layout.Length, perfil.Frame.PillarSpanTarget, perfil.Frame.PillarCantilever),
+            perfil.Frame);
+
     internal static (IReadOnlyList<Point3> Vertices, string Nome)? EscolherArea(Editor editor, Document documento)
     {
         var areas = AreaStore.Load(documento.Database);
