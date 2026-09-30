@@ -4118,4 +4118,14 @@ unidade". `AGUARDANDO VALIDAÇÃO` (item 22).
   chamado do terminal do Claude Code a elevação volta recusada; o Renan
   roda ele mesmo com `!`. Depois da primeira vez, as instalações seguem
   para lá sozinhas.
+- **Certificado de assinatura de código** (pesquisado em 30/09/2026): Sectigo
+  OV por revendedor ~US$ 220/ano (o indicado), DigiCert OV ~US$ 440, EV de
+  US$ 280 a 640; validade máxima de 1 ano desde 15/02/2026; vem em token
+  USB ou nuvem da certificadora. Azure Artifact Signing (US$ 9,99/mês) só
+  atende EUA, Canadá, UE e Reino Unido. Decisão: comprar só quando o plugin
+  for para outras pessoas; para uso do Renan, instalar em Arquivos de
+  Programas.
+- **Última instalação:** 30/09 00:19, na pasta do usuário, com a seta da
+  declividade no plano da mesa (`74a1f1a`). A instalação em Arquivos de
+  Programas ainda não foi feita.
 
