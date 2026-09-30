@@ -206,6 +206,12 @@ internal static class IconesDaRibbon
         Traco("M9,5 V27 M5,5 H13 M5,27 H13", Neutro, 2.0),
         Traco("M17,12 H27 M17,17 H24 M17,22 H27", Azul, 2.4));
 
+    /// <summary>Uma mesa inclinada com uma seta descendo ao longo dela: a declividade.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Declividade() => Montar(
+        Traco("M4,14 L28,24", Azul, 3.0),
+        Traco("M6,6 L22,12.7 M22,12.7 L16.5,13.3 M22,12.7 L18.3,8.4", Neutro, 2.2));
+
     /// <summary>As três cotas com uma seta circular: regerar as alturas.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static ImageSource RegerarAlturas() => Montar(

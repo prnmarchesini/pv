@@ -41,6 +41,9 @@ internal static class LayoutLayers
     /// <summary>A marca dos grupos: contorno, hachura e número (7.9).</summary>
     internal const string Grupo = Prefixo + "GRUPO";
 
+    /// <summary>A seta e o valor da declividade de cada mesa (análise de 29/09/2026).</summary>
+    internal const string SetaDeclividade = Prefixo + "SETA_DECLIVIDADE";
+
     /// <summary>As áreas de implantação: laranja (pedido do Renan, 29/09/2026).</summary>
     internal const string Area = Prefixo + "AREA";
 

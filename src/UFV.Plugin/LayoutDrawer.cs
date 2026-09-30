@@ -66,6 +66,9 @@ internal static class LayoutDrawer
         ArgumentNullException.ThrowIfNull(fileira);
         ArgumentNullException.ThrowIfNull(geometria);
 
+        // A análise de declividade (seta e valor), se está ligada no desenho.
+        var seta = SetaDeDeclividade.Ler(database);
+
         using var transacao = database.TransactionManager.StartTransaction();
 
         var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForRead);
@@ -77,6 +80,7 @@ internal static class LayoutDrawer
         var camadaFace = LayoutLayers.Garantir(transacao, database, LayoutLayers.Face, new RgbColor(60, 120, 220));
         var camadaAlturas = LayoutLayers.Garantir(transacao, database, LayoutLayers.Alturas, new RgbColor(200, 200, 200), desligada: true);
         var camadaMarcada = LayoutLayers.Garantir(transacao, database, LayoutLayers.Marcada, RgbColor.Red);
+        var camadaSeta = seta.Ligada ? SetaDeDeclividade.Camada(transacao, database) : null;
 
         // As camadas das análises, todas, mesmo as que nada vai pintar hoje:
         // é nelas que o usuário liga e desliga o que vê.
@@ -168,7 +172,9 @@ internal static class LayoutDrawer
                 // (26/09/2026): um risco vermelho na ponta baixa com a altura
                 // livre dela, outro na ponta alta com a dela, e no centro (o
                 // pilar) a altura livre do pilar, P3. Pilar com problema leva
-                // só o motivo, no centro.
+                // só o P3, que diz o problema pelo número (negativo: enterrado;
+                // "s/ terreno"). O motivo por extenso estourava a tela (Renan,
+                // 29/09/2026: "para de colocar esses textos").
                 var pontaBaixa = colocacao.Apply(new Point3(pilar.Station, 0, 0));
                 var pontaAlta = colocacao.Apply(new Point3(pilar.Station, geometria.Depth, 0));
 
@@ -180,7 +186,7 @@ internal static class LayoutDrawer
                 }
                 else
                 {
-                    AvisoDePilar(transacao, espaco, camadaAlturas, identidade.Id, pilar.Problem, new Point3(pilar.X, pilar.Y, pilar.TopZ), rumo);
+                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.FreeHeight, "P3", new Point3(pilar.X, pilar.Y, pilar.TopZ), direcaoDaFileira, rumo);
                 }
             }
 
@@ -231,7 +237,9 @@ internal static class LayoutDrawer
             pecas.Add(espaco.AppendEntity(contorno));
             transacao.AddNewlyCreatedDBObject(contorno, true);
 
-            foreach (var canto in CantosDaMesa(geometria).Select(colocacao.Apply))
+            var cantosDoContorno = CantosDaMesa(geometria).Select(colocacao.Apply).ToList();
+
+            foreach (var canto in cantosDoContorno)
             {
                 var vertice = new PolylineVertex3d(Ponto(canto));
                 contorno.AppendVertex(vertice);
@@ -258,32 +266,16 @@ internal static class LayoutDrawer
 
             LayoutXData.SaveTable(transacao, contorno, identidade);
 
-            // 4. O aviso da mesa que não cabe, no meio dela, na camada de marcadas.
-            if (naoCabe)
-            {
-                // O motivo da marca só vale quando a mesa está marcada: numa
-                // mesa não marcada o Reason é nota (pontas à mão), e o que a
-                // faz não caber é o pilar com problema.
-                var problemaDoPilar = mesa.Pillars.Pillars.FirstOrDefault(p => p.Problem is not null)?.Problem;
-                var motivo = (mesa.Solved.Marked ? mesa.Solved.Reason ?? problemaDoPilar : problemaDoPilar ?? mesa.Solved.Reason)
-                    ?? "sem solução";
-                var centro = colocacao.Apply(new Point3(geometria.Length / 2, geometria.Depth / 2, 0));
-                var aviso = new MText
-                {
-                    Location = new Point3d(centro.X, centro.Y, centro.Z + AlturaDoTexto),
-                    TextHeight = AlturaDoTexto * 1.5,
-                    Layer = camadaMarcada,
-                    Color = CorDeNaoCabe,
-                    Attachment = AttachmentPoint.MiddleCenter,
-                    Rotation = rumo,
-                    Contents = $"{mesa.Label} NÃO CABE NO TERRENO\\P{motivo}",
-                };
+            // 4. A mesa que não cabe: sem texto no desenho (Renan, 29/09/2026:
+            //    "para de colocar esses textos, estão estourando muito"). Ela
+            //    já está magenta inteira; o motivo fica no XData, na linha de
+            //    comando e no Estado.
+            if (naoCabe) marcadas++;
 
-                pecas.Add(espaco.AppendEntity(aviso));
-                transacao.AddNewlyCreatedDBObject(aviso, true);
-                LayoutXData.SaveNote(transacao, aviso, new NoteIdentity(Guid.NewGuid(), identidade.Id));
-                marcadas++;
-            }
+            // 5. A seta da declividade, se a análise está ligada. Fora do
+            //    grupo, como as cotas.
+            if (camadaSeta is not null)
+                SetaDeDeclividade.Desenhar(transacao, espaco, camadaSeta, identidade.Id, cantosDoContorno, seta.Unidade);
 
             LayoutGroups.Criar(transacao, database, pecas);
         }
@@ -323,24 +315,6 @@ internal static class LayoutDrawer
         else if (rumo <= -Math.PI / 2 + 1e-9) rumo += Math.PI;
 
         return rumo;
-    }
-
-    /// <summary>O aviso de pilar com problema, no topo dele, na camada das alturas.</summary>
-    internal static void AvisoDePilar(Transaction transacao, BlockTableRecord espaco, string camada, Guid mesa, string problema, Point3 topo, double rumo)
-    {
-        var aviso = new MText
-        {
-            Location = new Point3d(topo.X, topo.Y, topo.Z + AlturaDoTexto),
-            TextHeight = AlturaDoTexto,
-            Layer = camada,
-            Attachment = AttachmentPoint.MiddleCenter,
-            Rotation = rumo,
-            Contents = $"PILAR: {problema}",
-        };
-
-        espaco.AppendEntity(aviso);
-        transacao.AddNewlyCreatedDBObject(aviso, true);
-        LayoutXData.SaveNote(transacao, aviso, new NoteIdentity(Guid.NewGuid(), mesa));
     }
 
     /// <summary>

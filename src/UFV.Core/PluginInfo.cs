@@ -216,6 +216,9 @@ public static class PluginInfo
     /// <summary>Refaz todas as áreas com a configuração atual.</summary>
     public const string ComandoRegerar = "UFV_REGERAR";
 
+    /// <summary>A análise de declividade: seta e valor em cada mesa, em porcentagem ou graus, ou desligada.</summary>
+    public const string ComandoDeclividade = "UFV_DECLIVIDADE";
+
     /// <summary>Apaga tudo que o plugin desenhou dentro de uma área (a área e o alinhamento ficam).</summary>
     public const string ComandoApagarTudo = "UFV_APAGAR_TUDO";
 

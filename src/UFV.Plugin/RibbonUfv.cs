@@ -330,8 +330,8 @@ internal static class RibbonUfv
 
     /// <summary>
     /// Seção Análises: o que se liga, desliga e regera sobre as mesas
-    /// desenhadas (pedido do Renan em 26/09/2026). Hoje, as alturas dos
-    /// pilares.
+    /// desenhadas (pedido do Renan em 26/09/2026): as alturas dos pilares e
+    /// a declividade das mesas (29/09/2026).
     /// </summary>
     private static RibbonPanel MontarPainelAnalises()
     {
@@ -360,6 +360,12 @@ internal static class RibbonUfv
             IconesDaRibbon.Alturas(),
             PluginInfo.ComandoAlturas,
             "Mostra ou esconde as alturas dos pilares (PB na ponta baixa, PA na ponta alta, P3 no pilar)."));
+
+        origem.Items.Add(BotaoGrande(
+            "Declividade",
+            IconesDaRibbon.Declividade(),
+            PluginInfo.ComandoDeclividade,
+            "Uma seta em cada mesa apontando para onde ela desce, com a declividade ao lado. Pergunta a unidade (porcentagem ou graus) ou desliga."));
 
         origem.Items.Add(BotaoPequeno(
             "Regerar alturas",

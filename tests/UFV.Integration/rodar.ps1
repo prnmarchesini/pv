@@ -1298,9 +1298,11 @@ function Testar-Fileira {
         return $false
     }
 
-    $marcadasRelatadas = ([regex]::Matches($r.Texto, 'MARCADA \(')).Count
-    if ($marcadasTexto -ne $marcadasRelatadas) {
-        $problemas.Add("ufv-fileira: $marcadasTexto aviso(s) de marcada para $marcadasRelatadas mesa(s) marcada(s). Veja $($r.Saida)")
+    # Desde 29/09/2026 a mesa que nao cabe nao leva texto no desenho (o
+    # Renan: "para de colocar esses textos, estao estourando muito"): ela e
+    # magenta inteira, e o motivo fica no XData e na linha de comando.
+    if ($marcadasTexto -ne 0) {
+        $problemas.Add("ufv-fileira: $marcadasTexto texto(s) na camada de marcadas; a mesa que nao cabe nao leva mais aviso escrito. Veja $($r.Saida)")
         return $false
     }
 
@@ -1998,6 +2000,89 @@ function Testar-ApagarTudo {
     }
 
     Write-Host "  (apagar tudo: $apagadas mesa(s), $antes peca(s) e o grupo; area laranja e alinhamento amarelo ficaram)" -ForegroundColor DarkGray
+    return $true
+}
+
+<#
+    Declividade (29/09/2026): uma fileira, a analise ligada em graus e em
+    porcentagem, uma mesa recalculada e a analise desligada. Um texto por
+    mesa, com o valor que o contorno da, nas duas unidades; nada em dobro;
+    a mesa recalculada nasce com a seta; nada fora da cota das mesas;
+    desligar apaga tudo.
+#>
+function Testar-Declividade {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-declividade--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-declividade: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-declividade' `
+        -Script (Join-Path $PSScriptRoot 'ufv-declividade.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-declividade terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'UFV_DECLIV contornos=(\d+) graus=(\d+) okg=(\d+) porc=(\d+) okp=(\d+) recalc=(\d+) okr=(\d+) desligado=(\d+) fora=(\d+)') {
+        $problemas.Add("ufv-declividade: nao consegui ler o desenho em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $contornos = [int] $Matches[1]
+    $graus = [int] $Matches[2]; $okg = [int] $Matches[3]
+    $porc = [int] $Matches[4]; $okp = [int] $Matches[5]
+    $recalc = [int] $Matches[6]; $okr = [int] $Matches[7]
+    $desligado = [int] $Matches[8]; $fora = [int] $Matches[9]
+
+    if ($contornos -lt 2 -or $graus -ne $contornos -or $okg -ne $graus) {
+        $problemas.Add("ufv-declividade: em graus, $graus texto(s) para $contornos mesa(s), $okg com o valor do contorno. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($porc -ne $contornos -or $okp -ne $porc) {
+        $problemas.Add("ufv-declividade: em porcentagem, $porc texto(s) para $contornos mesa(s), $okp com o valor do contorno (texto em dobro ou unidade errada). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($recalc -ne $contornos -or $okr -ne $recalc) {
+        $problemas.Add("ufv-declividade: depois do recalcular, $recalc texto(s) para $contornos mesa(s), $okr certos: a mesa recalculada nao nasceu com a seta. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($fora -ne 0) {
+        $problemas.Add("ufv-declividade: $fora ponto(s) da seta fora da cota das mesas (regra sagrada 5). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($desligado -ne 0) {
+        $problemas.Add("ufv-declividade: desligada, ainda ha $desligado entidade(s) na camada. Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (declividade: $contornos mesas em graus e em porcentagem, valores do contorno, recalculada com seta, desligada limpa)" -ForegroundColor DarkGray
     return $true
 }
 
@@ -3127,6 +3212,10 @@ else {
     # Apagar tudo: so a area e o alinhamento ficam; camadas com cor.
     $total++
     if (Testar-ApagarTudo -Desenho $desenhos[0]) { $passaram++ }
+
+    # Declividade: seta e valor por mesa, em graus e porcentagem.
+    $total++
+    if (Testar-Declividade -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

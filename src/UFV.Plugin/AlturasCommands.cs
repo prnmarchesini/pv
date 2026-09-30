@@ -136,9 +136,11 @@ public static class AlturasCommands
                 var pontaAlta = new Point3(cantos[3].X + (cantos[2].X - cantos[3].X) * t, cantos[3].Y + (cantos[2].Y - cantos[3].Y) * t, cantos[3].Z + (cantos[2].Z - cantos[3].Z) * t);
                 var topo = new Point3(bloco.Position.X, bloco.Position.Y, bloco.Position.Z);
 
-                if (pilar.Problem is { } problema)
+                // Pilar com problema: só o P3, que diz o problema pelo número
+                // (29/09/2026: o motivo por extenso estourava a tela).
+                if (pilar.Problem is not null)
                 {
-                    LayoutDrawer.AvisoDePilar(transacao, espaco, camada, guid, problema, topo, rumo);
+                    LayoutDrawer.Cota(transacao, espaco, camada, guid, pilar.FreeHeight, "P3", topo, direcao, rumo);
                     cotas++;
                     feita = true;
                     continue;

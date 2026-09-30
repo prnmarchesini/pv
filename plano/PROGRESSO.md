@@ -264,6 +264,12 @@ teste: a etapa 6 é onde passa a ter.
    pela paleta de propriedades: também suja ("movida ou editada"). Rodar
    `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
    nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
+22. **Testar a rodada de 30/09 (sem textos, declividade)**, ver "Nona
+   rodada" no fim deste arquivo: Regerar ou Recalcular uma mesa que não
+   cabe: nenhum texto longo, só o magenta. Seção Análises → **Declividade**
+   → Graus: seta em cada mesa apontando para onde ela desce, com o valor;
+   de novo → Porcentagem: os valores trocam, sem texto em dobro; Desligar
+   apaga.
 21. **Testar as prioridades do motor (29/09, noite)**, ver "Oitava rodada"
    no fim deste arquivo: numa cópia do Itatiba sem as pontas à mão (ou
    Pontas → Automatico nelas), **Regerar**. As mesas que você arrumou à
@@ -4064,4 +4070,35 @@ enterrado, marcada com a declividade); `EntreVoarEAfundarAfunda` virou
 `MorroDentroDaMesaNaoLevantaAsPontas`; a força bruta usa o custo novo; a
 conferência da corrente aceita declividade acima do limite desde que a
 mesa esteja marcada e diga. Tudo verde, nível 2 26/26.
+
+## Nona rodada: sem textos longos, e a análise de declividade (30/09/2026)
+
+Renan, com print de um "F40.1 NÃO CABE NO TERRENO" com o motivo por
+extenso atravessando a tela: "para de colocar esses textos, estão
+estourando muito. Em análises, quero uma análise de inserir a declividade
+da mesa, quero uma flecha e a indicação em % ou graus, eu decido qual
+unidade". `AGUARDANDO VALIDAÇÃO` (item 22).
+
+- **Sem aviso escrito na mesa que não cabe.** Ela continua magenta inteira
+  na camada de marcadas; o motivo fica no XData, na linha de comando e no
+  Estado. O aviso de pilar com problema ("PILAR: o pilar está enterrado
+  até a mesa…") virou a cota curta do P3 (negativo é enterrado; "P3 s/
+  terreno"), no desenho e no Regerar alturas. `LayoutDrawer.AvisoDePilar`
+  saiu. O nível 2 da fileira passou a exigir ZERO textos na camada de
+  marcadas (antes exigia um por mesa marcada). O aviso antigo, em desenho
+  velho, continua sendo renomeado pelo Numerar.
+- **Declividade** (`UFV_DECLIVIDADE`, botão "Declividade" na seção
+  Análises): pergunta [Porcentagem/Graus/Desligar]. Em cada mesa, uma
+  seta no plano dela (linha do meio, de 25% a 75% do comprimento, ponta de
+  0,8 m) apontando para onde a mesa desce, e o valor ao lado, para o lado
+  da borda alta ("5,2%" ou "3,0°"; `SlopeLabel`, Core, 5 testes). Mesa
+  plana (desnível menor que 1 mm) leva só o valor. Camada
+  `MARCHENG_UFV_SETA_DECLIVIDADE` (ciano); notas da mesa, fora do grupo.
+  Ligada e unidade gravadas no desenho (registro `DECLIVIDADE_SETA`): mesa
+  desenhada, recalculada, refeita ou repintada já nasce com a seta; o
+  comando refaz as de todas as mesas; Desligar apaga e grava desligada.
+- Nível 2 novo, `ufv-declividade`: um texto por mesa com o GUID dela e o
+  valor que o contorno dá (graus e porcentagem), nada em dobro ao trocar a
+  unidade, a mesa recalculada nasce com a seta, nada fora da cota das
+  mesas (regra 5), desligar limpa. Placar: tudo verde, nível 2 27/27.
 
