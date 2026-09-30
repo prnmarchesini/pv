@@ -264,6 +264,12 @@ teste: a etapa 6 é onde passa a ter.
    pela paleta de propriedades: também suja ("movida ou editada"). Rodar
    `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
    nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
+21. **Testar as prioridades do motor (29/09, noite)**, ver "Oitava rodada"
+   no fim deste arquivo: numa cópia do Itatiba sem as pontas à mão (ou
+   Pontas → Automatico nelas), **Regerar**. As mesas que você arrumou à
+   mão devem sair parecidas com o que você fez (pontas perto de 0,50,
+   morro por baixo dos módulos do meio, pintado), nenhuma mesa com a
+   ponta dentro da terra; as que passam de 10° dizem "acima do limite".
 20. **Testar a rodada de 29/09 à noite (botão direito da mesa)**, ver
    "Sétima rodada" no fim deste arquivo: clique numa mesa com o botão
    direito → **UFV** → "Mudar inclinação (alturas das pontas)"; Enter e
@@ -4008,4 +4014,54 @@ pontas" — e, com print: "negativo, botão direito da mesa não abre nada".
 - O "perfil atual" para mesa nova é o primeiro em ordem alfabética, não o
   escolhido na janela. Se o Renan esperava o de 14 módulos no Regerar, é
   outro defeito.
+
+## Oitava rodada: as prioridades do motor (29/09/2026, noite)
+
+O Renan pôs à mão PB 0,50 nas duas pontas das mesas que o motor tinha
+afundado (F36, F37, F38 e a fileira de trás): "coisa linda. Você está
+iterando MUITO errado". Depois: "eu sei que tem limites, mas entendo que
+deve existir prioridades. 1 - pontas do último módulo da primeira mesa com
+a mesma altura do primeiro módulo da segunda mesa. 2 - não deixar
+enterrado, mesmo que estoure declividade da mesa e altura do pilar".
+`AGUARDANDO VALIDAÇÃO` (item 21).
+
+**O defeito.** Com o limite de declividade (10°) como parede e a junta
+fechada, uma mesa que precisava de 19,5° (F36.3) não subia, e pela junta
+puxava as vizinhas boas para dentro da terra: F36.4, perfeita sozinha a
+0,7° com tudo na faixa, saía a 10° e 2,12 m enterrada. O Renan disse que
+já tinha tirado o limite da configuração; a bancada sem limite mostra o
+motor igual ou melhor que a mão, então as telas dele foram calculadas com
+o limite ainda gravado. O defeito existe com qualquer limite, e foi
+corrigido assim mesmo.
+
+**As prioridades (regra sagrada 6 reescrita, `ChainWeights`).** 1) junta
+fechada (é a variável); 2) mesa nunca afundada: ponta dentro da terra
+custa 200/m, e o limite de declividade virou custo (10/m de desnível além
+do permitido; a parede é só física, 0,9 do vão), com a mesa marcada
+"declividade de X°, acima do limite de Y° (para não enterrar)"; 3) pontas
+na faixa (20/m acima ou abaixo); 4) módulos do meio (acima 3/m, abaixo 1/m,
+enterrado +5/m).
+
+**Interpretação registrada, o Renan confirma na tela.** Levei "não deixar
+enterrado" ao pé da letra primeiro (enterrar módulo = 200/m): o morro de
+1,49 m dentro da F34.4 fazia a mesa subir até o topo dele, as pontas iam a
+1,65 m e arrastavam as vizinhas pela junta (F37.2 a 2,39 m; 64 pilares
+acima de 1 m). Não é o que ele fez à mão: na correção dele o morro ficou
+DENTRO da mesa (F37.3 com módulos a −1,29 m, F36.3 a −0,40) e as pontas a
+0,50. O "enterrado" que ele rejeita é a mesa afundada; o morro sob o meio
+da mesa, pintado, ele aprovou. Os pesos seguem essa leitura.
+
+**Itatiba na bancada (com o limite de 10° gravado).** Juntas abertas 0;
+nenhuma ponta dentro da terra; pilares acima de 1 m: 30 (pior 1,72);
+módulos enterrados 64, todos morro dentro de mesa (pior −0,99). Contra a
+mão do Renan (0,50/0,50): F34.4 10 fora (mão 12), F37.3 11 fora e −0,99
+(mão 13 e −1,29), F38.2 4 fora (mão 5), F38.3 5 fora (mão 6), F36.4, F37.4
+e F38.4 0 fora nos dois. A bancada ganhou `--mao` para essa comparação.
+
+**Testes.** `RampaAcimaDoLimiteEnterraEmVezDeVoar` virou
+`RampaAcimaDoLimitePassaDoLimiteEmVezDeAfundar` (pontas na faixa, nada
+enterrado, marcada com a declividade); `EntreVoarEAfundarAfunda` virou
+`MorroDentroDaMesaNaoLevantaAsPontas`; a força bruta usa o custo novo; a
+conferência da corrente aceita declividade acima do limite desde que a
+mesa esteja marcada e diga. Tudo verde, nível 2 26/26.
 

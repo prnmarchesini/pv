@@ -98,44 +98,69 @@ public sealed record RowSolution(IReadOnlyList<SolvedRun> Runs)
 }
 
 /// <summary>
-/// Os pesos da corrente (29/09/2026). Custo por metro de ponta baixa fora da
-/// faixa, somado módulo a módulo e ponta a ponta.
+/// Os pesos da corrente. Custo por metro, somado módulo a módulo e ponta a
+/// ponta.
 ///
-/// A ordem é do Renan: "NUNCA QUERO PONTA SUPER ALTA", "melhor enfiar o
-/// módulo na terra e pintar que ele está na terra do que deixar uma ponta
-/// flutuando". A PONTA acima da faixa é o mais caro de tudo; o módulo do
-/// meio acima da faixa (a mesa passando por cima de uma vala) custa mais
-/// que abaixo, mas não tanto que a corrente afunde as pontas das vizinhas
-/// para baixar o meio de uma mesa.
+/// A ordem é do Renan (29/09/2026, noite): "1 - pontas do último módulo da
+/// primeira mesa com a mesma altura do primeiro módulo da segunda mesa.
+/// 2 - não deixar enterrado, mesmo que estoure declividade da mesa e altura
+/// do pilar." A junta é a própria variável (não abre nunca); ENTERRAR é o
+/// mais caro de tudo; passar do limite de declividade e ficar acima da
+/// faixa (pilar mais alto) vêm depois; abaixo da faixa mas fora da terra é
+/// o mais barato dos estouros. De manhã a ordem era outra ("prefiro módulo
+/// na terra do que voando"), e o que ele viu à mão à noite — mesas boas
+/// enterradas porque uma vizinha impossível as puxava — a inverteu.
 /// </summary>
 /// <param name="TipAboveBand">Metro de PB acima da faixa na ponta (no pilar da ponta).</param>
 /// <param name="AboveBand">Metro acima da faixa num módulo.</param>
-/// <param name="BelowBand">Metro abaixo da faixa (ponta ou módulo).</param>
+/// <param name="BelowBand">Metro abaixo da faixa (ponta ou módulo), ainda fora da terra.</param>
 /// <param name="Buried">Metro abaixo do chão, somado ao de abaixo da faixa.</param>
+/// <param name="SlopeExcess">
+/// Metro de desnível entre as pontas além do que o limite de declividade
+/// deixa. O limite deixou de ser parede: a mesa que precisa passar dele
+/// para não enterrar (nem puxar as vizinhas para a terra pela junta) passa,
+/// e é marcada.
+/// </param>
 /// <param name="OutEach">Custo fixo de cada ponto fora da faixa, para não espalhar estouro pequeno por muitos módulos.</param>
 /// <param name="Tiebreak">Metro de PB dentro da faixa, só para desempatar (a mais baixa: pilar mais curto).</param>
-public sealed record ChainWeights(double TipAboveBand, double AboveBand, double BelowBand, double Buried, double OutEach, double Tiebreak)
+public sealed record ChainWeights(
+    double TipAboveBand, double TipBelowBand, double TipBuried,
+    double AboveBand, double BelowBand, double Buried, double SlopeExcess, double OutEach, double Tiebreak)
 {
     /// <summary>Os pesos de partida.</summary>
-    public static readonly ChainWeights Default = new(TipAboveBand: 100, AboveBand: 10, BelowBand: 1, Buried: 1, OutEach: 0.05, Tiebreak: 1e-3);
+    public static readonly ChainWeights Default = new(
+        TipAboveBand: 20, TipBelowBand: 20, TipBuried: 200,
+        AboveBand: WeightsModule.Above, BelowBand: WeightsModule.Below, Buried: WeightsModule.Buried,
+        SlopeExcess: 10, OutEach: 0.05, Tiebreak: 1e-3);
+
+    /// <summary>Os pesos do módulo, à parte para a bancada experimentar.</summary>
+    internal static class WeightsModule
+    {
+        internal const double Above = 3;
+        internal const double Below = 1;
+        internal const double Buried = 5;
+    }
 
     /// <summary>A folga numérica das comparações com a faixa (a PB 0,30 da grade é 0,29999…).</summary>
     private const double Folga = 1e-9;
 
     /// <summary>O custo de um módulo com esta altura livre da ponta baixa.</summary>
-    internal double Cost(double clearance, double min, double max) => Custo(clearance, min, max, AboveBand);
+    internal double Cost(double clearance, double min, double max) => Custo(clearance, min, max, AboveBand, BelowBand, Buried);
 
     /// <summary>O custo de uma ponta (pilar da ponta) com esta PB.</summary>
-    internal double TipCost(double clearance, double min, double max) => Custo(clearance, min, max, TipAboveBand);
+    internal double TipCost(double clearance, double min, double max) => Custo(clearance, min, max, TipAboveBand, TipBelowBand, TipBuried);
 
-    private double Custo(double clearance, double min, double max, double acima)
+    /// <summary>O custo de uma mesa cujas pontas têm este desnível, com este alcance permitido pela declividade.</summary>
+    internal double SlopeCost(double drop, double allowed) => Math.Abs(drop) > allowed ? SlopeExcess * (Math.Abs(drop) - allowed) : 0;
+
+    private double Custo(double clearance, double min, double max, double acima, double abaixo, double enterrado)
     {
         if (clearance > max + Folga) return acima * (clearance - max) + OutEach;
 
         if (clearance < min - Folga)
         {
-            var custo = BelowBand * (min - clearance) + OutEach;
-            if (clearance < 0) custo += Buried * -clearance;
+            var custo = abaixo * (min - clearance) + OutEach;
+            if (clearance < -Folga) custo += enterrado * -clearance;
             return custo;
         }
 
@@ -390,6 +415,9 @@ public static class RowSolver
         if (ultima is { } b) faixas[^1] = Faixa(b);
     }
 
+    /// <summary>O maior giro que é mesa: nove décimos do comprimento de desnível.</summary>
+    private const double SenoFisico = 0.9;
+
     /// <summary>O passo da grade grossa.</summary>
     private const double PassoGrosso = 0.05;
 
@@ -403,9 +431,10 @@ public static class RowSolver
         var min = config.MinLowEdge;
         var max = config.MaxLowEdge;
 
-        // A declividade: sen(limite) sobre o vão entre as pontas; sem limite,
-        // nove décimos (desnível maior que o comprimento não é mesa).
-        var seno = config.MaxLongitudinalSlope is { } limite ? Math.Sin(limite) : 0.9;
+        // A declividade: o limite configurado (sen(limite) sobre o vão entre
+        // as pontas) é custo, não parede; a parede é física, nove décimos
+        // (desnível maior que o comprimento não é mesa).
+        var seno = config.MaxLongitudinalSlope is { } limite ? Math.Min(Math.Sin(limite), SenoFisico) : SenoFisico;
 
         double[] CustoDasPontas(int j)
         {
@@ -427,7 +456,8 @@ public static class RowSolver
             var vao = mesa.LastStation - a;
             var ga = mesa.FirstGround!.Value;
             var gb = mesa.LastGround!.Value;
-            var alcance = seno * vao;
+            var alcance = SenoFisico * vao;
+            var permitido = seno * vao;
 
             var fracoes = mesa.Modules.Select(m => (m.Station - a) / vao).ToArray();
             var chaos = mesa.Modules.Select(m => m.Ground!.Value).ToArray();
@@ -449,14 +479,14 @@ public static class RowSolver
 
                 var za = ga + (lo0 + k) * passo;
 
-                // As PBs da outra ponta que a declividade deixa: zb em za ± alcance.
+                // As PBs da outra ponta que a física deixa: zb em za ± alcance.
                 var kb0 = (int)Math.Max(0, (long)Math.Ceiling((za - alcance - gb) / passo - 1e-9) - lo1);
                 var kb1 = (int)Math.Min(n1 - 1, (long)Math.Floor((za + alcance - gb) / passo + 1e-9) - lo1);
 
                 for (var kb = kb0; kb <= kb1; kb++)
                 {
                     var zb = gb + (lo1 + kb) * passo;
-                    var total = base0 + pontas[kb];
+                    var total = base0 + pontas[kb] + w.SlopeCost(zb - za, permitido);
 
                     // Todo custo é positivo: passou do melhor, para.
                     for (var m = 0; m < fracoes.Length && total < proximo[kb]; m++)
@@ -538,11 +568,13 @@ public static class RowSolver
 
         var fora = enterrados + abaixo + acima;
         var tolerancia = config.BumpToleranceFor(mesa.Modules.Count);
-        var marcada = fora > tolerancia;
+        var giro = Math.Asin(Math.Clamp(Math.Abs(z1 - z0) / mesa.Length, 0, 1));
+        var passouDoLimite = config.MaxLongitudinalSlope is { } limite && giro > limite + 1e-6;
+        var marcada = fora > tolerancia || passouDoLimite;
 
         string? motivo = null;
 
-        if (marcada)
+        if (fora > tolerancia)
         {
             var partes = new List<string>();
 
@@ -552,6 +584,14 @@ public static class RowSolver
             if (acima > 0) partes.Add($"{acima} acima da faixa (até {Cm(maisAlto)} cm)");
 
             motivo = $"{fora} módulo(s) fora da faixa, e a tolerância é {tolerancia}: {string.Join(", ", partes)}";
+        }
+
+        if (passouDoLimite)
+        {
+            var declividade = $"declividade de {(giro * 180 / Math.PI).ToString("0.#", Brasil)}°, acima do limite de "
+                + $"{config.MaxLongitudinalSlopeDegrees!.Value.ToString("0.#", Brasil)}° (para não enterrar)";
+
+            motivo = motivo is null ? declividade : $"{motivo}; {declividade}";
         }
 
         return new SolvedTable(mesa.Label, z0, z1, fora, marcada, motivo);

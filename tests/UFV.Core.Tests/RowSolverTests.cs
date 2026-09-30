@@ -76,10 +76,17 @@ public class RowSolverTests
                 Assert.Equal(trecho.JointClearances[i], primeira, 6);
                 Assert.Equal(trecho.JointClearances[i + 1], ultima, 6);
 
+                // A declividade pode passar do limite (para não afundar a
+                // mesa, 29/09/2026), mas então a mesa sai marcada e diz.
                 if (config.MaxLongitudinalSlope is { } limite)
                 {
-                    var giro = Math.Abs(trecho.Tables[i].EndElevation - trecho.Tables[i].StartElevation) / Comprimento;
-                    Assert.True(giro <= Math.Sin(limite) + 1e-9, $"{mesa.Label}: giro de {Math.Asin(giro) / Grau:0.##}°, acima do limite");
+                    var giro = Math.Asin(Math.Abs(trecho.Tables[i].EndElevation - trecho.Tables[i].StartElevation) / Comprimento);
+
+                    if (giro > limite + 1e-6)
+                    {
+                        Assert.True(trecho.Tables[i].Marked, $"{mesa.Label}: {giro / Grau:0.##}° acima do limite e não marcada");
+                        Assert.Contains("declividade", trecho.Tables[i].Reason, StringComparison.Ordinal);
+                    }
                 }
             }
         }
@@ -175,13 +182,14 @@ public class RowSolverTests
 
     /// <summary>
     /// Terreno mais íngreme que o limite de declividade (19° com limite de
-    /// 10°, duas mesas, como a F40 do Itatiba): a mesa não consegue
-    /// acompanhar e a corrente não abre. Voar é o pior: nenhuma ponta passa
-    /// da faixa, e o que sai dela sai para baixo — enterrado, marcado.
+    /// 10°, duas mesas, como a F40 do Itatiba). As prioridades do Renan
+    /// (29/09/2026, noite): junta fechada, e nada afundado, "mesmo que
+    /// estoure declividade da mesa". A mesa passa do limite, sai marcada
+    /// dizendo quanto, e as pontas ficam na faixa — nenhuma enterrada.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
-    public void RampaAcimaDoLimiteEnterraEmVezDeVoar()
+    public void RampaAcimaDoLimitePassaDoLimiteEmVezDeAfundar()
     {
         var rampa = Math.Tan(19 * Grau);
         var mesas = Fileira(2, x => 700 - rampa * x);
@@ -189,27 +197,26 @@ public class RowSolverTests
 
         CorrenteFechada(mesas, solucao, Config());
 
-        Assert.True(solucao.MarkedCount > 0);
-        Assert.All(solucao.Runs[0].JointClearances, pb => Assert.True(pb <= Config().MaxLowEdge + 1e-6, $"ponta voando a {pb:0.00} m"));
-
-        var folgas = Folgas(mesas, solucao).ToList();
-        var acima = folgas.Count(f => f > Config().MaxLowEdge + 1e-6);
-        var abaixo = folgas.Count(f => f < Config().MinLowEdge - 1e-6);
-
-        Assert.True(abaixo > acima, $"{abaixo} módulo(s) abaixo e {acima} acima: devia afundar mais do que voar");
-        Assert.Contains(solucao.Tables, t => t.Reason is { } r && r.Contains("enterrado", StringComparison.Ordinal));
+        Assert.All(solucao.Runs[0].JointClearances, pb => Assert.InRange(pb, Config().MinLowEdge - 1e-6, Config().MaxLowEdge + 1e-6));
+        Assert.All(Folgas(mesas, solucao), f => Assert.True(f >= 0, $"módulo enterrado a {f:0.00} m"));
+        Assert.All(solucao.Tables, t =>
+        {
+            Assert.True(t.Marked);
+            Assert.Contains("acima do limite de 10°", t.Reason, StringComparison.Ordinal);
+        });
     }
 
     /// <summary>
-    /// Com a mesa podendo escolher: o custo de voar é maior que o de ficar
-    /// abaixo da faixa pela mesma distância. Um lombo que obriga a escolher
-    /// entre as pontas acima ou o lombo abaixo fica com o lombo abaixo.
+    /// Um morro DENTRO da mesa (lombo de 0,9 m sob os módulos do meio, a
+    /// faixa aceita 0,5 m): as pontas ficam na faixa, e o morro passa por
+    /// baixo dos módulos do meio, pintados — é o que o Renan fez à mão no
+    /// Itatiba (PB 0,50 nas pontas, "coisa linda"). A mesa não sobe até o
+    /// topo do morro levando as pontas para o alto.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
-    public void EntreVoarEAfundarAfunda()
+    public void MorroDentroDaMesaNaoLevantaAsPontas()
     {
-        // Lombo de 0,9 m no meio de uma mesa sozinha: a faixa aceita 0,5 m.
         double? Terreno(double x)
         {
             var d = Math.Abs(x - Comprimento / 2);
@@ -221,8 +228,9 @@ public class RowSolverTests
         var folgas = Folgas(mesas, solucao).ToList();
 
         Assert.True(solucao.Tables[0].Marked);
+        Assert.All(solucao.Runs[0].JointClearances, pb => Assert.InRange(pb, Config().MinLowEdge - 1e-6, Config().MaxLowEdge + 1e-6));
         Assert.True(folgas.Max() <= Config().MaxLowEdge + 1e-6, $"módulo acima da faixa: {folgas.Max():0.00} m");
-        Assert.True(folgas.Min() < Config().MinLowEdge, "o lombo deveria ter ficado abaixo da faixa");
+        Assert.True(folgas.Min() < Config().MinLowEdge, "o morro deveria passar por baixo da faixa");
     }
 
     /// <summary>A marca diz a verdade: marcada é exatamente a que tem mais módulos fora que a tolerância.</summary>
@@ -284,8 +292,11 @@ public class RowSolverTests
                 var za = m.FirstGround!.Value + pbs[i];
                 var zb = m.LastGround!.Value + pbs[i + 1];
 
-                if (Math.Abs(zb - za) > Math.Sin(config.MaxLongitudinalSlope!.Value) * (m.LastStation - m.FirstStation) + 1e-9)
-                    return double.PositiveInfinity;
+                var vaoDasPontas = m.LastStation - m.FirstStation;
+
+                if (Math.Abs(zb - za) > 0.9 * vaoDasPontas + 1e-9) return double.PositiveInfinity;
+
+                total += pesos.SlopeCost(zb - za, Math.Sin(config.MaxLongitudinalSlope!.Value) * vaoDasPontas);
 
                 foreach (var mod in m.Modules)
                 {
@@ -352,18 +363,19 @@ public class RowSolverTests
     }
 
     /// <summary>
-    /// Pontas presas que a declividade não deixa ligar (vizinha mexida à
-    /// mão): a mesa não derruba o Recalcular, resolve livre.
+    /// Pontas presas que nenhuma mesa liga (desnível maior que a mesa, a
+    /// vizinha mexida à mão): a mesa não derruba o Recalcular, resolve livre.
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
     public void PontaPresaImpossivelSoltaEResolveLivre()
     {
         var mesas = Fileira(1, _ => 700.0);
-        var solucao = RowSolver.Solve(mesas, Config(), firstTip: 0.30, lastTip: 5.0);
+        var solucao = RowSolver.Solve(mesas, Config(), firstTip: 0.30, lastTip: 20.0);
 
         CorrenteFechada(mesas, solucao, Config());
         Assert.False(solucao.Tables[0].Marked);
+        Assert.InRange(solucao.Runs[0].JointClearances[1], Config().MinLowEdge - 1e-6, Config().MaxLowEdge + 1e-6);
     }
 
     // ------------------------------------------------ o que fica de fora
