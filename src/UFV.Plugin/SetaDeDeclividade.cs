@@ -22,10 +22,15 @@ internal static class SetaDeDeclividade
     private const string Chave = "DECLIVIDADE_SETA";
 
     /// <summary>Altura do texto, em metro.</summary>
-    private const double AlturaDoTexto = 0.45;
+    private const double AlturaDoTexto = 0.50;
 
-    /// <summary>Quanto a seta fica acima do plano dos módulos, para não sumir dentro da face.</summary>
-    private const double Acima = 0.05;
+    /// <summary>
+    /// Quanto a seta e o texto ficam acima do plano dos módulos, na
+    /// perpendicular dele. Com 5 cm na vertical e o texto deitado na
+    /// horizontal, numa mesa de 17° metade do texto e da seta ficava por baixo
+    /// dos módulos (Renan, 30/09/2026: "a flecha tá meio que por baixo").
+    /// </summary>
+    private const double Acima = 0.15;
 
     /// <summary>Se a análise está ligada neste desenho, e em que unidade. Nunca gravada: desligada, em porcentagem.</summary>
     internal static (bool Ligada, SlopeUnit Unidade) Ler(Database database)
@@ -79,11 +84,18 @@ internal static class SetaDeDeclividade
         // A seta desce: do alto para o baixo.
         var (alto, baixo) = desnivel > 0 ? (fim, inicio) : (inicio, fim);
 
-        // Direção da seta (3D, no plano da mesa) e a largura (da borda baixa
-        // para a alta, no plano da mesa).
+        // Direção da seta (3D, no plano da mesa), a largura (da borda baixa
+        // para a alta, no plano da mesa) e a normal do plano, para cima:
+        // tudo é desenhado no plano da mesa, levantado na normal.
         var u = Unitario(Menos(baixo, alto));
         var w = Unitario(Menos(cantos[3], cantos[0]));
+        var n = Unitario(Vetorial(Unitario(Menos(fim, inicio)), w));
+        if (n.Z < 0) n = Vezes(n, -1);
+
+        var levantar = Vezes(n, Acima);
         var comprimento = Distancia(alto, baixo);
+
+        Point3d Ponto(Point3 p) => new(p.X + levantar.X, p.Y + levantar.Y, p.Z + levantar.Z);
 
         var criadas = 0;
 
@@ -105,14 +117,19 @@ internal static class SetaDeDeclividade
             var b = Mais(alto, Vezes(u, 0.75 * comprimento));
             Linha(a, b);
 
-            // A ponta: duas abas de 0,8 m para trás, abertas 0,4 m para cada lado.
-            var atras = Mais(b, Vezes(u, -0.8));
-            Linha(b, Mais(atras, Vezes(w, 0.4)));
-            Linha(b, Mais(atras, Vezes(w, -0.4)));
+            // A ponta: duas abas de 1,0 m para trás, abertas 0,45 m para cada lado.
+            var atras = Mais(b, Vezes(u, -1.0));
+            Linha(b, Mais(atras, Vezes(w, 0.45)));
+            Linha(b, Mais(atras, Vezes(w, -0.45)));
         }
 
-        // O valor, ao lado do corpo, para o lado da borda alta.
-        var ondeTexto = Mais(centro, Vezes(w, 0.7));
+        // O valor, ao lado do corpo, para o lado da borda alta, deitado no
+        // plano da mesa e correndo ao longo da fileira no sentido que se lê
+        // em planta (nunca de cabeça para baixo).
+        var ondeTexto = Mais(centro, Vezes(w, 0.9));
+        var aoLongo = Unitario(Menos(fim, inicio));
+        var legivel = LayoutDrawer.RumoLegivel(aoLongo.X, aoLongo.Y);
+        if (Math.Abs(Math.IEEERemainder(Math.Atan2(aoLongo.Y, aoLongo.X) - legivel, 2 * Math.PI)) > 1e-6) aoLongo = Vezes(aoLongo, -1);
 
         var mtexto = new MText
         {
@@ -120,9 +137,11 @@ internal static class SetaDeDeclividade
             TextHeight = AlturaDoTexto,
             Layer = camada,
             Attachment = AttachmentPoint.MiddleCenter,
-            Rotation = LayoutDrawer.RumoLegivel(u.X, u.Y),
             Contents = texto,
         };
+
+        mtexto.Normal = new Vector3d(n.X, n.Y, n.Z);
+        mtexto.Direction = new Vector3d(aoLongo.X, aoLongo.Y, aoLongo.Z);
 
         espaco.AppendEntity(mtexto);
         transacao.AddNewlyCreatedDBObject(mtexto, true);
@@ -151,5 +170,6 @@ internal static class SetaDeDeclividade
         return n < 1e-12 ? new Point3(1, 0, 0) : new Point3(a.X / n, a.Y / n, a.Z / n);
     }
 
-    private static Point3d Ponto(Point3 p) => new(p.X, p.Y, p.Z + Acima);
+    private static Point3 Vetorial(Point3 a, Point3 b) =>
+        new(a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
 }
