@@ -4102,3 +4102,20 @@ unidade". `AGUARDANDO VALIDAÇÃO` (item 22).
   unidade, a mesa recalculada nasce com a seta, nada fora da cota das
   mesas (regra 5), desligar limpa. Placar: tudo verde, nível 2 27/27.
 
+### Decisões anotadas em 30/09/2026 (para depois)
+
+- **Licenciamento:** o Renan vai ter servidor próprio (não Autodesk App
+  Store, não serviço pronto). Por ora gratuito com cadastro no site, que
+  gera a chave que a pessoa cola no plugin. Proposta dada na conversa:
+  ativação online com licença ASSINADA pelo servidor (chave pública no
+  plugin), impressão da máquina com vários identificadores (não só MAC),
+  licença que vence em poucos dias e se renova sozinha online, limite de
+  máquinas por chave, bloqueio no servidor; ofuscar e assinar a DLL com
+  certificado de verdade (que também acaba com o aviso de DLL não
+  assinada). Vira etapa própria quando ele pedir; nada foi feito.
+- **Instalar em Arquivos de Programas** (acabar com o aviso de DLL): o
+  `publicar-bundle.ps1 -ParaTodaAMaquina` pede elevação sozinho, mas
+  chamado do terminal do Claude Code a elevação volta recusada; o Renan
+  roda ele mesmo com `!`. Depois da primeira vez, as instalações seguem
+  para lá sozinhas.
+
