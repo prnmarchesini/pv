@@ -201,7 +201,7 @@ public static class AnalisesCommands
                 }
 
                 var linha = RowPipeline.ProcessFixed(
-                    celula, geometriaDela, perfilDela.TiltRadians, terreno.Mesh, settings, cantos[0].Z, cantos[1].Z, identidade.Reason, identidade.Marked);
+                    celula, geometriaDela, perfilDela.TiltRadians, terreno.Mesh, settings.ForTable(perfilDela.Frame), cantos[0].Z, cantos[1].Z, identidade.Reason, identidade.Marked);
 
                 var processada = linha.Tables[0];
                 processadas.Add(processada);

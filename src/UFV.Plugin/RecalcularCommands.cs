@@ -123,7 +123,9 @@ public static class RecalcularCommands
 
     internal static void RecalcularMesas(Editor editor, Document documento, ProcessedTerrain terreno, IReadOnlyList<Guid> mesas, TableProfile perfil)
     {
-        var settings = ConfigCommands.Inicial(documento, out var avisoDaConfig);
+        var doProjeto = ConfigCommands.Inicial(documento, out var avisoDaConfig);
+        if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage($"\n  ATENÇÃO: {notaDoT3}.\n");
+        var settings = doProjeto.ForTable(perfil.Frame);
         if (avisoDaConfig is not null) editor.WriteMessage($"\n  ATENÇÃO: {avisoDaConfig}\n");
 
         var pilares = perfil.Frame.Pillars(perfil.Layout);

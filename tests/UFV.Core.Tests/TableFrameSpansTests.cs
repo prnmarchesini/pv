@@ -209,3 +209,39 @@ public class TableFrameSpansTests
         Assert.Contains("falta", perfil.WhyInvalid);
     }
 }
+
+/// <summary>Passo 8.2: o T3 da estrutura chega ao motor pelas configurações.</summary>
+public class SettingsForTableTests
+{
+    private static TableFrame Padrao() => new(3.00, 2.50, 0.15, 0.07, 3.00, 0);
+
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void SemT3ValeODaConfiguracao()
+    {
+        Assert.Same(ProjectSettings.Default, ProjectSettings.Default.ForTable(Padrao()));
+    }
+
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void ComT3EleMandaNoEnterroMinimo()
+    {
+        var ajustada = ProjectSettings.Default.ForTable(Padrao() with { MinEmbedment = 1.3 });
+
+        Assert.Equal(1.3, ajustada.Configuration.MinEmbedment);
+        Assert.Equal(ProjectSettings.Default.Configuration.MaxEmbedment, ajustada.Configuration.MaxEmbedment);
+        Assert.True(ajustada.Configuration.IsValid);
+        Assert.Equal(ProjectSettings.Default.Analyses, ajustada.Analyses);
+    }
+
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void T3AcimaDoMaximoLevaOMaximoJunto()
+    {
+        var ajustada = ProjectSettings.Default.ForTable(Padrao() with { MinEmbedment = 2.5 });
+
+        Assert.Equal(2.5, ajustada.Configuration.MinEmbedment);
+        Assert.Equal(2.5, ajustada.Configuration.MaxEmbedment);
+        Assert.True(ajustada.Configuration.IsValid);
+    }
+}

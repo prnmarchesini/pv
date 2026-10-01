@@ -58,7 +58,7 @@ Só o Renan marca VALIDADO.
 | 7.9 | Grupos e painel de informações | AGUARDANDO VALIDAÇÃO | `TableGroup` (Core, 3 testes) no registro `GRUPOS`; `UFV_GRUPO_CRIAR`/`GRUPOS`/`GRUPO_RECALCULAR`/`GRUPO_SELECIONAR`/`GRUPO_APAGAR` com nível 2; painel (paleta WPF) com lista e botões |
 | 7.10 | Numeração | AGUARDANDO VALIDAÇÃO | `RowNumbering` (Core, 8 testes); `UFV_NUMERAR` com nível 2 (usina de 80 mesas invertida); seção Numeração na ribbon |
 | 8.1 | Vãos personalizados e enterro mínimo (Core) | VALIDADO (automático) | `TableFrame.PillarSpans`, `MinEmbedment` (T3), `PillarCoverage`, `SpanDifference`, `Pillars(mesa)`; perfil JSON com os dois campos opcionais; 25 testes |
-| 8.2 | Janela da estrutura | PENDENTE | |
+| 8.2 | Janela da estrutura | AGUARDANDO VALIDAÇÃO | Janela de Mesa: larguras do pilar, T3 (m, opcional), botão "Vãos entre pilares..." (`JanelaDeVaos`, conta em `PillarSpanForm`), solo e T3 no croqui; o T3 chega ao motor por `ProjectSettings.ForTable` |
 | 8.3 | Serviço local de módulos | AGUARDANDO VALIDAÇÃO | `servidor/` (FastAPI, SQLAlchemy, Alembic; SQLite sem `DATABASE_URL`, Postgres no `docker-compose`), 24 testes no placar; janela de Mesa lista os módulos do serviço e diz a origem; sem serviço, a embutida |
 | 8.4 | Cadastro de módulo | PENDENTE | |
 | 8.5 | Mesas do desenho | PENDENTE | |
@@ -4203,3 +4203,31 @@ Word, que o Renan confirma na tela:
 Civil 3D, botão Mesa: embaixo do Modelo deve aparecer "Módulos do serviço
 (http://localhost:8765): 3."; 3) fechar a janela do serviço, esperar um
 minuto, abrir a Mesa de novo: "Biblioteca embutida (serviço fora do ar)."
+
+### 8.2 (01/10/2026): janela da estrutura
+
+- Rótulos: "Pilar: largura ao longo da fileira" e "Pilar: largura na
+  inclinação" (era "profundidade"); dica ao passar o mouse em todos os
+  campos da estrutura.
+- Campo "Enterro mínimo T3 (m)", opcional. Preenchido, manda no enterro
+  mínimo de toda conta daquela mesa (`ProjectSettings.ForTable`, ligado em
+  Fileira, Usina, Recalcular, Pontas e Análises); se passar do enterro
+  máximo da Configuração, o máximo sobe junto e o comando avisa. Aceita de
+  1 mm a 5 m (acima disso é quase certo alguém digitando em cm).
+- Botão "Vãos entre pilares..." abre P1-P2, P2-P3..., com "Distribuir
+  igual" (em milímetros inteiros, o resto 1 mm por vão), a soma e se fecha
+  com o que os pilares cobrem; OK só libera quando fecha; "Usar o vão-alvo"
+  apaga os vãos escritos.
+- Croqui lateral: solo como símbolo abaixo da ponta baixa, pilar entrando
+  nele e a cota T3; sem T3, "T3: o da configuração".
+- **Decisões minhas, o Renan confirma na tela:** T3 da estrutura vale
+  mesmo se for MENOR que o enterro mínimo da Configuração (a estrutura é do
+  fabricante); o campo T3 é em metro, como o resto da janela de Mesa, e o
+  enterro da Configuração continua em cm (o 8.7 junta as duas telas).
+
+**Roteiro de tela do 8.2:** 1) botão Mesa: conferir os rótulos novos do
+pilar e o campo "Enterro mínimo T3"; 2) digitar 1,1 no T3: o croqui mostra
+o solo e "T3 1,1"; 3) "Vãos entre pilares...": mudar P1-P2 para 2,5: a soma
+fica vermelha com "falta"; "Distribuir igual" com 7 pilares volta a fechar
+(verde) e libera o OK; 4) OK: o resumo embaixo lista os vãos escritos;
+salvar o perfil, fechar e abrir de novo: T3 e vãos voltam.

@@ -18,6 +18,11 @@ namespace UFV.Plugin;
 /// referência, e o pilar desce até ela e segue tracejado: quanto ele mede de
 /// verdade depende do terreno, e o terreno entra na etapa 5. Desenhar um chão
 /// qualquer seria inventar um número que parece calculado.
+///
+/// O solo que aparece desde o 8.2 é um símbolo, sem cota até a ponta baixa: o
+/// que ele mostra é o <b>T3</b>, o mínimo que o pilar entra nele (Melhorias.docx,
+/// 01/10/2026: "tem o símbolo do solo, mas não tem a profundidade mínima de
+/// enterramento desenhada").
 /// </summary>
 internal sealed class CorteDaMesa : FrameworkElement
 {
@@ -53,6 +58,11 @@ internal sealed class CorteDaMesa : FrameworkElement
             DashStyle = new DashStyle([5, 4], 0),
         });
 
+    private static readonly Pen Solo =
+        Congelar(new Pen(Congelar(new SolidColorBrush(Color.FromRgb(0x9C, 0x7A, 0x52))), 1.5));
+
+    private static readonly Brush Terra = Congelar(new SolidColorBrush(Color.FromRgb(0xD9, 0xA4, 0x41)));
+
     private static readonly Pen Cota =
         Congelar(new Pen(Congelar(new SolidColorBrush(Color.FromRgb(0x8A, 0x95, 0xA1))), 1));
 
@@ -60,13 +70,18 @@ internal sealed class CorteDaMesa : FrameworkElement
 
     private TableGeometry? _mesa;
     private double _tilt;
+    private double? _enterro;
     private string? _recado;
 
-    /// <summary>Mostra o corte desta mesa, com esta inclinação em radianos.</summary>
-    internal void Mostrar(TableGeometry mesa, double tiltRadians)
+    /// <summary>
+    /// Mostra o corte desta mesa, com esta inclinação em radianos e o enterro
+    /// mínimo T3 da estrutura (null: o da configuração do projeto).
+    /// </summary>
+    internal void Mostrar(TableGeometry mesa, double tiltRadians, double? enterroMinimo = null)
     {
         _mesa = mesa;
         _tilt = tiltRadians;
+        _enterro = enterroMinimo;
         _recado = null;
         InvalidateVisual();
     }
@@ -109,10 +124,15 @@ internal sealed class CorteDaMesa : FrameworkElement
         var subida = pilarEm * sen;
         var alto = m2 * sen;
 
-        // A caixa do desenho vai da ponta baixa até a ponta alta, mais um
-        // pedaço abaixo da linha de referência para o pilar descer.
+        // O solo é símbolo: fica a um vão fixo abaixo da ponta baixa, e o
+        // pilar entra nele o T3 (ou um T3 de mostra, sem cota, sem T3 escrito).
+        var vaoAteOSolo = 0.35;
+        var t3 = _enterro ?? 0.6;
+
+        // A caixa do desenho vai da ponta baixa até a ponta alta, mais o
+        // pedaço abaixo dela até o pé do pilar dentro do solo.
         var largura = Math.Max(0.001, m2 * cos);
-        var altura = Math.Max(0.001, alto + Math.Max(subida, 0.3) * 0.9);
+        var altura = Math.Max(0.001, alto + vaoAteOSolo + t3 + 0.05);
 
         var disponivelX = Math.Max(1, ActualWidth - 2 * Margem - 58);
         var disponivelY = Math.Max(1, ActualHeight - 2 * Margem - 26);
@@ -139,13 +159,23 @@ internal sealed class CorteDaMesa : FrameworkElement
             tela.DrawLine(Face, No(faixa.De, -7), No(faixa.Ate, -7));
         }
 
-        // O pilar: cheio até a linha de referência, tracejado depois dela,
-        // porque o comprimento de verdade só existe com o terreno.
+        // O pilar: cheio até a linha de referência, tracejado até o solo,
+        // porque esse trecho só existe com o terreno, e cheio de novo dentro
+        // do solo, o T3.
         var encosto = No(pilarEm, 11);
+        var ySolo = yBaixa + vaoAteOSolo * k;
+        var yPe = ySolo + t3 * k;
 
         tela.DrawLine(Pilar, encosto, new Point(encosto.X, yBaixa));
-        tela.DrawLine(PilarSemFim, new Point(encosto.X, yBaixa),
-            new Point(encosto.X, Math.Min(ActualHeight - 14, yBaixa + 30)));
+        tela.DrawLine(PilarSemFim, new Point(encosto.X, yBaixa), new Point(encosto.X, ySolo));
+        tela.DrawLine(Pilar, new Point(encosto.X, ySolo), new Point(encosto.X, yPe));
+
+        DesenharSolo(tela, ySolo, encosto.X);
+
+        if (_enterro is { } escrito)
+            CotaVertical(tela, encosto.X - 26, ySolo, yPe, $"T3 {Medida(escrito)}", Terra, aEsquerda: true);
+        else
+            Escrever(tela, "T3: o da configuração", Fraco, 10, new Point(encosto.X + 8, (ySolo + yPe) / 2 - 7));
 
         Angulo(tela, No(0), k);
 
@@ -242,7 +272,7 @@ internal sealed class CorteDaMesa : FrameworkElement
         tela.DrawText(formatado, new Point(meio.X - formatado.Width / 2, meio.Y - formatado.Height / 2));
     }
 
-    private void CotaVertical(DrawingContext tela, double x, double de, double ate, string texto, Brush cor)
+    private void CotaVertical(DrawingContext tela, double x, double de, double ate, string texto, Brush cor, bool aEsquerda = false)
     {
         if (Math.Abs(ate - de) < 18) return;
 
@@ -251,7 +281,25 @@ internal sealed class CorteDaMesa : FrameworkElement
         tela.DrawLine(Cota, new Point(x - 4, ate), new Point(x + 4, ate));
 
         var formatado = Formatar(texto, 10.5, cor);
-        tela.DrawText(formatado, new Point(x + 6, (de + ate) / 2 - formatado.Height / 2));
+        var xTexto = aEsquerda ? x - 6 - formatado.Width : x + 6;
+        tela.DrawText(formatado, new Point(xTexto, (de + ate) / 2 - formatado.Height / 2));
+    }
+
+    /// <summary>
+    /// O símbolo do solo: a linha do terreno com riscos inclinados por baixo,
+    /// num trecho em volta do pilar.
+    /// </summary>
+    private void DesenharSolo(DrawingContext tela, double y, double xPilar)
+    {
+        var de = Math.Max(Margem, xPilar - 90);
+        var ate = Math.Min(ActualWidth - Margem, xPilar + 90);
+
+        tela.DrawLine(Solo, new Point(de, y), new Point(ate, y));
+
+        for (var x = de + 4; x < ate; x += 9)
+            tela.DrawLine(Solo, new Point(x, y), new Point(x - 6, y + 6));
+
+        Escrever(tela, "solo", Fraco, 10, new Point(ate - 26, y - 15));
     }
 
     private void Escrever(DrawingContext tela, string texto, Brush cor, double tamanho, Point onde) =>

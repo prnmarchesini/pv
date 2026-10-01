@@ -33,11 +33,10 @@ internal sealed class JanelaDeMesa : Window
     private readonly TableProfileStore _perfis;
 
     /// <summary>
-    /// Os vãos escritos e o T3 do perfil carregado. A janela ainda não tem
-    /// campo para eles (vem no 8.2); sem guardar aqui, salvar o perfil os
-    /// apagaria em silêncio.
+    /// Os vãos escritos par a par na janela de vãos (8.2), ou null para a
+    /// tabela sair do vão-alvo.
     /// </summary>
-    private (IReadOnlyList<double>? Vaos, double? Enterro) _semCampo;
+    private IReadOnlyList<double>? _vaosEscritos;
 
     /// <summary>Os módulos da lista e de onde vieram (serviço ou embutida, passo 8.3).</summary>
     private readonly IReadOnlyList<SolarModule> _modulos;
@@ -63,6 +62,15 @@ internal sealed class JanelaDeMesa : Window
     private readonly TextBox _pilarProfundidade = Campo();
     private readonly TextBox _vaoAlvo = Campo();
     private readonly TextBox _balanco = Campo();
+    private readonly TextBox _enterro = Campo();
+    private readonly Button _botaoDosVaos = new()
+    {
+        Content = "Vãos entre pilares...",
+        Height = 24,
+        Margin = new Thickness(0, 2, 0, 2),
+        ToolTip = "Abre a lista P1-P2, P2-P3... para escrever cada vão; mostra a soma e se ela fecha com a mesa.",
+    };
+    private readonly TextBlock _resumoDosVaos = new() { FontSize = 11, Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) };
 
     private readonly PlantaDaMesa _planta = new();
     private readonly CorteDaMesa _corte = new();
@@ -271,9 +279,10 @@ internal sealed class JanelaDeMesa : Window
             Margin = new Thickness(0, 10, 0, 2),
         });
 
-        void Linha(string rotulo, Control campo)
+        void Linha(string rotulo, Control campo, string? dica = null)
         {
-            pilha.Children.Add(new TextBlock { Text = rotulo, FontSize = 12 });
+            pilha.Children.Add(new TextBlock { Text = rotulo, FontSize = 12, ToolTip = dica });
+            if (dica is not null) campo.ToolTip = dica;
             pilha.Children.Add(campo);
         }
 
@@ -299,18 +308,23 @@ internal sealed class JanelaDeMesa : Window
         Linha("Inclinação (graus)", _inclinacao);
 
         Secao("Estrutura");
-        Linha("Tesoura T1 (m)", _tesoura);
-        Linha("Pilar na tesoura T2 (m)", _pilarNaTesoura);
-        Linha("Pilar: largura (m)", _pilarLargura);
-        Linha("Pilar: profundidade (m)", _pilarProfundidade);
-        Linha("Vão entre pilares (m)", _vaoAlvo);
-        Linha("Balanço nas pontas (m)", _balanco);
+        Linha("Tesoura T1 (m)", _tesoura, "Comprimento da tesoura, ao longo da inclinação.");
+        Linha("Pilar na tesoura T2 (m)", _pilarNaTesoura, "Onde o pilar encosta na tesoura, medido da ponta baixa dela.");
+        Linha("Pilar: largura ao longo da fileira (m)", _pilarLargura, "Lado da seção do pilar no sentido da fileira (comprimento da mesa).");
+        Linha("Pilar: largura na inclinação (m)", _pilarProfundidade, "Lado da seção do pilar no sentido da inclinação (tesoura).");
+        Linha("Enterro mínimo T3 (m)", _enterro, "O mínimo que o pilar fica dentro do solo. Em branco, vale o enterro mínimo da configuração do projeto.");
+        Linha("Vão-alvo entre pilares (m)", _vaoAlvo, "Vão pretendido; a tabela divide a mesa em vãos iguais perto dele. Não vale quando há vãos escritos.");
+        pilha.Children.Add(_botaoDosVaos);
+        pilha.Children.Add(_resumoDosVaos);
+        Linha("Balanço nas pontas (m)", _balanco, "Quanto de estrutura sobra para fora do primeiro e do último pilar.");
 
         foreach (var (campo, _) in Todos()) campo.TextChanged += (_, _) => Recalcular();
 
         _arranjo.SelectionChanged += (_, _) => Recalcular();
         _modelo.SelectionChanged += (_, _) => TrocarModulo();
         _salvos.SelectionChanged += (_, _) => CarregarSalvo();
+        _enterro.TextChanged += (_, _) => Recalcular();
+        _botaoDosVaos.Click += (_, _) => EscreverVaos();
 
         return pilha;
     }
@@ -338,9 +352,9 @@ internal sealed class JanelaDeMesa : Window
         yield return (_inclinacao, "Inclinação");
         yield return (_tesoura, "Tesoura T1");
         yield return (_pilarNaTesoura, "Pilar na tesoura T2");
-        yield return (_pilarLargura, "Pilar: largura");
-        yield return (_pilarProfundidade, "Pilar: profundidade");
-        yield return (_vaoAlvo, "Vão entre pilares");
+        yield return (_pilarLargura, "Pilar: largura ao longo da fileira");
+        yield return (_pilarProfundidade, "Pilar: largura na inclinação");
+        yield return (_vaoAlvo, "Vão-alvo entre pilares");
         yield return (_balanco, "Balanço nas pontas");
     }
 
@@ -412,7 +426,8 @@ internal sealed class JanelaDeMesa : Window
         _pilarProfundidade.Text = Numero(perfil.Frame.PillarDepth);
         _vaoAlvo.Text = Numero(perfil.Frame.PillarSpanTarget);
         _balanco.Text = Numero(perfil.Frame.PillarCantilever);
-        _semCampo = (perfil.Frame.PillarSpans, perfil.Frame.MinEmbedment);
+        _enterro.Text = perfil.Frame.MinEmbedment is { } t3 ? Numero(t3) : string.Empty;
+        _vaosEscritos = perfil.Frame.PillarSpans;
 
         Selecionar(_arranjo, perfil.Layout.Arrangement);
 
@@ -462,6 +477,20 @@ internal sealed class JanelaDeMesa : Window
         NumberInput.TryParseMeasure(_vaoAlvo.Text, out var vao);
         NumberInput.TryParseMeasure(_balanco.Text, out var balanco);
 
+        // T3 é opcional: em branco, vale o da configuração do projeto.
+        double? enterro = null;
+
+        if (!string.IsNullOrWhiteSpace(_enterro.Text))
+        {
+            if (!NumberInput.TryParseMeasure(_enterro.Text, out var t3))
+            {
+                motivo = "não consigo ler o número do campo \"Enterro mínimo T3\".";
+                return null;
+            }
+
+            enterro = t3;
+        }
+
         if (!NumberInput.TryParseCount(_quantidade.Text, out var quantidade))
         {
             motivo = "o número de módulos precisa ser inteiro.";
@@ -479,8 +508,8 @@ internal sealed class JanelaDeMesa : Window
                 gapH, gapV, esquerda, direita),
             new TableFrame(tesoura, t2, pilarL, pilarP, vao, balanco)
             {
-                PillarSpans = _semCampo.Vaos,
-                MinEmbedment = _semCampo.Enterro,
+                PillarSpans = _vaosEscritos,
+                MinEmbedment = enterro,
             },
             graus * Math.PI / 180);
 
@@ -542,6 +571,8 @@ internal sealed class JanelaDeMesa : Window
     {
         if (_preenchendo) return;
 
+        MostrarOrigemDosVaos();
+
         try
         {
             var perfil = Ler(out var motivo);
@@ -556,7 +587,7 @@ internal sealed class JanelaDeMesa : Window
             var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
 
             _planta.Mostrar(geometria);
-            _corte.Mostrar(geometria, perfil.TiltRadians);
+            _corte.Mostrar(geometria, perfil.TiltRadians, perfil.Frame.MinEmbedment);
 
             var potencia = perfil.Layout.ModuleCount * perfil.Layout.Module.PowerWatts / 1000;
 
@@ -568,8 +599,10 @@ internal sealed class JanelaDeMesa : Window
                 $"Comprimento {Numero(perfil.Layout.Length)} m · {Numero(perfil.Layout.Depth)} m na "
                 + $"inclinação · {perfil.Layout.Columns} colunas · "
                 + $"{potencia.ToString("0.#", Brasil)} kWp\n"
-                + $"{pilares.PillarCount} pilares em {pilares.Spans.Count} vãos de "
-                + $"{Numero(pilares.Spans[0])} m"
+                + $"{pilares.PillarCount} pilares em {pilares.Spans.Count} vãos "
+                + (_vaosEscritos is null
+                    ? $"de {Numero(pilares.Spans[0])} m"
+                    : $"escritos ({string.Join(" + ", pilares.Spans.Select(Numero))} m)")
                 + (pilares.Cantilever > 0
                     ? $", com balanço de {Numero(pilares.Cantilever)} m em cada ponta\n"
                     : ", com o pilar na ponta da estrutura\n")
@@ -585,6 +618,59 @@ internal sealed class JanelaDeMesa : Window
             RegistroDeDiagnostico.Registrar("Falha ao recalcular a mesa.", erro);
             NaoDeu(erro.Message);
         }
+    }
+
+    /// <summary>A linha embaixo do botão: de onde sai a tabela de pilares.</summary>
+    private void MostrarOrigemDosVaos() =>
+        _resumoDosVaos.Text = _vaosEscritos is null
+            ? "Vãos iguais pelo vão-alvo."
+            : $"{_vaosEscritos.Count} vãos escritos à mão; o vão-alvo não vale.";
+
+    private void EscreverVaos()
+    {
+        // Manipulador de clique do WPF: exceção solta aqui fecha o Civil 3D
+        // (a distribuição pelo vão-alvo lança acima de mil vãos).
+        try
+        {
+            AbrirVaos();
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao abrir os vãos entre pilares.", erro);
+            Avisar($"Não consegui abrir os vãos: {erro.Message}");
+        }
+    }
+
+    private void AbrirVaos()
+    {
+        var perfil = Ler(out var motivo);
+
+        // Com vãos escritos que deixaram de fechar (mudou o número de
+        // módulos), o perfil é recusado; a janela de vãos abre mesmo assim,
+        // com a mesa lida sem os vãos, para o usuário consertar.
+        if (perfil is null && _vaosEscritos is not null)
+        {
+            var guardados = _vaosEscritos;
+            _vaosEscritos = null;
+            perfil = Ler(out motivo);
+            _vaosEscritos = guardados;
+
+            if (perfil is not null)
+                perfil = perfil with { Frame = perfil.Frame with { PillarSpans = guardados } };
+        }
+
+        if (perfil is null)
+        {
+            Avisar("Antes dos vãos, a mesa precisa fechar: " + motivo);
+            return;
+        }
+
+        var janela = new JanelaDeVaos(perfil.Layout, perfil.Frame) { Owner = this };
+
+        if (janela.ShowDialog() != true || !janela.Confirmou) return;
+
+        _vaosEscritos = janela.Vaos;
+        Recalcular();
     }
 
     private void NaoDeu(string motivo)

@@ -40,6 +40,42 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
     /// </summary>
     public const int VersaoDoFormato = 1;
 
+    /// <summary>
+    /// As configurações para uma mesa desta estrutura: o enterro mínimo T3
+    /// da estrutura, quando ela diz, manda sobre o da configuração (passo
+    /// 8.2). Se o T3 passar do enterro máximo, o máximo sobe junto: a
+    /// estrutura é do fabricante, e uma faixa invertida recusaria o projeto
+    /// inteiro por um campo que o usuário nem está olhando.
+    /// </summary>
+    /// <summary>
+    /// O aviso para o editor quando o T3 da estrutura muda o enterro
+    /// máximo da configuração, ou null quando não muda.
+    /// </summary>
+    public string? EmbedmentNote(TableFrame estrutura)
+    {
+        ArgumentNullException.ThrowIfNull(estrutura);
+        if (estrutura.MinEmbedment is not { } t3 || t3 <= Configuration.MaxEmbedment) return null;
+
+        return $"o enterro mínimo da estrutura (T3 = {t3.ToString("0.###", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"))} m) "
+            + $"passa do enterro máximo da configuração ({Configuration.MaxEmbedment.ToString("0.###", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"))} m); "
+            + "o máximo subiu junto para esta mesa";
+    }
+
+    public ProjectSettings ForTable(TableFrame estrutura)
+    {
+        ArgumentNullException.ThrowIfNull(estrutura);
+        if (estrutura.MinEmbedment is not { } t3) return this;
+
+        return this with
+        {
+            Configuration = Configuration with
+            {
+                MinEmbedment = t3,
+                MaxEmbedment = Math.Max(Configuration.MaxEmbedment, t3),
+            },
+        };
+    }
+
     // Os nomes ficam gravados no arquivo do usuário: mudar qualquer um torna
     // ilegível a configuração dos desenhos já salvos.
     private const string CampoAzimute = "AZIMUTE_RAD";

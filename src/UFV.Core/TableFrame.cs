@@ -55,6 +55,10 @@ public sealed record TableFrame(
     /// </summary>
     private const double MaiorMedida = 20.0;
 
+    /// <summary>Faixa aceita do T3, em metro.</summary>
+    private const double MenorEnterro = 0.001;
+    private const double MaiorEnterro = 5.0;
+
     private readonly double[]? _vaos;
 
     /// <summary>
@@ -133,7 +137,7 @@ public sealed record TableFrame(
         {
             if (!Medida(RafterLength)) return "o comprimento da tesoura não é uma medida válida";
             if (!Medida(PillarWidth)) return "a largura do pilar não é uma medida válida";
-            if (!Medida(PillarDepth)) return "a profundidade do pilar não é uma medida válida";
+            if (!Medida(PillarDepth)) return "a largura do pilar na inclinação (a antiga profundidade do pilar) não é uma medida válida";
 
             if (!double.IsFinite(PillarAlongRafter) || PillarAlongRafter < 0)
                 return "a posição do pilar na tesoura não é uma distância válida";
@@ -143,8 +147,11 @@ public sealed record TableFrame(
             if (!double.IsFinite(PillarCantilever) || PillarCantilever < 0 || PillarCantilever > MaiorMedida)
                 return "o balanço das pontas não é uma medida válida";
 
-            if (MinEmbedment is { } t3 && !Medida(t3))
-                return "o enterro mínimo do pilar (T3) não é uma medida válida";
+            // De 1 mm (o piso do SystemConfiguration, senão ForTable montaria
+            // uma configuração inválida) a 5 m: acima disso é quase certo
+            // alguém digitando em centímetro num campo em metro.
+            if (MinEmbedment is { } t3 && (!double.IsFinite(t3) || t3 < MenorEnterro || t3 > MaiorEnterro))
+                return $"o enterro mínimo do pilar (T3) não é uma medida válida: precisa ficar entre 0,001 e {MaiorEnterro:0} m (o campo é em metro)";
 
             if (_vaos is not null)
             {

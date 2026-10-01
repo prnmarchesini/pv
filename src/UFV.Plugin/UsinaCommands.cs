@@ -123,7 +123,9 @@ public static class UsinaCommands
         TableProfile perfil,
         bool avisarSeJaHaMesas)
     {
-        var settings = ConfigCommands.Inicial(documento, out var avisoDaConfig);
+        var doProjeto = ConfigCommands.Inicial(documento, out var avisoDaConfig);
+        if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage($"\n  ATENÇÃO: {notaDoT3}.\n");
+        var settings = doProjeto.ForTable(perfil.Frame);
         if (avisoDaConfig is not null) editor.WriteMessage($"\n  ATENÇÃO: {avisoDaConfig}\n");
 
         if (avisarSeJaHaMesas) FileiraCommands.AvisarSeJaHaMesas(editor, documento.Database);
