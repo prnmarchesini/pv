@@ -14,13 +14,19 @@ namespace UFV.Plugin;
 /// textos, tira as cores e quantifica, sem mexer no que a outra fez ("análise
 /// eu sempre faço independente para não ter erro e nem confusão").
 ///
+/// Independência das cores: cada análise guarda no desenho quais peças ela
+/// pintou (<see cref="PecasPintadas"/>). Analisar só pinta quem sai da faixa
+/// (quem fica dentro não perde a cor de outra análise) e Tirar cores só
+/// desfaz o que ela mesma pintou. A mesa que não cabe (marcada no XData)
+/// tem as peças intocadas: ela continua magenta, dizendo que não cabe.
+///
 /// A identidade de cada texto vai no XData (<see cref="AnalysisTextIdentity"/>),
 /// com o valor; a camada própria de cada análise é só para ligar e desligar.
-/// Uma transação por operação do usuário.
+/// Uma transação e uma varredura do desenho por operação do usuário.
 /// </summary>
 internal static class AnalisesIndependentes
 {
-    /// <summary>Altura do texto, em metro, até o estilo do projeto (8.13) mandar.</summary>
+    /// <summary>Altura do texto, em metro, quando o projeto não tem estilo escolhido (8.13).</summary>
     internal const double AlturaDoTexto = 0.35;
 
     /// <summary>Quanto o texto da ponta fica para fora da borda da mesa, em planta.</summary>
@@ -32,6 +38,7 @@ internal static class AnalisesIndependentes
     /// <summary>Uma mesa lida do desenho, com o que as análises precisam.</summary>
     private sealed record MesaLida(
         Guid Id,
+        bool Marcada,
         ObjectId Contorno,
         IReadOnlyList<Point3> Cantos,
         IReadOnlyList<(PillarIdentity Pilar, ObjectId Bloco)> Pilares,
@@ -63,7 +70,7 @@ internal static class AnalisesIndependentes
         /// <summary>O rumo legível do texto, ao longo da fileira.</summary>
         internal double Rumo => LayoutDrawer.RumoLegivel(Cantos[1].X - Cantos[0].X, Cantos[1].Y - Cantos[0].Y);
 
-        /// <summary>A declividade ao longo da fileira, na unidade dada, pela linha do meio da mesa.</summary>
+        /// <summary>A declividade ao longo da fileira, na unidade dada, pela linha do meio da mesa (a mesma da seta).</summary>
         internal double Declividade(SlopeUnit unidade)
         {
             var inicio = Meio(Cantos[0], Cantos[3]);
@@ -73,25 +80,33 @@ internal static class AnalisesIndependentes
         }
     }
 
+    /// <summary>O que uma varredura do desenho achou: as mesas e os textos de análise.</summary>
+    private sealed record Leitura(List<MesaLida> Mesas, List<(ObjectId Id, AnalysisTextIdentity Texto)> Textos, int ContornosIgnorados);
+
     // ------------------------------------------------------------- inserir
 
     /// <summary>
     /// Insere os textos da análise em todas as mesas. Os que já existiam
-    /// (desta análise) saem antes: inserir de novo não empilha texto.
-    /// Quantos textos criou.
+    /// (desta análise) saem antes, na mesma transação: inserir de novo não
+    /// empilha texto, e se a inserção falhar os antigos ficam.
     /// </summary>
-    internal static int Inserir(Database database, IndependentKind tipo, SlopeUnit unidade)
+    internal static (int Criados, int Mesas, int Ignoradas) Inserir(Database database, IndependentKind tipo, SlopeUnit unidade)
     {
-        Apagar(database, tipo);
-
         using var transacao = database.TransactionManager.StartTransaction();
+
+        var leitura = Ler(transacao, database);
+
+        foreach (var (id, texto) in leitura.Textos)
+        {
+            if (texto.Kind == tipo) ((Entity)transacao.GetObject(id, OpenMode.ForWrite)).Erase();
+        }
 
         var espaco = Espaco(transacao, database, OpenMode.ForWrite);
         var camada = LayoutLayers.Garantir(transacao, database, IndependentAnalysis.LayerName(tipo), CorDaCamada(tipo));
         var estilo = EstiloDoProjeto.PrepararTexto(transacao, database);
         var criados = 0;
 
-        foreach (var mesa in Mesas(transacao, database))
+        foreach (var mesa in leitura.Mesas)
         {
             switch (tipo)
             {
@@ -102,7 +117,11 @@ internal static class AnalisesIndependentes
 
                     criados += SetaDeDeclividade.Desenhar(
                         transacao, espaco, camada, mesa.Id, mesa.Cantos, unidade,
-                        (t, e) => LayoutXData.SaveAnalysisText(t, e, new AnalysisTextIdentity(Guid.NewGuid(), mesa.Id, tipo, valor)));
+                        (t, e) =>
+                        {
+                            if (e is MText texto) estilo(texto);
+                            LayoutXData.SaveAnalysisText(t, e, new AnalysisTextIdentity(Guid.NewGuid(), mesa.Id, tipo, valor));
+                        });
                     break;
                 }
 
@@ -117,6 +136,9 @@ internal static class AnalisesIndependentes
                     {
                         var valor = (alta ? pilar.HighEdgeClearance : pilar.LowEdgeClearance) ?? double.NaN;
                         var naBorda = mesa.NaBorda(pilar.Station, alta);
+
+                        // Na borda, no plano da mesa (regra 5: a cota é a da
+                        // mesa, que acompanha o terreno), só afastado em planta.
                         var onde = new Point3(naBorda.X + sinal * ux * AfastamentoDaBorda, naBorda.Y + sinal * uy * AfastamentoDaBorda, naBorda.Z);
 
                         Texto(transacao, espaco, camada, mesa.Id, tipo, valor, onde, mesa.Rumo, unidade, estilo);
@@ -143,7 +165,7 @@ internal static class AnalisesIndependentes
         }
 
         transacao.Commit();
-        return criados;
+        return (criados, leitura.Mesas.Count, leitura.ContornosIgnorados);
     }
 
     private static void Texto(
@@ -180,10 +202,9 @@ internal static class AnalisesIndependentes
 
         var apagadas = 0;
 
-        foreach (var (id, texto) in Textos(transacao, database, tipo))
+        foreach (var (id, _) in Textos(transacao, database, tipo))
         {
-            var entidade = (Entity)transacao.GetObject(id, OpenMode.ForWrite);
-            entidade.Erase();
+            ((Entity)transacao.GetObject(id, OpenMode.ForWrite)).Erase();
             apagadas++;
         }
 
@@ -194,10 +215,11 @@ internal static class AnalisesIndependentes
     // ------------------------------------------------------------ analisar
 
     /// <summary>
-    /// Pinta pela regra: os textos desta análise e, se a regra pede, as
-    /// peças (módulos nas pontas, contorno na declividade, pilares). Dentro
-    /// da faixa volta à cor da camada. A mesa que não cabe (camada de
-    /// marcadas) não é tocada: ela continua dizendo que não cabe.
+    /// Pinta pela regra os textos desta análise e, se a regra pede, as peças
+    /// (módulos nas pontas, contorno na declividade, pilares). Antes, desfaz
+    /// a pintura anterior DESTA análise nas peças; quem fica dentro da faixa
+    /// não é tocado, para não perder a cor que outra análise pôs. Quantos
+    /// textos e quantas peças ficaram pintados.
     /// </summary>
     internal static (int Textos, int Pecas) Analisar(Database database, IndependentKind tipo, ThresholdRule regra, SlopeUnit unidade)
     {
@@ -205,34 +227,46 @@ internal static class AnalisesIndependentes
 
         using var transacao = database.TransactionManager.StartTransaction();
 
+        var leitura = Ler(transacao, database);
         var textos = 0;
 
-        foreach (var (id, identidade) in Textos(transacao, database, tipo))
+        foreach (var (id, identidade) in leitura.Textos)
         {
-            var entidade = (Entity)transacao.GetObject(id, OpenMode.ForWrite);
-            if (Colorir(entidade, double.IsFinite(identidade.Value) ? regra.ColorOf(identidade.Value) : null)) textos++;
+            if (identidade.Kind != tipo) continue;
+
+            // O texto é desta análise só: dentro da faixa ele volta à cor da
+            // camada, que ninguém mais pinta.
+            var cor = double.IsFinite(identidade.Value) ? regra.ColorOf(identidade.Value) : null;
+            Colorir(transacao, id, cor);
+            if (cor is not null) textos++;
         }
 
-        var pecas = 0;
+        // A pintura anterior desta análise sai antes da nova: mudar a regra
+        // não deixa peça com a cor de antes.
+        DesfazerPecas(transacao, database, tipo);
+
+        var pintadas = new List<ObjectId>();
 
         if (regra.PaintPieces)
         {
-            foreach (var (peca, valor) in PecasComValor(transacao, database, tipo, unidade))
+            foreach (var (peca, valor) in PecasComValor(leitura.Mesas, tipo, unidade, incluirMarcadas: false))
             {
-                var entidade = (Entity)transacao.GetObject(peca, OpenMode.ForWrite);
-                if (EMarcada(entidade)) continue;
-                if (Colorir(entidade, double.IsFinite(valor) ? regra.ColorOf(valor) : null)) pecas++;
+                if (!double.IsFinite(valor) || regra.ColorOf(valor) is not { } cor) continue;
+
+                Colorir(transacao, peca, cor);
+                pintadas.Add(peca);
             }
         }
 
+        PecasPintadas.Gravar(database, tipo, pintadas);
+
         transacao.Commit();
-        return (textos, pecas);
+        return (textos, pintadas.Count);
     }
 
     /// <summary>
-    /// Tira as cores desta análise: textos e peças do tipo dela voltam à cor
-    /// da camada. A peça que o Pintar antigo (antes do 8.9) tinha mudado para
-    /// uma camada de análise volta para a camada fixa.
+    /// Tira as cores desta análise: os textos dela e as peças que ela pintou
+    /// voltam à cor da camada. Peça pintada por outra análise fica.
     /// </summary>
     internal static int TirarCores(Database database, IndependentKind tipo)
     {
@@ -242,19 +276,27 @@ internal static class AnalisesIndependentes
 
         foreach (var (id, _) in Textos(transacao, database, tipo))
         {
-            var entidade = (Entity)transacao.GetObject(id, OpenMode.ForWrite);
-            if (VoltarACamada(entidade, null)) mexidas++;
+            if (Colorir(transacao, id, null)) mexidas++;
         }
 
-        foreach (var (peca, _) in PecasComValor(transacao, database, tipo, SlopeUnit.Percent))
-        {
-            var entidade = (Entity)transacao.GetObject(peca, OpenMode.ForWrite);
-            if (EMarcada(entidade)) continue;
-            if (VoltarACamada(entidade, CamadaFixa(tipo))) mexidas++;
-        }
+        mexidas += DesfazerPecas(transacao, database, tipo);
 
         transacao.Commit();
         return mexidas;
+    }
+
+    /// <summary>As peças que esta análise pintou da última vez voltam à cor da camada; a lista é zerada.</summary>
+    private static int DesfazerPecas(Transaction transacao, Database database, IndependentKind tipo)
+    {
+        var desfeitas = 0;
+
+        foreach (var id in PecasPintadas.Ler(database, tipo))
+        {
+            if (Colorir(transacao, id, null)) desfeitas++;
+        }
+
+        PecasPintadas.Gravar(database, tipo, []);
+        return desfeitas;
     }
 
     // --------------------------------------------------------- quantificar
@@ -262,14 +304,16 @@ internal static class AnalisesIndependentes
     /// <summary>
     /// A contagem da análise, pelos dados das mesas (não pelos textos): os
     /// pontos (pilares, ou mesas na declividade) e, nas pontas, os módulos.
+    /// Mesas marcadas entram: elas existem e vão para o campo.
     /// </summary>
     internal static (BandCount Pontos, BandCount? Modulos) Quantificar(Database database, IndependentKind tipo, ThresholdRule regra, SlopeUnit unidade)
     {
         using var transacao = database.TransactionManager.StartOpenCloseTransaction();
 
+        var mesas = Ler(transacao, database).Mesas;
         var pontos = new List<double>();
 
-        foreach (var mesa in Mesas(transacao, database))
+        foreach (var mesa in mesas)
         {
             switch (tipo)
             {
@@ -283,7 +327,7 @@ internal static class AnalisesIndependentes
         BandCount? modulos = null;
 
         if (tipo is IndependentKind.LowEdge or IndependentKind.HighEdge)
-            modulos = BandCount.Of(regra, PecasComValor(transacao, database, tipo, unidade).Select(p => p.Valor));
+            modulos = BandCount.Of(regra, PecasComValor(mesas, tipo, unidade, incluirMarcadas: true).Select(p => p.Valor).ToList());
 
         transacao.Commit();
         return (BandCount.Of(regra, pontos), modulos);
@@ -297,17 +341,34 @@ internal static class AnalisesIndependentes
         return (BlockTableRecord)transacao.GetObject(tabela[BlockTableRecord.ModelSpace], modo);
     }
 
-    /// <summary>As mesas do desenho com contorno de quatro cantos, pilares e módulos lidos.</summary>
-    private static List<MesaLida> Mesas(Transaction transacao, Database database)
+    /// <summary>
+    /// Uma varredura: as mesas (contorno de quatro cantos, pilares e módulos
+    /// com a identidade) e os textos de análise, que o LayoutScan junta às
+    /// notas de cada mesa.
+    /// </summary>
+    private static Leitura Ler(Transaction transacao, Database database)
     {
         var mesas = new List<MesaLida>();
+        var textos = new List<(ObjectId, AnalysisTextIdentity)>();
+        var ignorados = 0;
 
         foreach (var (guid, partes) in LayoutScan.Tables(transacao, database))
         {
-            if (partes.Identity is null || partes.Contour is not { } contorno) continue;
+            foreach (var id in partes.Notes)
+            {
+                if (transacao.GetObject(id, OpenMode.ForRead) is Entity e && LayoutXData.LoadAnalysisText(e) is { } texto)
+                    textos.Add((id, texto));
+            }
+
+            if (partes.Identity is not { } identidade || partes.Contour is not { } contorno) continue;
 
             var cantos = FileiraCommands.Vertices((Polyline3d)transacao.GetObject(contorno, OpenMode.ForRead), transacao);
-            if (cantos.Count != 4) continue;
+
+            if (cantos.Count != 4)
+            {
+                ignorados++;
+                continue;
+            }
 
             var pilares = new List<(PillarIdentity, ObjectId)>();
 
@@ -325,13 +386,13 @@ internal static class AnalisesIndependentes
                     modulos.Add((m, id));
             }
 
-            mesas.Add(new MesaLida(guid, contorno, cantos, pilares.OrderBy(p => p.Item1.Station).ToList(), modulos));
+            mesas.Add(new MesaLida(guid, identidade.Marked, contorno, cantos, pilares.OrderBy(p => p.Item1.Station).ToList(), modulos));
         }
 
-        return mesas;
+        return new Leitura(mesas, textos, ignorados);
     }
 
-    /// <summary>Os textos desta análise no espaço do modelo.</summary>
+    /// <summary>Os textos desta análise (Apagar e Tirar cores não precisam das mesas).</summary>
     private static List<(ObjectId Id, AnalysisTextIdentity Texto)> Textos(Transaction transacao, Database database, IndependentKind tipo)
     {
         var achados = new List<(ObjectId, AnalysisTextIdentity)>();
@@ -353,13 +414,16 @@ internal static class AnalisesIndependentes
 
     /// <summary>
     /// As peças que a análise pinta, com o valor de cada uma: nas pontas, cada
-    /// módulo com o valor do pilar mais perto da coluna dele; na
-    /// declividade, o contorno; no pilar, o bloco.
+    /// módulo com o valor do pilar mais perto da coluna dele (sem pilar, sem
+    /// valor); na declividade, o contorno; no pilar, o bloco.
     /// </summary>
-    private static IEnumerable<(ObjectId Peca, double Valor)> PecasComValor(Transaction transacao, Database database, IndependentKind tipo, SlopeUnit unidade)
+    private static IEnumerable<(ObjectId Peca, double Valor)> PecasComValor(
+        IReadOnlyList<MesaLida> mesas, IndependentKind tipo, SlopeUnit unidade, bool incluirMarcadas)
     {
-        foreach (var mesa in Mesas(transacao, database))
+        foreach (var mesa in mesas)
         {
+            if (mesa.Marcada && !incluirMarcadas) continue;
+
             switch (tipo)
             {
                 case IndependentKind.Slope:
@@ -372,13 +436,19 @@ internal static class AnalisesIndependentes
 
                 default:
                 {
-                    if (mesa.Pilares.Count == 0 || mesa.Modulos.Count == 0) break;
+                    if (mesa.Modulos.Count == 0) break;
 
                     var colunas = mesa.Modulos.Max(m => m.Modulo.Column) + 1;
                     var largura = mesa.Comprimento / colunas;
 
                     foreach (var (modulo, bloco) in mesa.Modulos)
                     {
+                        if (mesa.Pilares.Count == 0)
+                        {
+                            yield return (bloco, double.NaN);
+                            continue;
+                        }
+
                         var estacao = (modulo.Column + 0.5) * largura;
                         var perto = mesa.Pilares.MinBy(p => Math.Abs(p.Pilar.Station - estacao)).Pilar;
                         var valor = (tipo == IndependentKind.HighEdge ? perto.HighEdgeClearance : perto.LowEdgeClearance) ?? double.NaN;
@@ -394,43 +464,22 @@ internal static class AnalisesIndependentes
 
     // --------------------------------------------------------------- cores
 
-    /// <summary>Põe a cor (ou volta à da camada, com null). Se mudou algo.</summary>
-    private static bool Colorir(Entity entidade, RgbColor? cor)
+    /// <summary>
+    /// Põe a cor, ou volta à da camada com null. Abre para escrita só se
+    /// muda algo (o desfazer e a data de modificação não ficam sujos à toa).
+    /// Se mudou.
+    /// </summary>
+    private static bool Colorir(Transaction transacao, ObjectId id, RgbColor? cor)
     {
-        if (cor is { } c)
-        {
-            entidade.Color = Color.FromRgb(c.R, c.G, c.B);
-            return true;
-        }
+        if (id.IsErased || transacao.GetObject(id, OpenMode.ForRead) is not Entity entidade) return false;
 
-        entidade.ColorIndex = 256;
-        return false;
+        var nova = cor is { } c ? Color.FromRgb(c.R, c.G, c.B) : Color.FromColorIndex(ColorMethod.ByLayer, 256);
+        if (entidade.Color == nova) return false;
+
+        entidade.UpgradeOpen();
+        entidade.Color = nova;
+        return true;
     }
-
-    private static bool VoltarACamada(Entity entidade, string? camadaFixa)
-    {
-        var mudou = entidade.ColorIndex != 256 || entidade.Color.IsByAci == false;
-
-        entidade.ColorIndex = 256;
-
-        if (camadaFixa is not null && entidade.Layer.StartsWith(PluginInfo.PrefixoDeDados + "_ANALISE_", StringComparison.OrdinalIgnoreCase))
-        {
-            entidade.Layer = camadaFixa;
-            mudou = true;
-        }
-
-        return mudou;
-    }
-
-    private static bool EMarcada(Entity entidade) =>
-        string.Equals(entidade.Layer, LayoutLayers.Marcada, StringComparison.OrdinalIgnoreCase);
-
-    private static string CamadaFixa(IndependentKind tipo) => tipo switch
-    {
-        IndependentKind.Slope => LayoutLayers.Mesa,
-        IndependentKind.PillarAbove => LayoutLayers.Pilar,
-        _ => LayoutLayers.Modulo,
-    };
 
     private static RgbColor CorDaCamada(IndependentKind tipo) => tipo switch
     {
@@ -444,4 +493,41 @@ internal static class AnalisesIndependentes
 
     private static double Distancia(Point3 a, Point3 b) =>
         Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y) + (a.Z - b.Z) * (a.Z - b.Z));
+}
+
+/// <summary>
+/// As peças que cada análise pintou, no dicionário do desenho, pelo handle.
+/// É o que deixa Tirar cores desfazer só o que a própria análise fez.
+/// </summary>
+internal static class PecasPintadas
+{
+    private const string Versao = "V1";
+
+    private static string Chave(IndependentKind tipo) => "PINTADAS_" + tipo.ToString().ToUpperInvariant();
+
+    internal static List<ObjectId> Ler(Database database, IndependentKind tipo)
+    {
+        var ids = new List<ObjectId>();
+
+        using var dados = PluginDictionary.Load(database, Chave(tipo));
+        if (dados is null) return ids;
+
+        foreach (var valor in dados.AsArray())
+        {
+            if (valor.Value is not string texto || texto == Versao) continue;
+            if (!long.TryParse(texto, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var numero)) continue;
+            if (database.TryGetObjectId(new Handle(numero), out var id) && !id.IsErased) ids.Add(id);
+        }
+
+        return ids;
+    }
+
+    internal static void Gravar(Database database, IndependentKind tipo, IReadOnlyList<ObjectId> pecas)
+    {
+        // O registro nunca fica vazio: a versão vai sempre na frente.
+        var valores = new List<TypedValue> { new((int)DxfCode.Text, Versao) };
+        valores.AddRange(pecas.Select(id => new TypedValue((int)DxfCode.Text, id.Handle.ToString())));
+
+        PluginDictionary.Save(database, Chave(tipo), new ResultBuffer(valores.ToArray()));
+    }
 }

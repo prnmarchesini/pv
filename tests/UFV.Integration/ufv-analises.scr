@@ -60,6 +60,9 @@
 
 (command "UFV_AN_TESTE_PECAS")
 (setq ufv:modpint (ufv:modulospintados))
+; Independencia: tirar as cores da PA nao mexe no que a PB pintou.
+(command "UFV_AN_PA_CORES")
+(setq ufv:modpa (ufv:modulospintados))
 
 (command "UFV_AN_PB_CORES")
 (setq ufv:pbsem (ufv:textos "LowEdge") ufv:modsem (ufv:modulospintados))
@@ -73,6 +76,6 @@
                " zmax=" (rtos (max (cadddr ufv:pb) (cadddr ufv:pa) (cadddr ufv:pi)) 2 3)))
 (princ (strcat "\nUFV_AN_LISP2 pbpintados=" (itoa (cadr ufv:pbpint)) " papintados=" (itoa (cadr ufv:papint))
                " modpintados=" (itoa ufv:modpint) " pbsemcor=" (itoa (cadr ufv:pbsem)) " modsemcor=" (itoa ufv:modsem)
-               " pbfim=" (itoa (car ufv:pbfim)) " pafim=" (itoa (car ufv:pafim))))
+               " pbfim=" (itoa (car ufv:pbfim)) " pafim=" (itoa (car ufv:pafim)) " modposPA=" (itoa ufv:modpa)))
 (setvar "SECURELOAD" ufv:secureload)
 (princ)

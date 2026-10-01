@@ -65,10 +65,10 @@ Só o Renan marca VALIDADO.
 | 8.6 | Motor com mais de um tipo de mesa | PENDENTE | |
 | 8.7 | Janela de Configurações com abas | PENDENTE | |
 | 8.8 | Gerar sem análise | AGUARDANDO VALIDAÇÃO | Usina, Fileira e Refazer desenham sem cor de análise, sem cota e sem seta; Recalcular e Pontas nunca pintam e acompanham o desenho (cotas se ele tem, seta se ligada); nível 2 da usina confere "nada analisado" |
-| 8.9 | Análise: altura das pontas | PENDENTE | |
-| 8.10 | Análise: declividade | PENDENTE | |
-| 8.11 | Análise: pilares | PENDENTE | |
-| 8.12 | Quantificar e exportar para Excel | PENDENTE | |
+| 8.9 | Análise: altura das pontas | AGUARDANDO VALIDAÇÃO | PB e PA: inserir, analisar (duas cores, módulos opcional), apagar, tirar cores, quantificar; `AnalisesIndependentes`, nível 2 `ufv-analises` |
+| 8.10 | Análise: declividade | AGUARDANDO VALIDAÇÃO | Mesma base do 8.9; seta + valor por mesa, % ou graus (trocar a unidade reinsere os textos), contorno opcional |
+| 8.11 | Análise: pilares | AGUARDANDO VALIDAÇÃO | Mesma base do 8.9; P (acima do terreno) em cada pilar, pilares opcionais |
+| 8.12 | Quantificar e exportar para Excel | AGUARDANDO VALIDAÇÃO | Quantificar grava a contagem no desenho; `UFV_EXCEL` grava .xlsx (Resumo, Análises, Pilares, Compra de pilares), escrito à mão no Core (`XlsxWriter`); aberto no Excel de verdade em 01/10 |
 | 8.13 | Estilos do projeto | PENDENTE | |
 | 8.14 | Tags | PENDENTE | |
 | 8.15 | Terreno | PENDENTE | |
@@ -4284,3 +4284,41 @@ existe o módulo TESTE-600."
 cinza/azul, sem nenhuma cor de análise, sem textos e sem seta, mesmo com a
 declividade ligada; 2) as mesas que não cabem continuam magenta; 3) Regerar
 alturas: as cotas aparecem (camada desligada, ligar com Alturas).
+
+### 8.9 a 8.12 (01/10/2026): análises independentes e Excel
+
+- Quatro análises com a mesma base (`IndependentAnalysis` no Core,
+  `AnalisesIndependentes` no plugin): ponta baixa (PB), ponta alta (PA),
+  declividade e pilar acima do terreno. Cada uma tem cinco comandos:
+  `UFV_AN_<PB|PA|DECL|PILAR>_INSERIR`, `_ANALISAR` (janela da regra: abaixo
+  de X uma cor, acima de Y outra, pintar também as peças ou só os textos),
+  `_APAGAR`, `_CORES` e `_QUANTIFICAR`.
+- Textos com identidade própria no XData (`AnalysisTextIdentity`, com o
+  valor), cada análise na sua camada `MARCHENG_UFV_TXT_*`, no plano da mesa
+  (regra 5); vão junto com a mesa ao recalcular, apagar e copiar.
+- Independência: cada análise guarda no desenho as peças que pintou; quem
+  fica dentro da faixa não é tocado, e Tirar cores só desfaz o que ela
+  mesma pintou. Mesa marcada (não cabe) não tem peça pintada; os textos
+  dela, sim.
+- Quantificar conta pilares (mesas, na declividade) e, nas pontas, módulos
+  (o pilar mais perto da coluna). Fica gravado no desenho e vai para o
+  Excel (`UFV_EXCEL`): Resumo (mesas, módulos, kWp, pilares, metros de
+  pilar enterrado, acima e total), Análises, Pilares (um por linha) e
+  Compra de pilares (comprimentos agrupados).
+- **Decisões minhas, o Renan confirma na tela:** limites padrão (PB abaixo
+  de 0,30 m vermelho e acima de 1,20 m azul; PA acima de 3,00 m; declividade
+  acima de 10%; pilar acima de 3,00 m); o texto da PB/PA fica 0,45 m para
+  fora da borda da mesa; o texto do pilar fica no topo dele; módulo leva a
+  cor do pilar mais perto da coluna dele; recalcular uma mesa apaga os
+  textos de análise dela (inserir de novo traz).
+- **Observações que ficam:** os comandos antigos (Pintar, Parâmetros,
+  Alturas, Declividade) continuam existindo até a ribbon nova (8.16).
+
+**Roteiro de tela do 8.9 a 8.12:** 1) gerar uma área (sai sem nada); 2)
+Análises → Ponta baixa → Inserir: um "PB 0,45" por pilar, fora da borda
+baixa; 3) Analisar: na janela, abaixo de 0,30 vermelho, acima de 1,20 azul,
+marcar "pintar também os módulos" → Analisar: textos e módulos fora da
+faixa coloridos; 4) Ponta alta → Inserir e Tirar cores: os módulos da PB
+continuam coloridos; 5) Ponta baixa → Quantificar: a linha de comando diz
+quantos pilares e quantos módulos em cada faixa; 6) Declividade → Inserir,
+Analisar com graus; 7) Excel: abrir o arquivo e conferir as quatro abas.

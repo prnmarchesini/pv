@@ -3171,13 +3171,19 @@ function Testar-Analises {
         return $false
     }
 
-    if ($r.Texto -notmatch 'UFV_AN_LISP2 pbpintados=(\d+) papintados=(\d+) modpintados=(\d+) pbsemcor=(\d+) modsemcor=(\d+) pbfim=(\d+) pafim=(\d+)') {
+    if ($r.Texto -notmatch 'UFV_AN_LISP2 pbpintados=(\d+) papintados=(\d+) modpintados=(\d+) pbsemcor=(\d+) modsemcor=(\d+) pbfim=(\d+) pafim=(\d+) modposPA=(\d+)') {
         $problemas.Add("ufv-analises: nao consegui ler a segunda parte do LISP. Veja $($r.Saida)")
         return $false
     }
 
     $pbPint = [int] $Matches[1]; $paPint = [int] $Matches[2]; $modPint = [int] $Matches[3]
     $pbSem = [int] $Matches[4]; $modSem = [int] $Matches[5]; $pbFim = [int] $Matches[6]; $paFim = [int] $Matches[7]
+    $modDepoisDaPA = [int] $Matches[8]
+
+    if ($modDepoisDaPA -ne $modPint) {
+        $problemas.Add("ufv-analises: tirar as cores da PA mexeu nos modulos que a PB pintou ($modPint antes, $modDepoisDaPA depois). Veja $($r.Saida)")
+        return $false
+    }
 
     if ($r.Texto -notmatch 'QUANTIFICAR ponta baixa: (\d+) abaixo de [\d,]+ m, (\d+) dentro, (\d+) acima de [\d,]+ m') {
         $problemas.Add("ufv-analises: nao achei a quantificacao da ponta baixa. Veja $($r.Saida)")

@@ -142,3 +142,27 @@ public class QuantityReportTests
         Assert.Equal("3", Celula(compra, "A3"));
     }
 }
+
+/// <summary>Achados da revisão do 8.12.</summary>
+public class XlsxRevisionTests
+{
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void CaractereDeControleSaiDoTextoENumerosDeOutrosTipos()
+    {
+        var planilha = new XlsxWriter();
+        var aba = planilha.Sheet("A");
+        aba.Add(["ok", "x"]);
+        aba.Add(["sino" + (char)7 + "fim", 3L]);
+        aba.Add(["decimal", 2.5m]);
+
+        using var zip = new System.IO.Compression.ZipArchive(new MemoryStream(planilha.ToBytes()));
+        using var leitor = new StreamReader(zip.GetEntry("xl/worksheets/sheet1.xml")!.Open());
+        var xml = System.Xml.Linq.XDocument.Parse(leitor.ReadToEnd());
+        var texto = xml.ToString();
+
+        Assert.Contains("sinofim", texto);
+        Assert.Contains("<v>3</v>", texto);
+        Assert.Contains("<v>2.5</v>", texto);
+    }
+}

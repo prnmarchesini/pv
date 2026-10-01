@@ -54,7 +54,7 @@ public sealed class XlsxWriter
                 "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
                 + "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
                 + "<fonts count=\"2\"><font><sz val=\"11\"/><name val=\"Calibri\"/></font><font><b/><sz val=\"11\"/><name val=\"Calibri\"/></font></fonts>"
-                + "<fills count=\"1\"><fill><patternFill patternType=\"none\"/></fill></fills>"
+                + "<fills count=\"2\"><fill><patternFill patternType=\"none\"/></fill><fill><patternFill patternType=\"gray125\"/></fill></fills>"
                 + "<borders count=\"1\"><border/></borders>"
                 + "<cellStyleXfs count=\"1\"><xf/></cellStyleXfs>"
                 + "<cellXfs count=\"2\"><xf fontId=\"0\"/><xf fontId=\"1\" applyFont=\"1\"/></cellXfs>"
@@ -147,8 +147,14 @@ public sealed class XlsxWriter
                         xml.Append(CultureInfo.InvariantCulture, $"<c r=\"{referencia}\"{estilo}><v>{d.ToString("R", CultureInfo.InvariantCulture)}</v></c>");
                         break;
 
-                    case int n:
-                        xml.Append(CultureInfo.InvariantCulture, $"<c r=\"{referencia}\"{estilo}><v>{n}</v></c>");
+                    case int or long or short or byte:
+                        xml.Append(CultureInfo.InvariantCulture, $"<c r=\"{referencia}\"{estilo}><v>{Convert.ToInt64(linha[c], CultureInfo.InvariantCulture)}</v></c>");
+                        break;
+
+                    case float or decimal:
+                        var numero = Convert.ToDouble(linha[c], CultureInfo.InvariantCulture);
+                        if (double.IsFinite(numero))
+                            xml.Append(CultureInfo.InvariantCulture, $"<c r=\"{referencia}\"{estilo}><v>{numero.ToString("R", CultureInfo.InvariantCulture)}</v></c>");
                         break;
 
                     case double:
@@ -156,7 +162,11 @@ public sealed class XlsxWriter
                         break;
 
                     default:
-                        var texto = SecurityElement.Escape(Convert.ToString(linha[c], CultureInfo.InvariantCulture)) ?? "";
+                        // Caractere de controle não é XML válido: o Excel
+                        // recusaria o arquivo inteiro por uma célula.
+                        var cru = new string((Convert.ToString(linha[c], CultureInfo.InvariantCulture) ?? "")
+                            .Where(ch => ch >= ' ' || ch is '\t' or '\n' or '\r').ToArray());
+                        var texto = SecurityElement.Escape(cru) ?? "";
                         xml.Append($"<c r=\"{referencia}\" t=\"inlineStr\"{estilo}><is><t xml:space=\"preserve\">{texto}</t></is></c>");
                         break;
                 }

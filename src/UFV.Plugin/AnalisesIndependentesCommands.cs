@@ -92,6 +92,8 @@ public static class AnalisesIndependentesCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar($"Não consegui ler a regra da análise {tipo}.", erro);
+            AcadApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+                $"\n  ATENÇÃO: a regra gravada de {IndependentAnalysis.Name(tipo)} não pôde ser lida; valeu a padrão.\n");
             return IndependentAnalysis.Default(tipo);
         }
     }
@@ -122,10 +124,17 @@ public static class AnalisesIndependentesCommands
             {
                 case Acao.Inserir:
                 {
-                    var criados = AnalisesIndependentes.Inserir(database, tipo, unidade);
-                    editor.WriteMessage(criados == 0
-                        ? $"\nANÁLISE {nome}: nenhuma mesa com contorno no desenho; nada inserido.\n"
-                        : $"\nANÁLISE {nome}: {criados} entidade(s) de texto inserida(s) na camada {IndependentAnalysis.LayerName(tipo)}.\n");
+                    var (criados, mesas, ignoradas) = AnalisesIndependentes.Inserir(database, tipo, unidade);
+
+                    editor.WriteMessage(mesas == 0
+                        ? $"\nANÁLISE {nome}: o desenho não tem mesa gerada pelo plugin; nada inserido.\n"
+                        : $"\nANÁLISE {nome}: {criados} entidade(s) de texto em {mesas} mesa(s), na camada {IndependentAnalysis.LayerName(tipo)}.\n");
+
+                    if (mesas > 0 && criados == 0)
+                        editor.WriteMessage("  As mesas não têm pilares com identidade: recalcule-as para a análise ter o que mostrar.\n");
+
+                    if (ignoradas > 0)
+                        editor.WriteMessage($"  {ignoradas} mesa(s) com contorno deformado (sem quatro cantos) ficaram de fora; use Validar.\n");
                     break;
                 }
 
@@ -147,9 +156,17 @@ public static class AnalisesIndependentesCommands
 
                         if (escolha.Value.Unidade != unidade)
                         {
+                            // Os textos guardam o valor na unidade em que
+                            // nasceram: trocada a unidade, saem de novo nela,
+                            // senão os limites novos comparariam % com graus.
                             SetaDeDeclividade.Gravar(database, SetaDeDeclividade.Ler(database).Ligada, escolha.Value.Unidade);
                             unidade = escolha.Value.Unidade;
-                            editor.WriteMessage($"\n  Unidade da declividade trocada: insira os textos de novo para eles mudarem.\n");
+
+                            if (AnalisesIndependentes.Apagar(database, tipo) > 0)
+                            {
+                                AnalisesIndependentes.Inserir(database, tipo, unidade);
+                                editor.WriteMessage("\n  Unidade da declividade trocada: os textos foram inseridos de novo nela.\n");
+                            }
                         }
 
                         regra = escolha.Value.Regra;
