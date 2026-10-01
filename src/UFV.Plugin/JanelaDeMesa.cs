@@ -32,6 +32,13 @@ internal sealed class JanelaDeMesa : Window
 
     private readonly TableProfileStore _perfis;
 
+    /// <summary>
+    /// Os vãos escritos e o T3 do perfil carregado. A janela ainda não tem
+    /// campo para eles (vem no 8.2); sem guardar aqui, salvar o perfil os
+    /// apagaria em silêncio.
+    /// </summary>
+    private (IReadOnlyList<double>? Vaos, double? Enterro) _semCampo;
+
     private readonly ComboBox _salvos = new() { Margin = new Thickness(0, 2, 0, 6) };
     private readonly TextBox _nome = Campo();
     private readonly ComboBox _modelo = new() { Margin = new Thickness(0, 2, 0, 6) };
@@ -398,6 +405,7 @@ internal sealed class JanelaDeMesa : Window
         _pilarProfundidade.Text = Numero(perfil.Frame.PillarDepth);
         _vaoAlvo.Text = Numero(perfil.Frame.PillarSpanTarget);
         _balanco.Text = Numero(perfil.Frame.PillarCantilever);
+        _semCampo = (perfil.Frame.PillarSpans, perfil.Frame.MinEmbedment);
 
         Selecionar(_arranjo, perfil.Layout.Arrangement);
 
@@ -462,7 +470,11 @@ internal sealed class JanelaDeMesa : Window
                 quantidade,
                 Arranjo(),
                 gapH, gapV, esquerda, direita),
-            new TableFrame(tesoura, t2, pilarL, pilarP, vao, balanco),
+            new TableFrame(tesoura, t2, pilarL, pilarP, vao, balanco)
+            {
+                PillarSpans = _semCampo.Vaos,
+                MinEmbedment = _semCampo.Enterro,
+            },
             graus * Math.PI / 180);
 
         if (perfil.WhyInvalid is { } porQue)
@@ -533,10 +545,7 @@ internal sealed class JanelaDeMesa : Window
                 return;
             }
 
-            var pilares = PillarTable.Distribute(
-                perfil.Layout.Length,
-                perfil.Frame.PillarSpanTarget,
-                perfil.Frame.PillarCantilever);
+            var pilares = perfil.Frame.Pillars(perfil.Layout);
             var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
 
             _planta.Mostrar(geometria);

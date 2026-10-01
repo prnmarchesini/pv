@@ -177,6 +177,8 @@ public sealed record TableProfile(
                 PillarDepth = Frame.PillarDepth,
                 PillarSpanTarget = Frame.PillarSpanTarget,
                 PillarCantilever = Frame.PillarCantilever,
+                PillarSpans = Frame.PillarSpans?.ToArray(),
+                MinEmbedment = Frame.MinEmbedment,
             },
         };
 
@@ -256,7 +258,13 @@ public sealed record TableProfile(
                 Exigir(arquivo.Frame.PillarWidth, "frame.pillarWidth"),
                 Exigir(arquivo.Frame.PillarDepth, "frame.pillarDepth"),
                 Exigir(arquivo.Frame.PillarSpanTarget, "frame.pillarSpanTarget"),
-                Exigir(arquivo.Frame.PillarCantilever, "frame.pillarCantilever")),
+                Exigir(arquivo.Frame.PillarCantilever, "frame.pillarCantilever"))
+            {
+                // Opcionais desde o 8.1: perfil gravado antes deles abre com
+                // o vão-alvo e o enterro da configuração, como sempre abriu.
+                PillarSpans = arquivo.Frame.PillarSpans,
+                MinEmbedment = arquivo.Frame.MinEmbedment,
+            },
             Exigir(arquivo.TiltDegrees, "tiltDegrees") * Math.PI / 180);
 
         if (perfil.WhyInvalid is { } motivo)
@@ -331,5 +339,11 @@ public sealed record TableProfile(
         public double? PillarDepth { get; init; }
         public double? PillarSpanTarget { get; init; }
         public double? PillarCantilever { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double[]? PillarSpans { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double? MinEmbedment { get; init; }
     }
 }

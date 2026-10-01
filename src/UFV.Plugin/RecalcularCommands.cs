@@ -126,7 +126,7 @@ public static class RecalcularCommands
         var settings = ConfigCommands.Inicial(documento, out var avisoDaConfig);
         if (avisoDaConfig is not null) editor.WriteMessage($"\n  ATENÇÃO: {avisoDaConfig}\n");
 
-        var pilares = PillarTable.Distribute(perfil.Layout.Length, perfil.Frame.PillarSpanTarget, perfil.Frame.PillarCantilever);
+        var pilares = perfil.Frame.Pillars(perfil.Layout);
         var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
 
         // Recalcular uma mesa troca as entidades DELA; a varredura é refeita

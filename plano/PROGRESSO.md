@@ -57,7 +57,7 @@ Só o Renan marca VALIDADO.
 | 7.8 | Auto-seleção | AGUARDANDO VALIDAÇÃO | caixa flutuante semitransparente com mesas, módulos e kWp da seleção (`AutoSelecao`, na folga do AutoCAD); a conta é o `UFV_KWP_SELECAO`, com nível 2 |
 | 7.9 | Grupos e painel de informações | AGUARDANDO VALIDAÇÃO | `TableGroup` (Core, 3 testes) no registro `GRUPOS`; `UFV_GRUPO_CRIAR`/`GRUPOS`/`GRUPO_RECALCULAR`/`GRUPO_SELECIONAR`/`GRUPO_APAGAR` com nível 2; painel (paleta WPF) com lista e botões |
 | 7.10 | Numeração | AGUARDANDO VALIDAÇÃO | `RowNumbering` (Core, 8 testes); `UFV_NUMERAR` com nível 2 (usina de 80 mesas invertida); seção Numeração na ribbon |
-| 8.1 | Vãos personalizados e enterro mínimo (Core) | PENDENTE | |
+| 8.1 | Vãos personalizados e enterro mínimo (Core) | VALIDADO (automático) | `TableFrame.PillarSpans`, `MinEmbedment` (T3), `PillarCoverage`, `SpanDifference`, `Pillars(mesa)`; perfil JSON com os dois campos opcionais; 25 testes |
 | 8.2 | Janela da estrutura | PENDENTE | |
 | 8.3 | Serviço local de módulos | PENDENTE | |
 | 8.4 | Cadastro de módulo | PENDENTE | |
@@ -4160,3 +4160,20 @@ Word, que o Renan confirma na tela:
 - Serviço local de módulos no padrão do meuPlano (FastAPI, SQLAlchemy,
   Alembic, Postgres, SQLite sem `DATABASE_URL`); chave/licença fica para
   quando ele pedir (decisão de 30/09).
+
+### 8.1 (01/10/2026): vãos escritos e T3
+
+- `TableFrame` ganhou `PillarSpans` (vãos P1-P2, P2-P3..., opcional) e
+  `MinEmbedment` (T3, opcional). Sem vãos, a tabela sai do vão-alvo como
+  antes; com vãos, a soma tem que fechar com `PillarCoverage` (mesa inteira
+  menos os dois balanços), a 1 mm. Vão escrito tem o mesmo teto de 20 m do
+  vão-alvo.
+- Todo comando do plugin passou a pedir a tabela por `perfil.Frame.Pillars`
+  (antes chamava `PillarTable.Distribute` direto em seis lugares).
+- A janela de Mesa guarda os vãos e o T3 do perfil carregado até ganhar os
+  campos (8.2); sem isso, salvar apagaria os dois (achado do revisor).
+- **Observações que ficam:** o T3 está gravado mas o motor ainda usa o
+  enterro da Configuração (`PillarCalculator`); a troca entra no 8.7, quando
+  o campo sai da Configuração. Perfil com vãos ou T3 não abre num plugin
+  anterior ao 8.1 (campo desconhecido); como só há a máquina do Renan, a
+  versão do formato não subiu.

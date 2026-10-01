@@ -138,7 +138,7 @@ public static class AnalisesCommands
         var settings = ConfigCommands.Inicial(documento, out var avisoDaConfig);
         if (avisoDaConfig is not null) editor.WriteMessage($"\n  ATENÇÃO: {avisoDaConfig}\n");
 
-        var pilares = PillarTable.Distribute(perfil.Layout.Length, perfil.Frame.PillarSpanTarget, perfil.Frame.PillarCantilever);
+        var pilares = perfil.Frame.Pillars(perfil.Layout);
         var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
 
         var processadas = new List<ProcessedTable>();

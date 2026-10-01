@@ -48,7 +48,7 @@ $solucao = Join-Path $raiz 'UFV.sln'
 $saida   = Join-Path $raiz 'artefatos\testes'
 
 # @(0) e falsy em PowerShell, entao "-Etapa 0" com if ($Etapa) rodaria tudo.
-$etapas = if ($PSBoundParameters.ContainsKey('Etapa')) { $Etapa } else { 0..7 }
+$etapas = if ($PSBoundParameters.ContainsKey('Etapa')) { $Etapa } else { 0..8 }
 
 # O dotnet pode nao estar no PATH da sessao logo depois de instalado.
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
@@ -212,7 +212,7 @@ if (-not $PSBoundParameters.ContainsKey('Etapa')) {
         }
 
         $comEtapa = 0
-        foreach ($n in 0..7) {
+        foreach ($n in 0..8) {
             $trx = Join-Path $saida "etapa-$n--$nome.trx"
             if (Test-Path $trx) {
                 [xml] $x = Get-Content $trx

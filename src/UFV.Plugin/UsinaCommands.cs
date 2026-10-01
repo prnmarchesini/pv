@@ -128,7 +128,7 @@ public static class UsinaCommands
 
         if (avisarSeJaHaMesas) FileiraCommands.AvisarSeJaHaMesas(editor, documento.Database);
 
-        var pilares = PillarTable.Distribute(perfil.Layout.Length, perfil.Frame.PillarSpanTarget, perfil.Frame.PillarCantilever);
+        var pilares = perfil.Frame.Pillars(perfil.Layout);
         var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
         var config = settings.Configuration;
         var celula = new TableFootprint(geometria.Length, geometria.Depth * Math.Cos(perfil.TiltRadians));

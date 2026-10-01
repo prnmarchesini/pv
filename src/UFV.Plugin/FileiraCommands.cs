@@ -158,7 +158,7 @@ public static class FileiraCommands
 
         AvisarSeJaHaMesas(editor, documento.Database);
 
-        var pilares = PillarTable.Distribute(perfil.Layout.Length, perfil.Frame.PillarSpanTarget, perfil.Frame.PillarCantilever);
+        var pilares = perfil.Frame.Pillars(perfil.Layout);
         var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
 
         var config = settings.Configuration;
@@ -308,7 +308,7 @@ public static class FileiraCommands
     internal static TableGeometry GeometriaDe(TableProfile perfil) =>
         TableGeometry.Local(
             perfil.Layout,
-            PillarTable.Distribute(perfil.Layout.Length, perfil.Frame.PillarSpanTarget, perfil.Frame.PillarCantilever),
+            perfil.Frame.Pillars(perfil.Layout),
             perfil.Frame);
 
     internal static (IReadOnlyList<Point3> Vertices, string Nome)? EscolherArea(Editor editor, Document documento)
