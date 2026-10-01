@@ -59,7 +59,7 @@ Só o Renan marca VALIDADO.
 | 7.10 | Numeração | AGUARDANDO VALIDAÇÃO | `RowNumbering` (Core, 8 testes); `UFV_NUMERAR` com nível 2 (usina de 80 mesas invertida); seção Numeração na ribbon |
 | 8.1 | Vãos personalizados e enterro mínimo (Core) | VALIDADO (automático) | `TableFrame.PillarSpans`, `MinEmbedment` (T3), `PillarCoverage`, `SpanDifference`, `Pillars(mesa)`; perfil JSON com os dois campos opcionais; 25 testes |
 | 8.2 | Janela da estrutura | PENDENTE | |
-| 8.3 | Serviço local de módulos | PENDENTE | |
+| 8.3 | Serviço local de módulos | AGUARDANDO VALIDAÇÃO | `servidor/` (FastAPI, SQLAlchemy, Alembic; SQLite sem `DATABASE_URL`, Postgres no `docker-compose`), 24 testes no placar; janela de Mesa lista os módulos do serviço e diz a origem; sem serviço, a embutida |
 | 8.4 | Cadastro de módulo | PENDENTE | |
 | 8.5 | Mesas do desenho | PENDENTE | |
 | 8.6 | Motor com mais de um tipo de mesa | PENDENTE | |
@@ -4177,3 +4177,29 @@ Word, que o Renan confirma na tela:
   o campo sai da Configuração. Perfil com vãos ou T3 não abre num plugin
   anterior ao 8.1 (campo desconhecido); como só há a máquina do Renan, a
   versão do formato não subiu.
+
+### 8.3 (01/10/2026): serviço local de módulos
+
+- `servidor/`: FastAPI + SQLAlchemy + Alembic, padrão do meuPlano. Rotas
+  `/saude` e `/modulos` (listar, um, cadastrar, alterar, apagar). Modelo
+  único ignorando maiúscula pela coluna `chave` (normalizada em Python, que
+  o `lower()` do SQLite só pega ASCII). Mesmos limites do `SolarModule`
+  (medidas, potência, largura ≤ altura, espessura < largura). Banco vazio
+  recebe os três módulos que vinham embutidos (`semear.py`).
+- Subir no localhost: `.	ools\servico-local.ps1` (SQLite, sem Docker) ou
+  `docker compose up -d --build` em `servidor/` (Postgres; o Docker da
+  máquina estava parado em 01/10, o compose não foi rodado).
+- Plugin: `FonteDeModulos` busca `http://localhost:8765/modulos` (ou
+  `UFV_SERVICO`) com 1,5 s de limite; fora do ar, usa a biblioteca embutida,
+  guarda isso por 1 minuto e escreve a origem embaixo do campo Modelo.
+- O placar ganhou a linha `Servico` (pytest de `servidor/`).
+- **Observações que ficam:** o serviço não tem autenticação; antes de ir
+  para o Coolify precisa de chave (casa com o licenciamento de 30/09). Um
+  módulo inválido no serviço derruba a lista inteira para a embutida (o
+  serviço não deixa gravar um assim). O exemplo do comando Mesa sem perfil
+  salvo continua tirando o módulo da embutida.
+
+**Roteiro de tela do 8.3:** 1) rodar `.	ools\servico-local.ps1`; 2) no
+Civil 3D, botão Mesa: embaixo do Modelo deve aparecer "Módulos do serviço
+(http://localhost:8765): 3."; 3) fechar a janela do serviço, esperar um
+minuto, abrir a Mesa de novo: "Biblioteca embutida (serviço fora do ar)."

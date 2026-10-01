@@ -69,13 +69,20 @@ public static class ModuleLibrary
     /// quebrada: aí <see cref="Default"/> lança, e deve lançar mesmo — instalação
     /// corrompida é coisa para aparecer, não para virar "não achei o modelo".
     /// </summary>
-    public static SolarModule? Find(string? modelo)
+    public static SolarModule? Find(string? modelo) => Find(Default(), modelo);
+
+    /// <summary>
+    /// O mesmo que <see cref="Find(string?)"/>, numa lista qualquer: a do
+    /// serviço local (passo 8.3) ou a embutida.
+    /// </summary>
+    public static SolarModule? Find(IReadOnlyList<SolarModule> modulos, string? modelo)
     {
+        ArgumentNullException.ThrowIfNull(modulos);
         if (string.IsNullOrWhiteSpace(modelo)) return null;
 
         var procurado = modelo.Trim();
 
-        return Default().FirstOrDefault(m => Nomes.Equals(m.Model.Trim(), procurado));
+        return modulos.FirstOrDefault(m => Nomes.Equals(m.Model.Trim(), procurado));
     }
 
     /// <summary>
@@ -113,6 +120,49 @@ public static class ModuleLibrary
             throw new InvalidOperationException("A biblioteca de módulos está vazia.");
         }
 
+        return Validar(entradas);
+    }
+
+    /// <summary>
+    /// Lê a lista de módulos que o serviço devolve em <c>GET /modulos</c>
+    /// (passo 8.3), com os nomes de campo do serviço, e passa pela mesma
+    /// validação da biblioteca embutida.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Pelos mesmos motivos de <see cref="Parse"/>.
+    /// </exception>
+    public static IReadOnlyList<SolarModule> ParseService(string json)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+
+        List<DoServico>? doServico;
+
+        try
+        {
+            doServico = JsonSerializer.Deserialize<List<DoServico>>(json, Opcoes);
+        }
+        catch (JsonException erro)
+        {
+            throw new InvalidOperationException(
+                $"A lista de módulos do serviço não pôde ser lida: {erro.Message}", erro);
+        }
+
+        if (doServico is null or { Count: 0 })
+            throw new InvalidOperationException("O serviço não tem nenhum módulo cadastrado.");
+
+        return Validar(doServico.Select(m => new Entrada
+        {
+            Brand = m.Marca,
+            Model = m.Modelo,
+            PowerWatts = m.PotenciaW,
+            Height = m.AlturaM,
+            Width = m.LarguraM,
+            Thickness = m.EspessuraM,
+        }).ToList());
+    }
+
+    private static IReadOnlyList<SolarModule> Validar(List<Entrada> entradas)
+    {
         var modulos = new List<SolarModule>();
 
         foreach (var entrada in entradas)
@@ -181,6 +231,17 @@ public static class ModuleLibrary
         using var leitor = new StreamReader(fluxo);
 
         return Parse(leitor.ReadToEnd());
+    }
+
+    /// <summary>O módulo como o serviço devolve (nomes do Python, em snake_case).</summary>
+    private sealed class DoServico
+    {
+        [JsonPropertyName("marca")] public string? Marca { get; init; }
+        [JsonPropertyName("modelo")] public string? Modelo { get; init; }
+        [JsonPropertyName("potencia_w")] public double PotenciaW { get; init; }
+        [JsonPropertyName("altura_m")] public double AlturaM { get; init; }
+        [JsonPropertyName("largura_m")] public double LarguraM { get; init; }
+        [JsonPropertyName("espessura_m")] public double EspessuraM { get; init; }
     }
 
     /// <summary>

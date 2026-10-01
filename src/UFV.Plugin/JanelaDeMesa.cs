@@ -39,6 +39,10 @@ internal sealed class JanelaDeMesa : Window
     /// </summary>
     private (IReadOnlyList<double>? Vaos, double? Enterro) _semCampo;
 
+    /// <summary>Os módulos da lista e de onde vieram (serviço ou embutida, passo 8.3).</summary>
+    private readonly IReadOnlyList<SolarModule> _modulos;
+    private readonly TextBlock _origemDosModulos = new() { FontSize = 11, Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap };
+
     private readonly ComboBox _salvos = new() { Margin = new Thickness(0, 2, 0, 6) };
     private readonly TextBox _nome = Campo();
     private readonly ComboBox _modelo = new() { Margin = new Thickness(0, 2, 0, 6) };
@@ -108,7 +112,9 @@ internal sealed class JanelaDeMesa : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        foreach (var modulo in ModuleLibrary.Default())
+        (_modulos, _origemDosModulos.Text) = FonteDeModulos.Carregar();
+
+        foreach (var modulo in _modulos)
             _modelo.Items.Add(new ComboBoxItem { Content = modulo.Describe(), Tag = modulo });
 
         _modelo.Items.Add(new ComboBoxItem { Content = "(outro módulo, medidas à mão)", Tag = null });
@@ -277,6 +283,7 @@ internal sealed class JanelaDeMesa : Window
 
         Secao("Módulo");
         Linha("Modelo", _modelo);
+        pilha.Children.Add(_origemDosModulos);
         Linha("Altura (m)", _altura);
         Linha("Largura (m)", _largura);
         Linha("Espessura (m)", _espessura);
@@ -409,11 +416,11 @@ internal sealed class JanelaDeMesa : Window
 
         Selecionar(_arranjo, perfil.Layout.Arrangement);
 
-        var daBiblioteca = ModuleLibrary.Find(perfil.Layout.Module.Model);
+        var daBiblioteca = ModuleLibrary.Find(_modulos, perfil.Layout.Module.Model);
 
         _modelo.SelectedIndex = daBiblioteca is null
             ? _modelo.Items.Count - 1
-            : ModuleLibrary.Default().ToList().FindIndex(m => m.Model == daBiblioteca.Model);
+            : _modulos.ToList().IndexOf(daBiblioteca);
     }
 
     /// <summary>

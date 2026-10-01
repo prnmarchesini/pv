@@ -239,6 +239,51 @@ if (Test-Path $nivel2) {
     Escrever-Linha 'Nivel 2' '-' 'sem testes'
 }
 
+# ---- servico local (pytest) ------------------------------------------------
+# Passo 8.3: o servico de modulos em servidor/ (FastAPI). Sem Python na
+# maquina, a linha sai "sem python" e nao derruba o placar do plugin.
+
+$servidor = Join-Path $raiz 'servidor'
+if ((Test-Path $servidor) -and (Get-Command python -ErrorAction SilentlyContinue)) {
+    Push-Location $servidor
+    # Continue: com Stop, qualquer linha do python no stderr (um aviso, ou
+    # "No module named pytest") vira erro terminante e derruba o placar.
+    $antes = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & python -c "import pytest, fastapi, sqlalchemy, alembic, httpx" 2>$null
+        $temDependencias = ($LASTEXITCODE -eq 0)
+        if ($temDependencias) {
+            $saida = & python -m pytest -q -p no:cacheprovider 2>&1 | Out-String
+            $codigoServico = $LASTEXITCODE
+        }
+    }
+    finally {
+        $ErrorActionPreference = $antes
+        Pop-Location
+    }
+}
+
+if (-not (Test-Path $servidor)) {
+    # sem servico, sem linha
+} elseif (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+    Escrever-Linha 'Servico' '-' 'sem python'
+} elseif (-not $temDependencias) {
+    Escrever-Linha 'Servico' '-' 'sem pytest (pip install -r servidor/requirements-dev.txt)'
+} else {
+
+    $passouServico = if ($saida -match '(\d+) passed') { [int] $Matches[1] } else { 0 }
+    $falhouServico = if ($saida -match '(\d+) failed') { [int] $Matches[1] } else { 0 }
+    $totalServico = $passouServico + $falhouServico
+
+    if ($codigoServico -eq 0) {
+        Escrever-Linha 'Servico' "$passouServico/$totalServico" 'OK'
+    } else {
+        Escrever-Linha 'Servico' "$passouServico/$totalServico" 'FALHOU'
+        $problemas.Add("servidor/ (pytest) falhou:`n$saida")
+    }
+}
+
 # ---- acervo ----------------------------------------------------------------
 
 try {

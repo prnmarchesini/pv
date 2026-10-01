@@ -1,0 +1,26 @@
+[
+  {
+    "brand": "Risen",
+    "model": "RSM132-8-720BHDG",
+    "powerWatts": 720,
+    "height": 2.384,
+    "width": 1.303,
+    "thickness": 0.033
+  },
+  {
+    "brand": "Risen",
+    "model": "RSM132-8-730BHDG",
+    "powerWatts": 730,
+    "height": 2.384,
+    "width": 1.303,
+    "thickness": 0.033
+  },
+  {
+    "brand": "Risen",
+    "model": "RSM132-8-740BHDG",
+    "powerWatts": 740,
+    "height": 2.384,
+    "width": 1.303,
+    "thickness": 0.033
+  }
+]
