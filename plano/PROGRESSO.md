@@ -4186,7 +4186,7 @@ Word, que o Renan confirma na tela:
   o `lower()` do SQLite só pega ASCII). Mesmos limites do `SolarModule`
   (medidas, potência, largura ≤ altura, espessura < largura). Banco vazio
   recebe os três módulos que vinham embutidos (`semear.py`).
-- Subir no localhost: `.	ools\servico-local.ps1` (SQLite, sem Docker) ou
+- Subir no localhost: `.\tools\servico-local.ps1` (SQLite, sem Docker) ou
   `docker compose up -d --build` em `servidor/` (Postgres; o Docker da
   máquina estava parado em 01/10, o compose não foi rodado).
 - Plugin: `FonteDeModulos` busca `http://localhost:8765/modulos` (ou
@@ -4199,7 +4199,7 @@ Word, que o Renan confirma na tela:
   serviço não deixa gravar um assim). O exemplo do comando Mesa sem perfil
   salvo continua tirando o módulo da embutida.
 
-**Roteiro de tela do 8.3:** 1) rodar `.	ools\servico-local.ps1`; 2) no
+**Roteiro de tela do 8.3:** 1) rodar `.\tools\servico-local.ps1`; 2) no
 Civil 3D, botão Mesa: embaixo do Modelo deve aparecer "Módulos do serviço
 (http://localhost:8765): 3."; 3) fechar a janela do serviço, esperar um
 minuto, abrir a Mesa de novo: "Biblioteca embutida (serviço fora do ar)."
