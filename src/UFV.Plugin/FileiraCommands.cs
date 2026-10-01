@@ -122,7 +122,7 @@ public static class FileiraCommands
 
             if (desligada is null)
             {
-                editor.WriteMessage("\nAinda não há alturas no desenho: processe uma fileira primeiro.\n");
+                editor.WriteMessage($"\nAinda não há alturas no desenho: gerar não as põe (8.8); rode {PluginInfo.ComandoAlturasRegerar} primeiro.\n");
                 return;
             }
 
@@ -193,7 +193,7 @@ public static class FileiraCommands
 
         var processada = RowPipeline.ProcessRow(fileira, geometria, perfil.TiltRadians, terreno.Mesh, settings);
 
-        var desenho = LayoutDrawer.Draw(documento.Database, processada, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses);
+        var desenho = LayoutDrawer.Draw(documento.Database, processada, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses, analisar: LayoutDrawer.Analise.Nada);
 
         relogio.Stop();
 
@@ -221,7 +221,7 @@ public static class FileiraCommands
         foreach (var mesa in fileira.Tables)
             editor.WriteMessage($"  {mesa.Report.Describe()}; {mesa.Pillars.Describe()}\n");
 
-        editor.WriteMessage($"\n  As alturas estão na camada {LayoutLayers.Alturas}, desligada. {PluginInfo.ComandoAlturas} liga.\n");
+        editor.WriteMessage("\n  Gerado sem análise: cores, alturas e declividade saem pelo menu Análises.\n");
     }
 
     // ------------------------------------------------------------ entradas

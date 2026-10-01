@@ -18,6 +18,33 @@
 ; O contorno da mesa pintada por analise (borda, declividade) muda para a
 ; camada da analise; um contorno esta numa das tres camadas.
 (setq ufv:mesas (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "MARCHENG_UFV_MESA,MARCHENG_UFV_ANALISE_BORDA,MARCHENG_UFV_ANALISE_DECLIVIDADE,MARCHENG_UFV_MARCADA"))))
+; Passo 8.8: gerar nao analisa. Nenhuma cota na camada das alturas,
+; nenhuma seta, nenhum contorno nas camadas de analise, e nenhum pilar ou
+; modulo fora da camada fixa com cor propria (a mesa que nao cabe fica na
+; camada de marcadas, magenta: e aviso do motor, nao analise).
+(defun ufv:conta (ss) (if ss (sslength ss) 0))
+(setq ufv:cotas (ufv:conta (ssget "_X" (list (cons 8 "MARCHENG_UFV_ALTURAS")))))
+(setq ufv:setas (ufv:conta (ssget "_X" (list (cons 8 "MARCHENG_UFV_SETA_DECLIVIDADE")))))
+(setq ufv:analise (ufv:conta (ssget "_X" (list (cons 8 "MARCHENG_UFV_ANALISE_*")))))
+(setq ufv:pecas (ssget "_X" (list (cons 0 "INSERT") (cons 8 "MARCHENG_UFV_PILAR,MARCHENG_UFV_MODULO"))))
+(setq ufv:i 0 ufv:cores 0)
+(while (< ufv:i (ufv:conta ufv:pecas))
+  (setq ufv:e (entget (ssname ufv:pecas ufv:i)))
+  (if (or (assoc 420 ufv:e) (and (assoc 62 ufv:e) (/= (cdr (assoc 62 ufv:e)) 256))) (setq ufv:cores (1+ ufv:cores)))
+  (setq ufv:i (1+ ufv:i)))
+; As pecas da mesa que nao cabe: so magenta (16711935), nunca a cor de uma
+; analise.
+(setq ufv:marcadas (ssget "_X" (list (cons 0 "INSERT") (cons 8 "MARCHENG_UFV_MARCADA"))))
+(setq ufv:i 0)
+(while (< ufv:i (ufv:conta ufv:marcadas))
+  (if (/= (cdr (assoc 420 (entget (ssname ufv:marcadas ufv:i)))) 16711935) (setq ufv:cores (1+ ufv:cores)))
+  (setq ufv:i (1+ ufv:i)))
+; E nem as camadas de analise e de alturas nascem ao gerar.
+(setq ufv:camadas 0)
+(foreach ufv:c '("MARCHENG_UFV_ALTURAS" "MARCHENG_UFV_SETA_DECLIVIDADE" "MARCHENG_UFV_ANALISE_PONTA_BAIXA" "MARCHENG_UFV_ANALISE_PILAR" "MARCHENG_UFV_ANALISE_ENTERRO" "MARCHENG_UFV_ANALISE_BORDA" "MARCHENG_UFV_ANALISE_DECLIVIDADE")
+  (if (tblsearch "LAYER" ufv:c) (setq ufv:camadas (1+ ufv:camadas))))
+(setq ufv:analise (+ ufv:analise ufv:camadas))
+(princ (strcat "\nUFV_USINA_LIMPA cotas=" (itoa ufv:cotas) " setas=" (itoa ufv:setas) " analise=" (itoa ufv:analise) " cores=" (itoa ufv:cores)))
 (setq ufv:np (if ufv:pilares (sslength ufv:pilares) 0))
 (setq ufv:nf (if ufv:faces (sslength ufv:faces) 0))
 (setq ufv:nm (if ufv:mesas (sslength ufv:mesas) 0))

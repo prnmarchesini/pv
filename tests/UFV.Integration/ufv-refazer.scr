@@ -2,7 +2,8 @@
 ; refazer a area inteira (UFV_REFAZER_AUTO). O que se confere em LISP:
 ;   - a fileira desenhada antes foi apagada, e nada ficou em dobro: os
 ;     pilares sao 7 por contorno e as faces 28 por contorno;
-;   - toda nota (cota, aviso) tem XData com o GUID de uma mesa existente;
+;   - desde o 8.8 o refazer desenha sem analise: as cotas da fileira antiga
+;     foram apagadas e nenhuma nasceu de novo;
 ;   - o total de mesas e o da usina inteira (mais de uma fileira).
 
 (setq ufv:secureload (getvar "SECURELOAD"))
@@ -14,6 +15,8 @@
 (command "UFV_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area do refazer")
 (command "UFV_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento do refazer")
 (command "UFV_FILEIRA_AUTO")
+; Desde o 8.8 gerar nao poe cota: as alturas vem do comando de analise.
+(command "UFV_ALTURAS_REGERAR")
 (setvar "OSMODE" ufv:osmode)
 (setq ufv:antes (ssget "_X" (list (cons -3 (list (list "MARCHENG_UFV"))))))
 (setq ufv:nantes (if ufv:antes (sslength ufv:antes) 0))

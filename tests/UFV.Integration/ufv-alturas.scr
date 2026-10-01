@@ -13,6 +13,8 @@
 (command "UFV_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area das alturas")
 (command "UFV_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento das alturas")
 (command "UFV_FILEIRA_AUTO")
+; Desde o 8.8 gerar nao poe cota: as alturas vem do comando de analise.
+(command "UFV_ALTURAS_REGERAR")
 (setvar "OSMODE" ufv:osmode)
 (defun ufv:camada ( / ss) (setq ss (ssget "_X" (list (cons 8 "MARCHENG_UFV_ALTURAS")))) (if ss (sslength ss) 0))
 (defun ufv:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("MARCHENG_UFV")))))))

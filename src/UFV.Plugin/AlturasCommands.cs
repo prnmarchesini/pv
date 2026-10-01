@@ -54,6 +54,32 @@ public static class AlturasCommands
         }
     }
 
+    /// <summary>
+    /// Se o desenho tem alguma cota de altura nossa (passo 8.8: a mesa
+    /// recalculada só ganha cotas se o desenho já as tem).
+    /// </summary>
+    internal static bool HaCotas(Database database)
+    {
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+
+        var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForRead);
+        var espaco = (BlockTableRecord)transacao.GetObject(tabela[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+
+        foreach (ObjectId id in espaco)
+        {
+            if (id.ObjectClass != ClasseDoTexto) continue;
+
+            if (transacao.GetObject(id, OpenMode.ForRead) is Entity texto
+                && string.Equals(texto.Layer, LayoutLayers.Alturas, StringComparison.OrdinalIgnoreCase)
+                && LayoutXData.LoadNote(texto) is not null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDoTexto = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(MText));
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDaLinha = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Line));
 

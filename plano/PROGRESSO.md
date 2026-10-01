@@ -64,7 +64,7 @@ Só o Renan marca VALIDADO.
 | 8.5 | Mesas do desenho | PENDENTE | |
 | 8.6 | Motor com mais de um tipo de mesa | PENDENTE | |
 | 8.7 | Janela de Configurações com abas | PENDENTE | |
-| 8.8 | Gerar sem análise | PENDENTE | |
+| 8.8 | Gerar sem análise | AGUARDANDO VALIDAÇÃO | Usina, Fileira e Refazer desenham sem cor de análise, sem cota e sem seta; Recalcular e Pontas nunca pintam e acompanham o desenho (cotas se ele tem, seta se ligada); nível 2 da usina confere "nada analisado" |
 | 8.9 | Análise: altura das pontas | PENDENTE | |
 | 8.10 | Análise: declividade | PENDENTE | |
 | 8.11 | Análise: pilares | PENDENTE | |
@@ -4249,3 +4249,25 @@ salvar o perfil, fechar e abrir de novo: T3 e vãos voltam.
 1,134 × 0,030 → Cadastrar: a janela fecha, o Modelo mostra o TESTE-600 e o
 resumo da mesa muda; 3) cadastrar de novo o mesmo modelo: a janela diz "Já
 existe o módulo TESTE-600."
+
+### 8.8 (01/10/2026): gerar sem análise
+
+- `LayoutDrawer.Draw` recebe o que levar de análise (`Analise`: cores,
+  cotas, seta). Usina, Fileira e Refazer: nada. A mesa que não cabe continua
+  magenta (aviso do motor, não análise). Recalcular e Pontas: nunca pintam;
+  cotas só se o desenho já tem cotas, seta se a declividade está ligada
+  (para a mesa refeita não destoar do resto). Pintar e Regerar das análises
+  continuam pondo tudo, até o 8.9 refazer o menu Análises.
+- Nível 2: a usina confere zero cotas, zero setas, nenhuma camada de
+  análise criada, nenhuma peça pintada e as peças da mesa marcada só
+  magenta. Os testes que conferiam cotas (fileira, alturas, recalcular)
+  passaram a chamar `UFV_ALTURAS_REGERAR` depois de gerar, com as mesmas
+  conferências; o do refazer agora exige que as cotas antigas sumam e
+  nenhuma nasça (antes exigia uma por pilar, requisito que o Word revogou).
+- **Decisão minha, o Renan confirma na tela:** a mesa magenta (não cabe)
+  continua saindo ao gerar.
+
+**Roteiro de tela do 8.8:** 1) Refazer (ou Usina) numa área: as mesas saem
+cinza/azul, sem nenhuma cor de análise, sem textos e sem seta, mesmo com a
+declividade ligada; 2) as mesas que não cabem continuam magenta; 3) Regerar
+alturas: as cotas aparecem (camada desligada, ligar com Alturas).

@@ -140,9 +140,15 @@ public static class RecalcularCommands
 
         var feitas = 0;
 
+        // Uma vez, antes de apagar qualquer mesa: as cotas da própria mesa
+        // contam (numa mesa só, apagá-la antes deixaria o desenho sem cotas
+        // e ela voltaria sem as dela), e varrer o desenho por mesa custaria
+        // N varreduras num lote grande. Revisão do 8.8.
+        var analise = LayoutDrawer.Analise.ComoODesenho(documento.Database);
+
         foreach (var guid in mesas)
         {
-            if (!RecalcularUma(editor, documento, terreno, guid, todas, perfil, geometria, settings)) continue;
+            if (!RecalcularUma(editor, documento, terreno, guid, todas, perfil, geometria, settings, analise)) continue;
 
             feitas++;
 
@@ -161,7 +167,7 @@ public static class RecalcularCommands
 
     private static bool RecalcularUma(
         Editor editor, Document documento, ProcessedTerrain terreno, Guid guid, IReadOnlyDictionary<Guid, TableParts> todas,
-        TableProfile perfil, TableGeometry geometria, ProjectSettings settings)
+        TableProfile perfil, TableGeometry geometria, ProjectSettings settings, LayoutDrawer.Analise analise)
     {
         if (!todas.TryGetValue(guid, out var mesa) || mesa.Identity is null || mesa.Contour is not { } contorno)
         {
@@ -281,7 +287,7 @@ public static class RecalcularCommands
         Apagar(documento, mesa);
 
         var desenho = LayoutDrawer.Draw(
-            documento.Database, fileira, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses, _ => guid, _ => pontas);
+            documento.Database, fileira, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses, _ => guid, _ => pontas, analise);
         var processada = fileira.Tables[0];
 
         foreach (var aviso in fileira.Warnings.Concat(avisos)) editor.WriteMessage($"\n  ATENÇÃO: {aviso}\n");

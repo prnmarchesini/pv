@@ -275,6 +275,9 @@ public static class PontasCommands
         var ajuste = ManualEnds.Apply(
             c.Celula, c.Geometria, c.Perfil.TiltRadians, terreno.Mesh, c.Settings, c.Cantos[0].Z, c.Cantos[1].Z, primeira, ultima);
 
+        // Antes de apagar: as cotas da própria mesa contam (revisão do 8.8).
+        var analise = LayoutDrawer.Analise.ComoODesenho(documento.Database);
+
         RecalcularCommands.Apagar(documento, c.Mesa);
 
         var guid = c.Mesa.Identity!.Id;
@@ -282,7 +285,7 @@ public static class PontasCommands
 
         LayoutDrawer.Draw(
             documento.Database, ajuste.Row, c.Geometria, c.Perfil.Layout.Module, c.Perfil.TiltRadians, c.Settings.Analyses,
-            _ => guid, _ => pontas);
+            _ => guid, _ => pontas, analise);
 
         var mesa = ajuste.Row.Tables[0];
 

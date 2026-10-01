@@ -31,6 +31,8 @@
 (command "UFV_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area da fileira")
 (command "UFV_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento da fileira")
 (command "UFV_FILEIRA_AUTO")
+; Desde o 8.8 gerar nao poe cota: as alturas vem do comando de analise.
+(command "UFV_ALTURAS_REGERAR")
 (setvar "OSMODE" ufv:osmode)
 
 (defun ufv:conta (ss) (if ss (sslength ss) 0))

@@ -1424,8 +1424,21 @@ function Testar-Usina {
         return $false
     }
 
+    # Passo 8.8: gerar nao analisa.
+    if ($r.Texto -notmatch 'UFV_USINA_LIMPA cotas=(\d+) setas=(\d+) analise=(\d+) cores=(\d+)') {
+        $problemas.Add("ufv-usina: nao consegui ler a conferencia do 8.8 em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ([int] $Matches[1] + [int] $Matches[2] + [int] $Matches[3] + [int] $Matches[4] -ne 0) {
+        $problemas.Add(
+            "ufv-usina: gerar nao pode analisar (8.8), e o desenho tem $($Matches[1]) cota(s), $($Matches[2]) seta(s), " +
+            "$($Matches[3]) entidade(s) nas camadas de analise e $($Matches[4]) peca(s) pintada(s). Veja $($r.Saida)")
+        return $false
+    }
+
     if ($r.Texto -match 'tempo: motor ([\d,]+) s, desenho ([\d,]+) s') {
-        Write-Host "  (usina: $mesas mesas em $fileiras fileiras; motor $($Matches[1]) s, desenho $($Matches[2]) s)" -ForegroundColor DarkGray
+        Write-Host "  (usina: $mesas mesas em $fileiras fileiras, sem analise; motor $($Matches[1]) s, desenho $($Matches[2]) s)" -ForegroundColor DarkGray
     }
 
     return $true
@@ -1905,12 +1918,16 @@ function Testar-Refazer {
         return $false
     }
 
-    if ($notas -lt $pilares -or $orfas -ne 0) {
-        $problemas.Add("ufv-refazer: $notas nota(s), $orfas orfa(s); toda nota tem que apontar para uma mesa existente. Veja $($r.Saida)")
+    # Desde o 8.8 o refazer desenha sem analise: as cotas que a fileira
+    # antiga tinha (o script as pos com UFV_ALTURAS_REGERAR) foram apagadas
+    # com ela, e nenhuma nasceu de novo. Antes do 8.8 a conferencia era
+    # "toda nota com dona e pelo menos uma por pilar".
+    if ($notas -ne 0 -or $orfas -ne 0) {
+        $problemas.Add("ufv-refazer: $notas nota(s), $orfas orfa(s); o refazer apaga as cotas antigas e nao poe novas (8.8). Veja $($r.Saida)")
         return $false
     }
 
-    Write-Host "  (refazer: $apagadas mesa(s) apagada(s), $contornos redesenhada(s), $notas notas todas com dona)" -ForegroundColor DarkGray
+    Write-Host "  (refazer: $apagadas mesa(s) apagada(s), $contornos redesenhada(s), cotas antigas apagadas e nenhuma nova)" -ForegroundColor DarkGray
     return $true
 }
 

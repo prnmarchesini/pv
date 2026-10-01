@@ -48,6 +48,15 @@ internal static class LayoutDrawer
     /// O GUID a dar a cada mesa; null gera um novo. O recalcular (7.3) passa
     /// o GUID que a mesa já tinha, para ela continuar sendo ela.
     /// </param>
+    /// <param name="analisar">
+    /// O que sai junto com a fileira: cores das análises, cotas de altura,
+    /// seta de declividade (esta só se a análise estiver ligada no desenho).
+    /// Gerar passa <see cref="Analise.Nada"/> desde o 8.8 (Melhorias.docx,
+    /// 01/10/2026: "quando gerar o desenho, não quero que ele saia
+    /// analisando, pintando"); quem analisa é o menu Análises. A mesa que
+    /// não cabe continua magenta: é aviso do motor, não análise. Null é
+    /// tudo, como era antes do 8.8 (o Pintar e o Regerar das análises).
+    /// </param>
     /// <param name="pontasAMao">
     /// As alturas das pontas escolhidas à mão, a gravar na identidade (botão
     /// Pontas, 27/09/2026); null, ou null para a mesa, é o motor quem decide.
@@ -60,14 +69,17 @@ internal static class LayoutDrawer
         double tiltRadians,
         AnalysisRules regras,
         Func<ProcessedTable, Guid>? idDaMesa = null,
-        Func<ProcessedTable, (double Primeira, double Ultima)?>? pontasAMao = null)
+        Func<ProcessedTable, (double Primeira, double Ultima)?>? pontasAMao = null,
+        Analise? analisar = null)
     {
         ArgumentNullException.ThrowIfNull(database);
         ArgumentNullException.ThrowIfNull(fileira);
         ArgumentNullException.ThrowIfNull(geometria);
 
+        var oQue = analisar ?? Analise.Tudo;
+
         // A análise de declividade (seta e valor), se está ligada no desenho.
-        var seta = SetaDeDeclividade.Ler(database);
+        var seta = oQue.Seta ? SetaDeDeclividade.Ler(database) : default;
 
         using var transacao = database.TransactionManager.StartTransaction();
 
@@ -78,15 +90,20 @@ internal static class LayoutDrawer
         var camadaPilar = LayoutLayers.Garantir(transacao, database, LayoutLayers.Pilar, new RgbColor(120, 90, 60));
         var camadaModulo = LayoutLayers.Garantir(transacao, database, LayoutLayers.Modulo, new RgbColor(30, 60, 140));
         var camadaFace = LayoutLayers.Garantir(transacao, database, LayoutLayers.Face, new RgbColor(60, 120, 220));
-        var camadaAlturas = LayoutLayers.Garantir(transacao, database, LayoutLayers.Alturas, new RgbColor(200, 200, 200), desligada: true);
+        var camadaAlturas = oQue.Cotas
+            ? LayoutLayers.Garantir(transacao, database, LayoutLayers.Alturas, new RgbColor(200, 200, 200), desligada: true)
+            : null;
         var camadaMarcada = LayoutLayers.Garantir(transacao, database, LayoutLayers.Marcada, RgbColor.Red);
         var camadaSeta = seta.Ligada ? SetaDeDeclividade.Camada(transacao, database) : null;
 
         // As camadas das análises, todas, mesmo as que nada vai pintar hoje:
         // é nelas que o usuário liga e desliga o que vê.
-        foreach (var kind in AnalysisRules.RangedKinds)
-            LayoutLayers.Garantir(transacao, database, regras.Rule(kind).Layer);
-        LayoutLayers.Garantir(transacao, database, regras.EdgeRule.Layer);
+        if (oQue.Cores)
+        {
+            foreach (var kind in AnalysisRules.RangedKinds)
+                LayoutLayers.Garantir(transacao, database, regras.Rule(kind).Layer);
+            LayoutLayers.Garantir(transacao, database, regras.EdgeRule.Layer);
+        }
 
         var blocoDoPilar = LayoutBlocks.GarantirPilar(transacao, database);
         var blocoDoModulo = LayoutBlocks.GarantirModulo(transacao, database, modulo);
@@ -154,10 +171,12 @@ internal static class LayoutDrawer
                     Rotation = mesa.Cell.DirectionRadians,
                 };
 
+                var vereditoDoPilar = oQue.Cores ? relatorio.PaintVerdict : null;
+
                 if (naoCabe)
-                    PintarNaoCabe(bloco, relatorio.PaintVerdict, camadaMarcada);
+                    PintarNaoCabe(bloco, vereditoDoPilar, camadaMarcada);
                 else
-                    Pintar(bloco, relatorio.PaintVerdict, camadaPilar, ref pintadas);
+                    Pintar(bloco, vereditoDoPilar, camadaPilar, ref pintadas);
 
                 pecas.Add(espaco.AppendEntity(bloco));
                 transacao.AddNewlyCreatedDBObject(bloco, true);
@@ -178,7 +197,11 @@ internal static class LayoutDrawer
                 var pontaBaixa = colocacao.Apply(new Point3(pilar.Station, 0, 0));
                 var pontaAlta = colocacao.Apply(new Point3(pilar.Station, geometria.Depth, 0));
 
-                if (pilar.Problem is null)
+                if (camadaAlturas is null)
+                {
+                    // Sem análise (8.8): nenhuma cota; quem põe é Análises.
+                }
+                else if (pilar.Problem is null)
                 {
                     Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.LowEdgeClearance, "PB", pontaBaixa, direcaoDaFileira, rumo);
                     Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.HighEdgeClearance, "PA", pontaAlta, direcaoDaFileira, rumo);
@@ -206,10 +229,12 @@ internal static class LayoutDrawer
                     BlockTransform = matriz * deslocamento,
                 };
 
+                var vereditoDoModulo = oQue.Cores ? relatorio?.Verdict : null;
+
                 if (naoCabe)
-                    PintarNaoCabe(bloco, relatorio?.Verdict, camadaMarcada);
+                    PintarNaoCabe(bloco, vereditoDoModulo, camadaMarcada);
                 else
-                    Pintar(bloco, relatorio?.Verdict, camadaModulo, ref pintadas);
+                    Pintar(bloco, vereditoDoModulo, camadaModulo, ref pintadas);
 
                 pecas.Add(espaco.AppendEntity(bloco));
                 transacao.AddNewlyCreatedDBObject(bloco, true);
@@ -251,13 +276,13 @@ internal static class LayoutDrawer
                 contorno.Layer = camadaMarcada;
                 contorno.Color = CorDeNaoCabe;
             }
-            else if (mesa.Report.EdgeVerdict.Color is { } corDaBorda)
+            else if (oQue.Cores && mesa.Report.EdgeVerdict.Color is { } corDaBorda)
             {
                 contorno.Layer = mesa.Report.EdgeVerdict.Layer!;
                 contorno.Color = Color.FromRgb(corDaBorda.R, corDaBorda.G, corDaBorda.B);
                 pintadas++;
             }
-            else if (mesa.Report.SlopeVerdict.Color is { } corDaDeclividade)
+            else if (oQue.Cores && mesa.Report.SlopeVerdict.Color is { } corDaDeclividade)
             {
                 contorno.Layer = mesa.Report.SlopeVerdict.Layer!;
                 contorno.Color = Color.FromRgb(corDaDeclividade.R, corDaDeclividade.G, corDaDeclividade.B);
@@ -283,6 +308,27 @@ internal static class LayoutDrawer
         transacao.Commit();
 
         return new DrawnRow(fileira.Tables.Count, pilares, modulos, pintadas, marcadas);
+    }
+
+    /// <summary>
+    /// O que o desenho de uma fileira leva de análise (passo 8.8).
+    /// </summary>
+    /// <param name="Cores">Pintar peças e contorno pelas regras de análise.</param>
+    /// <param name="Cotas">Cotas de altura (PB, PA, P3) na camada das alturas.</param>
+    /// <param name="Seta">Seta de declividade, se a análise está ligada no desenho.</param>
+    internal sealed record Analise(bool Cores, bool Cotas, bool Seta)
+    {
+        internal static readonly Analise Tudo = new(true, true, true);
+        internal static readonly Analise Nada = new(false, false, false);
+
+        /// <summary>
+        /// Para refazer uma mesa num desenho que já existe (Recalcular,
+        /// Pontas): nunca pinta (pintar é análise que o usuário roda), mas
+        /// acompanha o resto do desenho: cotas se ele tem cotas, seta se a
+        /// declividade está ligada.
+        /// </summary>
+        internal static Analise ComoODesenho(Database database) =>
+            new(false, AlturasCommands.HaCotas(database), true);
     }
 
     /// <summary>Metade do comprimento do risco vermelho de cota, em metro, ao longo da fileira.</summary>

@@ -184,7 +184,7 @@ public static class UsinaCommands
 
         foreach (var fileira in usina.Rows)
         {
-            var desenho = LayoutDrawer.Draw(documento.Database, fileira, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses);
+            var desenho = LayoutDrawer.Draw(documento.Database, fileira, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses, analisar: LayoutDrawer.Analise.Nada);
 
             desenhadas += desenho.Tables;
             pilaresDesenhados += desenho.Pillars;
@@ -213,7 +213,7 @@ public static class UsinaCommands
         foreach (var fileira in usina.Rows)
             editor.WriteMessage($"  {fileira.Describe()}\n");
 
-        editor.WriteMessage($"\n  As alturas estão na camada {LayoutLayers.Alturas}, desligada. {PluginInfo.ComandoAlturas} liga.\n");
+        editor.WriteMessage("\n  Gerado sem análise: cores, alturas e declividade saem pelo menu Análises.\n");
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
     }
 }
