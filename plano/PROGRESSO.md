@@ -57,6 +57,22 @@ Só o Renan marca VALIDADO.
 | 7.8 | Auto-seleção | AGUARDANDO VALIDAÇÃO | caixa flutuante semitransparente com mesas, módulos e kWp da seleção (`AutoSelecao`, na folga do AutoCAD); a conta é o `UFV_KWP_SELECAO`, com nível 2 |
 | 7.9 | Grupos e painel de informações | AGUARDANDO VALIDAÇÃO | `TableGroup` (Core, 3 testes) no registro `GRUPOS`; `UFV_GRUPO_CRIAR`/`GRUPOS`/`GRUPO_RECALCULAR`/`GRUPO_SELECIONAR`/`GRUPO_APAGAR` com nível 2; painel (paleta WPF) com lista e botões |
 | 7.10 | Numeração | AGUARDANDO VALIDAÇÃO | `RowNumbering` (Core, 8 testes); `UFV_NUMERAR` com nível 2 (usina de 80 mesas invertida); seção Numeração na ribbon |
+| 8.1 | Vãos personalizados e enterro mínimo (Core) | PENDENTE | |
+| 8.2 | Janela da estrutura | PENDENTE | |
+| 8.3 | Serviço local de módulos | PENDENTE | |
+| 8.4 | Cadastro de módulo | PENDENTE | |
+| 8.5 | Mesas do desenho | PENDENTE | |
+| 8.6 | Motor com mais de um tipo de mesa | PENDENTE | |
+| 8.7 | Janela de Configurações com abas | PENDENTE | |
+| 8.8 | Gerar sem análise | PENDENTE | |
+| 8.9 | Análise: altura das pontas | PENDENTE | |
+| 8.10 | Análise: declividade | PENDENTE | |
+| 8.11 | Análise: pilares | PENDENTE | |
+| 8.12 | Quantificar e exportar para Excel | PENDENTE | |
+| 8.13 | Estilos do projeto | PENDENTE | |
+| 8.14 | Tags | PENDENTE | |
+| 8.15 | Terreno | PENDENTE | |
+| 8.16 | Ribbon nova | PENDENTE | |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -4129,3 +4145,18 @@ unidade". `AGUARDANDO VALIDAÇÃO` (item 22).
   declividade no plano da mesa (`74a1f1a`). A instalação em Arquivos de
   Programas ainda não foi feita.
 
+
+### Etapa 8 aberta em 01/10/2026 (Melhorias.docx)
+
+O Renan deixou em `0 - Assets/Melhorias.docx` a revisão dos menus. Virou a
+etapa 8 (`plano/etapas/etapa-8-menus.md`, 16 passos). Leituras minhas do
+Word, que o Renan confirma na tela:
+
+- "Trocar profundidade por largura": as duas medidas da seção do pilar
+  passam a se chamar largura, cada uma com o sentido escrito; a palavra
+  profundidade fica só para o enterro (T3).
+- Enterro mínimo sai da Configuração e vai para a estrutura da mesa (T3).
+- O "Regerar" das análises fica na ribbon (o Word não fala dele).
+- Serviço local de módulos no padrão do meuPlano (FastAPI, SQLAlchemy,
+  Alembic, Postgres, SQLite sem `DATABASE_URL`); chave/licença fica para
+  quando ele pedir (decisão de 30/09).
