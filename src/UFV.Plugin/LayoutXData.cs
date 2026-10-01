@@ -190,6 +190,31 @@ internal static class LayoutXData
         return face.IsValid ? face : null;
     }
 
+    private const int VersaoDoTextoDeAnalise = 1;
+
+    /// <summary>GUID, mesa, análise, valor.</summary>
+    private const int CamposDoTextoDeAnalise = 4;
+
+    internal static void SaveAnalysisText(Transaction transacao, Entity entidade, AnalysisTextIdentity texto) =>
+        PluginXData.Save(
+            transacao, entidade, AnalysisTextIdentity.Tipo, VersaoDoTextoDeAnalise,
+            texto.Id.ToString("D"), texto.Table.ToString("D"), texto.Kind.ToString(),
+            texto.Value.ToString("R", CultureInfo.InvariantCulture));
+
+    internal static AnalysisTextIdentity? LoadAnalysisText(Entity entidade)
+    {
+        var c = PluginXData.Load(entidade, AnalysisTextIdentity.Tipo, VersaoDoTextoDeAnalise, CamposDoTextoDeAnalise);
+        if (c is null) return null;
+
+        if (!Guid.TryParse(c[0], out var id) || !Guid.TryParse(c[1], out var mesa)) return null;
+        if (!Enum.TryParse<IndependentKind>(c[2], out var tipo)) return null;
+        if (!double.TryParse(c[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var valor)) return null;
+
+        var texto = new AnalysisTextIdentity(id, mesa, tipo, valor);
+
+        return texto.IsValid ? texto : null;
+    }
+
     private const int VersaoDaNota = 1;
 
     /// <summary>GUID, mesa.</summary>

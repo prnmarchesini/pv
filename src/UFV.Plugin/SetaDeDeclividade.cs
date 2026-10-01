@@ -67,8 +67,13 @@ internal static class SetaDeDeclividade
     /// criou.
     /// </summary>
     internal static int Desenhar(
-        Transaction transacao, BlockTableRecord espaco, string camada, Guid mesa, IReadOnlyList<Point3> cantos, SlopeUnit unidade)
+        Transaction transacao, BlockTableRecord espaco, string camada, Guid mesa, IReadOnlyList<Point3> cantos, SlopeUnit unidade,
+        Action<Transaction, Entity>? marcar = null)
     {
+        // Sem marcador, nota da mesa (a seta do Draw); a análise de
+        // declividade do 8.10 passa o seu, que grava o valor.
+        marcar ??= (t, e) => LayoutXData.SaveNote(t, e, new NoteIdentity(Guid.NewGuid(), mesa));
+
         if (cantos.Count < 4) return 0;
 
         // A linha do meio da mesa, ao longo da fileira.
@@ -104,7 +109,7 @@ internal static class SetaDeDeclividade
             var linha = new Line(Ponto(a), Ponto(b)) { Layer = camada };
             espaco.AppendEntity(linha);
             transacao.AddNewlyCreatedDBObject(linha, true);
-            LayoutXData.SaveNote(transacao, linha, new NoteIdentity(Guid.NewGuid(), mesa));
+            marcar(transacao, linha);
             criadas++;
         }
 
@@ -145,7 +150,7 @@ internal static class SetaDeDeclividade
 
         espaco.AppendEntity(mtexto);
         transacao.AddNewlyCreatedDBObject(mtexto, true);
-        LayoutXData.SaveNote(transacao, mtexto, new NoteIdentity(Guid.NewGuid(), mesa));
+        marcar(transacao, mtexto);
 
         return criadas + 1;
     }

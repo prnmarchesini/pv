@@ -1,0 +1,78 @@
+; Teste de nivel 2 das analises independentes (passos 8.9 a 8.11): gera uma
+; fileira (sem analise, 8.8) e, em LISP, confere cada passo pelas entidades:
+;   - inserir PB, PA, pilar e declividade da um texto por pilar (por mesa na
+;     declividade), com a identidade TextoAnalise no XData, a cota dentro do
+;     terreno (regra sagrada 5), e inserir de novo nao empilha;
+;   - analisar a PB pinta so textos da PB; com pecas, pinta modulos;
+;   - tirar as cores volta tudo a cor da camada; apagar a PB nao mexe na PA.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_TERRENO_AUTO")
+(setq ufv:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "UFV_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area das analises")
+(command "UFV_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento das analises")
+(command "UFV_FILEIRA_AUTO")
+(setvar "OSMODE" ufv:osmode)
+
+(defun ufv:conta (ss) (if ss (sslength ss) 0))
+(defun ufv:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("MARCHENG_UFV")))))))
+(defun ufv:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun ufv:tipo (xd) (cdr (nth 0 xd)))
+(defun ufv:pintada (e / d) (setq d (entget e)) (or (assoc 420 d) (and (assoc 62 d) (/= (cdr (assoc 62 d)) 256))))
+
+; Textos (MTEXT) de uma analise: quantos, quantos pintados, cota min e max.
+(defun ufv:textos (tipo / ss i e xd n p zmin zmax)
+  (setq ss (ssget "_X" (list (cons 0 "MTEXT") (list -3 (list "MARCHENG_UFV")))) i 0 n 0 p 0 zmin 1e99 zmax -1e99)
+  (while (< i (ufv:conta ss))
+    (setq e (ssname ss i) xd (ufv:xdata e))
+    (if (and (= (ufv:tipo xd) "TextoAnalise") (= (ufv:campo xd 2) tipo))
+      (progn
+        (setq n (1+ n))
+        (if (ufv:pintada e) (setq p (1+ p)))
+        (setq zmin (min zmin (cadddr (assoc 10 (entget e)))) zmax (max zmax (cadddr (assoc 10 (entget e)))))))
+    (setq i (1+ i)))
+  (list n p zmin zmax))
+
+(defun ufv:modulospintados ( / ss i n)
+  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 8 "MARCHENG_UFV_MODULO"))) i 0 n 0)
+  (while (< i (ufv:conta ss)) (if (ufv:pintada (ssname ss i)) (setq n (1+ n))) (setq i (1+ i)))
+  n)
+
+(setq ufv:pilares (ufv:conta (ssget "_X" (list (cons 0 "INSERT") (cons 2 "MARCHENG_UFV_PILAR")))))
+(setq ufv:contornos (ufv:conta (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "MARCHENG_UFV_MESA,MARCHENG_UFV_MARCADA")))))
+(setq ufv:modulos (ufv:conta (ssget "_X" (list (cons 0 "INSERT") (cons 8 "MARCHENG_UFV_MODULO")))))
+
+(command "UFV_AN_PB_INSERIR")
+(command "UFV_AN_PB_INSERIR")
+(command "UFV_AN_PA_INSERIR")
+(command "UFV_AN_PILAR_INSERIR")
+(command "UFV_AN_DECL_INSERIR")
+(setq ufv:pb (ufv:textos "LowEdge") ufv:pa (ufv:textos "HighEdge") ufv:pi (ufv:textos "PillarAbove") ufv:de (ufv:textos "Slope"))
+
+(command "UFV_AN_PB_ANALISAR_AUTO")
+(setq ufv:pbpint (ufv:textos "LowEdge") ufv:papint (ufv:textos "HighEdge"))
+(command "UFV_AN_PB_QUANTIFICAR")
+(command "UFV_AN_PILAR_QUANTIFICAR")
+(command "UFV_EXCEL_AUTO" "{{XLSX}}")
+
+(command "UFV_AN_TESTE_PECAS")
+(setq ufv:modpint (ufv:modulospintados))
+
+(command "UFV_AN_PB_CORES")
+(setq ufv:pbsem (ufv:textos "LowEdge") ufv:modsem (ufv:modulospintados))
+
+(command "UFV_AN_PB_APAGAR")
+(setq ufv:pbfim (ufv:textos "LowEdge") ufv:pafim (ufv:textos "HighEdge"))
+
+(princ (strcat "\nUFV_AN_LISP pilares=" (itoa ufv:pilares) " contornos=" (itoa ufv:contornos) " modulos=" (itoa ufv:modulos)
+               " pb=" (itoa (car ufv:pb)) " pa=" (itoa (car ufv:pa)) " pilar=" (itoa (car ufv:pi)) " decl=" (itoa (car ufv:de))
+               " zmin=" (rtos (min (caddr ufv:pb) (caddr ufv:pa) (caddr ufv:pi)) 2 3)
+               " zmax=" (rtos (max (cadddr ufv:pb) (cadddr ufv:pa) (cadddr ufv:pi)) 2 3)))
+(princ (strcat "\nUFV_AN_LISP2 pbpintados=" (itoa (cadr ufv:pbpint)) " papintados=" (itoa (cadr ufv:papint))
+               " modpintados=" (itoa ufv:modpint) " pbsemcor=" (itoa (cadr ufv:pbsem)) " modsemcor=" (itoa ufv:modsem)
+               " pbfim=" (itoa (car ufv:pbfim)) " pafim=" (itoa (car ufv:pafim))))
+(setvar "SECURELOAD" ufv:secureload)
+(princ)

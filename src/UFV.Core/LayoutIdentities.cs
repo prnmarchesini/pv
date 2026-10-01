@@ -180,3 +180,22 @@ public sealed record FaceIdentity(Guid Id, Guid Module, Guid Table, int Column, 
     /// <summary>Se a identidade é utilizável.</summary>
     public bool IsValid => Id != Guid.Empty && Module != Guid.Empty && Table != Guid.Empty && Column >= 0 && Row >= 0;
 }
+
+/// <summary>
+/// A identidade de um texto de análise (passos 8.9 a 8.11): de qual mesa,
+/// de qual análise, e o valor que ele escreve. Com o valor no XData, pintar
+/// e quantificar não refazem a conta, e o texto continua dizendo o que diz.
+/// Pertence à mesa como as notas: recalcular ou apagar a mesa o leva junto.
+/// </summary>
+/// <param name="Id">O GUID do texto.</param>
+/// <param name="Table">O GUID da mesa.</param>
+/// <param name="Kind">A análise.</param>
+/// <param name="Value">O valor escrito (m, ou % / ° na declividade); NaN sem terreno.</param>
+public sealed record AnalysisTextIdentity(Guid Id, Guid Table, IndependentKind Kind, double Value)
+{
+    /// <summary>O tipo, como vai no XData.</summary>
+    public const string Tipo = "TextoAnalise";
+
+    /// <summary>Se a identidade é utilizável.</summary>
+    public bool IsValid => Id != Guid.Empty && Table != Guid.Empty && Enum.IsDefined(Kind);
+}

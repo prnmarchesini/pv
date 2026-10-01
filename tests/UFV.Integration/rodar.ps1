@@ -3096,6 +3096,167 @@ function Testar-Alturas {
     return $true
 }
 
+<#
+    As analises independentes (8.9 a 8.11): inserir PB, PA, pilar e
+    declividade (um texto por pilar, um por mesa na declividade, cota dentro
+    do terreno), pintar so a PB, pintar modulos, tirar cores e apagar a PB sem
+    mexer na PA. Tudo contado em LISP, nas entidades.
+#>
+function Testar-Analises {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-analises--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-analises: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    if ($sonda.Texto -notmatch 'cotas:\s+(-?[\d.,]+) m a (-?[\d.,]+) m') {
+        $problemas.Add("ufv-analises: nao achei a faixa de cotas do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $minima = [double]::Parse($Matches[1], $ptbr)
+    $maxima = [double]::Parse($Matches[2], $ptbr)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $planilha = Join-Path $raiz 'artefatos\testes\ufv-analises.xlsx'
+    if (Test-Path $planilha) { Remove-Item $planilha -Force }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-analises' `
+        -Script (Join-Path $PSScriptRoot 'ufv-analises.scr') `
+        -Substituicoes @{
+            '{{XLSX}}' = ($planilha -replace '\\', '/')
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-analises terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'UFV_AN_LISP pilares=(\d+) contornos=(\d+) modulos=(\d+) pb=(\d+) pa=(\d+) pilar=(\d+) decl=(\d+) zmin=(-?[\d.]+) zmax=(-?[\d.]+)') {
+        $problemas.Add("ufv-analises: nao consegui ler o LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $pilares = [int] $Matches[1]; $contornos = [int] $Matches[2]
+    $pb = [int] $Matches[4]; $pa = [int] $Matches[5]; $pi = [int] $Matches[6]; $decl = [int] $Matches[7]
+    $zmin = [double]::Parse($Matches[8], $invariante); $zmax = [double]::Parse($Matches[9], $invariante)
+
+    if ($pilares -lt 7 -or $pb -ne $pilares -or $pa -ne $pilares -or $pi -ne $pilares -or $decl -ne $contornos) {
+        $problemas.Add("ufv-analises: $pilares pilar(es) e $contornos mesa(s) deram PB $pb, PA $pa, pilar $pi, declividade $decl; esperava um por pilar (e inserir duas vezes nao empilha) e um por mesa. Veja $($r.Saida)")
+        return $false
+    }
+
+    # Regra sagrada 5: o texto nasce na mesa, e a mesa acompanha o terreno.
+    if ($zmin -lt ($minima - 0.01) -or $zmax -gt ($maxima + 5)) {
+        $problemas.Add("ufv-analises: os textos vao de $zmin a $zmax, fora da faixa do terreno ($minima a $maxima). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'UFV_AN_LISP2 pbpintados=(\d+) papintados=(\d+) modpintados=(\d+) pbsemcor=(\d+) modsemcor=(\d+) pbfim=(\d+) pafim=(\d+)') {
+        $problemas.Add("ufv-analises: nao consegui ler a segunda parte do LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $pbPint = [int] $Matches[1]; $paPint = [int] $Matches[2]; $modPint = [int] $Matches[3]
+    $pbSem = [int] $Matches[4]; $modSem = [int] $Matches[5]; $pbFim = [int] $Matches[6]; $paFim = [int] $Matches[7]
+
+    if ($r.Texto -notmatch 'QUANTIFICAR ponta baixa: (\d+) abaixo de [\d,]+ m, (\d+) dentro, (\d+) acima de [\d,]+ m') {
+        $problemas.Add("ufv-analises: nao achei a quantificacao da ponta baixa. Veja $($r.Saida)")
+        return $false
+    }
+
+    $fora = [int] $Matches[1] + [int] $Matches[3]
+
+    if ($pbPint -ne $fora -or $paPint -ne 0) {
+        $problemas.Add("ufv-analises: analisar a PB pintou $pbPint texto(s) da PB (a quantificacao diz $fora fora da faixa) e $paPint da PA (tinha que ser 0). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'ANALISE_TESTE textos=(\d+) pecas=(\d+)') {
+        $problemas.Add("ufv-analises: nao achei o relatorio da pintura de modulos. Veja $($r.Saida)")
+        return $false
+    }
+
+    # A regra do teste pega toda ponta: todo modulo fora das mesas marcadas
+    # (camada MODULO) sai pintado, e o plugin conta o mesmo que o desenho.
+    $pecasRelatadas = [int] $Matches[2]
+    $modulosLivres = 0
+    if ($r.Texto -match 'UFV_AN_LISP pilares=\d+ contornos=\d+ modulos=(\d+)') { $modulosLivres = [int] $Matches[1] }
+
+    if ($modulosLivres -lt 1 -or $modPint -ne $modulosLivres -or $modPint -ne $pecasRelatadas) {
+        $problemas.Add("ufv-analises: $modulosLivres modulo(s) fora das mesas marcadas, o desenho tem $modPint pintado(s) e o plugin disse ${pecasRelatadas}; tinham que ser todos. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($pbSem -ne 0 -or $modSem -ne 0 -or $pbFim -ne 0 -or $paFim -ne $pilares) {
+        $problemas.Add("ufv-analises: depois de tirar as cores sobraram $pbSem texto(s) e $modSem modulo(s) pintados; depois de apagar a PB ficaram $pbFim da PB e $paFim da PA (esperava 0 e $pilares). Veja $($r.Saida)")
+        return $false
+    }
+
+    # Passo 8.12: o Excel. Abre o .xlsx (um zip de XML) e confere as abas,
+    # o resumo contra o LISP e a linha da ponta baixa contra a quantificacao.
+    if (-not (Test-Path $planilha)) {
+        $problemas.Add("ufv-analises: o UFV_EXCEL_AUTO nao gravou $planilha. Veja $($r.Saida)")
+        return $false
+    }
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [IO.Compression.ZipFile]::OpenRead($planilha)
+    try {
+        function LerParte([string] $nome) {
+            $entrada = $zip.GetEntry($nome)
+            if ($null -eq $entrada) { return $null }
+            $leitor = New-Object IO.StreamReader($entrada.Open())
+            try { [xml] $leitor.ReadToEnd() } finally { $leitor.Dispose() }
+        }
+
+        $pasta = LerParte 'xl/workbook.xml'
+        $abas = @($pasta.workbook.sheets.sheet | ForEach-Object { $_.name }) -join '|'
+        $resumo = LerParte 'xl/worksheets/sheet1.xml'
+        $analisesXml = LerParte 'xl/worksheets/sheet2.xml'
+    }
+    finally { $zip.Dispose() }
+
+    function Valor($folha, [string] $ref) {
+        $c = $folha.worksheet.sheetData.row.c | Where-Object { $_.r -eq $ref } | Select-Object -First 1
+        if ($null -eq $c) { return $null }
+        if ($c.v) { return [string] $c.v }
+        return [string] $c.is.t.'#text'
+    }
+
+    $mesasNoExcel = Valor $resumo 'B2'
+    $pilaresNoExcel = Valor $resumo 'B5'
+    $pbAbaixo = Valor $analisesXml 'D2'
+    $pbQuantificado = [regex]::Match($r.Texto, 'QUANTIFICAR ponta baixa: (\d+) abaixo').Groups[1].Value
+
+    if ($abas -ne 'Resumo|Análises|Pilares|Compra de pilares' -or $mesasNoExcel -ne "$contornos" -or $pilaresNoExcel -ne "$pilares" -or $pbAbaixo -ne $pbQuantificado) {
+        $problemas.Add("ufv-analises: o Excel tem abas [$abas], $mesasNoExcel mesa(s), $pilaresNoExcel pilar(es) e $pbAbaixo PB abaixo; esperava as quatro abas, $contornos, $pilares e a quantificacao. Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (analises: $pilares PB/PA/pilar e $decl declividades, $fora PB fora da faixa pintada(s), $modPint modulo(s), cores tiradas, PB apagada e PA intacta; Excel com $mesasNoExcel mesas e $pilaresNoExcel pilares)" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -3233,6 +3394,10 @@ else {
     # Declividade: seta e valor por mesa, em graus e porcentagem.
     $total++
     if (Testar-Declividade -Desenho $desenhos[0]) { $passaram++ }
+
+    # Analises independentes (8.9 a 8.11).
+    $total++
+    if (Testar-Analises -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

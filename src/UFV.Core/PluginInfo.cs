@@ -289,4 +289,85 @@ public static class PluginInfo
 
         return texto.Length == 0 ? VersaoDesconhecida : texto;
     }
+
+    /// <summary>Passo 8.9 a 8.11: insere os textos de ponta baixa.</summary>
+    public const string ComandoAnPontaBaixaInserir = "UFV_AN_PB_INSERIR";
+
+    /// <summary>Passo 8.9 a 8.11: pinta pela regra (abre a janela da regra) a análise de ponta baixa.</summary>
+    public const string ComandoAnPontaBaixaAnalisar = "UFV_AN_PB_ANALISAR";
+
+    /// <summary>Passo 8.9 a 8.11: pinta pela regra gravada, sem janela (nível 2), a análise de ponta baixa.</summary>
+    public const string ComandoAnPontaBaixaAnalisarAutomatico = "UFV_AN_PB_ANALISAR_AUTO";
+
+    /// <summary>Passo 8.9 a 8.11: apaga os textos de ponta baixa.</summary>
+    public const string ComandoAnPontaBaixaApagar = "UFV_AN_PB_APAGAR";
+
+    /// <summary>Passo 8.9 a 8.11: tira as cores da análise de ponta baixa.</summary>
+    public const string ComandoAnPontaBaixaTirarCores = "UFV_AN_PB_CORES";
+
+    /// <summary>Passo 8.9 a 8.11: conta, por faixa, a análise de ponta baixa.</summary>
+    public const string ComandoAnPontaBaixaQuantificar = "UFV_AN_PB_QUANTIFICAR";
+
+    /// <summary>Passo 8.9 a 8.11: insere os textos de ponta alta.</summary>
+    public const string ComandoAnPontaAltaInserir = "UFV_AN_PA_INSERIR";
+
+    /// <summary>Passo 8.9 a 8.11: pinta pela regra (abre a janela da regra) a análise de ponta alta.</summary>
+    public const string ComandoAnPontaAltaAnalisar = "UFV_AN_PA_ANALISAR";
+
+    /// <summary>Passo 8.9 a 8.11: pinta pela regra gravada, sem janela (nível 2), a análise de ponta alta.</summary>
+    public const string ComandoAnPontaAltaAnalisarAutomatico = "UFV_AN_PA_ANALISAR_AUTO";
+
+    /// <summary>Passo 8.9 a 8.11: apaga os textos de ponta alta.</summary>
+    public const string ComandoAnPontaAltaApagar = "UFV_AN_PA_APAGAR";
+
+    /// <summary>Passo 8.9 a 8.11: tira as cores da análise de ponta alta.</summary>
+    public const string ComandoAnPontaAltaTirarCores = "UFV_AN_PA_CORES";
+
+    /// <summary>Passo 8.9 a 8.11: conta, por faixa, a análise de ponta alta.</summary>
+    public const string ComandoAnPontaAltaQuantificar = "UFV_AN_PA_QUANTIFICAR";
+
+    /// <summary>Passo 8.9 a 8.11: insere os textos de declividade.</summary>
+    public const string ComandoAnDeclividadeInserir = "UFV_AN_DECL_INSERIR";
+
+    /// <summary>Passo 8.9 a 8.11: pinta pela regra (abre a janela da regra) a análise de declividade.</summary>
+    public const string ComandoAnDeclividadeAnalisar = "UFV_AN_DECL_ANALISAR";
+
+    /// <summary>Passo 8.9 a 8.11: pinta pela regra gravada, sem janela (nível 2), a análise de declividade.</summary>
+    public const string ComandoAnDeclividadeAnalisarAutomatico = "UFV_AN_DECL_ANALISAR_AUTO";
+
+    /// <summary>Passo 8.9 a 8.11: apaga os textos de declividade.</summary>
+    public const string ComandoAnDeclividadeApagar = "UFV_AN_DECL_APAGAR";
+
+    /// <summary>Passo 8.9 a 8.11: tira as cores da análise de declividade.</summary>
+    public const string ComandoAnDeclividadeTirarCores = "UFV_AN_DECL_CORES";
+
+    /// <summary>Passo 8.9 a 8.11: conta, por faixa, a análise de declividade.</summary>
+    public const string ComandoAnDeclividadeQuantificar = "UFV_AN_DECL_QUANTIFICAR";
+
+    /// <summary>Passo 8.9 a 8.11: insere os textos de pilar acima do terreno.</summary>
+    public const string ComandoAnPilarInserir = "UFV_AN_PILAR_INSERIR";
+
+    /// <summary>Passo 8.9 a 8.11: pinta pela regra (abre a janela da regra) a análise de pilar acima do terreno.</summary>
+    public const string ComandoAnPilarAnalisar = "UFV_AN_PILAR_ANALISAR";
+
+    /// <summary>Passo 8.9 a 8.11: pinta pela regra gravada, sem janela (nível 2), a análise de pilar acima do terreno.</summary>
+    public const string ComandoAnPilarAnalisarAutomatico = "UFV_AN_PILAR_ANALISAR_AUTO";
+
+    /// <summary>Passo 8.9 a 8.11: apaga os textos de pilar acima do terreno.</summary>
+    public const string ComandoAnPilarApagar = "UFV_AN_PILAR_APAGAR";
+
+    /// <summary>Passo 8.9 a 8.11: tira as cores da análise de pilar acima do terreno.</summary>
+    public const string ComandoAnPilarTirarCores = "UFV_AN_PILAR_CORES";
+
+    /// <summary>Passo 8.9 a 8.11: conta, por faixa, a análise de pilar acima do terreno.</summary>
+    public const string ComandoAnPilarQuantificar = "UFV_AN_PILAR_QUANTIFICAR";
+
+    /// <summary>Só para o nível 2: a análise da ponta baixa com uma regra que pega tudo, pintando também os módulos.</summary>
+    public const string ComandoAnTestePecas = "UFV_AN_TESTE_PECAS";
+
+    /// <summary>Passo 8.12: exporta para o Excel o resumo, as quantificações das análises e os pilares.</summary>
+    public const string ComandoExportarExcel = "UFV_EXCEL";
+
+    /// <summary>O mesmo, com o caminho na linha de comando. Para o nível 2.</summary>
+    public const string ComandoExportarExcelAutomatico = "UFV_EXCEL_AUTO";
 }
