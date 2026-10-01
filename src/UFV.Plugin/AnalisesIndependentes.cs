@@ -117,11 +117,8 @@ internal static class AnalisesIndependentes
 
                     criados += SetaDeDeclividade.Desenhar(
                         transacao, espaco, camada, mesa.Id, mesa.Cantos, unidade,
-                        (t, e) =>
-                        {
-                            if (e is MText texto) estilo(texto);
-                            LayoutXData.SaveAnalysisText(t, e, new AnalysisTextIdentity(Guid.NewGuid(), mesa.Id, tipo, valor));
-                        });
+                        (t, e) => LayoutXData.SaveAnalysisText(t, e, new AnalysisTextIdentity(Guid.NewGuid(), mesa.Id, tipo, valor)),
+                        estilo);
                     break;
                 }
 
@@ -186,10 +183,11 @@ internal static class AnalisesIndependentes
             Contents = conteudo,
         };
 
-        estilo(texto);
-
         espaco.AppendEntity(texto);
         transacao.AddNewlyCreatedDBObject(texto, true);
+
+        // Depois do AppendEntity: o texto anotativo precisa do banco.
+        estilo(texto);
         LayoutXData.SaveAnalysisText(transacao, texto, new AnalysisTextIdentity(Guid.NewGuid(), mesa, tipo, valor));
     }
 

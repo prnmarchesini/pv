@@ -68,7 +68,8 @@ internal static class SetaDeDeclividade
     /// </summary>
     internal static int Desenhar(
         Transaction transacao, BlockTableRecord espaco, string camada, Guid mesa, IReadOnlyList<Point3> cantos, SlopeUnit unidade,
-        Action<Transaction, Entity>? marcar = null)
+        Action<Transaction, Entity>? marcar = null,
+        Action<MText>? estilo = null)
     {
         // Sem marcador, nota da mesa (a seta do Draw); a análise de
         // declividade do 8.10 passa o seu, que grava o valor.
@@ -150,6 +151,7 @@ internal static class SetaDeDeclividade
 
         espaco.AppendEntity(mtexto);
         transacao.AddNewlyCreatedDBObject(mtexto, true);
+        estilo?.Invoke(mtexto);
         marcar(transacao, mtexto);
 
         return criadas + 1;

@@ -135,6 +135,7 @@ public static class AlturasCommands
 
         var desligada = LayoutLayers.EstaDesligada(transacao, database, LayoutLayers.Alturas) ?? true;
         var camada = LayoutLayers.Garantir(transacao, database, LayoutLayers.Alturas, new RgbColor(200, 200, 200), desligada: desligada);
+        var estilo = EstiloDoProjeto.PrepararTexto(transacao, database);
 
         // 2. As cotas de cada mesa, pelo contorno e pelo XData dos pilares.
         foreach (var (guid, mesa) in LayoutScan.Tables(transacao, database))
@@ -166,7 +167,7 @@ public static class AlturasCommands
                 // (29/09/2026: o motivo por extenso estourava a tela).
                 if (pilar.Problem is not null)
                 {
-                    LayoutDrawer.Cota(transacao, espaco, camada, guid, pilar.FreeHeight, "P3", topo, direcao, rumo);
+                    LayoutDrawer.Cota(transacao, espaco, camada, guid, pilar.FreeHeight, "P3", topo, direcao, rumo, estilo);
                     cotas++;
                     feita = true;
                     continue;
@@ -178,12 +179,12 @@ public static class AlturasCommands
                 }
                 else
                 {
-                    LayoutDrawer.Cota(transacao, espaco, camada, guid, pilar.LowEdgeClearance, "PB", pontaBaixa, direcao, rumo);
-                    LayoutDrawer.Cota(transacao, espaco, camada, guid, pilar.HighEdgeClearance, "PA", pontaAlta, direcao, rumo);
+                    LayoutDrawer.Cota(transacao, espaco, camada, guid, pilar.LowEdgeClearance, "PB", pontaBaixa, direcao, rumo, estilo);
+                    LayoutDrawer.Cota(transacao, espaco, camada, guid, pilar.HighEdgeClearance, "PA", pontaAlta, direcao, rumo, estilo);
                     cotas += 2;
                 }
 
-                LayoutDrawer.Cota(transacao, espaco, camada, guid, pilar.FreeHeight, "P3", topo, direcao, rumo);
+                LayoutDrawer.Cota(transacao, espaco, camada, guid, pilar.FreeHeight, "P3", topo, direcao, rumo, estilo);
                 cotas++;
                 feita = true;
             }

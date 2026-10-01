@@ -105,6 +105,9 @@ internal static class LayoutDrawer
             LayoutLayers.Garantir(transacao, database, regras.EdgeRule.Layer);
         }
 
+        // O estilo do projeto (8.13), resolvido uma vez para a fileira.
+        var estilo = oQue.Cotas || seta.Ligada ? EstiloDoProjeto.PrepararTexto(transacao, database) : null;
+
         var blocoDoPilar = LayoutBlocks.GarantirPilar(transacao, database);
         var blocoDoModulo = LayoutBlocks.GarantirModulo(transacao, database, modulo);
 
@@ -203,13 +206,13 @@ internal static class LayoutDrawer
                 }
                 else if (pilar.Problem is null)
                 {
-                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.LowEdgeClearance, "PB", pontaBaixa, direcaoDaFileira, rumo);
-                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.HighEdgeClearance, "PA", pontaAlta, direcaoDaFileira, rumo);
-                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.FreeHeight, "P3", new Point3(pilar.X, pilar.Y, pilar.TopZ), direcaoDaFileira, rumo);
+                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.LowEdgeClearance, "PB", pontaBaixa, direcaoDaFileira, rumo, estilo);
+                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.HighEdgeClearance, "PA", pontaAlta, direcaoDaFileira, rumo, estilo);
+                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.FreeHeight, "P3", new Point3(pilar.X, pilar.Y, pilar.TopZ), direcaoDaFileira, rumo, estilo);
                 }
                 else
                 {
-                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.FreeHeight, "P3", new Point3(pilar.X, pilar.Y, pilar.TopZ), direcaoDaFileira, rumo);
+                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.FreeHeight, "P3", new Point3(pilar.X, pilar.Y, pilar.TopZ), direcaoDaFileira, rumo, estilo);
                 }
             }
 
@@ -300,7 +303,7 @@ internal static class LayoutDrawer
             // 5. A seta da declividade, se a análise está ligada. Fora do
             //    grupo, como as cotas.
             if (camadaSeta is not null)
-                SetaDeDeclividade.Desenhar(transacao, espaco, camadaSeta, identidade.Id, cantosDoContorno, seta.Unidade);
+                SetaDeDeclividade.Desenhar(transacao, espaco, camadaSeta, identidade.Id, cantosDoContorno, seta.Unidade, estilo: estilo);
 
             LayoutGroups.Criar(transacao, database, pecas);
         }
@@ -370,7 +373,8 @@ internal static class LayoutDrawer
     /// </summary>
     internal static void Cota(
         Transaction transacao, BlockTableRecord espaco, string camada, Guid mesa,
-        double? valor, string sigla, Point3 ponto, Point3 direcaoDoRisco, double rumo)
+        double? valor, string sigla, Point3 ponto, Point3 direcaoDoRisco, double rumo,
+        Action<MText>? estilo = null)
     {
         // O risco corre ao longo da fileira, no plano da mesa.
         var dx = direcaoDoRisco.X * MeioRisco;
@@ -401,6 +405,7 @@ internal static class LayoutDrawer
 
         espaco.AppendEntity(texto);
         transacao.AddNewlyCreatedDBObject(texto, true);
+        estilo?.Invoke(texto);
         LayoutXData.SaveNote(transacao, texto, new NoteIdentity(Guid.NewGuid(), mesa));
     }
 

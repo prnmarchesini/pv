@@ -132,13 +132,15 @@ public static class DeclividadeCommands
 
         LayoutLayers.Ligar(transacao, database, camada, true);
 
+        var estilo = EstiloDoProjeto.PrepararTexto(transacao, database);
+
         foreach (var (guid, mesa) in LayoutScan.Tables(transacao, database))
         {
             if (mesa.Identity is null || mesa.Contour is not { } contorno || mesa.IsDuplicated) continue;
             if (transacao.GetObject(contorno, OpenMode.ForRead) is not Polyline3d polilinha) continue;
 
             var cantos = FileiraCommands.Vertices(polilinha, transacao);
-            var feitas = SetaDeDeclividade.Desenhar(transacao, espaco, camada, guid, cantos, unidade);
+            var feitas = SetaDeDeclividade.Desenhar(transacao, espaco, camada, guid, cantos, unidade, estilo: estilo);
 
             if (feitas > 0)
             {

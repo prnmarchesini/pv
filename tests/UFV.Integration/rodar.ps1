@@ -3313,6 +3313,70 @@ function Testar-TerrenoResumo {
     return $true
 }
 
+<#
+    Os estilos do projeto (8.13): sem escolha, o estilo do Renan quando o
+    desenho o tem; escolhido o Standard, os textos saem nele.
+#>
+function Testar-Estilos {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-estilos--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-estilos: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-estilos' `
+        -Script (Join-Path $PSScriptRoot 'ufv-estilos.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-estilos terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'UFV_ESTILO_PADRAO estilo=(.+?) anotativo=(\S+) altura=([\d.]+)') {
+        $problemas.Add("ufv-estilos: nao li o texto com o estilo padrao. Veja $($r.Saida)")
+        return $false
+    }
+
+    $padrao = $Matches[1]; $anotativoPadrao = $Matches[2]; $alturaPadrao = $Matches[3]
+
+    if ($r.Texto -notmatch 'UFV_ESTILO_STANDARD estilo=(.+?) anotativo=(\S+) altura=([\d.]+)') {
+        $problemas.Add("ufv-estilos: nao li o texto com o Standard. Veja $($r.Saida)")
+        return $false
+    }
+
+    $standard = $Matches[1]; $anotativoStandard = $Matches[2]
+
+    # O desenho de referencia (Itatiba) tem o estilo do Renan, anotativo.
+    if ($padrao -ne 'Marcheng Anotativa - Detalhe' -or $anotativoPadrao -ne '1' -or $standard -ne 'Standard' -or $anotativoStandard -eq '1') {
+        $problemas.Add("ufv-estilos: sem escolha o texto saiu em [$padrao] (anotativo $anotativoPadrao), esperava o do Renan anotativo; com Standard saiu em [$standard] (anotativo $anotativoStandard). Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (estilos: sem escolha '$padrao' anotativo, altura $alturaPadrao; escolhido Standard, nao anotativo)" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -3458,6 +3522,10 @@ else {
     # Resumo do terreno (8.15).
     $total++
     if (Testar-TerrenoResumo -Desenho $desenhos[0]) { $passaram++ }
+
+    # Estilos do projeto (8.13).
+    $total++
+    if (Testar-Estilos -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

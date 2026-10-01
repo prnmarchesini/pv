@@ -84,6 +84,7 @@ internal static class GroupDrawer
 
         espaco.AppendEntity(letreiro);
         transacao.AddNewlyCreatedDBObject(letreiro, true);
+        EstiloDoProjeto.PrepararTexto(transacao, database)(letreiro);
         LayoutXData.SaveGroupMark(transacao, letreiro, marca);
         criadas++;
 

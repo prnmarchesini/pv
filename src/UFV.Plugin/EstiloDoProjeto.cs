@@ -29,6 +29,20 @@ internal static class EstiloDoProjeto
         PluginDictionary.Save(database, ProjectStyles.StorageKey, new ResultBuffer(
             estilos.Encode().Select(c => new TypedValue((int)DxfCode.Text, c)).ToArray()));
 
+    /// <summary>
+    /// Os estilos que valem: os escolhidos; sem escolha gravada, os do Renan
+    /// (<see cref="ProjectStyles.Marcheng"/>) que o desenho tiver.
+    /// </summary>
+    internal static ProjectStyles Efetivo(Transaction transacao, Database database)
+    {
+        if (PluginDictionary.Contains(database, ProjectStyles.StorageKey)) return Ler(database);
+
+        return new ProjectStyles(
+            ProjectStyles.Match(ProjectStyles.Marcheng.TextStyle, EstilosDeTexto(transacao, database)),
+            ProjectStyles.Match(ProjectStyles.Marcheng.DimensionStyle, EstilosDeCota(transacao, database)),
+            ProjectStyles.Match(ProjectStyles.Marcheng.LeaderStyle, EstilosDeChamada(transacao, database)));
+    }
+
     /// <summary>Os nomes dos estilos de texto do desenho.</summary>
     internal static List<string> EstilosDeTexto(Transaction transacao, Database database) =>
         Nomes<TextStyleTableRecord>(transacao, database.TextStyleTableId).Where(n => n.Length > 0).ToList();
@@ -41,7 +55,12 @@ internal static class EstiloDoProjeto
     internal static List<string> EstilosDeChamada(Transaction transacao, Database database)
     {
         var dicionario = (DBDictionary)transacao.GetObject(database.MLeaderStyleDictionaryId, OpenMode.ForRead);
-        return dicionario.Cast<DBDictionaryEntry>().Select(e => e.Key).ToList();
+        var nomes = new List<string>();
+
+        // foreach tipado: o enumerador do DBDictionary não serve ao Cast<>.
+        foreach (DBDictionaryEntry entrada in dicionario) nomes.Add(entrada.Key);
+
+        return nomes;
     }
 
     /// <summary>
@@ -49,10 +68,13 @@ internal static class EstiloDoProjeto
     /// operação inteira (ler o registro a cada texto custaria caro numa usina
     /// grande). Sem estilo escolhido, ou se ele não existe no desenho, o
     /// texto fica como está, com a altura de reserva que já tem.
+    ///
+    /// Chamar com o texto JÁ no desenho (depois do AppendEntity): o texto
+    /// anotativo precisa do banco para ganhar a escala de anotação corrente.
     /// </summary>
     internal static Action<MText> PrepararTexto(Transaction transacao, Database database)
     {
-        var escolhido = Ler(database).TextStyle;
+        var escolhido = Efetivo(transacao, database).TextStyle;
         if (escolhido is null) return _ => { };
 
         var tabela = (TextStyleTable)transacao.GetObject(database.TextStyleTableId, OpenMode.ForRead);

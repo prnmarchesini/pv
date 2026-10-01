@@ -373,4 +373,10 @@ public static class PluginInfo
 
     /// <summary>Passo 8.15: o resumo do terreno (superfície, área, cidade, país e fuso UTM).</summary>
     public const string ComandoTerrenoResumo = "UFV_TERRENO_RESUMO";
+
+    /// <summary>Passo 8.13: escolher os estilos de texto, cota e chamada que o plugin usa.</summary>
+    public const string ComandoEstilos = "UFV_ESTILOS";
+
+    /// <summary>O mesmo pela linha de comando (texto, cota, chamada; "-" é o corrente). Para o nível 2.</summary>
+    public const string ComandoEstilosAutomatico = "UFV_ESTILOS_AUTO";
 }

@@ -1,0 +1,35 @@
+; Teste de nivel 2 dos estilos do projeto (passo 8.13). Sem escolha
+; gravada, os textos do plugin saem no estilo de texto do Renan quando o
+; desenho o tem (anotativo); escolhido o Standard, saem nele, sem ser
+; anotativos. Le o estilo (grupo 7), o anotativo e a altura da entidade.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_TERRENO_AUTO")
+(setq ufv:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "UFV_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area dos estilos")
+(command "UFV_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento dos estilos")
+(command "UFV_FILEIRA_AUTO")
+(setvar "OSMODE" ufv:osmode)
+
+(defun ufv:primeiro ( / ss)
+  (setq ss (ssget "_X" (list (cons 0 "MTEXT") (cons 8 "MARCHENG_UFV_TXT_PONTA_BAIXA"))))
+  (if ss (ssname ss 0)))
+; Sem getpropertyvalue no Core Console: o anotativo se le pelo XData
+; AcadAnnotative, que o AutoCAD grava em todo objeto anotativo.
+(defun ufv:descrever (rotulo e / d)
+  (setq d (entget e '("AcadAnnotative")))
+  (princ (strcat "\n" rotulo " estilo=" (cdr (assoc 7 d))
+                 " anotativo=" (if (assoc -3 d) "1" "0")
+                 " altura=" (rtos (cdr (assoc 40 d)) 2 4))))
+
+(command "UFV_AN_PB_INSERIR")
+(ufv:descrever "UFV_ESTILO_PADRAO" (ufv:primeiro))
+(command "UFV_ESTILOS_AUTO" "Standard" "-" "-")
+(command "UFV_AN_PB_INSERIR")
+(ufv:descrever "UFV_ESTILO_STANDARD" (ufv:primeiro))
+(princ (strcat "\nUFV_ESTILO_CANNOSCALE " (getvar "CANNOSCALE")))
+(setvar "SECURELOAD" ufv:secureload)
+(princ)

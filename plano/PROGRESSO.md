@@ -69,7 +69,7 @@ Só o Renan marca VALIDADO.
 | 8.10 | Análise: declividade | AGUARDANDO VALIDAÇÃO | Mesma base do 8.9; seta + valor por mesa, % ou graus (trocar a unidade reinsere os textos), contorno opcional |
 | 8.11 | Análise: pilares | AGUARDANDO VALIDAÇÃO | Mesma base do 8.9; P (acima do terreno) em cada pilar, pilares opcionais |
 | 8.12 | Quantificar e exportar para Excel | AGUARDANDO VALIDAÇÃO | Quantificar grava a contagem no desenho; `UFV_EXCEL` grava .xlsx (Resumo, Análises, Pilares, Compra de pilares), escrito à mão no Core (`XlsxWriter`); aberto no Excel de verdade em 01/10 |
-| 8.13 | Estilos do projeto | PENDENTE | |
+| 8.13 | Estilos do projeto | AGUARDANDO VALIDAÇÃO | `UFV_ESTILOS` (janela) grava estilo de texto, cota e chamada no desenho; todo texto do plugin sai nele, anotativo quando o estilo é; sem escolha valem os do Renan se o desenho os tem; nível 2 no Itatiba |
 | 8.14 | Tags | PENDENTE | |
 | 8.15 | Terreno | AGUARDANDO VALIDAÇÃO | `UFV_TERRENO_RESUMO`: superfície e estado, área, cotas, cidade (IBGE embutido), país e fuso UTM SIRGAS 2000 com EPSG; janela com Trocar terreno e Localização; nível 2 no Itatiba: Itatiba - SP, 23S |
 | 8.16 | Ribbon nova | PENDENTE | |
@@ -4341,3 +4341,25 @@ Analisar com graus; 7) Excel: abrir o arquivo e conferir as quatro abas.
 **Roteiro de tela do 8.15:** Terreno → Resumo: no Itatiba deve aparecer
 "Cidade: Itatiba - SP" e "Fuso: SIRGAS 2000 / UTM zone 23S (EPSG:31983)";
 "Trocar terreno..." abre a lista de superfícies.
+
+### 8.13 (01/10/2026): estilos do projeto
+
+- `UFV_ESTILOS` abre a escolha do estilo de texto, de cota e de chamada
+  (listas tiradas do desenho; "o corrente do desenho" é não escolher). Fica
+  gravado no desenho.
+- Todo texto que o plugin escreve passa pelo estilo: cotas de altura, seta
+  da declividade, textos das análises, número do grupo (e as tags do 8.14).
+  Estilo anotativo: o texto nasce anotativo, na altura de papel do estilo
+  pela escala de anotação corrente (no Itatiba, 2 mm a 1:500 = 1 m).
+- Sem escolha gravada, valem os estilos do Renan quando o desenho os tem.
+  Os nomes no desenho do Itatiba são "Marcheng Anotativa - Detalhe"
+  (texto), "Marcheng_Anotativa" (cota) e "Marchen Anotativo" (chamada); no
+  Word estavam escritos um pouco diferente ("Marchengg", "Marcheng
+  anotativo"). **O Renan confirma** se são esses.
+- O plugin ainda não desenha cota nem chamada; os dois estilos ficam
+  gravados para quando desenhar.
+
+**Roteiro de tela do 8.13:** 1) Inserir PB numa área: os textos saem no
+"Marcheng Anotativa - Detalhe", anotativos (aparecem no layout na escala do
+viewport); 2) `UFV_ESTILOS`: escolher Standard no texto, Salvar; inserir PB
+de novo: saem no Standard.
