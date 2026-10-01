@@ -20,6 +20,7 @@
   -->
   <ItemGroup>
     <EmbeddedResource Include="modulos.json" />
+    <EmbeddedResource Include="municipios.csv" />
   </ItemGroup>
 
   <PropertyGroup>

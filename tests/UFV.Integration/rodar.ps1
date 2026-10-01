@@ -3263,6 +3263,56 @@ function Testar-Analises {
     return $true
 }
 
+<#
+    O resumo do terreno (8.15): superficie, area em hectares que bate com a
+    do processamento, cotas, e onde fica. Desenho sem georreferencia diz
+    como definir; com ela, cidade, pais e fuso UTM.
+#>
+function Testar-TerrenoResumo {
+    param([string] $Desenho)
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-terreno-resumo' `
+                            -Script (Join-Path $PSScriptRoot 'ufv-terreno-resumo.scr')
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-terreno-resumo terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'RESUMO DO TERRENO' -or $r.Texto -notmatch '  Terreno: (.+)' -or $r.Texto -notmatch '  Área: ([\d.,]+) ha em planta') {
+        $problemas.Add("ufv-terreno-resumo: o resumo nao trouxe terreno e area. Veja $($r.Saida)")
+        return $false
+    }
+
+    $areaNoResumo = $Matches[1]
+
+    # A area do resumo e a mesma do processamento ("area 2D: X ha").
+    if ($r.Texto -match '(?i)área[^\n]*?([\d.,]+) ha' -and $r.Texto -notmatch [regex]::Escape("$areaNoResumo ha")) {
+        $problemas.Add("ufv-terreno-resumo: a area do resumo ($areaNoResumo ha) nao aparece no processamento. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -match '  Localização: não definida') {
+        Write-Host "  (terreno-resumo: $areaNoResumo ha; desenho sem georreferencia)" -ForegroundColor DarkGray
+        return $true
+    }
+
+    if ($r.Texto -notmatch '  Cidade: (.+)' ) {
+        $problemas.Add("ufv-terreno-resumo: com localizacao, faltou a cidade. Veja $($r.Saida)")
+        return $false
+    }
+
+    $cidade = $Matches[1].Trim()
+
+    if ($r.Texto -notmatch '  Fuso: (.*UTM.*)') {
+        $problemas.Add("ufv-terreno-resumo: com localizacao, faltou o fuso UTM. Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (terreno-resumo: $areaNoResumo ha; $cidade; $($Matches[1].Trim()))" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -3404,6 +3454,10 @@ else {
     # Analises independentes (8.9 a 8.11).
     $total++
     if (Testar-Analises -Desenho $desenhos[0]) { $passaram++ }
+
+    # Resumo do terreno (8.15).
+    $total++
+    if (Testar-TerrenoResumo -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

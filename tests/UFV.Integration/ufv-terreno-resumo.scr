@@ -1,0 +1,11 @@
+; Teste de nivel 2 do resumo do terreno (passo 8.15): processa a superficie
+; e pede o resumo. O que se confere e a linha de comando: superficie, area,
+; cotas e, com o desenho georreferenciado, cidade, pais e fuso UTM.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_TERRENO_AUTO")
+(command "UFV_TERRENO_RESUMO")
+(setvar "SECURELOAD" ufv:secureload)
+(princ)

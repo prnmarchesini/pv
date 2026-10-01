@@ -370,4 +370,7 @@ public static class PluginInfo
 
     /// <summary>O mesmo, com o caminho na linha de comando. Para o nível 2.</summary>
     public const string ComandoExportarExcelAutomatico = "UFV_EXCEL_AUTO";
+
+    /// <summary>Passo 8.15: o resumo do terreno (superfície, área, cidade, país e fuso UTM).</summary>
+    public const string ComandoTerrenoResumo = "UFV_TERRENO_RESUMO";
 }

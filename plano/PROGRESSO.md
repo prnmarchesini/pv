@@ -71,7 +71,7 @@ Só o Renan marca VALIDADO.
 | 8.12 | Quantificar e exportar para Excel | AGUARDANDO VALIDAÇÃO | Quantificar grava a contagem no desenho; `UFV_EXCEL` grava .xlsx (Resumo, Análises, Pilares, Compra de pilares), escrito à mão no Core (`XlsxWriter`); aberto no Excel de verdade em 01/10 |
 | 8.13 | Estilos do projeto | PENDENTE | |
 | 8.14 | Tags | PENDENTE | |
-| 8.15 | Terreno | PENDENTE | |
+| 8.15 | Terreno | AGUARDANDO VALIDAÇÃO | `UFV_TERRENO_RESUMO`: superfície e estado, área, cotas, cidade (IBGE embutido), país e fuso UTM SIRGAS 2000 com EPSG; janela com Trocar terreno e Localização; nível 2 no Itatiba: Itatiba - SP, 23S |
 | 8.16 | Ribbon nova | PENDENTE | |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
@@ -4322,3 +4322,22 @@ faixa coloridos; 4) Ponta alta → Inserir e Tirar cores: os módulos da PB
 continuam coloridos; 5) Ponta baixa → Quantificar: a linha de comando diz
 quantos pilares e quantos módulos em cada faixa; 6) Declividade → Inserir,
 Analisar com graus; 7) Excel: abrir o arquivo e conferir as quatro abas.
+
+### 8.15 (01/10/2026): resumo do terreno
+
+- `UFV_TERRENO_RESUMO` mostra (janela e linha de comando): a superfície
+  escolhida e se o carimbo está Atual, área em planta e na superfície,
+  cotas, localização, cidade, país e fuso UTM.
+- Cidade: o município do IBGE com a sede mais perto (base de 5.570
+  municípios embutida no Core, de github.com/kelvins/municipios-brasileiros,
+  licença MIT; sem internet). A mais de 60 km de toda sede, o país não é
+  afirmado. Fuso pela longitude, com o EPSG do SIRGAS 2000 na América do
+  Sul (31977 a 31985 no sul, 31971 a 31976 no norte); fora dela, só o fuso
+  ("demais países a gente pensa depois").
+- A janela tem "Trocar terreno..." (abre a escolha de superfície) e
+  "Localização..." (o UFV_LOCAL). O nome do terreno escolhido na própria
+  ribbon fica para o 8.16.
+
+**Roteiro de tela do 8.15:** Terreno → Resumo: no Itatiba deve aparecer
+"Cidade: Itatiba - SP" e "Fuso: SIRGAS 2000 / UTM zone 23S (EPSG:31983)";
+"Trocar terreno..." abre a lista de superfícies.
