@@ -56,3 +56,66 @@ public class ModuleServiceTests
         Assert.Equal(ModuleLibrary.Default(), ModuleLibrary.Parse(File.ReadAllText(copia)));
     }
 }
+
+/// <summary>Passo 8.4: o módulo que o plugin cadastra no serviço.</summary>
+public class ModuleServiceEntryTests
+{
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void OJsonTemOsNomesDoServico()
+    {
+        var json = ModuleLibrary.ToServiceJson(new SolarModule(" Risen ", " RSM132-8-720BHDG ", 720, 2.384, 1.303, 0.033));
+
+        Assert.Contains("\"marca\":\"Risen\"", json);
+        Assert.Contains("\"modelo\":\"RSM132-8-720BHDG\"", json);
+        Assert.Contains("\"potencia_w\":720", json);
+        Assert.Contains("\"largura_m\":1.303", json);
+    }
+
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void IdaEVoltaDaOMesmoModulo()
+    {
+        var modulo = new SolarModule("Risen", "RSM132-8-720BHDG", 720, 2.384, 1.303, 0.033);
+
+        var volta = ModuleLibrary.ParseService("[" + ModuleLibrary.ToServiceJson(modulo) + "]");
+
+        Assert.Equal(modulo, Assert.Single(volta));
+    }
+
+    [Theory]
+    [Trait("Etapa", "8")]
+    [InlineData(0.72, 2.384, 1.303)]
+    [InlineData(720, 1.303, 2.384)]
+    public void ModuloQueOPluginRecusaNaoVaiProServico(double watts, double altura, double largura)
+    {
+        var erro = Assert.Throws<InvalidOperationException>(
+            () => ModuleLibrary.ToServiceJson(new SolarModule("X", "Y", watts, altura, largura, 0.03)));
+
+        Assert.False(string.IsNullOrWhiteSpace(erro.Message));
+    }
+}
+
+/// <summary>Achados da revisão do 8.4: o que o serviço recusaria, o plugin recusa antes.</summary>
+public class ModuleServiceEntryRevisionTests
+{
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void MarcaEmBrancoERecusada()
+    {
+        var erro = Assert.Throws<InvalidOperationException>(
+            () => ModuleLibrary.ToServiceJson(new SolarModule("  ", "Y", 720, 2.384, 1.303, 0.033)));
+
+        Assert.Contains("marca", erro.Message);
+    }
+
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void NomeComprideDemaisERecusado()
+    {
+        var erro = Assert.Throws<InvalidOperationException>(
+            () => ModuleLibrary.ToServiceJson(new SolarModule("X", new string('M', 121), 720, 2.384, 1.303, 0.033)));
+
+        Assert.Contains("120", erro.Message);
+    }
+}

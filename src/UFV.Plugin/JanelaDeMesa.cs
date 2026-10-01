@@ -39,7 +39,14 @@ internal sealed class JanelaDeMesa : Window
     private IReadOnlyList<double>? _vaosEscritos;
 
     /// <summary>Os módulos da lista e de onde vieram (serviço ou embutida, passo 8.3).</summary>
-    private readonly IReadOnlyList<SolarModule> _modulos;
+    private IReadOnlyList<SolarModule> _modulos;
+    private readonly Button _cadastrarModulo = new()
+    {
+        Content = "Cadastrar módulo...",
+        Height = 24,
+        Margin = new Thickness(0, 2, 0, 6),
+        ToolTip = "Grava um módulo novo no serviço local (biblioteca de módulos). Precisa do serviço no ar: tools\\servico-local.ps1.",
+    };
     private readonly TextBlock _origemDosModulos = new() { FontSize = 11, Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap };
 
     private readonly ComboBox _salvos = new() { Margin = new Thickness(0, 2, 0, 6) };
@@ -121,11 +128,7 @@ internal sealed class JanelaDeMesa : Window
         ShowInTaskbar = false;
 
         (_modulos, _origemDosModulos.Text) = FonteDeModulos.Carregar();
-
-        foreach (var modulo in _modulos)
-            _modelo.Items.Add(new ComboBoxItem { Content = modulo.Describe(), Tag = modulo });
-
-        _modelo.Items.Add(new ComboBoxItem { Content = "(outro módulo, medidas à mão)", Tag = null });
+        ListarModulos();
 
         _arranjo.Items.Add(new ComboBoxItem
         {
@@ -293,6 +296,7 @@ internal sealed class JanelaDeMesa : Window
         Secao("Módulo");
         Linha("Modelo", _modelo);
         pilha.Children.Add(_origemDosModulos);
+        pilha.Children.Add(_cadastrarModulo);
         Linha("Altura (m)", _altura);
         Linha("Largura (m)", _largura);
         Linha("Espessura (m)", _espessura);
@@ -325,6 +329,7 @@ internal sealed class JanelaDeMesa : Window
         _salvos.SelectionChanged += (_, _) => CarregarSalvo();
         _enterro.TextChanged += (_, _) => Recalcular();
         _botaoDosVaos.Click += (_, _) => EscreverVaos();
+        _cadastrarModulo.Click += (_, _) => CadastrarModulo();
 
         return pilha;
     }
@@ -617,6 +622,71 @@ internal sealed class JanelaDeMesa : Window
         {
             RegistroDeDiagnostico.Registrar("Falha ao recalcular a mesa.", erro);
             NaoDeu(erro.Message);
+        }
+    }
+
+    private void ListarModulos()
+    {
+        _modelo.Items.Clear();
+
+        foreach (var modulo in _modulos)
+            _modelo.Items.Add(new ComboBoxItem { Content = modulo.Describe(), Tag = modulo });
+
+        _modelo.Items.Add(new ComboBoxItem { Content = "(outro módulo, medidas à mão)", Tag = null });
+    }
+
+    /// <summary>
+    /// Passo 8.4: cadastra um módulo no serviço, recarrega a lista e já o
+    /// escolhe. Parte das medidas que estão nos campos.
+    /// </summary>
+    private void CadastrarModulo()
+    {
+        try
+        {
+            NumberInput.TryParseLarge(_potencia.Text, out var potencia);
+            NumberInput.TryParseMeasure(_altura.Text, out var altura);
+            NumberInput.TryParseMeasure(_largura.Text, out var largura);
+            NumberInput.TryParseMeasure(_espessura.Text, out var espessura);
+
+            var janela = new JanelaDeCadastroDeModulo(new SolarModule(string.Empty, string.Empty, potencia, altura, largura, espessura))
+            {
+                Owner = this,
+            };
+
+            if (janela.ShowDialog() != true || janela.Cadastrado is not { } novo) return;
+
+            _preenchendo = true;
+            (_modulos, _origemDosModulos.Text) = FonteDeModulos.Carregar();
+            ListarModulos();
+
+            var achado = ModuleLibrary.Find(_modulos, novo.Model);
+            _modelo.SelectedIndex = achado is null ? _modelo.Items.Count - 1 : _modulos.ToList().IndexOf(achado);
+            _preenchendo = false;
+
+            if (achado is null)
+            {
+                // Gravou, mas a lista não recarregou do serviço: as medidas
+                // cadastradas vão para os campos à mão, e o usuário fica sabendo.
+                _marcaDoPerfil = novo.Brand;
+                _modeloDoPerfil = novo.Model;
+                _altura.Text = Numero(novo.Height);
+                _largura.Text = Numero(novo.Width);
+                _espessura.Text = Numero(novo.Thickness);
+                _potencia.Text = Numero(novo.PowerWatts);
+                Avisar($"O módulo {novo.DisplayName} foi cadastrado, mas a lista não recarregou do serviço; as medidas dele ficaram nos campos.");
+            }
+            else
+            {
+                TrocarModulo();
+            }
+
+            Recalcular();
+        }
+        catch (Exception erro)
+        {
+            _preenchendo = false;
+            RegistroDeDiagnostico.Registrar("Falha ao cadastrar módulo pela janela de Mesa.", erro);
+            Avisar($"Não consegui cadastrar o módulo: {erro.Message}");
         }
     }
 

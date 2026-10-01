@@ -24,6 +24,9 @@ public static class ModuleLibrary
 {
     private const string Arquivo = "UFV.Core.modulos.json";
 
+    /// <summary>O maior nome (marca ou modelo) que o serviço aceita.</summary>
+    private const int MaiorNome = 120;
+
     /// <summary>
     /// O comparador de nomes, um só para procurar, ordenar e achar repetido.
     ///
@@ -159,6 +162,47 @@ public static class ModuleLibrary
             Width = m.LarguraM,
             Thickness = m.EspessuraM,
         }).ToList());
+    }
+
+    /// <summary>
+    /// O módulo no formato que o serviço recebe em <c>POST /modulos</c>
+    /// (passo 8.4), com marca e modelo aparados.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Se o plugin recusaria o módulo: ele não vai para o serviço, que o
+    /// devolveria na lista e derrubaria a lista inteira para a embutida.
+    /// </exception>
+    public static string ToServiceJson(SolarModule modulo)
+    {
+        ArgumentNullException.ThrowIfNull(modulo);
+
+        if (!modulo.IsValid)
+        {
+            throw new InvalidOperationException(
+                "O módulo não pode ser cadastrado: falta o modelo ou há medida impossível "
+                + "(potência de 1 a 2000 Wp, medidas em metro até 3 m, espessura menor que a largura).");
+        }
+
+        if (modulo.LooksSwapped is { } aviso)
+            throw new InvalidOperationException($"O módulo não pode ser cadastrado: {aviso}.");
+
+        // O serviço exige marca e limita os dois nomes a 120 caracteres
+        // (servidor/app/schemas.py); recusar aqui dá a mensagem em português.
+        if (string.IsNullOrWhiteSpace(modulo.Brand))
+            throw new InvalidOperationException("O módulo não pode ser cadastrado: a marca está em branco.");
+
+        if (modulo.Brand.Trim().Length > MaiorNome || modulo.Model.Trim().Length > MaiorNome)
+            throw new InvalidOperationException($"O módulo não pode ser cadastrado: marca e modelo vão até {MaiorNome} caracteres.");
+
+        return JsonSerializer.Serialize(new DoServico
+        {
+            Marca = modulo.Brand.Trim(),
+            Modelo = modulo.Model.Trim(),
+            PotenciaW = modulo.PowerWatts,
+            AlturaM = modulo.Height,
+            LarguraM = modulo.Width,
+            EspessuraM = modulo.Thickness,
+        });
     }
 
     private static IReadOnlyList<SolarModule> Validar(List<Entrada> entradas)

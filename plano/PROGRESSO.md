@@ -60,7 +60,7 @@ Só o Renan marca VALIDADO.
 | 8.1 | Vãos personalizados e enterro mínimo (Core) | VALIDADO (automático) | `TableFrame.PillarSpans`, `MinEmbedment` (T3), `PillarCoverage`, `SpanDifference`, `Pillars(mesa)`; perfil JSON com os dois campos opcionais; 25 testes |
 | 8.2 | Janela da estrutura | AGUARDANDO VALIDAÇÃO | Janela de Mesa: larguras do pilar, T3 (m, opcional), botão "Vãos entre pilares..." (`JanelaDeVaos`, conta em `PillarSpanForm`), solo e T3 no croqui; o T3 chega ao motor por `ProjectSettings.ForTable` |
 | 8.3 | Serviço local de módulos | AGUARDANDO VALIDAÇÃO | `servidor/` (FastAPI, SQLAlchemy, Alembic; SQLite sem `DATABASE_URL`, Postgres no `docker-compose`), 24 testes no placar; janela de Mesa lista os módulos do serviço e diz a origem; sem serviço, a embutida |
-| 8.4 | Cadastro de módulo | PENDENTE | |
+| 8.4 | Cadastro de módulo | AGUARDANDO VALIDAÇÃO | Botão "Cadastrar módulo..." na janela de Mesa (`JanelaDeCadastroDeModulo`), POST no serviço; recusas em português; a lista recarrega e o módulo novo fica escolhido |
 | 8.5 | Mesas do desenho | PENDENTE | |
 | 8.6 | Motor com mais de um tipo de mesa | PENDENTE | |
 | 8.7 | Janela de Configurações com abas | PENDENTE | |
@@ -4231,3 +4231,21 @@ o solo e "T3 1,1"; 3) "Vãos entre pilares...": mudar P1-P2 para 2,5: a soma
 fica vermelha com "falta"; "Distribuir igual" com 7 pilares volta a fechar
 (verde) e libera o OK; 4) OK: o resumo embaixo lista os vãos escritos;
 salvar o perfil, fechar e abrir de novo: T3 e vãos voltam.
+
+### 8.4 (01/10/2026): cadastro de módulo
+
+- Botão "Cadastrar módulo..." embaixo do Modelo, na janela de Mesa. A
+  janela de cadastro parte das medidas que estão nos campos; o módulo vai
+  ao serviço (`POST /modulos`, prazo de 8 s), a lista recarrega e ele fica
+  escolhido.
+- O plugin recusa antes o que o serviço recusaria (marca em branco, nome
+  acima de 120 caracteres, medidas fora da faixa); recusa do serviço (modelo
+  repetido, 422) aparece com o nome do campo.
+- **Observação que fica:** "modelo repetido" compara diferente nos dois
+  lados em Unicode raro (é composto x decomposto).
+
+**Roteiro de tela do 8.4:** 1) `.\tools\servico-local.ps1`; 2) Mesa →
+"Cadastrar módulo...": marca "Teste", modelo "TESTE-600", 600 Wp, 2,278 ×
+1,134 × 0,030 → Cadastrar: a janela fecha, o Modelo mostra o TESTE-600 e o
+resumo da mesa muda; 3) cadastrar de novo o mesmo modelo: a janela diz "Já
+existe o módulo TESTE-600."
