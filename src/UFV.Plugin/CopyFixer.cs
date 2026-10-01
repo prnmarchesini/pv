@@ -190,6 +190,11 @@ internal static class CopyFixer
                     LayoutXData.SaveAnalysisText(transacao, entidade, texto with { Id = Guid.NewGuid(), Table = novaMesa });
                     pecas++;
                 }
+                else if (LayoutXData.LoadTag(entidade) is { } tag)
+                {
+                    LayoutXData.SaveTag(transacao, entidade, tag with { Id = Guid.NewGuid(), Table = novaMesa });
+                    pecas++;
+                }
             }
 
             resultado.Add(new ReidentifiedCopy(novaMesa, letreiro, contorno, pecas));
@@ -205,7 +210,8 @@ internal static class CopyFixer
         ?? LayoutXData.LoadModule(entidade)?.Id
         ?? LayoutXData.LoadFace(entidade)?.Id
         ?? LayoutXData.LoadNote(entidade)?.Id
-        ?? LayoutXData.LoadAnalysisText(entidade)?.Id;
+        ?? LayoutXData.LoadAnalysisText(entidade)?.Id
+        ?? LayoutXData.LoadTag(entidade)?.Id;
 
     /// <summary>Um ponto da entidade, para medir o deslocamento da cópia.</summary>
     private static Point3d? Posicao(Transaction transacao, Entity entidade)

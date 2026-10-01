@@ -70,7 +70,7 @@ Só o Renan marca VALIDADO.
 | 8.11 | Análise: pilares | AGUARDANDO VALIDAÇÃO | Mesma base do 8.9; P (acima do terreno) em cada pilar, pilares opcionais |
 | 8.12 | Quantificar e exportar para Excel | AGUARDANDO VALIDAÇÃO | Quantificar grava a contagem no desenho; `UFV_EXCEL` grava .xlsx (Resumo, Análises, Pilares, Compra de pilares), escrito à mão no Core (`XlsxWriter`); aberto no Excel de verdade em 01/10 |
 | 8.13 | Estilos do projeto | AGUARDANDO VALIDAÇÃO | `UFV_ESTILOS` (janela) grava estilo de texto, cota e chamada no desenho; todo texto do plugin sai nele, anotativo quando o estilo é; sem escolha valem os do Renan se o desenho os tem; nível 2 no Itatiba |
-| 8.14 | Tags | PENDENTE | |
+| 8.14 | Tags | AGUARDANDO VALIDAÇÃO | `UFV_TAG_FILEIRAS/MESAS/MODULOS/STRINGS` e `_APAGAR`; strings em serpentina, sem atravessar mesa, incompleta com asterisco; nível 2 com 14 e 20 por string |
 | 8.15 | Terreno | AGUARDANDO VALIDAÇÃO | `UFV_TERRENO_RESUMO`: superfície e estado, área, cotas, cidade (IBGE embutido), país e fuso UTM SIRGAS 2000 com EPSG; janela com Trocar terreno e Localização; nível 2 no Itatiba: Itatiba - SP, 23S |
 | 8.16 | Ribbon nova | PENDENTE | |
 
@@ -4363,3 +4363,22 @@ Analisar com graus; 7) Excel: abrir o arquivo e conferir as quatro abas.
 "Marcheng Anotativa - Detalhe", anotativos (aparecem no layout na escala do
 viewport); 2) `UFV_ESTILOS`: escolher Standard no texto, Salvar; inserir PB
 de novo: saem no Standard.
+
+### 8.14 (01/10/2026): tags
+
+- Quatro tags, cada uma com inserir e apagar: fileiras ("F1", antes da
+  primeira mesa), mesas ("F1.2", no meio), módulos (o número dentro da
+  mesa) e strings ("S1", "S2"... na usina toda, no meio dos módulos dela).
+  Camadas `MARCHENG_UFV_TAG_*`, identidade no XData (`TagIdentity`), vão
+  junto com a mesa ao recalcular, apagar e copiar; estilo do projeto.
+- A ordem é a dos letreiros (o Numerar arruma). Dentro da mesa, os módulos
+  andam em serpentina: a fileira de baixo da esquerda para a direita, a de
+  cima voltando.
+- Strings: o comando pergunta os módulos por string (fica gravado). **Decisão
+  minha, o Renan confirma:** a string não atravessa mesa; o que sobra numa
+  mesa vira string incompleta, com asterisco ("S2*"), e o comando avisa.
+
+**Roteiro de tela do 8.14:** Numerar a área; Tags → Fileiras, Mesas,
+Strings (digitar 28 ou 14): conferir "F1", "F1.1", "S1"... no desenho e o
+sentido da serpentina; Tags → Módulos → Apagar módulos: só os números dos
+módulos somem.

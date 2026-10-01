@@ -199,3 +199,17 @@ public sealed record AnalysisTextIdentity(Guid Id, Guid Table, IndependentKind K
     /// <summary>Se a identidade é utilizável.</summary>
     public bool IsValid => Id != Guid.Empty && Table != Guid.Empty && Enum.IsDefined(Kind);
 }
+
+/// <summary>
+/// A identidade de uma tag (passo 8.14): de qual mesa, de que tipo e o texto.
+/// Pertence à mesa como as notas: recalcular, apagar ou copiar a mesa a leva.
+/// A tag de fileira pertence à primeira mesa da fileira.
+/// </summary>
+public sealed record TagIdentity(Guid Id, Guid Table, TagKind Kind, string Text)
+{
+    /// <summary>O tipo, como vai no XData.</summary>
+    public const string Tipo = "Tag";
+
+    /// <summary>Se a identidade é utilizável.</summary>
+    public bool IsValid => Id != Guid.Empty && Table != Guid.Empty && Enum.IsDefined(Kind);
+}

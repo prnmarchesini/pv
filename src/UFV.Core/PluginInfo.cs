@@ -379,4 +379,31 @@ public static class PluginInfo
 
     /// <summary>O mesmo pela linha de comando (texto, cota, chamada; "-" é o corrente). Para o nível 2.</summary>
     public const string ComandoEstilosAutomatico = "UFV_ESTILOS_AUTO";
+
+    /// <summary>Passo 8.14: insere as tags de fileiras (F1, F2...).</summary>
+    public const string ComandoTagFileirasInserir = "UFV_TAG_FILEIRAS";
+
+    /// <summary>Passo 8.14: apaga as tags de fileiras (F1, F2...).</summary>
+    public const string ComandoTagFileirasApagar = "UFV_TAG_FILEIRAS_APAGAR";
+
+    /// <summary>Passo 8.14: insere as tags de mesas (F1.2).</summary>
+    public const string ComandoTagMesasInserir = "UFV_TAG_MESAS";
+
+    /// <summary>Passo 8.14: apaga as tags de mesas (F1.2).</summary>
+    public const string ComandoTagMesasApagar = "UFV_TAG_MESAS_APAGAR";
+
+    /// <summary>Passo 8.14: insere as tags de módulos (número na mesa).</summary>
+    public const string ComandoTagModulosInserir = "UFV_TAG_MODULOS";
+
+    /// <summary>Passo 8.14: apaga as tags de módulos (número na mesa).</summary>
+    public const string ComandoTagModulosApagar = "UFV_TAG_MODULOS_APAGAR";
+
+    /// <summary>Passo 8.14: insere as tags de strings (S1, S2...).</summary>
+    public const string ComandoTagStringsInserir = "UFV_TAG_STRINGS";
+
+    /// <summary>Passo 8.14: apaga as tags de strings (S1, S2...).</summary>
+    public const string ComandoTagStringsApagar = "UFV_TAG_STRINGS_APAGAR";
+
+    /// <summary>Strings pela linha de comando (módulos por string). Para o nível 2.</summary>
+    public const string ComandoTagStringsAutomatico = "UFV_TAG_STRINGS_AUTO";
 }

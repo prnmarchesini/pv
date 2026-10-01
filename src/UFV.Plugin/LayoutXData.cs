@@ -190,6 +190,27 @@ internal static class LayoutXData
         return face.IsValid ? face : null;
     }
 
+    private const int VersaoDaTag = 1;
+
+    /// <summary>GUID, mesa, tipo, texto.</summary>
+    private const int CamposDaTag = 4;
+
+    internal static void SaveTag(Transaction transacao, Entity entidade, TagIdentity tag) =>
+        PluginXData.Save(transacao, entidade, TagIdentity.Tipo, VersaoDaTag, tag.Id.ToString("D"), tag.Table.ToString("D"), tag.Kind.ToString(), tag.Text);
+
+    internal static TagIdentity? LoadTag(Entity entidade)
+    {
+        var c = PluginXData.Load(entidade, TagIdentity.Tipo, VersaoDaTag, CamposDaTag);
+        if (c is null) return null;
+
+        if (!Guid.TryParse(c[0], out var id) || !Guid.TryParse(c[1], out var mesa)) return null;
+        if (!Enum.TryParse<TagKind>(c[2], out var tipo)) return null;
+
+        var tag = new TagIdentity(id, mesa, tipo, c[3]);
+
+        return tag.IsValid ? tag : null;
+    }
+
     private const int VersaoDoTextoDeAnalise = 1;
 
     /// <summary>GUID, mesa, análise, valor.</summary>

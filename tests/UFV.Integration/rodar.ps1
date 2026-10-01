@@ -3377,6 +3377,83 @@ function Testar-Estilos {
     return $true
 }
 
+<#
+    As tags (8.14): uma por fileira, uma por mesa (inserir de novo nao
+    empilha), uma por modulo, strings de 14 (inteiras) e de 20 (uma
+    incompleta por mesa); apagar os modulos deixa as mesas. Cota na faixa do
+    terreno (regra 5).
+#>
+function Testar-Tags {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-tags--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-tags: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    if ($sonda.Texto -notmatch 'cotas:\s+(-?[\d.,]+) m a (-?[\d.,]+) m') {
+        $problemas.Add("ufv-tags: nao achei a faixa de cotas do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $minima = [double]::Parse($Matches[1], $ptbr)
+    $maxima = [double]::Parse($Matches[2], $ptbr)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-tags' `
+        -Script (Join-Path $PSScriptRoot 'ufv-tags.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-tags terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'UFV_TAGS mesas=(\d+) modulos=(\d+) fileiras=(\d+) tmesas=(\d+) tmodulos=(\d+) s14=(\d+) inc14=(\d+) s20=(\d+) inc20=(\d+) modfim=(\d+) mesasfim=(\d+) zmin=(-?[\d.]+) zmax=(-?[\d.]+)') {
+        $problemas.Add("ufv-tags: nao consegui ler o LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $m = $Matches
+    $mesas = [int] $m[1]; $modulos = [int] $m[2]
+    $esperado = "fileiras=1 tmesas=$mesas tmodulos=$modulos s14=$($modulos / 14) inc14=0 s20=$(2 * $mesas) inc20=$mesas modfim=0 mesasfim=$mesas"
+    $obtido = "fileiras=$($m[3]) tmesas=$($m[4]) tmodulos=$($m[5]) s14=$($m[6]) inc14=$($m[7]) s20=$($m[8]) inc20=$($m[9]) modfim=$($m[10]) mesasfim=$($m[11])"
+
+    if ($mesas -lt 1 -or $obtido -ne $esperado) {
+        $problemas.Add("ufv-tags: com $mesas mesa(s) e $modulos modulo(s) esperava [$esperado], deu [$obtido]. Veja $($r.Saida)")
+        return $false
+    }
+
+    $zmin = [double]::Parse($m[12], $invariante); $zmax = [double]::Parse($m[13], $invariante)
+
+    if ($zmin -lt ($minima - 0.01) -or $zmax -gt ($maxima + 5)) {
+        $problemas.Add("ufv-tags: as tags vao de $zmin a $zmax, fora da faixa do terreno ($minima a $maxima). Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (tags: 1 fileira, $mesas mesas, $modulos modulos, $($m[6]) strings de 14 e $($m[8]) de 20 com $($m[9]) incompletas)" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -3526,6 +3603,10 @@ else {
     # Estilos do projeto (8.13).
     $total++
     if (Testar-Estilos -Desenho $desenhos[0]) { $passaram++ }
+
+    # Tags (8.14).
+    $total++
+    if (Testar-Tags -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

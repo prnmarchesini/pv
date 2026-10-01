@@ -101,6 +101,11 @@ internal static class LayoutScan
                 // Texto de análise (8.9): anotação da mesa, vai junto com ela.
                 Juntar(notas, texto.Table, id);
             }
+            else if (LayoutXData.LoadTag(entidade) is { } tag)
+            {
+                // Tag (8.14): idem.
+                Juntar(notas, tag.Table, id);
+            }
         }
 
         var todas = contornos.Keys.Concat(pilares.Keys).Concat(modulos.Keys).Concat(faces.Keys).Concat(notas.Keys).Distinct();
@@ -133,7 +138,8 @@ internal static class LayoutScan
             ?? LayoutXData.LoadModule(entidade)?.Table
             ?? LayoutXData.LoadFace(entidade)?.Table
             ?? LayoutXData.LoadNote(entidade)?.Table
-            ?? LayoutXData.LoadAnalysisText(entidade)?.Table;
+            ?? LayoutXData.LoadAnalysisText(entidade)?.Table
+            ?? LayoutXData.LoadTag(entidade)?.Table;
     }
 
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDoBloco = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(BlockReference));
