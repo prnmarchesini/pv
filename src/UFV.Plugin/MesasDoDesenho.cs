@@ -35,15 +35,4 @@ internal static class MesasDoDesenho
         PluginDictionary.Save(database, DrawingTables.StorageKey, new ResultBuffer(
             DrawingTables.Encode(mesas).Select(c => new TypedValue((int)DxfCode.Text, c)).ToArray()));
     }
-
-    /// <summary>
-    /// Os tipos de mesa da usina: as mesas do desenho marcadas para uso
-    /// (da mais comprida para a mais curta), ou, se nenhuma está marcada, o
-    /// perfil de sempre, sozinho e sem cor.
-    /// </summary>
-    internal static IReadOnlyList<DrawingTable> DaUsina(Database database, TableProfile padrao)
-    {
-        var emUso = DrawingTables.InUse(Ler(database));
-        return emUso.Count > 0 ? emUso : [new DrawingTable(padrao, RgbColor.Red, Use: true)];
-    }
 }

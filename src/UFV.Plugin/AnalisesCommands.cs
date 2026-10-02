@@ -155,6 +155,11 @@ public static class AnalisesCommands
         var sujas = 0;
         var puladas = new List<string>();
 
+        // As mesas do desenho, lidas uma vez: o perfil de cada mesa é a mesma
+        // instância para todas as do mesmo tipo, e o cache de geometria e o
+        // agrupamento por perfil funcionam (revisão do 8.6).
+        var doDesenho = MesasDoDesenho.Ler(documento.Database);
+
         using (var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction())
         {
             foreach (var (guid, mesa) in LayoutScan.Tables(transacao, documento.Database))
@@ -180,7 +185,8 @@ public static class AnalisesCommands
                 }
 
                 var cantos = FileiraCommands.Vertices(polilinha, transacao);
-                var perfilDela = FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil, identidade.ProfileName, documento.Database);
+                var perfilDela = DrawingTables.Find(doDesenho, identidade.ProfileName)?.Profile
+                    ?? FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil);
 
                 if (!geometrias.TryGetValue(perfilDela, out var geometriaDela))
                 {
@@ -234,9 +240,14 @@ public static class AnalisesCommands
                 doGrupo,
                 []);
 
+            // O tipo da mesa (nome e cor) continua com ela ao repintar.
+            var tipo = doDesenho.FirstOrDefault(m => ReferenceEquals(m.Profile, perfilDoGrupo)) is { } registro
+                ? new LayoutDrawer.TiposDeMesa([geometrias[perfilDoGrupo]], [perfilDoGrupo.Layout.Module], [registro.Name], [registro.Color])
+                : null;
+
             var desenho = LayoutDrawer.Draw(
                 documento.Database, todas, geometrias[perfilDoGrupo], perfilDoGrupo.Layout.Module, perfilDoGrupo.TiltRadians, settings.Analyses,
-                p => guids[p], p => pontas.TryGetValue(p, out var v) ? v : null);
+                p => guids[p], p => pontas.TryGetValue(p, out var v) ? v : null, tipos: tipo);
 
             pintadas += desenho.Painted;
             marcadas += desenho.Marked;

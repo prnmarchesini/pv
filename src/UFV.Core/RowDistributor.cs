@@ -332,10 +332,11 @@ public static class RowDistributor
 
         if (!double.IsFinite(comprimento) || comprimento <= 0) return [];
 
-        // Em milímetros, o passo de cada mesa arredondado ao mais perto (erro
-        // de meio milímetro, dentro da tolerância da distribuição).
-        var capacidade = (int)Math.Floor((comprimento + gap + Tolerancia) * 1000);
-        var passos = tipos.Select(t => (int)Math.Round((t.Length + gap) * 1000, MidpointRounding.AwayFromZero)).ToArray();
+        // Em milímetros, o passo de cada mesa arredondado para CIMA (com uma
+        // folga de ponto flutuante): a soma nunca passa do trecho, e a mesa
+        // que cabe exata continua cabendo.
+        var capacidade = (int)Math.Floor((comprimento + gap) * 1000 + 1e-6);
+        var passos = tipos.Select(t => (int)Math.Ceiling((t.Length + gap) * 1000 - 1e-6)).ToArray();
 
         if (capacidade <= 0 || passos.All(p => p > capacidade)) return [];
 
@@ -371,7 +372,6 @@ public static class RowDistributor
         for (var x = capacidade; x > 0;)
         {
             if (ultimo[x] == -2) { x--; continue; }
-            if (ultimo[x] < 0) break;
 
             escolhidos.Add(ultimo[x]);
             x -= passos[ultimo[x]];

@@ -93,6 +93,46 @@ public static class UsinaCommands
     }
 
     /// <summary>O que o planejamento da usina produz, para o desenho vir depois (o Refazer apaga entre os dois).</summary>
+    /// <summary>
+    /// As mesas do desenho em uso (8.5/8.6), da mais comprida para a mais
+    /// curta. Lista vazia: nenhuma em uso, vale o perfil de sempre. Null,
+    /// com a mensagem dada: em uso, mas com inclinações diferentes.
+    /// </summary>
+    internal static IReadOnlyList<DrawingTable>? MesasEmUso(Editor editor, Autodesk.AutoCAD.DatabaseServices.Database database, string prefixo)
+    {
+        var lidas = MesasDoDesenho.Ler(database, out var problemas);
+        foreach (var problema in problemas) editor.WriteMessage($"\n  ATENÇÃO: {problema}.\n");
+
+        var emUso = DrawingTables.InUse(lidas);
+
+        if (emUso.Select(m => Math.Round(m.Profile.TiltDegrees, 3)).Distinct().Count() > 1)
+        {
+            editor.WriteMessage(
+                $"\n{prefixo} As mesas marcadas para uso têm inclinações diferentes ("
+                + string.Join(", ", emUso.Select(m => $"{m.Name} a {m.Profile.TiltDegrees.ToString("0.#", Brasil)}°"))
+                + "): numa fileira elas precisam ter a mesma. Ajuste em Configurações > Escolha das estruturas.\n");
+            return null;
+        }
+
+        return emUso;
+    }
+
+    /// <summary>Os tipos para o desenho e as pegadas para a distribuição, das mesas em uso.</summary>
+    internal static (LayoutDrawer.TiposDeMesa Tipos, List<TableFootprint> Pegadas, List<int> Modulos) Tipos(IReadOnlyList<DrawingTable> emUso)
+    {
+        var geometrias = emUso.Select(m => FileiraCommands.GeometriaDe(m.Profile)).ToList();
+        var tilt = emUso[0].Profile.TiltRadians;
+
+        return (
+            new LayoutDrawer.TiposDeMesa(
+                geometrias,
+                emUso.Select(m => m.Profile.Layout.Module).ToList(),
+                emUso.Select(m => (string?)m.Name).ToList(),
+                emUso.Select(m => (RgbColor?)m.Color).ToList()),
+            geometrias.Select(g => new TableFootprint(g.Length, g.Depth * Math.Cos(tilt))).ToList(),
+            emUso.Select(m => m.Profile.Layout.ModuleCount).ToList());
+    }
+
     internal sealed record PlanoDaUsina(
         ProjectSettings Settings, TableGeometry Geometria, TableProfile Perfil, PlanLayout Layout, ProcessedPlant Usina,
         LayoutDrawer.TiposDeMesa? Tipos = null);
@@ -127,21 +167,10 @@ public static class UsinaCommands
     {
         // As mesas do desenho marcadas para uso (8.5/8.6); sem nenhuma, o
         // perfil de sempre, e a usina sai como saía.
-        var doDesenho = DrawingTables.InUse(MesasDoDesenho.Ler(documento.Database));
+        var doDesenho = MesasEmUso(editor, documento.Database, "USINA");
+        if (doDesenho is null) return null;
 
-        if (doDesenho.Count > 0)
-        {
-            if (doDesenho.Select(m => Math.Round(m.Profile.TiltDegrees, 3)).Distinct().Count() > 1)
-            {
-                editor.WriteMessage(
-                    "\nUSINA As mesas marcadas para uso têm inclinações diferentes ("
-                    + string.Join(", ", doDesenho.Select(m => $"{m.Name} a {m.Profile.TiltDegrees.ToString("0.#", Brasil)}°"))
-                    + "): numa fileira elas precisam ter a mesma. Ajuste em Configurações > Escolha das estruturas.\n");
-                return null;
-            }
-
-            perfil = doDesenho[0].Profile;
-        }
+        if (doDesenho.Count > 0) perfil = doDesenho[0].Profile;
 
         var doProjeto = ConfigCommands.Inicial(documento, out var avisoDaConfig);
         if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage($"\n  ATENÇÃO: {notaDoT3}.\n");
@@ -160,15 +189,7 @@ public static class UsinaCommands
 
         if (doDesenho.Count > 0)
         {
-            var geometrias = doDesenho.Select(m => TableGeometry.Local(m.Profile.Layout, m.Profile.Frame.Pillars(m.Profile.Layout), m.Profile.Frame)).ToList();
-
-            tipos = new LayoutDrawer.TiposDeMesa(
-                geometrias,
-                doDesenho.Select(m => m.Profile.Layout.Module).ToList(),
-                doDesenho.Select(m => (string?)m.Name).ToList(),
-                doDesenho.Select(m => (RgbColor?)m.Color).ToList());
-
-            footprints = geometrias.Select(g => new TableFootprint(g.Length, g.Depth * Math.Cos(perfil.TiltRadians))).ToList();
+            (tipos, footprints, _) = Tipos(doDesenho);
 
             if (doDesenho.Count > 1)
                 editor.WriteMessage($"\nMesas em uso: {string.Join(", ", doDesenho.Select(m => $"{m.Name} ({m.Profile.Layout.ModuleCount} módulos)"))}\n");

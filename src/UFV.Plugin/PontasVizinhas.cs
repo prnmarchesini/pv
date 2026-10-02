@@ -38,6 +38,30 @@ internal static class PontasVizinhas
         PontaPresa? primeira = null, ultima = null;
         double distPrimeira = double.PositiveInfinity, distUltima = double.PositiveInfinity;
 
+        // A vizinha pode ser de outro tipo de mesa (8.6): a geometria dela sai
+        // do perfil que ela grava (ou do comprimento dela), lido uma vez.
+        var doDesenho = MesasDoDesenho.Ler(database);
+        var geometrias = new Dictionary<string, TableGeometry>(StringComparer.CurrentCultureIgnoreCase);
+
+        TableGeometry GeometriaDa(TableIdentity identidade, IReadOnlyList<Point3> cantos)
+        {
+            var registro = DrawingTables.Find(doDesenho, identidade.ProfileName);
+
+            if (registro is null)
+            {
+                var comprimento = Math.Sqrt(Math.Pow(cantos[1].X - cantos[0].X, 2) + Math.Pow(cantos[1].Y - cantos[0].Y, 2) + Math.Pow(cantos[1].Z - cantos[0].Z, 2));
+                if (Math.Abs(comprimento - geometria.Length) <= 0.05) return geometria;
+                registro = doDesenho.FirstOrDefault(m => Math.Abs(m.Profile.Layout.Length - comprimento) <= 0.05);
+            }
+
+            if (registro is null) return geometria;
+
+            if (!geometrias.TryGetValue(registro.Name, out var dela))
+                geometrias[registro.Name] = dela = FileiraCommands.GeometriaDe(registro.Profile);
+
+            return dela;
+        }
+
         using var transacao = database.TransactionManager.StartOpenCloseTransaction();
 
         foreach (var (outra, partes) in todas)
@@ -53,10 +77,11 @@ internal static class PontasVizinhas
             if (perto > 3 * celula.Length + config.MaxGapBeforeBreak) continue;
 
             PlacedTable vizinha;
+            var geometriaDela = GeometriaDa(partes.Identity, cantos);
 
             try
             {
-                vizinha = TableCells.FromCorners(cantos, partes.Identity.Label, geometria.Length, geometria.Depth * Math.Cos(tilt));
+                vizinha = TableCells.FromCorners(cantos, partes.Identity.Label, geometriaDela.Length, geometriaDela.Depth * Math.Cos(tilt));
             }
             catch (ArgumentException)
             {
@@ -65,7 +90,7 @@ internal static class PontasVizinhas
 
             if (!Vizinhas(celula, vizinha, geometria, config)) continue;
 
-            var dela = Pontas(vizinha, geometria, tilt, config);
+            var dela = Pontas(vizinha, geometriaDela, tilt, config);
 
             // O par de pontas que se encosta: o mais perto.
             var pares = new[]
@@ -78,7 +103,7 @@ internal static class PontasVizinhas
 
             var par = pares.MinBy(p => p.D);
 
-            var desenhada = RowPipeline.ProcessFixed(vizinha, geometria, tilt, terreno, settings, cantos[0].Z, cantos[1].Z, null).Tables[0];
+            var desenhada = RowPipeline.ProcessFixed(vizinha, geometriaDela, tilt, terreno, settings, cantos[0].Z, cantos[1].Z, null).Tables[0];
             var pilares = desenhada.Pillars.Pillars;
             if (pilares.Count == 0) continue;
 

@@ -153,6 +153,12 @@ public static class FileiraCommands
         int numeroDaFileira,
         TableProfile perfil)
     {
+        // As mesas do desenho em uso, como na Usina (revisão do 8.6: a
+        // fileira N tem que sair igual à fileira N da usina).
+        var emUso = UsinaCommands.MesasEmUso(editor, documento.Database, "FILEIRA");
+        if (emUso is null) return;
+        if (emUso.Count > 0) perfil = emUso[0].Profile;
+
         var doProjeto = ConfigCommands.Inicial(documento, out var avisoDaConfig);
         if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage($"\n  ATENÇÃO: {notaDoT3}.\n");
         var settings = doProjeto.ForTable(perfil.Frame);
@@ -173,9 +179,23 @@ public static class FileiraCommands
 
         var relogio = System.Diagnostics.Stopwatch.StartNew();
 
-        var layout = RowDistributor.Distribute(
-            area.Vertices, alinhamento.Vertices, alinhamento.Identidade.Side, config.Pitch, config.TableGap, celula,
-            config.UpslopeAzimuthRadians);
+        LayoutDrawer.TiposDeMesa? tipos = null;
+        PlanLayout layout;
+
+        if (emUso.Count == 0)
+        {
+            layout = RowDistributor.Distribute(
+                area.Vertices, alinhamento.Vertices, alinhamento.Identidade.Side, config.Pitch, config.TableGap, celula,
+                config.UpslopeAzimuthRadians);
+        }
+        else
+        {
+            var (t, pegadas, modulos) = UsinaCommands.Tipos(emUso);
+            tipos = t;
+            layout = RowDistributor.Distribute(
+                area.Vertices, alinhamento.Vertices, alinhamento.Identidade.Side, config.Pitch, config.TableGap, pegadas, modulos,
+                config.UpslopeAzimuthRadians);
+        }
 
         if (layout.Rows.Count == 0)
         {
@@ -191,9 +211,13 @@ public static class FileiraCommands
 
         var fileira = layout.Rows[numeroDaFileira - 1];
 
-        var processada = RowPipeline.ProcessRow(fileira, geometria, perfil.TiltRadians, terreno.Mesh, settings);
+        var processada = tipos is null
+            ? RowPipeline.ProcessRow(fileira, geometria, perfil.TiltRadians, terreno.Mesh, settings)
+            : RowPipeline.ProcessRow(fileira, fileira.Tables.Select(m => tipos.Geometrias[m.Kind]).ToList(), perfil.TiltRadians, terreno.Mesh, settings);
 
-        var desenho = LayoutDrawer.Draw(documento.Database, processada, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses, analisar: LayoutDrawer.Analise.Nada);
+        var desenho = LayoutDrawer.Draw(
+            documento.Database, processada, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses,
+            analisar: LayoutDrawer.Analise.Nada, tipos: tipos);
 
         relogio.Stop();
 
