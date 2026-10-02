@@ -138,6 +138,20 @@ public static class DrawingTables
     public static IReadOnlyList<DrawingTable> InUse(IEnumerable<DrawingTable> mesas) =>
         mesas.Where(m => m.Use).ToList();
 
+    /// <summary>
+    /// As mesas que o motor usa, na ordem da lista: as marcadas; sem
+    /// nenhuma marcada, TODAS (02/10/2026, com print da lista 28, 14 sem
+    /// marca e a usina toda de 14: "a prioridade são mesas de 28"). A
+    /// lista é o que o usuário vê; o motor não pode ignorá-la por falta de
+    /// um tique.
+    /// </summary>
+    public static IReadOnlyList<DrawingTable> ForEngine(IEnumerable<DrawingTable> mesas)
+    {
+        var lista = mesas.ToList();
+        var marcadas = InUse(lista);
+        return marcadas.Count > 0 ? marcadas : lista;
+    }
+
     /// <summary>A primeira cor da paleta que nenhuma mesa usa ainda (se todas foram, recomeça).</summary>
     public static RgbColor NextColor(IEnumerable<DrawingTable> mesas)
     {

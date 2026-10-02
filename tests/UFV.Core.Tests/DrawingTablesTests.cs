@@ -74,6 +74,19 @@ public class DrawingTablesTests
 
     [Fact]
     [Trait("Etapa", "8")]
+    public void SemNenhumaMarcadaOMotorUsaALista()
+    {
+        // 02/10/2026: lista 28, 14 sem marca saiu toda de 14 (valia a mesa da janela de Mesa).
+        var longa = new DrawingTable(Perfil("Longa", 28), RgbColor.Red, false);
+        var curta = new DrawingTable(Perfil("Curta", 14), RgbColor.Red, false);
+
+        Assert.Equal(["Longa", "Curta"], DrawingTables.ForEngine([longa, curta]).Select(m => m.Name));
+        Assert.Equal(["Curta"], DrawingTables.ForEngine([longa, curta with { Use = true }]).Select(m => m.Name));
+        Assert.Empty(DrawingTables.ForEngine([]));
+    }
+
+    [Fact]
+    [Trait("Etapa", "8")]
     public void NomeRepetidoOuEmBrancoERecusado()
     {
         var a = new DrawingTable(Perfil("Mesa", 28), RgbColor.Red, true);

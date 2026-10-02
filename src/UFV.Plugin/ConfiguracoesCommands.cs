@@ -42,39 +42,10 @@ public static class ConfiguracoesCommands
         var editor = documento.Editor;
         var database = documento.Database;
 
-        var doDesenho = MesasDoDesenho.Ler(database, out var problemas);
-        foreach (var problema in problemas) editor.WriteMessage($"\n  ATENÇÃO: {problema}.\n");
-
         var parametros = ConfigCommands.Inicial(documento, out var aviso);
         var estilos = EstilosCommands.Listar(database);
         var biblioteca = new TableProfileStore(MesaCommands.PastaDosPerfis);
-
-        // As mesas salvas na biblioteca (a pasta do usuário) entram na lista
-        // também, desmarcadas, as que o desenho ainda não tem (02/10/2026:
-        // "não está listando as mesas salvas, e tem mesa salva").
-        var mesas = doDesenho.ToList();
-
-        try
-        {
-            foreach (var nome in biblioteca.List())
-            {
-                if (DrawingTables.Find(mesas, nome) is not null) continue;
-
-                try
-                {
-                    mesas.Add(new DrawingTable(biblioteca.Load(nome), DrawingTables.NextColor(mesas), Use: false));
-                }
-                catch (System.Exception erro)
-                {
-                    RegistroDeDiagnostico.Registrar($"Não consegui ler o perfil \"{nome}\" da biblioteca.", erro);
-                    editor.WriteMessage($"\n  ATENÇÃO: o perfil \"{nome}\" da biblioteca não pôde ser lido: {erro.Message}\n");
-                }
-            }
-        }
-        catch (System.Exception erro)
-        {
-            RegistroDeDiagnostico.Registrar("Não consegui listar a biblioteca de perfis.", erro);
-        }
+        var mesas = Lista(editor, database, biblioteca);
 
         JanelaDeConfiguracoes? janela = null;
 
@@ -111,12 +82,50 @@ public static class ConfiguracoesCommands
         Gravar("os parâmetros", () => SettingsStore.Save(database, salvo.Parametros));
         Gravar("os estilos", () => EstilosCommands.Gravar(editor, database, salvo.Estilos));
 
-        var emUso = DrawingTables.InUse(salvo.Mesas);
+        var emUso = DrawingTables.ForEngine(salvo.Mesas);
 
         editor.WriteMessage(
             $"\nCONFIGURAÇÕES gravadas no desenho: {salvo.Mesas.Count} mesa(s), "
-            + (emUso.Count == 0 ? "nenhuma em uso (vale a da janela de Mesa)" : $"em uso: {string.Join(", ", emUso.Select(m => m.Name))}")
+            + (emUso.Count == 0 ? "nenhuma (vale a da janela de Mesa)" : $"o motor usa, nesta prioridade: {string.Join(", ", emUso.Select(m => m.Name))}")
             + $"; {salvo.Parametros.Describe()}.\n");
         editor.WriteMessage("  Elas vão junto com o arquivo: salve o desenho. Para a usina seguir as mudanças, use Refazer.\n");
+    }
+
+    /// <summary>
+    /// A lista de mesas, como a janela mostra e o motor usa: as do desenho,
+    /// na ordem gravada, e depois as da biblioteca (a pasta do usuário) que
+    /// o desenho ainda não tem, desmarcadas (02/10/2026: "não está listando
+    /// as mesas salvas, e tem mesa salva").
+    /// </summary>
+    internal static List<DrawingTable> Lista(Autodesk.AutoCAD.EditorInput.Editor editor, Autodesk.AutoCAD.DatabaseServices.Database database, TableProfileStore biblioteca)
+    {
+        var doDesenho = MesasDoDesenho.Ler(database, out var problemas);
+        foreach (var problema in problemas) editor.WriteMessage($"\n  ATENÇÃO: {problema}.\n");
+
+        var mesas = doDesenho.ToList();
+
+        try
+        {
+            foreach (var nome in biblioteca.List())
+            {
+                if (DrawingTables.Find(mesas, nome) is not null) continue;
+
+                try
+                {
+                    mesas.Add(new DrawingTable(biblioteca.Load(nome), DrawingTables.NextColor(mesas), Use: false));
+                }
+                catch (System.Exception erro)
+                {
+                    RegistroDeDiagnostico.Registrar($"Não consegui ler o perfil \"{nome}\" da biblioteca.", erro);
+                    editor.WriteMessage($"\n  ATENÇÃO: o perfil \"{nome}\" da biblioteca não pôde ser lido: {erro.Message}\n");
+                }
+            }
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui listar a biblioteca de perfis.", erro);
+        }
+
+        return mesas;
     }
 }

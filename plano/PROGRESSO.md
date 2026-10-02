@@ -4548,3 +4548,19 @@ Roteiro de tela:
    módulos das mesas magenta saem vermelhos; Tirar cores: voltam a magenta.
 3. Abas Pilar livre, Pilar enterrado e Pilar total: Inserir, Analisar.
 4. Criar grupo: a hachura aparece por cima dos módulos.
+
+### 02/10/2026: usina toda de 14 e fileiras esburacadas
+
+- **Toda de 14:** na lista, nenhuma mesa estava marcada "em uso", e aí
+  valia a mesa da janela de Mesa (a de 14). Agora, sem nenhuma marcada, o
+  motor usa todas as mesas do desenho, na ordem da lista
+  (`DrawingTables.ForEngine`), e a janela numera todas (1ª, 2ª). A Usina
+  escreve "Mesas, pela prioridade: 1ª ..., 2ª ...". Se o desenho não tem
+  mesa cadastrada e a biblioteca tem, avisa para Salvar em Configurações.
+- **Buracos:** vinham da troca no terreno (`TerrainFit`): a 28 que
+  enterrava virava uma 14 encostada numa ponta, e o resto do lugar ficava
+  vazio. Renan: "é melhor colocar a mesa e deixar ela enterrada e aí eu
+  vejo o que faço". A troca saiu do motor (TerrainFit apagado); a mesa
+  fica no lugar, do tipo da prioridade, marcada se não dá. Teste
+  `NoHolesTests`: em 12 terrenos com morro, toda mesa planejada fica no
+  lugar e do tipo dela, juntas fechadas, e há mesa marcada.

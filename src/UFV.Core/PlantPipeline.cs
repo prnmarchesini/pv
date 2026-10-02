@@ -160,17 +160,15 @@ public static class PlantPipeline
         var relogio = System.Diagnostics.Stopwatch.StartNew();
         var fileiras = new List<ProcessedRow>(layout.Rows.Count);
 
-        // As pegadas dos tipos, para a troca olhando o terreno (TerrainFit).
-        var pegadas = geometries.Select(g => new TableFootprint(g.Length, g.Depth * Math.Cos(tiltRadians))).ToList();
-
-        ProcessedRow Resolver(PlanRow fileira) =>
-            RowPipeline.ProcessRow(fileira, fileira.Tables.Select(t => geometries[t.Kind]).ToList(), tiltRadians, terrain, settings);
-
         foreach (var fileira in layout.Rows)
         {
-            // A distribuição pôs as mesas pela prioridade da lista; agora, no
-            // terreno, a mesa que não dá pode virar a seguinte da lista (02/10/2026).
-            fileiras.Add(TerrainFit.Improve(Resolver(fileira), pegadas, modulesByKind, Resolver));
+            // A mesa fica onde a distribuição pôs, do tipo que ela escolheu,
+            // mesmo que não dê no terreno: fica marcada (enterrada) e o
+            // usuário decide. Renan, 02/10/2026, com print de fileiras
+            // esburacadas pela troca de 28 por 14: "isso não pode acontecer,
+            // buracos; é melhor colocar a mesa e deixar ela enterrada e aí
+            // eu vejo o que faço".
+            fileiras.Add(RowPipeline.ProcessRow(fileira, fileira.Tables.Select(t => geometries[t.Kind]).ToList(), tiltRadians, terrain, settings));
             progress?.Invoke(fileiras.Count, layout.Rows.Count);
         }
 

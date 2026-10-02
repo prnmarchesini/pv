@@ -149,7 +149,7 @@ internal sealed class JanelaDeConfiguracoes : Window
         painel.Children.Add(new TextBlock
         {
             Text = "Marque as mesas que entram na usina. " + Prioridade.Replace("Use Subir e Descer", "Use ▲ e ▼", StringComparison.Ordinal)
-                + " Sem nenhuma marcada, vale a mesa da janela de Mesa.",
+                + " Sem nenhuma marcada, o motor usa todas da lista, nesta ordem.",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 10),
         });
@@ -182,8 +182,10 @@ internal sealed class JanelaDeConfiguracoes : Window
     /// <summary>A posição da mesa entre as em uso ("1ª"), ou vazio se não está em uso.</summary>
     private string Posicao(int indice)
     {
-        if (!_mesas[indice].Use) return "";
-        var n = _mesas.Take(indice + 1).Count(m => m.Use);
+        // Sem nenhuma marcada, o motor usa todas: todas têm posição.
+        var nenhuma = !_mesas.Any(m => m.Use);
+        if (!nenhuma && !_mesas[indice].Use) return "";
+        var n = nenhuma ? indice + 1 : _mesas.Take(indice + 1).Count(m => m.Use);
         return $"{n}ª";
     }
 

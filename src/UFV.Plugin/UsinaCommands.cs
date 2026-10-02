@@ -102,7 +102,14 @@ public static class UsinaCommands
         var lidas = MesasDoDesenho.Ler(database, out var problemas);
         foreach (var problema in problemas) editor.WriteMessage($"\n  ATENÇÃO: {problema}.\n");
 
-        var emUso = DrawingTables.InUse(lidas);
+        // As do desenho, pela prioridade da lista; sem nenhuma marcada, todas.
+        var emUso = DrawingTables.ForEngine(lidas);
+
+        if (lidas.Count == 0 && TemNaBiblioteca())
+            editor.WriteMessage($"\n{prefixo} ATENÇÃO: este desenho não tem mesas cadastradas; vale a da janela de Mesa. As mesas salvas na biblioteca só valem depois de Configurações > Salvar no desenho.\n");
+
+        if (emUso.Count > 0)
+            editor.WriteMessage($"\n{prefixo} Mesas, pela prioridade: {string.Join(", ", emUso.Select((m, i) => $"{i + 1}ª {m.Name}"))}.\n");
 
         if (emUso.Select(m => Math.Round(m.Profile.TiltDegrees, 3)).Distinct().Count() > 1)
         {
@@ -114,6 +121,19 @@ public static class UsinaCommands
         }
 
         return emUso;
+    }
+
+    private static bool TemNaBiblioteca()
+    {
+        try
+        {
+            return new TableProfileStore(MesaCommands.PastaDosPerfis).List().Any();
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui listar a biblioteca de perfis.", erro);
+            return false;
+        }
     }
 
     /// <summary>Os tipos para o desenho e as pegadas para a distribuição, das mesas em uso.</summary>
