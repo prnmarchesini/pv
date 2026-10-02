@@ -52,9 +52,8 @@ public static class RibbonLayout
             new("Terreno",
             [
                 B("Terreno", PluginInfo.ComandoTerreno, "Escolhe ou troca a superfície do desenho que é o terreno.", "Terreno", grande: true),
-                B("Resumo", PluginInfo.ComandoTerrenoResumo, "Qual terreno está escolhido, a área, a cidade, o país e o fuso UTM SIRGAS 2000.", "Status"),
+                B("Resumo", PluginInfo.ComandoTerrenoResumo, "Qual terreno está escolhido, a área, a cidade, o país e o fuso UTM SIRGAS 2000; ali também se corrige a localização.", "Status"),
                 B("Coordenada", PluginInfo.ComandoCoordenada, "Clica num ponto e responde X, Y e Z do terreno.", "Coordenada"),
-                B("Localização", PluginInfo.ComandoLocalizacao, "Informa ou corrige a latitude e a longitude do terreno.", "Coordenada"),
             ]),
             new("Implantação",
             [
@@ -82,7 +81,6 @@ public static class RibbonLayout
                     B("Sujar", PluginInfo.ComandoSujar, "Marca a mesa escolhida como suja, para recalcular depois.", "Sujar"),
                 ]),
                 B("Grupos", PluginInfo.ComandoGruposPainel, "Abre o painel de grupos: mesas, módulos, pilares e kWp de cada grupo.", "Grupos", grande: true),
-                B("Numerar", PluginInfo.ComandoNumerar, "Numera as fileiras e as mesas (F1, F1.1...) a partir da primeira e da última que você indicar.", "Numerar", grande: true),
             ]),
             new("Análises",
             [
@@ -93,14 +91,13 @@ public static class RibbonLayout
             new("Tags",
             [
                 B("Tags", PluginInfo.ComandoTags,
-                    "Abre a janela das tags, uma aba para cada: fileiras, mesas, módulos e strings (inserir e apagar).",
+                    "Abre a janela das tags: numerar fileiras e mesas, e as tags de fileiras, mesas, módulos e strings (inserir e apagar).",
                     "Numerar", grande: true),
             ]),
             new("Saída",
             [
                 B("PVsyst", PluginInfo.ComandoExportar, "Exporta as faces dos módulos escolhidos para o PVsyst (DAE).", "Exportar", grande: true),
                 B("Excel", PluginInfo.ComandoExportarExcel, "Exporta para o Excel o resumo, as quantificações das análises e os pilares.", "Exportar", grande: true),
-                B("Estilos", PluginInfo.ComandoEstilos, "Escolhe os estilos (anotativos) de texto, cota e chamada que o plugin usa.", "Configuracao"),
             ]),
         ]),
     ];

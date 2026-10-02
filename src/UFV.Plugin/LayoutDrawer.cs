@@ -249,7 +249,15 @@ internal static class LayoutDrawer
                 if (naoCabe)
                     PintarNaoCabe(bloco, vereditoDoModulo, camadaMarcada);
                 else
+                {
                     Pintar(bloco, vereditoDoModulo, camadaModulo, ref pintadas);
+
+                    // A cor do tipo de mesa nos módulos (02/10/2026: "coloquei
+                    // azul e ciano, e no desenho tem um azulzinho e magenta"):
+                    // sem análise pintando, o módulo diz de que mesa é.
+                    if (bloco.ColorIndex == 256 && tipos?.Cores[tipo] is { } corDoModulo)
+                        bloco.Color = Color.FromRgb(corDoModulo.R, corDoModulo.G, corDoModulo.B);
+                }
 
                 pecas.Add(espaco.AppendEntity(bloco));
                 transacao.AddNewlyCreatedDBObject(bloco, true);
@@ -369,6 +377,32 @@ internal static class LayoutDrawer
         /// dela, pelo nome gravado, se ele está entre as mesas do desenho;
         /// senão null, e ela sai como saía.
         /// </summary>
+        /// <summary>
+        /// A legenda das cores para a linha de comando: cada tipo com a cor
+        /// dele, e o magenta da mesa que não cabe (02/10/2026: "não sei o que
+        /// as cores representam").
+        /// </summary>
+        internal static string Legenda(TiposDeMesa? tipos, int marcadas)
+        {
+            var partes = new List<string>();
+
+            if (tipos is not null)
+            {
+                for (var k = 0; k < tipos.Nomes.Count; k++)
+                {
+                    if (tipos.Cores[k] is { } cor) partes.Add($"{tipos.Nomes[k]} = {NomeDaCor(cor)}");
+                }
+            }
+
+            partes.Add("cinza = mesa sem cor de tipo");
+            partes.Add($"magenta = mesa que não cabe no terreno ({marcadas}; o motivo está no Estado)");
+
+            return "  Cores: " + string.Join("; ", partes) + ".";
+        }
+
+        private static string NomeDaCor(RgbColor cor) =>
+            PaletaDeCores.Cores.FirstOrDefault(c => c.Cor == cor).Nome ?? cor.ToHex();
+
         internal static TiposDeMesa? DaMesa(Database database, string? nome, TableGeometry geometria, SolarModule modulo) =>
             DrawingTables.Find(MesasDoDesenho.Ler(database), nome) is { } registro
                 ? new TiposDeMesa([geometria], [modulo], [registro.Name], [registro.Color])

@@ -47,7 +47,7 @@ internal sealed class JanelaDeAnalises : Window
         foreach (var tipo in new[] { IndependentKind.LowEdge, IndependentKind.HighEdge, IndependentKind.Slope, IndependentKind.PillarAbove })
             abas.Items.Add(new TabItem { Header = Titulo(tipo), Content = new PainelDeAnalise(this, tipo), ToolTip = $"Análise de {IndependentAnalysis.Name(tipo)}." });
 
-        abas.Items.Add(new TabItem { Header = "Quantidades", Content = AbaQuantidades(), ToolTip = "As quantificações feitas e o Excel." });
+        abas.Items.Add(new TabItem { Header = "Quantidades", Content = AbaQuantidades(), ToolTip = "As quantificações feitas, como vão para o Excel." });
         abas.SelectionChanged += (_, e) => { if (e.Source == abas) AtualizarQuantidades(); };
 
         var fechar = new Button { Content = "Fechar", Width = 90, Height = 26, Margin = new Thickness(10), HorizontalAlignment = HorizontalAlignment.Right, IsCancel = true, ToolTip = "Fecha a janela; o que foi feito já está no desenho." };
@@ -101,25 +101,12 @@ internal sealed class JanelaDeAnalises : Window
         });
         pilha.Children.Add(_quantidades);
 
-        var excel = new Button { Content = "Exportar para o Excel...", Height = 28, Margin = new Thickness(0, 14, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(12, 0, 12, 0), ToolTip = "Grava um .xlsx com o resumo, as análises, os pilares e a compra de pilares." };
-        var recado = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
-
-        excel.Click += (_, _) =>
+        pilha.Children.Add(new TextBlock
         {
-            var dialogo = new Microsoft.Win32.SaveFileDialog { Filter = "Pasta de trabalho do Excel (*.xlsx)|*.xlsx", FileName = "quantidades.xlsx", Title = "Exportar para o Excel" };
-            if (dialogo.ShowDialog(this) != true) return;
-
-            var (ok, frase) = Fazer("exportar para o Excel", () =>
-            {
-                ExcelCommands.Gravar(_editor, _database, dialogo.FileName);
-                return $"Excel gravado em {dialogo.FileName}.";
-            });
-
-            Dizer(recado, ok, frase);
-        };
-
-        pilha.Children.Add(excel);
-        pilha.Children.Add(recado);
+            Text = "Para a planilha, use o botão Excel da ribbon (painel Saída).",
+            Foreground = Brushes.Gray,
+            Margin = new Thickness(0, 14, 0, 0),
+        });
 
         AtualizarQuantidades();
         return new ScrollViewer { Content = pilha, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };

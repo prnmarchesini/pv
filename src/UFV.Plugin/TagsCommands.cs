@@ -21,6 +21,9 @@ public static class TagsCommands
 {
     private const string ChaveDoTamanho = "MODULOS_POR_STRING";
 
+    /// <summary>Quanto a tag dentro da mesa fica acima do plano dela, em metro.</summary>
+    private const double AcimaDosModulos = 0.15;
+
     /// <summary>Alturas de reserva, quando o projeto não tem estilo de texto.</summary>
     private static double Altura(TagKind tipo) => tipo switch
     {
@@ -51,6 +54,22 @@ public static class TagsCommands
             if (apagar)
             {
                 editor.WriteMessage($"\nTAGS {Tags.Name(tipo)}: {Apagar(documento.Database, tipo)} tag(s) apagada(s).\n");
+                return;
+            }
+
+            if (tipo == TagKind.Row)
+            {
+                // Primeira e última fileira, e o lado (02/10/2026: "a tag
+                // sempre tem que ficar na lateral, e eu tenho que escolher a
+                // lateral, e onde é a primeira e a última fileira").
+                if (!NumerarCommands.NumerarPorCliques(editor, documento)) return;
+
+                var lado = editor.GetPoint(new PromptPointOptions("\nClique do lado das fileiras onde vão as tags (F1, F2...): "));
+                if (lado.Status != PromptStatus.OK) return;
+
+                var feitas = InserirFileiras(documento.Database, new Point3(lado.Value.X, lado.Value.Y, 0));
+                editor.WriteMessage($"\nTAGS fileiras: {feitas} tag(s) na ponta das fileiras, do lado clicado.\n");
+                editor.Regen();
                 return;
             }
 
@@ -141,6 +160,91 @@ public static class TagsCommands
         internal double Rumo => LayoutDrawer.RumoLegivel(Cantos[1].X - Cantos[0].X, Cantos[1].Y - Cantos[0].Y);
     }
 
+    /// <summary>
+    /// As tags de fileira na ponta de cada fileira do lado clicado, para fora
+    /// da última mesa (nunca em cima de mesa), no plano dela (regra 5).
+    /// </summary>
+    internal static int InserirFileiras(Database database, Point3 lado)
+    {
+        using var transacao = database.TransactionManager.StartTransaction();
+
+        var (mesas, _) = Ler(transacao, database, TagKind.Row, apagarAsDoTipo: true);
+        var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForRead);
+        var espaco = (BlockTableRecord)transacao.GetObject(tabela[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+        var camada = LayoutLayers.Garantir(transacao, database, Tags.LayerName(TagKind.Row), new RgbColor(255, 200, 0));
+        var estilo = EstiloDoProjeto.PrepararTexto(transacao, database);
+        var criadas = new List<ObjectId>();
+
+        var porFileira = mesas
+            .Select(m => (Mesa: m, Ok: Tags.TryParseLabel(m.Letreiro, out var f, out _), F: f))
+            .Where(x => x.Ok)
+            .GroupBy(x => x.F)
+            .OrderBy(g => g.Key);
+
+        foreach (var fileira in porFileira)
+        {
+            var doGrupo = fileira.Select(x => x.Mesa).ToList();
+            var c = doGrupo[0].Cantos;
+            var dx = c[1].X - c[0].X;
+            var dy = c[1].Y - c[0].Y;
+            var n = Math.Sqrt(dx * dx + dy * dy);
+            if (n < 1e-9) continue;
+
+            dx /= n;
+            dy /= n;
+
+            // As duas pontas da fileira: os cantos mais extremos ao longo dela.
+            var cantos = doGrupo.SelectMany(m => m.Cantos).ToList();
+            var minimo = cantos.MinBy(p => p.X * dx + p.Y * dy);
+            var maximo = cantos.MaxBy(p => p.X * dx + p.Y * dy);
+
+            // O meio da fileira no fundo (entre a borda baixa e a alta).
+            var deLado = cantos.Average(p => -p.X * dy + p.Y * dx);
+
+            Point3 Ponta(Point3 extremo, double sentido)
+            {
+                var ao = extremo.X * dx + extremo.Y * dy + sentido * 2.0;
+                return new Point3(ao * dx - deLado * dy, ao * dy + deLado * dx, extremo.Z);
+            }
+
+            var antes = Ponta(minimo, -1);
+            var depois = Ponta(maximo, +1);
+            var onde = Distancia(antes, lado) <= Distancia(depois, lado) ? antes : depois;
+
+            var mtexto = new MText
+            {
+                Location = new Point3d(onde.X, onde.Y, onde.Z),
+                TextHeight = Altura(TagKind.Row),
+                Layer = camada,
+                Attachment = AttachmentPoint.MiddleCenter,
+                Rotation = LayoutDrawer.RumoLegivel(dx, dy),
+                Contents = $"F{fileira.Key}",
+            };
+
+            espaco.AppendEntity(mtexto);
+            transacao.AddNewlyCreatedDBObject(mtexto, true);
+            estilo(mtexto);
+
+            // A tag pertence à mesa da ponta onde ela ficou.
+            var dona = doGrupo.MinBy(m => m.Cantos.Min(p => Distancia(p, onde)))!;
+            LayoutXData.SaveTag(transacao, mtexto, new TagIdentity(Guid.NewGuid(), dona.Id, TagKind.Row, $"F{fileira.Key}"));
+            criadas.Add(mtexto.ObjectId);
+        }
+
+        PorCima(transacao, espaco, criadas);
+        transacao.Commit();
+        return criadas.Count;
+    }
+
+    /// <summary>As tags na frente na ordem de desenho: em planta, por cima dos módulos.</summary>
+    private static void PorCima(Transaction transacao, BlockTableRecord espaco, List<ObjectId> ids)
+    {
+        if (ids.Count == 0) return;
+
+        var ordem = (DrawOrderTable)transacao.GetObject(espaco.DrawOrderTableId, OpenMode.ForWrite);
+        ordem.MoveToTop(new ObjectIdCollection(ids.ToArray()));
+    }
+
     internal static (int Criadas, int Mesas, int Incompletas) Inserir(Database database, TagKind tipo, int modulosPorString)
     {
         using var transacao = database.TransactionManager.StartTransaction();
@@ -155,12 +259,15 @@ public static class TagsCommands
 
         var criadas = 0;
         var incompletas = 0;
+        var ids = new List<ObjectId>();
 
         void Escrever(Guid mesa, string texto, Point3 onde, double rumo)
         {
             var mtexto = new MText
             {
-                Location = new Point3d(onde.X, onde.Y, onde.Z),
+                // Um pouco acima do plano da mesa, para não ficar por baixo
+                // da face dos módulos nas vistas 3D (como a seta da declividade).
+                Location = new Point3d(onde.X, onde.Y, onde.Z + AcimaDosModulos),
                 TextHeight = Altura(tipo),
                 Layer = camada,
                 Attachment = AttachmentPoint.MiddleCenter,
@@ -172,6 +279,7 @@ public static class TagsCommands
             transacao.AddNewlyCreatedDBObject(mtexto, true);
             estilo(mtexto);
             LayoutXData.SaveTag(transacao, mtexto, new TagIdentity(Guid.NewGuid(), mesa, tipo, texto));
+            ids.Add(mtexto.ObjectId);
             criadas++;
         }
 
@@ -218,6 +326,7 @@ public static class TagsCommands
                 break;
         }
 
+        PorCima(transacao, espaco, ids);
         transacao.Commit();
         return (criadas, mesas.Count, incompletas);
     }

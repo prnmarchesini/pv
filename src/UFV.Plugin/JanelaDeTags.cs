@@ -14,6 +14,9 @@ namespace UFV.Plugin;
 /// </summary>
 internal sealed class JanelaDeTags : Window
 {
+    /// <summary>Se o usuário pediu as tags de fileira: a janela fecha e o comando as faz (pedem cliques no desenho).</summary>
+    internal bool Fileiras { get; private set; }
+
     internal JanelaDeTags(Database database, Autodesk.AutoCAD.EditorInput.Editor editor, Action atualizarTela)
     {
         Title = "UFV — Tags";
@@ -29,7 +32,7 @@ internal sealed class JanelaDeTags : Window
         foreach (var tipo in new[] { TagKind.Row, TagKind.Table, TagKind.Module, TagKind.String })
         {
             var titulo = tipo switch { TagKind.Row => "Fileiras", TagKind.Table => "Mesas", TagKind.Module => "Módulos", _ => "Strings" };
-            abas.Items.Add(new TabItem { Header = titulo, Content = Aba(tipo, database, editor, atualizarTela), ToolTip = $"Tags de {Tags.Name(tipo)}." });
+            abas.Items.Add(new TabItem { Header = titulo, Content = Aba(tipo, database, editor, atualizarTela, () => { Fileiras = true; DialogResult = true; }), ToolTip = $"Tags de {Tags.Name(tipo)}." });
         }
 
         var fechar = new Button { Content = "Fechar", Width = 90, Height = 26, Margin = new Thickness(10), HorizontalAlignment = HorizontalAlignment.Right, IsCancel = true, ToolTip = "Fecha a janela; o que foi feito já está no desenho." };
@@ -41,7 +44,7 @@ internal sealed class JanelaDeTags : Window
         Content = raiz;
     }
 
-    private static UIElement Aba(TagKind tipo, Database database, Autodesk.AutoCAD.EditorInput.Editor editor, Action atualizarTela)
+    private static UIElement Aba(TagKind tipo, Database database, Autodesk.AutoCAD.EditorInput.Editor editor, Action atualizarTela, Action pedirFileiras)
     {
         var pilha = new StackPanel { Margin = new Thickness(12) };
         var recado = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
@@ -51,7 +54,7 @@ internal sealed class JanelaDeTags : Window
         {
             Text = tipo switch
             {
-                TagKind.Row => "\"F1\", \"F2\"... antes da primeira mesa de cada fileira. A ordem é a do Numerar.",
+                TagKind.Row => "\"F1\", \"F2\"... na ponta de cada fileira, para fora das mesas. Inserir fecha esta janela e pede no desenho: uma mesa da primeira fileira, uma da última (isso numera fileiras e mesas, F1.1...) e um clique do lado onde as tags vão.",
                 TagKind.Table => "\"F1.1\", \"F1.2\"... no meio de cada mesa.",
                 TagKind.Module => "O número de cada módulo dentro da mesa, em serpentina: a fileira de baixo da esquerda para a direita, a de cima voltando.",
                 _ => "\"S1\", \"S2\"... no meio de cada string, na ordem das mesas e em serpentina dentro da mesa.",
@@ -94,6 +97,12 @@ internal sealed class JanelaDeTags : Window
 
         inserir.Click += (_, _) =>
         {
+            if (tipo == TagKind.Row)
+            {
+                pedirFileiras();
+                return;
+            }
+
             var porString = 1;
 
             if (tipo == TagKind.String)

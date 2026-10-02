@@ -51,6 +51,12 @@ public static class JanelasDeAnaliseCommands
         AcadApp.ShowModalWindow(new JanelaDeAnalises(documento.Database, documento.Editor, Atualizar(documento)));
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void AbrirTags(Document documento) =>
-        AcadApp.ShowModalWindow(new JanelaDeTags(documento.Database, documento.Editor, Atualizar(documento)));
+    private static void AbrirTags(Document documento)
+    {
+        var janela = new JanelaDeTags(documento.Database, documento.Editor, Atualizar(documento));
+        AcadApp.ShowModalWindow(janela);
+
+        // As tags de fileira pedem cliques no desenho: rodam depois que a janela fecha.
+        if (janela.Fileiras) documento.SendStringToExecute(PluginInfo.ComandoTagFileirasInserir + " ", true, false, true);
+    }
 }

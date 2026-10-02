@@ -448,6 +448,7 @@ internal sealed class JanelaDeConfiguracao : Window
 
         foreach (var (nome, cor) in Paleta) caixa.Items.Add(ItemDeCor(nome, cor, daPaleta: true));
 
+        PaletaDeCores.PermitirMaisCores(caixa, c => ItemDeCor(c.ToHex(), c, daPaleta: false), item => item.Tag is ItemDePaleta p ? p.Cor : null);
         return caixa;
     }
 

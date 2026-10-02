@@ -295,7 +295,8 @@ public static class UsinaCommands
         foreach (var fileira in usina.Rows)
             editor.WriteMessage($"  {fileira.Describe()}\n");
 
-        editor.WriteMessage("\n  Gerado sem análise: cores, alturas e declividade saem pelo menu Análises.\n");
+        editor.WriteMessage("\n  Gerado sem análise: alturas, declividade e cores de análise saem pelo botão Análises.\n");
+        editor.WriteMessage(LayoutDrawer.TiposDeMesa.Legenda(tipos, marcadas) + "\n");
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
     }
 }

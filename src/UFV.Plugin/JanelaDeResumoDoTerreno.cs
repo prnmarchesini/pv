@@ -48,7 +48,6 @@ internal sealed class JanelaDeResumoDoTerreno : Window
             return b;
         }
 
-        botoes.Children.Add(Botao("Trocar terreno...", "Escolher outra superfície do desenho como terreno (o plugin processa de novo).", Acao.TrocarTerreno));
         botoes.Children.Add(Botao("Localização...", "Informar ou corrigir a latitude e a longitude, quando o desenho não tem sistema de coordenadas.", Acao.Localizacao));
         botoes.Children.Add(Botao("Fechar", "Fecha o resumo.", Acao.Nada, cancela: true));
 

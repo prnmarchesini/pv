@@ -4,6 +4,8 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <!-- A ribbon do AutoCAD (Autodesk.Windows) e WPF. -->
     <UseWPF>true</UseWPF>
+    <!-- A janela de cor do Windows (RGB, cores personalizadas) nas escolhas de cor. -->
+    <UseWindowsForms>true</UseWindowsForms>
     <!-- O AutoCAD carrega a DLL no proprio processo: nada de copiar as libs dele. -->
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -14,6 +16,12 @@
     -->
     <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>
   </PropertyGroup>
+
+  <!-- Sem os using automáticos do Windows Forms: Button, ComboBox... são os do WPF. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\UFV.Core\UFV.Core.csproj" />

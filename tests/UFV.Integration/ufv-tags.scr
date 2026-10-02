@@ -41,7 +41,9 @@
 (setq ufv:mesas (ufv:conta (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "MARCHENG_UFV_MESA,MARCHENG_UFV_MARCADA")))))
 (setq ufv:modulos (ufv:conta (ssget "_X" (list (cons 0 "INSERT") (cons 2 "MARCHENG_UFV_MOD*")))))
 
-(command "UFV_TAG_FILEIRAS")
+; A tag de fileira pede a primeira e a ultima fileira (pelo letreiro) e o
+; lado onde as tags vao (02/10/2026).
+(command "UFV_TAG_FILEIRAS" "Letreiro" "F1.1" "Letreiro" "F1.2" "{{L1}}")
 (command "UFV_TAG_MESAS")
 (command "UFV_TAG_MESAS")
 (command "UFV_TAG_MODULOS")

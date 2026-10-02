@@ -60,6 +60,23 @@ public class RibbonLayoutTests
         Assert.Contains(PluginInfo.ComandoTags, comandos);
     }
 
+    /// <summary>
+    /// Renan, 02/10/2026: "tem numerar e tag, deixa somente tag, tem que ser
+    /// somente UM, não pode ter redundância". Cada comando aparece uma vez,
+    /// e o que já mora numa janela não repete na ribbon.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void NenhumComandoRepetidoNaRibbon()
+    {
+        var comandos = RibbonLayout.AllButtons.Select(b => b.Command).ToList();
+
+        Assert.Equal(comandos.Count, comandos.Distinct().Count());
+        Assert.DoesNotContain(PluginInfo.ComandoNumerar, comandos);
+        Assert.DoesNotContain(PluginInfo.ComandoEstilos, comandos);
+        Assert.DoesNotContain(PluginInfo.ComandoLocalizacao, comandos);
+    }
+
     [Fact]
     [Trait("Etapa", "8")]
     public void AEdicaoECompacta()
@@ -67,7 +84,7 @@ public class RibbonLayoutTests
         var edicao = RibbonLayout.Tabs[0].Panels.Single(p => p.Title == "Edição");
 
         Assert.Single(edicao.Items.OfType<RibbonMenuSpec>());
-        Assert.True(edicao.Items.Count <= 3);
+        Assert.True(edicao.Items.Count <= 2);
     }
 
     [Fact]

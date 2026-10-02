@@ -29,19 +29,36 @@ public static class NumerarCommands
 
         try
         {
+            NumerarPorCliques(editor, documento);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao numerar.", erro);
+            editor.WriteMessage($"\nNão consegui numerar: {erro.Message}\n");
+        }
+    }
+
+    /// <summary>
+    /// Pede a primeira mesa (F1.1) e uma da última fileira e numera tudo.
+    /// Se numerou. É também o começo do Inserir das tags de fileira (o Renan
+    /// escolhe a primeira e a última fileira ali).
+    /// </summary>
+    internal static bool NumerarPorCliques(Editor editor, Document documento)
+    {
+        {
             var settings = ConfigCommands.Inicial(documento, out var avisoDaConfig);
             if (avisoDaConfig is not null) editor.WriteMessage($"\n  ATENÇÃO: {avisoDaConfig}\n");
 
             var celulas = Celulas(editor, documento);
-            if (celulas is null) return;
+            if (celulas is null) return false;
 
             editor.WriteMessage($"\nNUMERAR {celulas.Count} mesa(s) no desenho.\n");
 
-            var primeira = MesaEscolhida(editor, documento, celulas, "A mesa que será a F1.1");
-            if (primeira is null) return;
+            var primeira = MesaEscolhida(editor, documento, celulas, "Uma mesa da PRIMEIRA fileira (será a F1.1)");
+            if (primeira is null) return false;
 
-            var ultima = MesaEscolhida(editor, documento, celulas, "Uma mesa da última fileira");
-            if (ultima is null) return;
+            var ultima = MesaEscolhida(editor, documento, celulas, "Uma mesa da ÚLTIMA fileira");
+            if (ultima is null) return false;
 
             var resultado = RowNumbering.Number(
                 celulas.Select(c => new TableToNumber(c.Key, c.Value.Celula)).ToList(),
@@ -55,11 +72,7 @@ public static class NumerarCommands
             foreach (var aviso in resultado.Warnings) editor.WriteMessage($"  ATENÇÃO: {aviso}.\n");
 
             GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
-        }
-        catch (System.Exception erro)
-        {
-            RegistroDeDiagnostico.Registrar("Falha ao numerar.", erro);
-            editor.WriteMessage($"\nNão consegui numerar: {erro.Message}\n");
+            return true;
         }
     }
 

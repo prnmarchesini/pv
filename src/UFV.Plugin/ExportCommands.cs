@@ -56,15 +56,8 @@ public static class ExportCommands
                 return;
             }
 
-            var formato = PerguntarFormato(editor);
-            if (formato is null) return;
-
-            if (formato == "PVC")
-            {
-                editor.WriteMessage("\nEXPORTAR O formato PVC ainda não está disponível (é o passo 6.5). Exporte em DAE por enquanto.\n");
-                return;
-            }
-
+            // O formato vem do tipo de arquivo escolhido na janela (hoje só
+            // DAE; o PVC é o passo 6.5): nada de pergunta na linha de comando.
             var caminho = PerguntarArquivo(editor, documento);
             if (caminho is null) return;
 
@@ -228,24 +221,8 @@ public static class ExportCommands
     private static string ComExtensao(string caminho) =>
         caminho.EndsWith(".dae", StringComparison.OrdinalIgnoreCase) ? caminho : caminho + ".dae";
 
-    private static string? PerguntarFormato(Editor editor)
-    {
-        // O AutoCAD monta "[DAE/PVC] <DAE>" sozinho a partir das palavras e do padrão.
-        var opcoes = new PromptKeywordOptions("\nFormato") { AllowNone = true };
-        opcoes.Keywords.Add("DAE");
-        opcoes.Keywords.Add("PVC");
-        opcoes.Keywords.Default = "DAE";
-
-        var resposta = editor.GetKeywords(opcoes);
-
-        if (resposta.Status == PromptStatus.None) return "DAE";
-        if (resposta.Status != PromptStatus.OK) return null;
-
-        return resposta.StringResult;
-    }
-
     /// <summary>
-    /// O arquivo, pela janela padrão do AutoCAD. O nome sugerido é o do
+    /// O arquivo, pela janela de salvar do Windows. O nome sugerido é o do
     /// desenho, e a pasta é a dele quando o desenho já foi salvo.
     /// </summary>
     private static string? PerguntarArquivo(Editor editor, Document documento)
@@ -253,28 +230,19 @@ public static class ExportCommands
         var nome = Path.GetFileNameWithoutExtension(documento.Name);
         if (string.IsNullOrWhiteSpace(nome)) nome = "usina";
 
-        var opcoes = new PromptSaveFileOptions("\nArquivo para o PVsyst")
-        {
-            Filter = "Cena 3D Collada (*.dae)|*.dae",
-            InitialFileName = nome + ".dae",
-            DialogCaption = "Exportar para o PVsyst",
-        };
+        // Sempre a janela do Windows (regra de 02/10/2026: "toda interação de
+        // salvar e abrir é via janela do Windows").
+        var caminho = DialogoDeArquivo.Salvar(
+            "Exportar para o PVsyst", "Cena 3D Collada (*.dae)|*.dae", nome + ".dae",
+            documento.IsNamedDrawing ? Path.GetDirectoryName(documento.Name) : null);
 
-        if (documento.IsNamedDrawing)
-        {
-            var pasta = Path.GetDirectoryName(documento.Name);
-            if (!string.IsNullOrEmpty(pasta)) opcoes.InitialDirectory = pasta;
-        }
-
-        var resposta = editor.GetFileNameForSave(opcoes);
-
-        if (resposta.Status != PromptStatus.OK || string.IsNullOrWhiteSpace(resposta.StringResult))
+        if (caminho is null)
         {
             editor.WriteMessage("\nEXPORTAR Cancelado.\n");
             return null;
         }
 
-        return ComExtensao(resposta.StringResult);
+        return ComExtensao(caminho);
     }
 
     /// <summary>

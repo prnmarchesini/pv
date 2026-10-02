@@ -31,20 +31,18 @@ public static class ExcelCommands
             var nome = Path.GetFileNameWithoutExtension(documento.Name);
             if (string.IsNullOrWhiteSpace(nome)) nome = "usina";
 
-            var opcoes = new PromptSaveFileOptions("\nPlanilha das quantidades")
+            // Sempre a janela do Windows (regra de 02/10/2026).
+            var caminho = DialogoDeArquivo.Salvar(
+                "Exportar para o Excel", "Pasta de trabalho do Excel (*.xlsx)|*.xlsx", nome + " - quantidades.xlsx",
+                documento.IsNamedDrawing ? Path.GetDirectoryName(documento.Name) : null);
+
+            if (caminho is null)
             {
-                Filter = "Pasta de trabalho do Excel (*.xlsx)|*.xlsx",
-                InitialFileName = nome + " - quantidades.xlsx",
-                DialogCaption = "Exportar para o Excel",
-            };
+                editor.WriteMessage("\nEXCEL Cancelado.\n");
+                return;
+            }
 
-            if (documento.IsNamedDrawing && Path.GetDirectoryName(documento.Name) is { Length: > 0 } pasta)
-                opcoes.InitialDirectory = pasta;
-
-            var resposta = editor.GetFileNameForSave(opcoes);
-            if (resposta.Status != PromptStatus.OK || string.IsNullOrWhiteSpace(resposta.StringResult)) return;
-
-            Gravar(editor, documento.Database, resposta.StringResult);
+            Gravar(editor, documento.Database, caminho);
         }
         catch (System.Exception erro)
         {

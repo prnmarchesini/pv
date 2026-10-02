@@ -160,10 +160,17 @@ public static class PlantPipeline
         var relogio = System.Diagnostics.Stopwatch.StartNew();
         var fileiras = new List<ProcessedRow>(layout.Rows.Count);
 
+        // As pegadas dos tipos, para a troca olhando o terreno (TerrainFit).
+        var pegadas = geometries.Select(g => new TableFootprint(g.Length, g.Depth * Math.Cos(tiltRadians))).ToList();
+
+        ProcessedRow Resolver(PlanRow fileira) =>
+            RowPipeline.ProcessRow(fileira, fileira.Tables.Select(t => geometries[t.Kind]).ToList(), tiltRadians, terrain, settings);
+
         foreach (var fileira in layout.Rows)
         {
-            var porMesa = fileira.Tables.Select(t => geometries[t.Kind]).ToList();
-            fileiras.Add(RowPipeline.ProcessRow(fileira, porMesa, tiltRadians, terrain, settings));
+            // A distribuição escolheu pelo comprimento; agora, no terreno, a
+            // mesa com módulo enterrado pode virar uma mais curta (02/10/2026).
+            fileiras.Add(TerrainFit.Improve(Resolver(fileira), pegadas, modulesByKind, Resolver));
             progress?.Invoke(fileiras.Count, layout.Rows.Count);
         }
 
