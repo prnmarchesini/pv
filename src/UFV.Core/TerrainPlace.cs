@@ -82,10 +82,11 @@ public static class TerrainPlace
 
         var sul = latitude < 0;
 
-        // SIRGAS 2000 cobre a América do Sul (e um pouco ao norte do
+        // SIRGAS 2000 cobre a América do Sul com as ilhas (Fernando de Noronha
+        // fica em -32°) e um pouco ao norte do
         // Equador): fusos 17 a 25. Os códigos EPSG são 31977 a 31985 no sul
         // (17S a 25S) e 31971 a 31976 no norte (17N a 22N).
-        var naAmericaDoSul = latitude is >= -56 and <= 13 && longitude is >= -82 and <= -34;
+        var naAmericaDoSul = latitude is >= -56 and <= 13 && longitude is >= -82 and <= -28;
         int? epsg = null;
 
         if (naAmericaDoSul)

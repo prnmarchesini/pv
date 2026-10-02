@@ -43,6 +43,7 @@ public class TerrainPlaceTests
     [InlineData(-15.8, -47.9, 23, true, 31983)]
     [InlineData(-3.1, -60.02, 20, true, 31980)]
     [InlineData(-8.05, -34.9, 25, true, 31985)]
+    [InlineData(-3.85, -32.42, 25, true, 31985)]
     [InlineData(2.8, -60.7, 20, false, 31974)]
     [InlineData(-33.45, -70.66, 19, true, 31979)]
     public void OFusoUtmComOEpsgDoSirgas(double lat, double lon, int fuso, bool sul, int epsg)

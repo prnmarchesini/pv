@@ -191,6 +191,18 @@ public static class NumerarCommands
             foreach (var id in mesa.Partes.Notes)
             {
                 if (transacao.GetObject(id, OpenMode.ForRead) is not MText texto) continue;
+
+                // Tags do 8.14 seguem o letreiro novo: a da mesa vira o
+                // letreiro, a da fileira o "F" do número novo.
+                if (LayoutXData.LoadTag(texto) is { Kind: TagKind.Table or TagKind.Row } tag)
+                {
+                    var novo = tag.Kind == TagKind.Table ? numerada.Label : $"F{numerada.Row}";
+                    texto.UpgradeOpen();
+                    texto.Contents = novo;
+                    LayoutXData.SaveTag(transacao, texto, tag with { Text = novo });
+                    continue;
+                }
+
                 if (!texto.Contents.StartsWith(identidade.Label + " ", StringComparison.Ordinal)) continue;
 
                 texto.UpgradeOpen();

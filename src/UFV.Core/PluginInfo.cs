@@ -404,6 +404,4 @@ public static class PluginInfo
     /// <summary>Passo 8.14: apaga as tags de strings (S1, S2...).</summary>
     public const string ComandoTagStringsApagar = "UFV_TAG_STRINGS_APAGAR";
 
-    /// <summary>Strings pela linha de comando (módulos por string). Para o nível 2.</summary>
-    public const string ComandoTagStringsAutomatico = "UFV_TAG_STRINGS_AUTO";
 }

@@ -38,7 +38,6 @@ public static class TagsCommands
     [CommandMethod(PluginInfo.ComandoTagModulosApagar)] public static void ModulosApagar() => Rodar(TagKind.Module, apagar: true);
     [CommandMethod(PluginInfo.ComandoTagStringsInserir)] public static void StringsInserir() => Rodar(TagKind.String, apagar: false);
     [CommandMethod(PluginInfo.ComandoTagStringsApagar)] public static void StringsApagar() => Rodar(TagKind.String, apagar: true);
-    [CommandMethod(PluginInfo.ComandoTagStringsAutomatico)] public static void StringsAuto() => Rodar(TagKind.String, apagar: false);
 
     private static void Rodar(TagKind tipo, bool apagar)
     {
@@ -136,7 +135,7 @@ public static class TagsCommands
     {
         using var transacao = database.TransactionManager.StartTransaction();
 
-        var mesas = Ler(transacao, database, tipo, apagarAsDoTipo: true);
+        var (mesas, _) = Ler(transacao, database, tipo, apagarAsDoTipo: true);
         var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForRead);
         var espaco = (BlockTableRecord)transacao.GetObject(tabela[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
         var camada = LayoutLayers.Garantir(transacao, database, Tags.LayerName(tipo), new RgbColor(255, 200, 0));
@@ -217,26 +216,10 @@ public static class TagsCommands
     {
         using var transacao = database.TransactionManager.StartTransaction();
 
-        var antes = Contar(transacao, database, tipo);
-        Ler(transacao, database, tipo, apagarAsDoTipo: true);
+        var (_, apagadas) = Ler(transacao, database, tipo, apagarAsDoTipo: true);
 
         transacao.Commit();
-        return antes;
-    }
-
-    private static int Contar(Transaction transacao, Database database, TagKind tipo)
-    {
-        var n = 0;
-
-        foreach (var (_, partes) in LayoutScan.Tables(transacao, database))
-        {
-            foreach (var id in partes.Notes)
-            {
-                if (transacao.GetObject(id, OpenMode.ForRead) is Entity e && LayoutXData.LoadTag(e) is { } tag && tag.Kind == tipo) n++;
-            }
-        }
-
-        return n;
+        return apagadas;
     }
 
     /// <summary>
@@ -244,9 +227,10 @@ public static class TagsCommands
     /// módulos; de quebra apaga as tags deste tipo que já existiam (inserir
     /// de novo não empilha).
     /// </summary>
-    private static List<Mesa> Ler(Transaction transacao, Database database, TagKind tipo, bool apagarAsDoTipo)
+    private static (List<Mesa> Mesas, int Apagadas) Ler(Transaction transacao, Database database, TagKind tipo, bool apagarAsDoTipo)
     {
         var mesas = new List<Mesa>();
+        var apagadas = 0;
 
         foreach (var (guid, partes) in LayoutScan.Tables(transacao, database))
         {
@@ -258,13 +242,17 @@ public static class TagsCommands
                     {
                         e.UpgradeOpen();
                         e.Erase();
+                        apagadas++;
                     }
                 }
             }
 
-            if (partes.Identity is not { } identidade || partes.Contour is not { } contorno) continue;
+            // Cópia ainda não corrigida (dois contornos com o mesmo GUID):
+            // os módulos das duas se misturariam; fica de fora até o Validar.
+            if (partes.Identity is not { } identidade || partes.Contour is not { } contorno || partes.IsDuplicated) continue;
+            if (transacao.GetObject(contorno, OpenMode.ForRead) is not Polyline3d polilinha) continue;
 
-            var cantos = FileiraCommands.Vertices((Polyline3d)transacao.GetObject(contorno, OpenMode.ForRead), transacao);
+            var cantos = FileiraCommands.Vertices(polilinha, transacao);
             if (cantos.Count != 4) continue;
 
             var modulos = new List<(int, int)>();
@@ -278,7 +266,7 @@ public static class TagsCommands
             mesas.Add(new Mesa(guid, identidade.Label, cantos, modulos));
         }
 
-        return mesas;
+        return (mesas, apagadas);
     }
 
     private static double Distancia(Point3 a, Point3 b) =>
