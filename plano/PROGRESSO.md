@@ -95,18 +95,15 @@ Esta seção existe porque o resto do arquivo é diário de decisões, e diário
 responde "e agora?". Ela fica no topo de propósito. **Quem retomar o trabalho
 lê isto primeiro, e depois `CLAUDE.md`.**
 
-### 01/10/2026: etapa 8 (Melhorias.docx) em andamento
+### 01/10/2026: etapa 8 (Melhorias.docx) feita inteira
 
 O Renan deixou a revisão dos menus em `0 - Assets/Melhorias.docx`; virou a
-etapa 8 (`plano/etapas/etapa-8-menus.md`, 16 passos). Feitos em 01/10:
-8.1 (fechado automático), 8.2, 8.3, 8.4 e 8.8 (aguardando tela, roteiros
-nas seções de cada passo no fim deste arquivo). Bundle instalado em 01/10
-na pasta do usuário. **Próximo: 8.9** (análise da altura das pontas:
-inserir, analisar com duas cores, apagar, tirar cores, quantificar), depois
-8.10, 8.11, 8.12; os grandes 8.5/8.6 (várias mesas no desenho e o motor
-escolhendo entre elas) e 8.7 (o modal de Configurações com abas) vêm
-depois, e a ribbon nova (8.16) por último. Para testar 8.3/8.4 o serviço
-precisa estar no ar: `.\tools\servico-local.ps1`.
+etapa 8 (`plano/etapas/etapa-8-menus.md`, 16 passos), feita inteira em
+01/10/2026 (8.1 fechado automático; 8.2 a 8.16 aguardando a tela). Bundle
+instalado na pasta do usuário. Os roteiros de tela estão nas seções "8.x
+(01/10/2026)" no fim deste arquivo, com as decisões que tomei sozinho para
+ele confirmar. Para o cadastro de módulos (8.3/8.4) o serviço precisa estar
+no ar: `.\tools\servico-local.ps1`.
 
 ### Estado
 
