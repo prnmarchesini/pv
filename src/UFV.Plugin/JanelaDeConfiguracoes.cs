@@ -112,6 +112,17 @@ internal sealed class JanelaDeConfiguracoes : Window
         Botao("Editar...", "Abre a mesa escolhida na janela de Mesa: módulo, arranjo, tesoura, pilares, vãos P1-P2, enterro T3.", Editar);
         Botao("Duplicar", "Copia a mesa escolhida com outro nome (para fazer a de 14 a partir da de 28).", Duplicar);
         Botao("Remover", "Tira a mesa escolhida deste desenho (as mesas já desenhadas continuam como estão).", Remover);
+        Botao("▲ Subir", "Sobe a mesa escolhida na lista: mais prioridade para o motor.", () => Mover(_lista.SelectedIndex, -1));
+        Botao("▼ Descer", "Desce a mesa escolhida na lista: menos prioridade para o motor.", () => Mover(_lista.SelectedIndex, +1));
+
+        botoes.Children.Add(new TextBlock
+        {
+            Text = Prioridade,
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 10, 0, 0),
+        });
 
         botoes.Children.Add(new TextBlock
         {
@@ -137,13 +148,43 @@ internal sealed class JanelaDeConfiguracoes : Window
 
         painel.Children.Add(new TextBlock
         {
-            Text = "Marque as mesas que entram na usina. Com mais de uma, o motor escolhe por trecho de fileira a combinação que põe mais módulos (as compridas primeiro). Sem nenhuma marcada, vale a mesa da janela de Mesa.",
+            Text = "Marque as mesas que entram na usina. " + Prioridade.Replace("Use Subir e Descer", "Use ▲ e ▼", StringComparison.Ordinal)
+                + " Sem nenhuma marcada, vale a mesa da janela de Mesa.",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 10),
         });
 
         painel.Children.Add(new ScrollViewer { Content = _escolha, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 480 });
         return painel;
+    }
+
+    /// <summary>A mensagem da prioridade (Renan, 02/10/2026: "o primeiro da lista vai ser a prioridade ... e uma mensagem falando isso").</summary>
+    private const string Prioridade = "A ordem da lista é a PRIORIDADE: o motor tenta sempre encaixar a 1ª mesa em uso; onde ela não couber (no trecho da fileira ou no terreno), tenta a 2ª, e assim por diante. Use Subir e Descer para mudar a ordem.";
+
+    /// <summary>Troca a mesa de lugar com a vizinha de cima (-1) ou de baixo (+1): é a ordem de prioridade gravada.</summary>
+    private void Mover(int indice, int passo)
+    {
+        var destino = indice + passo;
+
+        if (indice < 0 || indice >= _mesas.Count)
+        {
+            _recado.Text = "Escolha uma mesa na lista.";
+            return;
+        }
+
+        if (destino < 0 || destino >= _mesas.Count) return;
+
+        (_mesas[indice], _mesas[destino]) = (_mesas[destino], _mesas[indice]);
+        Atualizar();
+        _lista.SelectedIndex = destino;
+    }
+
+    /// <summary>A posição da mesa entre as em uso ("1ª"), ou vazio se não está em uso.</summary>
+    private string Posicao(int indice)
+    {
+        if (!_mesas[indice].Use) return "";
+        var n = _mesas.Take(indice + 1).Count(m => m.Use);
+        return $"{n}ª";
     }
 
     private void Atualizar()
@@ -160,8 +201,7 @@ internal sealed class JanelaDeConfiguracoes : Window
 
             _lista.Items.Add(new ListBoxItem
             {
-                Content = $"{mesa.Name} — {mesa.Profile.Layout.ModuleCount} módulos, {mesa.Profile.Layout.Length.ToString("0.###", Brasil)} m, "
-                    + $"{mesa.Profile.TiltDegrees.ToString("0.#", Brasil)}°{(mesa.Use ? "  (em uso)" : "")}",
+                Content = Rotulo(indice),
                 ToolTip = mesa.Profile.Describe(),
             });
 
@@ -181,6 +221,16 @@ internal sealed class JanelaDeConfiguracoes : Window
             cor.Width = 140;
             cor.SelectionChanged += (_, _) => _mesas[indice] = _mesas[indice] with { Color = PaletaDeCores.Cor(cor) };
 
+            Button Seta(string texto, int passo, string dica)
+            {
+                var b = new Button { Content = texto, Width = 26, Height = 24, Margin = new Thickness(0, 0, 4, 0), ToolTip = dica };
+                b.Click += (_, _) => Tentar(() => Mover(indice, passo));
+                return b;
+            }
+
+            linha.Children.Add(Seta("▲", -1, "Mais prioridade: o motor tenta esta mesa antes da de cima."));
+            linha.Children.Add(Seta("▼", +1, "Menos prioridade: o motor tenta esta mesa depois da de baixo."));
+            linha.Children.Add(new TextBlock { Text = Posicao(indice), Width = 30, VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeights.SemiBold, ToolTip = "A prioridade entre as mesas em uso." });
             linha.Children.Add(usar);
             linha.Children.Add(cor);
             linha.Children.Add(new TextBlock
@@ -201,16 +251,34 @@ internal sealed class JanelaDeConfiguracoes : Window
         if (escolhida >= 0 && escolhida < _mesas.Count) _lista.SelectedIndex = escolhida;
     }
 
-    /// <summary>Marca ou desmarca a mesa e atualiza a linha dela na aba Estruturas.</summary>
+    /// <summary>A linha da mesa na aba Estruturas, com a prioridade quando em uso.</summary>
+    private string Rotulo(int indice)
+    {
+        var mesa = _mesas[indice];
+        var posicao = Posicao(indice);
+
+        return $"{(posicao.Length > 0 ? posicao + " — " : "      ")}{mesa.Name} — {mesa.Profile.Layout.ModuleCount} módulos, "
+            + $"{mesa.Profile.Layout.Length.ToString("0.###", Brasil)} m, {mesa.Profile.TiltDegrees.ToString("0.#", Brasil)}°{(mesa.Use ? "  (em uso)" : "")}";
+    }
+
+    /// <summary>
+    /// Marca ou desmarca a mesa e atualiza as linhas da aba Estruturas (a
+    /// prioridade das outras muda). A aba Escolha não é refeita: a caixa
+    /// que o usuário acabou de clicar continua a mesma.
+    /// </summary>
     private void Usar(int indice, bool usar)
     {
         _mesas[indice] = _mesas[indice] with { Use = usar };
 
-        if (indice < _lista.Items.Count && _lista.Items[indice] is ListBoxItem item)
+        for (var i = 0; i < _mesas.Count && i < _lista.Items.Count; i++)
         {
-            var mesa = _mesas[indice];
-            item.Content = $"{mesa.Name} — {mesa.Profile.Layout.ModuleCount} módulos, {mesa.Profile.Layout.Length.ToString("0.###", Brasil)} m, "
-                + $"{mesa.Profile.TiltDegrees.ToString("0.#", Brasil)}°{(mesa.Use ? "  (em uso)" : "")}";
+            if (_lista.Items[i] is ListBoxItem item) item.Content = Rotulo(i);
+        }
+
+        for (var i = 0; i < _mesas.Count && i < _escolha.Children.Count; i++)
+        {
+            if (_escolha.Children[i] is StackPanel linha && linha.Children.Count > 2 && linha.Children[2] is TextBlock posicao)
+                posicao.Text = Posicao(i);
         }
     }
 

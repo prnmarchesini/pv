@@ -81,6 +81,8 @@ public class IndependentAnalysisTests
     [InlineData(IndependentKind.LowEdge, 0.452, "PB 0,45")]
     [InlineData(IndependentKind.HighEdge, 2.1, "PA 2,10")]
     [InlineData(IndependentKind.PillarAbove, 1.857, "P 1,86")]
+    [InlineData(IndependentKind.PillarBuried, 1.5, "E 1,50")]
+    [InlineData(IndependentKind.PillarLength, 3.364, "PT 3,36")]
     public void ORotuloDoTexto(IndependentKind tipo, double valor, string esperado)
     {
         Assert.Equal(esperado, IndependentAnalysis.Label(tipo, valor, SlopeUnit.Percent));
@@ -122,6 +124,26 @@ public class IndependentAnalysisTests
     {
         Assert.Equal(IndependentAnalysis.Default(IndependentKind.PillarAbove), IndependentAnalysis.Decode(["lixo"], IndependentKind.PillarAbove));
         Assert.Equal(IndependentAnalysis.Default(IndependentKind.Slope), IndependentAnalysis.Decode([], IndependentKind.Slope));
+    }
+
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void CadaAnaliseDePilarLeOSeuValor()
+    {
+        // Renan, 02/10/2026: parte livre, parte enterrada e comprimento total são três análises.
+        var pilar = new PillarIdentity(Guid.NewGuid(), Guid.NewGuid(), 1, 0, Length: 3.6, Embedment: 1.5, FreeHeight: 2.1, Problem: null, GroundZ: 700);
+
+        Assert.Equal(2.1, IndependentAnalysis.PillarValue(IndependentKind.PillarAbove, pilar));
+        Assert.Equal(1.5, IndependentAnalysis.PillarValue(IndependentKind.PillarBuried, pilar));
+        Assert.Equal(3.6, IndependentAnalysis.PillarValue(IndependentKind.PillarLength, pilar));
+
+        var semTerreno = pilar with { Length = null, FreeHeight = null, GroundZ = null };
+        Assert.All(
+            new[] { IndependentKind.PillarAbove, IndependentKind.PillarBuried, IndependentKind.PillarLength },
+            t => Assert.True(double.IsNaN(IndependentAnalysis.PillarValue(t, semTerreno))));
+
+        Assert.True(IndependentAnalysis.IsPillar(IndependentKind.PillarBuried));
+        Assert.False(IndependentAnalysis.IsPillar(IndependentKind.Slope));
     }
 
     [Fact]

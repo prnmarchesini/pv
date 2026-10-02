@@ -17,8 +17,11 @@ namespace UFV.Plugin;
 /// Independência das cores: cada análise guarda no desenho quais peças ela
 /// pintou (<see cref="PecasPintadas"/>). Analisar só pinta quem sai da faixa
 /// (quem fica dentro não perde a cor de outra análise) e Tirar cores só
-/// desfaz o que ela mesma pintou. A mesa que não cabe (marcada no XData)
-/// tem as peças intocadas: ela continua magenta, dizendo que não cabe.
+/// desfaz o que ela mesma pintou, devolvendo a cor que a peça tinha antes
+/// (magenta da mesa que não cabe, cor do tipo de mesa, ou a da camada). A
+/// mesa que não cabe também é pintada (02/10/2026, com print de texto
+/// vermelho sobre módulo magenta: "não pintou o módulo"): é nela que a
+/// ponta sai da faixa, e o módulo pintado mostra onde.
 ///
 /// A identidade de cada texto vai no XData (<see cref="AnalysisTextIdentity"/>),
 /// com o valor; a camada própria de cada análise é só para ligar e desligar.
@@ -31,6 +34,9 @@ internal static class AnalisesIndependentes
 
     /// <summary>Quanto o texto da ponta fica para fora da borda da mesa, em planta.</summary>
     private const double AfastamentoDaBorda = 0.45;
+
+    /// <summary>Quanto os textos da parte enterrada e do comprimento total saem do pilar, em planta, para não cobrir o da parte livre.</summary>
+    private const double AfastamentoDosPilares = 0.45;
 
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDoTexto = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(MText));
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDaLinha = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Line));
@@ -147,12 +153,26 @@ internal static class AnalisesIndependentes
 
                 default:
                 {
+                    // As três análises de pilar escrevem no pilar; para não
+                    // se sobreporem em planta, a enterrada vai um pouco para
+                    // baixo (na direção da borda baixa) e a total para cima.
+                    var (ux, uy) = mesa.ParaCima;
+                    var desvio = tipo switch
+                    {
+                        IndependentKind.PillarBuried => -AfastamentoDosPilares,
+                        IndependentKind.PillarLength => AfastamentoDosPilares,
+                        _ => 0,
+                    };
+
                     foreach (var (pilar, bloco) in mesa.Pilares)
                     {
-                        var valor = pilar.FreeHeight ?? double.NaN;
+                        var valor = IndependentAnalysis.PillarValue(tipo, pilar);
                         var topo = ((BlockReference)transacao.GetObject(bloco, OpenMode.ForRead)).Position;
 
-                        Texto(transacao, espaco, camada, mesa.Id, tipo, valor, new Point3(topo.X, topo.Y, topo.Z), mesa.Rumo, unidade, estilo);
+                        // A cota é a do topo do pilar, que acompanha o terreno (regra 5).
+                        var onde = new Point3(topo.X + ux * desvio, topo.Y + uy * desvio, topo.Z);
+
+                        Texto(transacao, espaco, camada, mesa.Id, tipo, valor, onde, mesa.Rumo, unidade, estilo);
                         criados++;
                     }
 
@@ -216,7 +236,8 @@ internal static class AnalisesIndependentes
     /// Pinta pela regra os textos desta análise e, se a regra pede, as peças
     /// (módulos nas pontas, contorno na declividade, pilares). Antes, desfaz
     /// a pintura anterior DESTA análise nas peças; quem fica dentro da faixa
-    /// não é tocado, para não perder a cor que outra análise pôs. Quantos
+    /// não é tocado, para não perder a cor que outra análise pôs. Cada peça
+    /// pintada guarda a cor de antes, para Tirar cores devolvê-la. Quantos
     /// textos e quantas peças ficaram pintados.
     /// </summary>
     internal static (int Textos, int Pecas) Analisar(Database database, IndependentKind tipo, ThresholdRule regra, SlopeUnit unidade)
@@ -239,20 +260,29 @@ internal static class AnalisesIndependentes
             if (cor is not null) textos++;
         }
 
+        // A peça que outra análise já pintou: a cor de antes é a que ELA
+        // guardou (a original), não a pintura dela. Lido ANTES do desfazer,
+        // que regrava o dicionário: ler depois, com a transação aberta,
+        // derrubava o Core Console (access violation).
+        var originais = DasOutras(database, tipo).ToDictionary(p => p.Id, p => p.Antes);
+
         // A pintura anterior desta análise sai antes da nova: mudar a regra
         // não deixa peça com a cor de antes.
         DesfazerPecas(transacao, database, tipo);
 
-        var pintadas = new List<ObjectId>();
+        var pintadas = new List<(ObjectId, Color, Color)>();
 
         if (regra.PaintPieces)
         {
-            foreach (var (peca, valor) in PecasComValor(leitura.Mesas, tipo, unidade, incluirMarcadas: false))
+            foreach (var (peca, valor) in PecasComValor(leitura.Mesas, tipo, unidade, incluirMarcadas: true))
             {
                 if (!double.IsFinite(valor) || regra.ColorOf(valor) is not { } cor) continue;
+                if (peca.IsErased || transacao.GetObject(peca, OpenMode.ForRead) is not Entity entidade) continue;
 
-                Colorir(transacao, peca, cor);
-                pintadas.Add(peca);
+                var antes = originais.TryGetValue(peca, out var original) ? original : entidade.Color;
+                var pintura = Color.FromRgb(cor.R, cor.G, cor.B);
+                Colorir(transacao, peca, pintura);
+                pintadas.Add((peca, antes, pintura));
             }
         }
 
@@ -264,7 +294,8 @@ internal static class AnalisesIndependentes
 
     /// <summary>
     /// Tira as cores desta análise: os textos dela e as peças que ela pintou
-    /// voltam à cor da camada. Peça pintada por outra análise fica.
+    /// voltam à cor de antes (a da camada, a do tipo ou magenta). Peça
+    /// pintada também por outra análise fica com a cor da outra.
     /// </summary>
     internal static int TirarCores(Database database, IndependentKind tipo)
     {
@@ -274,7 +305,7 @@ internal static class AnalisesIndependentes
 
         foreach (var (id, _) in Textos(transacao, database, tipo))
         {
-            if (Colorir(transacao, id, null)) mexidas++;
+            if (Colorir(transacao, id, (RgbColor?)null)) mexidas++;
         }
 
         mexidas += DesfazerPecas(transacao, database, tipo);
@@ -283,18 +314,44 @@ internal static class AnalisesIndependentes
         return mexidas;
     }
 
-    /// <summary>As peças que esta análise pintou da última vez voltam à cor da camada; a lista é zerada.</summary>
+    /// <summary>
+    /// As peças que esta análise pintou da última vez voltam à cor de antes;
+    /// a lista é zerada. Se outra análise também pintou a peça, ela fica
+    /// com a cor dessa outra.
+    /// </summary>
     private static int DesfazerPecas(Transaction transacao, Database database, IndependentKind tipo)
     {
         var desfeitas = 0;
+        var dasOutras = new Dictionary<ObjectId, Color>();
 
-        foreach (var id in PecasPintadas.Ler(database, tipo))
+        foreach (var p in DasOutras(database, tipo))
         {
-            if (Colorir(transacao, id, null)) desfeitas++;
+            if (p.Pintura is { } pintura) dasOutras[p.Id] = pintura;
+        }
+
+        foreach (var (id, antes, _) in PecasPintadas.Ler(database, tipo))
+        {
+            if (Colorir(transacao, id, dasOutras.TryGetValue(id, out var daOutra) ? daOutra : antes)) desfeitas++;
         }
 
         PecasPintadas.Gravar(database, tipo, []);
         return desfeitas;
+    }
+
+    /// <summary>As peças pintadas pelas outras análises (a mesma peça pode aparecer em mais de uma: vale a primeira).</summary>
+    private static IEnumerable<(ObjectId Id, Color Antes, Color? Pintura)> DasOutras(Database database, IndependentKind tipo)
+    {
+        var vistas = new HashSet<ObjectId>();
+
+        foreach (var outra in Enum.GetValues<IndependentKind>())
+        {
+            if (outra == tipo) continue;
+
+            foreach (var p in PecasPintadas.Ler(database, outra))
+            {
+                if (vistas.Add(p.Id)) yield return p;
+            }
+        }
     }
 
     // --------------------------------------------------------- quantificar
@@ -318,7 +375,7 @@ internal static class AnalisesIndependentes
                 case IndependentKind.Slope: pontos.Add(mesa.Declividade(unidade)); break;
                 case IndependentKind.LowEdge: pontos.AddRange(mesa.Pilares.Select(p => p.Pilar.LowEdgeClearance ?? double.NaN)); break;
                 case IndependentKind.HighEdge: pontos.AddRange(mesa.Pilares.Select(p => p.Pilar.HighEdgeClearance ?? double.NaN)); break;
-                default: pontos.AddRange(mesa.Pilares.Select(p => p.Pilar.FreeHeight ?? double.NaN)); break;
+                default: pontos.AddRange(mesa.Pilares.Select(p => IndependentAnalysis.PillarValue(tipo, p.Pilar))); break;
             }
         }
 
@@ -429,7 +486,9 @@ internal static class AnalisesIndependentes
                     break;
 
                 case IndependentKind.PillarAbove:
-                    foreach (var (pilar, bloco) in mesa.Pilares) yield return (bloco, pilar.FreeHeight ?? double.NaN);
+                case IndependentKind.PillarBuried:
+                case IndependentKind.PillarLength:
+                    foreach (var (pilar, bloco) in mesa.Pilares) yield return (bloco, IndependentAnalysis.PillarValue(tipo, pilar));
                     break;
 
                 default:
@@ -467,11 +526,12 @@ internal static class AnalisesIndependentes
     /// muda algo (o desfazer e a data de modificação não ficam sujos à toa).
     /// Se mudou.
     /// </summary>
-    private static bool Colorir(Transaction transacao, ObjectId id, RgbColor? cor)
+    private static bool Colorir(Transaction transacao, ObjectId id, RgbColor? cor) =>
+        Colorir(transacao, id, cor is { } c ? Color.FromRgb(c.R, c.G, c.B) : Color.FromColorIndex(ColorMethod.ByLayer, 256));
+
+    private static bool Colorir(Transaction transacao, ObjectId id, Color nova)
     {
         if (id.IsErased || transacao.GetObject(id, OpenMode.ForRead) is not Entity entidade) return false;
-
-        var nova = cor is { } c ? Color.FromRgb(c.R, c.G, c.B) : Color.FromColorIndex(ColorMethod.ByLayer, 256);
         if (entidade.Color == nova) return false;
 
         entidade.UpgradeOpen();
@@ -494,38 +554,70 @@ internal static class AnalisesIndependentes
 }
 
 /// <summary>
-/// As peças que cada análise pintou, no dicionário do desenho, pelo handle.
-/// É o que deixa Tirar cores desfazer só o que a própria análise fez.
+/// As peças que cada análise pintou, no dicionário do desenho, pelo handle,
+/// cada uma com a cor que tinha antes e a que recebeu ("handle=antes=pintura").
+/// É o que deixa Tirar cores desfazer só o que a própria análise fez e
+/// devolver a cor certa. Registro V1 (sem as cores) volta à cor da camada.
 /// </summary>
 internal static class PecasPintadas
 {
-    private const string Versao = "V1";
+    private const string Versao = "V2";
+    private const string VersaoSemCor = "V1";
 
     private static string Chave(IndependentKind tipo) => "PINTADAS_" + tipo.ToString().ToUpperInvariant();
 
-    internal static List<ObjectId> Ler(Database database, IndependentKind tipo)
+    private static readonly System.Globalization.CultureInfo Invariante = System.Globalization.CultureInfo.InvariantCulture;
+
+    internal static List<(ObjectId Id, Color Antes, Color? Pintura)> Ler(Database database, IndependentKind tipo)
     {
-        var ids = new List<ObjectId>();
+        var pecas = new List<(ObjectId, Color, Color?)>();
 
         using var dados = PluginDictionary.Load(database, Chave(tipo));
-        if (dados is null) return ids;
+        if (dados is null) return pecas;
 
         foreach (var valor in dados.AsArray())
         {
-            if (valor.Value is not string texto || texto == Versao) continue;
-            if (!long.TryParse(texto, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var numero)) continue;
-            if (database.TryGetObjectId(new Handle(numero), out var id) && !id.IsErased) ids.Add(id);
+            if (valor.Value is not string texto || texto == Versao || texto == VersaoSemCor) continue;
+
+            var partes = texto.Split('=', 3);
+            if (!long.TryParse(partes[0], System.Globalization.NumberStyles.HexNumber, Invariante, out var numero)) continue;
+            if (!database.TryGetObjectId(new Handle(numero), out var id) || id.IsErased) continue;
+
+            pecas.Add((id, partes.Length >= 2 ? CorDe(partes[1]) : PelaCamada, partes.Length == 3 ? CorDe(partes[2]) : null));
         }
 
-        return ids;
+        return pecas;
     }
 
-    internal static void Gravar(Database database, IndependentKind tipo, IReadOnlyList<ObjectId> pecas)
+    internal static void Gravar(Database database, IndependentKind tipo, IReadOnlyList<(ObjectId Id, Color Antes, Color Pintura)> pecas)
     {
         // O registro nunca fica vazio: a versão vai sempre na frente.
         var valores = new List<TypedValue> { new((int)DxfCode.Text, Versao) };
-        valores.AddRange(pecas.Select(id => new TypedValue((int)DxfCode.Text, id.Handle.ToString())));
+        valores.AddRange(pecas.Select(p => new TypedValue((int)DxfCode.Text, p.Id.Handle + "=" + Texto(p.Antes) + "=" + Texto(p.Pintura))));
 
         PluginDictionary.Save(database, Chave(tipo), new ResultBuffer(valores.ToArray()));
+    }
+
+    private static Color PelaCamada => Color.FromColorIndex(ColorMethod.ByLayer, 256);
+
+    /// <summary>A cor em texto: L (camada), B (bloco), I&lt;índice&gt; ou R&lt;rrggbb&gt;.</summary>
+    internal static string Texto(Color cor) =>
+        cor.IsByLayer ? "L"
+        : cor.IsByBlock ? "B"
+        : cor.ColorMethod == ColorMethod.ByColor ? "R" + cor.Red.ToString("X2", Invariante) + cor.Green.ToString("X2", Invariante) + cor.Blue.ToString("X2", Invariante)
+        : "I" + cor.ColorIndex.ToString(Invariante);
+
+    internal static Color CorDe(string texto)
+    {
+        if (texto == "B") return Color.FromColorIndex(ColorMethod.ByBlock, 0);
+
+        if (texto.StartsWith('R') && texto.Length == 7
+            && int.TryParse(texto.AsSpan(1), System.Globalization.NumberStyles.HexNumber, Invariante, out var rgb))
+            return Color.FromRgb((byte)(rgb >> 16), (byte)((rgb >> 8) & 0xFF), (byte)(rgb & 0xFF));
+
+        if (texto.StartsWith('I') && short.TryParse(texto.AsSpan(1), Invariante, out var indice) && indice is >= 1 and <= 255)
+            return Color.FromColorIndex(ColorMethod.ByAci, indice);
+
+        return PelaCamada;
     }
 }

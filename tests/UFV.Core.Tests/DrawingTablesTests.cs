@@ -59,8 +59,9 @@ public class DrawingTablesTests
 
     [Fact]
     [Trait("Etapa", "8")]
-    public void EmUsoDaMaisCompridaParaAMaisCurta()
+    public void EmUsoNaOrdemDaListaQueEAPrioridade()
     {
+        // Renan, 02/10/2026: "o primeiro da lista vai ser a prioridade".
         var mesas = new[]
         {
             new DrawingTable(Perfil("Curta", 14), RgbColor.Red, true),
@@ -68,7 +69,7 @@ public class DrawingTablesTests
             new DrawingTable(Perfil("Longa", 28), RgbColor.Red, true),
         };
 
-        Assert.Equal(["Longa", "Curta"], DrawingTables.InUse(mesas).Select(m => m.Name));
+        Assert.Equal(["Curta", "Longa"], DrawingTables.InUse(mesas).Select(m => m.Name));
     }
 
     [Fact]

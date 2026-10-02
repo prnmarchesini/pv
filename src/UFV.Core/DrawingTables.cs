@@ -131,9 +131,12 @@ public static class DrawingTables
         return repetido is null ? null : $"há duas mesas chamadas \"{repetido.Key}\"";
     }
 
-    /// <summary>As mesas marcadas para a usina, da mais comprida para a mais curta (é a ordem em que o motor tenta).</summary>
+    /// <summary>
+    /// As mesas marcadas para a usina, na ordem da lista: é a prioridade
+    /// (02/10/2026: "o primeiro da lista vai ser a prioridade").
+    /// </summary>
     public static IReadOnlyList<DrawingTable> InUse(IEnumerable<DrawingTable> mesas) =>
-        mesas.Where(m => m.Use).OrderByDescending(m => m.Profile.Layout.Length).ThenBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        mesas.Where(m => m.Use).ToList();
 
     /// <summary>A primeira cor da paleta que nenhuma mesa usa ainda (se todas foram, recomeça).</summary>
     public static RgbColor NextColor(IEnumerable<DrawingTable> mesas)

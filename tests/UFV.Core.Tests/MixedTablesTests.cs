@@ -43,10 +43,21 @@ public class MixedTablesTests
 
     [Fact]
     [Trait("Etapa", "8")]
-    public void NoEmpateDeModulosGanhaQuemUsaMenosMesas()
+    public void APrimeiraDaListaTemPrioridade()
     {
-        // 40 m: duas longas (56) ou uma longa e duas curtas (56) ou quatro curtas (56): duas longas.
+        // Renan, 02/10/2026: "sempre vai tentar encaixar o primeiro, se não
+        // der, aí o segundo". 40 m com a longa primeiro: duas longas; com a
+        // curta primeiro: quatro curtas.
         Assert.Equal([0, 0], RowDistributor.Combinacao(40, [Longa, Curta], [28, 14], 0.5));
+        Assert.Equal([0, 0, 0, 0], RowDistributor.Combinacao(40, [Curta, Longa], [14, 28], 0.5));
+    }
+
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void ASegundaSoEntraNoQueSobra()
+    {
+        // 30 m: uma longa (19,2 com o espaço) e, nos 11,3 que sobram, uma curta.
+        Assert.Equal([0, 1], RowDistributor.Combinacao(30, [Longa, Curta], [28, 14], 0.5));
     }
 
     [Theory]

@@ -4505,3 +4505,46 @@ Pedidos do Renan, com prints, todos feitos:
 
 Regras novas na memória: otimizar espaço e UX em toda janela; nenhuma
 função em dois lugares; salvar/abrir só pela janela do Windows.
+
+### 02/10/2026: prioridade das mesas, pintura dos módulos, pilares, hachura
+
+Reprovado na tela: com 28 e 14 em uso, a usina saiu toda com 14; "não
+pintou o módulo"; "pilares abaixo de o quê?"; hachura do grupo escondida.
+O que mudou (AGUARDANDO VALIDAÇÃO na tela):
+
+- **A ordem da lista é a prioridade.** `RowDistributor.Combinacao` enche
+  o trecho com o máximo da 1ª mesa em uso, o que sobra com a 2ª, e assim
+  por diante (não maximiza mais módulos). `DrawingTables.InUse` mantém a
+  ordem da lista. `TerrainFit.Improve` só troca uma mesa que não dá
+  (módulo enterrado), só pelo tipo SEGUINTE da lista que seja mais curto,
+  e só quando diminuem as mesas que não dão. Testes: prioridade nos dois
+  sentidos, a 2ª só no que sobra, curta primeiro não troca nada,
+  propriedade "toda troca resolve e a junta fecha".
+- **Configurações:** botões ▲ Subir / ▼ Descer na aba Estruturas e ▲ ▼
+  em cada linha da Escolha, a posição (1ª, 2ª) de cada mesa em uso, e a
+  mensagem "A ordem da lista é a PRIORIDADE...". A ordem vai gravada em
+  MESAS.
+- **Pintura dos módulos (todas as análises):** a pintura pulava as mesas
+  marcadas, justamente onde a ponta sai da faixa (por isso "0 peça(s)
+  pintada(s)"). Agora pinta todas, e cada peça guarda a cor de antes
+  (registro PINTADAS V2, "handle=cor"); Tirar cores devolve magenta, cor
+  do tipo ou cor da camada. Nível 2: todos os módulos, das duas camadas,
+  saem vermelhos, e os magenta voltam a magenta.
+- **Pilares em três análises:** Pilar livre (P, fora da terra), Pilar
+  enterrado (E) e Pilar total (PT), cada uma em aba própria; os limites
+  agora se chamam "Menor que" e "Maior que". Padrões meus: enterrado menor
+  que 1,10 m vermelho, total maior que 4,50 m vermelho. E e PT saem 45 cm
+  para a borda baixa e para a alta, para não cobrir o P. Nível 2: um texto
+  de cada por pilar, com a cota na faixa do terreno (regra 5).
+- **Hachura do grupo por cima:** cota no canto mais alto das mesas mais
+  30 cm e, na ordem de desenho, contorno, hachura e número para a frente.
+  Nível 2 confere a cota contra os contornos das mesas.
+
+Roteiro de tela:
+1. Configurações > Estruturas: suba a de 28 para 1ª, Salvar; Usina: 28
+   onde couber, 14 só nas sobras e onde a de 28 enterra. Desça a 28 para
+   2ª e gere de novo: tudo de 14.
+2. Análises > Ponta baixa, "Pintar também os módulos", Analisar: os
+   módulos das mesas magenta saem vermelhos; Tirar cores: voltam a magenta.
+3. Abas Pilar livre, Pilar enterrado e Pilar total: Inserir, Analisar.
+4. Criar grupo: a hachura aparece por cima dos módulos.

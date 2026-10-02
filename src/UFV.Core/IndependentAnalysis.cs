@@ -14,8 +14,14 @@ public enum IndependentKind
     /// <summary>Declividade da mesa ao longo da fileira.</summary>
     Slope,
 
-    /// <summary>Comprimento do pilar acima do terreno (P3).</summary>
+    /// <summary>Parte livre do pilar: o comprimento fora da terra (P).</summary>
     PillarAbove,
+
+    /// <summary>Parte enterrada do pilar (E). Renan, 02/10/2026: "enterrado menos de x m ou mais de x m?".</summary>
+    PillarBuried,
+
+    /// <summary>Comprimento total do pilar (PT). Renan, 02/10/2026: "preciso também pilares maior que x m".</summary>
+    PillarLength,
 }
 
 /// <summary>Em que faixa um valor cai.</summary>
@@ -129,8 +135,30 @@ public static class IndependentAnalysis
         IndependentKind.LowEdge => "ponta baixa",
         IndependentKind.HighEdge => "ponta alta",
         IndependentKind.Slope => "declividade",
-        _ => "pilar acima do terreno",
+        IndependentKind.PillarBuried => "parte enterrada do pilar",
+        IndependentKind.PillarLength => "comprimento total do pilar",
+        _ => "parte livre do pilar (fora da terra)",
     };
+
+    /// <summary>Se a análise é de pilar (um valor por pilar, escrito no pilar).</summary>
+    public static bool IsPillar(IndependentKind tipo) =>
+        tipo is IndependentKind.PillarAbove or IndependentKind.PillarBuried or IndependentKind.PillarLength;
+
+    /// <summary>
+    /// O valor do pilar para a análise: a parte livre, a enterrada ou o
+    /// comprimento total; NaN quando o pilar não tem (sem terreno).
+    /// </summary>
+    public static double PillarValue(IndependentKind tipo, PillarIdentity pilar)
+    {
+        ArgumentNullException.ThrowIfNull(pilar);
+
+        return tipo switch
+        {
+            IndependentKind.PillarBuried => pilar.GroundZ is null ? double.NaN : pilar.Embedment,
+            IndependentKind.PillarLength => pilar.Length ?? double.NaN,
+            _ => pilar.FreeHeight ?? double.NaN,
+        };
+    }
 
     /// <summary>O texto que vai ao desenho: "PB 0,45", "PA 2,10", "P 1,86", "5,0%".</summary>
     public static string Label(IndependentKind tipo, double valor, SlopeUnit unidade) => tipo switch
@@ -138,6 +166,8 @@ public static class IndependentAnalysis
         IndependentKind.LowEdge => $"PB {valor.ToString("0.00", Brasil)}",
         IndependentKind.HighEdge => $"PA {valor.ToString("0.00", Brasil)}",
         IndependentKind.PillarAbove => $"P {valor.ToString("0.00", Brasil)}",
+        IndependentKind.PillarBuried => $"E {valor.ToString("0.00", Brasil)}",
+        IndependentKind.PillarLength => $"PT {valor.ToString("0.00", Brasil)}",
         _ => unidade == SlopeUnit.Degrees ? $"{valor.ToString("0.0", Brasil)}°" : $"{valor.ToString("0.0", Brasil)}%",
     };
 
@@ -147,6 +177,8 @@ public static class IndependentAnalysis
         IndependentKind.LowEdge => "PONTA_BAIXA",
         IndependentKind.HighEdge => "PONTA_ALTA",
         IndependentKind.Slope => "DECLIVIDADE",
+        IndependentKind.PillarBuried => "PILAR_ENTERRADO",
+        IndependentKind.PillarLength => "PILAR_TOTAL",
         _ => "PILAR",
     };
 
@@ -166,14 +198,18 @@ public static class IndependentAnalysis
     /// <summary>
     /// A regra com que a análise nasce. Ponta baixa: abaixo de 0,30 m
     /// vermelho, acima de 1,20 m azul (a faixa padrão da configuração);
-    /// ponta alta: acima de 3,00 m; declividade: acima de 10%; pilar acima do
-    /// terreno: acima de 3,00 m. Padrões meus, o Renan muda na janela.
+    /// ponta alta: acima de 3,00 m; declividade: acima de 10%; parte livre do
+    /// pilar: acima de 3,00 m; parte enterrada: abaixo de 1,10 m (a cravação
+    /// mínima de costume); comprimento total: acima de 4,50 m. Padrões meus,
+    /// o Renan muda na janela.
     /// </summary>
     public static ThresholdRule Default(IndependentKind tipo) => tipo switch
     {
         IndependentKind.LowEdge => new ThresholdRule(0.30, RgbColor.Red, 1.20, RgbColor.Blue, PaintPieces: false),
         IndependentKind.HighEdge => new ThresholdRule(null, RgbColor.Red, 3.00, RgbColor.Blue, PaintPieces: false),
         IndependentKind.Slope => new ThresholdRule(null, RgbColor.Blue, 10.0, RgbColor.Red, PaintPieces: false),
+        IndependentKind.PillarBuried => new ThresholdRule(1.10, RgbColor.Red, null, RgbColor.Blue, PaintPieces: false),
+        IndependentKind.PillarLength => new ThresholdRule(null, RgbColor.Blue, 4.50, RgbColor.Red, PaintPieces: false),
         _ => new ThresholdRule(null, RgbColor.Blue, 3.00, RgbColor.Red, PaintPieces: false),
     };
 

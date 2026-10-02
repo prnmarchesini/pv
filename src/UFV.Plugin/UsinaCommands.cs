@@ -93,8 +93,8 @@ public static class UsinaCommands
     }
 
     /// <summary>
-    /// As mesas do desenho em uso (8.5/8.6), da mais comprida para a mais
-    /// curta. Lista vazia: nenhuma em uso, vale o perfil de sempre. Null,
+    /// As mesas do desenho em uso (8.5/8.6), na ordem da lista (a
+    /// prioridade). Lista vazia: nenhuma em uso, vale o perfil de sempre. Null,
     /// com a mensagem dada: em uso, mas com inclinações diferentes.
     /// </summary>
     internal static IReadOnlyList<DrawingTable>? MesasEmUso(Editor editor, Autodesk.AutoCAD.DatabaseServices.Database database, string prefixo)

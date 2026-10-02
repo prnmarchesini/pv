@@ -59,7 +59,7 @@ internal sealed class JanelaDeAnalise : Window
         _pecas.Content = tipo switch
         {
             IndependentKind.Slope => "Pintar também o contorno da mesa",
-            IndependentKind.PillarAbove => "Pintar também os pilares",
+            IndependentKind.PillarAbove or IndependentKind.PillarBuried or IndependentKind.PillarLength => "Pintar também os pilares",
             _ => "Pintar também os módulos (não só os textos)",
         };
         _pecas.ToolTip = "Desmarcado, só os textos da análise mudam de cor.";

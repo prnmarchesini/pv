@@ -107,18 +107,19 @@ public class TerrainFitTests
         var antes = resolver(fileira);
         var depois = TerrainFit.Improve(antes, Pegadas, Modulos, resolver);
 
-        Assert.True(TerrainFit.UsefulModules(depois, Modulos) >= TerrainFit.UsefulModules(antes, Modulos));
+        Assert.True(TerrainFit.FailingTables(depois, Modulos) <= TerrainFit.FailingTables(antes, Modulos));
         Assert.Empty(EqualTips.Check(depois, ProjectSettings.Default.Configuration));
     }
 
     /// <summary>
     /// Propriedade: em terreno sorteado (morros de altura e largura
-    /// aleatórias), a troca nunca piora os módulos úteis, e a fileira
-    /// trocada continua fechando as juntas (regra 6).
+    /// aleatórias), a troca nunca aumenta as mesas que não dão, só mexe em
+    /// mesa que não dava, e a fileira trocada continua fechando as juntas
+    /// (regra 6).
     /// </summary>
     [Fact]
     [Trait("Etapa", "8")]
-    public void ATrocaNuncaPioraENuncaAbreJunta()
+    public void ATrocaSoResolveMesaQueNaoDaENuncaAbreJunta()
     {
         var sorteio = new Random(20261002);
         var trocou = 0;
@@ -138,13 +139,47 @@ public class TerrainFitTests
                 var antes = resolver(fileira);
                 var depois = TerrainFit.Improve(antes, Pegadas, Modulos, resolver);
 
-                Assert.True(TerrainFit.UsefulModules(depois, Modulos) >= TerrainFit.UsefulModules(antes, Modulos));
+                Assert.True(TerrainFit.FailingTables(depois, Modulos) <= TerrainFit.FailingTables(antes, Modulos));
                 Assert.Empty(EqualTips.Check(depois, ProjectSettings.Default.Configuration));
-                if (!ReferenceEquals(antes, depois)) trocou++;
+
+                if (!ReferenceEquals(antes, depois))
+                {
+                    trocou++;
+                    Assert.True(TerrainFit.FailingTables(depois, Modulos) < TerrainFit.FailingTables(antes, Modulos));
+                }
             }
         }
 
         // O sorteio tem morros que enterram o meio de mesas de 28: alguma troca acontece.
         Assert.True(trocou > 0, "nenhuma troca em 12 terrenos com morro");
+    }
+
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void ComACurtaPrimeiraNaListaNaoHaTroca()
+    {
+        // A prioridade manda: só se troca pelo tipo SEGUINTE da lista, e a
+        // longa (segunda) não cabe no lugar da curta.
+        double Morro(double x, double y) => 700 + (x is > 2 and < 15 ? 3.0 : 0.0);
+        var terreno = Terreno(Morro);
+        TableGeometry[] geos = [Geos[1], Geos[0]];
+        TableFootprint[] pegadas = [Pegadas[1], Pegadas[0]];
+        int[] modulos = [14, 28];
+
+        var area = new[] { new Point3(0, 0, 0), new Point3(40, 0, 0), new Point3(40, 8, 0), new Point3(0, 8, 0) };
+        var alinhamento = new[] { new Point3(0, 0, 0), new Point3(0, 8, 0) };
+        var config = ProjectSettings.Default.Configuration;
+        var layout = RowDistributor.Distribute(area, alinhamento, LineSide.Right, config.Pitch, config.TableGap, pegadas, modulos, config.UpslopeAzimuthRadians);
+
+        ProcessedRow Resolver(PlanRow f) =>
+            RowPipeline.ProcessRow(f, f.Tables.Select(t => geos[t.Kind]).ToList(), Tilt, terreno, ProjectSettings.Default);
+
+        Assert.All(layout.Tables, t => Assert.Equal(0, t.Kind));
+
+        foreach (var fileira in layout.Rows)
+        {
+            var antes = Resolver(fileira);
+            Assert.Same(antes, TerrainFit.Improve(antes, pegadas, modulos, Resolver));
+        }
     }
 }

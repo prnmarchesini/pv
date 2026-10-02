@@ -168,8 +168,8 @@ public static class PlantPipeline
 
         foreach (var fileira in layout.Rows)
         {
-            // A distribuição escolheu pelo comprimento; agora, no terreno, a
-            // mesa com módulo enterrado pode virar uma mais curta (02/10/2026).
+            // A distribuição pôs as mesas pela prioridade da lista; agora, no
+            // terreno, a mesa que não dá pode virar a seguinte da lista (02/10/2026).
             fileiras.Add(TerrainFit.Improve(Resolver(fileira), pegadas, modulesByKind, Resolver));
             progress?.Invoke(fileiras.Count, layout.Rows.Count);
         }

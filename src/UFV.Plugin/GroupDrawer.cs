@@ -13,10 +13,20 @@ namespace UFV.Plugin;
 /// translúcido dentro, e o letreiro com o número e o nome no centro. Tudo
 /// na camada do grupo, com o GUID do grupo no XData; apagar o grupo apaga
 /// a marca. A marca não é peça de mesa: a varredura das mesas não a vê.
+///
+/// Por cima dos módulos (02/10/2026, com print da hachura escondida: "o
+/// hachurado tem que ficar por cima"): a cota é a do canto mais alto das
+/// mesas mais uma folga (em 3D e em vista inclinada ela não afunda nos
+/// módulos; regra 5: acompanha as mesas, que acompanham o terreno), e na
+/// ordem de desenho contorno, hachura e número vão para a frente, o número
+/// por último.
 /// </summary>
 internal static class GroupDrawer
 {
     private const double AlturaDoNumero = 3.0;
+
+    /// <summary>Quanto a marca fica acima do canto mais alto das mesas, em metro.</summary>
+    internal const double FolgaAcimaDasMesas = 0.30;
 
     /// <summary>Desenha a marca. Devolve quantas entidades criou (0 se não há canto para contornar).</summary>
     internal static int Desenhar(Database database, TableGroup grupo, IReadOnlyList<Point3> cantosDasMesas)
@@ -27,7 +37,7 @@ internal static class GroupDrawer
         var casca = ConvexHull.Of(cantosDasMesas);
         if (casca.Count < 3) return 0;
 
-        var cota = cantosDasMesas.Where(p => p.IsFinite).Select(p => p.Z).DefaultIfEmpty(0).Average();
+        var cota = cantosDasMesas.Where(p => p.IsFinite).Select(p => p.Z).DefaultIfEmpty(0).Max() + FolgaAcimaDasMesas;
 
         using var transacao = database.TransactionManager.StartTransaction();
 
@@ -36,6 +46,7 @@ internal static class GroupDrawer
         var camada = LayoutLayers.Garantir(transacao, database, LayoutLayers.Grupo, new RgbColor(80, 180, 120));
         var marca = new GroupMarkIdentity(grupo.Id);
         var criadas = 0;
+        var naFrente = new List<ObjectId>();
 
         var contorno = new Polyline(casca.Count) { Closed = true, Layer = camada, Elevation = cota };
 
@@ -44,6 +55,7 @@ internal static class GroupDrawer
         espaco.AppendEntity(contorno);
         transacao.AddNewlyCreatedDBObject(contorno, true);
         LayoutXData.SaveGroupMark(transacao, contorno, marca);
+        naFrente.Add(contorno.ObjectId);
         criadas++;
 
         try
@@ -64,6 +76,7 @@ internal static class GroupDrawer
             hachura.EvaluateHatch(true);
             hachura.Transparency = new Transparency(51); // 80 % transparente
             LayoutXData.SaveGroupMark(transacao, hachura, marca);
+            naFrente.Add(hachura.ObjectId);
             criadas++;
         }
         catch (System.Exception erro)
@@ -75,7 +88,7 @@ internal static class GroupDrawer
         var centro = ConvexHull.Centroid(casca);
         var letreiro = new MText
         {
-            Location = new Point3d(centro.X, centro.Y, cota + 0.5),
+            Location = new Point3d(centro.X, centro.Y, cota + 0.2),
             TextHeight = AlturaDoNumero,
             Layer = camada,
             Attachment = AttachmentPoint.MiddleCenter,
@@ -86,7 +99,12 @@ internal static class GroupDrawer
         transacao.AddNewlyCreatedDBObject(letreiro, true);
         EstiloDoProjeto.PrepararTexto(transacao, database)(letreiro);
         LayoutXData.SaveGroupMark(transacao, letreiro, marca);
+        naFrente.Add(letreiro.ObjectId);
         criadas++;
+
+        // A ordem da lista é a ordem final: o número fica na frente da hachura.
+        var ordem = (DrawOrderTable)transacao.GetObject(espaco.DrawOrderTableId, OpenMode.ForWrite);
+        ordem.MoveToTop(new ObjectIdCollection(naFrente.ToArray()));
 
         transacao.Commit();
 

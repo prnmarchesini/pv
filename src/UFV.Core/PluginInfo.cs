@@ -362,6 +362,12 @@ public static class PluginInfo
     /// <summary>Passo 8.9 a 8.11: conta, por faixa, a análise de pilar acima do terreno.</summary>
     public const string ComandoAnPilarQuantificar = "UFV_AN_PILAR_QUANTIFICAR";
 
+    /// <summary>02/10/2026: insere os textos da parte enterrada do pilar (E).</summary>
+    public const string ComandoAnPilarEnterradoInserir = "UFV_AN_PENT_INSERIR";
+
+    /// <summary>02/10/2026: insere os textos do comprimento total do pilar (PT).</summary>
+    public const string ComandoAnPilarTotalInserir = "UFV_AN_PTOT_INSERIR";
+
     /// <summary>Só para o nível 2: a análise da ponta baixa com uma regra que pega tudo, pintando também os módulos.</summary>
     public const string ComandoAnTestePecas = "UFV_AN_TESTE_PECAS";
 

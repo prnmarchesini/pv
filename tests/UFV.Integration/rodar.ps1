@@ -2900,6 +2900,21 @@ function Testar-Grupos {
     $marca = [int] $Matches[3]
     $marcaApagada = [int] $Matches[4]
 
+    # 02/10/2026: "o hachurado tem que ficar por cima" (acima do canto mais
+    # alto das mesas, e nao mais que um metro acima: regra 5).
+    if ($r.Texto -notmatch 'zhachura=(-?[\d.]+) zmesas=(-?[\d.]+)') {
+        $problemas.Add("ufv-grupos: nao consegui ler a cota da hachura. Veja $($r.Saida)")
+        return $false
+    }
+
+    $zHachura = [double]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture)
+    $zMesas = [double]::Parse($Matches[2], [Globalization.CultureInfo]::InvariantCulture)
+
+    if ($zHachura -le $zMesas -or $zHachura -gt $zMesas + 1) {
+        $problemas.Add("ufv-grupos: a hachura do grupo esta na cota $zHachura e o canto mais alto das mesas em $zMesas; tinha que ficar logo acima. Veja $($r.Saida)")
+        return $false
+    }
+
     if ($marca -ne 3 -or $marcaApagada -ne 0) {
         $problemas.Add("ufv-grupos: a marca do grupo devia ter 3 entidades (contorno, hachura, numero) e sumir ao apagar; deu $marca e $marcaApagada. Veja $($r.Saida)")
         return $false
@@ -3160,6 +3175,12 @@ function Testar-Analises {
     $pb = [int] $Matches[4]; $pa = [int] $Matches[5]; $pi = [int] $Matches[6]; $decl = [int] $Matches[7]
     $zmin = [double]::Parse($Matches[8], $invariante); $zmax = [double]::Parse($Matches[9], $invariante)
 
+    # 02/10/2026: as analises de pilar enterrado e comprimento total, um texto por pilar.
+    if ($r.Texto -notmatch 'penterrado=(\d+) ptotal=(\d+)' -or [int] $Matches[1] -ne $pilares -or [int] $Matches[2] -ne $pilares) {
+        $problemas.Add("ufv-analises: os textos de pilar enterrado e total nao deram um por pilar ($pilares). Veja $($r.Saida)")
+        return $false
+    }
+
     if ($pilares -lt 7 -or $pb -ne $pilares -or $pa -ne $pilares -or $pi -ne $pilares -or $decl -ne $contornos) {
         $problemas.Add("ufv-analises: $pilares pilar(es) e $contornos mesa(s) deram PB $pb, PA $pa, pilar $pi, declividade $decl; esperava um por pilar (e inserir duas vezes nao empilha) e um por mesa. Veja $($r.Saida)")
         return $false
@@ -3171,7 +3192,7 @@ function Testar-Analises {
         return $false
     }
 
-    if ($r.Texto -notmatch 'UFV_AN_LISP2 pbpintados=(\d+) papintados=(\d+) modpintados=(\d+) pbsemcor=(\d+) modsemcor=(\d+) pbfim=(\d+) pafim=(\d+) modposPA=(\d+)') {
+    if ($r.Texto -notmatch 'UFV_AN_LISP2 pbpintados=(\d+) papintados=(\d+) modpintados=(\d+) pbsemcor=(\d+) modsemcor=(\d+) pbfim=(\d+) pafim=(\d+) modposPA=(\d+) magenta=(\d+) magentadepois=(\d+)') {
         $problemas.Add("ufv-analises: nao consegui ler a segunda parte do LISP. Veja $($r.Saida)")
         return $false
     }
@@ -3179,6 +3200,13 @@ function Testar-Analises {
     $pbPint = [int] $Matches[1]; $paPint = [int] $Matches[2]; $modPint = [int] $Matches[3]
     $pbSem = [int] $Matches[4]; $modSem = [int] $Matches[5]; $pbFim = [int] $Matches[6]; $paFim = [int] $Matches[7]
     $modDepoisDaPA = [int] $Matches[8]
+    $magentaAntes = [int] $Matches[9]; $magentaDepois = [int] $Matches[10]
+
+    # Tirar as cores devolve a cor de antes: o modulo da mesa marcada volta a magenta.
+    if ($magentaDepois -ne $magentaAntes) {
+        $problemas.Add("ufv-analises: antes da pintura havia $magentaAntes modulo(s) magenta (mesa que nao cabe); depois de tirar as cores, $magentaDepois. Tinham que voltar todos. Veja $($r.Saida)")
+        return $false
+    }
 
     if ($modDepoisDaPA -ne $modPint) {
         $problemas.Add("ufv-analises: tirar as cores da PA mexeu nos modulos que a PB pintou ($modPint antes, $modDepoisDaPA depois). Veja $($r.Saida)")
@@ -3202,14 +3230,14 @@ function Testar-Analises {
         return $false
     }
 
-    # A regra do teste pega toda ponta: todo modulo fora das mesas marcadas
-    # (camada MODULO) sai pintado, e o plugin conta o mesmo que o desenho.
+    # A regra do teste pega toda ponta: todo modulo, das mesas marcadas
+    # tambem, sai pintado, e o plugin conta o mesmo que o desenho.
     $pecasRelatadas = [int] $Matches[2]
     $modulosLivres = 0
     if ($r.Texto -match 'UFV_AN_LISP pilares=\d+ contornos=\d+ modulos=(\d+)') { $modulosLivres = [int] $Matches[1] }
 
     if ($modulosLivres -lt 1 -or $modPint -ne $modulosLivres -or $modPint -ne $pecasRelatadas) {
-        $problemas.Add("ufv-analises: $modulosLivres modulo(s) fora das mesas marcadas, o desenho tem $modPint pintado(s) e o plugin disse ${pecasRelatadas}; tinham que ser todos. Veja $($r.Saida)")
+        $problemas.Add("ufv-analises: $modulosLivres modulo(s) no desenho, $modPint pintado(s) e o plugin disse ${pecasRelatadas}; tinham que ser todos. Veja $($r.Saida)")
         return $false
     }
 

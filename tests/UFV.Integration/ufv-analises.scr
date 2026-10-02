@@ -3,8 +3,10 @@
 ;   - inserir PB, PA, pilar e declividade da um texto por pilar (por mesa na
 ;     declividade), com a identidade TextoAnalise no XData, a cota dentro do
 ;     terreno (regra sagrada 5), e inserir de novo nao empilha;
-;   - analisar a PB pinta so textos da PB; com pecas, pinta modulos;
-;   - tirar as cores volta tudo a cor da camada; apagar a PB nao mexe na PA.
+;   - analisar a PB pinta so textos da PB; com pecas, pinta modulos, os das
+;     mesas marcadas tambem (02/10/2026: "nao pintou o modulo");
+;   - tirar as cores volta cada peca a cor de antes (magenta na marcada);
+;     apagar a PB nao mexe na PA.
 
 (setq ufv:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
@@ -36,21 +38,27 @@
     (setq i (1+ i)))
   (list n p zmin zmax))
 
-(defun ufv:modulospintados ( / ss i n)
-  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 8 "MARCHENG_UFV_MODULO"))) i 0 n 0)
-  (while (< i (ufv:conta ss)) (if (ufv:pintada (ssname ss i)) (setq n (1+ n))) (setq i (1+ i)))
+; Modulos (das duas camadas) com a cor verdadeira dada: vermelho 16711680, magenta 16711935.
+(defun ufv:moduloscor (cor / ss i n)
+  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 8 "MARCHENG_UFV_MODULO,MARCHENG_UFV_MARCADA") (cons 2 "MARCHENG_UFV_MODULO*"))) i 0 n 0)
+  (while (< i (ufv:conta ss)) (if (= (cdr (assoc 420 (entget (ssname ss i)))) cor) (setq n (1+ n))) (setq i (1+ i)))
   n)
+(defun ufv:modulospintados () (ufv:moduloscor 16711680))
 
 (setq ufv:pilares (ufv:conta (ssget "_X" (list (cons 0 "INSERT") (cons 2 "MARCHENG_UFV_PILAR")))))
 (setq ufv:contornos (ufv:conta (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "MARCHENG_UFV_MESA,MARCHENG_UFV_MARCADA")))))
-(setq ufv:modulos (ufv:conta (ssget "_X" (list (cons 0 "INSERT") (cons 8 "MARCHENG_UFV_MODULO")))))
+(setq ufv:modulos (ufv:conta (ssget "_X" (list (cons 0 "INSERT") (cons 8 "MARCHENG_UFV_MODULO,MARCHENG_UFV_MARCADA") (cons 2 "MARCHENG_UFV_MODULO*")))))
+(setq ufv:magenta (ufv:moduloscor 16711935))
 
 (command "UFV_AN_PB_INSERIR")
 (command "UFV_AN_PB_INSERIR")
 (command "UFV_AN_PA_INSERIR")
 (command "UFV_AN_PILAR_INSERIR")
 (command "UFV_AN_DECL_INSERIR")
+(command "UFV_AN_PENT_INSERIR")
+(command "UFV_AN_PTOT_INSERIR")
 (setq ufv:pb (ufv:textos "LowEdge") ufv:pa (ufv:textos "HighEdge") ufv:pi (ufv:textos "PillarAbove") ufv:de (ufv:textos "Slope"))
+(setq ufv:pe (ufv:textos "PillarBuried") ufv:pt (ufv:textos "PillarLength"))
 
 (command "UFV_AN_PB_ANALISAR_AUTO")
 (setq ufv:pbpint (ufv:textos "LowEdge") ufv:papint (ufv:textos "HighEdge"))
@@ -65,17 +73,19 @@
 (setq ufv:modpa (ufv:modulospintados))
 
 (command "UFV_AN_PB_CORES")
-(setq ufv:pbsem (ufv:textos "LowEdge") ufv:modsem (ufv:modulospintados))
+(setq ufv:pbsem (ufv:textos "LowEdge") ufv:modsem (ufv:modulospintados) ufv:magentadepois (ufv:moduloscor 16711935))
 
 (command "UFV_AN_PB_APAGAR")
 (setq ufv:pbfim (ufv:textos "LowEdge") ufv:pafim (ufv:textos "HighEdge"))
 
 (princ (strcat "\nUFV_AN_LISP pilares=" (itoa ufv:pilares) " contornos=" (itoa ufv:contornos) " modulos=" (itoa ufv:modulos)
                " pb=" (itoa (car ufv:pb)) " pa=" (itoa (car ufv:pa)) " pilar=" (itoa (car ufv:pi)) " decl=" (itoa (car ufv:de))
-               " zmin=" (rtos (min (caddr ufv:pb) (caddr ufv:pa) (caddr ufv:pi)) 2 3)
-               " zmax=" (rtos (max (cadddr ufv:pb) (cadddr ufv:pa) (cadddr ufv:pi)) 2 3)))
+               " zmin=" (rtos (min (caddr ufv:pb) (caddr ufv:pa) (caddr ufv:pi) (caddr ufv:pe) (caddr ufv:pt)) 2 3)
+               " zmax=" (rtos (max (cadddr ufv:pb) (cadddr ufv:pa) (cadddr ufv:pi) (cadddr ufv:pe) (cadddr ufv:pt)) 2 3)
+               " penterrado=" (itoa (car ufv:pe)) " ptotal=" (itoa (car ufv:pt))))
 (princ (strcat "\nUFV_AN_LISP2 pbpintados=" (itoa (cadr ufv:pbpint)) " papintados=" (itoa (cadr ufv:papint))
                " modpintados=" (itoa ufv:modpint) " pbsemcor=" (itoa (cadr ufv:pbsem)) " modsemcor=" (itoa ufv:modsem)
-               " pbfim=" (itoa (car ufv:pbfim)) " pafim=" (itoa (car ufv:pafim)) " modposPA=" (itoa ufv:modpa)))
+               " pbfim=" (itoa (car ufv:pbfim)) " pafim=" (itoa (car ufv:pafim)) " modposPA=" (itoa ufv:modpa)
+               " magenta=" (itoa ufv:magenta) " magentadepois=" (itoa ufv:magentadepois)))
 (setvar "SECURELOAD" ufv:secureload)
 (princ)

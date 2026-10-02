@@ -8,13 +8,15 @@ namespace UFV.Core;
 /// aí?"; "o motor não faz esse tipo de análise, só usa 14 ou 28 pelo
 /// comprimento perante a lateral, a linha da área").
 ///
-/// A distribuição escolhe as mesas pelo comprimento do trecho. Depois de a
-/// fileira ser resolvida no terreno, cada mesa com módulo enterrado (ponta
-/// baixa abaixo do terreno) é testada trocada por uma mais curta, encostada
-/// no começo ou no fim do lugar dela; a fileira inteira é resolvida de novo
-/// (a junta com as vizinhas continua fechada, regra 6). A troca fica quando
-/// aumentam os MÓDULOS ÚTEIS: os da usina menos os enterrados, que não se
-/// constroem. Gulosa: repete enquanto alguma troca melhora.
+/// A distribuição põe as mesas pela prioridade da lista (a primeira sempre
+/// que couber). Depois de a fileira ser resolvida no terreno, a mesa que
+/// "não dá" (módulo enterrado: ponta baixa abaixo do terreno) é testada
+/// trocada pelo tipo SEGUINTE da lista que seja mais curto, encostada no
+/// começo ou no fim do lugar dela; a fileira inteira é resolvida de novo (a
+/// junta com as vizinhas continua fechada, regra 6). A troca só fica quando
+/// diminuem as mesas que não dão (02/10/2026: "o primeiro da lista vai ser
+/// a prioridade, sempre vai tentar encaixar o primeiro, se não der, aí o
+/// segundo"): mesa que dá nunca é trocada.
 /// </summary>
 public static class TerrainFit
 {
@@ -68,10 +70,20 @@ public static class TerrainFit
         return fileira.Tables.Sum(m => modulosPorTipo[m.Cell.Kind] - BuriedModules(m, modulosPorTipo[m.Cell.Kind]));
     }
 
+    /// <summary>Quantas mesas da fileira não dão: têm algum módulo enterrado.</summary>
+    public static int FailingTables(ProcessedRow fileira, IReadOnlyList<int> modulosPorTipo)
+    {
+        ArgumentNullException.ThrowIfNull(fileira);
+
+        return fileira.Tables.Count(m => BuriedModules(m, modulosPorTipo[m.Cell.Kind]) > 0);
+    }
+
     /// <summary>
-    /// A fileira com as trocas que aumentam os módulos úteis. Só troca por
-    /// tipo mais curto (cabe no lugar sem invadir a vizinha); com um tipo
-    /// só, devolve a fileira como veio.
+    /// A fileira com as trocas que diminuem as mesas que não dão. Só troca
+    /// uma mesa que não dá, e só pelo tipo seguinte na prioridade que seja
+    /// mais curto (cabe no lugar sem invadir a vizinha); entre trocas que
+    /// resolvem, fica a do tipo de maior prioridade. Com um tipo só, ou sem
+    /// mesa que não dá, devolve a fileira como veio.
     /// </summary>
     public static ProcessedRow Improve(
         ProcessedRow fileira,
@@ -87,15 +99,15 @@ public static class TerrainFit
         if (tipos.Count < 2) return fileira;
 
         var atual = fileira;
-        var uteis = UsefulModules(atual, modulosPorTipo);
+        var falhas = FailingTables(atual, modulosPorTipo);
 
-        // Cada passada troca no máximo uma mesa (a melhor troca); para quando
-        // nenhuma troca melhora. O limite é o número de mesas: cada mesa só
-        // pode encurtar até o tipo mais curto.
-        for (var passada = 0; passada < fileira.Tables.Count * (tipos.Count - 1); passada++)
+        // Cada passada troca no máximo uma mesa; para quando nenhuma troca
+        // resolve. O limite é o número de mesas vezes os degraus da lista.
+        for (var passada = 0; passada < fileira.Tables.Count * (tipos.Count - 1) && falhas > 0; passada++)
         {
             ProcessedRow? melhor = null;
-            var melhores = uteis;
+            var melhorFalhas = falhas;
+            var melhorTipo = int.MaxValue;
 
             for (var i = 0; i < atual.Tables.Count; i++)
             {
@@ -104,7 +116,7 @@ public static class TerrainFit
 
                 if (BuriedModules(mesa, modulosPorTipo[tipo]) == 0) continue;
 
-                for (var outro = 0; outro < tipos.Count; outro++)
+                for (var outro = tipo + 1; outro < tipos.Count; outro++)
                 {
                     if (tipos[outro].Length >= tipos[tipo].Length - 1e-6) continue;
 
@@ -114,11 +126,12 @@ public static class TerrainFit
                         celulas[i] = Replace(mesa.Cell, tipos[outro], outro, noFim);
 
                         var tentativa = resolver(new PlanRow(atual.Row.Number, celulas));
-                        var u = UsefulModules(tentativa, modulosPorTipo);
+                        var f = FailingTables(tentativa, modulosPorTipo);
 
-                        if (u > melhores)
+                        if (f < melhorFalhas || (f == melhorFalhas && melhor is not null && outro < melhorTipo))
                         {
-                            melhores = u;
+                            melhorFalhas = f;
+                            melhorTipo = outro;
                             melhor = tentativa;
                         }
                     }
@@ -128,7 +141,7 @@ public static class TerrainFit
             if (melhor is null) break;
 
             atual = melhor;
-            uteis = melhores;
+            falhas = melhorFalhas;
         }
 
         return atual;

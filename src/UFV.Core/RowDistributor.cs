@@ -179,11 +179,10 @@ public static class RowDistributor
 
     /// <summary>
     /// A distribuição com mais de um tipo de mesa (passo 8.6, Melhorias.docx:
-    /// "posso ter uma mesa de 28 módulos e uma mesa de 14 módulos, aí o sistema
-    /// vê o que vai encaixar melhor"). Em cada trecho de fileira dentro da
-    /// área, a combinação de mesas que põe MAIS MÓDULOS (empate: menos mesas),
-    /// as mais compridas primeiro. Com um tipo só é exatamente a distribuição
-    /// de sempre.
+    /// "posso ter uma mesa de 28 módulos e uma mesa de 14 módulos"). Em cada
+    /// trecho de fileira dentro da área, as mesas pela ordem de prioridade da
+    /// lista (<see cref="Combinacao"/>). Com um tipo só é exatamente a
+    /// distribuição de sempre.
     ///
     /// Todos os tipos ocupam a mesma faixa da fileira: o fundo em planta que
     /// vale é o maior deles.
@@ -301,7 +300,7 @@ public static class RowDistributor
                     continue;
                 }
 
-                // Vários tipos: a melhor combinação para o comprimento do trecho.
+                // Vários tipos: pela prioridade da lista, no comprimento do trecho.
                 var posicao = inicio;
 
                 foreach (var tipo in Combinacao(fim - inicio, tables, modules, gap))
@@ -320,65 +319,35 @@ public static class RowDistributor
     }
 
     /// <summary>
-    /// Os tipos de mesa (índices) que cabem num trecho de comprimento dado,
-    /// pondo o máximo de módulos; no empate, menos mesas. Mais compridas
-    /// primeiro. Programação dinâmica ao milímetro: cada mesa ocupa o
-    /// comprimento dela mais o espaçamento, e o último espaçamento sobra.
+    /// Os tipos de mesa (índices) que cabem num trecho, pela PRIORIDADE da
+    /// lista (Renan, 02/10/2026: "o primeiro da lista vai ser a prioridade,
+    /// sempre vai tentar encaixar o primeiro, se não der, aí o segundo"): o
+    /// máximo de mesas do primeiro tipo; no que sobra, do segundo; e assim
+    /// por diante. Cada mesa ocupa o comprimento dela mais o espaçamento, e o
+    /// último espaçamento sobra. Arredondado ao milímetro para cima: nunca
+    /// passa do trecho.
     /// </summary>
+    /// <param name="modulos">Não entra na escolha (fica pela assinatura de quem chama).</param>
     public static IReadOnlyList<int> Combinacao(double comprimento, IReadOnlyList<TableFootprint> tipos, IReadOnlyList<int> modulos, double gap)
     {
         ArgumentNullException.ThrowIfNull(tipos);
-        ArgumentNullException.ThrowIfNull(modulos);
 
         if (!double.IsFinite(comprimento) || comprimento <= 0) return [];
 
-        // Em milímetros, o passo de cada mesa arredondado para CIMA (com uma
-        // folga de ponto flutuante): a soma nunca passa do trecho, e a mesa
-        // que cabe exata continua cabendo.
-        var capacidade = (int)Math.Floor((comprimento + gap) * 1000 + 1e-6);
-        var passos = tipos.Select(t => (int)Math.Ceiling((t.Length + gap) * 1000 - 1e-6)).ToArray();
-
-        if (capacidade <= 0 || passos.All(p => p > capacidade)) return [];
-
-        var melhor = new int[capacidade + 1];
-        var mesas = new int[capacidade + 1];
-        var ultimo = new int[capacidade + 1];
-        Array.Fill(ultimo, -1);
-
-        for (var x = 1; x <= capacidade; x++)
-        {
-            melhor[x] = melhor[x - 1];
-            mesas[x] = mesas[x - 1];
-            ultimo[x] = -2; // herdado de x - 1
-
-            for (var t = 0; t < passos.Length; t++)
-            {
-                if (passos[t] > x) continue;
-
-                var m = melhor[x - passos[t]] + modulos[t];
-                var n = mesas[x - passos[t]] + 1;
-
-                if (m > melhor[x] || (m == melhor[x] && n < mesas[x]))
-                {
-                    melhor[x] = m;
-                    mesas[x] = n;
-                    ultimo[x] = t;
-                }
-            }
-        }
-
+        var restante = (long)Math.Floor((comprimento + gap) * 1000 + 1e-6);
         var escolhidos = new List<int>();
 
-        for (var x = capacidade; x > 0;)
+        for (var t = 0; t < tipos.Count; t++)
         {
-            if (ultimo[x] == -2) { x--; continue; }
+            var passo = (long)Math.Ceiling((tipos[t].Length + gap) * 1000 - 1e-6);
+            if (passo <= 0) continue;
 
-            escolhidos.Add(ultimo[x]);
-            x -= passos[ultimo[x]];
+            var quantas = restante / passo;
+            for (var k = 0; k < quantas; k++) escolhidos.Add(t);
+            restante -= quantas * passo;
         }
 
-        // As compridas primeiro, como o Renan monta à mão.
-        return escolhidos.OrderByDescending(t => tipos[t].Length).ThenBy(t => t).ToList();
+        return escolhidos;
     }
 
     /// <summary>

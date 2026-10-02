@@ -56,6 +56,8 @@ public static class AnalisesIndependentesCommands
     [CommandMethod(PluginInfo.ComandoAnPilarApagar)] public static void PilarApagar() => Rodar(IndependentKind.PillarAbove, Acao.Apagar);
     [CommandMethod(PluginInfo.ComandoAnPilarTirarCores)] public static void PilarCores() => Rodar(IndependentKind.PillarAbove, Acao.TirarCores);
     [CommandMethod(PluginInfo.ComandoAnPilarQuantificar)] public static void PilarQuantificar() => Rodar(IndependentKind.PillarAbove, Acao.Quantificar);
+    [CommandMethod(PluginInfo.ComandoAnPilarEnterradoInserir)] public static void PilarEnterradoInserir() => Rodar(IndependentKind.PillarBuried, Acao.Inserir);
+    [CommandMethod(PluginInfo.ComandoAnPilarTotalInserir)] public static void PilarTotalInserir() => Rodar(IndependentKind.PillarLength, Acao.Inserir);
 
     /// <summary>UFV_AN_TESTE_PECAS: para o nível 2, a ponta baixa com uma regra que pega tudo, pintando os módulos.</summary>
     [CommandMethod(PluginInfo.ComandoAnTestePecas)]
@@ -66,7 +68,7 @@ public static class AnalisesIndependentesCommands
 
         try
         {
-            // Abaixo de 100 m pega toda ponta: todo módulo fora das mesas marcadas tem que sair pintado.
+            // Abaixo de 100 m pega toda ponta: todo módulo, das mesas marcadas também, tem que sair pintado.
             var regra = new ThresholdRule(100, RgbColor.Red, null, RgbColor.Blue, PaintPieces: true);
             var (textos, pecas) = AnalisesIndependentes.Analisar(documento.Database, IndependentKind.LowEdge, regra, SlopeUnit.Percent);
             documento.Editor.WriteMessage($"\nANALISE_TESTE textos={textos} pecas={pecas}\n");
@@ -192,7 +194,7 @@ public static class AnalisesIndependentesCommands
                 case Acao.TirarCores:
                 {
                     var mexidas = AnalisesIndependentes.TirarCores(database, tipo);
-                    editor.WriteMessage($"\nANÁLISE {nome}: {mexidas} entidade(s) de volta à cor da camada.\n");
+                    editor.WriteMessage($"\nANÁLISE {nome}: {mexidas} entidade(s) de volta à cor de antes.\n");
                     break;
                 }
 

@@ -44,6 +44,22 @@
 (sssetfirst nil ufv:ss)
 (command "UFV_GRUPO_CRIAR" "Bloco A")
 (setq ufv:marcaCriada (ufv:marcas))
+; 02/10/2026: a hachura por cima dos modulos. A cota dela (grupo 10 da
+; HATCH) contra o vertice mais alto dos contornos 3D das mesas.
+; So os contornos das duas mesas do grupo.
+(defun ufv:zmesa (ss / i e z)
+  (setq i 0 z -1e99)
+  (while (< i (if ss (sslength ss) 0))
+    (if (= (cdr (assoc 0 (entget (ssname ss i)))) "POLYLINE")
+      (progn
+        (setq e (entnext (ssname ss i)))
+        (while (and e (= (cdr (assoc 0 (entget e))) "VERTEX"))
+          (setq z (max z (cadddr (assoc 10 (entget e)))) e (entnext e)))))
+    (setq i (1+ i)))
+  z)
+(defun ufv:zmesas () (max (ufv:zmesa (ufv:pecas ufv:g1)) (ufv:zmesa (ufv:pecas ufv:g2))))
+(defun ufv:zhachura ( / ss) (setq ss (ssget "_X" (list (cons 0 "HATCH") (cons 8 "MARCHENG_UFV_GRUPO")))) (if ss (cadddr (assoc 10 (entget (ssname ss 0)))) -1e99))
+(setq ufv:zh (ufv:zhachura) ufv:zm (ufv:zmesas))
 (command "UFV_GRUPOS")
 (command "UFV_SUJAR_AUTO")
 (command "UFV_GRUPO_RECALCULAR" "Bloco A")
@@ -57,7 +73,8 @@
 (command "UFV_GRUPO_APAGAR" "bloco a")
 (setq ufv:marcaApagada (ufv:marcas))
 (command "UFV_GRUPOS")
-(princ (strcat "\nUFV_GRUPOS_LISP mesas=" (itoa ufv:depois) " so2=" (itoa ufv:so2) " marca=" (itoa ufv:marcaCriada) " marcaApagada=" (itoa ufv:marcaApagada)))
+(princ (strcat "\nUFV_GRUPOS_LISP mesas=" (itoa ufv:depois) " so2=" (itoa ufv:so2) " marca=" (itoa ufv:marcaCriada) " marcaApagada=" (itoa ufv:marcaApagada)
+               " zhachura=" (rtos ufv:zh 2 3) " zmesas=" (rtos ufv:zm 2 3)))
 (setvar "SECURELOAD" ufv:secureload)
 (princ (strcat "\nUFV_SECURELOAD_ANTES=" (itoa ufv:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
 (princ)

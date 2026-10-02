@@ -35,7 +35,7 @@ internal sealed class JanelaDeAnalises : Window
         _atualizarTela = atualizarTela;
 
         Title = "UFV — Análises";
-        Width = 640;
+        Width = 760;
         Height = 640;
         MinWidth = 560;
         MinHeight = 520;
@@ -44,7 +44,7 @@ internal sealed class JanelaDeAnalises : Window
 
         var abas = new TabControl { Margin = new Thickness(10) };
 
-        foreach (var tipo in new[] { IndependentKind.LowEdge, IndependentKind.HighEdge, IndependentKind.Slope, IndependentKind.PillarAbove })
+        foreach (var tipo in Analises)
             abas.Items.Add(new TabItem { Header = Titulo(tipo), Content = new PainelDeAnalise(this, tipo), ToolTip = $"Análise de {IndependentAnalysis.Name(tipo)}." });
 
         abas.Items.Add(new TabItem { Header = "Quantidades", Content = AbaQuantidades(), ToolTip = "As quantificações feitas, como vão para o Excel." });
@@ -59,12 +59,21 @@ internal sealed class JanelaDeAnalises : Window
         Content = raiz;
     }
 
+    /// <summary>As análises, na ordem das abas.</summary>
+    private static readonly IndependentKind[] Analises =
+    [
+        IndependentKind.LowEdge, IndependentKind.HighEdge, IndependentKind.Slope,
+        IndependentKind.PillarAbove, IndependentKind.PillarBuried, IndependentKind.PillarLength,
+    ];
+
     internal static string Titulo(IndependentKind tipo) => tipo switch
     {
         IndependentKind.LowEdge => "Ponta baixa",
         IndependentKind.HighEdge => "Ponta alta",
         IndependentKind.Slope => "Declividade",
-        _ => "Pilares",
+        IndependentKind.PillarBuried => "Pilar enterrado",
+        IndependentKind.PillarLength => "Pilar total",
+        _ => "Pilar livre",
     };
 
     internal Database Database => _database;
@@ -116,7 +125,7 @@ internal sealed class JanelaDeAnalises : Window
     {
         _quantidades.Children.Clear();
 
-        foreach (var tipo in new[] { IndependentKind.LowEdge, IndependentKind.HighEdge, IndependentKind.Slope, IndependentKind.PillarAbove })
+        foreach (var tipo in Analises)
         {
             var q = QuantificacaoGravada.Ler(_database, tipo);
 
@@ -149,10 +158,10 @@ internal sealed class PainelDeAnalise : ScrollViewer
     private readonly JanelaDeAnalises _janela;
     private readonly IndependentKind _tipo;
 
-    private readonly CheckBox _usarAbaixo = new() { Content = "Abaixo de", VerticalAlignment = VerticalAlignment.Center, Width = 90, ToolTip = "Desmarcado: nada é pintado por estar baixo." };
+    private readonly CheckBox _usarAbaixo = new() { Content = "Menor que", VerticalAlignment = VerticalAlignment.Center, Width = 90, ToolTip = "Desmarcado: nada é pintado por ser menor." };
     private readonly TextBox _abaixo = new() { Width = 70, Height = 24, Margin = new Thickness(4, 0, 8, 0) };
     private readonly ComboBox _corAbaixo;
-    private readonly CheckBox _usarAcima = new() { Content = "Acima de", VerticalAlignment = VerticalAlignment.Center, Width = 90, ToolTip = "Desmarcado: nada é pintado por estar alto." };
+    private readonly CheckBox _usarAcima = new() { Content = "Maior que", VerticalAlignment = VerticalAlignment.Center, Width = 90, ToolTip = "Desmarcado: nada é pintado por ser maior." };
     private readonly TextBox _acima = new() { Width = 70, Height = 24, Margin = new Thickness(4, 0, 8, 0) };
     private readonly ComboBox _corAcima;
     private readonly CheckBox _pecas = new() { Margin = new Thickness(0, 8, 0, 0) };
@@ -184,7 +193,7 @@ internal sealed class PainelDeAnalise : ScrollViewer
         _pecas.Content = tipo switch
         {
             IndependentKind.Slope => "Pintar também o contorno da mesa",
-            IndependentKind.PillarAbove => "Pintar também os pilares",
+            IndependentKind.PillarAbove or IndependentKind.PillarBuried or IndependentKind.PillarLength => "Pintar também os pilares",
             _ => "Pintar também os módulos (não só os textos)",
         };
         _pecas.ToolTip = "Desmarcado, só os textos desta análise mudam de cor.";
@@ -227,7 +236,7 @@ internal sealed class PainelDeAnalise : ScrollViewer
         cores.Children.Add(_pecas);
         cores.Children.Add(Botoes(
             ("Analisar", "Grava a regra no desenho e pinta quem sai da faixa (refaz a pintura anterior desta análise).", Analisar),
-            ("Tirar cores", "Volta à cor da camada o que esta análise pintou; as cores das outras análises ficam.", TirarCores)));
+            ("Tirar cores", "Volta à cor de antes (da camada, do tipo de mesa ou magenta) o que esta análise pintou; as cores das outras análises ficam.", TirarCores)));
         cores.Children.Add(_recadoCores);
         pilha.Children.Add(Secao("2. Cores", cores));
 
@@ -246,7 +255,9 @@ internal sealed class PainelDeAnalise : ScrollViewer
         IndependentKind.LowEdge => "A altura livre da ponta baixa do módulo em cada pilar (PB), escrita fora da borda baixa da mesa.",
         IndependentKind.HighEdge => "A altura livre da ponta alta do módulo em cada pilar (PA), escrita fora da borda alta da mesa.",
         IndependentKind.Slope => "A declividade de cada mesa ao longo da fileira, com a seta descendo.",
-        _ => "O comprimento de cada pilar acima do terreno (P), escrito no topo dele.",
+        IndependentKind.PillarBuried => "A parte ENTERRADA de cada pilar (E): do terreno até a ponta de baixo. Escrita junto ao pilar, um pouco para a borda baixa.",
+        IndependentKind.PillarLength => "O comprimento TOTAL de cada pilar (PT): parte livre mais parte enterrada. Escrito junto ao pilar, um pouco para a borda alta.",
+        _ => "A parte LIVRE de cada pilar (P): do terreno até o topo, fora da terra. Escrita no topo dele.",
     };
 
     private static TextBlock Recado() => new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
@@ -367,7 +378,7 @@ internal sealed class PainelDeAnalise : ScrollViewer
 
     private void TirarCores()
     {
-        var (ok, frase) = _janela.Fazer("tirar as cores", () => $"{AnalisesIndependentes.TirarCores(_janela.Database, _tipo)} entidade(s) de volta à cor da camada.");
+        var (ok, frase) = _janela.Fazer("tirar as cores", () => $"{AnalisesIndependentes.TirarCores(_janela.Database, _tipo)} entidade(s) de volta à cor de antes.");
         JanelaDeAnalises.Dizer(_recadoCores, ok, frase);
     }
 
