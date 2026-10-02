@@ -92,7 +92,6 @@ public static class UsinaCommands
         }
     }
 
-    /// <summary>O que o planejamento da usina produz, para o desenho vir depois (o Refazer apaga entre os dois).</summary>
     /// <summary>
     /// As mesas do desenho em uso (8.5/8.6), da mais comprida para a mais
     /// curta. Lista vazia: nenhuma em uso, vale o perfil de sempre. Null,
@@ -133,6 +132,7 @@ public static class UsinaCommands
             emUso.Select(m => m.Profile.Layout.ModuleCount).ToList());
     }
 
+    /// <summary>O que o planejamento da usina produz, para o desenho vir depois (o Refazer apaga entre os dois).</summary>
     internal sealed record PlanoDaUsina(
         ProjectSettings Settings, TableGeometry Geometria, TableProfile Perfil, PlanLayout Layout, ProcessedPlant Usina,
         LayoutDrawer.TiposDeMesa? Tipos = null);

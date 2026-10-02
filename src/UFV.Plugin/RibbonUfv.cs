@@ -26,8 +26,8 @@ namespace UFV.Plugin;
 /// </summary>
 internal static class RibbonUfv
 {
-    private const string IdDaAba = "UFV_RIBBON_TAB";
-    private const string TituloDaAba = "UFV";
+    /// <summary>A primeira aba do layout: se ela existe, as abas já foram montadas.</summary>
+    private static string IdDaAba => RibbonLayout.Tabs[0].Id;
 
     private static readonly object Tranca = new();
 
@@ -271,6 +271,10 @@ internal static class RibbonUfv
             Size = RibbonItemSize.Large,
             Orientation = System.Windows.Controls.Orientation.Vertical,
             IsSplit = false,
+
+            // Sem isto o botão passa a mostrar o último item clicado
+            // ("Recalcular") no lugar de "Edição".
+            IsSynchronizedWithCurrentItem = false,
             ToolTip = menu.Tooltip,
         };
 

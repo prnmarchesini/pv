@@ -65,9 +65,24 @@ public static class ConfiguracoesCommands
             return;
         }
 
-        MesasDoDesenho.Gravar(database, salvo.Mesas);
-        SettingsStore.Save(database, salvo.Parametros);
-        EstilosCommands.Gravar(editor, database, salvo.Estilos);
+        // Cada parte grava sozinha e diz se falhou: uma falha nos estilos não
+        // pode passar por "não consegui abrir" com as mesas já gravadas.
+        void Gravar(string oQue, Action gravar)
+        {
+            try
+            {
+                gravar();
+            }
+            catch (System.Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar($"Falha ao gravar {oQue}.", erro);
+                editor.WriteMessage($"\n  ATENÇÃO: não consegui gravar {oQue}: {erro.Message}\n");
+            }
+        }
+
+        Gravar("as mesas do desenho", () => MesasDoDesenho.Gravar(database, salvo.Mesas));
+        Gravar("os parâmetros", () => SettingsStore.Save(database, salvo.Parametros));
+        Gravar("os estilos", () => EstilosCommands.Gravar(editor, database, salvo.Estilos));
 
         var emUso = DrawingTables.InUse(salvo.Mesas);
 

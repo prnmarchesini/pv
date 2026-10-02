@@ -185,7 +185,11 @@ public static class AnalisesCommands
                 }
 
                 var cantos = FileiraCommands.Vertices(polilinha, transacao);
+                // Pelo nome gravado; sem nome (mesa antiga), pelo comprimento
+                // entre as do desenho; por fim, a biblioteca.
+                var comprimento = Math.Sqrt(Math.Pow(cantos[1].X - cantos[0].X, 2) + Math.Pow(cantos[1].Y - cantos[0].Y, 2) + Math.Pow(cantos[1].Z - cantos[0].Z, 2));
                 var perfilDela = DrawingTables.Find(doDesenho, identidade.ProfileName)?.Profile
+                    ?? doDesenho.FirstOrDefault(m => Math.Abs(m.Profile.Layout.Length - comprimento) <= 0.05)?.Profile
                     ?? FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil);
 
                 if (!geometrias.TryGetValue(perfilDela, out var geometriaDela))

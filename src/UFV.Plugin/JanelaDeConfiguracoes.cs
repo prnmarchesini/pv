@@ -85,6 +85,10 @@ internal sealed class JanelaDeConfiguracoes : Window
 
         Content = raiz;
 
+        // A janela dos parâmetros nunca é mostrada; fechá-la junto evita que
+        // ela fique pendurada na aplicação a cada abertura.
+        Closed += (_, _) => _parametros.Close();
+
         Atualizar();
     }
 
@@ -170,8 +174,8 @@ internal sealed class JanelaDeConfiguracoes : Window
                 Width = 26,
                 ToolTip = "Marcada, a mesa entra na usina.",
             };
-            usar.Checked += (_, _) => _mesas[indice] = _mesas[indice] with { Use = true };
-            usar.Unchecked += (_, _) => _mesas[indice] = _mesas[indice] with { Use = false };
+            usar.Checked += (_, _) => Usar(indice, true);
+            usar.Unchecked += (_, _) => Usar(indice, false);
 
             var cor = PaletaDeCores.Caixa(mesa.Color, "A cor do contorno desta mesa no desenho, para saber qual é qual.");
             cor.Width = 140;
@@ -195,6 +199,19 @@ internal sealed class JanelaDeConfiguracoes : Window
         }
 
         if (escolhida >= 0 && escolhida < _mesas.Count) _lista.SelectedIndex = escolhida;
+    }
+
+    /// <summary>Marca ou desmarca a mesa e atualiza a linha dela na aba Estruturas.</summary>
+    private void Usar(int indice, bool usar)
+    {
+        _mesas[indice] = _mesas[indice] with { Use = usar };
+
+        if (indice < _lista.Items.Count && _lista.Items[indice] is ListBoxItem item)
+        {
+            var mesa = _mesas[indice];
+            item.Content = $"{mesa.Name} — {mesa.Profile.Layout.ModuleCount} módulos, {mesa.Profile.Layout.Length.ToString("0.###", Brasil)} m, "
+                + $"{mesa.Profile.TiltDegrees.ToString("0.#", Brasil)}°{(mesa.Use ? "  (em uso)" : "")}";
+        }
     }
 
     // ------------------------------------------------------------- ações
@@ -251,7 +268,7 @@ internal sealed class JanelaDeConfiguracoes : Window
             return;
         }
 
-        _mesas.Remove(mesa);
+        _mesas.RemoveAt(_lista.SelectedIndex);
         Atualizar();
     }
 
