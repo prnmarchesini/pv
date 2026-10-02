@@ -52,8 +52,8 @@ internal sealed class JanelaDeConfiguracoes : Window
         _editarMesa = editarMesa;
 
         Title = "UFV — Configurações";
-        Width = 1000;
-        Height = 720;
+        Width = 900;
+        Height = 560;
         MinWidth = 860;
         MinHeight = 560;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;

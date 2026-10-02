@@ -120,9 +120,9 @@ internal sealed class JanelaDeMesa : Window
         _perfis = perfis ?? throw new ArgumentNullException(nameof(perfis));
 
         Title = "UFV — Mesa";
-        Width = 1000;
-        Height = 760;
-        MinWidth = 840;
+        Width = 1320;
+        Height = 800;
+        MinWidth = 1100;
         MinHeight = 600;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -171,17 +171,21 @@ internal sealed class JanelaDeMesa : Window
     {
         var grade = new Grid { Margin = new Thickness(12) };
 
-        grade.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(310) });
+        grade.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grade.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
         grade.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         grade.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         grade.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
+        // Seções lado a lado, rótulo ao lado do campo (02/10/2026: "otimizar
+        // espaço e melhorar UX de tudo"): enchem a altura e passam para a
+        // coluna seguinte, em vez de uma coluna estreita com barra de rolagem.
         var campos = new ScrollViewer
         {
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = Formulario(),
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = LayoutCompacto.Secoes((Panel)Formulario()),
         };
 
         Grid.SetColumn(campos, 0);

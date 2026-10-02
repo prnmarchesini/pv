@@ -4461,3 +4461,20 @@ abas, algo MUITO estruturado". Refeito:
 textos, marcar abaixo de 0,30 vermelho e acima de 1,20 azul, Analisar,
 Quantificar (os números aparecem na janela); trocar de aba e repetir;
 Quantidades → Exportar para o Excel. Tags: Strings com 28 → Inserir.
+
+### 02/10/2026: Configurações sem as mesas salvas e espaço desperdiçado
+
+O Renan, com prints: a aba Estruturas não listava as mesas salvas na
+biblioteca; "para que tanto espaço em branco e uma barra de rolagem?
+Regra: otimizar espaço e melhorar UX de tudo". Feito:
+
+- Estruturas e Escolha das estruturas listam também os perfis da
+  biblioteca (pasta do usuário) que o desenho ainda não tem, desmarcados;
+  ao salvar, vão para o desenho.
+- `LayoutCompacto`: os formulários viram seções lado a lado (GroupBox),
+  rótulo à esquerda do campo, sem barra de rolagem. Aplicado na aba
+  Parâmetros (duas colunas, janela 900 × 560) e na janela de Mesa (duas
+  colunas de campos e os desenhos à direita, 1320 × 800, cabe na tela de
+  1536 × 816).
+- As janelas foram renderizadas fora do AutoCAD e conferidas na imagem
+  antes de instalar.

@@ -172,14 +172,25 @@ internal sealed class JanelaDeConfiguracao : Window
         grade.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grade.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        var sistema = new ScrollViewer
-        {
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = FormularioDoSistema(),
-        };
+        // Embutida na aba Parâmetros (02/10/2026: "para que tanto espaço em
+        // branco e uma barra de rolagem?"): as seções lado a lado, rótulo ao
+        // lado do campo, ocupando a largura toda.
+        var sistema = _embutida
+            ? new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = LayoutCompacto.Secoes((Panel)FormularioDoSistema(), 400),
+            }
+            : new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = FormularioDoSistema(),
+            };
 
         Grid.SetColumn(sistema, 0);
         Grid.SetRow(sistema, 0);
+        if (_embutida) Grid.SetColumnSpan(sistema, 3);
         grade.Children.Add(sistema);
 
         var analises = new ScrollViewer

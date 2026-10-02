@@ -42,12 +42,39 @@ public static class ConfiguracoesCommands
         var editor = documento.Editor;
         var database = documento.Database;
 
-        var mesas = MesasDoDesenho.Ler(database, out var problemas);
+        var doDesenho = MesasDoDesenho.Ler(database, out var problemas);
         foreach (var problema in problemas) editor.WriteMessage($"\n  ATENÇÃO: {problema}.\n");
 
         var parametros = ConfigCommands.Inicial(documento, out var aviso);
         var estilos = EstilosCommands.Listar(database);
         var biblioteca = new TableProfileStore(MesaCommands.PastaDosPerfis);
+
+        // As mesas salvas na biblioteca (a pasta do usuário) entram na lista
+        // também, desmarcadas, as que o desenho ainda não tem (02/10/2026:
+        // "não está listando as mesas salvas, e tem mesa salva").
+        var mesas = doDesenho.ToList();
+
+        try
+        {
+            foreach (var nome in biblioteca.List())
+            {
+                if (DrawingTables.Find(mesas, nome) is not null) continue;
+
+                try
+                {
+                    mesas.Add(new DrawingTable(biblioteca.Load(nome), DrawingTables.NextColor(mesas), Use: false));
+                }
+                catch (System.Exception erro)
+                {
+                    RegistroDeDiagnostico.Registrar($"Não consegui ler o perfil \"{nome}\" da biblioteca.", erro);
+                    editor.WriteMessage($"\n  ATENÇÃO: o perfil \"{nome}\" da biblioteca não pôde ser lido: {erro.Message}\n");
+                }
+            }
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui listar a biblioteca de perfis.", erro);
+        }
 
         JanelaDeConfiguracoes? janela = null;
 
