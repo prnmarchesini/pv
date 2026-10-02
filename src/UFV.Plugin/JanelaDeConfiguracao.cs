@@ -114,12 +114,19 @@ internal sealed class JanelaDeConfiguracao : Window
     /// </summary>
     private readonly bool _soAnalises;
 
-    internal JanelaDeConfiguracao(ProjectSettings inicial, string? aviso, bool soAnalises = false)
+    /// <summary>
+    /// Embutida na aba Parâmetros da janela de Configurações (8.7): sem os
+    /// botões próprios; quem salva é a janela de fora, por <see cref="Validar"/>.
+    /// </summary>
+    private readonly bool _embutida;
+
+    internal JanelaDeConfiguracao(ProjectSettings inicial, string? aviso, bool soAnalises = false, bool embutida = false)
     {
         ArgumentNullException.ThrowIfNull(inicial);
 
         _base = ProjectSettingsForm.From(inicial);
         _soAnalises = soAnalises;
+        _embutida = embutida;
 
         Title = soAnalises ? "UFV — Parâmetros das análises" : "UFV — Configuração do projeto";
         Width = 980;
@@ -183,7 +190,10 @@ internal sealed class JanelaDeConfiguracao : Window
 
         Grid.SetColumn(analises, 2);
         Grid.SetRow(analises, 0);
-        grade.Children.Add(analises);
+
+        // Embutida na aba Parâmetros (8.7), a grade de cores das análises
+        // sai: desde o 8.9 cada análise tem a regra dela, na janela dela.
+        if (!_embutida) grade.Children.Add(analises);
 
         Grid.SetColumn(_resumo, 0);
         Grid.SetColumnSpan(_resumo, 3);
@@ -214,7 +224,7 @@ internal sealed class JanelaDeConfiguracao : Window
         Grid.SetColumn(botoes, 0);
         Grid.SetColumnSpan(botoes, 3);
         Grid.SetRow(botoes, 2);
-        grade.Children.Add(botoes);
+        if (!_embutida) grade.Children.Add(botoes);
 
         return grade;
     }
@@ -609,6 +619,17 @@ internal sealed class JanelaDeConfiguracao : Window
 
         Conferir();
     }
+
+    /// <summary>O formulário, tirado desta janela para ir numa aba (8.7).</summary>
+    internal UIElement Formulario()
+    {
+        var formulario = (UIElement)Content;
+        Content = null;
+        return formulario;
+    }
+
+    /// <summary>A configuração dos campos, ou null com o motivo (8.7).</summary>
+    internal ProjectSettings? Validar(out string motivo) => Ler().TryParse(out motivo);
 
     private void Confirmar()
     {

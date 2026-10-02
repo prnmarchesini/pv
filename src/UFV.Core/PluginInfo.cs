@@ -406,4 +406,7 @@ public static class PluginInfo
 
     /// <summary>Só para o nível 2: cadastra no desenho a mesa de exemplo de 28 módulos e uma de 14, as duas em uso.</summary>
     public const string ComandoMesasExemploAutomatico = "UFV_MESAS_EXEMPLO_AUTO";
+
+    /// <summary>Passo 8.7: a janela de Configurações (Estruturas, Escolha das estruturas, Parâmetros, Projeto).</summary>
+    public const string ComandoConfiguracoes = "UFV_CONFIGURACOES";
 }

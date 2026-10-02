@@ -63,7 +63,7 @@ Só o Renan marca VALIDADO.
 | 8.4 | Cadastro de módulo | AGUARDANDO VALIDAÇÃO | Botão "Cadastrar módulo..." na janela de Mesa (`JanelaDeCadastroDeModulo`), POST no serviço; recusas em português; a lista recarrega e o módulo novo fica escolhido |
 | 8.5 | Mesas do desenho | AGUARDANDO VALIDAÇÃO | `DrawingTables` (Core) no dicionário do desenho: perfil, cor e "usar"; a tela é a aba Escolha das estruturas do 8.7 |
 | 8.6 | Motor com mais de um tipo de mesa | AGUARDANDO VALIDAÇÃO | Distribuição escolhe por trecho a combinação que põe mais módulos; fileira mista no motor (regra 6 testada); mesa grava o nome do perfil (XData v6) e sai com a cor do tipo; nível 2: 64 × 28 e 16 × 14 |
-| 8.7 | Janela de Configurações com abas | PENDENTE | |
+| 8.7 | Janela de Configurações com abas | AGUARDANDO VALIDAÇÃO | `UFV_CONFIGURACOES`: abas Estruturas (mesas do desenho: nova, editar na janela de Mesa, duplicar, remover), Escolha das estruturas (usar + cor), Parâmetros (o formulário do 4.4 sem a grade antiga de cores) e Projeto (estilos) |
 | 8.8 | Gerar sem análise | AGUARDANDO VALIDAÇÃO | Usina, Fileira e Refazer desenham sem cor de análise, sem cota e sem seta; Recalcular e Pontas nunca pintam e acompanham o desenho (cotas se ele tem, seta se ligada); nível 2 da usina confere "nada analisado" |
 | 8.9 | Análise: altura das pontas | AGUARDANDO VALIDAÇÃO | PB e PA: inserir, analisar (duas cores, módulos opcional), apagar, tirar cores, quantificar; `AnalisesIndependentes`, nível 2 `ufv-analises` |
 | 8.10 | Análise: declividade | AGUARDANDO VALIDAÇÃO | Mesma base do 8.9; seta + valor por mesa, % ou graus (trocar a unidade reinsere os textos), contorno opcional |
@@ -72,7 +72,7 @@ Só o Renan marca VALIDADO.
 | 8.13 | Estilos do projeto | AGUARDANDO VALIDAÇÃO | `UFV_ESTILOS` (janela) grava estilo de texto, cota e chamada no desenho; todo texto do plugin sai nele, anotativo quando o estilo é; sem escolha valem os do Renan se o desenho os tem; nível 2 no Itatiba |
 | 8.14 | Tags | AGUARDANDO VALIDAÇÃO | `UFV_TAG_FILEIRAS/MESAS/MODULOS/STRINGS` e `_APAGAR`; strings em serpentina, sem atravessar mesa, incompleta com asterisco; nível 2 com 14 e 20 por string |
 | 8.15 | Terreno | AGUARDANDO VALIDAÇÃO | `UFV_TERRENO_RESUMO`: superfície e estado, área, cotas, cidade (IBGE embutido), país e fuso UTM SIRGAS 2000 com EPSG; janela com Trocar terreno e Localização; nível 2 no Itatiba: Itatiba - SP, 23S |
-| 8.16 | Ribbon nova | PENDENTE | |
+| 8.16 | Ribbon nova | AGUARDANDO VALIDAÇÃO | Três abas (UFV, UFV Análises, UFV Tags) descritas no Core (`RibbonLayout`) e testadas: todo botão com dica e comando que existe; sem Olá, Mesa, Configuração, Parâmetros e Pintar; Edição num menu |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -4406,3 +4406,38 @@ módulos somem.
 cadastrar uma mesa de 28 e uma de 14, marcar as duas → Refazer a área: as
 fileiras terminam com a de 14 onde a de 28 não cabe, cada uma com a cor
 dela; a linha de comando diz quantas de cada.
+
+### 8.7 e 8.16 (01/10/2026): janela de Configurações e ribbon nova
+
+- `UFV_CONFIGURACOES` (botão Configurações) abre uma janela com abas:
+  Estruturas (as mesas do desenho; "Nova mesa..." e "Editar..." abrem a
+  janela de Mesa de sempre, com vãos e T3; "Duplicar" faz a de 14 a partir
+  da de 28), Escolha das estruturas (marcar quais entram e a cor de cada
+  uma), Parâmetros (azimute, pitch, degraus, espaçamentos, altura livre,
+  declividade, enterro) e Projeto (estilos). Nada vai ao desenho até
+  "Salvar no desenho".
+- Ribbon em três abas, montada do `RibbonLayout` (Core):
+  - **UFV:** Configurações; Terreno (Terreno, Resumo, Coordenada,
+    Localização); Implantação (Área, Alinhamento); Processar (Usina,
+    Fileira, Refazer, Regerar áreas); Edição (um menu com Recalcular,
+    Recalcular sujas, Pontas, Validar, Recontar, Renomear blocos, Estado,
+    Sujar; mais Grupos e Numerar); Saída (PVsyst, Excel).
+  - **UFV Análises:** Ponta baixa, Ponta alta, Declividade e Pilares, cada
+    uma com Inserir, Analisar, Apagar textos, Tirar cores e Quantificar;
+    Quantidades (Excel).
+  - **UFV Tags:** Fileiras, Mesas, Módulos e Strings (Inserir e Apagar);
+    Projeto (Estilos).
+- Saíram da ribbon: Olá, Mesa, Configuração, Parâmetros, Pintar estouros,
+  Alturas e Regerar alturas (os comandos continuam existindo pela linha de
+  comando). **Decisão minha, o Renan confirma:** Análises e Tags como abas
+  próprias (são muitos botões para caber na aba UFV).
+- Revisão do 8.6 corrigida junto: no Recalcular a vizinha de outro tipo
+  usa a geometria dela (a junta não fica solta); o Pintar mantém o nome e
+  a cor do tipo e lê as mesas do desenho uma vez; a combinação arredonda
+  o passo para cima; a Fileira usa as mesas do desenho como a Usina.
+
+**Roteiro de tela do 8.7/8.16:** 1) conferir as três abas e passar o mouse
+em cada botão (todos têm texto); 2) Configurações → Estruturas → Nova mesa
+(28) e Duplicar → editar a cópia para 14 módulos → Escolha das estruturas:
+marcar as duas, cores diferentes → Parâmetros: mudar o pitch → Salvar; 3)
+Refazer a área: mesas de 28 e de 14, cada uma com a sua cor.

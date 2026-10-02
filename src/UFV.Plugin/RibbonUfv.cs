@@ -22,8 +22,7 @@ namespace UFV.Plugin;
 /// corpo para dentro do chamador e a resolucao de AdWindows volta a acontecer
 /// cedo demais. Ao acrescentar um ponto de entrada aqui, o atributo vem junto.
 ///
-/// A ribbon cresce por secoes conforme as etapas; na etapa 0 ela tem so o
-/// botao Ola.
+/// O que vai na ribbon e dado do Core (RibbonLayout, 8.16).
 /// </summary>
 internal static class RibbonUfv
 {
@@ -92,6 +91,11 @@ internal static class RibbonUfv
         }
     }
 
+    /// <summary>
+    /// Monta as abas a partir de <see cref="RibbonLayout"/> (passo 8.16): o
+    /// que vai em cada aba, painel e botão é dado do Core, testado lá (todo
+    /// botão com dica, comando que existe). Aqui só se traduz para a ribbon.
+    /// </summary>
     private static void Montar()
     {
         var ribbon = ComponentManager.Ribbon;
@@ -101,335 +105,177 @@ internal static class RibbonUfv
             return;
         }
 
-        // NETLOAD por cima do bundle montaria a aba duas vezes.
+        // NETLOAD por cima do bundle montaria as abas duas vezes.
         if (ribbon.Tabs.Any(t => t.Id == IdDaAba))
         {
             RegistroDeDiagnostico.Registrar("Aba UFV já existia; nada a montar.");
             return;
         }
 
-        var aba = new RibbonTab
+        foreach (var especificacao in RibbonLayout.Tabs)
         {
-            Id = IdDaAba,
-            Title = TituloDaAba,
-            Name = TituloDaAba,
-        };
+            var aba = new RibbonTab
+            {
+                Id = especificacao.Id,
+                Title = especificacao.Title,
+                Name = especificacao.Title,
+            };
 
-        aba.Panels.Add(MontarPainelInicio());
-        aba.Panels.Add(MontarPainelTerreno());
-        aba.Panels.Add(MontarPainelUfv());
-        aba.Panels.Add(MontarPainelProcessar());
-        aba.Panels.Add(MontarPainelPvsyst());
-        aba.Panels.Add(MontarPainelAnalises());
-        aba.Panels.Add(MontarPainelEdicao());
-        aba.Panels.Add(MontarPainelNumeracao());
-        ribbon.Tabs.Add(aba);
+            foreach (var painel in especificacao.Panels) aba.Panels.Add(MontarPainel(painel));
+
+            ribbon.Tabs.Add(aba);
+        }
 
         var temDocumento = AcadApp.DocumentManager.MdiActiveDocument is not null;
-        RegistroDeDiagnostico.Registrar($"Aba UFV montada (documento aberto: {temDocumento}).");
-    }
-
-    private static RibbonPanel MontarPainelInicio()
-    {
-        var origem = new RibbonPanelSource { Title = "Início" };
-
-        origem.Items.Add(BotaoGrande(
-            "Olá",
-            IconesDaRibbon.Ola(),
-            PluginInfo.ComandoOla,
-            $"{PluginInfo.Nome}: confirma que o plugin está carregado."));
-
-        return new RibbonPanel { Source = origem };
+        RegistroDeDiagnostico.Registrar($"Abas UFV montadas (documento aberto: {temDocumento}).");
     }
 
     /// <summary>
-    /// Seção Terreno: escolher a superfície e conferir o que saiu dela.
-    ///
-    /// O botão Terreno é o grande, porque é por onde se começa. Os outros dois
-    /// dependem dele e ficam pequenos, empilhados ao lado — é o arranjo que o
-    /// próprio Civil 3D usa, e economiza a largura que três botões grandes
-    /// ocupariam.
-    ///
-    /// Eles não são desabilitados quando não há terreno: o comando avisa e diz
-    /// o que fazer, que é mais útil que um botão cinza sem explicação.
+    /// Um painel: botões grandes um a um; os pequenos em seguida, empilhados
+    /// de três em três numa coluna (é como o Civil 3D faz, e economiza a
+    /// largura); o menu, grande.
     /// </summary>
-    private static RibbonPanel MontarPainelTerreno()
+    private static RibbonPanel MontarPainel(RibbonPanelSpec painel)
     {
-        var origem = new RibbonPanelSource { Title = "Terreno" };
+        var origem = new RibbonPanelSource { Title = painel.Title };
+        RibbonRowPanel? coluna = null;
+        var naColuna = 0;
 
-        origem.Items.Add(BotaoGrande(
-            "Terreno",
-            IconesDaRibbon.Terreno(),
-            PluginInfo.ComandoTerreno,
-            "Escolhe qual superfície do desenho é o terreno."));
-
-        var coluna = new RibbonRowPanel();
-
-        coluna.Items.Add(BotaoPequeno(
-            "Coordenada",
-            IconesDaRibbon.Coordenada(),
-            PluginInfo.ComandoCoordenada,
-            "Clica num ponto e responde X, Y e Z do terreno."));
-
-        // A quebra manda o próximo botão para a linha de baixo. Sem ela os
-        // dois ficariam lado a lado e o painel voltaria a ficar largo.
-        coluna.Items.Add(new RibbonRowBreak());
-
-        coluna.Items.Add(BotaoPequeno(
-            "Status",
-            IconesDaRibbon.Status(),
-            PluginInfo.ComandoTerrenoStatus,
-            "Diz se o terreno processado ainda corresponde à superfície do desenho."));
-
-        origem.Items.Add(coluna);
-
-        return new RibbonPanel { Source = origem };
-    }
-
-    /// <summary>
-    /// Seção UFV: o que é do projeto da usina, e não do terreno.
-    /// </summary>
-    private static RibbonPanel MontarPainelUfv()
-    {
-        var origem = new RibbonPanelSource { Title = "UFV" };
-
-        origem.Items.Add(BotaoGrande(
-            "Área",
-            IconesDaRibbon.Area(),
-            PluginInfo.ComandoArea,
-            "Traça a área de implantação e a assenta no terreno."));
-
-        origem.Items.Add(BotaoGrande(
-            "Mesa",
-            IconesDaRibbon.Mesa(),
-            PluginInfo.ComandoMesa,
-            "Monta a mesa: módulo, quantidade, folgas, estrutura e pilares."));
-
-        origem.Items.Add(BotaoGrande(
-            "Alinhamento",
-            IconesDaRibbon.Alinhamento(),
-            PluginInfo.ComandoAlinhamento,
-            "Traça a linha de referência das fileiras e guarda de que lado ficam as mesas."));
-
-        origem.Items.Add(BotaoGrande(
-            "Configuração",
-            IconesDaRibbon.Configuracao(),
-            PluginInfo.ComandoConfig,
-            "Os limites do projeto e as regras de análise, gravados no desenho."));
-
-        return new RibbonPanel { Source = origem };
-    }
-
-    /// <summary>
-    /// Seção Processar: o que põe mesa no terreno.
-    /// </summary>
-    private static RibbonPanel MontarPainelProcessar()
-    {
-        var origem = new RibbonPanelSource { Title = "Processar" };
-
-        origem.Items.Add(BotaoGrande(
-            "Fileira",
-            IconesDaRibbon.Fileira(),
-            PluginInfo.ComandoFileira,
-            "Processa e desenha uma fileira: distribui, alinha as mesas, calcula os pilares e pinta as análises."));
-
-        origem.Items.Add(BotaoGrande(
-            "Usina",
-            IconesDaRibbon.Usina(),
-            PluginInfo.ComandoUsina,
-            "Processa e desenha a área inteira: todas as fileiras, com o tempo medido."));
-
-        origem.Items.Add(BotaoPequeno(
-            "Refazer",
-            IconesDaRibbon.Refazer(),
-            PluginInfo.ComandoRefazer,
-            "Apaga as mesas de uma área e as desenha de novo com a configuração atual (também no botão direito sobre a área)."));
-
-        return new RibbonPanel { Source = origem };
-    }
-
-    /// <summary>
-    /// Seção PVsyst: o que sai do desenho para a simulação.
-    /// </summary>
-    private static RibbonPanel MontarPainelPvsyst()
-    {
-        var origem = new RibbonPanelSource { Title = "PVsyst" };
-
-        origem.Items.Add(BotaoGrande(
-            "Exportar",
-            IconesDaRibbon.Exportar(),
-            PluginInfo.ComandoExportar,
-            "Exporta os módulos selecionados como cena 3D para o PVsyst (DAE)."));
-
-        return new RibbonPanel { Source = origem };
-    }
-
-    /// <summary>
-    /// Seção Edição: o que acontece com a usina depois de desenhada.
-    /// </summary>
-    private static RibbonPanel MontarPainelEdicao()
-    {
-        var origem = new RibbonPanelSource { Title = "Edição" };
-
-        origem.Items.Add(BotaoPequeno(
-            "Sujar",
-            IconesDaRibbon.Sujar(),
-            PluginInfo.ComandoSujar,
-            "Marca uma mesa como suja (precisa de recálculo) e a pinta de vermelho."));
-
-        origem.Items.Add(BotaoPequeno(
-            "Estado",
-            IconesDaRibbon.Estado(),
-            PluginInfo.ComandoEstado,
-            "Diz quantas mesas estão limpas e quais estão sujas, e por quê."));
-
-        origem.Items.Add(BotaoPequeno(
-            "Recalcular",
-            IconesDaRibbon.Recalcular(),
-            PluginInfo.ComandoRecalcular,
-            "Recalcula uma mesa onde ela está: reamostra o terreno e refaz pilares e pontas baixas (também no botão direito sobre a mesa)."));
-
-        origem.Items.Add(BotaoPequeno(
-            "Pontas",
-            IconesDaRibbon.Pontas(),
-            PluginInfo.ComandoPontas,
-            "Muda a altura da ponta baixa de uma mesa à mão: clique perto da ponta que vai mudar (a outra fica travada), ou \"Duas\" para dar as duas; \"Automatico\" devolve a mesa ao motor (também no botão direito sobre a mesa)."));
-
-        origem.Items.Add(BotaoPequeno(
-            "Recalcular sujas",
-            IconesDaRibbon.RecalcularSujas(),
-            PluginInfo.ComandoRecalcularSujas,
-            "Recalcula só as mesas sujas."));
-
-        origem.Items.Add(BotaoPequeno(
-            "Grupos",
-            IconesDaRibbon.Grupos(),
-            PluginInfo.ComandoGruposPainel,
-            "Abre o painel dos grupos: criar a partir da seleção, listar com mesas, módulos, pilares e kWp, selecionar, recalcular e apagar."));
-
-        origem.Items.Add(BotaoPequeno(
-            "Validar",
-            IconesDaRibbon.Validar(),
-            PluginInfo.ComandoValidar,
-            "Confere registros, mesas sujas, identidades repetidas, removidas e o carimbo do terreno; diz o que achou e o que fazer."));
-
-        origem.Items.Add(BotaoPequeno(
-            "Recontar",
-            IconesDaRibbon.Recontar(),
-            PluginInfo.ComandoRecontar,
-            "Conta a usina como está no desenho: mesas, módulos, kWp e pilares; lista e limpa as removidas."));
-
-        origem.Items.Add(BotaoPequeno(
-            "Renomear",
-            IconesDaRibbon.Renomear(),
-            PluginInfo.ComandoRenomear,
-            "Devolve ao padrão do plugin os blocos que chegaram de outro desenho com sufixo ($0$)."));
-
-        return new RibbonPanel { Source = origem };
-    }
-
-    /// <summary>
-    /// Seção Análises: o que se liga, desliga e regera sobre as mesas
-    /// desenhadas (pedido do Renan em 26/09/2026): as alturas dos pilares e
-    /// a declividade das mesas (29/09/2026).
-    /// </summary>
-    private static RibbonPanel MontarPainelAnalises()
-    {
-        var origem = new RibbonPanelSource { Title = "Análises" };
-
-        origem.Items.Add(BotaoGrande(
-            "Parâmetros",
-            IconesDaRibbon.Parametros(),
-            PluginInfo.ComandoAnalisesParametros,
-            "Os limites que decidem o que estoura e as cores de cada análise: faixa da ponta baixa, módulos que podem estourar (lombo), degraus entre mesas, declividade máxima. Grava no desenho."));
-
-        origem.Items.Add(BotaoGrande(
-            "Pintar estouros",
-            IconesDaRibbon.PintarEstouros(),
-            PluginInfo.ComandoPintar,
-            "Repinta todas as mesas como estão (sem mover nada) com os parâmetros gravados: módulo com a ponta baixa abaixo ou acima da faixa, pilar, declividade."));
-
-        origem.Items.Add(BotaoGrande(
-            "Regerar",
-            IconesDaRibbon.RegerarTudo(),
-            PluginInfo.ComandoRegerar,
-            "Refaz todas as áreas com os parâmetros atuais: o motor escolhe de novo a cota de cada mesa. Pontas escolhidas à mão voltam ao motor (U desfaz)."));
-
-        origem.Items.Add(BotaoGrande(
-            "Alturas",
-            IconesDaRibbon.Alturas(),
-            PluginInfo.ComandoAlturas,
-            "Mostra ou esconde as alturas dos pilares (PB na ponta baixa, PA na ponta alta, P3 no pilar)."));
-
-        origem.Items.Add(BotaoGrande(
-            "Declividade",
-            IconesDaRibbon.Declividade(),
-            PluginInfo.ComandoDeclividade,
-            "Uma seta em cada mesa apontando para onde ela desce, com a declividade ao lado. Pergunta a unidade (porcentagem ou graus) ou desliga."));
-
-        origem.Items.Add(BotaoPequeno(
-            "Regerar alturas",
-            IconesDaRibbon.RegerarAlturas(),
-            PluginInfo.ComandoAlturasRegerar,
-            "Apaga tudo o que está na camada das alturas (inclusive texto órfão) e redesenha as cotas de todas as mesas a partir do que está gravado nos pilares."));
-
-        return new RibbonPanel { Source = origem };
-    }
-
-    /// <summary>
-    /// Seção Numeração (7.10): numerar as fileiras e as mesas a partir da
-    /// F1.1 e de uma mesa da última fileira.
-    /// </summary>
-    private static RibbonPanel MontarPainelNumeracao()
-    {
-        var origem = new RibbonPanelSource { Title = "Numeração" };
-
-        origem.Items.Add(BotaoGrande(
-            "Numerar fileiras",
-            IconesDaRibbon.Numerar(),
-            PluginInfo.ComandoNumerar,
-            "Numera as fileiras (F1, F2…) e as mesas de cada uma (F1.1, F1.2…). Você clica na mesa que será a F1.1 e numa mesa da última fileira; "
-            + "as fileiras crescem de uma para a outra, e as mesas correm a partir da F1.1. Mesa contínua na mesma reta e azimute é a mesma fileira."));
-
-        return new RibbonPanel { Source = origem };
-    }
-
-    /// <summary>
-    /// Botão grande: ícone em cima, rótulo embaixo.
-    ///
-    /// O nome do comando vem sempre de uma constante de <see cref="PluginInfo"/>:
-    /// renomear o comando arrasta o botão junto. Quem guarda o nome é o
-    /// handler, e não o CommandParameter — a ribbon chama CanExecute(null), e
-    /// um handler que dependesse do parâmetro deixaria o botão inerte.
-    /// </summary>
-    private static RibbonButton BotaoGrande(
-        string rotulo, ImageSource icone, string comando, string dica) =>
-        new()
+        foreach (var item in painel.Items)
         {
-            Text = rotulo,
+            if (item is RibbonButtonSpec { Large: false } pequeno)
+            {
+                if (coluna is null || naColuna == 3)
+                {
+                    coluna = new RibbonRowPanel();
+                    origem.Items.Add(coluna);
+                    naColuna = 0;
+                }
+                else
+                {
+                    // A quebra manda o próximo botão para a linha de baixo.
+                    coluna.Items.Add(new RibbonRowBreak());
+                }
+
+                coluna.Items.Add(BotaoPequeno(pequeno));
+                naColuna++;
+                continue;
+            }
+
+            coluna = null;
+
+            switch (item)
+            {
+                case RibbonButtonSpec grande:
+                    origem.Items.Add(BotaoGrande(grande));
+                    break;
+
+                case RibbonMenuSpec menu:
+                    origem.Items.Add(Menu(menu));
+                    break;
+            }
+        }
+
+        return new RibbonPanel { Source = origem };
+    }
+
+    /// <summary>O ícone pelo nome; nome que não existe cai no da configuração.</summary>
+    private static ImageSource Icone(string nome) => nome switch
+    {
+        "Terreno" => IconesDaRibbon.Terreno(),
+        "Coordenada" => IconesDaRibbon.Coordenada(),
+        "Status" => IconesDaRibbon.Status(),
+        "Area" => IconesDaRibbon.Area(),
+        "Alinhamento" => IconesDaRibbon.Alinhamento(),
+        "Fileira" => IconesDaRibbon.Fileira(),
+        "Usina" => IconesDaRibbon.Usina(),
+        "Refazer" => IconesDaRibbon.Refazer(),
+        "Recalcular" => IconesDaRibbon.Recalcular(),
+        "Pontas" => IconesDaRibbon.Pontas(),
+        "Parametros" => IconesDaRibbon.Parametros(),
+        "PintarEstouros" => IconesDaRibbon.PintarEstouros(),
+        "RegerarTudo" => IconesDaRibbon.RegerarTudo(),
+        "RecalcularSujas" => IconesDaRibbon.RecalcularSujas(),
+        "Numerar" => IconesDaRibbon.Numerar(),
+        "Grupos" => IconesDaRibbon.Grupos(),
+        "Validar" => IconesDaRibbon.Validar(),
+        "Recontar" => IconesDaRibbon.Recontar(),
+        "Renomear" => IconesDaRibbon.Renomear(),
+        "Alturas" => IconesDaRibbon.Alturas(),
+        "Declividade" => IconesDaRibbon.Declividade(),
+        "RegerarAlturas" => IconesDaRibbon.RegerarAlturas(),
+        "Exportar" => IconesDaRibbon.Exportar(),
+        "Sujar" => IconesDaRibbon.Sujar(),
+        "Estado" => IconesDaRibbon.Estado(),
+        "Mesa" => IconesDaRibbon.Mesa(),
+        _ => IconesDaRibbon.Configuracao(),
+    };
+
+    /// <summary>
+    /// Botão grande: ícone em cima, rótulo embaixo. Quem guarda o comando é
+    /// o handler, e não o CommandParameter — a ribbon chama CanExecute(null),
+    /// e um handler que dependesse do parâmetro deixaria o botão inerte.
+    /// </summary>
+    private static RibbonButton BotaoGrande(RibbonButtonSpec b)
+    {
+        var icone = Icone(b.Icon);
+
+        return new RibbonButton
+        {
+            Text = b.Text,
             ShowText = true,
             ShowImage = true,
             LargeImage = icone,
             Image = icone,
             Size = RibbonItemSize.Large,
             Orientation = System.Windows.Controls.Orientation.Vertical,
-            CommandHandler = new ComandoDaRibbon(comando),
-            ToolTip = dica,
+            CommandHandler = new ComandoDaRibbon(b.Command),
+            ToolTip = b.Tooltip,
         };
+    }
 
     /// <summary>Botão pequeno: ícone à esquerda, rótulo ao lado.</summary>
-    private static RibbonButton BotaoPequeno(
-        string rotulo, ImageSource icone, string comando, string dica) =>
-        new()
+    private static RibbonButton BotaoPequeno(RibbonButtonSpec b)
+    {
+        var icone = Icone(b.Icon);
+
+        return new RibbonButton
         {
-            Text = rotulo,
+            Text = b.Text,
             ShowText = true,
             ShowImage = true,
             Image = icone,
             LargeImage = icone,
             Size = RibbonItemSize.Standard,
             Orientation = System.Windows.Controls.Orientation.Horizontal,
-            CommandHandler = new ComandoDaRibbon(comando),
-            ToolTip = dica,
+            CommandHandler = new ComandoDaRibbon(b.Command),
+            ToolTip = b.Tooltip,
         };
+    }
+
+    /// <summary>
+    /// O menu (a Edição compacta, 8.16: "edição tá grande demais para poucos
+    /// botões"): um botão grande que abre a lista, cada item com a dica dele.
+    /// </summary>
+    private static RibbonSplitButton Menu(RibbonMenuSpec menu)
+    {
+        var icone = Icone(menu.Icon);
+
+        var botao = new RibbonSplitButton
+        {
+            Text = menu.Text,
+            ShowText = true,
+            ShowImage = true,
+            LargeImage = icone,
+            Image = icone,
+            Size = RibbonItemSize.Large,
+            Orientation = System.Windows.Controls.Orientation.Vertical,
+            IsSplit = false,
+            ToolTip = menu.Tooltip,
+        };
+
+        foreach (var item in menu.Items) botao.Items.Add(BotaoPequeno(item));
+
+        return botao;
+    }
 }
