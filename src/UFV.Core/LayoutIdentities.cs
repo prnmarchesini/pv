@@ -52,7 +52,8 @@ public sealed record TableIdentity(
     double? ModulePowerWatts = null,
     Point3? Anchor = null,
     double? ManualFirstLowEdge = null,
-    double? ManualLastLowEdge = null)
+    double? ManualLastLowEdge = null,
+    string? ProfileName = null)
 {
     /// <summary>O tipo, como vai no XData.</summary>
     public const string Tipo = "Mesa";

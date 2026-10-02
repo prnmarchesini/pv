@@ -180,7 +180,7 @@ public static class AnalisesCommands
                 }
 
                 var cantos = FileiraCommands.Vertices(polilinha, transacao);
-                var perfilDela = FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil);
+                var perfilDela = FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil, identidade.ProfileName, documento.Database);
 
                 if (!geometrias.TryGetValue(perfilDela, out var geometriaDela))
                 {

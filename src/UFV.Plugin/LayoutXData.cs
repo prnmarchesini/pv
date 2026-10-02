@@ -24,7 +24,8 @@ internal static class LayoutXData
     /// (etapa 5) continuam a ser lidas. Sempre acrescentar no fim: os testes
     /// de nível 2 leem campo por posição.
     /// </summary>
-    private const int VersaoDaMesa = 5;
+    private const int VersaoDaMesa = 6;
+    private const int VersaoDaMesaCinco = 5;
     private const int VersaoDaMesaQuatro = 4;
     private const int VersaoDaMesaTres = 3;
     private const int VersaoDaMesaDois = 2;
@@ -34,7 +35,10 @@ internal static class LayoutXData
     private const int VersaoDoModulo = 1;
 
     /// <summary>GUID, letreiro, cota inicial, cota final, inclinação, marcada, motivo, suja, motivo da sujeira, potência do módulo, âncora X, Y, Z, ponta à mão no primeiro e no último pilar.</summary>
-    private const int CamposDaMesa = 15;
+    private const int CamposDaMesa = 16;
+
+    /// <summary>Os quinze primeiros, na versão 5 (sem o nome do perfil, 8.6).</summary>
+    private const int CamposDaMesaCinco = 15;
 
     /// <summary>Os treze primeiros, na versão 4.</summary>
     private const int CamposDaMesaQuatro = 13;
@@ -79,11 +83,13 @@ internal static class LayoutXData
             Opcional(mesa.Anchor?.Y),
             Opcional(mesa.Anchor?.Z),
             Opcional(mesa.ManualFirstLowEdge),
-            Opcional(mesa.ManualLastLowEdge));
+            Opcional(mesa.ManualLastLowEdge),
+            mesa.ProfileName ?? string.Empty);
 
     internal static TableIdentity? LoadTable(Entity entidade)
     {
         var c = PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesa, CamposDaMesa)
+            ?? PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesaCinco, CamposDaMesaCinco)
             ?? PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesaQuatro, CamposDaMesaQuatro)
             ?? PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesaTres, CamposDaMesaTres)
             ?? PluginXData.Load(entidade, TableIdentity.Tipo, VersaoDaMesaDois, CamposDaMesaDois)
@@ -112,14 +118,17 @@ internal static class LayoutXData
         }
 
         // As pontas à mão valem aos pares: uma só gravada é lida como nenhuma.
-        double? primeira = c.Count >= CamposDaMesa ? RealOpcional(c[13]) : null;
-        double? ultima = c.Count >= CamposDaMesa ? RealOpcional(c[14]) : null;
+        double? primeira = c.Count >= CamposDaMesaCinco ? RealOpcional(c[13]) : null;
+        double? ultima = c.Count >= CamposDaMesaCinco ? RealOpcional(c[14]) : null;
+
+        // O perfil de que a mesa é (8.6); antes da versão 6, não se sabe.
+        var perfil = c.Count >= CamposDaMesa && c[15].Length > 0 ? c[15] : null;
 
         if (primeira is not { } a || ultima is not { } b || !double.IsFinite(a) || !double.IsFinite(b))
             primeira = ultima = null;
 
         var mesa = new TableIdentity(
-            id, c[1], z0, z1, tilt, c[5] == "1", c[6].Length == 0 ? null : c[6], suja, motivo, potencia, ancora, primeira, ultima);
+            id, c[1], z0, z1, tilt, c[5] == "1", c[6].Length == 0 ? null : c[6], suja, motivo, potencia, ancora, primeira, ultima, perfil);
 
         return mesa.IsValid ? mesa : null;
     }

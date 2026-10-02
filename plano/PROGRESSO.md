@@ -61,8 +61,8 @@ Só o Renan marca VALIDADO.
 | 8.2 | Janela da estrutura | AGUARDANDO VALIDAÇÃO | Janela de Mesa: larguras do pilar, T3 (m, opcional), botão "Vãos entre pilares..." (`JanelaDeVaos`, conta em `PillarSpanForm`), solo e T3 no croqui; o T3 chega ao motor por `ProjectSettings.ForTable` |
 | 8.3 | Serviço local de módulos | AGUARDANDO VALIDAÇÃO | `servidor/` (FastAPI, SQLAlchemy, Alembic; SQLite sem `DATABASE_URL`, Postgres no `docker-compose`), 24 testes no placar; janela de Mesa lista os módulos do serviço e diz a origem; sem serviço, a embutida |
 | 8.4 | Cadastro de módulo | AGUARDANDO VALIDAÇÃO | Botão "Cadastrar módulo..." na janela de Mesa (`JanelaDeCadastroDeModulo`), POST no serviço; recusas em português; a lista recarrega e o módulo novo fica escolhido |
-| 8.5 | Mesas do desenho | PENDENTE | |
-| 8.6 | Motor com mais de um tipo de mesa | PENDENTE | |
+| 8.5 | Mesas do desenho | AGUARDANDO VALIDAÇÃO | `DrawingTables` (Core) no dicionário do desenho: perfil, cor e "usar"; a tela é a aba Escolha das estruturas do 8.7 |
+| 8.6 | Motor com mais de um tipo de mesa | AGUARDANDO VALIDAÇÃO | Distribuição escolhe por trecho a combinação que põe mais módulos; fileira mista no motor (regra 6 testada); mesa grava o nome do perfil (XData v6) e sai com a cor do tipo; nível 2: 64 × 28 e 16 × 14 |
 | 8.7 | Janela de Configurações com abas | PENDENTE | |
 | 8.8 | Gerar sem análise | AGUARDANDO VALIDAÇÃO | Usina, Fileira e Refazer desenham sem cor de análise, sem cota e sem seta; Recalcular e Pontas nunca pintam e acompanham o desenho (cotas se ele tem, seta se ligada); nível 2 da usina confere "nada analisado" |
 | 8.9 | Análise: altura das pontas | AGUARDANDO VALIDAÇÃO | PB e PA: inserir, analisar (duas cores, módulos opcional), apagar, tirar cores, quantificar; `AnalisesIndependentes`, nível 2 `ufv-analises` |
@@ -4382,3 +4382,27 @@ de novo: saem no Standard.
 Strings (digitar 28 ou 14): conferir "F1", "F1.1", "S1"... no desenho e o
 sentido da serpentina; Tags → Módulos → Apagar módulos: só os números dos
 módulos somem.
+
+### 8.5 e 8.6 (01/10/2026): mesas do desenho e motor misto
+
+- As mesas que valem para a usina ficam NO DESENHO (`DrawingTables`):
+  perfil, cor e "usar nesta usina". Sem nenhuma marcada, a usina sai como
+  antes, com o perfil de sempre.
+- Com mais de uma marcada, cada trecho de fileira dentro da área recebe a
+  combinação que põe mais módulos (empate: menos mesas), as compridas
+  primeiro (`RowDistributor.Combinacao`, programação dinâmica ao
+  milímetro). O resto do motor trata cada mesa com a geometria dela: a
+  corrente (ponta com ponta) vale na fileira mista, e o teste confere a
+  regra 6 nela.
+- Cada mesa grava o nome do perfil (XData da mesa versão 6; as versões 1 a
+  5 continuam lidas) e o contorno sai com a cor do tipo. Recalcular, Pontas
+  e Pintar acham o perfil pelo nome; mesa antiga, pelo comprimento.
+- **Decisões minhas, o Renan confirma:** as mesas em uso precisam ter a
+  mesma inclinação (senão a usina avisa e não gera); o enterro mínimo (T3)
+  usado é o da mesa mais comprida em uso; a cor do tipo vai só no contorno
+  (módulos e pilares ficam nas cores da camada).
+
+**Roteiro de tela do 8.5/8.6:** Configurações → Escolha das estruturas:
+cadastrar uma mesa de 28 e uma de 14, marcar as duas → Refazer a área: as
+fileiras terminam com a de 14 onde a de 28 não cabe, cada uma com a cor
+dela; a linha de comando diz quantas de cada.

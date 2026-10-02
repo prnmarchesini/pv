@@ -273,8 +273,18 @@ public static class FileiraCommands
     /// Recalcular das de 28 passou a recusar ("Trocou de mesa?").
     /// Sem nenhum do mesmo tamanho (5 cm), devolve o padrão.
     /// </summary>
-    internal static TableProfile PerfilDaMesaDesenhada(IReadOnlyList<Point3> cantos, TableProfile padrao)
+    /// <remarks>
+    /// Desde o 8.6 a mesa grava o nome do perfil dela: com o nome e o
+    /// desenho, a mesa cadastrada no desenho com esse nome vale antes de
+    /// qualquer adivinhação; depois, as do desenho pelo comprimento.
+    /// </remarks>
+    internal static TableProfile PerfilDaMesaDesenhada(
+        IReadOnlyList<Point3> cantos, TableProfile padrao, string? nomeDoPerfil = null, Database? database = null)
     {
+        var doDesenho = database is null ? [] : MesasDoDesenho.Ler(database);
+
+        if (DrawingTables.Find(doDesenho, nomeDoPerfil) is { } pelaIdentidade) return pelaIdentidade.Profile;
+
         if (cantos.Count < 2) return padrao;
 
         var dx = cantos[1].X - cantos[0].X;
@@ -285,6 +295,8 @@ public static class FileiraCommands
         bool Serve(TableProfile p) => Math.Abs(p.Layout.Length - comprimento) <= 0.05;
 
         if (Serve(padrao)) return padrao;
+
+        if (doDesenho.FirstOrDefault(m => Serve(m.Profile)) is { } doMesmoTamanho) return doMesmoTamanho.Profile;
 
         try
         {

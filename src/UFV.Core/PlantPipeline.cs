@@ -9,12 +9,19 @@ namespace UFV.Core;
 /// <param name="ModulesPerTable">Quantos módulos cada mesa tem.</param>
 /// <param name="ModulePowerWatts">A potência de um módulo, em Wp.</param>
 /// <param name="Elapsed">Quanto tempo o processamento levou (sem o desenho).</param>
+/// <param name="ModulesByKind">
+/// Com mais de um tipo de mesa (8.6), os módulos de cada tipo, pelo
+/// <see cref="PlacedTable.Kind"/>; null quando há um só.
+/// </param>
+/// <param name="PowerByKind">A potência do módulo de cada tipo, em Wp; null quando há um só.</param>
 public sealed record ProcessedPlant(
     PlanLayout Layout,
     IReadOnlyList<ProcessedRow> Rows,
     int ModulesPerTable,
     double ModulePowerWatts,
-    TimeSpan Elapsed)
+    TimeSpan Elapsed,
+    IReadOnlyList<int>? ModulesByKind = null,
+    IReadOnlyList<double>? PowerByKind = null)
 {
     private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
 
@@ -30,11 +37,19 @@ public sealed record ProcessedPlant(
     /// <summary>Quantos pilares há no total.</summary>
     public int PillarCount => Tables.Sum(t => t.Pillars.Pillars.Count);
 
-    /// <summary>Quantos módulos há no total: mesas × módulos por mesa (regra sagrada 3: a contagem é a soma).</summary>
-    public int ModuleCount => Tables.Count * ModulesPerTable;
+    /// <summary>Quantos módulos há no total: a soma dos de cada mesa (regra sagrada 3: a contagem é a soma).</summary>
+    public int ModuleCount => ModulesByKind is null
+        ? Tables.Count * ModulesPerTable
+        : Tables.Sum(t => ModulesByKind[t.Cell.Kind]);
 
     /// <summary>A potência instalada, em kWp: a soma das potências dos módulos.</summary>
-    public double PowerKwp => ModuleCount * ModulePowerWatts / 1000;
+    public double PowerKwp => ModulesByKind is null || PowerByKind is null
+        ? ModuleCount * ModulePowerWatts / 1000
+        : Tables.Sum(t => ModulesByKind[t.Cell.Kind] * PowerByKind[t.Cell.Kind]) / 1000;
+
+    /// <summary>Quantas mesas de cada tipo (só com mais de um tipo; com um, a lista tem um item).</summary>
+    public IReadOnlyList<int> TablesByKind =>
+        Enumerable.Range(0, ModulesByKind?.Count ?? 1).Select(k => Tables.Count(t => t.Cell.Kind == k)).ToList();
 
     /// <summary>Os avisos de todas as fileiras.</summary>
     public IReadOnlyList<string> Warnings => Rows.SelectMany(r => r.Warnings).ToList();
@@ -106,5 +121,54 @@ public static class PlantPipeline
         relogio.Stop();
 
         return new ProcessedPlant(layout, fileiras, modulesPerTable, modulePowerWatts, relogio.Elapsed);
+    }
+
+    /// <summary>
+    /// O mesmo com mais de um tipo de mesa (passo 8.6): cada mesa da
+    /// distribuição usa a geometria, os módulos e a potência do tipo dela
+    /// (<see cref="PlacedTable.Kind"/>). A inclinação é uma só.
+    /// </summary>
+    public static ProcessedPlant ProcessAll(
+        PlanLayout layout,
+        IReadOnlyList<TableGeometry> geometries,
+        double tiltRadians,
+        IReadOnlyList<int> modulesByKind,
+        IReadOnlyList<double> powerByKind,
+        Tin terrain,
+        ProjectSettings settings,
+        Action<int, int>? progress = null)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+        ArgumentNullException.ThrowIfNull(geometries);
+        ArgumentNullException.ThrowIfNull(modulesByKind);
+        ArgumentNullException.ThrowIfNull(powerByKind);
+        ArgumentNullException.ThrowIfNull(terrain);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (geometries.Count == 0 || modulesByKind.Count != geometries.Count || powerByKind.Count != geometries.Count)
+            throw new ArgumentException("Uma geometria, um número de módulos e uma potência por tipo de mesa.", nameof(geometries));
+
+        if (modulesByKind.Any(m => m <= 0))
+            throw new ArgumentOutOfRangeException(nameof(modulesByKind), "Toda mesa precisa de módulos.");
+
+        if (powerByKind.Any(w => !double.IsFinite(w) || w <= 0))
+            throw new ArgumentOutOfRangeException(nameof(powerByKind), "A potência do módulo não é válida.");
+
+        if (layout.Tables.Any(t => t.Kind < 0 || t.Kind >= geometries.Count))
+            throw new ArgumentException("A distribuição tem mesa de um tipo que não veio.", nameof(layout));
+
+        var relogio = System.Diagnostics.Stopwatch.StartNew();
+        var fileiras = new List<ProcessedRow>(layout.Rows.Count);
+
+        foreach (var fileira in layout.Rows)
+        {
+            var porMesa = fileira.Tables.Select(t => geometries[t.Kind]).ToList();
+            fileiras.Add(RowPipeline.ProcessRow(fileira, porMesa, tiltRadians, terrain, settings));
+            progress?.Invoke(fileiras.Count, layout.Rows.Count);
+        }
+
+        relogio.Stop();
+
+        return new ProcessedPlant(layout, fileiras, modulesByKind[0], powerByKind[0], relogio.Elapsed, modulesByKind, powerByKind);
     }
 }

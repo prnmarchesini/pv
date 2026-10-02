@@ -231,7 +231,7 @@ public static class PontasCommands
         }
 
         // O perfil do tamanho da mesa desenhada, não o "atual" da biblioteca.
-        var doDesenho = FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil);
+        var doDesenho = FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil, mesa.Identity.ProfileName, documento.Database);
 
         if (!ReferenceEquals(doDesenho, perfil))
         {
@@ -285,7 +285,8 @@ public static class PontasCommands
 
         LayoutDrawer.Draw(
             documento.Database, ajuste.Row, c.Geometria, c.Perfil.Layout.Module, c.Perfil.TiltRadians, c.Settings.Analyses,
-            _ => guid, _ => pontas, analise);
+            _ => guid, _ => pontas, analise,
+            LayoutDrawer.TiposDeMesa.DaMesa(documento.Database, c.Mesa.Identity!.ProfileName, c.Geometria, c.Perfil.Layout.Module));
 
         var mesa = ajuste.Row.Tables[0];
 

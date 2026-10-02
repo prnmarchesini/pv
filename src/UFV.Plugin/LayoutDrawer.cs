@@ -70,7 +70,8 @@ internal static class LayoutDrawer
         AnalysisRules regras,
         Func<ProcessedTable, Guid>? idDaMesa = null,
         Func<ProcessedTable, (double Primeira, double Ultima)?>? pontasAMao = null,
-        Analise? analisar = null)
+        Analise? analisar = null,
+        TiposDeMesa? tipos = null)
     {
         ArgumentNullException.ThrowIfNull(database);
         ArgumentNullException.ThrowIfNull(fileira);
@@ -109,7 +110,10 @@ internal static class LayoutDrawer
         var estilo = oQue.Cotas || seta.Ligada ? EstiloDoProjeto.PrepararTexto(transacao, database) : null;
 
         var blocoDoPilar = LayoutBlocks.GarantirPilar(transacao, database);
-        var blocoDoModulo = LayoutBlocks.GarantirModulo(transacao, database, modulo);
+        // Um bloco de módulo por tipo de mesa (8.6: tipos podem ter módulos diferentes).
+        var blocosDoModulo = (tipos?.Modulos ?? [modulo])
+            .Select(m => LayoutBlocks.GarantirModulo(transacao, database, m))
+            .ToList();
 
         var pilares = 0;
         var modulos = 0;
@@ -123,6 +127,13 @@ internal static class LayoutDrawer
             // Regerar alturas apaga e refaz sozinho, e apagar uma cota não
             // pode levar a mesa junto.
             var pecas = new List<ObjectId>();
+
+            // O tipo da mesa (8.6): a geometria, o módulo, o nome do perfil e
+            // a cor dela; com um tipo só, os da fileira.
+            var tipo = tipos is null ? 0 : mesa.Cell.Kind;
+            var geo = tipos?.Geometrias[tipo] ?? geometria;
+            var mod = tipos?.Modulos[tipo] ?? modulo;
+            var blocoDoModulo = blocosDoModulo[tipos is null ? 0 : tipo];
 
             var colocacao = mesa.Placement;
 
@@ -140,10 +151,11 @@ internal static class LayoutDrawer
                 idDaMesa?.Invoke(mesa) ?? Guid.NewGuid(), mesa.Label,
                 mesa.Solved.StartElevation, mesa.Solved.EndElevation, tiltRadians,
                 mesa.Solved.Marked, mesa.Solved.Reason,
-                ModulePowerWatts: modulo.PowerWatts,
+                ModulePowerWatts: mod.PowerWatts,
                 Anchor: colocacao.Apply(new Point3(0, 0, 0)),
                 ManualFirstLowEdge: pontasDaMesa?.Primeira,
-                ManualLastLowEdge: pontasDaMesa?.Ultima);
+                ManualLastLowEdge: pontasDaMesa?.Ultima,
+                ProfileName: tipos?.Nomes[tipo]);
 
             var matriz = Matriz(colocacao);
 
@@ -164,7 +176,7 @@ internal static class LayoutDrawer
 
                 // A seção do pilar vem da pegada da geometria local: largura
                 // ao longo da mesa, profundidade na inclinação.
-                var pegada = geometria.Pillars[i].Footprint;
+                var pegada = geo.Pillars[i].Footprint;
                 var largura = Distancia(pegada[0], pegada[1]);
                 var profundidade = Distancia(pegada[0], pegada[3]);
 
@@ -198,7 +210,7 @@ internal static class LayoutDrawer
                 // "s/ terreno"). O motivo por extenso estourava a tela (Renan,
                 // 29/09/2026: "para de colocar esses textos").
                 var pontaBaixa = colocacao.Apply(new Point3(pilar.Station, 0, 0));
-                var pontaAlta = colocacao.Apply(new Point3(pilar.Station, geometria.Depth, 0));
+                var pontaAlta = colocacao.Apply(new Point3(pilar.Station, geo.Depth, 0));
 
                 if (camadaAlturas is null)
                 {
@@ -217,7 +229,7 @@ internal static class LayoutDrawer
             }
 
             // 2. Módulos: o bloco e a face superior.
-            foreach (var peca in geometria.Modules)
+            foreach (var peca in geo.Modules)
             {
                 var relatorio = peca.Row == 0 ? mesa.Report.Modules.FirstOrDefault(m => m.Column == peca.Column) : null;
                 var modIdentidade = new ModuleIdentity(Guid.NewGuid(), identidade.Id, peca.Column, peca.Row, relatorio?.Clearance);
@@ -265,7 +277,7 @@ internal static class LayoutDrawer
             pecas.Add(espaco.AppendEntity(contorno));
             transacao.AddNewlyCreatedDBObject(contorno, true);
 
-            var cantosDoContorno = CantosDaMesa(geometria).Select(colocacao.Apply).ToList();
+            var cantosDoContorno = CantosDaMesa(geo).Select(colocacao.Apply).ToList();
 
             foreach (var canto in cantosDoContorno)
             {
@@ -290,6 +302,13 @@ internal static class LayoutDrawer
                 contorno.Layer = mesa.Report.SlopeVerdict.Layer!;
                 contorno.Color = Color.FromRgb(corDaDeclividade.R, corDaDeclividade.G, corDaDeclividade.B);
                 pintadas++;
+            }
+            else if (tipos?.Cores[tipo] is { } corDoTipo)
+            {
+                // A cor do tipo de mesa (8.5: "se desse para usar cores
+                // diferentes nelas, aí eu saberia qual é qual"). Não é
+                // análise: é o nome da mesa dito em cor, no contorno.
+                contorno.Color = Color.FromRgb(corDoTipo.R, corDoTipo.G, corDoTipo.B);
             }
 
             LayoutXData.SaveTable(transacao, contorno, identidade);
@@ -332,6 +351,28 @@ internal static class LayoutDrawer
         /// </summary>
         internal static Analise ComoODesenho(Database database) =>
             new(false, AlturasCommands.HaCotas(database), true);
+    }
+
+    /// <summary>
+    /// Os tipos de mesa de uma usina mista (8.6), pelo índice
+    /// <see cref="PlacedTable.Kind"/>: geometria, módulo, nome do perfil e a
+    /// cor do contorno (null, a da camada).
+    /// </summary>
+    internal sealed record TiposDeMesa(
+        IReadOnlyList<TableGeometry> Geometrias,
+        IReadOnlyList<SolarModule> Modulos,
+        IReadOnlyList<string?> Nomes,
+        IReadOnlyList<RgbColor?> Cores)
+    {
+        /// <summary>
+        /// Para redesenhar UMA mesa que já existe (Recalcular, Pontas): o tipo
+        /// dela, pelo nome gravado, se ele está entre as mesas do desenho;
+        /// senão null, e ela sai como saía.
+        /// </summary>
+        internal static TiposDeMesa? DaMesa(Database database, string? nome, TableGeometry geometria, SolarModule modulo) =>
+            DrawingTables.Find(MesasDoDesenho.Ler(database), nome) is { } registro
+                ? new TiposDeMesa([geometria], [modulo], [registro.Name], [registro.Color])
+                : null;
     }
 
     /// <summary>Metade do comprimento do risco vermelho de cota, em metro, ao longo da fileira.</summary>

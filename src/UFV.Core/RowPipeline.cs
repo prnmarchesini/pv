@@ -104,7 +104,33 @@ public static class RowPipeline
     {
         ArgumentNullException.ThrowIfNull(row);
         ArgumentNullException.ThrowIfNull(geometry);
+
+        return ProcessRow(row, Enumerable.Repeat(geometry, row.Tables.Count).ToList(), tiltRadians, terrain, settings, step, firstTip, lastTip);
+    }
+
+    /// <summary>
+    /// O mesmo, com a geometria de CADA mesa (passo 8.6: a fileira pode
+    /// misturar mesas de comprimentos diferentes, 28 e 14 módulos). A lista
+    /// vem na ordem de <c>row.Tables</c>. O solver da corrente já trabalha
+    /// com o comprimento e os pilares de cada mesa; só a inclinação
+    /// transversal é uma só para a fileira.
+    /// </summary>
+    public static ProcessedRow ProcessRow(
+        PlanRow row,
+        IReadOnlyList<TableGeometry> geometries,
+        double tiltRadians,
+        Tin terrain,
+        ProjectSettings settings,
+        double step = ViableElevations.DefaultStep,
+        double? firstTip = null,
+        double? lastTip = null)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        ArgumentNullException.ThrowIfNull(geometries);
         ArgumentNullException.ThrowIfNull(terrain);
+
+        if (geometries.Count != row.Tables.Count)
+            throw new ArgumentException($"A fileira tem {row.Tables.Count} mesa(s) e vieram {geometries.Count} geometria(s).", nameof(geometries));
         ArgumentNullException.ThrowIfNull(settings);
 
         if (settings.WhyInvalid is { } motivo)
@@ -147,8 +173,8 @@ public static class RowPipeline
             vaos[i] = Math.Max(0, RowSolver.GapBetween(row.Tables[Math.Min(i, anterior)], row.Tables[Math.Max(i, anterior)]));
         }
 
-        var primeiroPilar = geometry.Pillars.Min(p => p.Station);
-        var ultimoPilar = geometry.Pillars.Max(p => p.Station);
+        var primeiroPilar = geometries.Select(g => g.Pillars.Min(p => p.Station)).ToList();
+        var ultimoPilar = geometries.Select(g => g.Pillars.Max(p => p.Station)).ToList();
 
         // A iteração: o giro que a corrente escolhe tira a ponta baixa do
         // lugar em planta (a estação s cai em s·cos(giro)), e a PB é medida
@@ -166,7 +192,7 @@ public static class RowPipeline
 
             foreach (var i in ordem)
             {
-                amostras[i] = TerrainSampler.Sample(geometry, colocacoes[i], terrain);
+                amostras[i] = TerrainSampler.Sample(geometries[i], colocacoes[i], terrain);
                 if (passada == 0) semGiro[i] = amostras[i];
 
                 double? Chao(double estacao)
@@ -176,9 +202,9 @@ public static class RowPipeline
                 }
 
                 elos.Add(new ChainTable(
-                    row.Tables[i].Label, vaos[i], geometry.Length,
+                    row.Tables[i].Label, vaos[i], geometries[i].Length,
                     amostras[i].LowEdge.Select(m => new ChainModule(m.Station, m.GroundZ)).ToList(),
-                    primeiroPilar, Chao(primeiroPilar), ultimoPilar, Chao(ultimoPilar)));
+                    primeiroPilar[i], Chao(primeiroPilar[i]), ultimoPilar[i], Chao(ultimoPilar[i])));
             }
 
             solucao = RowSolver.Solve(elos, config, firstTip: firstTip, lastTip: lastTip);
@@ -197,15 +223,15 @@ public static class RowPipeline
 
                 resolvidas[i] = nova;
 
-                colocacoes[i] = Math.Abs(nova.EndElevation - nova.StartElevation) < geometry.Length * 0.99
-                    ? TablePlacement.PlanSolved(row.Tables[i], orientacoes[i], tiltRadians, nova.StartElevation, nova.EndElevation, geometry.Length, out _)
+                colocacoes[i] = Math.Abs(nova.EndElevation - nova.StartElevation) < geometries[i].Length * 0.99
+                    ? TablePlacement.PlanSolved(row.Tables[i], orientacoes[i], tiltRadians, nova.StartElevation, nova.EndElevation, geometries[i].Length, out _)
                     : TablePlacement.Plan(row.Tables[i], orientacoes[i], tiltRadians, nova.StartElevation);
             }
 
             if (mudou < 0.005) break;
         }
 
-        var viaveis = semGiro.Select(a => ViableElevations.Compute(a, geometry.Length, config, step)).ToList();
+        var viaveis = semGiro.Select((a, i) => ViableElevations.Compute(a, geometries[i].Length, config, step)).ToList();
 
         // A mesa marcada diz o porquê com número; quando é um lombo que
         // nenhuma inclinação vence, diz também isso.
@@ -222,18 +248,18 @@ public static class RowPipeline
         for (var i = 0; i < row.Tables.Count; i++)
         {
             var pilares = PillarCalculator.Compute(
-                geometry, row.Tables[i], orientacoes[i], tiltRadians, resolvidas[i], terrain, config);
+                geometries[i], row.Tables[i], orientacoes[i], tiltRadians, resolvidas[i], terrain, config);
 
-            var finais = TerrainSampler.Sample(geometry, pilares.Placement, terrain);
+            var finais = TerrainSampler.Sample(geometries[i], pilares.Placement, terrain);
 
             var relatorio = TableAnalysis.Evaluate(
-                resolvidas[i], finais, geometry.Length, pilares, row.Tables[i], settings.Analyses, config);
+                resolvidas[i], finais, geometries[i].Length, pilares, row.Tables[i], settings.Analyses, config);
 
             mesas.Add(new ProcessedTable(
                 row.Tables[i], orientacoes[i], semGiro[i], finais, viaveis[i], resolvidas[i], pilares, relatorio));
         }
 
-        return new ProcessedRow(row, solucao, mesas, Avisos(mesas, geometry, tiltRadians, orientacoes[0].LengthRunsWithRow));
+        return new ProcessedRow(row, solucao, mesas, Avisos(mesas, geometries, tiltRadians, orientacoes[0].LengthRunsWithRow));
     }
 
     /// <summary>
@@ -316,17 +342,18 @@ public static class RowPipeline
     /// comparada com o vão em planta.
     /// </summary>
     private static IReadOnlyList<string> Avisos(
-        List<ProcessedTable> mesas, TableGeometry geometry, double tiltRadians, bool comprimentoComAFileira)
+        List<ProcessedTable> mesas, IReadOnlyList<TableGeometry> geometrias, double tiltRadians, bool comprimentoComAFileira)
     {
         var avisos = new List<string>();
-        var d = geometry.Depth;
-        var l = geometry.Length;
 
-        double NoInicio(ProcessedTable m) => Math.Max(0, d * Math.Sin(tiltRadians) * Math.Sin(m.Pillars.LongitudinalTiltRadians));
+        // Cada mesa com o fundo e o comprimento dela (8.6: a fileira pode
+        // misturar tamanhos).
+        double NoInicio(int k) =>
+            Math.Max(0, geometrias[k].Depth * Math.Sin(tiltRadians) * Math.Sin(mesas[k].Pillars.LongitudinalTiltRadians));
 
-        double NoFim(ProcessedTable m) => Math.Max(0,
-            d * Math.Sin(tiltRadians) * Math.Sin(-m.Pillars.LongitudinalTiltRadians)
-            - l * (1 - Math.Cos(m.Pillars.LongitudinalTiltRadians)));
+        double NoFim(int k) => Math.Max(0,
+            geometrias[k].Depth * Math.Sin(tiltRadians) * Math.Sin(-mesas[k].Pillars.LongitudinalTiltRadians)
+            - geometrias[k].Length * (1 - Math.Cos(mesas[k].Pillars.LongitudinalTiltRadians)));
 
         for (var i = 0; i + 1 < mesas.Count; i++)
         {
@@ -336,7 +363,7 @@ public static class RowPipeline
 
             // Quem encosta em quem: com o comprimento correndo com a fileira,
             // o fim local de A toca o início local de B; senão, o contrário.
-            var avanco = comprimentoComAFileira ? NoFim(a) + NoInicio(b) : NoInicio(a) + NoFim(b);
+            var avanco = comprimentoComAFileira ? NoFim(i) + NoInicio(i + 1) : NoInicio(i) + NoFim(i + 1);
 
             if (avanco > vao + 1e-6)
             {

@@ -193,7 +193,7 @@ public static class RecalcularCommands
 
         // O perfil do tamanho da mesa desenhada, não o "atual" da biblioteca:
         // numa usina com mesas de dois tamanhos, cada uma se refaz com o seu.
-        var doDesenho = FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil);
+        var doDesenho = FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil, mesa.Identity!.ProfileName, documento.Database);
 
         if (!ReferenceEquals(doDesenho, perfil))
         {
@@ -287,7 +287,8 @@ public static class RecalcularCommands
         Apagar(documento, mesa);
 
         var desenho = LayoutDrawer.Draw(
-            documento.Database, fileira, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses, _ => guid, _ => pontas, analise);
+            documento.Database, fileira, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses, _ => guid, _ => pontas, analise,
+            LayoutDrawer.TiposDeMesa.DaMesa(documento.Database, mesa.Identity!.ProfileName, geometria, perfil.Layout.Module));
         var processada = fileira.Tables[0];
 
         foreach (var aviso in fileira.Warnings.Concat(avisos)) editor.WriteMessage($"\n  ATENÇÃO: {aviso}\n");

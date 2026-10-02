@@ -404,4 +404,6 @@ public static class PluginInfo
     /// <summary>Passo 8.14: apaga as tags de strings (S1, S2...).</summary>
     public const string ComandoTagStringsApagar = "UFV_TAG_STRINGS_APAGAR";
 
+    /// <summary>Só para o nível 2: cadastra no desenho a mesa de exemplo de 28 módulos e uma de 14, as duas em uso.</summary>
+    public const string ComandoMesasExemploAutomatico = "UFV_MESAS_EXEMPLO_AUTO";
 }

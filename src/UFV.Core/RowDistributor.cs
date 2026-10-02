@@ -37,6 +37,11 @@ public sealed record TableFootprint(double Length, double PlanDepth);
 /// (decisão do Renan na tela). O campo fica porque a análise de borda (4.3)
 /// o lê; hoje ela não tem o que pintar.
 /// </param>
+/// <param name="Kind">
+/// Qual das mesas da usina é esta, pelo índice na lista de tipos que a
+/// distribuição recebeu (passo 8.6: 28 e 14 módulos na mesma usina). Zero
+/// quando só há um tipo.
+/// </param>
 public sealed record PlacedTable(
     int Row,
     int Number,
@@ -45,7 +50,8 @@ public sealed record PlacedTable(
     double Length,
     double PlanDepth,
     IReadOnlyList<Point3> Corners,
-    bool PartlyOutside)
+    bool PartlyOutside,
+    int Kind = 0)
 {
     /// <summary>O letreiro do plano de requisitos: F1.1, F1.2, F2.1…</summary>
     public string Label => $"F{Row}.{Number}";
@@ -167,11 +173,46 @@ public static class RowDistributor
         TableFootprint table,
         double upslopeAzimuthRadians)
     {
+        ArgumentNullException.ThrowIfNull(table);
+        return Distribute(area, alignment, side, pitch, gap, [table], [1], upslopeAzimuthRadians);
+    }
+
+    /// <summary>
+    /// A distribuição com mais de um tipo de mesa (passo 8.6, Melhorias.docx:
+    /// "posso ter uma mesa de 28 módulos e uma mesa de 14 módulos, aí o sistema
+    /// vê o que vai encaixar melhor"). Em cada trecho de fileira dentro da
+    /// área, a combinação de mesas que põe MAIS MÓDULOS (empate: menos mesas),
+    /// as mais compridas primeiro. Com um tipo só é exatamente a distribuição
+    /// de sempre.
+    ///
+    /// Todos os tipos ocupam a mesma faixa da fileira: o fundo em planta que
+    /// vale é o maior deles.
+    /// </summary>
+    /// <param name="tables">Os tipos de mesa, em planta.</param>
+    /// <param name="modules">Os módulos de cada tipo, na mesma ordem.</param>
+    public static PlanLayout Distribute(
+        IReadOnlyList<Point3> area,
+        IReadOnlyList<Point3> alignment,
+        LineSide side,
+        double pitch,
+        double gap,
+        IReadOnlyList<TableFootprint> tables,
+        IReadOnlyList<int> modules,
+        double upslopeAzimuthRadians)
+    {
         ArgumentNullException.ThrowIfNull(area);
         ArgumentNullException.ThrowIfNull(alignment);
-        ArgumentNullException.ThrowIfNull(table);
+        ArgumentNullException.ThrowIfNull(tables);
+        ArgumentNullException.ThrowIfNull(modules);
 
-        Conferir(area, alignment, side, pitch, gap, table, upslopeAzimuthRadians);
+        if (tables.Count == 0) throw new ArgumentException("A usina precisa de pelo menos um tipo de mesa.", nameof(tables));
+        if (modules.Count != tables.Count) throw new ArgumentException("Um número de módulos por tipo de mesa.", nameof(modules));
+        if (modules.Any(m => m < 1)) throw new ArgumentOutOfRangeException(nameof(modules), "Todo tipo de mesa tem pelo menos um módulo.");
+
+        // A faixa é a do tipo mais fundo; os outros cabem nela.
+        var table = new TableFootprint(tables.Max(t => t.Length), tables.Max(t => t.PlanDepth));
+
+        foreach (var tipo in tables) Conferir(area, alignment, side, pitch, gap, tipo, upslopeAzimuthRadians);
 
         var trechos = Trechos(alignment);
 
@@ -213,6 +254,26 @@ public static class RowDistributor
 
             var mesas = new List<PlacedTable>();
 
+            // Põe a mesa do tipo dado na estação s; null se um recorte da
+            // área entra por ela (descartada).
+            PlacedTable? Colocar(double s, TableFootprint tipo, int indice)
+            {
+                var canto = new Point3(
+                    origem.X + direcao.X * s + subida.X * afastamento,
+                    origem.Y + direcao.Y * s + subida.Y * afastamento,
+                    0);
+
+                var mesa = Montar(fileiras.Count + 1, mesas.Count + 1, canto, direcao, subida, rumo, tipo);
+
+                if (ParcialmenteFora(mesa.Corners, canto, direcao, subida, tipo, area))
+                {
+                    descartadas++;
+                    return null;
+                }
+
+                return mesa with { Number = mesas.Count + 1, Kind = indice };
+            }
+
             foreach (var (inicioDoTrecho, fimDoTrecho) in Trechos(area, origem, direcao, subida, afastamento, table.PlanDepth))
             {
                 var inicio = Math.Max(inicioDoTrecho, comeco.Value);
@@ -220,37 +281,104 @@ public static class RowDistributor
 
                 if (fim - inicio <= Tolerancia) continue;
 
-                for (var s = inicio; s < fim - Tolerancia; s += table.Length + gap)
+                if (tables.Count == 1)
                 {
-                    // Não cabe inteira no trecho: descartada, e o trecho acabou.
-                    if (s + table.Length > fim + Tolerancia)
+                    // Um tipo só: a distribuição de sempre, mesa atrás de mesa.
+                    var unica = tables[0];
+
+                    for (var s = inicio; s < fim - Tolerancia; s += unica.Length + gap)
                     {
-                        descartadas++;
-                        break;
+                        // Não cabe inteira no trecho: descartada, e o trecho acabou.
+                        if (s + unica.Length > fim + Tolerancia)
+                        {
+                            descartadas++;
+                            break;
+                        }
+
+                        if (Colocar(s, unica, 0) is { } mesa) mesas.Add(mesa);
                     }
 
-                    var canto = new Point3(
-                        origem.X + direcao.X * s + subida.X * afastamento,
-                        origem.Y + direcao.Y * s + subida.Y * afastamento,
-                        0);
-
-                    var mesa = Montar(fileiras.Count + 1, mesas.Count + 1, canto, direcao, subida, rumo, table);
-
-                    // Um recorte da área entrando pela mesa: descartada.
-                    if (ParcialmenteFora(mesa.Corners, canto, direcao, subida, table, area))
-                    {
-                        descartadas++;
-                        continue;
-                    }
-
-                    mesas.Add(mesa with { Number = mesas.Count + 1 });
+                    continue;
                 }
+
+                // Vários tipos: a melhor combinação para o comprimento do trecho.
+                var posicao = inicio;
+
+                foreach (var tipo in Combinacao(fim - inicio, tables, modules, gap))
+                {
+                    if (Colocar(posicao, tables[tipo], tipo) is { } mesa) mesas.Add(mesa);
+                    posicao += tables[tipo].Length + gap;
+                }
+
+                if (posicao < fim - Tolerancia && fim - posicao > tables.Min(t => t.Length) * 0.5) descartadas++;
             }
 
             if (mesas.Count > 0) fileiras.Add(new PlanRow(fileiras.Count + 1, mesas));
         }
 
         return new PlanLayout(fileiras, descartadas);
+    }
+
+    /// <summary>
+    /// Os tipos de mesa (índices) que cabem num trecho de comprimento dado,
+    /// pondo o máximo de módulos; no empate, menos mesas. Mais compridas
+    /// primeiro. Programação dinâmica ao milímetro: cada mesa ocupa o
+    /// comprimento dela mais o espaçamento, e o último espaçamento sobra.
+    /// </summary>
+    public static IReadOnlyList<int> Combinacao(double comprimento, IReadOnlyList<TableFootprint> tipos, IReadOnlyList<int> modulos, double gap)
+    {
+        ArgumentNullException.ThrowIfNull(tipos);
+        ArgumentNullException.ThrowIfNull(modulos);
+
+        if (!double.IsFinite(comprimento) || comprimento <= 0) return [];
+
+        // Em milímetros, o passo de cada mesa arredondado ao mais perto (erro
+        // de meio milímetro, dentro da tolerância da distribuição).
+        var capacidade = (int)Math.Floor((comprimento + gap + Tolerancia) * 1000);
+        var passos = tipos.Select(t => (int)Math.Round((t.Length + gap) * 1000, MidpointRounding.AwayFromZero)).ToArray();
+
+        if (capacidade <= 0 || passos.All(p => p > capacidade)) return [];
+
+        var melhor = new int[capacidade + 1];
+        var mesas = new int[capacidade + 1];
+        var ultimo = new int[capacidade + 1];
+        Array.Fill(ultimo, -1);
+
+        for (var x = 1; x <= capacidade; x++)
+        {
+            melhor[x] = melhor[x - 1];
+            mesas[x] = mesas[x - 1];
+            ultimo[x] = -2; // herdado de x - 1
+
+            for (var t = 0; t < passos.Length; t++)
+            {
+                if (passos[t] > x) continue;
+
+                var m = melhor[x - passos[t]] + modulos[t];
+                var n = mesas[x - passos[t]] + 1;
+
+                if (m > melhor[x] || (m == melhor[x] && n < mesas[x]))
+                {
+                    melhor[x] = m;
+                    mesas[x] = n;
+                    ultimo[x] = t;
+                }
+            }
+        }
+
+        var escolhidos = new List<int>();
+
+        for (var x = capacidade; x > 0;)
+        {
+            if (ultimo[x] == -2) { x--; continue; }
+            if (ultimo[x] < 0) break;
+
+            escolhidos.Add(ultimo[x]);
+            x -= passos[ultimo[x]];
+        }
+
+        // As compridas primeiro, como o Renan monta à mão.
+        return escolhidos.OrderByDescending(t => tipos[t].Length).ThenBy(t => t).ToList();
     }
 
     /// <summary>

@@ -3454,6 +3454,102 @@ function Testar-Tags {
     return $true
 }
 
+<#
+    A usina mista (8.5 e 8.6): mesas de 28 e de 14 no desenho, em uso, numa
+    area de 90 m de largura. Os dois tipos aparecem, cada contorno com o
+    nome do perfil e a cor do tipo, os pilares batem com 7 por mesa de 28 e
+    4 por mesa de 14, as faces com os modulos, e o relatorio da usina diz o
+    mesmo total de modulos. Cota dos pilares na faixa do terreno (regra 5).
+#>
+function Testar-UsinaMista {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-usina-mista--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-usina-mista: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    if ($sonda.Texto -notmatch 'cotas:\s+(-?[\d.,]+) m a (-?[\d.,]+) m') {
+        $problemas.Add("ufv-usina-mista: nao achei a faixa de cotas do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $minima = [double]::Parse($Matches[1], $ptbr)
+    $maxima = [double]::Parse($Matches[2], $ptbr)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-usina-mista' `
+        -Script (Join-Path $PSScriptRoot 'ufv-usina-mista.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -45 -50 0)
+            '{{A2}}'   = (Ponto3  45 -50 0)
+            '{{A3}}'   = (Ponto3  45  50 0)
+            '{{A4}}'   = (Ponto3 -45  50 0)
+            '{{L1}}'   = (Ponto3 -45 -50 0)
+            '{{L2}}'   = (Ponto3 -45  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-usina-mista terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'UFV_MISTA n28=(\d+) n14=(\d+) outros=(\d+) comcor=(\d+) pilares=(\d+) faces=(\d+) zmin=(-?[\d.]+) zmax=(-?[\d.]+)') {
+        $problemas.Add("ufv-usina-mista: nao consegui ler o LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $m = $Matches
+    $n28 = [int] $m[1]; $n14 = [int] $m[2]; $outros = [int] $m[3]; $comCor = [int] $m[4]
+    $pilares = [int] $m[5]; $faces = [int] $m[6]
+
+    if ($n28 -lt 1 -or $n14 -lt 1 -or $outros -ne 0) {
+        $problemas.Add("ufv-usina-mista: $n28 mesa(s) de 28, $n14 de 14 e $outros sem o nome do perfil; esperava os dois tipos, todas com nome. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($pilares -ne (7 * $n28 + 4 * $n14) -or $faces -ne (28 * $n28 + 14 * $n14)) {
+        $problemas.Add("ufv-usina-mista: $pilares pilar(es) e $faces face(s) para $n28 x 28 e $n14 x 14 (esperava $(7 * $n28 + 4 * $n14) e $(28 * $n28 + 14 * $n14)). Veja $($r.Saida)")
+        return $false
+    }
+
+    # Mesa que nao cabe sai magenta, com cor propria tambem: so conferimos
+    # que toda mesa que cabe tem a cor do tipo (comcor >= mesas - marcadas).
+    if ($r.Texto -match 'desenhado: (\d+) mesa\(s\).*?(\d+) marcada\(s\)') {
+        if ($comCor -lt ([int] $Matches[1] - [int] $Matches[2])) {
+            $problemas.Add("ufv-usina-mista: so $comCor contorno(s) com cor; toda mesa que cabe tem a cor do tipo. Veja $($r.Saida)")
+            return $false
+        }
+    }
+
+    if ($r.Texto -notmatch 'USINA .*?(\d+) mesa\(s\), (\d+) módulo\(s\)' -or [int] $Matches[2] -ne $faces) {
+        $problemas.Add("ufv-usina-mista: o relatorio da usina diz $($Matches[2]) modulo(s), o desenho tem $faces faces. Veja $($r.Saida)")
+        return $false
+    }
+
+    $zmin = [double]::Parse($m[7], $invariante); $zmax = [double]::Parse($m[8], $invariante)
+
+    if ($zmin -lt $minima -or $zmax -gt ($maxima + 5)) {
+        $problemas.Add("ufv-usina-mista: os topos dos pilares vao de $zmin a $zmax, fora da faixa do terreno ($minima a $maxima). Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (usina mista: $n28 mesas de 28 e $n14 de 14, $pilares pilares, $faces modulos)" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -3607,6 +3703,10 @@ else {
     # Tags (8.14).
     $total++
     if (Testar-Tags -Desenho $desenhos[0]) { $passaram++ }
+
+    # Usina com dois tipos de mesa (8.5 e 8.6).
+    $total++
+    if (Testar-UsinaMista -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

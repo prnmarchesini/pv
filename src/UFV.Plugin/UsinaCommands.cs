@@ -93,7 +93,9 @@ public static class UsinaCommands
     }
 
     /// <summary>O que o planejamento da usina produz, para o desenho vir depois (o Refazer apaga entre os dois).</summary>
-    internal sealed record PlanoDaUsina(ProjectSettings Settings, TableGeometry Geometria, TableProfile Perfil, PlanLayout Layout, ProcessedPlant Usina);
+    internal sealed record PlanoDaUsina(
+        ProjectSettings Settings, TableGeometry Geometria, TableProfile Perfil, PlanLayout Layout, ProcessedPlant Usina,
+        LayoutDrawer.TiposDeMesa? Tipos = null);
 
     internal static void Executar(
         Editor editor,
@@ -123,6 +125,24 @@ public static class UsinaCommands
         TableProfile perfil,
         bool avisarSeJaHaMesas)
     {
+        // As mesas do desenho marcadas para uso (8.5/8.6); sem nenhuma, o
+        // perfil de sempre, e a usina sai como saía.
+        var doDesenho = DrawingTables.InUse(MesasDoDesenho.Ler(documento.Database));
+
+        if (doDesenho.Count > 0)
+        {
+            if (doDesenho.Select(m => Math.Round(m.Profile.TiltDegrees, 3)).Distinct().Count() > 1)
+            {
+                editor.WriteMessage(
+                    "\nUSINA As mesas marcadas para uso têm inclinações diferentes ("
+                    + string.Join(", ", doDesenho.Select(m => $"{m.Name} a {m.Profile.TiltDegrees.ToString("0.#", Brasil)}°"))
+                    + "): numa fileira elas precisam ter a mesma. Ajuste em Configurações > Escolha das estruturas.\n");
+                return null;
+            }
+
+            perfil = doDesenho[0].Profile;
+        }
+
         var doProjeto = ConfigCommands.Inicial(documento, out var avisoDaConfig);
         if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage($"\n  ATENÇÃO: {notaDoT3}.\n");
         var settings = doProjeto.ForTable(perfil.Frame);
@@ -135,6 +155,25 @@ public static class UsinaCommands
         var config = settings.Configuration;
         var celula = new TableFootprint(geometria.Length, geometria.Depth * Math.Cos(perfil.TiltRadians));
 
+        LayoutDrawer.TiposDeMesa? tipos = null;
+        var footprints = new List<TableFootprint> { celula };
+
+        if (doDesenho.Count > 0)
+        {
+            var geometrias = doDesenho.Select(m => TableGeometry.Local(m.Profile.Layout, m.Profile.Frame.Pillars(m.Profile.Layout), m.Profile.Frame)).ToList();
+
+            tipos = new LayoutDrawer.TiposDeMesa(
+                geometrias,
+                doDesenho.Select(m => m.Profile.Layout.Module).ToList(),
+                doDesenho.Select(m => (string?)m.Name).ToList(),
+                doDesenho.Select(m => (RgbColor?)m.Color).ToList());
+
+            footprints = geometrias.Select(g => new TableFootprint(g.Length, g.Depth * Math.Cos(perfil.TiltRadians))).ToList();
+
+            if (doDesenho.Count > 1)
+                editor.WriteMessage($"\nMesas em uso: {string.Join(", ", doDesenho.Select(m => $"{m.Name} ({m.Profile.Layout.ModuleCount} módulos)"))}\n");
+        }
+
         editor.WriteMessage(
             $"\nMesa: {perfil.Describe()}\n"
             + $"Configuração: {settings.Describe()}\n"
@@ -144,9 +183,13 @@ public static class UsinaCommands
 
         try
         {
-            layout = RowDistributor.Distribute(
-                area.Vertices, alinhamento.Vertices, alinhamento.Identidade.Side, config.Pitch, config.TableGap, celula,
-                config.UpslopeAzimuthRadians);
+            layout = tipos is null
+                ? RowDistributor.Distribute(
+                    area.Vertices, alinhamento.Vertices, alinhamento.Identidade.Side, config.Pitch, config.TableGap, celula,
+                    config.UpslopeAzimuthRadians)
+                : RowDistributor.Distribute(
+                    area.Vertices, alinhamento.Vertices, alinhamento.Identidade.Side, config.Pitch, config.TableGap, footprints,
+                    doDesenho.Select(m => m.Profile.Layout.ModuleCount).ToList(), config.UpslopeAzimuthRadians);
         }
         catch (ArgumentException erro)
         {
@@ -162,18 +205,34 @@ public static class UsinaCommands
 
         editor.WriteMessage($"\nProcessando {layout.Rows.Count} fileira(s), {layout.Tables.Count} mesa(s)...\n");
 
-        var usina = PlantPipeline.ProcessAll(
-            layout, geometria, perfil.TiltRadians,
-            perfil.Layout.ModuleCount, perfil.Layout.Module.PowerWatts, terreno.Mesh, settings,
-            (feitas, total) => { if (feitas % 10 == 0 || feitas == total) editor.WriteMessage($"  {feitas}/{total} fileira(s)\n"); });
+        void Progresso(int feitas, int total)
+        {
+            if (feitas % 10 == 0 || feitas == total) editor.WriteMessage($"  {feitas}/{total} fileira(s)\n");
+        }
 
-        return new PlanoDaUsina(settings, geometria, perfil, layout, usina);
+        var usina = tipos is null
+            ? PlantPipeline.ProcessAll(
+                layout, geometria, perfil.TiltRadians,
+                perfil.Layout.ModuleCount, perfil.Layout.Module.PowerWatts, terreno.Mesh, settings, Progresso)
+            : PlantPipeline.ProcessAll(
+                layout, tipos.Geometrias, perfil.TiltRadians,
+                doDesenho.Select(m => m.Profile.Layout.ModuleCount).ToList(),
+                doDesenho.Select(m => m.Profile.Layout.Module.PowerWatts).ToList(),
+                terreno.Mesh, settings, Progresso);
+
+        if (tipos is not null && doDesenho.Count > 1)
+        {
+            var porTipo = usina.TablesByKind;
+            editor.WriteMessage($"  por mesa: {string.Join(", ", doDesenho.Select((m, k) => $"{porTipo[k]} × {m.Name}"))}\n");
+        }
+
+        return new PlanoDaUsina(settings, geometria, perfil, layout, usina, tipos);
     }
 
     /// <summary>Desenha o que foi planejado e relata.</summary>
     internal static void Desenhar(Editor editor, Document documento, PlanoDaUsina plano)
     {
-        var (settings, geometria, perfil, _, usina) = plano;
+        var (settings, geometria, perfil, _, usina, tipos) = plano;
 
         var relogio = System.Diagnostics.Stopwatch.StartNew();
         var desenhadas = 0;
@@ -184,7 +243,9 @@ public static class UsinaCommands
 
         foreach (var fileira in usina.Rows)
         {
-            var desenho = LayoutDrawer.Draw(documento.Database, fileira, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses, analisar: LayoutDrawer.Analise.Nada);
+            var desenho = LayoutDrawer.Draw(
+                documento.Database, fileira, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses,
+                analisar: LayoutDrawer.Analise.Nada, tipos: tipos);
 
             desenhadas += desenho.Tables;
             pilaresDesenhados += desenho.Pillars;
