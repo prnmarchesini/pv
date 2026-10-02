@@ -43,23 +43,21 @@ public class RibbonLayoutTests
         Assert.Contains(PluginInfo.ComandoRegerar, comandos);
     }
 
+    /// <summary>
+    /// Renan, 02/10/2026, na tela: "eu quero apenas o menu UFV, e aí dentro
+    /// dele você coloca análises e tags"; "menu análises, e aí o modal com as
+    /// abas". Uma aba; Análises e Tags são botões que abrem janelas.
+    /// </summary>
     [Fact]
     [Trait("Etapa", "8")]
-    public void AsAbasDoWord()
+    public void UmaAbaSoComOsBotoesDeAnalisesETags()
     {
-        Assert.Equal(["UFV", "UFV Análises", "UFV Tags"], RibbonLayout.Tabs.Select(t => t.Title));
-        Assert.Equal(RibbonLayout.Tabs.Count, RibbonLayout.Tabs.Select(t => t.Id).Distinct().Count());
+        var aba = Assert.Single(RibbonLayout.Tabs);
+        Assert.Equal("UFV", aba.Title);
 
-        var analises = RibbonLayout.Tabs[1].Panels.Select(p => p.Title);
-        Assert.Equal(["Ponta baixa", "Ponta alta", "Declividade", "Pilares", "Quantidades"], analises);
-    }
-
-    [Fact]
-    [Trait("Etapa", "8")]
-    public void CadaAnaliseTemOsCincoBotoes()
-    {
-        foreach (var painel in RibbonLayout.Tabs[1].Panels.Take(4))
-            Assert.Equal(["Inserir", "Analisar", "Apagar textos", "Tirar cores", "Quantificar"], painel.Buttons.Select(b => b.Text));
+        var comandos = aba.Panels.SelectMany(p => p.Buttons).Select(b => b.Command).ToList();
+        Assert.Contains(PluginInfo.ComandoAnalises, comandos);
+        Assert.Contains(PluginInfo.ComandoTags, comandos);
     }
 
     [Fact]

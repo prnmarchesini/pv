@@ -98,7 +98,7 @@ public static class AnalisesIndependentesCommands
         }
     }
 
-    private static void GravarRegra(Database database, IndependentKind tipo, ThresholdRule regra) =>
+    internal static void GravarRegra(Database database, IndependentKind tipo, ThresholdRule regra) =>
         PluginDictionary.Save(database, IndependentAnalysis.StorageKey(tipo), new ResultBuffer(
             IndependentAnalysis.Encode(regra).Select(c => new TypedValue((int)DxfCode.Text, c)).ToArray()));
 

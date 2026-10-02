@@ -4438,3 +4438,26 @@ em cada botão (todos têm texto); 2) Configurações → Estruturas → Nova me
 (28) e Duplicar → editar a cópia para 14 módulos → Escolha das estruturas:
 marcar as duas, cores diferentes → Parâmetros: mudar o pitch → Salvar; 3)
 Refazer a área: mesas de 28 e de 14, cada uma com a sua cor.
+
+### 02/10/2026: reprovação da ribbon na tela
+
+O Renan, com print: "eu quero apenas o MENU UFV, e aí dentro dele você
+coloca análises e tags"; "eu falei, menu análises, e aí o modal com as
+abas, algo MUITO estruturado". Refeito:
+
+- Uma aba só, a UFV. Os painéis Análises e Tags têm um botão cada, que abre
+  uma janela com abas.
+- **Janela Análises** (`UFV_ANALISES`): abas Ponta baixa, Ponta alta,
+  Declividade, Pilares e Quantidades. Cada aba de análise em três seções
+  numeradas: 1. Textos (Inserir, Apagar), 2. Cores (abaixo de X / acima de
+  Y com a cor de cada um, pintar também as peças, unidade na declividade;
+  Analisar, Tirar cores), 3. Quantidades (Quantificar, com os números na
+  própria janela). A aba Quantidades mostra a última quantificação de cada
+  análise e exporta o Excel. O desenho atualiza atrás da janela a cada botão.
+- **Janela Tags** (`UFV_TAGS`): abas Fileiras, Mesas, Módulos e Strings,
+  cada uma com Inserir e Apagar; Strings com o campo "módulos por string".
+
+**Roteiro de tela:** aba UFV → Análises: na aba Ponta baixa, Inserir
+textos, marcar abaixo de 0,30 vermelho e acima de 1,20 azul, Analisar,
+Quantificar (os números aparecem na janela); trocar de aba e repetir;
+Quantidades → Exportar para o Excel. Tags: Strings com 28 → Inserir.

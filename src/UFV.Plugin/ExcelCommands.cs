@@ -76,7 +76,7 @@ public static class ExcelCommands
         }
     }
 
-    private static void Gravar(Editor editor, Database database, string caminho)
+    internal static void Gravar(Editor editor, Database database, string caminho)
     {
         if (!caminho.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)) caminho += ".xlsx";
 

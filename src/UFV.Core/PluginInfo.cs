@@ -409,4 +409,10 @@ public static class PluginInfo
 
     /// <summary>Passo 8.7: a janela de Configurações (Estruturas, Escolha das estruturas, Parâmetros, Projeto).</summary>
     public const string ComandoConfiguracoes = "UFV_CONFIGURACOES";
+
+    /// <summary>Janela das análises (abas Ponta baixa, Ponta alta, Declividade, Pilares, Quantidades).</summary>
+    public const string ComandoAnalises = "UFV_ANALISES";
+
+    /// <summary>Janela das tags (abas Fileiras, Mesas, Módulos, Strings).</summary>
+    public const string ComandoTags = "UFV_TAGS";
 }

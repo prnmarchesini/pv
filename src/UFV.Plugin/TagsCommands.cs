@@ -80,6 +80,16 @@ public static class TagsCommands
         }
     }
 
+    /// <summary>Os módulos por string gravados no desenho, ou 0.</summary>
+    internal static int TamanhoGravado(Database database)
+    {
+        using var dados = PluginDictionary.Load(database, ChaveDoTamanho);
+        return dados?.AsArray() is { Length: > 0 } valores && valores[0].Value is string texto && int.TryParse(texto, out var n) ? n : 0;
+    }
+
+    internal static void GravarTamanho(Database database, int modulos) =>
+        PluginDictionary.Save(database, ChaveDoTamanho, new ResultBuffer(new TypedValue((int)DxfCode.Text, modulos.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+
     private static int? PerguntarTamanho(Editor editor, Database database)
     {
         var gravado = 0;
@@ -131,7 +141,7 @@ public static class TagsCommands
         internal double Rumo => LayoutDrawer.RumoLegivel(Cantos[1].X - Cantos[0].X, Cantos[1].Y - Cantos[0].Y);
     }
 
-    private static (int Criadas, int Mesas, int Incompletas) Inserir(Database database, TagKind tipo, int modulosPorString)
+    internal static (int Criadas, int Mesas, int Incompletas) Inserir(Database database, TagKind tipo, int modulosPorString)
     {
         using var transacao = database.TransactionManager.StartTransaction();
 
@@ -212,7 +222,7 @@ public static class TagsCommands
         return (criadas, mesas.Count, incompletas);
     }
 
-    private static int Apagar(Database database, TagKind tipo)
+    internal static int Apagar(Database database, TagKind tipo)
     {
         using var transacao = database.TransactionManager.StartTransaction();
 
