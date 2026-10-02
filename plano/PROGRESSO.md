@@ -4478,3 +4478,30 @@ Regra: otimizar espaço e melhorar UX de tudo". Feito:
   1536 × 816).
 - As janelas foram renderizadas fora do AutoCAD e conferidas na imagem
   antes de instalar.
+
+### 02/10/2026: rodada de ajustes na tela
+
+Pedidos do Renan, com prints, todos feitos:
+
+- **Motor (28 x 14 no terreno):** depois de resolver a fileira, a mesa de
+  28 com módulo enterrado é testada trocada por uma de 14 (no começo ou no
+  fim do lugar dela) e a fileira é resolvida de novo; fica a troca que
+  aumenta os módulos úteis (os enterrados não contam). `TerrainFit`, com
+  teste de propriedade (nunca piora, regra 6 vale) e teste que exige troca.
+- **Cores:** os módulos da mesa que cabe saem na cor do tipo (a escolhida
+  em Configurações); magenta continua sendo "não cabe". A Usina escreve a
+  legenda no fim. Toda lista de cor tem "Mais cores..." (janela do Windows).
+- **Ribbon sem redundância:** Numerar, Estilos e Localização saíram (estão
+  nas Tags, em Configurações > Projeto e no Resumo do terreno); o Excel só
+  na ribbon; trocar terreno só no botão Terreno.
+- **Tags de fileira:** Inserir pede uma mesa da primeira fileira, uma da
+  última (numera fileiras e mesas) e um clique do lado; o "F1" vai para
+  fora da ponta da fileira. Tags dentro da mesa vão por cima dos módulos
+  (ordem de desenho e 15 cm acima).
+- **Salvar e abrir:** sempre a janela do Windows (`DialogoDeArquivo`);
+  PVsyst e Excel trocados; a pergunta de formato na linha de comando saiu.
+- **Criar grupo:** a seleção só aceita módulos do plugin, e um placar
+  grande mostra mesas, módulos e kWp enquanto se seleciona.
+
+Regras novas na memória: otimizar espaço e UX em toda janela; nenhuma
+função em dois lugares; salvar/abrir só pela janela do Windows.

@@ -47,7 +47,7 @@ public static class GrupoCommands
 
             if (selecao.Status != PromptStatus.OK)
             {
-                selecao = editor.GetSelection(new PromptSelectionOptions { MessageForAdding = "\nSelecione as mesas do grupo: " });
+                selecao = SelecionarModulos(documento);
                 if (selecao.Status != PromptStatus.OK) return;
             }
 
@@ -93,6 +93,89 @@ public static class GrupoCommands
             RegistroDeDiagnostico.Registrar("Falha ao criar o grupo.", erro);
             editor.WriteMessage($"\nNão consegui criar o grupo: {erro.Message}\n");
         }
+    }
+
+    /// <summary>
+    /// A seleção do grupo (02/10/2026: "conforme vou selecionando mostre um
+    /// texto na tela, de bom tamanho, mostrando a potência em kWp; e não
+    /// quero que selecione tudo, a ferramenta tem que pegar SOMENTE os
+    /// módulos"). O filtro só aceita os blocos de módulo do plugin; o placar
+    /// mostra mesas, módulos e kWp das mesas tocadas a cada clique ou janela.
+    /// </summary>
+    private static PromptSelectionResult SelecionarModulos(Document documento)
+    {
+        var editor = documento.Editor;
+        var escolhidos = new HashSet<ObjectId>();
+        CaixaDeSelecao? placar = null;
+
+        void Atualizar()
+        {
+            try
+            {
+                var mesas = SelecaoCommands.MesasTocadas(documento, escolhidos);
+                var resumo = SelecaoCommands.Resumir(documento, mesas);
+
+                placar ??= NovoPlacar();
+                placar.TextoLivre = mesas.Count == 0 ? "Grupo: nada selecionado" : $"Grupo: {resumo.Describe()}";
+                if (!placar.IsVisible) placar.Show();
+            }
+            catch (System.Exception erro)
+            {
+                // Evento do editor: exceção solta aqui derrubaria o Civil 3D.
+                RegistroDeDiagnostico.Registrar("Falha no placar do grupo.", erro);
+            }
+        }
+
+        void Somou(object? _, SelectionAddedEventArgs e)
+        {
+            foreach (ObjectId id in e.AddedObjects.GetObjectIds()) escolhidos.Add(id);
+            Atualizar();
+        }
+
+        void Tirou(object? _, SelectionRemovedEventArgs e)
+        {
+            foreach (ObjectId id in e.RemovedObjects.GetObjectIds()) escolhidos.Remove(id);
+            Atualizar();
+        }
+
+        var filtro = new SelectionFilter(
+        [
+            new TypedValue((int)DxfCode.Start, "INSERT"),
+            new TypedValue((int)DxfCode.BlockName, "MARCHENG_UFV_MODULO_*"),
+        ]);
+
+        editor.SelectionAdded += Somou;
+        editor.SelectionRemoved += Tirou;
+
+        try
+        {
+            return editor.GetSelection(new PromptSelectionOptions { MessageForAdding = "\nSelecione os módulos do grupo (só módulos entram): " }, filtro);
+        }
+        finally
+        {
+            editor.SelectionAdded -= Somou;
+            editor.SelectionRemoved -= Tirou;
+            placar?.Close();
+        }
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static CaixaDeSelecao NovoPlacar()
+    {
+        var caixa = new CaixaDeSelecao(tamanhoDaLetra: 26, largura: 560);
+
+        try
+        {
+            var janela = AcadApp.MainWindow.DeviceIndependentLocation;
+            caixa.Left = janela.X + 60;
+            caixa.Top = janela.Y + 240;
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui posicionar o placar do grupo.", erro);
+        }
+
+        return caixa;
     }
 
     /// <summary>UFV_GRUPOS: lista os grupos com a contagem de cada um.</summary>

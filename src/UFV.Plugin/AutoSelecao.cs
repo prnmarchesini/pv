@@ -247,7 +247,7 @@ internal sealed class CaixaDeSelecao : Window
 
     private readonly TextBlock _texto;
 
-    internal CaixaDeSelecao()
+    internal CaixaDeSelecao(double tamanhoDaLetra = 15, double largura = 360)
     {
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
@@ -257,13 +257,13 @@ internal sealed class CaixaDeSelecao : Window
         Focusable = false;
         IsHitTestVisible = false;
         ResizeMode = ResizeMode.NoResize;
-        Width = 360;
+        Width = largura;
         SizeToContent = SizeToContent.Height;
 
         _texto = new TextBlock
         {
             Foreground = Brushes.White,
-            FontSize = 15,
+            FontSize = tamanhoDaLetra,
             FontWeight = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(14, 10, 14, 10),
@@ -291,6 +291,12 @@ internal sealed class CaixaDeSelecao : Window
     internal string Texto
     {
         set => _texto.Text = "Seleção: " + value;
+    }
+
+    /// <summary>O texto como vem, sem o "Seleção:" (o placar do grupo).</summary>
+    internal string TextoLivre
+    {
+        set => _texto.Text = value;
     }
 
     protected override void OnSourceInitialized(EventArgs e)
