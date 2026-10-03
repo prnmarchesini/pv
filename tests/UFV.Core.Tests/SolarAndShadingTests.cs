@@ -213,6 +213,23 @@ public class SolarAndShadingTests
         Assert.Throws<ArgumentException>(() => Shading.Instants(dia, dia.AddDays(-1), new TimeOnly(9, 0), new TimeOnly(9, 0), TimeSpan.FromHours(1)));
     }
 
+    /// <summary>A conta dos instantes bate com a lista, e um ano de hora em hora das 7h às 17h cabe no teto; de 5 em 5 min, não.</summary>
+    [Fact]
+    [Trait("Etapa", "9")]
+    public void ContaDeInstantesEOTeto()
+    {
+        var ano0 = new DateOnly(2026, 1, 1);
+        var ano1 = new DateOnly(2026, 12, 31);
+
+        Assert.Equal(25, Shading.CountInstants(new DateOnly(2026, 6, 21), new DateOnly(2026, 6, 21), new TimeOnly(6, 0), new TimeOnly(18, 0), TimeSpan.FromMinutes(30)));
+        Assert.Equal(
+            Shading.Instants(ano0, ano1, new TimeOnly(7, 0), new TimeOnly(17, 0), TimeSpan.FromHours(1)).Count(),
+            Shading.CountInstants(ano0, ano1, new TimeOnly(7, 0), new TimeOnly(17, 0), TimeSpan.FromHours(1)));
+        Assert.True(Shading.CountInstants(ano0, ano1, new TimeOnly(7, 0), new TimeOnly(17, 0), TimeSpan.FromHours(1)) <= Shading.MaxInstants);
+        Assert.True(Shading.CountInstants(ano0, ano1, new TimeOnly(7, 0), new TimeOnly(17, 0), TimeSpan.FromMinutes(5)) > Shading.MaxInstants);
+        Assert.Equal(0, Shading.CountInstants(ano1, ano0, new TimeOnly(7, 0), new TimeOnly(17, 0), TimeSpan.FromHours(1)));
+    }
+
     /// <summary>
     /// Uma árvore de 8 m em Itatiba e uma face a 6 m ao sul dela: no
     /// inverno o sol fica ao norte e baixo, a sombra cai ao sul e pega a

@@ -169,7 +169,8 @@ public static class ArvoreCommands
     /// <summary>O bloco destas medidas: tronco marrom e copa verde, o pé na origem.</summary>
     private static ObjectId GarantirBloco(Transaction transacao, Database database, TreeSpec m)
     {
-        static string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
+        // "R": medidas que diferem na quarta casa não podem dividir o mesmo bloco.
+        static string N(double v) => v.ToString("R", CultureInfo.InvariantCulture);
 
         var nome = $"{PrefixoDoBloco}{N(m.TrunkHeight)}x{N(m.TrunkWidth)}_{N(m.CrownHeight)}x{N(m.CrownWidth)}";
         var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForRead);

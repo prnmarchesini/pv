@@ -75,4 +75,15 @@ public class Viewer3DPageTests
         Assert.Contains("<title>Usina &quot;Teste&quot; &lt;/script&gt; — 3D</title>", html, StringComparison.Ordinal);
         Assert.Equal(3, html.Split("</script>").Length - 1);
     }
+
+    /// <summary>Um desenho chamado "x{{ORBITA}}" não faz o script entrar no título.</summary>
+    [Fact]
+    [Trait("Etapa", "9")]
+    public void OTituloNaoViraLugarDeScript()
+    {
+        var html = Viewer3DPage.Html(Cena() with { Title = "x{{ORBITA}}{{THREE}}" });
+
+        Assert.Contains("<title>x{{ORBITA}}{{THREE}} — 3D</title>", html, StringComparison.Ordinal);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, "THREE.OrbitControls = OrbitControls"));
+    }
 }

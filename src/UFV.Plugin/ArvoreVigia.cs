@@ -76,6 +76,7 @@ internal static class ArvoreVigia
         private readonly Database _banco;
         private readonly HashSet<ObjectId> _mexidas = [];
         private readonly HashSet<ObjectId> _novas = [];
+        private readonly ObjectId _modelo;
         private int _calados;
         private bool _executando;
         private bool _folgaAgendada;
@@ -84,6 +85,7 @@ internal static class ArvoreVigia
         {
             _documento = documento;
             _banco = documento.Database;
+            _modelo = SymbolUtilityServices.GetBlockModelSpaceId(_banco);
 
             _banco.ObjectModified += AoModificar;
             _banco.ObjectAppended += AoAcrescentar;
@@ -122,7 +124,9 @@ internal static class ArvoreVigia
 
         private void Anotar(DBObject objeto, bool nova)
         {
-            if (_executando || _calados > 0 || objeto is not BlockReference) return;
+            // Só o espaço do modelo: árvore dentro de bloco (BLOCK, ARRAY,
+            // INSERT de outro desenho) tem a posição em coordenadas do bloco.
+            if (_executando || _calados > 0 || objeto is not BlockReference || objeto.OwnerId != _modelo) return;
 
             try
             {
@@ -199,7 +203,21 @@ internal static class ArvoreVigia
             _mexidas.Clear();
             _novas.Clear();
 
+            // Desenho reaberto: a malha é só memória, o carimbo diz qual
+            // superfície é o terreno. Reprocessa sozinho, como os comandos.
             var terreno = TerrainCache.Get(_documento);
+            if (terreno is null && mexidas.Count + novas.Count > 0)
+            {
+                try
+                {
+                    if (TerrainCommands.Reprocessar(_documento.Editor, _documento)) terreno = TerrainCache.Get(_documento);
+                }
+                catch (System.Exception erro)
+                {
+                    RegistroDeDiagnostico.Registrar("O vigia das árvores não conseguiu reprocessar o terreno.", erro);
+                }
+            }
+
             _executando = true;
 
             try
@@ -210,12 +228,12 @@ internal static class ArvoreVigia
 
                 foreach (var id in mexidas.Concat(novas).Distinct())
                 {
-                    if (id.IsErased || transacao.GetObject(id, OpenMode.ForRead) is not BlockReference arvore) continue;
+                    if (id.IsErased || transacao.GetObject(id, OpenMode.ForRead, false, true) is not BlockReference arvore || arvore.OwnerId != _modelo) continue;
                     if (LayoutXData.LoadTree(arvore) is not { } identidade) continue;
 
                     if (novas.Contains(id))
                     {
-                        arvore.UpgradeOpen();
+                        arvore = (BlockReference)transacao.GetObject(id, OpenMode.ForWrite, false, true);
                         LayoutXData.SaveTree(transacao, arvore, identidade with { Id = Guid.NewGuid() });
                     }
 
@@ -231,7 +249,7 @@ internal static class ArvoreVigia
 
                     if (Math.Abs(chao - p.Z) < 1e-4) continue;
 
-                    if (!arvore.IsWriteEnabled) arvore.UpgradeOpen();
+                    if (!arvore.IsWriteEnabled) arvore = (BlockReference)transacao.GetObject(id, OpenMode.ForWrite, false, true);
                     arvore.Position = new Point3d(p.X, p.Y, chao);
                     assentadas++;
                 }

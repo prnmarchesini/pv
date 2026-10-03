@@ -146,7 +146,12 @@ public static class SombrasCommands
         if (!double.TryParse(fuso.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var f) || f is < -14 or > 14) { porque = "O fuso precisa ser de -14 a 14 horas."; return null; }
         if (d1 < d0) { porque = "O último dia vem antes do primeiro."; return null; }
         if (h1 < h0) { porque = "A hora final vem antes da inicial."; return null; }
-        if ((d1.DayNumber - d0.DayNumber + 1) > 366 * 2) { porque = "O período passa de dois anos."; return null; }
+        var instantes = Shading.CountInstants(d0, d1, h0, h1, TimeSpan.FromMinutes(p));
+        if (instantes > Shading.MaxInstants)
+        {
+            porque = $"O período tem {instantes.ToString("N0", Brasil)} instantes; o máximo é {Shading.MaxInstants.ToString("N0", Brasil)}. Aumente o passo ou encurte o período.";
+            return null;
+        }
 
         return new PeriodoDeSombra(d0, d1, h0, h1, p, f);
     }
@@ -364,7 +369,8 @@ public static class SombrasCommands
         for (var k = 0; k < modulos.Count; k++)
         {
             if (fracoes[k] <= 0 || modulos[k].IsErased) continue;
-            if (transacao.GetObject(modulos[k], OpenMode.ForWrite) is not Entity modulo) continue;
+            // Camada travada não derruba a marcação (a peça é aberta mesmo assim).
+            if (transacao.GetObject(modulos[k], OpenMode.ForWrite, false, true) is not Entity modulo) continue;
 
             var cor = CorDaFracao(fracoes[k]);
             pintadas.Add(modulo.Handle + "=" + PecasPintadas.Texto(modulo.Color));
@@ -395,7 +401,11 @@ public static class SombrasCommands
                 var partes = texto.Split('=', 2);
                 if (partes.Length != 2 || !long.TryParse(partes[0], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var numero)) continue;
                 if (!database.TryGetObjectId(new Handle(numero), out var id) || id.IsErased) continue;
-                if (transacao.GetObject(id, OpenMode.ForWrite) is not Entity modulo) continue;
+                if (transacao.GetObject(id, OpenMode.ForWrite, false, true) is not Entity modulo) continue;
+
+                // Só a cor que a sombra pôs volta: se o módulo foi repintado
+                // depois (Configurações, uma análise), a cor nova fica.
+                if (!EDaSombra(modulo.Color)) continue;
 
                 modulo.Color = PecasPintadas.CorDe(partes[1]);
                 devolvidos++;
@@ -409,10 +419,9 @@ public static class SombrasCommands
                 var nome = id.ObjectClass.DxfName;
                 if (nome != "POLYLINE" && nome != "MTEXT") continue;
 
-                if (transacao.GetObject(id, OpenMode.ForRead) is Entity e && PluginXData.Load(e, TipoDaSombra, 1, 1) is not null)
+                if (transacao.GetObject(id, OpenMode.ForRead, false, true) is Entity e && PluginXData.Load(e, TipoDaSombra, 1, 1) is not null)
                 {
-                    e.UpgradeOpen();
-                    e.Erase();
+                    transacao.GetObject(id, OpenMode.ForWrite, false, true).Erase();
                     apagados++;
                 }
             }
@@ -424,6 +433,11 @@ public static class SombrasCommands
 
         return $"SOMBRAS {apagados} contorno(s) e etiqueta(s) de sombra apagado(s); {devolvidos} módulo(s) de volta à cor de antes.";
     }
+
+    /// <summary>Se a cor é uma das três da marca de sombra.</summary>
+    private static bool EDaSombra(Color cor) =>
+        cor.ColorMethod == ColorMethod.ByColor
+        && new[] { 0.1, 0.4, 0.9 }.Select(CorDaFracao).Any(c => c.R == cor.Red && c.G == cor.Green && c.B == cor.Blue);
 
     private static string Rotulo(Database database, ObjectId modulo)
     {

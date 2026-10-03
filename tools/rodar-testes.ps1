@@ -212,7 +212,7 @@ if (-not $PSBoundParameters.ContainsKey('Etapa')) {
         }
 
         $comEtapa = 0
-        foreach ($n in 0..8) {
+        foreach ($n in $etapas) {
             $trx = Join-Path $saida "etapa-$n--$nome.trx"
             if (Test-Path $trx) {
                 [xml] $x = Get-Content $trx

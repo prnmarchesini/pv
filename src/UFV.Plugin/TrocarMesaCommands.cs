@@ -193,14 +193,16 @@ public static class TrocarMesaCommands
 
         var fileira = RowPipeline.ProcessRow(new PlanRow(celula.Row, troca.Tables), geometria, perfil.TiltRadians, terreno.Mesh, settings);
 
-        // Como o desenho está (cores, cotas, seta), lido antes de apagar.
+        // Como o desenho está (cores, cotas, seta), lido antes de mexer.
         var analise = LayoutDrawer.Analise.ComoODesenho(database);
 
-        RecalcularCommands.Apagar(documento, mesa);
-
+        // Desenha antes de apagar: se o desenho falhar (camada travada), a
+        // mesa antiga continua lá.
         var desenho = LayoutDrawer.Draw(
             database, fileira, geometria, perfil.Layout.Module, perfil.TiltRadians, settings.Analyses, analisar: analise,
             tipos: LayoutDrawer.TiposDeMesa.DaMesa(database, nova.Name, geometria, perfil.Layout.Module));
+
+        RecalcularCommands.Apagar(documento, mesa);
 
         foreach (var a in fileira.Warnings) editor.WriteMessage($"\n  ATENÇÃO: {a}\n");
 
@@ -210,6 +212,8 @@ public static class TrocarMesaCommands
             $"\nTROCAR {mesa.Identity.Label} virou {quantas} × {nova.Name} ({string.Join(", ", troca.Tables.Select(t => t.Label))}), "
             + $"travada no {(lado == SwapAnchor.Start ? "início" : "fim")}: {desenho.Tables} mesa(s), {desenho.Modules} módulo(s)"
             + (desenho.Marked > 0 ? $", {desenho.Marked} com módulo dentro da terra (magenta)" : string.Empty) + ".\n");
+
+        AvisarForaDaArea(editor, database, troca.Tables, "TROCAR");
 
         if (troca.Overflows && !reespacar)
         {
@@ -250,7 +254,11 @@ public static class TrocarMesaCommands
             if (terreno is null) return;
 
             var lida = Ler(documento);
-            if (!lida.Cantos.TryGetValue(guid.Value, out var cantos) || lida.Mesas[guid.Value].Identity is not { } identidade) return;
+            if (!lida.Cantos.TryGetValue(guid.Value, out var cantos) || lida.Mesas[guid.Value].Identity is not { } identidade)
+            {
+                editor.WriteMessage("\nREGERAR FILEIRA A mesa não tem contorno; não há como saber onde ela está.\n");
+                return;
+            }
 
             Regerar(editor, documento, terreno, identidade.Label, cantos, manter: resposta.StringResult != "Motor", alinhamento: null);
         }
@@ -352,8 +360,19 @@ public static class TrocarMesaCommands
             .Select(c => c.Key)
             .ToList();
 
-        if (manter) Reespacar(editor, documento, terreno, lida, daFileira, letreiro);
-        else PeloMotor(editor, documento, terreno, area.Value, alinhamento, lida, daFileira, centro, letreiro);
+        if (manter)
+        {
+            Reespacar(editor, documento, terreno, lida, daFileira, letreiro);
+        }
+        else
+        {
+            // A fileira do motor precisa cair na mesma faixa: sem isso, a
+            // fileira vizinha do plano seria desenhada por cima de outra.
+            bool NaFaixa(ProcessedRow fileira) =>
+                fileira.Tables.Any(m => Math.Abs(Lado(new Point3(m.Cell.Corners.Average(p => p.X), m.Cell.Corners.Average(p => p.Y), 0)) - meio) < config.Pitch / 2);
+
+            PeloMotor(editor, documento, terreno, area.Value, alinhamento, lida, daFileira, centro, letreiro, NaFaixa);
+        }
     }
 
     /// <summary>Reespaça as mesas da fileira, cada uma com o tipo dela.</summary>
@@ -368,12 +387,20 @@ public static class TrocarMesaCommands
         var celulas = new List<PlacedTable>();
         var partes = new List<TableParts>();
 
+        // Mesa da faixa que não dá para ler (copiada, sem identidade): nada é
+        // feito, para não desenhar por cima de algo que ficaria.
+        var ruins = daFileira.Count(g => lida.Mesas[g].Identity is null || lida.Mesas[g].IsDuplicated);
+        if (ruins > 0)
+        {
+            editor.WriteMessage($"\nREGERAR FILEIRA {ruins} mesa(s) da fileira de {letreiro} sem identidade ou com contorno repetido (copiada). Use Validar ou o Regerar área. Nada foi mexido.\n");
+            return;
+        }
+
         foreach (var guid in daFileira)
         {
             var mesa = lida.Mesas[guid];
-            if (mesa.Identity is null || mesa.IsDuplicated) continue;
 
-            var perfil = FileiraCommands.PerfilDaMesaDesenhada(lida.Cantos[guid], padrao, mesa.Identity.ProfileName, database);
+            var perfil = FileiraCommands.PerfilDaMesaDesenhada(lida.Cantos[guid], padrao, mesa.Identity!.ProfileName, database);
             var registro = DrawingTables.Find(doDesenho, perfil.Name) ?? new DrawingTable(perfil, new RgbColor(150, 150, 150), Use: true);
 
             var k = tipos.FindIndex(t => ReferenceEquals(t.Profile, registro.Profile) || t.Name == registro.Name);
@@ -383,8 +410,12 @@ public static class TrocarMesaCommands
                 k = tipos.Count - 1;
             }
 
-            var celula = Celula(lida.Cantos[guid], mesa.Identity, database, perfil);
-            if (celula is null) continue;
+            var celula = Celula(lida.Cantos[guid], mesa.Identity!, database, perfil);
+            if (celula is null)
+            {
+                editor.WriteMessage($"\nREGERAR FILEIRA O contorno de {mesa.Identity!.Label} não descreve uma mesa. Use o Regerar área. Nada foi mexido.\n");
+                return;
+            }
 
             celulas.Add(celula with { Kind = k });
             partes.Add(mesa);
@@ -393,6 +424,14 @@ public static class TrocarMesaCommands
         if (celulas.Count == 0)
         {
             editor.WriteMessage($"\nREGERAR FILEIRA Não achei as mesas da fileira de {letreiro}.\n");
+            return;
+        }
+
+        // Inclinações diferentes na mesma fileira não têm conta comum (o fundo
+        // em planta e a cota dependem dela): recusado, dito.
+        if (tipos.Select(t => Math.Round(t.Profile.TiltRadians, 6)).Distinct().Count() > 1)
+        {
+            editor.WriteMessage($"\nREGERAR FILEIRA A fileira de {letreiro} tem mesas de inclinações diferentes ({string.Join(", ", tipos.Select(t => t.Name))}). Use o Regerar área. Nada foi mexido.\n");
             return;
         }
 
@@ -409,12 +448,15 @@ public static class TrocarMesaCommands
         var guids = new Dictionary<string, Guid>(StringComparer.Ordinal);
         foreach (var p in partes) guids.TryAdd(p.Identity!.Label, p.Identity.Id);
 
+        // Mesmo GUID por letreiro: grupos e quantificações seguem a mesa. As
+        // antigas são apagadas antes, porque têm os mesmos GUIDs.
         RecalcularCommands.Apagar(documento, partes);
 
-        // Mesmo GUID por letreiro: grupos e quantificações seguem a mesa.
         var desenho = LayoutDrawer.Draw(
             database, fileira, desenhoDosTipos.Geometrias[0], tipos[0].Profile.Layout.Module, tilt, settings.Analyses,
             idDaMesa: m => guids.TryGetValue(m.Label, out var g) ? g : Guid.NewGuid(), analisar: analise, tipos: desenhoDosTipos);
+
+        AvisarForaDaArea(editor, database, reespacadas, "REGERAR FILEIRA");
 
         foreach (var a in fileira.Warnings) editor.WriteMessage($"\n  ATENÇÃO: {a}\n");
 
@@ -429,7 +471,7 @@ public static class TrocarMesaCommands
     private static void PeloMotor(
         Editor editor, Document documento, ProcessedTerrain terreno, (IReadOnlyList<Point3> Vertices, string Nome) area,
         (IReadOnlyList<Point3> Vertices, AlignmentIdentity Identidade)? alinhamento, Leitura lida, IReadOnlyList<Guid> daFileira,
-        Point3 centro, string letreiro)
+        Point3 centro, string letreiro, Func<ProcessedRow, bool> naFaixa)
     {
         alinhamento ??= FileiraCommands.EscolherAlinhamento(editor, documento);
         if (alinhamento is null) return;
@@ -457,17 +499,18 @@ public static class TrocarMesaCommands
             }
         }
 
-        if (escolhida is null)
+        if (escolhida is null || !naFaixa(escolhida))
         {
-            editor.WriteMessage($"\nREGERAR FILEIRA O motor não pôs fileira na faixa de {letreiro}. Nada foi apagado.\n");
+            editor.WriteMessage($"\nREGERAR FILEIRA O motor não pôs fileira na faixa de {letreiro} (a configuração mudou a distância entre fileiras?). Use o Regerar área. Nada foi apagado.\n");
             return;
         }
 
-        RecalcularCommands.Apagar(documento, daFileira.Select(g => lida.Mesas[g]).ToList());
-
+        // Desenha antes de apagar: se o desenho falhar, a fileira antiga fica.
         var desenho = LayoutDrawer.Draw(
             documento.Database, escolhida, plano.Geometria, plano.Perfil.Layout.Module, plano.Perfil.TiltRadians, plano.Settings.Analyses,
             analisar: LayoutDrawer.Analise.Nada, tipos: plano.Tipos);
+
+        RecalcularCommands.Apagar(documento, daFileira.Select(g => lida.Mesas[g]).ToList());
 
         foreach (var a in escolhida.Warnings) editor.WriteMessage($"\n  ATENÇÃO: {a}\n");
 
@@ -475,6 +518,20 @@ public static class TrocarMesaCommands
             $"\nREGERAR FILEIRA {escolhida.Row.Number} pelo motor: {daFileira.Count} mesa(s) apagada(s), {desenho.Tables} desenhada(s), "
             + $"{desenho.Modules} módulo(s)" + (desenho.Marked > 0 ? $", {desenho.Marked} com módulo dentro da terra (magenta)" : string.Empty) + ".\n");
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
+    }
+
+    /// <summary>Avisa as mesas que saíram da área (a troca e o reespaçar não olham o contorno dela).</summary>
+    private static void AvisarForaDaArea(Editor editor, Database database, IReadOnlyList<PlacedTable> mesas, string prefixo)
+    {
+        if (mesas.Count == 0) return;
+
+        var c = mesas[0].Corners;
+        if (AreaDe(database, new Point3(c.Average(p => p.X), c.Average(p => p.Y), 0)) is not { } area) return;
+
+        var fora = mesas.Where(m => m.Corners.Any(p => !Polygons.Contains(area.Vertices, p.X, p.Y))).Select(m => m.Label).ToList();
+
+        if (fora.Count > 0)
+            editor.WriteMessage($"  ATENÇÃO: {prefixo} {string.Join(", ", fora)} {(fora.Count == 1 ? "passa" : "passam")} da borda da área {area.Nome}.\n");
     }
 
     // ------------------------------------------------------------- leitura

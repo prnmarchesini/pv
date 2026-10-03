@@ -76,12 +76,12 @@ Só o Renan marca VALIDADO.
 | 9.1 | Trocar mesa (Core) | VALIDADO (automático) | `TableSwap.Plan`: N mesas do tipo novo encostadas no lado travado (início ou fim), espaçamento da configuração entre elas, fundo do mesmo lado; diz quanto passa do espaço até a vizinha e não a move; mesmo número de mesa (a tela põe a, b, c); 9 testes |
 | 9.2 | Trocar mesa (tela) | AGUARDANDO VALIDAÇÃO | `UFV_TROCAR_MESA` (Edição > Trocar mesa): clica a mesa, janela com mesa nova (as do desenho), quantas (1 a 5), lado travado e "reespaçar a fileira depois"; apaga a antiga, desenha as novas no terreno (F3.5a, F3.5b), diz quanto passou da vizinha; nível 2 `ufv-trocar` |
 | 9.3 | Regerar fileira | AGUARDANDO VALIDAÇÃO | `UFV_REGERAR_FILEIRA` (Edição > Regerar fileira): Manter (as mesas e os tipos da fileira, reespaçadas, mesmo GUID; `TableSwap.Respace`, trechos separados por vão grande ficam) ou Motor (a área planejada de novo, só a fileira da mesa desenhada); nível 2 nos dois modos |
-| 9.4 | Objetos de sombra: árvore | PENDENTE | |
-| 9.5 | Posição do sol (Core) | PENDENTE | |
-| 9.6 | Sombra num instante (Core) | PENDENTE | |
-| 9.7 | Sombras num instante (tela) | PENDENTE | |
-| 9.8 | Sombras por período, pior caso | PENDENTE | |
-| 9.9 | Ver em 3D no navegador | PENDENTE | |
+| 9.4 | Objetos de sombra: árvore | AGUARDANDO VALIDAÇÃO | `UFV_ARVORE` (Sombreamento > Objetos > Árvore): janela com tronco e copa (altura e largura), cliques; bloco com dois cilindros, pé na cota do terreno, medidas no XData; `ArvoreVigia` devolve ao chão a árvore movida, arrastada ou copiada (cópia com GUID próprio); nível 2 `ufv-arvore` |
+| 9.5 | Posição do sol (Core) | VALIDADO (automático) | `SolarCalculator` (NOAA/Meeus, com refração): declinação nos solstícios e equinócio, equação do tempo, meio-dia solar em quatro latitudes, manhã a leste, fuso; 6 testes |
+| 9.6 | Sombra num instante (Core) | VALIDADO (automático) | `Shading`: cilindro bloqueia o raio de sol do ponto; fração da face numa grade 6 × 3; só faces na caixa da sombra; contorno no chão (envoltória da base e do topo) assentado no terreno; testes no plano e em rampa |
+| 9.7 | Sombras num instante (tela) | AGUARDANDO VALIDAÇÃO | `UFV_SOMBRAS` (Sombreamento > Sombras): janela solta; dia e hora, fuso pela longitude; contornos no terreno (camada SOMBRA) com etiqueta; módulos amarelos/laranja/vermelhos pela fração; Apagar sombras devolve a cor de antes; nível 2 `ufv-sombras` |
+| 9.8 | Sombras por período, pior caso | AGUARDANDO VALIDAÇÃO | Na mesma janela: dia inteiro, horário fixo num período, período inteiro; atalhos Solstício de inverno, Este mês, Este ano; cada módulo pelo pior caso e quando; a sombra desenhada é a do pior instante; os 10 piores na linha de comando |
+| 9.9 | Ver em 3D no navegador | AGUARDANDO VALIDAÇÃO | `UFV_3D` (Saída > 3D): "desenho - 3D.html" ao lado do desenho, um arquivo só com a three.js r128 (MIT) embutida, abre no navegador padrão sem internet; terreno em grade (até 200 células), módulos nas cores do desenho, pilares, árvores, sombras; camadas liga/desliga, exagero vertical; nível 2 `ufv-3d` e conferido no Edge |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -4664,3 +4664,92 @@ minhas: painel "Sombreamento" na ribbon (o Renan ainda não tinha nome),
 com Objetos > Árvore e Sombras; a troca por várias mantém o número da mesa
 com sufixo (F3.5a, F3.5b) até o Renan rodar Numerar, para não renumerar a
 fileira sem comando dele (regra do CLAUDE.md).
+
+### 03/10/2026: etapa 9 feita (Renan: "faça tudo, não quero que sobre nada")
+
+**9.2 Trocar mesa.** Edição > Trocar mesa: clica a mesa; a janela pede a
+mesa nova (as cadastradas no desenho), quantas (1 a 5), o lado travado
+(início = primeiro pilar, fim = último) e "reespaçar a fileira depois". As
+novas saem encostadas no lado travado, com o espaçamento da configuração
+entre elas, assentadas no terreno; uma por uma fica com o letreiro da antiga;
+várias ganham sufixo (F3.5a, F3.5b) até o Numerar. Se passam da vizinha, a
+linha de comando diz quanto (a troca não mexe nas vizinhas: "problema meu").
+
+**9.3 Regerar fileira.** Edição > Regerar fileira: clica uma mesa e escolhe
+**Manter** (as mesas e os tipos que a fileira tem, postas de novo com o
+espaçamento, mesmo GUID; um vão maior que o de quebra separa trechos, que
+não se juntam) ou **Motor** (a área é planejada de novo e só a fileira da
+mesa é apagada e desenhada). Depois de uma troca, Manter acerta o
+espaçamento sem desfazer a troca. Decisão minha: o padrão é Manter.
+
+**9.4 Árvore.** Sombreamento > Objetos > Árvore: tronco e copa, altura e
+largura (lembra as últimas), depois cliques. O pé fica na cota do terreno do
+clique. MOVE, grip, COPY, ROTATE ou Propriedades: no fim do comando a árvore
+volta ao chão do lugar novo; fora do terreno, fica e é dito. Cópia ganha
+GUID próprio.
+
+**9.5 a 9.8 Sombras.** Sol pelo NOAA com a latitude e a longitude do
+desenho (a do Resumo do terreno); fuso de partida pela longitude (−3 em
+Itatiba). Sombreamento > Sombras abre janela solta: Instante, Dia inteiro,
+Horário fixo num período, Período inteiro; atalhos Solstício de inverno, Este
+mês, Este ano. Módulo com sombra fica amarelo (até 25% da face), laranja (até
+50%) ou vermelho; no período, pelo pior caso. A sombra desenhada é a do
+instante, ou do pior instante do período (o de mais área sombreada somada).
+Apagar sombras tira os contornos e devolve a cor de antes de cada módulo.
+Decisões minhas: sol abaixo de 2° não conta (sombra infinita); a face é
+amostrada em 6 × 3 pontos; X do desenho é leste e Y é norte (a convergência
+de meridianos do UTM, menos de 1° no Brasil, fica de fora). Só árvores fazem
+sombra por enquanto; mesa sobre mesa (fileira na sombra da da frente) não.
+
+**9.9 3D.** Saída > 3D grava "nome do desenho - 3D.html" ao lado do desenho
+(desenho nunca salvo: Documentos) e abre no navegador padrão. Um arquivo só,
+com a three.js r128 (MIT, licença em `src/UFV.Core/Visualizador3D`) dentro:
+abre sem internet e pode ir por e-mail. Terreno reduzido a uma grade de até
+200 células no lado maior; módulos nas cores do desenho; pilares; árvores;
+sombras. Liga e desliga cada camada, exagero vertical 1× a 5×, Enquadrar.
+Conferido no Edge (sem janela): desenha terreno, fileira, pilares, árvore e
+sombra.
+
+Roteiro de tela:
+
+1. Trocar mesa: numa usina com 28 e 14 em uso, Edição > Trocar mesa, clique
+   numa de 28, Mesa 14, Quantas 2, Início, sem reespaçar: saem F?.?a e
+   F?.?b, e a linha de comando diz quanto passaram da vizinha. Edição >
+   Regerar fileira > Manter: a fileira fica com o espaçamento certo e as duas
+   de 14 continuam lá. Regerar fileira > Motor numa outra fileira: ela volta
+   como o motor faz.
+2. Árvore: Sombreamento > Objetos > Árvore, medidas, clique em três lugares,
+   Enter. Arraste uma do alto do morro para baixo (grip ou MOVE): ela desce
+   para o chão. Copie uma: a cópia também fica no chão.
+3. Sombras: Sombreamento > Sombras, Instante 21/06 às 09:00, Gerar: a sombra
+   aparece no terreno e os módulos que ela pega ficam coloridos. Com a janela
+   aberta, arraste uma árvore e Gerar de novo. Atalho Este ano, Gerar:
+   módulos pelo pior caso, os piores na linha de comando. Apagar sombras.
+4. 3D: Saída > 3D. A página abre no navegador: gire, dê zoom, desligue o
+   terreno, exagero 3×.
+
+Revisão independente da etapa 9 (agente revisor, 03/10/2026), sem achado
+grave; corrigido:
+- Regerar fileira > Motor só desenha se a fileira do plano cair na mesma
+  faixa da clicada; senão não apaga nada e diz.
+- Regerar fileira > Manter recusa (sem mexer) fileira com mesa copiada, sem
+  identidade, com contorno ilegível ou com inclinações diferentes.
+- Trocar e Regerar dizem quando uma mesa passa da borda da área.
+- Trocar e Regerar > Motor desenham antes de apagar (falha no desenho não
+  some com a mesa antiga).
+- Vigia das árvores: só o espaço do modelo (árvore dentro de bloco não é
+  mexida); desenho reaberto reprocessa o terreno sozinho; camada travada
+  não derruba.
+- Sombras: teto de 20.000 instantes no período (um ano de hora em hora das
+  7h às 17h são 4.015); camada travada não derruba; Apagar sombras só devolve
+  a cor de antes se o módulo ainda estiver com a cor da sombra (se as
+  Configurações repintaram, a cor nova fica).
+- Bloco da árvore com o nome em precisão total; título da página 3D trocado
+  por último (nome de desenho com "{{ORBITA}}" não injeta script).
+
+Fica para a tela (não dá para provar no Core Console): o assentamento da
+árvore roda no fim do MOVE; se o primeiro U depois de arrastar desfizer só o
+assentamento (árvore no lugar novo, fora do chão), o segundo U desfaz o MOVE.
+Conferir no roteiro 2: arrastar, U, ver onde a árvore fica. Escala e
+rotação fora do plano numa árvore não mudam as medidas do XData: a sombra usa
+as medidas da janela.

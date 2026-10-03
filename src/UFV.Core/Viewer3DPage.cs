@@ -146,11 +146,13 @@ public static class Viewer3DPage
         var three = Recurso("UFV.Core.three.min.js");
         var orbita = Recurso("UFV.Core.OrbitControls.js");
 
+        // O título por último: um nome de desenho com "{{ORBITA}}" não pode
+        // virar o lugar onde o script entra.
         return Modelo
-            .Replace("{{TITULO}}", System.Net.WebUtility.HtmlEncode(scene.Title), StringComparison.Ordinal)
             .Replace("{{THREE}}", three, StringComparison.Ordinal)
             .Replace("{{ORBITA}}", orbita, StringComparison.Ordinal)
-            .Replace("{{CENA}}", Json(scene).Replace("</", "<\\/", StringComparison.Ordinal), StringComparison.Ordinal);
+            .Replace("{{CENA}}", Json(scene).Replace("</", "<\\/", StringComparison.Ordinal), StringComparison.Ordinal)
+            .Replace("{{TITULO}}", System.Net.WebUtility.HtmlEncode(scene.Title), StringComparison.Ordinal);
     }
 
     private static string Recurso(string nome)

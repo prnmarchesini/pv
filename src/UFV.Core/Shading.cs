@@ -108,26 +108,33 @@ public static class Shading
         ArgumentNullException.ThrowIfNull(faces);
         ArgumentNullException.ThrowIfNull(cylinders);
 
+        return Fractions(faces, Caixas(faces), cylinders, sun);
+    }
+
+    /// <summary>As caixas em planta das faces e a cota mais baixa delas, calculadas uma vez para o período inteiro.</summary>
+    private static (double MinX, double MaxX, double MinY, double MaxY, double Chao)[] Caixas(IReadOnlyList<IReadOnlyList<Point3>> faces) =>
+        faces.Select(f => (f.Min(p => p.X), f.Max(p => p.X), f.Min(p => p.Y), f.Max(p => p.Y), f.Min(p => p.Z))).ToArray();
+
+    private static double[] Fractions(
+        IReadOnlyList<IReadOnlyList<Point3>> faces, (double MinX, double MaxX, double MinY, double MaxY, double Chao)[] caixasDasFaces,
+        IReadOnlyList<ShadowCylinder> cylinders, (double X, double Y, double Z) sun)
+    {
         var resultado = new double[faces.Count];
         if (sun.Z <= 0 || cylinders.Count == 0 || faces.Count == 0) return resultado;
 
-        var chao = faces.Min(f => f.Min(p => p.Z));
+        var chao = caixasDasFaces.Min(c => c.Chao);
         var caixas = cylinders.Select(c => (Cilindro: c, Caixa: Caixa(c, sun, chao))).ToList();
+        var perto = new List<ShadowCylinder>(cylinders.Count);
 
         for (var k = 0; k < faces.Count; k++)
         {
-            var f = faces[k];
-            var minX = f.Min(p => p.X);
-            var maxX = f.Max(p => p.X);
-            var minY = f.Min(p => p.Y);
-            var maxY = f.Max(p => p.Y);
+            var f = caixasDasFaces[k];
+            perto.Clear();
 
-            var perto = caixas
-                .Where(c => c.Caixa.MaxX >= minX && c.Caixa.MinX <= maxX && c.Caixa.MaxY >= minY && c.Caixa.MinY <= maxY)
-                .Select(c => c.Cilindro)
-                .ToList();
+            foreach (var c in caixas)
+                if (c.Caixa.MaxX >= f.MinX && c.Caixa.MinX <= f.MaxX && c.Caixa.MaxY >= f.MinY && c.Caixa.MinY <= f.MaxY) perto.Add(c.Cilindro);
 
-            if (perto.Count > 0) resultado[k] = FaceFraction(f, perto, sun);
+            if (perto.Count > 0) resultado[k] = FaceFraction(faces[k], perto, sun);
         }
 
         return resultado;
@@ -143,6 +150,7 @@ public static class Shading
         ArgumentNullException.ThrowIfNull(faces);
         ArgumentNullException.ThrowIfNull(instants);
 
+        var caixasDasFaces = Caixas(faces);
         var pior = new double[faces.Count];
         var quando = new DateTime?[faces.Count];
         DateTime? piorInstante = null;
@@ -157,7 +165,7 @@ public static class Shading
             if (sol.ElevationDegrees < MinimumElevationDegrees) continue;
 
             comSol++;
-            var fracoes = Fractions(faces, cylinders, sol.Direction);
+            var fracoes = Fractions(faces, caixasDasFaces, cylinders, sol.Direction);
             var soma = 0.0;
 
             for (var k = 0; k < fracoes.Length; k++)
@@ -206,6 +214,20 @@ public static class Shading
             }
         }
     }
+
+    /// <summary>
+    /// Quantos instantes o período tem: (dias) × (passos por dia). Acima de
+    /// <see cref="MaxInstants"/> a conta travaria o CAD por minutos.
+    /// </summary>
+    public static long CountInstants(DateOnly firstDay, DateOnly lastDay, TimeOnly from, TimeOnly to, TimeSpan step)
+    {
+        if (lastDay < firstDay || to < from || step <= TimeSpan.Zero) return 0;
+        var porDia = (long)Math.Floor((to - from).TotalMinutes / step.TotalMinutes) + 1;
+        return (lastDay.DayNumber - firstDay.DayNumber + 1L) * porDia;
+    }
+
+    /// <summary>O máximo de instantes de um período: um ano de hora em hora das 6h às 18h cabe com folga.</summary>
+    public const int MaxInstants = 20_000;
 
     /// <summary>
     /// O contorno da sombra de um cilindro no chão: a envoltória (em planta)
