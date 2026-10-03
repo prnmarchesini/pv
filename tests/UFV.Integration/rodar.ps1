@@ -3478,6 +3478,13 @@ function Testar-Tags {
         return $false
     }
 
+    # Nenhuma tag abaixo da ponta mais alta da mesa dela (03/10/2026: "tags
+    # ainda sendo cortadas" pela metade alta da mesa inclinada).
+    if ($r.Texto -notmatch 'UFV_TAGS_ALTURA abaixo=(\d+) mesas=(\d+)' -or [int] $Matches[2] -lt 1 -or [int] $Matches[1] -ne 0) {
+        $problemas.Add("ufv-tags: tag abaixo do topo da mesa dela (cortada no sombreado). Veja $($r.Saida)")
+        return $false
+    }
+
     Write-Host "  (tags: 1 fileira, $mesas mesas, $modulos modulos, $($m[6]) strings de 14 e $($m[8]) de 20 com $($m[9]) incompletas)" -ForegroundColor DarkGray
     return $true
 }

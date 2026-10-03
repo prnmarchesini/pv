@@ -73,6 +73,15 @@ Só o Renan marca VALIDADO.
 | 8.14 | Tags | AGUARDANDO VALIDAÇÃO | `UFV_TAG_FILEIRAS/MESAS/MODULOS/STRINGS` e `_APAGAR`; strings em serpentina, sem atravessar mesa, incompleta com asterisco; nível 2 com 14 e 20 por string |
 | 8.15 | Terreno | AGUARDANDO VALIDAÇÃO | `UFV_TERRENO_RESUMO`: superfície e estado, área, cotas, cidade (IBGE embutido), país e fuso UTM SIRGAS 2000 com EPSG; janela com Trocar terreno e Localização; nível 2 no Itatiba: Itatiba - SP, 23S |
 | 8.16 | Ribbon nova | AGUARDANDO VALIDAÇÃO | Três abas (UFV, UFV Análises, UFV Tags) descritas no Core (`RibbonLayout`) e testadas: todo botão com dica e comando que existe; sem Olá, Mesa, Configuração, Parâmetros e Pintar; Edição num menu |
+| 9.1 | Trocar mesa (Core) | VALIDADO (automático) | `TableSwap.Plan`: N mesas do tipo novo encostadas no lado travado (início ou fim), espaçamento da configuração entre elas, fundo do mesmo lado; diz quanto passa do espaço até a vizinha e não a move; mesmo número de mesa (a tela põe a, b, c); 9 testes |
+| 9.2 | Trocar mesa (tela) | PENDENTE | |
+| 9.3 | Regerar fileira | PENDENTE | |
+| 9.4 | Objetos de sombra: árvore | PENDENTE | |
+| 9.5 | Posição do sol (Core) | PENDENTE | |
+| 9.6 | Sombra num instante (Core) | PENDENTE | |
+| 9.7 | Sombras num instante (tela) | PENDENTE | |
+| 9.8 | Sombras por período, pior caso | PENDENTE | |
+| 9.9 | Ver em 3D no navegador | PENDENTE | |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -4632,3 +4641,26 @@ Roteiro de tela:
    voltar à janela e Analisar.
 4. A ribbon não tem mais o botão Fileira; "Refazer" virou "Regerar área" e
    "Regerar áreas" virou "Regerar todas as áreas" (as mensagens também).
+
+### 03/10/2026: tags ainda cortadas
+
+Renan mandou print: "F46.6" e "F46.7" com a metade de baixo sumida no
+sombreado. A tag ficava 15 cm acima do plano da mesa NO PONTO dela (o meio),
+e a metade alta da mesa inclinada passava por cima. Agora toda tag (mesa,
+módulo, string e fileira) fica 15 cm acima da ponta MAIS ALTA da mesa dela.
+Teste de nível 2 `ufv-tags`: nenhuma tag abaixo do vértice mais alto do
+contorno da mesa dela (pegou a de fileira, que tinha caminho próprio).
+
+Roteiro de tela: Tags > Mesas (e Fileiras) numa usina em morro, vista
+sombreada: o letreiro inteiro aparece.
+
+### 03/10/2026: etapa 9 aberta
+
+Pedidos do Renan na tela: trocar mesa (uma por uma ou por várias, travando
+um lado), regerar fileira, árvore como objeto de sombra, sombras por
+instante e por período (pior caso), e o 3D no navegador "como o PVcase".
+Virou `plano/etapas/etapa-9-edicao-sombras-3d.md`, 9 passos. Decisões
+minhas: painel "Sombreamento" na ribbon (o Renan ainda não tinha nome),
+com Objetos > Árvore e Sombras; a troca por várias mantém o número da mesa
+com sufixo (F3.5a, F3.5b) até o Renan rodar Numerar, para não renumerar a
+fileira sem comando dele (regra do CLAUDE.md).

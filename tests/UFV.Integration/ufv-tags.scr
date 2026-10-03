@@ -49,6 +49,30 @@
 (command "UFV_TAG_MODULOS")
 (command "UFV_TAG_STRINGS" 14)
 (setq ufv:f (ufv:tags "Row") ufv:m (ufv:tags "Table") ufv:mo (ufv:tags "Module") ufv:s14 (ufv:tags "String") ufv:inc14 (ufv:incompletas))
+; Nenhuma tag abaixo da ponta mais alta da mesa dela: no plano do meio, a
+; metade alta da mesa inclinada cobria a tag (03/10/2026, "tags ainda sendo
+; cortadas"). O topo da mesa e o vertice mais alto do contorno (o Core
+; Console nao tem COM: os vertices sao percorridos com entnext).
+(defun ufv:topo (e / v z)
+  (setq z -1e99 v (entnext e))
+  (while (and v (= (cdr (assoc 0 (entget v))) "VERTEX"))
+    (setq z (max z (cadddr (assoc 10 (entget v)))) v (entnext v)))
+  z)
+(setq ufv:ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "MARCHENG_UFV")))) ufv:i 0 ufv:topos nil)
+(while (< ufv:i (ufv:conta ufv:ss))
+  (setq ufv:e (ssname ufv:ss ufv:i) ufv:xd (ufv:xdata ufv:e))
+  (if (= (ufv:tipo ufv:xd) "Mesa")
+    (setq ufv:topos (cons (cons (ufv:campo ufv:xd 0) (ufv:topo ufv:e)) ufv:topos)))
+  (setq ufv:i (1+ ufv:i)))
+(setq ufv:ss (ssget "_X" (list (cons 0 "MTEXT") (list -3 (list "MARCHENG_UFV")))) ufv:i 0 ufv:baixas 0)
+(while (< ufv:i (ufv:conta ufv:ss))
+  (setq ufv:e (ssname ufv:ss ufv:i) ufv:xd (ufv:xdata ufv:e))
+  (if (and (= (ufv:tipo ufv:xd) "Tag") (assoc (ufv:campo ufv:xd 1) ufv:topos)
+           (< (cadddr (assoc 10 (entget ufv:e))) (cdr (assoc (ufv:campo ufv:xd 1) ufv:topos))))
+    (setq ufv:baixas (1+ ufv:baixas)))
+  (setq ufv:i (1+ ufv:i)))
+(princ (strcat "\nUFV_TAGS_ALTURA abaixo=" (itoa ufv:baixas) " mesas=" (itoa (length ufv:topos))))
+
 (command "UFV_TAG_STRINGS" 20)
 (setq ufv:s20 (ufv:tags "String") ufv:inc20 (ufv:incompletas))
 (command "UFV_TAG_MODULOS_APAGAR")

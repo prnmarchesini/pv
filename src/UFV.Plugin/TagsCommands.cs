@@ -201,10 +201,13 @@ public static class TagsCommands
             // O meio da fileira no fundo (entre a borda baixa e a alta).
             var deLado = cantos.Average(p => -p.X * dy + p.Y * dx);
 
+            // Acima da ponta mais alta da mesa da ponta, como as outras tags:
+            // a tag larga alcança a mesa e não pode ficar por baixo dela.
             Point3 Ponta(Point3 extremo, double sentido)
             {
                 var ao = extremo.X * dx + extremo.Y * dy + sentido * 2.0;
-                return new Point3(ao * dx - deLado * dy, ao * dy + deLado * dx, extremo.Z);
+                var topo = doGrupo.First(m => m.Cantos.Contains(extremo)).Cantos.Max(p => p.Z);
+                return new Point3(ao * dx - deLado * dy, ao * dy + deLado * dx, Math.Max(extremo.Z, topo) + AcimaDosModulos);
             }
 
             var antes = Ponta(minimo, -1);
@@ -265,9 +268,10 @@ public static class TagsCommands
         {
             var mtexto = new MText
             {
-                // Um pouco acima do plano da mesa, para não ficar por baixo
-                // da face dos módulos nas vistas 3D (como a seta da declividade).
-                Location = new Point3d(onde.X, onde.Y, onde.Z + AcimaDosModulos),
+                // Acima da ponta MAIS ALTA da mesa, não do ponto da tag: no
+                // plano do meio, a metade alta da mesa inclinada cobria a
+                // tag no sombreado (03/10/2026: "tags ainda sendo cortadas").
+                Location = new Point3d(onde.X, onde.Y, Math.Max(onde.Z, porId[mesa].Cantos.Max(c => c.Z)) + AcimaDosModulos),
                 TextHeight = Altura(tipo),
                 Layer = camada,
                 Attachment = AttachmentPoint.MiddleCenter,
