@@ -107,7 +107,7 @@ public sealed record LayoutCensus(
         }
 
         if (Duplicated > 0)
-            linhas.Add($"ATENÇÃO: {Duplicated} mesa(s) com mais de um contorno na mesma identidade (cópia sem identidade própria): use o Refazer da área");
+            linhas.Add($"ATENÇÃO: {Duplicated} mesa(s) com mais de um contorno na mesma identidade (cópia sem identidade própria): use o Regerar área");
 
         if (TablesWithoutPower > 0)
             linhas.Add($"ATENÇÃO: {TablesWithoutPower} mesa(s) sem potência gravada (desenhadas antes do 7.6): usaram {FallbackPowerWatts.ToString("N0", Brasil)} W do perfil atual");

@@ -335,7 +335,7 @@ internal static class LayoutWatcher
                     RegistroDeDiagnostico.Registrar("Não consegui dar identidade à cópia.", erro);
                     editor.WriteMessage(
                         $"\nVIGIA ATENÇÃO: a cópia ficou com a identidade da original ({erro.Message}). "
-                        + "Apague a cópia, ou use o Refazer da área.\n");
+                        + "Apague a cópia, ou use o Regerar área.\n");
                 }
             }
 

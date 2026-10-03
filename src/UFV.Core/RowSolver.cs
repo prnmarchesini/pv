@@ -539,60 +539,38 @@ public static class RowSolver
         return new SolvedRun(resolvidas, pbs);
     }
 
-    /// <summary>A mesa resolvida com estas cotas: quantos módulos fora da faixa, e se isso passa do lombo.</summary>
+    /// <summary>
+    /// A mesa resolvida com estas cotas: quantos módulos fora da faixa, e se
+    /// algum entrou na terra. Marcada (magenta) é SÓ módulo enterrado. Renan,
+    /// 03/10/2026: "o não cabe deve ser somente módulo que entra na terra, o
+    /// resto não, o resto eu valido por análises". Fora da faixa sem enterrar
+    /// e passar do limite de declividade saem nas análises.
+    /// </summary>
     private static SolvedTable Relatar(ChainTable mesa, double z0, double z1, SystemConfiguration config)
     {
-        var enterrados = 0;
-        var abaixo = 0;
-        var acima = 0;
-        var maisFundo = 0.0;
-        var maisAlto = 0.0;
+        var fora = 0;
+        var enterrados = new List<int>();
+        var maisEnterrado = 0.0;
 
-        foreach (var m in mesa.Modules)
+        for (var k = 0; k < mesa.Modules.Count; k++)
         {
+            var m = mesa.Modules[k];
             var c = z0 + (z1 - z0) * m.Station / mesa.Length - m.Ground!.Value;
 
-            if (c > config.MaxLowEdge + 1e-9)
-            {
-                acima++;
-                maisAlto = Math.Max(maisAlto, c - config.MaxLowEdge);
-            }
-            else if (c < config.MinLowEdge - 1e-9)
-            {
-                if (c < 0) enterrados++;
-                else abaixo++;
+            if (c > config.MaxLowEdge + 1e-9 || c < config.MinLowEdge - 1e-9) fora++;
 
-                maisFundo = Math.Max(maisFundo, config.MinLowEdge - c);
+            if (c < 0)
+            {
+                enterrados.Add(k + 1);
+                maisEnterrado = Math.Max(maisEnterrado, -c);
             }
         }
 
-        var fora = enterrados + abaixo + acima;
-        var tolerancia = config.BumpToleranceFor(mesa.Modules.Count);
-        var giro = Math.Asin(Math.Clamp(Math.Abs(z1 - z0) / mesa.Length, 0, 1));
-        var passouDoLimite = config.MaxLongitudinalSlope is { } limite && giro > limite + 1e-6;
-        var marcada = fora > tolerancia || passouDoLimite;
-
-        string? motivo = null;
-
-        if (fora > tolerancia)
-        {
-            var partes = new List<string>();
-
-            if (enterrados > 0) partes.Add($"{enterrados} enterrado(s)");
-            if (abaixo > 0) partes.Add($"{abaixo} abaixo da faixa");
-            if (enterrados + abaixo > 0) partes[^1] += $" (até {Cm(maisFundo)} cm abaixo da PB mínima)";
-            if (acima > 0) partes.Add($"{acima} acima da faixa (até {Cm(maisAlto)} cm)");
-
-            motivo = $"{fora} módulo(s) fora da faixa, e a tolerância é {tolerancia}: {string.Join(", ", partes)}";
-        }
-
-        if (passouDoLimite)
-        {
-            var declividade = $"declividade de {(giro * 180 / Math.PI).ToString("0.#", Brasil)}°, acima do limite de "
-                + $"{config.MaxLongitudinalSlopeDegrees!.Value.ToString("0.#", Brasil)}° (para não enterrar)";
-
-            motivo = motivo is null ? declividade : $"{motivo}; {declividade}";
-        }
+        var marcada = enterrados.Count > 0;
+        var motivo = marcada
+            ? $"{enterrados.Count} módulo(s) com a ponta baixa dentro da terra (o {string.Join(", ", enterrados)}º da fileira de baixo, "
+                + $"contando da ponta inicial), até {Cm(maisEnterrado)} cm abaixo do chão"
+            : null;
 
         return new SolvedTable(mesa.Label, z0, z1, fora, marcada, motivo);
     }

@@ -63,9 +63,8 @@ public static class RibbonLayout
             new("Processar",
             [
                 B("Usina", PluginInfo.ComandoUsina, "Gera a área inteira com as mesas em uso, sem análise (as análises ficam no painel Análises).", "Usina", grande: true),
-                B("Fileira", PluginInfo.ComandoFileira, "Gera uma fileira só, para conferir antes da usina.", "Fileira"),
-                B("Refazer", PluginInfo.ComandoRefazer, "Apaga e gera de novo a área com a configuração atual.", "Refazer"),
-                B("Regerar áreas", PluginInfo.ComandoRegerar, "Refaz todas as áreas do desenho com a configuração atual.", "RegerarTudo"),
+                B("Regerar área", PluginInfo.ComandoRefazer, "Apaga e gera de novo a área com a configuração atual.", "Refazer"),
+                B("Regerar todas as áreas", PluginInfo.ComandoRegerar, "Refaz todas as áreas do desenho com a configuração atual.", "RegerarTudo"),
             ]),
             new("Edição",
             [

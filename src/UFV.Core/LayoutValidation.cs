@@ -64,13 +64,13 @@ public sealed record LayoutValidation(
             linhas.Add($"{DuplicatedAlignments} identidade(s) de alinhamento em mais de uma polilinha (alinhamento copiado): apague a cópia, ou trace de novo.");
 
         if (DuplicatedTables.Count > 0)
-            linhas.Add($"{DuplicatedTables.Count} mesa(s) com mais de um contorno na mesma identidade ({Juntar(DuplicatedTables)}): apague a cópia, ou use o Refazer da área.");
+            linhas.Add($"{DuplicatedTables.Count} mesa(s) com mais de um contorno na mesma identidade ({Juntar(DuplicatedTables)}): apague a cópia, ou use o Regerar área.");
 
         if (DuplicatedPieces > 0)
-            linhas.Add($"{DuplicatedPieces} peça(s) com identidade repetida: use o Refazer da área.");
+            linhas.Add($"{DuplicatedPieces} peça(s) com identidade repetida: use o Regerar área.");
 
         if (Orphans > 0)
-            linhas.Add($"{Orphans} mesa(s) só com peças, sem contorno: apague as peças, ou use o Refazer da área.");
+            linhas.Add($"{Orphans} mesa(s) só com peças, sem contorno: apague as peças, ou use o Regerar área.");
 
         if (PendingRemovals.Count > 0)
             linhas.Add($"{PendingRemovals.Count} mesa(s) removida(s) ainda não recontada(s) ({Juntar(PendingRemovals)}): use Recontar.");

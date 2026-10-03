@@ -99,15 +99,6 @@ internal static class IconesDaRibbon
         Preenchimento("M21,16 A2.6,2.6 0 1 1 20.99,16 Z", Ambar),
         Preenchimento("M14,23 A2.6,2.6 0 1 1 13.99,23 Z", Azul));
 
-    /// <summary>Três mesas em fila sobre o terreno, com pilares: a fileira processada.</summary>
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    internal static ImageSource Fileira() => Montar(
-        Traco("M2,26 C10,20 20,28 30,22", Neutro, 1.6),
-        Traco("M4,12 L11,9", Azul, 3.0),
-        Traco("M13,12 L20,9", Azul, 3.0),
-        Traco("M22,12 L29,9", Azul, 3.0),
-        Traco("M7.5,11 V22 M16.5,11 V21 M25.5,11 V20", Ambar, 2.0));
-
     /// <summary>Uma grade de mesas: a usina inteira.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static ImageSource Usina() => Montar(

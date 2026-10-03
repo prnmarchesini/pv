@@ -78,7 +78,13 @@ public static class ConfiguracoesCommands
             }
         }
 
+        var antes = MesasDoDesenho.Ler(database);
         Gravar("as mesas do desenho", () => MesasDoDesenho.Gravar(database, salvo.Mesas));
+
+        // A cor do tipo vale já nas mesas desenhadas (03/10/2026: "não tem
+        // nenhuma mesa laranja ou verde").
+        var repintadas = 0;
+        Gravar("as cores das mesas desenhadas", () => repintadas = CoresDosTipos.Repintar(database, antes, salvo.Mesas));
         Gravar("os parâmetros", () => SettingsStore.Save(database, salvo.Parametros));
         Gravar("os estilos", () => EstilosCommands.Gravar(editor, database, salvo.Estilos));
 
@@ -88,7 +94,8 @@ public static class ConfiguracoesCommands
             $"\nCONFIGURAÇÕES gravadas no desenho: {salvo.Mesas.Count} mesa(s), "
             + (emUso.Count == 0 ? "nenhuma (vale a da janela de Mesa)" : $"o motor usa, nesta prioridade: {string.Join(", ", emUso.Select(m => m.Name))}")
             + $"; {salvo.Parametros.Describe()}.\n");
-        editor.WriteMessage("  Elas vão junto com o arquivo: salve o desenho. Para a usina seguir as mudanças, use Refazer.\n");
+        if (repintadas > 0) editor.WriteMessage($"  {repintadas} mesa(s) desenhada(s) com a cor nova do tipo.\n");
+        editor.WriteMessage("  Elas vão junto com o arquivo: salve o desenho. Para a usina seguir as outras mudanças, use Regerar área.\n");
     }
 
     /// <summary>

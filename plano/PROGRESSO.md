@@ -4584,3 +4584,51 @@ outra cor, roxo: tentei todas as mesas possíveis, nenhuma ficou boa".
 - Limites que ficam: o teste é da mesa sozinha; na fileira, presa às
   vizinhas pela regra 6, ela ainda pode sair magenta. O roxo não fica
   gravado no XData: Recalcular uma mesa roxa a redesenha magenta.
+
+### 03/10/2026: cor do tipo, magenta só para módulo enterrado, Análises solta, sem Fileira
+
+Renan, quatro pedidos na mesma rodada:
+
+1. "Não tem nenhuma mesa laranja ou verde, as configurações de cores estão
+   falhas." Só o contorno tinha a cor do tipo; os módulos ficavam cinza. A
+   cor do módulo dependia de o bloco nascer "por camada" (`ColorIndex ==
+   256`), e o bloco recém-criado não nasce assim. Agora o módulo que
+   nenhuma análise pinta recebe a cor do tipo sempre (`LayoutDrawer`). E
+   **Salvar no desenho** em Configurações repinta as mesas já desenhadas do
+   tipo com a cor nova (`CoresDosTipos`): contorno na camada da mesa e
+   módulo na camada de módulo, quando estão com a cor antiga do tipo, por
+   camada ou por bloco. Mesa marcada, suja ou peça pintada por análise
+   ficam como estão; a "cor de antes" das análises passa à nova. Teste de
+   nível 2 `ufv-usina-mista`: todo módulo fora das marcadas com cor (420).
+2. "O não cabe deve ser somente módulo que entra na terra, o resto não; o
+   resto eu valido por análises." `RowSolver.Relatar`: marcada é só a mesa
+   com módulo da fileira de baixo com a ponta baixa abaixo do chão. Fora
+   da faixa sem enterrar, declividade acima do limite e pilar com problema
+   não pintam mais de magenta. O motivo diz quais módulos e quanto ("2
+   módulo(s) com a ponta baixa dentro da terra (o 6º, 7º da fileira de
+   baixo, contando da ponta inicial), até 12 cm abaixo do chão"), e a Usina
+   lista na linha de comando cada mesa magenta com o motivo (até 30).
+   Testes do `RowSolverTests` reescritos para a regra nova.
+   **Decisão minha para o Renan confirmar:** módulo enterrado marca mesmo
+   dentro da tolerância de lombo (a tolerância segue contando fora da
+   faixa, mas não segura mais a marca). A troca para a 2ª mesa da lista
+   (`FitsOnTerrain`) segue a regra nova: troca onde a 1ª enterra módulo
+   ou tem pilar com problema.
+3. "Quero poder mexer na tela Análises e no CAD ao mesmo tempo." A janela
+   de Análises é solta (`ShowModelessWindow`): uma por desenho, clicar de
+   novo traz a mesma para a frente, fechar o desenho fecha a janela. Cada
+   botão trava o documento enquanto escreve.
+4. "Pode apagar o menu Fileira." Botão tirado da ribbon (painel
+   Processar). O comando `UFV_FILEIRA` continua, sem botão, porque os
+   testes de nível 2 usam.
+
+Roteiro de tela:
+
+1. Configurações > Escolha das estruturas: 28 laranja, 14 verde, Salvar.
+   As mesas já desenhadas viram laranja e verde (módulos e contorno).
+2. Refazer: módulos laranja e verde; magenta só onde módulo entra na
+   terra; a linha de comando lista cada magenta com o porquê.
+3. Análises: com a janela aberta, dar zoom, selecionar, mexer no desenho;
+   voltar à janela e Analisar.
+4. A ribbon não tem mais o botão Fileira; "Refazer" virou "Regerar área" e
+   "Regerar áreas" virou "Regerar todas as áreas" (as mensagens também).

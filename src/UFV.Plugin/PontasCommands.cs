@@ -223,7 +223,7 @@ public static class PontasCommands
 
             if (mesa.IsDuplicated)
             {
-                editor.WriteMessage($"\nPONTAS {mesa.Identity.Label} tem contornos repetidos (mesa copiada). Apague a cópia ou use o Refazer.\n");
+                editor.WriteMessage($"\nPONTAS {mesa.Identity.Label} tem contornos repetidos (mesa copiada). Apague a cópia ou use o Regerar área.\n");
                 return null;
             }
 
@@ -247,7 +247,7 @@ public static class PontasCommands
         }
         catch (ArgumentException erro)
         {
-            editor.WriteMessage($"\nPONTAS {mesa.Identity.Label}: {erro.Message} Use o Refazer da área.\n");
+            editor.WriteMessage($"\nPONTAS {mesa.Identity.Label}: {erro.Message} Use o Regerar área.\n");
             return null;
         }
 

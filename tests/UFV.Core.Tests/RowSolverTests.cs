@@ -76,18 +76,12 @@ public class RowSolverTests
                 Assert.Equal(trecho.JointClearances[i], primeira, 6);
                 Assert.Equal(trecho.JointClearances[i + 1], ultima, 6);
 
-                // A declividade pode passar do limite (para não afundar a
-                // mesa, 29/09/2026), mas então a mesa sai marcada e diz.
-                if (config.MaxLongitudinalSlope is { } limite)
-                {
-                    var giro = Math.Asin(Math.Abs(trecho.Tables[i].EndElevation - trecho.Tables[i].StartElevation) / Comprimento);
-
-                    if (giro > limite + 1e-6)
-                    {
-                        Assert.True(trecho.Tables[i].Marked, $"{mesa.Label}: {giro / Grau:0.##}° acima do limite e não marcada");
-                        Assert.Contains("declividade", trecho.Tables[i].Reason, StringComparison.Ordinal);
-                    }
-                }
+                // Marcada é só a que tem módulo dentro da terra (03/10/2026:
+                // "o não cabe deve ser somente módulo que entra na terra"), e
+                // ela diz isso. Declividade acima do limite sai nas análises.
+                var enterrada = mesa.Modules.Any(m => Cota(trecho.Tables[i], m.Station) - m.Ground!.Value < 0);
+                Assert.Equal(enterrada, trecho.Tables[i].Marked);
+                if (enterrada) Assert.Contains("dentro da terra", trecho.Tables[i].Reason, StringComparison.Ordinal);
             }
         }
     }
@@ -173,19 +167,18 @@ public class RowSolverTests
         var maior = doVale.Modules.Max(m => Cota(resolvida, m.Station) - m.Ground!.Value);
         Assert.True(maior < Config().MinLowEdge + 1.2, $"o meio da mesa do vale ficou a {maior:0.00} m");
 
-        // Marcadas: a do vale e, no máximo, as duas vizinhas, que dividem
-        // com ela as pontas abaixadas. As mesas longe do vale não sentem.
-        var marcadas = solucao.Tables.Where(t => t.Marked).Select(t => t.Label).ToList();
-        Assert.Contains("F1.3", marcadas);
-        Assert.All(marcadas, l => Assert.Contains(l, new[] { "F1.2", "F1.3", "F1.4" }));
+        // Nada enterrado, nada marcado (03/10/2026: marcada é só módulo
+        // dentro da terra). O vale acima da faixa sai na análise de PB.
+        Assert.Empty(solucao.Tables.Where(t => t.Marked));
     }
 
     /// <summary>
     /// Terreno mais íngreme que o limite de declividade (19° com limite de
     /// 10°, duas mesas, como a F40 do Itatiba). As prioridades do Renan
     /// (29/09/2026, noite): junta fechada, e nada afundado, "mesmo que
-    /// estoure declividade da mesa". A mesa passa do limite, sai marcada
-    /// dizendo quanto, e as pontas ficam na faixa — nenhuma enterrada.
+    /// estoure declividade da mesa". A mesa passa do limite e as pontas
+    /// ficam na faixa — nenhuma enterrada, então nenhuma marcada (03/10/2026:
+    /// a declividade sai nas análises, não no magenta).
     /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
@@ -199,11 +192,7 @@ public class RowSolverTests
 
         Assert.All(solucao.Runs[0].JointClearances, pb => Assert.InRange(pb, Config().MinLowEdge - 1e-6, Config().MaxLowEdge + 1e-6));
         Assert.All(Folgas(mesas, solucao), f => Assert.True(f >= 0, $"módulo enterrado a {f:0.00} m"));
-        Assert.All(solucao.Tables, t =>
-        {
-            Assert.True(t.Marked);
-            Assert.Contains("acima do limite de 10°", t.Reason, StringComparison.Ordinal);
-        });
+        Assert.All(solucao.Tables, t => Assert.False(t.Marked, t.Reason));
     }
 
     /// <summary>
@@ -227,13 +216,16 @@ public class RowSolverTests
         var solucao = RowSolver.Solve(mesas, Config());
         var folgas = Folgas(mesas, solucao).ToList();
 
-        Assert.True(solucao.Tables[0].Marked);
+        Assert.Equal(folgas.Min() < 0, solucao.Tables[0].Marked);
         Assert.All(solucao.Runs[0].JointClearances, pb => Assert.InRange(pb, Config().MinLowEdge - 1e-6, Config().MaxLowEdge + 1e-6));
         Assert.True(folgas.Max() <= Config().MaxLowEdge + 1e-6, $"módulo acima da faixa: {folgas.Max():0.00} m");
         Assert.True(folgas.Min() < Config().MinLowEdge, "o morro deveria passar por baixo da faixa");
     }
 
-    /// <summary>A marca diz a verdade: marcada é exatamente a que tem mais módulos fora que a tolerância.</summary>
+    /// <summary>
+    /// A marca diz a verdade: fora da faixa é contado, e marcada é exatamente
+    /// a que tem módulo dentro da terra (03/10/2026), com qualquer tolerância.
+    /// </summary>
     [Theory]
     [Trait("Etapa", "5")]
     [InlineData(0)]
@@ -258,8 +250,10 @@ public class RowSolverTests
                 return f < config.MinLowEdge - 1e-9 || f > config.MaxLowEdge + 1e-9;
             });
 
+            var enterrados = mesa.Modules.Count(m => Cota(resolvida, m.Station) - m.Ground!.Value < 0);
+
             Assert.Equal(fora, resolvida.Violations);
-            Assert.Equal(fora > tolerancia, resolvida.Marked);
+            Assert.Equal(enterrados > 0, resolvida.Marked);
             Assert.Equal(resolvida.Marked, resolvida.Reason is not null);
         }
     }
@@ -441,19 +435,25 @@ public class RowSolverTests
         });
     }
 
-    /// <summary>A tolerância de lombo deixa passar sem marca o que está dentro dela.</summary>
+    /// <summary>
+    /// Calombo que põe um módulo dentro da terra marca a mesa, mesmo dentro
+    /// da tolerância de lombo, e o motivo diz qual módulo e quanto (03/10/2026:
+    /// "se não cabe, não sei o porquê ... ser explícito do porquê não cabe").
+    /// </summary>
     [Fact]
     [Trait("Etapa", "5")]
-    public void CalomboDentroDaToleranciaNaoMarca()
+    public void CalomboQueEnterraMarcaEDizQualModulo()
     {
-        // Calombo estreito sob um módulo só.
+        // Calombo estreito sob um módulo só: a coluna 6, o 7º contando de 1.
         double? Terreno(double x) => 700 + (Math.Abs(x - Estacao(6)) < 0.5 ? 0.9 : 0);
 
         var config = Config() with { BumpToleranceModules = 1 };
         var solucao = RowSolver.Solve(Fileira(1, Terreno), config);
 
-        Assert.False(solucao.Tables[0].Marked);
+        Assert.True(solucao.Tables[0].Marked);
         Assert.Equal(1, solucao.Tables[0].Violations);
+        Assert.Contains("1 módulo(s) com a ponta baixa dentro da terra (o 7º", solucao.Tables[0].Reason, StringComparison.Ordinal);
+        Assert.Contains("abaixo do chão", solucao.Tables[0].Reason, StringComparison.Ordinal);
     }
 
     /// <summary>Mesmo resultado sempre, e rápido numa fileira de quarenta mesas com terreno irregular.</summary>

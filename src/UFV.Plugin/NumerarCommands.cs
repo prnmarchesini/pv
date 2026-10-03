@@ -111,7 +111,7 @@ public static class NumerarCommands
             {
                 editor.WriteMessage(
                     $"\nNUMERAR {partes.Identity.Label} tem {partes.Contours.Count} contornos com a mesma identidade (mesa copiada e colada). "
-                    + "Apague a cópia, ou use o Refazer da área.\n");
+                    + "Apague a cópia, ou use o Regerar área.\n");
                 return null;
             }
 
@@ -124,7 +124,7 @@ public static class NumerarCommands
             }
             catch (ArgumentException erro)
             {
-                editor.WriteMessage($"\nNUMERAR {partes.Identity.Label}: {erro.Message} Use o Refazer da área.\n");
+                editor.WriteMessage($"\nNUMERAR {partes.Identity.Label}: {erro.Message} Use o Regerar área.\n");
                 return null;
             }
         }

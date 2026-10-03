@@ -316,6 +316,17 @@ public static class UsinaCommands
         foreach (var fileira in usina.Rows)
             editor.WriteMessage($"  {fileira.Describe()}\n");
 
+        // O porquê de cada magenta, dito aqui (03/10/2026: "se não cabe, não
+        // sei o porquê ... ser explícito do porquê não cabe").
+        var naoCabem = usina.Tables.Where(t => t.Solved.Marked).ToList();
+
+        if (naoCabem.Count > 0)
+        {
+            editor.WriteMessage($"\n  NÃO CABE (magenta), {naoCabem.Count} mesa(s):\n");
+            foreach (var mesa in naoCabem.Take(30)) editor.WriteMessage($"    {mesa.Solved.Label}: {mesa.Solved.Reason}\n");
+            if (naoCabem.Count > 30) editor.WriteMessage($"    ... e mais {naoCabem.Count - 30}; o motivo de cada uma está no Estado.\n");
+        }
+
         editor.WriteMessage("\n  Gerado sem análise: alturas, declividade e cores de análise saem pelo botão Análises.\n");
         editor.WriteMessage(LayoutDrawer.TiposDeMesa.Legenda(tipos, marcadas) + "\n");
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);

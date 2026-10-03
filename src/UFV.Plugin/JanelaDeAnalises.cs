@@ -52,6 +52,10 @@ internal sealed class JanelaDeAnalises : Window
 
         var fechar = new Button { Content = "Fechar", Width = 90, Height = 26, Margin = new Thickness(10), HorizontalAlignment = HorizontalAlignment.Right, IsCancel = true, ToolTip = "Fecha a janela; o que foi feito já está no desenho." };
 
+        // A janela é solta (03/10/2026: "quero poder mexer na tela análises
+        // e no CAD ao mesmo tempo"): IsCancel só fecha diálogo, aqui fecha à mão.
+        fechar.Click += (_, _) => Close();
+
         var raiz = new DockPanel();
         DockPanel.SetDock(fechar, Dock.Bottom);
         raiz.Children.Add(fechar);
@@ -83,8 +87,18 @@ internal sealed class JanelaDeAnalises : Window
     {
         try
         {
-            var frase = operacao();
-            _atualizarTela();
+            // Janela solta: o clique chega fora de um comando, e escrever no
+            // desenho pede a trava do documento. Desenho fechado, nada a fazer.
+            var documento = Autodesk.AutoCAD.ApplicationServices.Core.Application.DocumentManager.GetDocument(_database)
+                ?? throw new InvalidOperationException("o desenho desta janela foi fechado");
+
+            string frase;
+            using (documento.LockDocument())
+            {
+                frase = operacao();
+                _atualizarTela();
+            }
+
             _editor.WriteMessage($"\nANÁLISES {frase}\n");
             return (true, frase);
         }

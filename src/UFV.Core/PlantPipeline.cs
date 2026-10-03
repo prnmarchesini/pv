@@ -131,7 +131,7 @@ public static class PlantPipeline
     /// <summary>
     /// O teste da mesa no terreno para a distribuição (<see cref="RowDistributor.Distribute(IReadOnlyList{Point3}, IReadOnlyList{Point3}, LineSide, double, double, IReadOnlyList{TableFootprint}, IReadOnlyList{int}, double, Func{PlacedTable, bool}?)"/>):
     /// a mesa resolvida sozinha no terreno não fica marcada (sem módulo
-    /// fora do que o lombo permite, sem pilar sem terreno). Na fileira, com
+    /// enterrado, desde 03/10/2026) nem tem pilar com problema. Na fileira, com
     /// as juntas fechadas com as vizinhas (regra 6), ela ainda pode ficar
     /// marcada: aí sai magenta.
     /// </summary>

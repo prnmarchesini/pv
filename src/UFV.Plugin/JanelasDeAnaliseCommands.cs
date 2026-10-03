@@ -46,9 +46,42 @@ public static class JanelasDeAnaliseCommands
         AcadApp.UpdateScreen();
     };
 
+    /// <summary>A janela de Análises aberta de cada desenho: uma só por desenho.</summary>
+    private static readonly Dictionary<Document, JanelaDeAnalises> Abertas = [];
+
+    /// <summary>
+    /// A janela de Análises é solta (03/10/2026: "eu clico no botão, analiso,
+    /// volto, troco algo na tela, analiso, mas hoje a tela é fixa"): o CAD
+    /// segue usável com ela aberta. Clicar de novo traz a mesma para a frente;
+    /// fechar o desenho fecha a janela dele.
+    /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void AbrirAnalises(Document documento) =>
-        AcadApp.ShowModalWindow(new JanelaDeAnalises(documento.Database, documento.Editor, Atualizar(documento)));
+    private static void AbrirAnalises(Document documento)
+    {
+        if (Abertas.TryGetValue(documento, out var aberta))
+        {
+            if (aberta.WindowState == System.Windows.WindowState.Minimized) aberta.WindowState = System.Windows.WindowState.Normal;
+            aberta.Activate();
+            return;
+        }
+
+        var janela = new JanelaDeAnalises(documento.Database, documento.Editor, Atualizar(documento));
+        Abertas[documento] = janela;
+
+        void AoFecharODesenho(object? _, DocumentCollectionEventArgs e)
+        {
+            if (e.Document == documento) janela.Close();
+        }
+
+        AcadApp.DocumentManager.DocumentToBeDestroyed += AoFecharODesenho;
+        janela.Closed += (_, _) =>
+        {
+            Abertas.Remove(documento);
+            AcadApp.DocumentManager.DocumentToBeDestroyed -= AoFecharODesenho;
+        };
+
+        AcadApp.ShowModelessWindow(janela);
+    }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void AbrirTags(Document documento)

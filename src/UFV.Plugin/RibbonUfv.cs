@@ -187,7 +187,6 @@ internal static class RibbonUfv
         "Status" => IconesDaRibbon.Status(),
         "Area" => IconesDaRibbon.Area(),
         "Alinhamento" => IconesDaRibbon.Alinhamento(),
-        "Fileira" => IconesDaRibbon.Fileira(),
         "Usina" => IconesDaRibbon.Usina(),
         "Refazer" => IconesDaRibbon.Refazer(),
         "Recalcular" => IconesDaRibbon.Recalcular(),

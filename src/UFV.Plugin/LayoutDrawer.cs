@@ -159,12 +159,12 @@ internal static class LayoutDrawer
 
             var matriz = Matriz(colocacao);
 
-            // A mesa que não cabe no terreno (o alinhamento a marcou, ou um
-            // pilar não tem altura livre / não tem terreno): pintada INTEIRA
-            // de magenta na camada de marcadas, com o aviso no meio. Pedido
-            // do Renan em 26/09/2026: "olha projetista, essa mesa tá socada
-            // na terra porque ali não tem como fazer milagre".
-            var naoCabe = mesa.Solved.Marked || mesa.Pillars.ProblemCount > 0;
+            // A mesa que não cabe no terreno: pintada INTEIRA de magenta na
+            // camada de marcadas. Pedido do Renan em 26/09/2026: "olha
+            // projetista, essa mesa tá socada na terra porque ali não tem
+            // como fazer milagre". Desde 03/10/2026 é SÓ módulo enterrado (o
+            // alinhamento marca); pilar com problema sai nas análises.
+            var naoCabe = mesa.Solved.Marked;
 
             // Roxo: a distribuição tentou todas as mesas da lista neste lugar
             // e nenhuma ficou boa; ficou a primeira (02/10/2026).
@@ -254,13 +254,17 @@ internal static class LayoutDrawer
                     PintarNaoCabe(bloco, vereditoDoModulo, camadaMarcada, corDeNaoCabe);
                 else
                 {
-                    Pintar(bloco, vereditoDoModulo, camadaModulo, ref pintadas);
-
                     // A cor do tipo de mesa nos módulos (02/10/2026: "coloquei
                     // azul e ciano, e no desenho tem um azulzinho e magenta"):
-                    // sem análise pintando, o módulo diz de que mesa é.
-                    if (bloco.ColorIndex == 256 && tipos?.Cores[tipo] is { } corDoModulo)
-                        bloco.Color = Color.FromRgb(corDoModulo.R, corDoModulo.G, corDoModulo.B);
+                    // sem análise pintando, o módulo diz de que mesa é. A cor
+                    // vai sempre, explícita: antes dependia da cor com que o
+                    // bloco nascia (ColorIndex 256), que não é "por camada"
+                    // num bloco recém-criado, e os módulos saíam cinza
+                    // (03/10/2026: "não tem nenhuma mesa laranja ou verde").
+                    if (!Pintar(bloco, vereditoDoModulo, camadaModulo, ref pintadas))
+                        bloco.Color = tipos?.Cores[tipo] is { } corDoModulo
+                            ? Color.FromRgb(corDoModulo.R, corDoModulo.G, corDoModulo.B)
+                            : Color.FromColorIndex(ColorMethod.ByLayer, 256);
                 }
 
                 pecas.Add(espaco.AppendEntity(bloco));
@@ -399,7 +403,7 @@ internal static class LayoutDrawer
             }
 
             partes.Add("cinza = mesa sem cor de tipo");
-            partes.Add($"magenta = mesa que não cabe no terreno ({marcadas}; o motivo está no Estado)");
+            partes.Add($"magenta = mesa com módulo dentro da terra ({marcadas}; o motivo de cada uma está acima e no Estado)");
             if (tipos is { Nomes.Count: > 1 }) partes.Add("roxo = tentei todas as mesas da lista nesse lugar, nenhuma coube; ficou a 1ª");
 
             return "  Cores: " + string.Join("; ", partes) + ".";
@@ -505,18 +509,19 @@ internal static class LayoutDrawer
         entidade.Color = veredito?.Color is { } cor ? Color.FromRgb(cor.R, cor.G, cor.B) : corDeNaoCabe;
     }
 
-    /// <summary>Camada e cor da peça: a da análise quando ela pinta, a fixa quando não.</summary>
-    private static void Pintar(Entity entidade, AnalysisVerdict? veredito, string camadaFixa, ref int pintadas)
+    /// <summary>Camada e cor da peça: a da análise quando ela pinta, a fixa quando não. Se a análise pintou.</summary>
+    private static bool Pintar(Entity entidade, AnalysisVerdict? veredito, string camadaFixa, ref int pintadas)
     {
         if (veredito?.Color is { } cor && veredito.Layer is { } camada)
         {
             entidade.Layer = camada;
             entidade.Color = Color.FromRgb(cor.R, cor.G, cor.B);
             pintadas++;
-            return;
+            return true;
         }
 
         entidade.Layer = camadaFixa;
+        return false;
     }
 
     /// <summary>Os quatro cantos do plano da mesa, em coordenadas locais.</summary>

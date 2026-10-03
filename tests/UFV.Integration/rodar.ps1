@@ -3562,6 +3562,18 @@ function Testar-UsinaMista {
         }
     }
 
+    # Todo modulo na camada de modulo (fora das marcadas) com a cor do tipo:
+    # em 03/10/2026 eles saiam cinza e so o contorno tinha cor.
+    if ($r.Texto -notmatch 'UFV_MISTA_MODULOS n=(\d+) comcor=(\d+)') {
+        $problemas.Add("ufv-usina-mista: nao consegui ler a cor dos modulos. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ([int] $Matches[1] -lt 1 -or [int] $Matches[2] -ne [int] $Matches[1]) {
+        $problemas.Add("ufv-usina-mista: $($Matches[2]) de $($Matches[1]) modulo(s) com a cor do tipo; todos deveriam ter. Veja $($r.Saida)")
+        return $false
+    }
+
     if ($r.Texto -notmatch 'USINA .*?(\d+) mesa\(s\), (\d+) módulo\(s\)' -or [int] $Matches[2] -ne $faces) {
         $problemas.Add("ufv-usina-mista: o relatorio da usina diz $($Matches[2]) modulo(s), o desenho tem $faces faces. Veja $($r.Saida)")
         return $false

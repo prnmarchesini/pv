@@ -38,6 +38,15 @@
   (setq ufv:z (cadddr (assoc 10 (entget (ssname ufv:pilares ufv:i)))))
   (setq ufv:zmin (min ufv:zmin ufv:z) ufv:zmax (max ufv:zmax ufv:z) ufv:i (1+ ufv:i)))
 
+; Os modulos fora da camada de marcadas: todos com a cor do tipo (420,
+; cor verdadeira). Bug de 03/10/2026: saiam cinza, so o contorno tinha cor.
+(setq ufv:mods (ssget "_X" (list (cons 0 "INSERT") (cons 8 "MARCHENG_UFV_MODULO"))) ufv:i 0 ufv:nmod 0 ufv:modcor 0)
+(while (< ufv:i (ufv:conta ufv:mods))
+  (setq ufv:nmod (1+ ufv:nmod))
+  (if (assoc 420 (entget (ssname ufv:mods ufv:i))) (setq ufv:modcor (1+ ufv:modcor)))
+  (setq ufv:i (1+ ufv:i)))
+
+(princ (strcat "\nUFV_MISTA_MODULOS n=" (itoa ufv:nmod) " comcor=" (itoa ufv:modcor)))
 (princ (strcat "\nUFV_MISTA n28=" (itoa ufv:n28) " n14=" (itoa ufv:n14) " outros=" (itoa ufv:outros) " comcor=" (itoa ufv:cor)
                " pilares=" (itoa ufv:np) " faces=" (itoa ufv:nf) " zmin=" (rtos ufv:zmin 2 3) " zmax=" (rtos ufv:zmax 2 3)))
 (setvar "SECURELOAD" ufv:secureload)

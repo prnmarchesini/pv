@@ -18,7 +18,7 @@ namespace UFV.Plugin;
 /// ali, os pilares e as pontas baixas são refeitos com a configuração e o
 /// perfil de mesa ATUAIS, tudo dela é apagado e desenhado de novo com o
 /// MESMO GUID, e a mesa nasce limpa. O alinhamento de fileira (5.4) não é
-/// refeito para as vizinhas: isso é o Refazer da área.
+/// refeito para as vizinhas: isso é o Regerar área.
 /// </summary>
 public static class RecalcularCommands
 {
@@ -179,7 +179,7 @@ public static class RecalcularCommands
         {
             editor.WriteMessage(
                 $"\nRECALCULAR {mesa.Identity.Label} tem {mesa.Contours.Count} contornos com a mesma identidade (mesa copiada e colada). "
-                + "Apague a cópia, ou use o Refazer da área.\n");
+                + "Apague a cópia, ou use o Regerar área.\n");
             return false;
         }
 
@@ -209,7 +209,7 @@ public static class RecalcularCommands
         }
         catch (ArgumentException erro)
         {
-            editor.WriteMessage($"\nRECALCULAR {mesa.Identity!.Label}: {erro.Message} Use o Refazer da área.\n");
+            editor.WriteMessage($"\nRECALCULAR {mesa.Identity!.Label}: {erro.Message} Use o Regerar área.\n");
             return false;
         }
 
@@ -281,7 +281,7 @@ public static class RecalcularCommands
             if (soltas.Count > 0)
                 editor.WriteMessage(
                     $"\n  ATENÇÃO: {mesa.Identity.Label} não conseguiu prender a ponta em {string.Join(" e ", soltas)}: "
-                    + "a declividade não deixa. A junta ficou aberta; use o Refazer da área.\n");
+                    + "a declividade não deixa. A junta ficou aberta; use o Regerar área.\n");
         }
 
         Apagar(documento, mesa);
