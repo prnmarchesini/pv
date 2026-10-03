@@ -207,6 +207,10 @@ internal static class RibbonUfv
         "Sujar" => IconesDaRibbon.Sujar(),
         "Estado" => IconesDaRibbon.Estado(),
         "Mesa" => IconesDaRibbon.Mesa(),
+        "Trocar" => IconesDaRibbon.Trocar(),
+        "Arvore" => IconesDaRibbon.Arvore(),
+        "Sombras" => IconesDaRibbon.Sombras(),
+        "Ver3D" => IconesDaRibbon.Ver3D(),
         _ => IconesDaRibbon.Configuracao(),
     };
 

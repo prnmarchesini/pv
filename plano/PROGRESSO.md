@@ -74,8 +74,8 @@ Só o Renan marca VALIDADO.
 | 8.15 | Terreno | AGUARDANDO VALIDAÇÃO | `UFV_TERRENO_RESUMO`: superfície e estado, área, cotas, cidade (IBGE embutido), país e fuso UTM SIRGAS 2000 com EPSG; janela com Trocar terreno e Localização; nível 2 no Itatiba: Itatiba - SP, 23S |
 | 8.16 | Ribbon nova | AGUARDANDO VALIDAÇÃO | Três abas (UFV, UFV Análises, UFV Tags) descritas no Core (`RibbonLayout`) e testadas: todo botão com dica e comando que existe; sem Olá, Mesa, Configuração, Parâmetros e Pintar; Edição num menu |
 | 9.1 | Trocar mesa (Core) | VALIDADO (automático) | `TableSwap.Plan`: N mesas do tipo novo encostadas no lado travado (início ou fim), espaçamento da configuração entre elas, fundo do mesmo lado; diz quanto passa do espaço até a vizinha e não a move; mesmo número de mesa (a tela põe a, b, c); 9 testes |
-| 9.2 | Trocar mesa (tela) | PENDENTE | |
-| 9.3 | Regerar fileira | PENDENTE | |
+| 9.2 | Trocar mesa (tela) | AGUARDANDO VALIDAÇÃO | `UFV_TROCAR_MESA` (Edição > Trocar mesa): clica a mesa, janela com mesa nova (as do desenho), quantas (1 a 5), lado travado e "reespaçar a fileira depois"; apaga a antiga, desenha as novas no terreno (F3.5a, F3.5b), diz quanto passou da vizinha; nível 2 `ufv-trocar` |
+| 9.3 | Regerar fileira | AGUARDANDO VALIDAÇÃO | `UFV_REGERAR_FILEIRA` (Edição > Regerar fileira): Manter (as mesas e os tipos da fileira, reespaçadas, mesmo GUID; `TableSwap.Respace`, trechos separados por vão grande ficam) ou Motor (a área planejada de novo, só a fileira da mesa desenhada); nível 2 nos dois modos |
 | 9.4 | Objetos de sombra: árvore | PENDENTE | |
 | 9.5 | Posição do sol (Core) | PENDENTE | |
 | 9.6 | Sombra num instante (Core) | PENDENTE | |

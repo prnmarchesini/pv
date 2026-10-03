@@ -216,6 +216,39 @@ public static class PluginInfo
     /// <summary>Refaz todas as áreas com a configuração atual.</summary>
     public const string ComandoRegerar = "UFV_REGERAR";
 
+    /// <summary>Troca a mesa clicada por uma ou mais de outro tipo, travando um lado (9.2).</summary>
+    public const string ComandoTrocarMesa = "UFV_TROCAR_MESA";
+
+    /// <summary>O mesmo pela linha de comando: letreiro, tipo, quantidade e lado. Para o nível 2.</summary>
+    public const string ComandoTrocarMesaAutomatico = "UFV_TROCAR_MESA_AUTO";
+
+    /// <summary>Apaga e gera de novo só a fileira da mesa clicada (9.3).</summary>
+    public const string ComandoRegerarFileira = "UFV_REGERAR_FILEIRA";
+
+    /// <summary>O mesmo pelo letreiro, sem clique. Para o nível 2.</summary>
+    public const string ComandoRegerarFileiraAutomatico = "UFV_REGERAR_FILEIRA_AUTO";
+
+    /// <summary>Insere árvores (tronco e copa cilíndricos) clicando no desenho; o pé no terreno (9.4).</summary>
+    public const string ComandoArvore = "UFV_ARVORE";
+
+    /// <summary>O mesmo com as medidas e os pontos pela linha de comando. Para o nível 2.</summary>
+    public const string ComandoArvoreAutomatico = "UFV_ARVORE_AUTO";
+
+    /// <summary>Janela das sombras: instante, dia, mês ou ano; desenha a sombra e marca os módulos (9.7, 9.8).</summary>
+    public const string ComandoSombras = "UFV_SOMBRAS";
+
+    /// <summary>Sombras pela linha de comando (data, hora ou período). Para o nível 2.</summary>
+    public const string ComandoSombrasAutomatico = "UFV_SOMBRAS_AUTO";
+
+    /// <summary>Apaga as sombras desenhadas e tira as marcas dos módulos.</summary>
+    public const string ComandoSombrasApagar = "UFV_SOMBRAS_APAGAR";
+
+    /// <summary>Grava a página 3D (terreno, mesas, árvores) e abre no navegador (9.9).</summary>
+    public const string ComandoVer3D = "UFV_3D";
+
+    /// <summary>Grava a página 3D sem abrir o navegador, no caminho dado. Para o nível 2.</summary>
+    public const string ComandoVer3DAutomatico = "UFV_3D_AUTO";
+
     /// <summary>A análise de declividade: seta e valor em cada mesa, em porcentagem ou graus, ou desligada.</summary>
     public const string ComandoDeclividade = "UFV_DECLIVIDADE";
 

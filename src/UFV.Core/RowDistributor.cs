@@ -58,10 +58,15 @@ public sealed record PlacedTable(
     IReadOnlyList<Point3> Corners,
     bool PartlyOutside,
     int Kind = 0,
-    bool TriedAll = false)
+    bool TriedAll = false,
+    string Suffix = "")
 {
-    /// <summary>O letreiro do plano de requisitos: F1.1, F1.2, F2.1…</summary>
-    public string Label => $"F{Row}.{Number}";
+    /// <summary>
+    /// O letreiro do plano de requisitos: F1.1, F1.2, F2.1… Com sufixo
+    /// (F3.5a, F3.5b) quando uma mesa foi trocada por várias (9.2), até o
+    /// Numerar.
+    /// </summary>
+    public string Label => $"F{Row}.{Number}{Suffix}";
 }
 
 /// <summary>Uma fileira: as mesas em sequência sobre a mesma reta.</summary>

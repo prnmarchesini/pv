@@ -44,7 +44,7 @@ public static class TableCells
         if (!double.IsFinite(length) || length < RowDistributor.MenorMedida || !double.IsFinite(planDepth) || planDepth < RowDistributor.MenorMedida)
             throw new ArgumentOutOfRangeException(nameof(length), "O comprimento e o fundo em planta precisam ser medidas.");
 
-        if (!TryParseLabel(label, out var fileira, out var numero))
+        if (!TryParseLabel(label, out var fileira, out var numero, out var sufixo))
             throw new ArgumentException($"O letreiro \"{label}\" não é F<fileira>.<mesa>.", nameof(label));
 
         var origem = new Point3(corners[0].X, corners[0].Y, 0);
@@ -85,7 +85,7 @@ public static class TableCells
             new(origem.X + normal.X * planDepth, origem.Y + normal.Y * planDepth, 0),
         ];
 
-        return new PlacedTable(fileira, numero, origem, Math.Atan2(direcao.Y, direcao.X), length, planDepth, cantos, false);
+        return new PlacedTable(fileira, numero, origem, Math.Atan2(direcao.Y, direcao.X), length, planDepth, cantos, false, Suffix: sufixo);
     }
 
     /// <summary>
@@ -102,7 +102,7 @@ public static class TableCells
         if (corners.Count != 4 || corners.Any(c => !c.IsFinite))
             throw new ArgumentException("O contorno da mesa precisa de quatro cantos finitos.", nameof(corners));
 
-        if (!TryParseLabel(label, out var fileira, out var numero))
+        if (!TryParseLabel(label, out var fileira, out var numero, out var sufixo))
             throw new ArgumentException($"O letreiro \"{label}\" não é F<fileira>.<mesa>.", nameof(label));
 
         var origem = new Point3(corners[0].X, corners[0].Y, 0);
@@ -134,14 +134,18 @@ public static class TableCells
             new(origem.X + normal.X * fundo, origem.Y + normal.Y * fundo, 0),
         ];
 
-        return new PlacedTable(fileira, numero, origem, Math.Atan2(direcao.Y, direcao.X), comprimento, fundo, cantos, false);
+        return new PlacedTable(fileira, numero, origem, Math.Atan2(direcao.Y, direcao.X), comprimento, fundo, cantos, false, Suffix: sufixo);
     }
 
-    /// <summary>Lê "F1.3" como fileira 1, mesa 3.</summary>
-    public static bool TryParseLabel(string? label, out int row, out int number)
+    /// <summary>Lê "F1.3" como fileira 1, mesa 3 (o sufixo de "F1.3a" é aceito e descartado).</summary>
+    public static bool TryParseLabel(string? label, out int row, out int number) => TryParseLabel(label, out row, out number, out _);
+
+    /// <summary>Lê "F1.3a" como fileira 1, mesa 3, sufixo "a" (mesa trocada por várias, 9.2).</summary>
+    public static bool TryParseLabel(string? label, out int row, out int number, out string suffix)
     {
         row = 0;
         number = 0;
+        suffix = string.Empty;
 
         if (string.IsNullOrWhiteSpace(label)) return false;
 
@@ -151,8 +155,14 @@ public static class TableCells
         var partes = texto[1..].Split('.');
         if (partes.Length != 2) return false;
 
+        var digitos = partes[1].TakeWhile(char.IsAsciiDigit).Count();
+        var resto = partes[1][digitos..];
+        if (!resto.All(char.IsAsciiLetterLower)) return false;
+
+        suffix = resto;
+
         return int.TryParse(partes[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out row)
-            && int.TryParse(partes[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out number)
+            && int.TryParse(partes[1][..digitos], NumberStyles.Integer, CultureInfo.InvariantCulture, out number)
             && row > 0 && number > 0;
     }
 }

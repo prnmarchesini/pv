@@ -151,6 +151,25 @@ public class TableCellsTests
         Assert.False(TableCells.TryParseLabel(null, out _, out _));
     }
 
+    /// <summary>A mesa trocada por várias (9.2) tem sufixo: F3.5a; o sufixo volta no letreiro da célula.</summary>
+    [Fact]
+    [Trait("Etapa", "9")]
+    public void OLetreiroComSufixoELido()
+    {
+        Assert.True(TableCells.TryParseLabel("F3.5b", out var f, out var m, out var s));
+        Assert.Equal((3, 5, "b"), (f, m, s));
+        Assert.True(TableCells.TryParseLabel("F3.5", out _, out _, out var semSufixo));
+        Assert.Equal(string.Empty, semSufixo);
+        Assert.False(TableCells.TryParseLabel("F3.5B", out _, out _, out _));
+        Assert.False(TableCells.TryParseLabel("F3.5-", out _, out _, out _));
+        Assert.False(TableCells.TryParseLabel("F3.a", out _, out _, out _));
+        Assert.True(Tags.TryParseLabel("F3.5a", out var tf, out var tn));
+        Assert.Equal((3, 5), (tf, tn));
+
+        var cantos = new[] { new Point3(0, 0, 0), new Point3(10, 0, 0), new Point3(10, 4, 0), new Point3(0, 4, 0) };
+        Assert.Equal("F3.5a", TableCells.FromDrawnCorners(cantos, "F3.5a").Label);
+    }
+
     [Fact]
     [Trait("Etapa", "7")]
     public void ContornoQueNaoDescreveUmaMesaERecusado()

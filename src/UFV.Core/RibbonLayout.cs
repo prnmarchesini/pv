@@ -78,6 +78,8 @@ public static class RibbonLayout
                     B("Renomear blocos", PluginInfo.ComandoRenomear, "Devolve aos blocos copiados o nome do padrão do plugin.", "Renomear"),
                     B("Estado", PluginInfo.ComandoEstado, "Lista as mesas sujas e o motivo.", "Estado"),
                     B("Sujar", PluginInfo.ComandoSujar, "Marca a mesa escolhida como suja, para recalcular depois.", "Sujar"),
+                    B("Trocar mesa", PluginInfo.ComandoTrocarMesa, "Troca a mesa clicada por uma ou mais de outro tipo (por exemplo, uma de 28 por duas de 14), travando o início ou o fim dela.", "Trocar"),
+                    B("Regerar fileira", PluginInfo.ComandoRegerarFileira, "Apaga e gera de novo só a fileira da mesa clicada, com as mesas em uso; acerta o espaçamento depois de uma troca.", "Refazer"),
                 ]),
                 B("Grupos", PluginInfo.ComandoGruposPainel, "Abre o painel de grupos: mesas, módulos, pilares e kWp de cada grupo.", "Grupos", grande: true),
             ]),
@@ -93,10 +95,19 @@ public static class RibbonLayout
                     "Abre a janela das tags: numerar fileiras e mesas, e as tags de fileiras, mesas, módulos e strings (inserir e apagar).",
                     "Numerar", grande: true),
             ]),
+            new("Sombreamento",
+            [
+                new RibbonMenuSpec("Objetos", "Objetos que fazem sombra nos módulos; o primeiro é a árvore.", "Arvore",
+                [
+                    B("Árvore", PluginInfo.ComandoArvore, "Árvore como um pirulito: tronco e copa cilíndricos, com altura e largura de cada um. Clique onde pôr; o pé fica no terreno e acompanha o terreno quando a árvore é arrastada.", "Arvore"),
+                ]),
+                B("Sombras", PluginInfo.ComandoSombras, "Escolhe o dia e o horário (ou um dia, um mês, um ano inteiro) e desenha a sombra dos objetos no terreno, marcando os módulos que ela pega; no período, o pior caso.", "Sombras", grande: true),
+            ]),
             new("Saída",
             [
                 B("PVsyst", PluginInfo.ComandoExportar, "Exporta as faces dos módulos escolhidos para o PVsyst (DAE).", "Exportar", grande: true),
                 B("Excel", PluginInfo.ComandoExportarExcel, "Exporta para o Excel o resumo, as quantificações das análises e os pilares.", "Exportar", grande: true),
+                B("3D", PluginInfo.ComandoVer3D, "Abre no navegador um modelo 3D para girar e dar zoom: terreno, mesas com as cores dos tipos, pilares e árvores. Funciona sem internet.", "Ver3D", grande: true),
             ]),
         ]),
     ];

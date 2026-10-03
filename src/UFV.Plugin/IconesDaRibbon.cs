@@ -241,6 +241,36 @@ internal static class IconesDaRibbon
         Preenchimento("M11,9 A2,2 0 1 1 10.99,9 Z", Azul),
         Preenchimento("M28,8 A2,2 0 1 1 27.99,8 Z", Azul));
 
+    /// <summary>Uma mesa grande e duas pequenas com a seta de troca entre elas.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Trocar() => Montar(
+        Traco("M3,8 H29", Azul, 3.4),
+        Traco("M3,24 H14 M18,24 H29", Ambar, 3.4),
+        Traco("M10,12 V20 M7.5,17.5 L10,20 L12.5,17.5", Neutro, 1.8),
+        Traco("M22,20 V12 M19.5,14.5 L22,12 L24.5,14.5", Neutro, 1.8));
+
+    /// <summary>A árvore pirulito: tronco e copa.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Arvore() => Montar(
+        Traco("M16,18 V29", Ambar, 3.4),
+        Preenchimento("M7,4 H25 V19 H7 Z", Verde),
+        Traco("M2,29 H30", Neutro, 1.4));
+
+    /// <summary>O sol, a árvore e a sombra deitada no chão.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Sombras() => Montar(
+        Preenchimento("M6,7 A3.5,3.5 0 1 1 5.99,7 Z", Ambar),
+        Traco("M6,1 V2 M0.5,7 H1.5 M10,3 L10.8,2.2", Ambar, 1.4),
+        Traco("M15,15 V26", Ambar, 2.6),
+        Preenchimento("M11,8 H19 V16 H11 Z", Verde),
+        Preenchimento("M15,26 L30,22 L30,28 L15,28 Z", Neutro));
+
+    /// <summary>Um cubo em perspectiva: o modelo 3D.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static ImageSource Ver3D() => Montar(
+        Preenchimento("M16,4 L28,10 L16,16 L4,10 Z", AzulTranslucido),
+        Traco("M16,4 L28,10 L28,23 L16,29 L4,23 L4,10 Z M4,10 L16,16 L28,10 M16,16 V29", Azul, 1.8));
+
     private static Drawing Traco(string caminho, Brush cor, double espessura)
     {
         // StartLineCap/EndLineCap arredondados: sem eles as pontas das curvas

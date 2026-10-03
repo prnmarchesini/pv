@@ -45,7 +45,7 @@ public sealed record TaggedTable(string Label, Guid Id, IReadOnlyList<(int Colum
 /// </summary>
 public static class Tags
 {
-    private static readonly Regex Letreiro = new(@"^F(\d+)\.(\d+)$", RegexOptions.CultureInvariant);
+    private static readonly Regex Letreiro = new(@"^F(\d+)\.(\d+)[a-z]*$", RegexOptions.CultureInvariant);
 
     /// <summary>A camada das tags do tipo. Só para ligar e desligar: a identidade vai no XData.</summary>
     public static string LayerName(TagKind tipo) => PluginInfo.PrefixoDeDados + "_TAG_" + tipo switch

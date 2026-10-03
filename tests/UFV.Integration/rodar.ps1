@@ -3597,6 +3597,107 @@ function Testar-UsinaMista {
     return $true
 }
 
+<#
+    Trocar mesa e regerar fileira (9.2 e 9.3), na area da usina mista (90 m
+    de largura, 28 e 14 em uso). A F1.2 vira duas de 14 (F1.2a e F1.2b, com o
+    perfil de 14), com a cota no terreno; reespacar a fileira 1 mantem as
+    mesas e deixa pelo menos o espacamento entre vizinhas; a fileira 2 pelo
+    motor volta com o mesmo numero de mesas.
+#>
+function Testar-Trocar {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-trocar--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-trocar: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    if ($sonda.Texto -notmatch 'cotas:\s+(-?[\d.,]+) m a (-?[\d.,]+) m') {
+        $problemas.Add("ufv-trocar: nao achei a faixa de cotas do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $minima = [double]::Parse($Matches[1], $ptbr)
+    $maxima = [double]::Parse($Matches[2], $ptbr)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-trocar' `
+        -Script (Join-Path $PSScriptRoot 'ufv-trocar.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -45 -50 0)
+            '{{A2}}'   = (Ponto3  45 -50 0)
+            '{{A3}}'   = (Ponto3  45  50 0)
+            '{{A4}}'   = (Ponto3 -45  50 0)
+            '{{L1}}'   = (Ponto3 -45 -50 0)
+            '{{L2}}'   = (Ponto3 -45  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-trocar terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    $padrao = 'UFV_TROCAR total0=(\d+) total1=(\d+) total2=(\d+) f1antes=(\d+) f1troca=(\d+) f1manter=(\d+) f2antes=(\d+) f2motor=(\d+) ' +
+              'perfil12=(.+?) p2a=(.+?) p2b=(.+?) sem12=(.+?) p2amanter=(.+?) vao0=(-?[\d.]+) vaotroca=(-?[\d.]+) vaomanter=(-?[\d.]+) zmin=(-?[\d.]+) zmax=(-?[\d.]+)'
+
+    if ($r.Texto -notmatch $padrao) {
+        $problemas.Add("ufv-trocar: nao consegui ler o LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $m = $Matches
+    $total0 = [int] $m[1]; $total1 = [int] $m[2]; $total2 = [int] $m[3]
+    $f1antes = [int] $m[4]; $f1troca = [int] $m[5]; $f1manter = [int] $m[6]
+    $f2antes = [int] $m[7]; $f2motor = [int] $m[8]
+    $vao0 = [double]::Parse($m[14], $invariante)
+    $vaoManter = [double]::Parse($m[16], $invariante)
+    $zmin = [double]::Parse($m[17], $invariante); $zmax = [double]::Parse($m[18], $invariante)
+
+    if ($total0 -lt 4 -or $total1 -ne ($total0 + 1) -or $f1troca -ne ($f1antes + 1)) {
+        $problemas.Add("ufv-trocar: trocar 1 por 2 deveria somar uma mesa (antes $total0, depois $total1; fileira 1 de $f1antes para $f1troca). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($m[10] -ne 'Mesa 2V14' -or $m[11] -ne 'Mesa 2V14' -or $m[12] -ne '-') {
+        $problemas.Add("ufv-trocar: a F1.2 ($($m[9])) deveria virar F1.2a e F1.2b de 'Mesa 2V14' e sumir; deu F1.2a=$($m[10]), F1.2b=$($m[11]), F1.2=$($m[12]). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($zmin -lt ($minima - 0.01) -or $zmax -gt ($maxima + 5)) {
+        $problemas.Add("ufv-trocar: o contorno da F1.2a vai de $zmin a $zmax, fora da faixa do terreno ($minima a $maxima). Veja $($r.Saida)")
+        return $false
+    }
+
+    # Reespacar mantem as mesas e os tipos e deixa o espacamento do motor. O
+    # vao medido e entre contornos em planta (o plano dos modulos, menor que
+    # a pegada): o do motor, antes da troca, e a referencia; a inclinacao de
+    # cada mesa muda um pouco o comprimento em planta, dai a folga de 0,1 m.
+    if ($f1manter -ne $f1troca -or $m[13] -ne 'Mesa 2V14' -or $vaoManter -le 0 -or $vaoManter -lt ($vao0 - 0.1)) {
+        $problemas.Add("ufv-trocar: reespacar a fileira 1 deveria manter $f1troca mesas (deu $f1manter), a F1.2a de 14 (deu $($m[13])) e o vao do motor ($vao0 m, menos 0,1; deu $vaoManter). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($f2motor -ne $f2antes -or $total2 -ne $total1) {
+        $problemas.Add("ufv-trocar: a fileira 2 pelo motor deveria voltar com $f2antes mesas (deu $f2motor; total $total1 -> $total2). Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (trocar: F1.2 ($($m[9])) virou 2 de 14, vao minimo $($m[15]) m (motor $vao0); reespacada com $vaoManter m; fileira 2 pelo motor com $f2motor mesas)" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -3754,6 +3855,10 @@ else {
     # Usina com dois tipos de mesa (8.5 e 8.6).
     $total++
     if (Testar-UsinaMista -Desenho $desenhos[0]) { $passaram++ }
+
+    # Trocar mesa e regerar fileira (9.2 e 9.3).
+    $total++
+    if (Testar-Trocar -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------
