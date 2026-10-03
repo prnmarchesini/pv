@@ -128,6 +128,38 @@ public static class PlantPipeline
     /// distribuição usa a geometria, os módulos e a potência do tipo dela
     /// (<see cref="PlacedTable.Kind"/>). A inclinação é uma só.
     /// </summary>
+    /// <summary>
+    /// O teste da mesa no terreno para a distribuição (<see cref="RowDistributor.Distribute(IReadOnlyList{Point3}, IReadOnlyList{Point3}, LineSide, double, double, IReadOnlyList{TableFootprint}, IReadOnlyList{int}, double, Func{PlacedTable, bool}?)"/>):
+    /// a mesa resolvida sozinha no terreno não fica marcada (sem módulo
+    /// fora do que o lombo permite, sem pilar sem terreno). Na fileira, com
+    /// as juntas fechadas com as vizinhas (regra 6), ela ainda pode ficar
+    /// marcada: aí sai magenta.
+    /// </summary>
+    public static Func<PlacedTable, bool> FitsOnTerrain(
+        IReadOnlyList<TableGeometry> geometries, double tiltRadians, Tin terrain, ProjectSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(geometries);
+        ArgumentNullException.ThrowIfNull(terrain);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        return celula =>
+        {
+            try
+            {
+                var sozinha = RowPipeline.ProcessRow(new PlanRow(celula.Row, [celula]), [geometries[celula.Kind]], tiltRadians, terrain, settings);
+                return sozinha.MarkedCount == 0 && sozinha.Tables.All(t => t.Pillars.ProblemCount == 0);
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+        };
+    }
+
     public static ProcessedPlant ProcessAll(
         PlanLayout layout,
         IReadOnlyList<TableGeometry> geometries,

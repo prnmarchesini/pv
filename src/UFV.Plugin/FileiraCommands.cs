@@ -194,7 +194,8 @@ public static class FileiraCommands
             tipos = t;
             layout = RowDistributor.Distribute(
                 area.Vertices, alinhamento.Vertices, alinhamento.Identidade.Side, config.Pitch, config.TableGap, pegadas, modulos,
-                config.UpslopeAzimuthRadians);
+                config.UpslopeAzimuthRadians,
+                pegadas.Count > 1 ? PlantPipeline.FitsOnTerrain(t.Geometrias, perfil.TiltRadians, terreno.Mesh, settings) : null);
         }
 
         if (layout.Rows.Count == 0)

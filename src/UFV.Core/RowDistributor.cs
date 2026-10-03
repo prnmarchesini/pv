@@ -42,6 +42,12 @@ public sealed record TableFootprint(double Length, double PlanDepth);
 /// distribuição recebeu (passo 8.6: 28 e 14 módulos na mesma usina). Zero
 /// quando só há um tipo.
 /// </param>
+/// <param name="TriedAll">
+/// A distribuição testou no terreno todas as mesas que cabiam neste lugar,
+/// pela prioridade, e nenhuma ficou boa: ficou a de maior prioridade
+/// (02/10/2026: "tentei todas as mesas possíveis, nenhuma ficou boa, então
+/// deixei a primeira opção"; o desenho pinta de roxo).
+/// </param>
 public sealed record PlacedTable(
     int Row,
     int Number,
@@ -51,7 +57,8 @@ public sealed record PlacedTable(
     double PlanDepth,
     IReadOnlyList<Point3> Corners,
     bool PartlyOutside,
-    int Kind = 0)
+    int Kind = 0,
+    bool TriedAll = false)
 {
     /// <summary>O letreiro do plano de requisitos: F1.1, F1.2, F2.1…</summary>
     public string Label => $"F{Row}.{Number}";
@@ -186,9 +193,19 @@ public static class RowDistributor
     ///
     /// Todos os tipos ocupam a mesma faixa da fileira: o fundo em planta que
     /// vale é o maior deles.
+    ///
+    /// Com <paramref name="fits"/> (o teste da mesa no terreno), cada lugar
+    /// da fileira é decidido olhando o terreno (Renan, 02/10/2026: "deveria
+    /// testar com o módulo de 14 quando a primeira opção, que é 28, não
+    /// couber; se a segunda opção não couber, volta à de 28, mas pinta de
+    /// outra cor"): a primeira mesa da lista que cabe no trecho e fica boa
+    /// no terreno; se nenhuma fica boa, a primeira que cabe, com
+    /// <see cref="PlacedTable.TriedAll"/>. A mesa seguinte começa logo
+    /// depois da escolhida: a fileira não fica com buraco.
     /// </summary>
     /// <param name="tables">Os tipos de mesa, em planta.</param>
     /// <param name="modules">Os módulos de cada tipo, na mesma ordem.</param>
+    /// <param name="fits">Se a mesa, sozinha, fica boa no terreno; null distribui só pelo comprimento.</param>
     public static PlanLayout Distribute(
         IReadOnlyList<Point3> area,
         IReadOnlyList<Point3> alignment,
@@ -197,7 +214,8 @@ public static class RowDistributor
         double gap,
         IReadOnlyList<TableFootprint> tables,
         IReadOnlyList<int> modules,
-        double upslopeAzimuthRadians)
+        double upslopeAzimuthRadians,
+        Func<PlacedTable, bool>? fits = null)
     {
         ArgumentNullException.ThrowIfNull(area);
         ArgumentNullException.ThrowIfNull(alignment);
@@ -254,8 +272,8 @@ public static class RowDistributor
             var mesas = new List<PlacedTable>();
 
             // Põe a mesa do tipo dado na estação s; null se um recorte da
-            // área entra por ela (descartada).
-            PlacedTable? Colocar(double s, TableFootprint tipo, int indice)
+            // área entra por ela (descartada, e contada se contar).
+            PlacedTable? Colocar(double s, TableFootprint tipo, int indice, bool contar = true)
             {
                 var canto = new Point3(
                     origem.X + direcao.X * s + subida.X * afastamento,
@@ -266,7 +284,7 @@ public static class RowDistributor
 
                 if (ParcialmenteFora(mesa.Corners, canto, direcao, subida, tipo, area))
                 {
-                    descartadas++;
+                    if (contar) descartadas++;
                     return null;
                 }
 
@@ -297,6 +315,52 @@ public static class RowDistributor
                         if (Colocar(s, unica, 0) is { } mesa) mesas.Add(mesa);
                     }
 
+                    continue;
+                }
+
+                if (fits is not null)
+                {
+                    // Lugar a lugar, olhando o terreno.
+                    var s = inicio;
+
+                    while (true)
+                    {
+                        var cabem = Enumerable.Range(0, tables.Count).Where(t => s + tables[t].Length <= fim + Tolerancia).ToList();
+                        if (cabem.Count == 0) break;
+
+                        PlacedTable? escolhida = null;
+                        PlacedTable? primeira = null;
+                        var testadas = 0;
+
+                        foreach (var t in cabem)
+                        {
+                            if (Colocar(s, tables[t], t, contar: false) is not { } candidata) continue;
+
+                            primeira ??= candidata;
+                            testadas++;
+
+                            if (fits(candidata))
+                            {
+                                escolhida = candidata;
+                                break;
+                            }
+                        }
+
+                        if (primeira is null)
+                        {
+                            // Um recorte da área entra por todas: o lugar da
+                            // primeira fica vazio, como na distribuição de sempre.
+                            descartadas++;
+                            s += tables[cabem[0]].Length + gap;
+                            continue;
+                        }
+
+                        var mesa = escolhida ?? primeira with { TriedAll = testadas > 1 };
+                        mesas.Add(mesa);
+                        s += mesa.Length + gap;
+                    }
+
+                    if (s < fim - Tolerancia && fim - s > tables.Min(t => t.Length) * 0.5) descartadas++;
                     continue;
                 }
 

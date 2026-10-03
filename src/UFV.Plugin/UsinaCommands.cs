@@ -230,7 +230,8 @@ public static class UsinaCommands
                     config.UpslopeAzimuthRadians)
                 : RowDistributor.Distribute(
                     area.Vertices, alinhamento.Vertices, alinhamento.Identidade.Side, config.Pitch, config.TableGap, footprints,
-                    doDesenho.Select(m => m.Profile.Layout.ModuleCount).ToList(), config.UpslopeAzimuthRadians);
+                    doDesenho.Select(m => m.Profile.Layout.ModuleCount).ToList(), config.UpslopeAzimuthRadians,
+                    footprints.Count > 1 ? PlantPipeline.FitsOnTerrain(tipos.Geometrias, perfil.TiltRadians, terreno.Mesh, settings) : null);
         }
         catch (ArgumentException erro)
         {

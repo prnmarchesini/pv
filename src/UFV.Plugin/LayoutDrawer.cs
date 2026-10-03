@@ -166,6 +166,10 @@ internal static class LayoutDrawer
             // na terra porque ali não tem como fazer milagre".
             var naoCabe = mesa.Solved.Marked || mesa.Pillars.ProblemCount > 0;
 
+            // Roxo: a distribuição tentou todas as mesas da lista neste lugar
+            // e nenhuma ficou boa; ficou a primeira (02/10/2026).
+            var corDeNaoCabe = mesa.Cell.TriedAll ? CorTentouTodas : CorDeNaoCabe;
+
             // 1. Pilares.
             for (var i = 0; i < mesa.Pillars.Pillars.Count; i++)
             {
@@ -189,7 +193,7 @@ internal static class LayoutDrawer
                 var vereditoDoPilar = oQue.Cores ? relatorio.PaintVerdict : null;
 
                 if (naoCabe)
-                    PintarNaoCabe(bloco, vereditoDoPilar, camadaMarcada);
+                    PintarNaoCabe(bloco, vereditoDoPilar, camadaMarcada, corDeNaoCabe);
                 else
                     Pintar(bloco, vereditoDoPilar, camadaPilar, ref pintadas);
 
@@ -247,7 +251,7 @@ internal static class LayoutDrawer
                 var vereditoDoModulo = oQue.Cores ? relatorio?.Verdict : null;
 
                 if (naoCabe)
-                    PintarNaoCabe(bloco, vereditoDoModulo, camadaMarcada);
+                    PintarNaoCabe(bloco, vereditoDoModulo, camadaMarcada, corDeNaoCabe);
                 else
                 {
                     Pintar(bloco, vereditoDoModulo, camadaModulo, ref pintadas);
@@ -297,7 +301,7 @@ internal static class LayoutDrawer
             if (naoCabe)
             {
                 contorno.Layer = camadaMarcada;
-                contorno.Color = CorDeNaoCabe;
+                contorno.Color = corDeNaoCabe;
             }
             else if (oQue.Cores && mesa.Report.EdgeVerdict.Color is { } corDaBorda)
             {
@@ -396,6 +400,7 @@ internal static class LayoutDrawer
 
             partes.Add("cinza = mesa sem cor de tipo");
             partes.Add($"magenta = mesa que não cabe no terreno ({marcadas}; o motivo está no Estado)");
+            if (tipos is { Nomes.Count: > 1 }) partes.Add("roxo = tentei todas as mesas da lista nesse lugar, nenhuma coube; ficou a 1ª");
 
             return "  Cores: " + string.Join("; ", partes) + ".";
         }
@@ -414,6 +419,9 @@ internal static class LayoutDrawer
 
     /// <summary>Magenta: a cor da mesa que não cabe no terreno, inteira.</summary>
     private static readonly Color CorDeNaoCabe = Color.FromRgb(255, 0, 255);
+
+    /// <summary>Roxo: a mesa que não cabe depois de tentadas todas as mesas da lista naquele lugar.</summary>
+    private static readonly Color CorTentouTodas = Color.FromRgb(120, 40, 200);
 
     /// <summary>A direção (unitária, 3D) do eixo X local da colocação: ao longo da fileira, no plano da mesa.</summary>
     private static Point3 DirecaoDoEixoX(Transform colocacao)
@@ -491,10 +499,10 @@ internal static class LayoutDrawer
     /// fora do padrão mas não pintou o módulo" — é o módulo pintado que diz
     /// ONDE a mesa não cabe.
     /// </summary>
-    private static void PintarNaoCabe(Entity entidade, AnalysisVerdict? veredito, string camadaMarcada)
+    private static void PintarNaoCabe(Entity entidade, AnalysisVerdict? veredito, string camadaMarcada, Color corDeNaoCabe)
     {
         entidade.Layer = camadaMarcada;
-        entidade.Color = veredito?.Color is { } cor ? Color.FromRgb(cor.R, cor.G, cor.B) : CorDeNaoCabe;
+        entidade.Color = veredito?.Color is { } cor ? Color.FromRgb(cor.R, cor.G, cor.B) : corDeNaoCabe;
     }
 
     /// <summary>Camada e cor da peça: a da análise quando ela pinta, a fixa quando não.</summary>

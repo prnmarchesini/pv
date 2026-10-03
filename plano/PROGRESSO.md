@@ -4564,3 +4564,23 @@ Roteiro de tela:
   fica no lugar, do tipo da prioridade, marcada se não dá. Teste
   `NoHolesTests`: em 12 terrenos com morro, toda mesa planejada fica no
   lugar e do tipo dela, juntas fechadas, e há mesa marcada.
+
+### 02/10/2026: tentar a 2ª onde a 1ª não fica boa, e roxo quando nenhuma serve
+
+Renan: "deveria testar com o módulo de 14 quando a primeira opção, que é
+28, não couber; se a segunda não couber, volta à de 28, mas pinta de
+outra cor, roxo: tentei todas as mesas possíveis, nenhuma ficou boa".
+
+- `RowDistributor.Distribute` recebe o teste do terreno
+  (`PlantPipeline.FitsOnTerrain`: a mesa resolvida sozinha no terreno não
+  fica marcada nem tem pilar sem terreno). Lugar a lugar: a primeira mesa
+  da lista que cabe no trecho e fica boa; nenhuma boa, a primeira que
+  cabe, com `TriedAll`. A seguinte começa logo depois: sem buraco.
+- O desenho pinta a mesa `TriedAll` que não cabe de roxo (120, 40, 200);
+  a legenda da Usina explica o roxo. Usina e Fileira usam o teste.
+- Teste `TentaASegundaOndeAPrimeiraNaoFicaBoaSemBuraco`: 12 terrenos com
+  morro; exige troca de 28 por 14 por causa do terreno, lugar sem mesa
+  boa (de 28, roxo) e vão igual ao espaçamento entre mesas vizinhas.
+- Limites que ficam: o teste é da mesa sozinha; na fileira, presa às
+  vizinhas pela regra 6, ela ainda pode sair magenta. O roxo não fica
+  gravado no XData: Recalcular uma mesa roxa a redesenha magenta.

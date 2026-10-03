@@ -105,4 +105,95 @@ public class NoHolesTests
 
         Assert.True(marcadas > 0, "os morros sorteados não enterraram mesa nenhuma: o teste não prova nada");
     }
+
+    /// <summary>
+    /// Com o teste do terreno (Renan, 02/10/2026: "deveria testar com o
+    /// módulo de 14 quando a primeira opção, que é 28, não couber; se a
+    /// segunda não couber, volta à de 28 e pinta de outra cor"): em
+    /// terrenos com morro sorteado, cada mesa é a primeira da lista que
+    /// fica boa no terreno; a que não ficou boa com nenhuma é a de 28,
+    /// marcada como "tentou todas"; e a fileira não tem buraco: cada mesa
+    /// começa logo depois da anterior.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void TentaASegundaOndeAPrimeiraNaoFicaBoaSemBuraco()
+    {
+        var sorteio = new Random(20261003);
+        var config = ProjectSettings.Default.Configuration;
+        int trocadas = 0, tentouTodas = 0;
+
+        for (var caso = 0; caso < 12; caso++)
+        {
+            var centro = sorteio.NextDouble() * 40;
+            var largura = 2 + sorteio.NextDouble() * 12;
+            var altura = 0.5 + sorteio.NextDouble() * 4;
+
+            double Morro(double x, double y) => 700 + altura * Math.Exp(-Math.Pow((x - centro) / largura, 2));
+
+            var terreno = Terreno(Morro);
+            var fica = PlantPipeline.FitsOnTerrain(Geos, Tilt, terreno, ProjectSettings.Default);
+
+            var area = new[] { new Point3(0, 0, 0), new Point3(40, 0, 0), new Point3(40, 8, 0), new Point3(0, 8, 0) };
+            var alinhamento = new[] { new Point3(0, 0, 0), new Point3(0, 8, 0) };
+            var layout = RowDistributor.Distribute(area, alinhamento, LineSide.Right, config.Pitch, config.TableGap, Pegadas, Modulos, config.UpslopeAzimuthRadians, fica);
+
+            foreach (var fileira in layout.Rows)
+            {
+                for (var t = 0; t < fileira.Tables.Count; t++)
+                {
+                    var mesa = fileira.Tables[t];
+
+                    if (mesa.TriedAll)
+                    {
+                        // Ficou a primeira da lista, e nenhuma ficava boa ali.
+                        Assert.Equal(0, mesa.Kind);
+                        Assert.False(fica(mesa));
+                        Assert.False(fica(TerrainSwap(mesa, 1)));
+                        tentouTodas++;
+                    }
+                    else if (mesa.Kind == 1 && fica(mesa) && t + 1 < fileira.Tables.Count)
+                    {
+                        // A de 14 no meio da fileira: a de 28 não ficava boa ali.
+                        Assert.False(fica(TerrainSwap(mesa, 0)));
+                        trocadas++;
+                    }
+
+                    // Sem buraco: a próxima começa no fim desta mais o espaçamento.
+                    if (t + 1 < fileira.Tables.Count)
+                    {
+                        var proxima = fileira.Tables[t + 1];
+                        var fimDesta = mesa.Corners[1];
+                        var vao = Math.Sqrt(Math.Pow(proxima.Origin.X - fimDesta.X, 2) + Math.Pow(proxima.Origin.Y - fimDesta.Y, 2));
+                        Assert.Equal(config.TableGap, vao, 6);
+                    }
+                }
+            }
+        }
+
+        Assert.True(trocadas > 0, "nenhuma 28 virou 14 por causa do terreno: o teste não prova nada");
+        Assert.True(tentouTodas > 0, "nenhum lugar ficou sem mesa boa: o teste não prova a volta à primeira");
+    }
+
+    /// <summary>A mesma mesa, no mesmo começo, com outro tipo.</summary>
+    private static PlacedTable TerrainSwap(PlacedTable mesa, int tipo)
+    {
+        var c = mesa.Corners;
+        var dx = (c[1].X - c[0].X) / mesa.Length;
+        var dy = (c[1].Y - c[0].Y) / mesa.Length;
+        var nx = (c[3].X - c[0].X) / mesa.PlanDepth;
+        var ny = (c[3].Y - c[0].Y) / mesa.PlanDepth;
+        var comprimento = Pegadas[tipo].Length;
+        var fundo = Pegadas[tipo].PlanDepth;
+        var fim = new Point3(c[0].X + dx * comprimento, c[0].Y + dy * comprimento, 0);
+
+        return mesa with
+        {
+            Kind = tipo,
+            Length = comprimento,
+            PlanDepth = fundo,
+            TriedAll = false,
+            Corners = [c[0], fim, new Point3(fim.X + nx * fundo, fim.Y + ny * fundo, 0), new Point3(c[0].X + nx * fundo, c[0].Y + ny * fundo, 0)],
+        };
+    }
 }
