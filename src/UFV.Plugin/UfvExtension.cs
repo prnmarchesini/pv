@@ -34,6 +34,7 @@ public sealed class UfvExtension : IExtensionApplication
         try
         {
             LayoutWatcher.Instalar();
+            ArvoreVigia.Instalar();
             ValidacaoAoAbrir.Instalar();
         }
         catch (System.Exception erro)
@@ -67,6 +68,7 @@ public sealed class UfvExtension : IExtensionApplication
         try
         {
             ValidacaoAoAbrir.Desinstalar();
+            ArvoreVigia.Desinstalar();
             LayoutWatcher.Desinstalar();
         }
         catch (System.Exception erro)

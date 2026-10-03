@@ -3698,6 +3698,243 @@ function Testar-Trocar {
     return $true
 }
 
+<#
+    A arvore (9.4): duas pelo comando, o pe no terreno (o clique vem com
+    Z = 0); a primeira MOVIDA com +80 m de cota e a segunda COPIADA com -40 m
+    voltam ao chao do lugar novo (regra 5), e a copia tem GUID proprio.
+#>
+function Testar-Arvore {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-arvore--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-arvore: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto([double] $dx, [double] $dy) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},0', $centroX + $dx, $centroY + $dy)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-arvore' `
+        -Script (Join-Path $PSScriptRoot 'ufv-arvore.scr') `
+        -Substituicoes @{ '{{P1}}' = (Ponto -20 -10); '{{P2}}' = (Ponto 10 5) }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-arvore terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'UFV_ARVORE_ANTES n=(\d+) z1=(-?[\d.]+) z2=(-?[\d.]+)' -or [int] $Matches[1] -ne 2) {
+        $problemas.Add("ufv-arvore: esperava 2 arvores postas pelo comando. Veja $($r.Saida)")
+        return $false
+    }
+
+    # O pe na cota do terreno, nunca a do clique (0).
+    if ([math]::Abs([double]::Parse($Matches[2], $invariante)) -lt 1 -or [math]::Abs([double]::Parse($Matches[3], $invariante)) -lt 1) {
+        $problemas.Add("ufv-arvore: arvore posta com a cota do clique (0) e nao a do terreno. Veja $($r.Saida)")
+        return $false
+    }
+
+    $arvores = [regex]::Matches($r.Texto, '(?m)^UFV_ARVORE_P i=\d+ z=(-?[\d.]+) guid=([0-9a-f-]+)')
+    $chao = [regex]::Matches($r.Texto, '(?m)^\s+X [\d\.,]+\s+Y [\d\.,]+\s+Z ([\d\.,-]+)\s*$')
+
+    if ($arvores.Count -ne 3 -or $chao.Count -ne 3) {
+        $problemas.Add("ufv-arvore: depois de mover e copiar esperava 3 arvores e 3 cotas do terreno; deu $($arvores.Count) e $($chao.Count). Veja $($r.Saida)")
+        return $false
+    }
+
+    for ($i = 0; $i -lt 3; $i++) {
+        $z = [double]::Parse($arvores[$i].Groups[1].Value, $invariante)
+        $terreno = [double]::Parse(($chao[$i].Groups[1].Value -replace '\.', ''), $ptbr)
+
+        if ([math]::Abs($z - $terreno) -gt 0.01) {
+            $problemas.Add("ufv-arvore: a arvore $($i + 1) ficou na cota $z e o terreno ali e $terreno; ela tinha de voltar ao chao. Veja $($r.Saida)")
+            return $false
+        }
+    }
+
+    $guids = $arvores | ForEach-Object { $_.Groups[2].Value } | Sort-Object -Unique
+    if (@($guids).Count -ne 3) {
+        $problemas.Add("ufv-arvore: a copia ficou com o GUID da original. Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (arvore: 2 postas no terreno, uma movida 10 m em planta e +80 m na cota, uma copiada -40 m; as 3 no chao, GUIDs proprios)" -ForegroundColor DarkGray
+    return $true
+}
+
+<#
+    Sombras (9.7 e 9.8): uma fileira e uma arvore grande no meio da F1.3. As
+    09:00 de 21/06/2026 a sombra e desenhada no terreno (cota na faixa dele,
+    regra 5) e marca modulos; Apagar tira os contornos e devolve exatamente
+    a cor de antes de cada modulo; o dia inteiro marca, pelo pior caso, pelo
+    menos os modulos do instante.
+#>
+function Testar-Sombras {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-sombras--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-sombras: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    if ($sonda.Texto -notmatch 'cotas:\s+(-?[\d.,]+) m a (-?[\d.,]+) m') {
+        $problemas.Add("ufv-sombras: nao achei a faixa de cotas do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $minima = [double]::Parse($Matches[1], $ptbr)
+    $maxima = [double]::Parse($Matches[2], $ptbr)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-sombras' `
+        -Script (Join-Path $PSScriptRoot 'ufv-sombras.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-sombras terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'UFV_SOMBRAS instante=(\d+) zmin=(-?[\d.]+) zmax=(-?[\d.]+) marcados=(\d+) apagado=(\d+) marcadosdepois=(\d+) volta=(\d) dia=(\d+) marcadosdia=(\d+)') {
+        $problemas.Add("ufv-sombras: nao consegui ler o LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $m = $Matches
+    $contornos = [int] $m[1]; $zmin = [double]::Parse($m[2], $invariante); $zmax = [double]::Parse($m[3], $invariante)
+    $marcados = [int] $m[4]; $marcadosDia = [int] $m[9]
+
+    if ($contornos -lt 2 -or $marcados -lt 1) {
+        $problemas.Add("ufv-sombras: as 09:00 esperava a sombra do tronco e da copa desenhadas e modulos marcados; deu $contornos contorno(s) e $marcados modulo(s). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($zmin -lt ($minima - 0.01) -or $zmax -gt ($maxima + 0.1)) {
+        $problemas.Add("ufv-sombras: a sombra vai da cota $zmin a $zmax, fora do terreno ($minima a $maxima). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ([int] $m[5] -ne 0 -or [int] $m[6] -ne 0 -or $m[7] -ne '1') {
+        $problemas.Add("ufv-sombras: Apagar deveria tirar os contornos ($($m[5]) ficaram), as marcas ($($m[6]) ficaram) e devolver a cor de antes (volta=$($m[7])). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ([int] $m[8] -lt 2 -or $marcadosDia -lt $marcados) {
+        $problemas.Add("ufv-sombras: o dia inteiro deveria desenhar a sombra do pior instante e marcar pelo menos os $marcados modulos das 09:00; deu $($m[8]) contorno(s) e $marcadosDia modulo(s). Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (sombras: 09:00 com $contornos contornos e $marcados modulo(s); apagadas com a cor de volta; dia inteiro com $marcadosDia modulo(s) no pior caso)" -ForegroundColor DarkGray
+    return $true
+}
+
+<#
+    O 3D no navegador (9.9): a pagina gravada e um arquivo so, sem script
+    buscado na internet, com a three.js, tantas faces quantas 3DFACE o
+    desenho tem, os pilares, a arvore, as sombras e o terreno em grade.
+#>
+function Testar-Ver3D {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-3d--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'ufv-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("ufv-3d: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $html = Join-Path $saida 'ufv-3d.html'
+    if (Test-Path $html) { Remove-Item $html -Force }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'ufv-3d' `
+        -Script (Join-Path $PSScriptRoot 'ufv-3d.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+            '{{P}}'    = (Ponto3 -30   0 0)
+            '{{HTML}}' = $html
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("ufv-3d terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'UFV_3D faces=(\d+) pilares=(\d+)' -or -not (Test-Path $html)) {
+        $problemas.Add("ufv-3d: a pagina nao foi gravada em $html. Veja $($r.Saida)")
+        return $false
+    }
+
+    $faces = [int] $Matches[1]; $pilares = [int] $Matches[2]
+    $texto = [IO.File]::ReadAllText($html, [Text.Encoding]::UTF8)
+
+    if ($texto -notmatch 'const D = (\{.*?\});\r?\n') {
+        $problemas.Add("ufv-3d: a cena nao esta na pagina. Veja $html")
+        return $false
+    }
+
+    $cena = $Matches[1] | ConvertFrom-Json
+
+    $erros = @()
+    if ($texto -match '(?i)<script src|<link') { $erros += 'busca coisa de fora' }
+    if ($texto -notmatch 'Copyright 2010-2021 Three.js Authors') { $erros += 'sem a three.js' }
+    if (@($cena.faces).Count -ne $faces -or $faces -lt 1) { $erros += "$(@($cena.faces).Count) faces na pagina e $faces no desenho" }
+    if (@($cena.pilares).Count -ne $pilares) { $erros += "$(@($cena.pilares).Count) pilares na pagina e $pilares no desenho" }
+    if (@($cena.arvores).Count -ne 1) { $erros += "$(@($cena.arvores).Count) arvores (esperava 1)" }
+    if (@($cena.sombras).Count -lt 2) { $erros += "$(@($cena.sombras).Count) sombras (esperava tronco e copa)" }
+    if ($null -eq $cena.terreno -or @($cena.terreno.z | Where-Object { $null -ne $_ }).Count -lt 100) { $erros += 'terreno vazio' }
+
+    if ($erros.Count -gt 0) {
+        $problemas.Add("ufv-3d: $($erros -join '; '). Veja $html e $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (3d: $faces faces, $pilares pilares, 1 arvore, $(@($cena.sombras).Count) sombras, terreno $($cena.terreno.colunas) x $($cena.terreno.linhas); $([math]::Round((Get-Item $html).Length / 1MB, 1)) MB)" -ForegroundColor DarkGray
+    return $true
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -3859,6 +4096,18 @@ else {
     # Trocar mesa e regerar fileira (9.2 e 9.3).
     $total++
     if (Testar-Trocar -Desenho $desenhos[0]) { $passaram++ }
+
+    # Arvore como objeto de sombra, acompanhando o terreno (9.4).
+    $total++
+    if (Testar-Arvore -Desenho $desenhos[0]) { $passaram++ }
+
+    # Sombras num instante e no dia inteiro, pior caso (9.7 e 9.8).
+    $total++
+    if (Testar-Sombras -Desenho $desenhos[0]) { $passaram++ }
+
+    # 3D no navegador (9.9).
+    $total++
+    if (Testar-Ver3D -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

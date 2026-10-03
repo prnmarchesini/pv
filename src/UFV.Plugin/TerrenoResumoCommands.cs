@@ -78,7 +78,7 @@ public static class TerrenoResumoCommands
     }
 
     /// <summary>O meio do retângulo que contém o terreno, em coordenadas do desenho.</summary>
-    private static Point3d Centro(ProcessedTerrain terreno)
+    internal static Point3d Centro(ProcessedTerrain terreno)
     {
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
 

@@ -1,0 +1,48 @@
+; Teste de nivel 2 da arvore (9.4): duas arvores pelo comando (o pe no
+; terreno, nunca na cota do clique, que vem com Z = 0); depois a primeira e
+; MOVIDA com um salto de +80 m na cota, e a segunda COPIADA com -40 m: as
+; duas, e a copia, tem de voltar ao chao do lugar novo (o vigia das arvores).
+; A cota do terreno em cada lugar vem do UFV_COORD, na mesma ordem; a copia
+; ganha GUID proprio.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_TERRENO_AUTO")
+(setq ufv:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "UFV_ARVORE_AUTO" 3 0.4 5 6 "{{P1}}" "{{P2}}" "")
+
+(defun ufv:conta (ss) (if ss (sslength ss) 0))
+(defun ufv:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("MARCHENG_UFV")))))))
+(defun ufv:arvores ( / ss i e l)
+  (setq ss (ssget "_X" (list (cons 0 "INSERT") (list -3 (list "MARCHENG_UFV")))) i 0)
+  (while (< i (ufv:conta ss))
+    (setq e (ssname ss i))
+    (if (= (cdr (nth 0 (ufv:xdata e))) "Arvore") (setq l (cons e l)))
+    (setq i (1+ i)))
+  (reverse l))
+
+(setq ufv:antes (ufv:arvores) ufv:zclique 0.0)
+(setq ufv:e1 (car ufv:antes) ufv:e2 (cadr ufv:antes))
+(princ (strcat "\nUFV_ARVORE_ANTES n=" (itoa (length ufv:antes))
+               " z1=" (rtos (cadddr (assoc 10 (entget ufv:e1))) 2 3)
+               " z2=" (rtos (cadddr (assoc 10 (entget ufv:e2))) 2 3)))
+
+(command "_.MOVE" ufv:e1 "" "0,0,0" "10,8,80")
+(command "_.COPY" ufv:e2 "" "0,0,0" "-10,6,-40" "")
+(setvar "OSMODE" ufv:osmode)
+
+(setq ufv:depois (ufv:arvores) ufv:i 0)
+(foreach e ufv:depois
+  (setq ufv:i (1+ ufv:i) ufv:p (cdr (assoc 10 (entget e))))
+  (princ (strcat "\nUFV_ARVORE_P i=" (itoa ufv:i) " z=" (rtos (caddr ufv:p) 2 3) " guid=" (cdr (nth 2 (ufv:xdata e))))))
+
+; A cota do terreno em cada arvore, na mesma ordem.
+(foreach e ufv:depois
+  (setq ufv:p (cdr (assoc 10 (entget e))))
+  (command "UFV_COORD" (list (car ufv:p) (cadr ufv:p) 0.0) ""))
+
+(princ (strcat "\nUFV_ARVORE_FIM n=" (itoa (length ufv:depois))))
+(setvar "SECURELOAD" ufv:secureload)
+(princ)

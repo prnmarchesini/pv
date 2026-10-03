@@ -299,6 +299,34 @@ internal static class LayoutXData
         return modulo.IsValid ? modulo : null;
     }
 
+    private const int VersaoDaArvore = 1;
+
+    /// <summary>GUID, altura e largura do tronco, altura e largura da copa.</summary>
+    private const int CamposDaArvore = 5;
+
+    /// <summary>A árvore (9.4): o GUID e as medidas, no XData do bloco.</summary>
+    internal static void SaveTree(Transaction transacao, Entity entidade, TreeIdentity arvore) =>
+        PluginXData.Save(
+            transacao, entidade, TreeIdentity.Tipo, VersaoDaArvore,
+            arvore.Id.ToString("D"),
+            Numero(arvore.Spec.TrunkHeight),
+            Numero(arvore.Spec.TrunkWidth),
+            Numero(arvore.Spec.CrownHeight),
+            Numero(arvore.Spec.CrownWidth));
+
+    internal static TreeIdentity? LoadTree(Entity entidade)
+    {
+        var c = PluginXData.Load(entidade, TreeIdentity.Tipo, VersaoDaArvore, CamposDaArvore);
+        if (c is null) return null;
+
+        if (!Guid.TryParse(c[0], out var id)) return null;
+        if (!Real(c[1], out var ht) || !Real(c[2], out var lt) || !Real(c[3], out var hc) || !Real(c[4], out var lc)) return null;
+
+        var arvore = new TreeIdentity(id, new TreeSpec(ht, lt, hc, lc));
+
+        return arvore.IsValid ? arvore : null;
+    }
+
     private static string Numero(double valor) => valor.ToString("R", CultureInfo.InvariantCulture);
 
     private static string Opcional(double? valor) => valor is { } v ? Numero(v) : string.Empty;

@@ -1,0 +1,73 @@
+; Teste de nivel 2 das sombras (9.7 e 9.8): uma fileira, uma arvore grande
+; (tronco 4 m, copa 10 m de altura e 8 m de largura) no meio da F1.3; a sombra
+; de 21/06/2026 as 09:00 (fuso -3) e desenhada no terreno e pega modulos, que
+; ficam amarelos, laranja ou vermelhos; Apagar tira os contornos e devolve a
+; cor de antes; o dia inteiro (06:00 as 18:00, de hora em hora) marca pelo
+; pior caso pelo menos os mesmos modulos.
+
+(setq ufv:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "UFV_TERRENO_AUTO")
+(setq ufv:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "UFV_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area sombras")
+(command "UFV_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento sombras")
+(command "UFV_FILEIRA_AUTO")
+
+(defun ufv:conta (ss) (if ss (sslength ss) 0))
+(defun ufv:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("MARCHENG_UFV")))))))
+(defun ufv:verts (e / v l)
+  (setq v (entnext e))
+  (while (and v (= (cdr (assoc 0 (entget v))) "VERTEX"))
+    (setq l (cons (cdr (assoc 10 (entget v))) l) v (entnext v)))
+  l)
+
+; O meio da F1.3, pelos cantos do contorno.
+(setq ufv:ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "MARCHENG_UFV")))) ufv:i 0 ufv:meio nil)
+(while (< ufv:i (ufv:conta ufv:ss))
+  (setq ufv:e (ssname ufv:ss ufv:i) ufv:xd (ufv:xdata ufv:e))
+  (if (and (= (cdr (nth 0 ufv:xd)) "Mesa") (= (cdr (nth 3 ufv:xd)) "F1.3"))
+    (setq ufv:v (ufv:verts ufv:e)
+          ufv:meio (list (/ (apply '+ (mapcar 'car ufv:v)) 4.0) (/ (apply '+ (mapcar 'cadr ufv:v)) 4.0) 0.0)))
+  (setq ufv:i (1+ ufv:i)))
+
+(command "UFV_ARVORE_AUTO" 4 0.6 10 8 ufv:meio "")
+(setvar "OSMODE" ufv:osmode)
+
+; Cores dos modulos: as tres da sombra e as outras.
+(defun ufv:cores ( / ss i c n)
+  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "MARCHENG_UFV_MOD*"))) i 0 n 0)
+  (while (< i (ufv:conta ss))
+    (setq c (cdr (assoc 420 (entget (ssname ss i)))))
+    (if (member c '(16768000 16747520 12459520)) (setq n (1+ n)))
+    (setq i (1+ i)))
+  n)
+(defun ufv:assinatura ( / ss i l)
+  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "MARCHENG_UFV_MOD*"))) i 0)
+  (while (< i (ufv:conta ss))
+    (setq l (cons (list (cdr (assoc 5 (entget (ssname ss i)))) (cdr (assoc 62 (entget (ssname ss i)))) (cdr (assoc 420 (entget (ssname ss i))))) l) i (1+ i)))
+  l)
+(defun ufv:sombras ( / ss i n zmin zmax)
+  (setq ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "MARCHENG_UFV")))) i 0 n 0 zmin 1e99 zmax -1e99)
+  (while (< i (ufv:conta ss))
+    (if (= (cdr (nth 0 (ufv:xdata (ssname ss i)))) "Sombra")
+      (progn
+        (setq n (1+ n))
+        (foreach p (ufv:verts (ssname ss i)) (setq zmin (min zmin (caddr p)) zmax (max zmax (caddr p))))))
+    (setq i (1+ i)))
+  (list n zmin zmax))
+
+(setq ufv:antes (ufv:assinatura))
+(command "UFV_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "09:00" "09:00" "30" "-3")
+(setq ufv:s1 (ufv:sombras) ufv:c1 (ufv:cores))
+(command "UFV_SOMBRAS_APAGAR")
+(setq ufv:s2 (ufv:sombras) ufv:c2 (ufv:cores) ufv:volta (equal ufv:antes (ufv:assinatura)))
+(command "UFV_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "06:00" "18:00" "60" "-3")
+(setq ufv:s3 (ufv:sombras) ufv:c3 (ufv:cores))
+
+(princ (strcat "\nUFV_SOMBRAS instante=" (itoa (car ufv:s1)) " zmin=" (rtos (cadr ufv:s1) 2 3) " zmax=" (rtos (caddr ufv:s1) 2 3)
+               " marcados=" (itoa ufv:c1) " apagado=" (itoa (car ufv:s2)) " marcadosdepois=" (itoa ufv:c2)
+               " volta=" (if ufv:volta "1" "0") " dia=" (itoa (car ufv:s3)) " marcadosdia=" (itoa ufv:c3)))
+(setvar "SECURELOAD" ufv:secureload)
+(princ)

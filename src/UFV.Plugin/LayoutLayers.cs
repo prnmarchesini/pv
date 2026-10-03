@@ -50,6 +50,15 @@ internal static class LayoutLayers
     /// <summary>Os alinhamentos: amarelo (pedido do Renan, 29/09/2026).</summary>
     internal const string Alinhamento = Prefixo + "ALINHAMENTO";
 
+    /// <summary>As árvores e outros objetos que fazem sombra (9.4).</summary>
+    internal const string Arvore = Prefixo + "ARVORE";
+
+    /// <summary>A sombra desenhada no terreno (9.7).</summary>
+    internal const string Sombra = Prefixo + "SOMBRA";
+
+    /// <summary>Os módulos marcados pela sombra (9.7): a marca é cor na peça; a camada é a dos textos de sombra.</summary>
+    internal const string SombraTexto = Prefixo + "SOMBRA_TEXTO";
+
     /// <summary>Laranja do AutoCAD (ACI 30).</summary>
     internal const short CorDaArea = 30;
 
