@@ -12,7 +12,7 @@ using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 namespace Clivus.Plugin;
 
 /// <summary>
-/// Seção UFV: a área de implantação.
+/// Seção Clivus Solar: a área de implantação.
 ///
 /// O usuário traça a área em planta, dá um nome, e o plugin a assenta no
 /// terreno — a linha que era reta no papel passa a acompanhar o relevo. É o

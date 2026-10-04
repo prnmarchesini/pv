@@ -15,7 +15,7 @@ using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 namespace Clivus.Plugin;
 
 /// <summary>
-/// Seção Terreno da aba UFV.
+/// Seção Terreno da aba Clivus Solar.
 ///
 /// Casca fina: lê as superfícies do desenho, entrega a lista pronta ao
 /// usuário e conta o que ele escolheu. O processamento da superfície é o

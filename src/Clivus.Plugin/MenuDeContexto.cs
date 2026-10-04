@@ -9,7 +9,7 @@ using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 namespace Clivus.Plugin;
 
 /// <summary>
-/// O menu de botão direito do plugin, submenu "UFV": sobre a área, "Refazer
+/// O menu de botão direito do plugin, submenu "Clivus Solar": sobre a área, "Refazer
 /// as mesas desta área" e "Apagar tudo"; sobre a mesa, "Mudar inclinação
 /// (alturas das pontas)" e "Recalcular esta mesa".
 ///
@@ -40,7 +40,7 @@ internal static class MenuDeContexto
 
         var menu = new ContextMenuExtension { Title = "Clivus Solar" };
 
-        // Um submenu "UFV" com os itens dentro (o Title da extensão não vira
+        // Um submenu "Clivus Solar" com os itens dentro (o Title da extensão não vira
         // submenu sozinho: o AutoCAD despeja os itens soltos no menu, como
         // o Renan viu em 26/09/2026).
         _raiz = new MenuItem("Clivus Solar");

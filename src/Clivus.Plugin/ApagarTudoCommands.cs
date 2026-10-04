@@ -11,7 +11,7 @@ namespace Clivus.Plugin;
 
 /// <summary>
 /// Apagar tudo de uma área (pedido do Renan em 29/09/2026, pelo botão
-/// direito sobre a área, no submenu UFV): o que o plugin desenhou dentro
+/// direito sobre a área, no submenu Clivus Solar): o que o plugin desenhou dentro
 /// dela some (mesas, pilares, módulos, faces, notas), e a área e o
 /// alinhamento ficam, prontos para desenhar de novo. É o Refazer sem o
 /// redesenho. U desfaz.

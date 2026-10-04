@@ -27,7 +27,7 @@ public sealed record RibbonTabSpec(string Id, string Title, IReadOnlyList<Ribbon
 /// para o Core testar o que o Word pede: todo botão com texto explicativo
 /// ("isso é regra, preciso que tudo tenha isso"), sem o Olá, sem Mesa,
 /// Configuração e Parâmetros soltos (viram a janela de Configurações), a
-/// Edição compacta num menu. Uma aba só, a UFV (Renan, 02/10/2026: "eu quero
+/// Edição compacta num menu. Uma aba só, a Clivus Solar (Renan, 02/10/2026: "eu quero
 /// apenas o menu UFV, e aí dentro dele você coloca análises e tags"):
 /// Análises e Tags são botões que abrem janelas com abas ("menu análises, e
 /// aí o modal com as abas, algo muito estruturado").

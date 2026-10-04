@@ -7,7 +7,7 @@ using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 namespace Clivus.Plugin;
 
 /// <summary>
-/// Monta a aba UFV na ribbon.
+/// Monta a aba Clivus Solar na ribbon.
 ///
 /// Tudo que toca Autodesk.Windows mora aqui, e nao em ClivusExtension, por um
 /// motivo concreto: um host sem interface, como o Core Console
