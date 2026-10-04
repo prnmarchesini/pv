@@ -15,9 +15,14 @@
 
 .PARAMETER Certificado
     O .pfx de assinatura de codigo (opcional). A senha vem de CLIVUS_PFX_SENHA.
+
+.PARAMETER Enviar
+    Sobe o .exe e o .sha256 para a pasta de download do site (SFTP com o
+    usuario restrito clivus-upload, chave ~\.ssh\clivus_kinghost) e confere,
+    baixando pelo site, que o arquivo publicado tem o mesmo SHA-256.
 #>
 [CmdletBinding()]
-param([string] $Certificado)
+param([string] $Certificado, [switch] $Enviar)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -59,3 +64,24 @@ Set-Content -Path "$exe.sha256" -Value "$hash  $(Split-Path -Leaf $exe)" -Encodi
 $tamanho = [math]::Round((Get-Item $exe).Length / 1MB, 1)
 Write-Host "Instalador: $exe ($tamanho MB)" -ForegroundColor Green
 Write-Host "SHA-256:    $hash" -ForegroundColor Green
+
+if ($Enviar) {
+    # O servidor e a pasta (CANAL.md, 04/10/2026): o site serve /baixar.
+    $servidor = 'clivus-upload@177.153.20.214'
+    $site = 'https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io/baixar'
+    $chave = Join-Path $HOME '.ssh\clivus_kinghost'
+    if (-not (Test-Path $chave)) { Write-Host "Sem a chave $chave." -ForegroundColor Red; exit 1 }
+
+    $comandos = "put `"$($exe.Replace('\', '/'))`"`nput `"$($exe.Replace('\', '/')).sha256`"`n"
+    $comandos | & sftp -i $chave -o IdentitiesOnly=yes -o BatchMode=yes -b - $servidor
+    if ($LASTEXITCODE -ne 0) { Write-Host 'O envio falhou.' -ForegroundColor Red; exit 1 }
+
+    $nome = Split-Path -Leaf $exe
+    $baixado = Join-Path ([IO.Path]::GetTempPath()) "conferir-$nome"
+    Invoke-WebRequest "$site/$nome" -OutFile $baixado -UseBasicParsing
+    $publicado = (Get-FileHash $baixado -Algorithm SHA256).Hash.ToLowerInvariant()
+    Remove-Item $baixado -Force
+    if ($publicado -ne $hash) { Write-Host "O arquivo no site nao bate: $publicado" -ForegroundColor Red; exit 1 }
+
+    Write-Host "Publicado:  $site/$nome (SHA-256 conferido)" -ForegroundColor Green
+}
