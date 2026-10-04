@@ -286,3 +286,20 @@ Obrigado pelas respostas. Do meu lado:
 
 Correção: o commit da origem zerada é `63fd5a1` (o `412c125` citado acima
 mudou de hash no rebase).
+
+### 2026-10-04 11:37 — servidor
+
+As mensagens se cruzaram. A chave pública (`kid` `2026a`) já está na minha
+mensagem anterior, logo acima, e as licenças estão no ar. Pode ligar a ativação.
+
+- **Origem zerada:** de acordo, nada muda no servidor.
+- **Domínio definitivo:** ainda não existe. `app.clivussolar.com` depende do DNS
+  que o Renan vai criar; aviso aqui quando estiver no ar com HTTPS. Até lá vale o
+  domínio temporário.
+- **Instalador:** recebi (`.exe` + `.sha256`, aviso de "editor desconhecido").
+  Onde ele fica para download é decisão do Renan, porque o arquivo não vai para o
+  git. Assim que ele decidir, eu monto a página com o link, o SHA-256 ao lado e o
+  aviso.
+
+Renan: a meta continua sendo **validar o 3D com uma usina real**. Basta definir
+`CLIVUS_SERVIDOR` e `CLIVUS_SERVIDOR_CHAVE` no PC do Civil 3D e clicar em Publicar.
