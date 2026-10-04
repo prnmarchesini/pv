@@ -84,7 +84,7 @@ public sealed record TableIdentity(
     public TableIdentity AsClean() => this with { Dirty = false, DirtyReason = null };
 
     /// <summary>"F1.3: limpa" ou "F1.3: PENDENTE (movida)".</summary>
-    public string DescribeState() => Dirty ? $"{Label}: PENDENTE ({DirtyReason})" : $"{Label}: limpa";
+    public string DescribeState() => Dirty ? Tr.F("{0}: PENDENTE ({1})", Label, Tr.T(DirtyReason ?? string.Empty)) : Tr.F("{0}: limpa", Label);
 }
 
 /// <summary>A identidade de um pilar desenhado.</summary>

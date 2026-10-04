@@ -21,7 +21,7 @@ public static class ConfiguracoesCommands
 
         if (!ClivusExtension.TemInterface())
         {
-            editor.WriteMessage("\nA janela de Configurações precisa da interface do Civil 3D.\n");
+            editor.WriteMessage(Tr.T("\nA janela de Configurações precisa da interface do Civil 3D.\n"));
             return;
         }
 
@@ -32,7 +32,7 @@ public static class ConfiguracoesCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha na janela de Configurações.", erro);
-            editor.WriteMessage($"\nNão consegui abrir as Configurações: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui abrir as Configurações: {0}\n", erro.Message));
         }
     }
 
@@ -59,7 +59,7 @@ public static class ConfiguracoesCommands
 
         if (AcadApp.ShowModalWindow(janela) != true || janela.Salvo is not { } salvo)
         {
-            editor.WriteMessage("\nConfigurações fechadas sem salvar.\n");
+            editor.WriteMessage(Tr.T("\nConfigurações fechadas sem salvar.\n"));
             return;
         }
 
@@ -74,28 +74,27 @@ public static class ConfiguracoesCommands
             catch (System.Exception erro)
             {
                 RegistroDeDiagnostico.Registrar($"Falha ao gravar {oQue}.", erro);
-                editor.WriteMessage($"\n  ATENÇÃO: não consegui gravar {oQue}: {erro.Message}\n");
+                editor.WriteMessage(Tr.F("\n  ATENÇÃO: não consegui gravar {0}: {1}\n", Tr.T(oQue), erro.Message));
             }
         }
 
         var antes = MesasDoDesenho.Ler(database);
-        Gravar("as mesas do desenho", () => MesasDoDesenho.Gravar(database, salvo.Mesas));
+        Gravar(Tr.N("as mesas do desenho"), () => MesasDoDesenho.Gravar(database, salvo.Mesas));
 
         // A cor do tipo vale já nas mesas desenhadas (03/10/2026: "não tem
         // nenhuma mesa laranja ou verde").
         var repintadas = 0;
-        Gravar("as cores das mesas desenhadas", () => repintadas = CoresDosTipos.Repintar(database, antes, salvo.Mesas));
-        Gravar("os parâmetros", () => SettingsStore.Save(database, salvo.Parametros));
-        Gravar("os estilos", () => EstilosCommands.Gravar(editor, database, salvo.Estilos));
+        Gravar(Tr.N("as cores das mesas desenhadas"), () => repintadas = CoresDosTipos.Repintar(database, antes, salvo.Mesas));
+        Gravar(Tr.N("os parâmetros"), () => SettingsStore.Save(database, salvo.Parametros));
+        Gravar(Tr.N("os estilos"), () => EstilosCommands.Gravar(editor, database, salvo.Estilos));
 
         var emUso = DrawingTables.ForEngine(salvo.Mesas);
 
-        editor.WriteMessage(
-            $"\nCONFIGURAÇÕES gravadas no desenho: {salvo.Mesas.Count} mesa(s), "
-            + (emUso.Count == 0 ? "nenhuma (vale a da janela de Mesa)" : $"o motor usa, nesta prioridade: {string.Join(", ", emUso.Select(m => m.Name))}")
-            + $"; {salvo.Parametros.Describe()}.\n");
-        if (repintadas > 0) editor.WriteMessage($"  {repintadas} mesa(s) desenhada(s) com a cor nova do tipo.\n");
-        editor.WriteMessage("  Elas vão junto com o arquivo: salve o desenho. Para a usina seguir as outras mudanças, use Regerar área.\n");
+        editor.WriteMessage(emUso.Count == 0
+            ? Tr.F("\nCONFIGURAÇÕES gravadas no desenho: {0} mesa(s), nenhuma (vale a da janela de Mesa); {1}.\n", salvo.Mesas.Count, salvo.Parametros.Describe())
+            : Tr.F("\nCONFIGURAÇÕES gravadas no desenho: {0} mesa(s), o motor usa, nesta prioridade: {1}; {2}.\n", salvo.Mesas.Count, string.Join(", ", emUso.Select(m => m.Name)), salvo.Parametros.Describe()));
+        if (repintadas > 0) editor.WriteMessage(Tr.F("  {0} mesa(s) desenhada(s) com a cor nova do tipo.\n", repintadas));
+        editor.WriteMessage(Tr.T("  Elas vão junto com o arquivo: salve o desenho. Para a usina seguir as outras mudanças, use Regerar área.\n"));
     }
 
     /// <summary>
@@ -107,7 +106,7 @@ public static class ConfiguracoesCommands
     internal static List<DrawingTable> Lista(Autodesk.AutoCAD.EditorInput.Editor editor, Autodesk.AutoCAD.DatabaseServices.Database database, TableProfileStore biblioteca)
     {
         var doDesenho = MesasDoDesenho.Ler(database, out var problemas);
-        foreach (var problema in problemas) editor.WriteMessage($"\n  ATENÇÃO: {problema}.\n");
+        foreach (var problema in problemas) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", problema));
 
         var mesas = doDesenho.ToList();
 
@@ -124,7 +123,7 @@ public static class ConfiguracoesCommands
                 catch (System.Exception erro)
                 {
                     RegistroDeDiagnostico.Registrar($"Não consegui ler o perfil \"{nome}\" da biblioteca.", erro);
-                    editor.WriteMessage($"\n  ATENÇÃO: o perfil \"{nome}\" da biblioteca não pôde ser lido: {erro.Message}\n");
+                    editor.WriteMessage(Tr.F("\n  ATENÇÃO: o perfil \"{0}\" da biblioteca não pôde ser lido: {1}\n", nome, erro.Message));
                 }
             }
         }

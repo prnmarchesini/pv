@@ -44,8 +44,6 @@ public sealed record LayoutCensus(
     int TablesWithoutPower,
     double FallbackPowerWatts)
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>Conta.</summary>
     /// <param name="fallbackPowerWatts">A potência do módulo do perfil atual, para as mesas que não têm a sua gravada.</param>
     /// <exception cref="ArgumentOutOfRangeException">Potência de reserva que não é um número positivo.</exception>
@@ -92,25 +90,26 @@ public sealed record LayoutCensus(
     {
         var linhas = new List<string>
         {
-            $"{Tables} mesa(s), {Modules} módulo(s), {PowerKwp.ToString("0.#", Brasil)} kWp",
-            $"{Pillars} pilar(es)" + (PillarsWithoutLength > 0 ? $", {PillarsWithoutLength} sem comprimento" : string.Empty)
+            Tr.F("{0} mesa(s), {1} módulo(s), {2:0.#} kWp", Tables, Modules, PowerKwp),
+            Tr.F("{0} pilar(es)", Pillars) + (PillarsWithoutLength > 0 ? Tr.F(", {0} sem comprimento", PillarsWithoutLength) : string.Empty)
                 + (PillarLengths.Count > 0
-                    ? $"; comprimento de {PillarLengths.Min().ToString("0.00", Brasil)} a {PillarLengths.Max().ToString("0.00", Brasil)} m, média {PillarLengths.Average().ToString("0.00", Brasil)} m"
+                    ? Tr.F("; comprimento de {0:0.00} a {1:0.00} m, média {2:0.00} m", PillarLengths.Min(), PillarLengths.Max(), PillarLengths.Average())
                     : string.Empty),
         };
 
         if (Dirty > 0 || Marked > 0 || Orphans > 0)
         {
             linhas.Add(
-                $"{Dirty} pendente(s), {Marked} que não cabe(m) no terreno, {Orphans} com peças órfãs (sem contorno"
-                + (OrphanModules > 0 ? $"; {OrphanModules} módulo(s) órfão(s) contado(s) acima" : string.Empty) + ")");
+                OrphanModules > 0
+                    ? Tr.F("{0} pendente(s), {1} que não cabe(m) no terreno, {2} com peças órfãs (sem contorno; {3} módulo(s) órfão(s) contado(s) acima)", Dirty, Marked, Orphans, OrphanModules)
+                    : Tr.F("{0} pendente(s), {1} que não cabe(m) no terreno, {2} com peças órfãs (sem contorno)", Dirty, Marked, Orphans));
         }
 
         if (Duplicated > 0)
-            linhas.Add($"ATENÇÃO: {Duplicated} mesa(s) com mais de um contorno na mesma identidade (cópia sem identidade própria): use o Regerar área");
+            linhas.Add(Tr.F("ATENÇÃO: {0} mesa(s) com mais de um contorno na mesma identidade (cópia sem identidade própria): use o Regerar área", Duplicated));
 
         if (TablesWithoutPower > 0)
-            linhas.Add($"ATENÇÃO: {TablesWithoutPower} mesa(s) sem potência gravada (desenhadas antes do 7.6): usaram {FallbackPowerWatts.ToString("N0", Brasil)} W do perfil atual");
+            linhas.Add(Tr.F("ATENÇÃO: {0} mesa(s) sem potência gravada (desenhadas antes do 7.6): usaram {1:N0} W do perfil atual", TablesWithoutPower, FallbackPowerWatts));
 
         return linhas;
     }

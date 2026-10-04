@@ -46,24 +46,24 @@ public static class ReindexCommands
         // O desenho manda, pelo mesmo motivo das áreas.
         AlignmentStore.Save(database, noDesenho);
 
-        editor.WriteMessage($"\nREINDEXADO {noDesenho.Count} alinhamento(s) no desenho.\n");
+        editor.WriteMessage(Tr.F("\nREINDEXADO {0} alinhamento(s) no desenho.\n", noDesenho.Count));
 
         if (novos.Count > 0)
         {
-            editor.WriteMessage($"  {novos.Count} passaram a ser reconhecidos:\n");
+            editor.WriteMessage(Tr.F("  {0} passaram a ser reconhecidos:\n", novos.Count));
             foreach (var alinhamento in novos)
                 editor.WriteMessage($"    {alinhamento.Identity.Describe()}\n");
         }
 
         if (sumidos.Count > 0)
         {
-            editor.WriteMessage($"  {sumidos.Count} não estão mais no desenho e saíram do registro:\n");
+            editor.WriteMessage(Tr.F("  {0} não estão mais no desenho e saíram do registro:\n", sumidos.Count));
             foreach (var alinhamento in sumidos)
                 editor.WriteMessage($"    {alinhamento.Identity.Describe()}\n");
         }
 
         if (novos.Count == 0 && sumidos.Count == 0)
-            editor.WriteMessage("  O registro já estava em dia.\n");
+            editor.WriteMessage(Tr.T("  O registro já estava em dia.\n"));
     }
 
     private static string Capitalize(string problema) =>
@@ -108,30 +108,29 @@ public static class ReindexCommands
             // mentindo.
             AreaStore.Save(documento.Database, noDesenho);
 
-            editor.WriteMessage($"\nREINDEXADO {noDesenho.Count} área(s) no desenho.\n");
+            editor.WriteMessage(Tr.F("\nREINDEXADO {0} área(s) no desenho.\n", noDesenho.Count));
 
             if (novas.Count > 0)
             {
-                editor.WriteMessage($"  {novas.Count} passaram a ser reconhecidas:\n");
+                editor.WriteMessage(Tr.F("  {0} passaram a ser reconhecidas:\n", novas.Count));
                 foreach (var area in novas)
                     editor.WriteMessage($"    {area.Identity.Describe()}\n");
 
                 // Quem chegou por cópia traz cota do terreno de outro desenho.
                 editor.WriteMessage(
-                    "  As cotas destas áreas vieram do desenho de origem. Se a topografia\n"
-                    + "  daqui for outra, elas precisam ser traçadas de novo.\n");
+                    Tr.T("  As cotas destas áreas vieram do desenho de origem. Se a topografia\n  daqui for outra, elas precisam ser traçadas de novo.\n"));
             }
 
             if (sumidas.Count > 0)
             {
-                editor.WriteMessage($"  {sumidas.Count} não estão mais no desenho e saíram do registro:\n");
+                editor.WriteMessage(Tr.F("  {0} não estão mais no desenho e saíram do registro:\n", sumidas.Count));
                 foreach (var area in sumidas)
                     editor.WriteMessage($"    {area.Identity.Describe()}\n");
             }
 
             if (novas.Count == 0 && sumidas.Count == 0)
             {
-                editor.WriteMessage("  O registro já estava em dia.\n");
+                editor.WriteMessage(Tr.T("  O registro já estava em dia.\n"));
             }
 
             ReindexarAlinhamentos(editor, documento.Database);
@@ -141,7 +140,7 @@ public static class ReindexCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao reindexar.", erro);
-            editor.WriteMessage($"\nNão consegui reindexar: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui reindexar: {0}\n", erro.Message));
         }
     }
 }

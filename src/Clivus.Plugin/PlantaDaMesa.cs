@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using Clivus.Core;
@@ -22,8 +21,6 @@ namespace Clivus.Plugin;
 /// </summary>
 internal sealed class PlantaDaMesa : FrameworkElement
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     private static readonly Brush Fundo = Congelar(new SolidColorBrush(Color.FromRgb(0x1B, 0x20, 0x27)));
     private static readonly Brush Modulo = Congelar(new SolidColorBrush(Color.FromRgb(0x2F, 0x6F, 0xB5)));
     private static readonly Brush Pilar = Congelar(new SolidColorBrush(Color.FromRgb(0xC8, 0x85, 0x3C)));
@@ -168,8 +165,7 @@ internal sealed class PlantaDaMesa : FrameworkElement
 
         Escrever(
             tela,
-            $"{_mesa.Modules.Count} módulos · {_mesa.Pillars.Count} pilares · "
-            + $"{Medida(profundidade)} m na inclinação",
+            Tr.F("{0} módulos · {1} pilares · {2} m na inclinação", _mesa.Modules.Count, _mesa.Pillars.Count, Medida(profundidade)),
             Fraco,
             11,
             new Point(X(0), baixo + 62));
@@ -185,8 +181,8 @@ internal sealed class PlantaDaMesa : FrameworkElement
     /// </summary>
     private void Pontas(DrawingContext tela, double cima, double baixo)
     {
-        var alta = Formatar("ponta alta", 10.5, Fraco);
-        var baixa = Formatar("ponta baixa", 10.5, Fraco);
+        var alta = Formatar(Tr.T("ponta alta"), 10.5, Fraco);
+        var baixa = Formatar(Tr.T("ponta baixa"), 10.5, Fraco);
 
         tela.DrawText(alta, new Point(MargemEsquerda - alta.Width - 8, cima - 2));
         tela.DrawText(baixa, new Point(MargemEsquerda - baixa.Width - 8, baixo - baixa.Height + 2));
@@ -267,8 +263,8 @@ internal sealed class PlantaDaMesa : FrameworkElement
         var todosIguais = vaos.Max() - vaos.Min() <= Nada;
 
         var resumo = todosIguais
-            ? $"{vaos.Count} vãos de {Medida(vaos[0])} m"
-            : $"{vaos.Count} vãos, de {Medida(vaos.Min())} a {Medida(vaos.Max())} m";
+            ? Tr.F("{0} vãos de {1} m", vaos.Count, Medida(vaos[0]))
+            : Tr.F("{0} vãos, de {1} a {2} m", vaos.Count, Medida(vaos.Min()), Medida(vaos.Max()));
 
         var texto = Formatar(resumo, 10.5, Pilar);
 
@@ -303,14 +299,14 @@ internal sealed class PlantaDaMesa : FrameworkElement
     private FormattedText Formatar(string texto, double tamanho, Brush cor) =>
         new(
             texto,
-            Brasil,
+            Tr.Culture,
             FlowDirection.LeftToRight,
             new Typeface("Segoe UI"),
             tamanho,
             cor,
             VisualTreeHelper.GetDpi(this).PixelsPerDip);
 
-    private static string Medida(double valor) => valor.ToString("0.###", Brasil);
+    private static string Medida(double valor) => valor.ToString("0.###", Tr.Culture);
 
     private static T Congelar<T>(T objeto) where T : Freezable
     {

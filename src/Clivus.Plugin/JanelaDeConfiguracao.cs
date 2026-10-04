@@ -34,18 +34,18 @@ internal sealed class JanelaDeConfiguracao : Window
     /// </summary>
     private static readonly (string Nome, RgbColor Cor)[] Paleta =
     [
-        ("Vermelho", RgbColor.Red),
-        ("Azul", RgbColor.Blue),
-        ("Magenta", RgbColor.Magenta),
-        ("Amarelo", new RgbColor(255, 255, 0)),
-        ("Laranja", new RgbColor(255, 128, 0)),
-        ("Verde", new RgbColor(0, 160, 0)),
-        ("Ciano", new RgbColor(0, 200, 200)),
-        ("Roxo", new RgbColor(128, 0, 200)),
-        ("Rosa", new RgbColor(255, 105, 180)),
-        ("Marrom", new RgbColor(150, 90, 40)),
-        ("Branco", new RgbColor(255, 255, 255)),
-        ("Preto", new RgbColor(0, 0, 0)),
+        (Tr.N("Vermelho"), RgbColor.Red),
+        (Tr.N("Azul"), RgbColor.Blue),
+        (Tr.N("Magenta"), RgbColor.Magenta),
+        (Tr.N("Amarelo"), new RgbColor(255, 255, 0)),
+        (Tr.N("Laranja"), new RgbColor(255, 128, 0)),
+        (Tr.N("Verde"), new RgbColor(0, 160, 0)),
+        (Tr.N("Ciano"), new RgbColor(0, 200, 200)),
+        (Tr.N("Roxo"), new RgbColor(128, 0, 200)),
+        (Tr.N("Rosa"), new RgbColor(255, 105, 180)),
+        (Tr.N("Marrom"), new RgbColor(150, 90, 40)),
+        (Tr.N("Branco"), new RgbColor(255, 255, 255)),
+        (Tr.N("Preto"), new RgbColor(0, 0, 0)),
     ];
 
     // ---- sistema
@@ -61,7 +61,7 @@ internal sealed class JanelaDeConfiguracao : Window
     private readonly TextBox _espacamentoMesas = Campo();
     private readonly CheckBox _temDeclividade = new()
     {
-        Content = "Limitar a declividade longitudinal",
+        Content = Tr.T("Limitar a declividade longitudinal"),
         Margin = new Thickness(0, 6, 0, 2),
     };
     private readonly TextBox _declividadeMax = Campo();
@@ -79,7 +79,7 @@ internal sealed class JanelaDeConfiguracao : Window
     private readonly Dictionary<AnalysisKind, LinhaDeAnalise> _analises = new();
     private readonly CheckBox _pintarPilar = new()
     {
-        Content = "Pintar pilar mais comprido que (m)",
+        Content = Tr.T("Pintar pilar mais comprido que (m)"),
         Margin = new Thickness(0, 6, 0, 2),
     };
     private readonly TextBox _pilarAcimaDe = Campo();
@@ -128,7 +128,7 @@ internal sealed class JanelaDeConfiguracao : Window
         _soAnalises = soAnalises;
         _embutida = embutida;
 
-        Title = soAnalises ? "Clivus Solar — Parâmetros das análises" : "Clivus Solar — Configuração do projeto";
+        Title = soAnalises ? Tr.T("Clivus Solar — Parâmetros das análises") : Tr.T("Clivus Solar — Configuração do projeto");
         Width = 980;
         Height = 700;
         MinWidth = 860;
@@ -138,7 +138,7 @@ internal sealed class JanelaDeConfiguracao : Window
 
         _salvar = new Button
         {
-            Content = "Salvar no desenho",
+            Content = Tr.T("Salvar no desenho"),
             Width = 150,
             Height = 26,
             Margin = new Thickness(8, 0, 0, 0),
@@ -218,14 +218,14 @@ internal sealed class JanelaDeConfiguracao : Window
             Margin = new Thickness(0, 12, 0, 0),
         };
 
-        var padrao = new Button { Content = "Restaurar padrão", Width = 130, Height = 26 };
+        var padrao = new Button { Content = Tr.T("Restaurar padrão"), Width = 130, Height = 26 };
         padrao.Click += (_, _) => RestaurarPadrao();
 
         botoes.Children.Add(padrao);
         botoes.Children.Add(_salvar);
         botoes.Children.Add(new Button
         {
-            Content = "Fechar",
+            Content = Tr.T("Fechar"),
             Width = 90,
             Height = 26,
             Margin = new Thickness(8, 0, 0, 0),
@@ -269,36 +269,36 @@ internal sealed class JanelaDeConfiguracao : Window
 
         if (!_soAnalises)
         {
-            pilha.Children.Add(Secao("Orientação"));
-            Linha("Azimute para onde a mesa olha (graus, 0 = norte)", _azimute);
+            pilha.Children.Add(Secao(Tr.T("Orientação")));
+            Linha(Tr.T("Azimute para onde a mesa olha (graus, 0 = norte)"), _azimute);
         }
 
-        pilha.Children.Add(Secao(_soAnalises ? "Degrau entre mesas vizinhas" : "Mesas"));
-        if (!_soAnalises) Linha("Pitch entre mesas (m)", _pitch);
-        Linha("Degrau mínimo entre mesas vizinhas (cm)", _degrauMin);
-        Linha("Degrau máximo entre mesas vizinhas (cm)", _degrauMax);
+        pilha.Children.Add(Secao(_soAnalises ? Tr.T("Degrau entre mesas vizinhas") : Tr.T("Mesas")));
+        if (!_soAnalises) Linha(Tr.T("Pitch entre mesas (m)"), _pitch);
+        Linha(Tr.T("Degrau mínimo entre mesas vizinhas (cm)"), _degrauMin);
+        Linha(Tr.T("Degrau máximo entre mesas vizinhas (cm)"), _degrauMax);
 
         if (!_soAnalises)
         {
-            Linha("Espaçamento entre mesas da fileira (cm)", _espacamentoMesas);
-            Linha("Espaçamento que quebra a fileira (cm)", _espacamento);
+            Linha(Tr.T("Espaçamento entre mesas da fileira (cm)"), _espacamentoMesas);
+            Linha(Tr.T("Espaçamento que quebra a fileira (cm)"), _espacamento);
         }
 
-        pilha.Children.Add(Secao("Ponta baixa do módulo"));
-        Linha("Altura livre mínima (cm)", _pontaBaixaMin);
-        Linha("Altura livre máxima (cm)", _pontaBaixaMax);
-        Linha("Módulos por mesa que podem estourar (lombo)", _lombo);
+        pilha.Children.Add(Secao(Tr.T("Ponta baixa do módulo")));
+        Linha(Tr.T("Altura livre mínima (cm)"), _pontaBaixaMin);
+        Linha(Tr.T("Altura livre máxima (cm)"), _pontaBaixaMax);
+        Linha(Tr.T("Módulos por mesa que podem estourar (lombo)"), _lombo);
 
         if (!_soAnalises)
         {
-            pilha.Children.Add(Secao("Pilar"));
-            Linha("Enterro mínimo (cm)", _enterroMin);
-            Linha("Enterro máximo (cm)", _enterroMax);
+            pilha.Children.Add(Secao(Tr.T("Pilar")));
+            Linha(Tr.T("Enterro mínimo (cm)"), _enterroMin);
+            Linha(Tr.T("Enterro máximo (cm)"), _enterroMax);
         }
 
-        pilha.Children.Add(Secao("Declividade longitudinal"));
+        pilha.Children.Add(Secao(Tr.T("Declividade longitudinal")));
         pilha.Children.Add(_temDeclividade);
-        Linha("Declividade máxima da mesa (graus)", _declividadeMax);
+        Linha(Tr.T("Declividade máxima da mesa (graus)"), _declividadeMax);
 
         foreach (var campo in CamposDeTexto()) campo.TextChanged += (_, _) => Conferir();
 
@@ -312,10 +312,9 @@ internal sealed class JanelaDeConfiguracao : Window
     {
         var pilha = new StackPanel();
 
-        pilha.Children.Add(Secao("Análises: o que se pinta, de que cor, em que camada"));
+        pilha.Children.Add(Secao(Tr.T("Análises: o que se pinta, de que cor, em que camada")));
         pilha.Children.Add(Nota(
-            "Dentro do limite não pinta nada. Fora, pinta com a cor escolhida para aquele lado. "
-            + "Os limites são os da esquerda; cada análise vai na sua camada, para ligar e desligar."));
+            Tr.T("Dentro do limite não pinta nada. Fora, pinta com a cor escolhida para aquele lado. Os limites são os da esquerda; cada análise vai na sua camada, para ligar e desligar.")));
 
         var grade = new Grid();
 
@@ -339,10 +338,10 @@ internal sealed class JanelaDeConfiguracao : Window
         }
 
         grade.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        Cabecalho(0, "Análise");
-        Cabecalho(1, "Camada");
-        Cabecalho(2, "Abaixo do mínimo");
-        Cabecalho(3, "Acima do máximo");
+        Cabecalho(0, Tr.T("Análise"));
+        Cabecalho(1, Tr.T("Camada"));
+        Cabecalho(2, Tr.T("Abaixo do mínimo"));
+        Cabecalho(3, Tr.T("Acima do máximo"));
 
         var linha = 1;
 
@@ -353,9 +352,9 @@ internal sealed class JanelaDeConfiguracao : Window
 
         pilha.Children.Add(grade);
 
-        pilha.Children.Add(Secao("Comprimento de pilar"));
+        pilha.Children.Add(Secao(Tr.T("Comprimento de pilar")));
         pilha.Children.Add(Nota(
-            "Não é teto: o plugin sempre calcula o pilar ideal. Isto só pinta os que passarem do valor."));
+            Tr.T("Não é teto: o plugin sempre calcula o pilar ideal. Isto só pinta os que passarem do valor.")));
         pilha.Children.Add(_pintarPilar);
         pilha.Children.Add(_pilarAcimaDe);
 
@@ -404,7 +403,7 @@ internal sealed class JanelaDeConfiguracao : Window
             // o projetista não escolher uma cor que nunca seria usada.
             var vazio = new TextBlock
             {
-                Text = kind == AnalysisKind.EdgeTable ? "" : "(sem mínimo)",
+                Text = kind == AnalysisKind.EdgeTable ? "" : Tr.T("(sem mínimo)"),
                 Foreground = Brushes.Gray,
                 FontSize = 11,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -419,7 +418,7 @@ internal sealed class JanelaDeConfiguracao : Window
         Grid.SetColumn(corAcima, 3);
         grade.Children.Add(corAcima);
 
-        if (kind == AnalysisKind.EdgeTable) corAcima.ToolTip = "A cor da mesa que cai fora da área.";
+        if (kind == AnalysisKind.EdgeTable) corAcima.ToolTip = Tr.T("A cor da mesa que cai fora da área.");
 
         ligada.Checked += (_, _) => Conferir();
         ligada.Unchecked += (_, _) => Conferir();
@@ -446,7 +445,7 @@ internal sealed class JanelaDeConfiguracao : Window
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        foreach (var (nome, cor) in Paleta) caixa.Items.Add(ItemDeCor(nome, cor, daPaleta: true));
+        foreach (var (nome, cor) in Paleta) caixa.Items.Add(ItemDeCor(Tr.T(nome), cor, daPaleta: true));
 
         PaletaDeCores.PermitirMaisCores(caixa, c => ItemDeCor(c.ToHex(), c, daPaleta: false), item => item.Tag is ItemDePaleta p ? p.Cor : null);
         return caixa;
@@ -474,11 +473,11 @@ internal sealed class JanelaDeConfiguracao : Window
 
     private static string Nome(AnalysisKind kind) => kind switch
     {
-        AnalysisKind.LowEdge => "Ponta baixa",
-        AnalysisKind.PillarLength => "Comprimento de pilar",
-        AnalysisKind.Embedment => "Enterro",
-        AnalysisKind.LongitudinalSlope => "Declividade",
-        AnalysisKind.EdgeTable => "Mesa na borda",
+        AnalysisKind.LowEdge => Tr.T("Ponta baixa"),
+        AnalysisKind.PillarLength => Tr.T("Comprimento de pilar"),
+        AnalysisKind.Embedment => Tr.T("Enterro"),
+        AnalysisKind.LongitudinalSlope => Tr.T("Declividade"),
+        AnalysisKind.EdgeTable => Tr.T("Mesa na borda"),
         _ => kind.ToString(),
     };
 
@@ -661,7 +660,7 @@ internal sealed class JanelaDeConfiguracao : Window
         catch (Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao confirmar a configuração.", erro);
-            MessageBox.Show(this, $"Não consegui ler a configuração: {erro.Message}", Title,
+            MessageBox.Show(this, Tr.F("Não consegui ler a configuração: {0}", erro.Message), Title,
                 MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
@@ -696,7 +695,7 @@ internal sealed class JanelaDeConfiguracao : Window
 
         if (forasteiro is not null) caixa.Items.Remove(forasteiro);
 
-        var proprio = ItemDeCor($"Outra ({cor.ToHex()})", cor, daPaleta: false);
+        var proprio = ItemDeCor(Tr.F("Outra ({0})", cor.ToHex()), cor, daPaleta: false);
 
         caixa.Items.Add(proprio);
         caixa.SelectedItem = proprio;

@@ -10,21 +10,20 @@ namespace Clivus.Core;
 public static class SurfaceCatalog
 {
     /// <summary>O que dizer quando o desenho não tem superfície alguma.</summary>
-    public const string NenhumaSuperficie =
-        "Este desenho não tem nenhuma superfície. Crie a superfície do terreno no Civil 3D antes de continuar.";
+    public static string NenhumaSuperficie => Tr.T(
+        "Este desenho não tem nenhuma superfície. Crie a superfície do terreno no Civil 3D antes de continuar.");
 
     /// <summary>
     /// O mesmo, quando o desenho tem referências externas: a superfície pode
     /// estar lá dentro, e é preciso dizer isso em vez de deixar o usuário
     /// achando que o plugin não enxergou nada.
     /// </summary>
-    public const string NenhumaSuperficieComXref =
-        "Este desenho não tem superfície própria. Se a topografia vem de uma referência externa, "
-        + "vincule-a ao desenho (BIND) ou abra o desenho da referência.";
+    public static string NenhumaSuperficieComXref => Tr.T(
+        "Este desenho não tem superfície própria. Se a topografia vem de uma referência externa, vincule-a ao desenho (BIND) ou abra o desenho da referência.");
 
     /// <summary>O que dizer quando há superfícies, mas todas vazias.</summary>
-    public const string TodasVazias =
-        "As superfícies deste desenho estão vazias. Nenhuma delas tem ponto para ler cota.";
+    public static string TodasVazias => Tr.T(
+        "As superfícies deste desenho estão vazias. Nenhuma delas tem ponto para ler cota.");
 
     /// <summary>
     /// Ordena a lista para a tela: alfabética pelo nome COMO ELE APARECE, sem

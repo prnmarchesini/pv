@@ -37,7 +37,7 @@ public static class AreaCommands
             if (terreno is null)
             {
                 editor.WriteMessage(
-                    "\nNenhum terreno processado neste desenho. Use o botão Terreno primeiro.\n");
+                    Tr.T("\nNenhum terreno processado neste desenho. Use o botão Terreno primeiro.\n"));
                 return;
             }
 
@@ -47,7 +47,7 @@ public static class AreaCommands
             var aviso = TerrenoEnvelhecido.Conferir(documento);
             if (aviso is not null)
             {
-                editor.WriteMessage($"\n  ATENÇÃO: {aviso}\n");
+                editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
             }
 
             // O rastro mostra o que já foi clicado: o AutoCAD sozinho só dá o
@@ -66,7 +66,7 @@ public static class AreaCommands
 
             if (pontos.Count < 3)
             {
-                editor.WriteMessage("\nUma área precisa de pelo menos três vértices.\n");
+                editor.WriteMessage(Tr.T("\nUma área precisa de pelo menos três vértices.\n"));
                 return;
             }
 
@@ -78,7 +78,7 @@ public static class AreaCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao criar a área.", erro);
-            editor.WriteMessage($"\nNão consegui criar a área: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui criar a área: {0}\n", erro.Message));
         }
     }
 
@@ -94,13 +94,13 @@ public static class AreaCommands
         var pontos = new List<Point3d>();
 
         editor.WriteMessage(
-            "\nTrace a área em planta. A cota de cada vértice vem do terreno.\n");
+            Tr.T("\nTrace a área em planta. A cota de cada vértice vem do terreno.\n"));
 
         while (true)
         {
             var opcoes = pontos.Count == 0
-                ? new PromptPointOptions("\nPrimeiro vértice: ")
-                : new PromptPointOptions($"\nPróximo vértice [Fechar] <{pontos.Count} traçados>: ")
+                ? new PromptPointOptions(Tr.T("\nPrimeiro vértice: "))
+                : new PromptPointOptions(Tr.F("\nPróximo vértice [Fechar] <{0} traçados>: ", pontos.Count))
                 {
                     UseBasePoint = true,
                     BasePoint = pontos[^1],
@@ -118,7 +118,7 @@ public static class AreaCommands
 
             if (resposta.Status == PromptStatus.Cancel)
             {
-                editor.WriteMessage("\nÁrea não criada.\n");
+                editor.WriteMessage(Tr.T("\nÁrea não criada.\n"));
                 return null;
             }
 
@@ -137,7 +137,7 @@ public static class AreaCommands
     }
 
     private static string? PerguntarNome(Editor editor) =>
-        Perguntas.Nome(editor, "área", "A área");
+        Perguntas.Nome(editor, Tr.T("área"), Tr.T("A área"));
 
     private static void Criar(
         Editor editor,
@@ -161,8 +161,7 @@ public static class AreaCommands
         if (contorno.Count < 3)
         {
             editor.WriteMessage(
-                "\nO contorno não fechou uma área: os vértices caíram todos no mesmo\n"
-                + "lugar. Área não criada.\n");
+                Tr.T("\nO contorno não fechou uma área: os vértices caíram todos no mesmo\nlugar. Área não criada.\n"));
             return;
         }
 
@@ -209,8 +208,7 @@ public static class AreaCommands
             // A área foi criada e a identidade dela está na entidade. O que
             // se perdeu foi o índice, e ele se refaz.
             editor.WriteMessage(
-                $"\n  ATENÇÃO: {problema}. As áreas que estavam nele podem ter sumido\n"
-                + "  da lista. Rode CLIVUS_REINDEXAR para refazê-lo a partir do desenho.\n");
+                Tr.F("\n  ATENÇÃO: {0}. As áreas que estavam nele podem ter sumido\n  da lista. Rode CLIVUS_REINDEXAR para refazê-lo a partir do desenho.\n", problema));
         }
 
         Relatar(editor, identidade, pontos.Count, drapejada);
@@ -251,19 +249,17 @@ public static class AreaCommands
         var noTerreno = SemOFechamento(drapejada.Vertices).Count;
         var acrescentados = noTerreno - verticesTracados;
 
-        editor.WriteMessage($"\nÁrea criada: {identidade.Describe()}\n");
-        editor.WriteMessage($"  vértices traçados:    {verticesTracados}\n");
+        editor.WriteMessage(Tr.F("\nÁrea criada: {0}\n", identidade.Describe()));
+        editor.WriteMessage(Tr.F("  vértices traçados:    {0}\n", verticesTracados));
         editor.WriteMessage(
-            $"  vértices no terreno:  {noTerreno} "
-            + $"({Math.Max(acrescentados, 0)} acrescentados no contorno do relevo)\n");
+            Tr.F("  vértices no terreno:  {0} ({1} acrescentados no contorno do relevo)\n", noTerreno, Math.Max(acrescentados, 0)));
 
         if (drapejada.HasGaps)
         {
             // Sem este aviso, o trecho sem terreno fica com a cota que o
             // usuário clicou — plausível, e sem nada que o denuncie.
             editor.WriteMessage(
-                $"  ATENÇÃO: {drapejada.OutsideCount} vértice(s) caíram fora do terreno e ficaram\n"
-                + "  com a cota do clique. Reveja o traçado ou processe uma superfície maior.\n");
+                Tr.F("  ATENÇÃO: {0} vértice(s) caíram fora do terreno e ficaram\n  com a cota do clique. Reveja o traçado ou processe uma superfície maior.\n", drapejada.OutsideCount));
         }
     }
 

@@ -56,9 +56,7 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
         ArgumentNullException.ThrowIfNull(estrutura);
         if (estrutura.MinEmbedment is not { } t3 || t3 <= Configuration.MaxEmbedment) return null;
 
-        return $"o enterro mínimo da estrutura (T3 = {t3.ToString("0.###", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"))} m) "
-            + $"passa do enterro máximo da configuração ({Configuration.MaxEmbedment.ToString("0.###", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"))} m); "
-            + "o máximo subiu junto para esta mesa";
+        return Tr.F("o enterro mínimo da estrutura (T3 = {0:0.###} m) passa do enterro máximo da configuração ({1:0.###} m); o máximo subiu junto para esta mesa", t3, Configuration.MaxEmbedment);
     }
 
     public ProjectSettings ForTable(TableFrame estrutura)
@@ -149,8 +147,8 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
     {
         get
         {
-            if (Configuration is null) return "a configuração do sistema está ausente";
-            if (Analyses is null) return "as regras de análise estão ausentes";
+            if (Configuration is null) return Tr.T("a configuração do sistema está ausente");
+            if (Analyses is null) return Tr.T("as regras de análise estão ausentes");
 
             return Configuration.WhyInvalid ?? Analyses.WhyInvalid;
         }
@@ -159,7 +157,7 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
     /// <summary>As duas linhas que descrevem as configurações para o usuário.</summary>
     public string Describe()
     {
-        if (WhyInvalid is { } motivo) return $"Configuração inválida: {motivo}.";
+        if (WhyInvalid is { } motivo) return Tr.F("Configuração inválida: {0}.", motivo);
 
         return $"{Configuration.Describe()}; {Analyses.Describe()}";
     }
@@ -175,7 +173,7 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
     public IReadOnlyList<KeyValuePair<string, string>> ToFields()
     {
         if (WhyInvalid is { } motivo)
-            throw new InvalidOperationException($"A configuração não pode ser gravada: {motivo}.");
+            throw new InvalidOperationException(Tr.F("A configuração não pode ser gravada: {0}.", motivo));
 
         var c = Configuration;
         var a = Analyses;
@@ -238,14 +236,13 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
         }
 
         if (!campos.TryGetValue(CampoVersao, out var versaoTexto))
-            return Problema("a configuração gravada não diz de que versão do formato é");
+            return Problema(Tr.T("a configuração gravada não diz de que versão do formato é"));
 
         if (!int.TryParse(versaoTexto, NumberStyles.Integer, CultureInfo.InvariantCulture, out var versao)
             || versao != VersaoDoFormato)
         {
             return Problema(
-                $"a configuração gravada é da versão {versaoTexto} do formato, e este plugin "
-                + $"lê a versão {VersaoDoFormato}");
+                Tr.F("a configuração gravada é da versão {0} do formato, e este plugin lê a versão {1}", versaoTexto, VersaoDoFormato));
         }
 
         var leitor = new Leitor(campos);
@@ -291,7 +288,7 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
         var lido = new ProjectSettings(configuracao, analises);
 
         if (lido.WhyInvalid is { } motivo)
-            return Problema($"a configuração gravada não fecha: {motivo}");
+            return Problema(Tr.F("a configuração gravada não fecha: {0}", motivo));
 
         return new ProjectSettingsResult(lido, null);
     }
@@ -334,7 +331,7 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
             if (double.TryParse(texto, NumberStyles.Float, CultureInfo.InvariantCulture, out var valor))
                 return valor;
 
-            Anotar($"o campo {chave} da configuração gravada não é um número");
+            Anotar(Tr.F("o campo {0} da configuração gravada não é um número", chave));
             return 0;
         }
 
@@ -346,7 +343,7 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
             if (double.TryParse(texto, NumberStyles.Float, CultureInfo.InvariantCulture, out var valor))
                 return valor;
 
-            Anotar($"o campo {chave} da configuração gravada não é um número");
+            Anotar(Tr.F("o campo {0} da configuração gravada não é um número", chave));
             return null;
         }
 
@@ -357,7 +354,7 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
             if (int.TryParse(texto, NumberStyles.Integer, CultureInfo.InvariantCulture, out var valor))
                 return valor;
 
-            Anotar($"o campo {chave} da configuração gravada não é um inteiro");
+            Anotar(Tr.F("o campo {0} da configuração gravada não é um inteiro", chave));
             return 0;
         }
 
@@ -370,7 +367,7 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
                 case "1": return true;
                 case "0": return false;
                 default:
-                    Anotar($"o campo {chave} da configuração gravada não é 0 nem 1");
+                    Anotar(Tr.F("o campo {0} da configuração gravada não é 0 nem 1", chave));
                     return false;
             }
         }
@@ -383,7 +380,7 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
 
             if (RgbColor.TryParseHex(texto, out var cor)) return cor;
 
-            Anotar($"o campo {chave} da configuração gravada não é uma cor #RRGGBB");
+            Anotar(Tr.F("o campo {0} da configuração gravada não é uma cor #RRGGBB", chave));
             return default;
         }
 
@@ -395,7 +392,7 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
                 return true;
             }
 
-            Anotar($"o campo {chave} está faltando na configuração gravada");
+            Anotar(Tr.F("o campo {0} está faltando na configuração gravada", chave));
             texto = string.Empty;
             return false;
         }
