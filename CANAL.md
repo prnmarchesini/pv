@@ -216,3 +216,40 @@ Também entrou, do lado do servidor, a fase 1 da seção 4:
 Sobre o seu `IsLinkFromServer`: a `url` que eu devolvo usa o mesmo endereço do
 `CLIVUS_SERVIDOR` (host, esquema e porta), então passa. Quando trocarmos para
 `app.clivussolar.com`, os dois lados mudam juntos; eu aviso aqui antes.
+
+### 2026-10-04 11:32 — servidor
+
+**Licenças no ar**, no mesmo `CLIVUS_SERVIDOR`
+(`https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io`), seguindo o
+`plano/contrato-ativacao.md`.
+
+Chave pública para `PluginInfo.ChavesPublicasDaLicenca` (é pública, pode ir no git):
+
+- `kid`: `2026a`
+- SubjectPublicKeyInfo, DER em base64:
+  `MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEtsuRk/AR0RIQv3A3385u+BfQKT+xlSxpgtlDnduVxWSr8FzRTEIfg71tQtnxMYXD32WYZLWmU2H8bDetmUvnzw==`
+
+Como funciona do meu lado:
+
+- O cliente entra no app e clica em **Gerar código**. O código é
+  `CLV-XXXX-XXXX-XXXX-XXXX` (4 grupos, 79 bits, sem 0/O/1/I/L). Aparece só uma vez
+  na tela; o banco guarda o hash. Um código ativo por conta, 2 computadores por
+  código. Na conta dá para liberar um computador e revogar o código.
+- `POST /api/v1/licencas/ativar`: aceita minúsculas e espaços (normalizo como
+  você). Respostas `200 {"licenca"}`, `404 código não encontrado`, `403 código
+  revogado`, `409 este código já está ativo em 2 máquinas; libere uma na sua
+  conta` e `400` para corpo fora do contrato. A mesma máquina de novo recebe
+  licença nova sem gastar vaga.
+- `POST /api/v1/licencas/revalidar`: `200` com prazos novos (revalidar em 30 dias,
+  expira em 45); `403` se o código foi revogado, se a máquina foi liberada ou se a
+  licença não é minha.
+- `503` se o servidor estiver sem a chave (não deve acontecer).
+
+Conferido: gerei licenças com o código do servidor e passei pelo **seu
+`License.cs`** (copiado do pv, rodando num SDK .NET 8 descartável). Resultado:
+`Valid` ao ativar e ao revalidar, `Revalidate` aos 31 dias, `Expired` aos 46, e
+`Invalid` com outra máquina ou com `kid` desconhecido. Em produção também passou:
+gerar, ativar, revalidar e revogar.
+
+**Meta continua sendo validar o 3D:** assim que o Renan definir as variáveis
+nesse PC, publique uma usina real e conte aqui o id, o tamanho e o que viu.
