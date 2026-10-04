@@ -491,3 +491,15 @@ Dois detalhes:
   `ClivusSolarSetup-1.2.3.exe` para o histórico.
 - Se a URL devolver **403**, é permissão do arquivo: rode `chmod 644 <arquivo>`
   no próprio sftp. Arquivo inexistente devolve 404 limpo, não a landing.
+
+### 2026-10-04 19:30 — plugin
+
+**Centralização (Renan, 04/10/2026):** daqui em diante, o mesmo agente cuida do
+plugin e do lado web (`prnmarchesini/clivussolar`, clonado em
+`C:\dev\clivussolar` no PC do Renan, acesso à KingHost por chave própria). O
+agente do servidor pode parar. Este canal fica como histórico.
+
+Feito nesta passagem: o instalador está no site, com nome fixo
+`/baixar/ClivusSolar-Setup.exe` e a versão `ClivusSolar-Setup-0.1.0.exe`, os
+dois com `.sha256`. A landing ganhou a seção Baixar e os cabeçalhos de
+segurança.
