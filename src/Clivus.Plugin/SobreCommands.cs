@@ -31,7 +31,7 @@ public static class SobreCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha na janela Sobre.", erro);
-            documento?.Editor.WriteMessage($"\nNão consegui abrir a janela Sobre: {erro.Message}\n");
+            documento?.Editor.WriteMessage(Tr.F("\nNão consegui abrir a janela Sobre: {0}\n", erro.Message));
         }
     }
 }
@@ -43,7 +43,7 @@ internal sealed class JanelaSobre : Window
 
     internal JanelaSobre(string versao)
     {
-        Title = "Sobre o Clivus Solar";
+        Title = Tr.T("Sobre o Clivus Solar");
         Width = 520;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
@@ -67,10 +67,10 @@ internal sealed class JanelaSobre : Window
         };
 
         pilha.Children.Add(Linha($"Clivus Solar {versao}", forte: true));
-        pilha.Children.Add(Linha("Layout de usinas fotovoltaicas em terreno inclinado, no Civil 3D."));
-        pilha.Children.Add(Linha($"Registro de diagnóstico: {RegistroDeDiagnostico.Caminho}"));
+        pilha.Children.Add(Linha(Tr.T("Layout de usinas fotovoltaicas em terreno inclinado, no Civil 3D.")));
+        pilha.Children.Add(Linha(Tr.F("Registro de diagnóstico: {0}", RegistroDeDiagnostico.Caminho)));
 
-        var fechar = new Button { Content = "Fechar", Width = 90, Height = 26, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0), IsCancel = true, IsDefault = true };
+        var fechar = new Button { Content = Tr.T("Fechar"), Width = 90, Height = 26, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0), IsCancel = true, IsDefault = true };
         pilha.Children.Add(fechar);
 
         Content = pilha;

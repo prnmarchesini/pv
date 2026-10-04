@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Clivus.Core;
 
 /// <summary>
@@ -56,8 +54,6 @@ public sealed record ProjectSettingsForm(
     IReadOnlyDictionary<AnalysisKind, AnalysisRule> Rules,
     EdgeRule Edge)
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     private const double Grau = Math.PI / 180;
 
     /// <summary>
@@ -66,19 +62,19 @@ public sealed record ProjectSettingsForm(
     /// </summary>
     public static readonly IReadOnlyList<(string Field, string Label)> Labels =
     [
-        (nameof(AzimuthDegrees), "Azimute"),
-        (nameof(Pitch), "Pitch entre mesas"),
-        (nameof(MinStepCm), "Degrau mínimo"),
-        (nameof(MaxStepCm), "Degrau máximo"),
-        (nameof(TableGapCm), "Espaçamento entre mesas"),
-        (nameof(BreakGapCm), "Espaçamento que quebra a fileira"),
-        (nameof(MinLowEdgeCm), "Altura livre mínima"),
-        (nameof(MaxLowEdgeCm), "Altura livre máxima"),
-        (nameof(BumpModules), "Módulos que podem estourar"),
-        (nameof(MinEmbedmentCm), "Enterro mínimo"),
-        (nameof(MaxEmbedmentCm), "Enterro máximo"),
-        (nameof(MaxSlopeDegrees), "Declividade máxima"),
-        (nameof(PillarLongerThan), "Pintar pilar mais comprido que"),
+        (nameof(AzimuthDegrees), Tr.N("Azimute")),
+        (nameof(Pitch), Tr.N("Pitch entre mesas")),
+        (nameof(MinStepCm), Tr.N("Degrau mínimo")),
+        (nameof(MaxStepCm), Tr.N("Degrau máximo")),
+        (nameof(TableGapCm), Tr.N("Espaçamento entre mesas")),
+        (nameof(BreakGapCm), Tr.N("Espaçamento que quebra a fileira")),
+        (nameof(MinLowEdgeCm), Tr.N("Altura livre mínima")),
+        (nameof(MaxLowEdgeCm), Tr.N("Altura livre máxima")),
+        (nameof(BumpModules), Tr.N("Módulos que podem estourar")),
+        (nameof(MinEmbedmentCm), Tr.N("Enterro mínimo")),
+        (nameof(MaxEmbedmentCm), Tr.N("Enterro máximo")),
+        (nameof(MaxSlopeDegrees), Tr.N("Declividade máxima")),
+        (nameof(PillarLongerThan), Tr.N("Pintar pilar mais comprido que")),
     ];
 
     /// <summary>O formulário que mostra estas configurações.</summary>
@@ -107,13 +103,13 @@ public sealed record ProjectSettingsForm(
             BreakGapCm: Centimetros(c.MaxGapBeforeBreak),
             MinLowEdgeCm: Centimetros(c.MinLowEdge),
             MaxLowEdgeCm: Centimetros(c.MaxLowEdge),
-            BumpModules: c.BumpToleranceModules.ToString(Brasil),
+            BumpModules: c.BumpToleranceModules.ToString(Tr.Culture),
             MinEmbedmentCm: Centimetros(c.MinEmbedment),
             MaxEmbedmentCm: Centimetros(c.MaxEmbedment),
             LimitSlope: c.MaxLongitudinalSlopeDegrees is not null,
             MaxSlopeDegrees: c.MaxLongitudinalSlopeDegrees is { } graus ? Numero(graus) : "10",
             PaintPillars: a.PaintPillarsLongerThan is not null,
-            PillarLongerThan: a.PaintPillarsLongerThan is { } pilar ? Numero(pilar) : "2,5",
+            PillarLongerThan: a.PaintPillarsLongerThan is { } pilar ? Numero(pilar) : Numero(2.5),
             Rules: regras,
             Edge: a.EdgeRule);
     }
@@ -138,10 +134,10 @@ public sealed record ProjectSettingsForm(
             if (certo) continue;
 
             motivo = string.IsNullOrWhiteSpace(texto)
-                ? $"o campo \"{nome}\" está em branco."
+                ? Tr.F("o campo \"{0}\" está em branco.", Tr.T(nome))
                 : campo == nameof(BumpModules)
-                    ? $"o campo \"{nome}\" precisa ser um inteiro."
-                    : $"não consigo ler o número do campo \"{nome}\".";
+                    ? Tr.F("o campo \"{0}\" precisa ser um inteiro.", Tr.T(nome))
+                    : Tr.F("não consigo ler o número do campo \"{0}\".", Tr.T(nome));
 
             return null;
         }
@@ -192,14 +188,14 @@ public sealed record ProjectSettingsForm(
         {
             if (Rules is null || !Rules.ContainsKey(kind) || Rules[kind] is null)
             {
-                motivo = $"a regra da análise de {kind} está ausente no formulário.";
+                motivo = Tr.F("a regra da análise de {0} está ausente no formulário.", kind);
                 return null;
             }
         }
 
         if (Edge is null)
         {
-            motivo = "a regra da mesa na borda está ausente no formulário.";
+            motivo = Tr.T("a regra da mesa na borda está ausente no formulário.");
             return null;
         }
 
@@ -241,7 +237,7 @@ public sealed record ProjectSettingsForm(
         _ => throw new ArgumentException($"Campo desconhecido: {campo}.", nameof(campo)),
     } ?? string.Empty;
 
-    private static string Numero(double valor) => valor.ToString("0.############", Brasil);
+    private static string Numero(double valor) => valor.ToString("0.############", Tr.Culture);
 
     private static string Centimetros(double metros) => Numero(metros * 100);
 }

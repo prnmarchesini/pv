@@ -53,12 +53,12 @@ internal static class FonteDeModulos
         if (EnderecoValido() is null)
         {
             RegistroDeDiagnostico.Registrar($"CLIVUS_SERVICO não é um endereço http: \"{Endereco}\".");
-            return (ModuleLibrary.Default(), $"Biblioteca embutida (CLIVUS_SERVICO inválido: {Endereco}).");
+            return (ModuleLibrary.Default(), Tr.F("Biblioteca embutida (CLIVUS_SERVICO inválido: {0}).", Endereco));
         }
 
         // Serviço fora do ar há pouco: não espera de novo a cada janela.
         if (_foraDoArAte is { } ate && DateTime.UtcNow < ate)
-            return (ModuleLibrary.Default(), "Biblioteca embutida (serviço fora do ar).");
+            return (ModuleLibrary.Default(), Tr.T("Biblioteca embutida (serviço fora do ar)."));
 
         try
         {
@@ -67,15 +67,15 @@ internal static class FonteDeModulos
             var json = Task.Run(() => Cliente.GetStringAsync($"{Endereco}/modulos")).GetAwaiter().GetResult();
             var modulos = ModuleLibrary.ParseService(json);
 
-            return (modulos, $"Módulos do serviço ({Endereco}): {modulos.Count}.");
+            return (modulos, Tr.F("Módulos do serviço ({0}): {1}.", Endereco, modulos.Count));
         }
         catch (Exception erro) when (erro is HttpRequestException or TaskCanceledException or InvalidOperationException)
         {
             RegistroDeDiagnostico.Registrar($"Serviço de módulos indisponível em {Endereco}; usando a biblioteca embutida.", erro);
             if (erro is not InvalidOperationException) _foraDoArAte = DateTime.UtcNow.AddMinutes(1);
 
-            var motivo = erro is InvalidOperationException ? erro.Message : "serviço fora do ar";
-            return (ModuleLibrary.Default(), $"Biblioteca embutida ({motivo}).");
+            var motivo = erro is InvalidOperationException ? erro.Message : Tr.T("serviço fora do ar");
+            return (ModuleLibrary.Default(), Tr.F("Biblioteca embutida ({0}).", motivo));
         }
     }
 
@@ -99,7 +99,7 @@ internal static class FonteDeModulos
 
         if (EnderecoValido() is null)
         {
-            return (false, $"CLIVUS_SERVICO não é um endereço http: \"{Endereco}\".");
+            return (false, Tr.F("CLIVUS_SERVICO não é um endereço http: \"{0}\".", Endereco));
         }
 
         try
@@ -111,18 +111,17 @@ internal static class FonteDeModulos
             if (resposta.IsSuccessStatusCode)
             {
                 _foraDoArAte = null;
-                return (true, $"Módulo {modulo.DisplayName} cadastrado no serviço.");
+                return (true, Tr.F("Módulo {0} cadastrado no serviço.", modulo.DisplayName));
             }
 
             return (false, resposta.StatusCode == HttpStatusCode.Conflict
-                ? Detalhe(texto) ?? "Já existe um módulo com esse modelo."
-                : $"O serviço recusou ({(int)resposta.StatusCode}): {Detalhe(texto) ?? Cortar(texto)}");
+                ? Detalhe(texto) ?? Tr.T("Já existe um módulo com esse modelo.")
+                : Tr.F("O serviço recusou ({0}): {1}", (int)resposta.StatusCode, Detalhe(texto) ?? Cortar(texto)));
         }
         catch (Exception erro) when (erro is HttpRequestException or TaskCanceledException)
         {
             RegistroDeDiagnostico.Registrar($"Falha ao cadastrar módulo em {Endereco}.", erro);
-            return (false, $"O serviço de módulos não respondeu em {Endereco}. Se ele estava no ar, o módulo pode ter "
-                + "sido gravado: feche e abra a janela de Mesa para conferir a lista. Fora do ar, rode tools\\servico-local.ps1.");
+            return (false, Tr.F("O serviço de módulos não respondeu em {0}. Se ele estava no ar, o módulo pode ter sido gravado: feche e abra a janela de Mesa para conferir a lista. Fora do ar, rode tools\\servico-local.ps1.", Endereco));
         }
     }
 

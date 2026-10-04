@@ -49,7 +49,7 @@ public sealed record TableRemoval(Guid Id, string Label, DateTime When)
         return remocao.IsValid ? remocao : null;
     }
 
-    public string Describe() => $"{Label} removida em {When.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.GetCultureInfo("pt-BR"))}";
+    public string Describe() => Tr.F("{0} removida em {1:dd/MM/yyyy HH:mm}", Label, When.ToLocalTime());
 }
 
 /// <summary>O que o vigia decidiu ao fim de um comando.</summary>
@@ -79,13 +79,13 @@ public sealed record ChangeResolution(
 public sealed class PendingChanges
 {
     /// <summary>Motivo gravado quando a peça foi modificada.</summary>
-    public const string ReasonModified = "movida ou editada";
+    public static readonly string ReasonModified = Tr.N("movida ou editada");
 
     /// <summary>Motivo gravado quando apareceu uma peça com a nossa identidade.</summary>
-    public const string ReasonAppended = "copiada";
+    public static readonly string ReasonAppended = Tr.N("copiada");
 
     /// <summary>Motivo gravado quando uma peça (não o contorno) foi apagada.</summary>
-    public const string ReasonErased = "peça apagada";
+    public static readonly string ReasonErased = Tr.N("peça apagada");
 
     private readonly Dictionary<Guid, int> _severidade = [];
     private readonly Dictionary<Guid, string> _removidas = [];
@@ -106,7 +106,7 @@ public sealed class PendingChanges
 
         if (kind == ChangeKind.Erased && isContour)
         {
-            _removidas[table] = string.IsNullOrWhiteSpace(label) ? "(sem letreiro)" : label.Trim();
+            _removidas[table] = string.IsNullOrWhiteSpace(label) ? Tr.N("(sem letreiro)") : label.Trim();
             _restauradas.Remove(table);
             return;
         }

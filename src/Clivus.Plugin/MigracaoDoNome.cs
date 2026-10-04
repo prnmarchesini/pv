@@ -68,12 +68,12 @@ public static class MigracaoDoNome
 
         try
         {
-            documento.Editor.WriteMessage($"\n{Migrar(documento.Database) ?? "MIGRAR Nada do nome antigo neste desenho."}\n");
+            documento.Editor.WriteMessage($"\n{Migrar(documento.Database) ?? Tr.T("MIGRAR Nada do nome antigo neste desenho.")}\n");
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao migrar o desenho para o nome novo.", erro);
-            documento.Editor.WriteMessage($"\nNão consegui migrar o desenho: {erro.Message}\n");
+            documento.Editor.WriteMessage(Tr.F("\nNão consegui migrar o desenho: {0}\n", erro.Message));
         }
     }
 
@@ -130,7 +130,7 @@ public static class MigracaoDoNome
                 var nome = Novo + camada.Name[antigo.Length..];
                 if (tabelaDeCamadas.Has(nome))
                 {
-                    conflitos.Add($"camada {camada.Name} (já existe {nome})");
+                    conflitos.Add(Tr.F("camada {0} (já existe {1})", camada.Name, nome));
                     continue;
                 }
 
@@ -148,7 +148,7 @@ public static class MigracaoDoNome
                 var nome = Novo + bloco.Name[antigo.Length..];
                 if (tabelaDeBlocos.Has(nome))
                 {
-                    conflitos.Add($"bloco {bloco.Name} (já existe {nome})");
+                    conflitos.Add(Tr.F("bloco {0} (já existe {1})", bloco.Name, nome));
                     continue;
                 }
 
@@ -222,9 +222,9 @@ public static class MigracaoDoNome
             transacao.Commit();
         }
 
-        return $"MIGRAR Desenho passado para o nome Clivus Solar: {pecas} peça(s), {camadas} camada(s), {blocos} bloco(s), {registros} registro(s) do desenho."
-            + (conflitos.Count > 0 ? $" Ficaram com o nome antigo (o novo já existia): {string.Join(", ", conflitos)}." : string.Empty)
-            + " Salve o desenho para não migrar de novo.";
+        return Tr.F("MIGRAR Desenho passado para o nome Clivus Solar: {0} peça(s), {1} camada(s), {2} bloco(s), {3} registro(s) do desenho.", pecas, camadas, blocos, registros)
+            + (conflitos.Count > 0 ? " " + Tr.F("Ficaram com o nome antigo (o novo já existia): {0}.", string.Join(", ", conflitos)) : string.Empty)
+            + " " + Tr.T("Salve o desenho para não migrar de novo.");
     }
 
     /// <summary>Reescreve o XData do aplicativo antigo no novo, trocando o prefixo nos textos. Se havia.</summary>

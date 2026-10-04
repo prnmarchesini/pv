@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -20,8 +19,6 @@ namespace Clivus.Plugin;
 /// </summary>
 internal sealed class JanelaDeConfiguracoes : Window
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     private readonly List<DrawingTable> _mesas;
     private readonly Func<TableProfile, TableProfile?> _editarMesa;
     private readonly JanelaDeConfiguracao _parametros;
@@ -51,7 +48,7 @@ internal sealed class JanelaDeConfiguracoes : Window
         _mesas = [.. mesas];
         _editarMesa = editarMesa;
 
-        Title = "Clivus Solar — Configurações";
+        Title = Tr.T("Clivus Solar — Configurações");
         Width = 900;
         Height = 560;
         MinWidth = 860;
@@ -63,17 +60,17 @@ internal sealed class JanelaDeConfiguracoes : Window
         _estilos = new PainelDeEstilos(estilos.Textos, estilos.Cotas, estilos.Chamadas, estilos.Atuais);
 
         var abas = new TabControl { Margin = new Thickness(10, 10, 10, 0) };
-        abas.Items.Add(new TabItem { Header = "Estruturas", Content = AbaEstruturas(), ToolTip = "As mesas cadastradas neste desenho: módulo, arranjo, tesoura, pilares, vãos e enterro." });
-        abas.Items.Add(new TabItem { Header = "Escolha das estruturas", Content = AbaEscolha(), ToolTip = "Quais mesas entram na usina e a cor de cada uma no desenho." });
-        abas.Items.Add(new TabItem { Header = "Parâmetros", Content = _parametros.Formulario(), ToolTip = "Azimute, pitch, degraus, espaçamentos, altura livre e declividade." });
-        abas.Items.Add(new TabItem { Header = "Projeto", Content = new ScrollViewer { Content = _estilos, Margin = new Thickness(12), VerticalScrollBarVisibility = ScrollBarVisibility.Auto }, ToolTip = "Os estilos (anotativos) dos textos, cotas e chamadas do plugin." });
+        abas.Items.Add(new TabItem { Header = Tr.T("Estruturas"), Content = AbaEstruturas(), ToolTip = Tr.T("As mesas cadastradas neste desenho: módulo, arranjo, tesoura, pilares, vãos e enterro.") });
+        abas.Items.Add(new TabItem { Header = Tr.T("Escolha das estruturas"), Content = AbaEscolha(), ToolTip = Tr.T("Quais mesas entram na usina e a cor de cada uma no desenho.") });
+        abas.Items.Add(new TabItem { Header = Tr.T("Parâmetros"), Content = _parametros.Formulario(), ToolTip = Tr.T("Azimute, pitch, degraus, espaçamentos, altura livre e declividade.") });
+        abas.Items.Add(new TabItem { Header = Tr.T("Projeto"), Content = new ScrollViewer { Content = _estilos, Margin = new Thickness(12), VerticalScrollBarVisibility = ScrollBarVisibility.Auto }, ToolTip = Tr.T("Os estilos (anotativos) dos textos, cotas e chamadas do plugin.") });
         abas.SelectedIndex = Math.Clamp(abaInicial, 0, 3);
 
         var botoes = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(10) };
-        var salvar = new Button { Content = "Salvar no desenho", Width = 150, Height = 26, IsDefault = true, ToolTip = "Grava as mesas, os parâmetros e os estilos no desenho." };
+        var salvar = new Button { Content = Tr.T("Salvar no desenho"), Width = 150, Height = 26, IsDefault = true, ToolTip = Tr.T("Grava as mesas, os parâmetros e os estilos no desenho.") };
         salvar.Click += (_, _) => Salvar();
         botoes.Children.Add(salvar);
-        botoes.Children.Add(new Button { Content = "Fechar", Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true, ToolTip = "Fecha sem gravar nada." });
+        botoes.Children.Add(new Button { Content = Tr.T("Fechar"), Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true, ToolTip = Tr.T("Fecha sem gravar nada.") });
 
         // O idioma (etapa 10) é do usuário, não do desenho: vale na hora,
         // sem "Salvar no desenho", e fica no lado esquerdo do rodapé.
@@ -115,12 +112,12 @@ internal sealed class JanelaDeConfiguracoes : Window
             return b;
         }
 
-        Botao("Nova mesa...", "Abre a janela de Mesa para cadastrar uma mesa neste desenho (pode partir de um perfil salvo).", Nova);
-        Botao("Editar...", "Abre a mesa escolhida na janela de Mesa: módulo, arranjo, tesoura, pilares, vãos P1-P2, enterro T3.", Editar);
-        Botao("Duplicar", "Copia a mesa escolhida com outro nome (para fazer a de 14 a partir da de 28).", Duplicar);
-        Botao("Remover", "Tira a mesa escolhida deste desenho (as mesas já desenhadas continuam como estão).", Remover);
-        Botao("▲ Subir", "Sobe a mesa escolhida na lista: mais prioridade para o motor.", () => Mover(_lista.SelectedIndex, -1));
-        Botao("▼ Descer", "Desce a mesa escolhida na lista: menos prioridade para o motor.", () => Mover(_lista.SelectedIndex, +1));
+        Botao(Tr.T("Nova mesa..."), Tr.T("Abre a janela de Mesa para cadastrar uma mesa neste desenho (pode partir de um perfil salvo)."), Nova);
+        Botao(Tr.T("Editar..."), Tr.T("Abre a mesa escolhida na janela de Mesa: módulo, arranjo, tesoura, pilares, vãos P1-P2, enterro T3."), Editar);
+        Botao(Tr.T("Duplicar"), Tr.T("Copia a mesa escolhida com outro nome (para fazer a de 14 a partir da de 28)."), Duplicar);
+        Botao(Tr.T("Remover"), Tr.T("Tira a mesa escolhida deste desenho (as mesas já desenhadas continuam como estão)."), Remover);
+        Botao(Tr.T("▲ Subir"), Tr.T("Sobe a mesa escolhida na lista: mais prioridade para o motor."), () => Mover(_lista.SelectedIndex, -1));
+        Botao(Tr.T("▼ Descer"), Tr.T("Desce a mesa escolhida na lista: menos prioridade para o motor."), () => Mover(_lista.SelectedIndex, +1));
 
         botoes.Children.Add(new TextBlock
         {
@@ -133,7 +130,7 @@ internal sealed class JanelaDeConfiguracoes : Window
 
         botoes.Children.Add(new TextBlock
         {
-            Text = "As mesas ficam gravadas no desenho. Os perfis da pasta do usuário são a biblioteca de onde trazer uma mesa.",
+            Text = Tr.T("As mesas ficam gravadas no desenho. Os perfis da pasta do usuário são a biblioteca de onde trazer uma mesa."),
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brushes.Gray,
             FontSize = 11,
@@ -155,8 +152,9 @@ internal sealed class JanelaDeConfiguracoes : Window
 
         painel.Children.Add(new TextBlock
         {
-            Text = "Marque as mesas que entram na usina. " + Prioridade.Replace("Use Subir e Descer", "Use ▲ e ▼", StringComparison.Ordinal)
-                + " Sem nenhuma marcada, o motor usa todas da lista, nesta ordem.",
+            // A frase inteira, e não a de cima com "Subir e Descer" trocado por
+            // setas: a tradução precisa ver a frase toda (etapa 10).
+            Text = Tr.T("Marque as mesas que entram na usina. A ordem da lista é a PRIORIDADE: o motor tenta sempre encaixar a 1ª mesa em uso; onde ela não couber (no trecho da fileira ou no terreno), tenta a 2ª, e assim por diante. Use ▲ e ▼ para mudar a ordem. Sem nenhuma marcada, o motor usa todas da lista, nesta ordem."),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 10),
         });
@@ -166,7 +164,7 @@ internal sealed class JanelaDeConfiguracoes : Window
     }
 
     /// <summary>A mensagem da prioridade (Renan, 02/10/2026: "o primeiro da lista vai ser a prioridade ... e uma mensagem falando isso").</summary>
-    private const string Prioridade = "A ordem da lista é a PRIORIDADE: o motor tenta sempre encaixar a 1ª mesa em uso; onde ela não couber (no trecho da fileira ou no terreno), tenta a 2ª, e assim por diante. Use Subir e Descer para mudar a ordem.";
+    private static string Prioridade => Tr.T("A ordem da lista é a PRIORIDADE: o motor tenta sempre encaixar a 1ª mesa em uso; onde ela não couber (no trecho da fileira ou no terreno), tenta a 2ª, e assim por diante. Use Subir e Descer para mudar a ordem.");
 
     /// <summary>Troca a mesa de lugar com a vizinha de cima (-1) ou de baixo (+1): é a ordem de prioridade gravada.</summary>
     private void Mover(int indice, int passo)
@@ -175,7 +173,7 @@ internal sealed class JanelaDeConfiguracoes : Window
 
         if (indice < 0 || indice >= _mesas.Count)
         {
-            _recado.Text = "Escolha uma mesa na lista.";
+            _recado.Text = Tr.T("Escolha uma mesa na lista.");
             return;
         }
 
@@ -193,7 +191,7 @@ internal sealed class JanelaDeConfiguracoes : Window
         var nenhuma = !_mesas.Any(m => m.Use);
         if (!nenhuma && !_mesas[indice].Use) return "";
         var n = nenhuma ? indice + 1 : _mesas.Take(indice + 1).Count(m => m.Use);
-        return $"{n}ª";
+        return Tr.F("{0}ª", n);
     }
 
     private void Atualizar()
@@ -221,12 +219,12 @@ internal sealed class JanelaDeConfiguracoes : Window
                 IsChecked = mesa.Use,
                 VerticalAlignment = VerticalAlignment.Center,
                 Width = 26,
-                ToolTip = "Marcada, a mesa entra na usina.",
+                ToolTip = Tr.T("Marcada, a mesa entra na usina."),
             };
             usar.Checked += (_, _) => Usar(indice, true);
             usar.Unchecked += (_, _) => Usar(indice, false);
 
-            var cor = PaletaDeCores.Caixa(mesa.Color, "A cor do contorno desta mesa no desenho, para saber qual é qual.");
+            var cor = PaletaDeCores.Caixa(mesa.Color, Tr.T("A cor do contorno desta mesa no desenho, para saber qual é qual."));
             cor.Width = 140;
             cor.SelectionChanged += (_, _) => _mesas[indice] = _mesas[indice] with { Color = PaletaDeCores.Cor(cor) };
 
@@ -237,14 +235,14 @@ internal sealed class JanelaDeConfiguracoes : Window
                 return b;
             }
 
-            linha.Children.Add(Seta("▲", -1, "Mais prioridade: o motor tenta esta mesa antes da de cima."));
-            linha.Children.Add(Seta("▼", +1, "Menos prioridade: o motor tenta esta mesa depois da de baixo."));
-            linha.Children.Add(new TextBlock { Text = Posicao(indice), Width = 30, VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeights.SemiBold, ToolTip = "A prioridade entre as mesas em uso." });
+            linha.Children.Add(Seta("▲", -1, Tr.T("Mais prioridade: o motor tenta esta mesa antes da de cima.")));
+            linha.Children.Add(Seta("▼", +1, Tr.T("Menos prioridade: o motor tenta esta mesa depois da de baixo.")));
+            linha.Children.Add(new TextBlock { Text = Posicao(indice), Width = 30, VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeights.SemiBold, ToolTip = Tr.T("A prioridade entre as mesas em uso.") });
             linha.Children.Add(usar);
             linha.Children.Add(cor);
             linha.Children.Add(new TextBlock
             {
-                Text = $"  {mesa.Name} — {mesa.Profile.Layout.ModuleCount} módulos, {mesa.Profile.Layout.Module.DisplayName}",
+                Text = Tr.F("  {0} — {1} módulos, {2}", mesa.Name, mesa.Profile.Layout.ModuleCount, mesa.Profile.Layout.Module.DisplayName),
                 VerticalAlignment = VerticalAlignment.Center,
             });
 
@@ -253,8 +251,8 @@ internal sealed class JanelaDeConfiguracoes : Window
 
         if (_mesas.Count == 0)
         {
-            _lista.Items.Add(new ListBoxItem { Content = "(nenhuma mesa neste desenho: use Nova mesa...)", IsEnabled = false });
-            _escolha.Children.Add(new TextBlock { Text = "Nenhuma mesa cadastrada neste desenho ainda.", Foreground = Brushes.Gray });
+            _lista.Items.Add(new ListBoxItem { Content = Tr.T("(nenhuma mesa neste desenho: use Nova mesa...)"), IsEnabled = false });
+            _escolha.Children.Add(new TextBlock { Text = Tr.T("Nenhuma mesa cadastrada neste desenho ainda."), Foreground = Brushes.Gray });
         }
 
         if (escolhida >= 0 && escolhida < _mesas.Count) _lista.SelectedIndex = escolhida;
@@ -266,8 +264,11 @@ internal sealed class JanelaDeConfiguracoes : Window
         var mesa = _mesas[indice];
         var posicao = Posicao(indice);
 
-        return $"{(posicao.Length > 0 ? posicao + " — " : "      ")}{mesa.Name} — {mesa.Profile.Layout.ModuleCount} módulos, "
-            + $"{mesa.Profile.Layout.Length.ToString("0.###", Brasil)} m, {mesa.Profile.TiltDegrees.ToString("0.#", Brasil)}°{(mesa.Use ? "  (em uso)" : "")}";
+        return (posicao.Length > 0 ? posicao + " — " : "      ")
+            + Tr.F(
+                "{0} — {1} módulos, {2:0.###} m, {3:0.#}°",
+                mesa.Name, mesa.Profile.Layout.ModuleCount, mesa.Profile.Layout.Length, mesa.Profile.TiltDegrees)
+            + (mesa.Use ? Tr.T("  (em uso)") : "");
     }
 
     /// <summary>
@@ -311,7 +312,7 @@ internal sealed class JanelaDeConfiguracoes : Window
     {
         if (Selecionada() is not { } mesa)
         {
-            _recado.Text = "Escolha uma mesa na lista.";
+            _recado.Text = Tr.T("Escolha uma mesa na lista.");
             return;
         }
 
@@ -329,11 +330,11 @@ internal sealed class JanelaDeConfiguracoes : Window
     {
         if (Selecionada() is not { } mesa)
         {
-            _recado.Text = "Escolha uma mesa na lista.";
+            _recado.Text = Tr.T("Escolha uma mesa na lista.");
             return;
         }
 
-        _mesas.Add(new DrawingTable(mesa.Profile with { Name = NomeLivre(mesa.Name + " (cópia)") }, DrawingTables.NextColor(_mesas), Use: false));
+        _mesas.Add(new DrawingTable(mesa.Profile with { Name = NomeLivre(mesa.Name + " " + Tr.T("(cópia)")) }, DrawingTables.NextColor(_mesas), Use: false));
         Atualizar();
     }
 
@@ -341,7 +342,7 @@ internal sealed class JanelaDeConfiguracoes : Window
     {
         if (Selecionada() is not { } mesa)
         {
-            _recado.Text = "Escolha uma mesa na lista.";
+            _recado.Text = Tr.T("Escolha uma mesa na lista.");
             return;
         }
 
@@ -351,7 +352,7 @@ internal sealed class JanelaDeConfiguracoes : Window
 
     private string NomeLivre(string desejado)
     {
-        var nome = string.IsNullOrWhiteSpace(desejado) ? "Mesa" : desejado.Trim();
+        var nome = string.IsNullOrWhiteSpace(desejado) ? Tr.T("Mesa") : desejado.Trim();
         if (DrawingTables.Find(_mesas, nome) is null) return nome;
 
         for (var n = 2; ; n++)
@@ -367,7 +368,7 @@ internal sealed class JanelaDeConfiguracoes : Window
         {
             if (DrawingTables.WhyInvalid(_mesas) is { } motivoDasMesas)
             {
-                _recado.Text = "Estruturas: " + motivoDasMesas + ".";
+                _recado.Text = Tr.F("Estruturas: {0}.", motivoDasMesas);
                 return;
             }
 
@@ -375,7 +376,7 @@ internal sealed class JanelaDeConfiguracoes : Window
 
             if (emUso.Select(m => Math.Round(m.Profile.TiltDegrees, 3)).Distinct().Count() > 1)
             {
-                _recado.Text = "Escolha das estruturas: as mesas em uso precisam ter a mesma inclinação.";
+                _recado.Text = Tr.T("Escolha das estruturas: as mesas em uso precisam ter a mesma inclinação.");
                 return;
             }
 
@@ -383,7 +384,7 @@ internal sealed class JanelaDeConfiguracoes : Window
 
             if (parametros is null)
             {
-                _recado.Text = "Parâmetros: " + motivo;
+                _recado.Text = Tr.F("Parâmetros: {0}", motivo);
                 return;
             }
 

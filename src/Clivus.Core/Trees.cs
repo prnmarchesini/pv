@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Clivus.Core;
 
 /// <summary>
@@ -22,19 +20,19 @@ public sealed record TreeSpec(double TrunkHeight, double TrunkWidth, double Crow
     {
         static bool Medida(double v, double max) => double.IsFinite(v) && v > 0 && v <= max;
 
-        if (!Medida(TrunkHeight, 100)) return "a altura do tronco precisa ser maior que zero e até 100 m";
-        if (!Medida(TrunkWidth, 20)) return "a largura do tronco precisa ser maior que zero e até 20 m";
-        if (!Medida(CrownHeight, 100)) return "a altura da copa precisa ser maior que zero e até 100 m";
-        if (!Medida(CrownWidth, 60)) return "a largura da copa precisa ser maior que zero e até 60 m";
+        if (!Medida(TrunkHeight, 100)) return Tr.T("a altura do tronco precisa ser maior que zero e até 100 m");
+        if (!Medida(TrunkWidth, 20)) return Tr.T("a largura do tronco precisa ser maior que zero e até 20 m");
+        if (!Medida(CrownHeight, 100)) return Tr.T("a altura da copa precisa ser maior que zero e até 100 m");
+        if (!Medida(CrownWidth, 60)) return Tr.T("a largura da copa precisa ser maior que zero e até 60 m");
         return null;
     }
 
     /// <summary>"tronco 3 × 0,4 m, copa 5 × 6 m (altura × largura)".</summary>
     public string Describe()
     {
-        var br = CultureInfo.GetCultureInfo("pt-BR");
-        return $"tronco {TrunkHeight.ToString("0.##", br)} × {TrunkWidth.ToString("0.##", br)} m, "
-            + $"copa {CrownHeight.ToString("0.##", br)} × {CrownWidth.ToString("0.##", br)} m (altura × largura)";
+        return Tr.F(
+            "tronco {0:0.##} × {1:0.##} m, copa {2:0.##} × {3:0.##} m (altura × largura)",
+            TrunkHeight, TrunkWidth, CrownHeight, CrownWidth);
     }
 
     /// <summary>Os dois cilindros da árvore com o pé em (x, y, chão).</summary>
