@@ -3,7 +3,7 @@
   <PropertyGroup>
     <!-- Versao do plugin, a que o comando CLIVUS_OLA mostra ao usuario. -->
     <Version>0.1.0</Version>
-    <Company>MarchEng</Company>
+    <Company>Clivus Solar</Company>
     <Product>Clivus Solar</Product>
 
     <LangVersion>latest</LangVersion>

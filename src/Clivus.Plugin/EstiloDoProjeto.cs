@@ -30,17 +30,39 @@ internal static class EstiloDoProjeto
             estilos.Encode().Select(c => new TypedValue((int)DxfCode.Text, c)).ToArray()));
 
     /// <summary>
-    /// Os estilos que valem: os escolhidos; sem escolha gravada, os do Renan
-    /// (<see cref="ProjectStyles.Marcheng"/>) que o desenho tiver.
+    /// Os estilos que valem: os escolhidos; sem escolha gravada, o primeiro
+    /// anotativo próprio do desenho de cada tipo (<see cref="ProjectStyles.FirstAnnotative"/>).
     /// </summary>
     internal static ProjectStyles Efetivo(Transaction transacao, Database database)
     {
         if (PluginDictionary.Contains(database, ProjectStyles.StorageKey)) return Ler(database);
 
         return new ProjectStyles(
-            ProjectStyles.Match(ProjectStyles.Marcheng.TextStyle, EstilosDeTexto(transacao, database)),
-            ProjectStyles.Match(ProjectStyles.Marcheng.DimensionStyle, EstilosDeCota(transacao, database)),
-            ProjectStyles.Match(ProjectStyles.Marcheng.LeaderStyle, EstilosDeChamada(transacao, database)));
+            ProjectStyles.FirstAnnotative(Anotativos<TextStyleTableRecord>(transacao, database.TextStyleTableId, r => r.Annotative == AnnotativeStates.True)),
+            ProjectStyles.FirstAnnotative(Anotativos<DimStyleTableRecord>(transacao, database.DimStyleTableId, r => r.Annotative == AnnotativeStates.True)),
+            ProjectStyles.FirstAnnotative(ChamadasAnotativas(transacao, database)));
+    }
+
+    private static List<(string, bool)> Anotativos<T>(Transaction transacao, ObjectId tabelaId, Func<T, bool> anotativo) where T : SymbolTableRecord
+    {
+        var tabela = (SymbolTable)transacao.GetObject(tabelaId, OpenMode.ForRead);
+        var estilos = new List<(string, bool)>();
+
+        foreach (ObjectId id in tabela)
+            if (transacao.GetObject(id, OpenMode.ForRead) is T registro) estilos.Add((registro.Name, anotativo(registro)));
+
+        return estilos;
+    }
+
+    private static List<(string, bool)> ChamadasAnotativas(Transaction transacao, Database database)
+    {
+        var dicionario = (DBDictionary)transacao.GetObject(database.MLeaderStyleDictionaryId, OpenMode.ForRead);
+        var estilos = new List<(string, bool)>();
+
+        foreach (DBDictionaryEntry entrada in dicionario)
+            if (transacao.GetObject(entrada.Value, OpenMode.ForRead) is MLeaderStyle estilo) estilos.Add((entrada.Key, estilo.Annotative == AnnotativeStates.True));
+
+        return estilos;
     }
 
     /// <summary>Os nomes dos estilos de texto do desenho.</summary>

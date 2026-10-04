@@ -86,8 +86,8 @@ botão exporta tudo para .xlsx: as contagens das análises e o quantitativo
 ## 8.13 Estilos do projeto
 Word, Tags. Configuração do projeto escolhe o text style, o dimension style e
 o multileader style (anotativos) que o plugin usa; todo texto do plugin passa
-a nascer com esse estilo e anotativo. Padrão do Itatiba: texto "Marchengg
-Anotativa - Detalhe", cota "Marcheng_anotativa", leader "Marcheng anotativo".
+a nascer com esse estilo e anotativo. Padrão: os estilos anotativos próprios
+do desenho (no Itatiba, os de texto, cota e chamada do Renan).
 
 ## 8.14 Tags
 Word, Tags. Numeração visível de fileiras, mesas, módulos e strings. Cada uma

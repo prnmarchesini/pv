@@ -1,6 +1,6 @@
 # Clivus Solar Civil 3D: instruções para o Claude Code
 
-Você está construindo o **Clivus Solar**, um plugin de AutoCAD Civil 3D que substitui o PVcase no layout de usinas fotovoltaicas em terreno inclinado. O nome é de 04/10/2026; antes era "Plugin UFV", com comandos `UFV_*` e o prefixo `MARCHENG_UFV` em camadas, blocos e XData. Hoje é `CLIVUS_*` e `CLIVUS`, e desenho antigo é migrado ao abrir (`MigracaoDoNome`). O plano de requisitos completo está em:
+Você está construindo o **Clivus Solar**, um plugin de AutoCAD Civil 3D que substitui o PVcase no layout de usinas fotovoltaicas em terreno inclinado. O nome é de 04/10/2026; antes era "Plugin UFV", com comandos `UFV_*`. Hoje os comandos são `CLIVUS_*` e camadas, blocos e XData usam o prefixo `CLIVUS`; desenho antigo é migrado ao abrir (`MigracaoDoNome`). O plano de requisitos completo está em:
 https://claude.ai/code/artifact/3668dee4-233d-4a4c-b596-262f1f089c09
 
 O plano de EXECUÇÃO está em `plano/`. Leia nesta ordem antes de qualquer código:

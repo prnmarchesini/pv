@@ -215,18 +215,29 @@ public class AnalysisTallyAndStylesTests
     [Trait("Etapa", "8")]
     public void OsEstilosGravadosVoltamIguais()
     {
-        Assert.Equal(ProjectStyles.Marcheng, ProjectStyles.Decode(ProjectStyles.Marcheng.Encode()));
+        var escolhidos = new ProjectStyles("Projeto Anotativa - Detalhe", "Projeto_Anotativa", "Projeto Anotativo");
+        Assert.Equal(escolhidos, ProjectStyles.Decode(escolhidos.Encode()));
         Assert.Equal(ProjectStyles.None, ProjectStyles.Decode(ProjectStyles.None.Encode()));
         Assert.Equal(ProjectStyles.None, ProjectStyles.Decode(["lixo"]));
     }
 
     [Theory]
     [Trait("Etapa", "8")]
-    [InlineData("Marchengg Anotativa - Detalhe", "Marchengg Anotativa – Detalhe")]
-    [InlineData(" marcheng_anotativa ", "Marcheng_anotativa")]
+    [InlineData("Projeto Anotativa - Detalhe", "Projeto Anotativa – Detalhe")]
+    [InlineData(" projeto_anotativa ", "Projeto_anotativa")]
     public void OEstiloEAchadoMesmoComTravessaoOuMaiuscula(string pedido, string existente)
     {
         Assert.Equal(existente, ProjectStyles.Match(pedido, ["Standard", existente]));
+    }
+
+    /// <summary>Sem escolha, o primeiro anotativo próprio do desenho; o "Annotative" de fábrica fica de lado.</summary>
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void SemEscolhaValeOPrimeiroAnotativoProprio()
+    {
+        Assert.Equal("Projeto Anotativa", ProjectStyles.FirstAnnotative([("Standard", false), ("Annotative", true), ("Zeta Anotativa", true), ("Projeto Anotativa", true), ("Arial", false)]));
+        Assert.Null(ProjectStyles.FirstAnnotative([("Standard", false), ("Annotative", true)]));
+        Assert.Null(ProjectStyles.FirstAnnotative([]));
     }
 
     [Fact]

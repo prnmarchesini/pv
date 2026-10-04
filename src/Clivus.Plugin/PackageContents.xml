@@ -16,9 +16,9 @@
     Name="Clivus Solar"
     Description="Layout de usinas fotovoltaicas em terreno inclinado"
     AppVersion="0.1.0"
-    Author="MarchEng">
+    Author="Clivus Solar">
 
-  <CompanyDetails Name="MarchEng" />
+  <CompanyDetails Name="Clivus Solar" />
 
   <Components Description="Civil 3D 2026">
     <RuntimeRequirements

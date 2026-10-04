@@ -216,7 +216,7 @@ public static class PluginInfo
     /// <summary>Refaz todas as áreas com a configuração atual.</summary>
     public const string ComandoRegerar = "CLIVUS_REGERAR";
 
-    /// <summary>Passa o desenho feito com o nome antigo (MARCHENG_UFV) para o Clivus Solar. Roda sozinho ao abrir.</summary>
+    /// <summary>Passa o desenho feito com o nome antigo para o Clivus Solar. Roda sozinho ao abrir.</summary>
     public const string ComandoMigrar = "CLIVUS_MIGRAR";
 
     /// <summary>Troca a mesa clicada por uma ou mais de outro tipo, travando um lado (9.2).</summary>
@@ -267,18 +267,9 @@ public static class PluginInfo
     /// </summary>
     public const string PrefixoDeDados = "CLIVUS";
 
-    /// <summary>
-    /// O prefixo de antes do nome Clivus Solar (até 04/10/2026). Desenho com
-    /// dados nele é migrado ao abrir (<c>MigracaoDoNome</c>): XData, camadas,
-    /// blocos, dicionário e as configurações gravadas.
-    /// </summary>
-    public const string PrefixoAntigo = "MARCHENG_UFV";
-
     /// <summary>A pasta do plugin em %LOCALAPPDATA% (perfis de mesa, log, bancada).</summary>
     public const string PastaDoUsuario = "Clivus Solar";
 
-    /// <summary>A pasta de antes da troca de nome, em %LOCALAPPDATA%: os perfis são copiados dela uma vez.</summary>
-    public const string PastaDoUsuarioAntiga = @"MarchEng\UFV";
 
     /// <summary>
     /// Prefixo de todos os comandos do plugin. O vigia (7.2) usa para saber

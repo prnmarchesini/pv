@@ -1166,7 +1166,7 @@ tecla e a planta baixa com os módulos, os pilares e as sobras das pontas. Botã
 **Mesa** na ribbon, com ícone.
 
 Junto foi a parte de arquivo do 3.6: `TableProfileStore`, que grava e lê perfil
-em `%LOCALAPPDATA%\MarchEng\UFV\perfis`. Mora no Core, com a pasta vindo de
+na pasta do usuário em `%LOCALAPPDATA%` (hoje `Clivus Solar\perfis`). Mora no Core, com a pasta vindo de
 fora — assim ele é testável, e quem sabe onde guardar continua sendo o plugin.
 
 A planta existe porque o número sozinho não denuncia erro de digitação: 28
@@ -3728,7 +3728,7 @@ Status: `AGUARDANDO VALIDAÇÃO` (é tela).
 ### O diagnóstico, com números (bancada)
 
 Novo comando `CLIVUS_BANCADA` exporta terreno, configuração, perfil e os
-contornos de todas as mesas para um JSON (`%LOCALAPPDATA%\MarchEng\UFV\bancada`).
+contornos de todas as mesas para um JSON (`%LOCALAPPDATA%\Clivus Solar\bancada`).
 Rodado no Core Console sobre uma cópia do `0 - Assets\Curvas Itatiba.dwg`
 (salvo em 26/09 21:25), o motor fora do CAD reproduz o desenho exatamente
 (52 marcadas nos dois). O que ele mostrou:
@@ -4050,7 +4050,7 @@ pontas" — e, com print: "negativo, botão direito da mesa não abre nada".
 ### Observações que ficam
 
 - Os testes de nível 2 leem a biblioteca de perfis do Renan (LOCALAPPDATA,
-  MarchEng/UFV/perfis): o placar pode mudar com o que ele salva. Isolar
+  pasta de perfis do usuário): o placar pode mudar com o que ele salva. Isolar
   numa pasta de teste é dívida.
 - O "perfil atual" para mesa nova é o primeiro em ordem alfabética, não o
   escolhido na janela. Se o Renan esperava o de 14 módulos no Regerar, é
@@ -4357,16 +4357,15 @@ Analisar com graus; 7) Excel: abrir o arquivo e conferir as quatro abas.
   da declividade, textos das análises, número do grupo (e as tags do 8.14).
   Estilo anotativo: o texto nasce anotativo, na altura de papel do estilo
   pela escala de anotação corrente (no Itatiba, 2 mm a 1:500 = 1 m).
-- Sem escolha gravada, valem os estilos do Renan quando o desenho os tem.
-  Os nomes no desenho do Itatiba são "Marcheng Anotativa - Detalhe"
-  (texto), "Marcheng_Anotativa" (cota) e "Marchen Anotativo" (chamada); no
-  Word estavam escritos um pouco diferente ("Marchengg", "Marcheng
-  anotativo"). **O Renan confirma** se são esses.
+- Sem escolha gravada, valem os estilos anotativos próprios do desenho
+  (os do Renan, no desenho do Itatiba). Desde 04/10/2026 a regra não tem
+  nome fixo: o primeiro estilo anotativo de texto, de cota e de chamada que
+  o desenho tiver, fora o "Annotative" de fábrica.
 - O plugin ainda não desenha cota nem chamada; os dois estilos ficam
   gravados para quando desenhar.
 
 **Roteiro de tela do 8.13:** 1) Inserir PB numa área: os textos saem no
-"Marcheng Anotativa - Detalhe", anotativos (aparecem no layout na escala do
+estilo anotativo de texto do desenho (aparecem no layout na escala do
 viewport); 2) `CLIVUS_ESTILOS`: escolher Standard no texto, Salvar; inserir PB
 de novo: saem no Standard.
 
@@ -4800,24 +4799,30 @@ sistema, pastas, código, layers etc".
   `Clivus.Integration`; solução `ClivusSolar.sln`; namespaces `Clivus.*`.
   Os scripts de nível 2 são `clivus-*.scr`.
 - Comandos `CLIVUS_*` (eram `UFV_*`). Camadas, blocos, aplicativo de XData
-  e dicionário do desenho com o prefixo `CLIVUS` (era `MARCHENG_UFV`):
+  e dicionário do desenho com o prefixo `CLIVUS` (era um prefixo terminado em `_UFV`):
   `CLIVUS_MESA`, `CLIVUS_PILAR`, `CLIVUS_MODULO_...`, `CLIVUS_ARVORE_...`.
 - Aba da ribbon, janelas, menu de botão direito e paleta: "Clivus Solar".
 - Bundle `ClivusSolar.bundle`; o instalador remove o `UFV.bundle` antigo
   (os dois juntos dariam duas abas).
 - Pasta do usuário `%LOCALAPPDATA%\Clivus Solar` (perfis de mesa, log,
-  bancada); os perfis da pasta antiga (`MarchEng\UFV`) são copiados uma vez.
+  bancada); os perfis da pasta antiga (`...\UFV\perfis`) são copiados uma vez.
 - Variável do serviço `CLIVUS_SERVICO` (a antiga `UFV_SERVICO` ainda vale);
   banco do serviço `clivus`.
 - **Desenhos já feitos:** ao abrir, o desenho com o nome antigo é migrado
   sozinho (`MigracaoDoNome`, também pelo comando `CLIVUS_MIGRAR`): XData de
   toda peça, camadas e blocos do plugin, o dicionário do desenho e os nomes
-  de camada gravados nas configurações. Só o que é do plugin muda: camada do
-  usuário com "MARCHENG" no nome (que não comece com `MARCHENG_UFV_`) fica.
+  de camada gravados nas configurações. Só o que é do plugin muda: as
+  camadas e os estilos do usuário ficam. O prefixo antigo é achado no
+  desenho (o aplicativo de XData terminado em `_UFV`), sem nome fixo no
+  código.
   Nível 2 `clivus-migrar` monta um desenho antigo em LISP e confere.
-- Fica como estava: "MarchEng" como empresa nos metadados da DLL e do
-  bundle (é a empresa, não o nome do sistema), "UFV" como termo técnico
-  (usina fotovoltaica) nos textos, e este diário.
+- Fica como estava: "UFV" como termo técnico (usina fotovoltaica) nos
+  textos, e este diário.
+- Depois, no mesmo dia (Renan: "não quero nenhuma menção a [nome antigo da
+  empresa]. UFV ok"): a empresa nos metadados da DLL e do bundle passou a
+  "Clivus Solar"; os estilos padrão deixaram de ser procurados por nome (o
+  primeiro anotativo próprio do desenho); a migração acha o prefixo antigo
+  pelo formato; nenhum arquivo do repositório cita mais o nome antigo.
 
 Roteiro de tela:
 1. Abra o Civil 3D: a aba se chama Clivus Solar, e não há mais aba UFV.

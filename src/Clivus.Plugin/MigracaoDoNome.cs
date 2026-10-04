@@ -12,19 +12,52 @@ namespace Clivus.Plugin;
 /// <summary>
 /// A troca do nome para Clivus Solar (Renan, 04/10/2026: "vai chamar Clivus
 /// Solar, troque tudo do sistema, pastas, código, layers etc"). Desenho feito
-/// antes tem tudo com o prefixo antigo (MARCHENG_UFV): o XData das peças, as
-/// camadas, os blocos de pilar, módulo e árvore, o dicionário do desenho (com
-/// as configurações, que guardam nomes de camada). Ao abrir, tudo passa para
-/// o prefixo novo, uma vez; salvo o desenho, não há mais o que migrar.
+/// antes tem tudo com o prefixo antigo: o XData das peças, as camadas, os
+/// blocos de pilar, módulo e árvore, o dicionário do desenho (com as
+/// configurações, que guardam nomes de camada). Ao abrir, tudo passa para o
+/// prefixo novo, uma vez; o registro do aplicativo antigo sai do desenho.
+///
+/// O prefixo antigo não fica escrito aqui (Renan: nenhuma menção ao nome de
+/// antes): ele é achado no próprio desenho, como o aplicativo de XData cujo
+/// nome termina em "_UFV", o formato que o plugin usava.
 ///
 /// Só o que é do plugin muda: camada e bloco cujo nome COMEÇA com o prefixo
-/// antigo e o nosso aplicativo de XData. O que é do usuário (um estilo de
-/// texto "Marcheng Anotativa", por exemplo) fica como está.
+/// antigo e o nosso aplicativo de XData. Os estilos e as camadas do usuário
+/// ficam como estão.
 /// </summary>
 public static class MigracaoDoNome
 {
-    private const string Antigo = PluginInfo.PrefixoAntigo;
     private const string Novo = PluginInfo.PrefixoDeDados;
+
+    /// <summary>O fim do nome do aplicativo de XData de antes da troca de nome.</summary>
+    private const string FimAntigo = "_UFV";
+
+    /// <summary>
+    /// O prefixo antigo deste desenho: o aplicativo de XData registrado (ou a
+    /// chave do dicionário do desenho) cujo nome termina em "_UFV". Null se
+    /// não há.
+    /// </summary>
+    internal static string? PrefixoAntigo(Database database)
+    {
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+
+        var apps = (RegAppTable)transacao.GetObject(database.RegAppTableId, OpenMode.ForRead);
+        foreach (ObjectId id in apps)
+        {
+            var nome = ((RegAppTableRecord)transacao.GetObject(id, OpenMode.ForRead)).Name;
+            if (EAntigo(nome)) return nome;
+        }
+
+        var raiz = (DBDictionary)transacao.GetObject(database.NamedObjectsDictionaryId, OpenMode.ForRead);
+        foreach (DBDictionaryEntry entrada in raiz)
+            if (EAntigo(entrada.Key)) return entrada.Key;
+
+        return null;
+    }
+
+    private static bool EAntigo(string nome) =>
+        nome.Length > FimAntigo.Length && nome.EndsWith(FimAntigo, StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(nome, Novo, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>CLIVUS_MIGRAR: migra o desenho aberto, se ele tiver coisas do nome antigo.</summary>
     [CommandMethod(PluginInfo.ComandoMigrar)]
@@ -44,29 +77,14 @@ public static class MigracaoDoNome
         }
     }
 
-    /// <summary>Se o desenho tem algo do nome antigo (aplicativo de XData, dicionário, camada ou bloco).</summary>
-    internal static bool TemNomeAntigo(Database database)
-    {
-        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
-
-        var apps = (RegAppTable)transacao.GetObject(database.RegAppTableId, OpenMode.ForRead);
-        if (apps.Has(Antigo)) return true;
-
-        var raiz = (DBDictionary)transacao.GetObject(database.NamedObjectsDictionaryId, OpenMode.ForRead);
-        if (raiz.Contains(Antigo)) return true;
-
-        var camadas = (LayerTable)transacao.GetObject(database.LayerTableId, OpenMode.ForRead);
-        foreach (ObjectId id in camadas)
-            if (((LayerTableRecord)transacao.GetObject(id, OpenMode.ForRead)).Name.StartsWith(Antigo + "_", StringComparison.OrdinalIgnoreCase)) return true;
-
-        return false;
-    }
+    /// <summary>Se o desenho tem algo do nome antigo (aplicativo de XData ou dicionário).</summary>
+    internal static bool TemNomeAntigo(Database database) => PrefixoAntigo(database) is not null;
 
     /// <summary>Migra o desenho. O relato, ou null se não havia nada do nome antigo.</summary>
     internal static string? Migrar(Database database)
     {
         ArgumentNullException.ThrowIfNull(database);
-        if (!TemNomeAntigo(database)) return null;
+        if (PrefixoAntigo(database) is not { } antigo) return null;
 
         var pecas = 0;
         var camadas = 0;
@@ -97,7 +115,7 @@ public static class MigracaoDoNome
                 {
                     if (id.IsErased) continue;
                     if (transacao.GetObject(id, OpenMode.ForRead, false, true) is not Entity entidade) continue;
-                    if (MigrarXData(transacao, id, entidade)) pecas++;
+                    if (MigrarXData(transacao, id, entidade, antigo)) pecas++;
                 }
             }
 
@@ -107,9 +125,9 @@ public static class MigracaoDoNome
             foreach (ObjectId id in tabelaDeCamadas)
             {
                 var camada = (LayerTableRecord)transacao.GetObject(id, OpenMode.ForRead);
-                if (!camada.Name.StartsWith(Antigo + "_", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!camada.Name.StartsWith(antigo + "_", StringComparison.OrdinalIgnoreCase)) continue;
 
-                var nome = Novo + camada.Name[Antigo.Length..];
+                var nome = Novo + camada.Name[antigo.Length..];
                 if (tabelaDeCamadas.Has(nome))
                 {
                     conflitos.Add($"camada {camada.Name} (já existe {nome})");
@@ -125,9 +143,9 @@ public static class MigracaoDoNome
             foreach (ObjectId id in tabelaDeBlocos)
             {
                 var bloco = (BlockTableRecord)transacao.GetObject(id, OpenMode.ForRead);
-                if (bloco.IsLayout || bloco.IsAnonymous || !bloco.Name.StartsWith(Antigo + "_", StringComparison.OrdinalIgnoreCase)) continue;
+                if (bloco.IsLayout || bloco.IsAnonymous || !bloco.Name.StartsWith(antigo + "_", StringComparison.OrdinalIgnoreCase)) continue;
 
-                var nome = Novo + bloco.Name[Antigo.Length..];
+                var nome = Novo + bloco.Name[antigo.Length..];
                 if (tabelaDeBlocos.Has(nome))
                 {
                     conflitos.Add($"bloco {bloco.Name} (já existe {nome})");
@@ -143,9 +161,9 @@ public static class MigracaoDoNome
             //    configurações guardam nomes de camada com o prefixo).
             var raiz = (DBDictionary)transacao.GetObject(database.NamedObjectsDictionaryId, OpenMode.ForRead);
 
-            if (raiz.Contains(Antigo))
+            if (raiz.Contains(antigo))
             {
-                var antigo = (DBDictionary)transacao.GetObject(raiz.GetAt(Antigo), OpenMode.ForWrite);
+                var dicAntigo = (DBDictionary)transacao.GetObject(raiz.GetAt(antigo), OpenMode.ForWrite);
                 DBDictionary destino;
 
                 if (raiz.Contains(Novo))
@@ -155,25 +173,25 @@ public static class MigracaoDoNome
                 else
                 {
                     raiz.UpgradeOpen();
-                    raiz.Remove(antigo.ObjectId);
-                    raiz.SetAt(Novo, antigo);
-                    destino = antigo;
+                    raiz.Remove(dicAntigo.ObjectId);
+                    raiz.SetAt(Novo, dicAntigo);
+                    destino = dicAntigo;
                 }
 
                 // O foreach tipado: o enumerador não tipado do DBDictionary
                 // entrega DictionaryEntry, não DBDictionaryEntry.
                 var entradas = new List<DBDictionaryEntry>();
-                foreach (DBDictionaryEntry e in antigo) entradas.Add(e);
+                foreach (DBDictionaryEntry e in dicAntigo) entradas.Add(e);
 
                 foreach (var entrada in entradas)
                 {
                     if (transacao.GetObject(entrada.Value, OpenMode.ForWrite) is not Xrecord registro) continue;
 
-                    var data = Trocar(registro.Data);
+                    var data = Trocar(registro.Data, antigo);
                     if (data is not null) registro.Data = data;
 
                     // Os dois dicionários existiam: o que o novo não tem vem do antigo.
-                    if (!ReferenceEquals(destino, antigo) && !destino.Contains(entrada.Key))
+                    if (!ReferenceEquals(destino, dicAntigo) && !destino.Contains(entrada.Key))
                     {
                         var copia = new Xrecord { Data = registro.Data };
                         destino.SetAt(entrada.Key, copia);
@@ -183,12 +201,22 @@ public static class MigracaoDoNome
                     registros++;
                 }
 
-                if (!ReferenceEquals(destino, antigo))
+                if (!ReferenceEquals(destino, dicAntigo))
                 {
                     raiz.UpgradeOpen();
-                    raiz.Remove(antigo.ObjectId);
-                    antigo.Erase();
+                    raiz.Remove(dicAntigo.ObjectId);
+                    dicAntigo.Erase();
                 }
+            }
+
+            // O registro do aplicativo antigo sai (sem XData nenhum agora):
+            // o desenho salvo não é mais reconhecido como antigo.
+            var tabelaDeApps = (RegAppTable)transacao.GetObject(database.RegAppTableId, OpenMode.ForRead);
+            if (tabelaDeApps.Has(antigo))
+            {
+                var ids = new ObjectIdCollection { tabelaDeApps[antigo] };
+                database.Purge(ids);
+                foreach (ObjectId id in ids) transacao.GetObject(id, OpenMode.ForWrite).Erase();
             }
 
             transacao.Commit();
@@ -200,50 +228,53 @@ public static class MigracaoDoNome
     }
 
     /// <summary>Reescreve o XData do aplicativo antigo no novo, trocando o prefixo nos textos. Se havia.</summary>
-    private static bool MigrarXData(Transaction transacao, ObjectId id, Entity entidade)
+    private static bool MigrarXData(Transaction transacao, ObjectId id, Entity entidade, string antigo)
     {
-        using var antigo = entidade.GetXDataForApplication(Antigo);
-        if (antigo is null) return false;
+        using var dados = entidade.GetXDataForApplication(antigo);
+        if (dados is null) return false;
 
-        var valores = antigo.AsArray();
+        var valores = dados.AsArray();
         var novos = new List<TypedValue> { new((int)DxfCode.ExtendedDataRegAppName, Novo) };
 
         foreach (var v in valores.Skip(1))
-            novos.Add(v.Value is string s ? new TypedValue(v.TypeCode, TrocarTexto(s)) : v);
+            novos.Add(v.Value is string s ? new TypedValue(v.TypeCode, TrocarTexto(s, antigo)) : v);
 
         var escrita = (Entity)transacao.GetObject(id, OpenMode.ForWrite, false, true);
 
         // Só o nome do aplicativo apaga o XData dele; depois grava o novo.
-        escrita.XData = new ResultBuffer(new TypedValue((int)DxfCode.ExtendedDataRegAppName, Antigo));
+        escrita.XData = new ResultBuffer(new TypedValue((int)DxfCode.ExtendedDataRegAppName, antigo));
         escrita.XData = new ResultBuffer(novos.ToArray());
         return true;
     }
 
-    private static ResultBuffer? Trocar(ResultBuffer? dados)
+    private static ResultBuffer? Trocar(ResultBuffer? dados, string antigo)
     {
         if (dados is null) return null;
 
         var valores = dados.AsArray();
-        if (!valores.Any(v => v.Value is string s && s.Contains(Antigo, StringComparison.Ordinal))) return null;
+        if (!valores.Any(v => v.Value is string s && s.Contains(antigo, StringComparison.Ordinal))) return null;
 
-        return new ResultBuffer(valores.Select(v => v.Value is string s ? new TypedValue(v.TypeCode, TrocarTexto(s)) : v).ToArray());
+        return new ResultBuffer(valores.Select(v => v.Value is string s ? new TypedValue(v.TypeCode, TrocarTexto(s, antigo)) : v).ToArray());
     }
 
-    private static string TrocarTexto(string s) => s.Replace(Antigo, Novo, StringComparison.Ordinal);
+    private static string TrocarTexto(string s, string antigo) => s.Replace(antigo, Novo, StringComparison.Ordinal);
 
     /// <summary>
-    /// Os perfis de mesa da pasta antiga (%LOCALAPPDATA%\MarchEng\UFV) vêm para
-    /// a nova uma vez, se a nova ainda não tem perfil nenhum.
+    /// Os perfis de mesa da pasta antiga (%LOCALAPPDATA%\&lt;empresa&gt;\UFV\perfis,
+    /// achada pelo formato) vêm para a nova uma vez, se a nova ainda não tem
+    /// perfil nenhum.
     /// </summary>
     internal static void CopiarPastaDoUsuario()
     {
         try
         {
             var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var antiga = Path.Combine(local, PluginInfo.PastaDoUsuarioAntiga, "perfis");
+            var antiga = Directory.EnumerateDirectories(local)
+                .Select(d => Path.Combine(d, "UFV", "perfis"))
+                .FirstOrDefault(Directory.Exists);
             var nova = MesaCommands.PastaDosPerfis;
 
-            if (!Directory.Exists(antiga)) return;
+            if (antiga is null) return;
             if (Directory.Exists(nova) && Directory.EnumerateFileSystemEntries(nova).Any()) return;
 
             Directory.CreateDirectory(nova);

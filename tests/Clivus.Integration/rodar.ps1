@@ -3395,9 +3395,11 @@ function Testar-Estilos {
 
     $standard = $Matches[1]; $anotativoStandard = $Matches[2]
 
-    # O desenho de referencia (Itatiba) tem o estilo do Renan, anotativo.
-    if ($padrao -ne 'Marcheng Anotativa - Detalhe' -or $anotativoPadrao -ne '1' -or $standard -ne 'Standard' -or $anotativoStandard -eq '1') {
-        $problemas.Add("clivus-estilos: sem escolha o texto saiu em [$padrao] (anotativo $anotativoPadrao), esperava o do Renan anotativo; com Standard saiu em [$standard] (anotativo $anotativoStandard). Veja $($r.Saida)")
+    # Sem escolha vale o primeiro estilo anotativo proprio do desenho (o de
+    # referencia, Itatiba, tem o do Renan): nem o Standard nem o "Annotative"
+    # de fabrica.
+    if ($padrao -in @('Standard', 'Annotative', '') -or $anotativoPadrao -ne '1' -or $standard -ne 'Standard' -or $anotativoStandard -eq '1') {
+        $problemas.Add("clivus-estilos: sem escolha o texto saiu em [$padrao] (anotativo $anotativoPadrao), esperava um anotativo proprio do desenho; com Standard saiu em [$standard] (anotativo $anotativoStandard). Veja $($r.Saida)")
         return $false
     }
 
@@ -3971,13 +3973,15 @@ if (Testar-Caso -Rotulo 'clivus-mesa-sem-interface' -Desenho $desenhoVazio `
 $total++
 if (Testar-Config -Desenho $desenhoVazio) { $passaram++ }
 
-# A migracao do nome antigo (MARCHENG_UFV) para o Clivus Solar: um desenho
-# antigo montado em LISP no desenho vazio; a camada do usuario fica.
+# A migracao do nome antigo para o Clivus Solar: um desenho antigo montado em
+# LISP no desenho vazio (prefixo neutro terminado em _UFV); a camada do
+# usuario fica; a segunda migracao nao acha mais nada.
 $total++
 if (Testar-Caso -Rotulo 'clivus-migrar' -Desenho $desenhoVazio -Script (Join-Path $PSScriptRoot 'clivus-migrar.scr') `
                 -Esperados @(
                     [regex]::Escape('MIGRAR Desenho passado para o nome Clivus Solar'),
-                    [regex]::Escape('CLIVUS_MIGRAR_LISP camada=1 velha=0 linha=CLIVUS_MESA xdata=CLIVUS_ANALISE_BORDA xvelho=0 bloco=1 blocovelho=0 dic=1 dicvelho=0 reg=CLIVUS_ANALISE_BORDA usuario=1'))) {
+                    [regex]::Escape('MIGRAR Nada do nome antigo neste desenho.'),
+                    [regex]::Escape('CLIVUS_MIGRAR_LISP camada=1 velha=0 linha=CLIVUS_MESA xdata=CLIVUS_ANALISE_BORDA xvelho=0 bloco=1 blocovelho=0 dic=1 dicvelho=0 reg=CLIVUS_ANALISE_BORDA usuario=1 app=0'))) {
     $passaram++
 }
 

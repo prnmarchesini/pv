@@ -23,12 +23,22 @@ public sealed record ProjectStyles(string? TextStyle, string? DimensionStyle, st
     public static readonly ProjectStyles None = new(null, null, null);
 
     /// <summary>
-    /// Os estilos do Renan, com os nomes como estão no desenho do Itatiba
-    /// (lidos dele em 01/10/2026; no Word ele escreveu "Marchengg Anotativa
-    /// – Detalhe", "Marcheng_anotativa" e "Marcheng anotativo"). Valem sozinhos
-    /// quando o desenho os tem e nada foi escolhido.
+    /// Sem escolha gravada, o estilo de partida: o primeiro anotativo
+    /// próprio do desenho, em ordem de nome, deixando de lado o "Annotative"
+    /// que vem de fábrica no AutoCAD. Os estilos do Renan são anotativos e
+    /// são os únicos anotativos próprios dos desenhos dele; null se o desenho
+    /// não tem nenhum (vale o corrente).
     /// </summary>
-    public static readonly ProjectStyles Marcheng = new("Marcheng Anotativa - Detalhe", "Marcheng_Anotativa", "Marchen Anotativo");
+    public static string? FirstAnnotative(IEnumerable<(string Name, bool Annotative)> estilos)
+    {
+        ArgumentNullException.ThrowIfNull(estilos);
+
+        return estilos
+            .Where(e => e.Annotative && !string.IsNullOrWhiteSpace(e.Name) && !string.Equals(e.Name.Trim(), "Annotative", StringComparison.OrdinalIgnoreCase))
+            .Select(e => e.Name)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+    }
 
     /// <summary>Para o registro: versão e os três nomes (vazio = corrente).</summary>
     public IReadOnlyList<string> Encode() => [Versao, TextStyle ?? "", DimensionStyle ?? "", LeaderStyle ?? ""];
