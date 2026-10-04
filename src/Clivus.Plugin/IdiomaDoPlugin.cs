@@ -39,7 +39,19 @@ internal static class IdiomaDoPlugin
         }
 
         Tr.Current = Tr.Resolve(escolha, UserPreferences.CultureOfAutoCadLocale(locale));
-        RegistroDeDiagnostico.Registrar($"Idioma: {Tr.Code(Tr.Current)} (escolha {escolha}, LOCALE {locale ?? "?"}).");
+
+        // Os nomes dos comandos no idioma (10.5); o global em português vale sempre.
+        var nomes = 0;
+        try
+        {
+            nomes = ComandosNoIdioma.Registrar(Tr.Current);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui registrar os nomes dos comandos no idioma.", erro);
+        }
+
+        RegistroDeDiagnostico.Registrar($"Idioma: {Tr.Code(Tr.Current)} (escolha {escolha}, LOCALE {locale ?? "?"}), {nomes} nome(s) de comando no idioma.");
     }
 
     /// <summary>Grava a escolha nova, põe em vigor e refaz a ribbon. Se mudou o idioma.</summary>
