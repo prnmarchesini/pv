@@ -268,4 +268,55 @@ public class SolarAndShadingTests
         var sol = SolarCalculator.Compute(-23.0, -46.8, new DateTime(2026, 12, 21, 12, 10, 0), -3);
         Assert.Equal(0.0, Shading.FaceFraction(perto, arvore, sol.Direction));
     }
+
+    /// <summary>
+    /// A sombra cai sobre a mesa, não só no chão (04/10/2026): mesa plana em
+    /// z = 1, sol do sul a 45°, copa de 2 a 4 m ao sul da mesa. A sombra na
+    /// mesa vai de y = -3 + (2 - 1) até -3 + (4 - 1) + raio, recortada em y ≥ 0.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "9")]
+    public void ASombraDoCilindroCaiSobreAMesaRecortadaPeloContorno()
+    {
+        Point3[] mesa = [new(0, 0, 1), new(10, 0, 1), new(10, 10, 1), new(0, 10, 1)];
+        var sol = (X: 0.0, Y: -Math.Sqrt(0.5), Z: Math.Sqrt(0.5));   // do sul, 45°: a sombra vai para o norte
+        var copa = new ShadowCylinder(5, -3, 1, 2, 4);
+
+        var sombra = Shading.ShadowOnPlane(copa, sol, mesa);
+
+        Assert.True(sombra.Count >= 3);
+        Assert.All(sombra, p =>
+        {
+            Assert.Equal(1, p.Z, 9);
+            Assert.InRange(p.X, 4 - 1e-9, 6 + 1e-9);
+            Assert.InRange(p.Y, -1e-9, 1 + 1e-6);
+        });
+        Assert.Equal(1, sombra.Max(p => p.Y), 2);
+
+        // Mesa acima da copa: nada. Sol do norte (sombra para o sul): nada.
+        Point3[] alta = [new(0, 0, 5), new(10, 0, 5), new(10, 10, 5), new(0, 10, 5)];
+        Assert.Empty(Shading.ShadowOnPlane(copa, sol, alta));
+        Assert.Empty(Shading.ShadowOnPlane(copa, (0, Math.Sqrt(0.5), Math.Sqrt(0.5)), mesa));
+    }
+
+    /// <summary>Mesa inclinada: todo vértice da sombra está no plano da mesa e dentro dela.</summary>
+    [Fact]
+    [Trait("Etapa", "9")]
+    public void ASombraNaMesaInclinadaFicaNoPlanoDaMesa()
+    {
+        // Plano z = 1 + 0.2·y (mesa voltada para o norte, inclinada).
+        Point3[] mesa = [new(0, 0, 1), new(0, 8, 2.6), new(20, 8, 2.6), new(20, 0, 1)];
+        var sol = SolarCalculator.Compute(-23.0, -46.8, new DateTime(2026, 7, 15, 9, 0, 0), -3);
+        var copa = new ShadowCylinder(14, 12, 3, 3, 8);   // ao norte-nordeste, de manhã a sombra vem para a mesa
+
+        var sombra = Shading.ShadowOnPlane(copa, sol.Direction, mesa);
+
+        Assert.True(sombra.Count >= 3);
+        Assert.All(sombra, p =>
+        {
+            Assert.Equal(1 + 0.2 * p.Y, p.Z, 6);
+            Assert.InRange(p.X, -1e-6, 20 + 1e-6);
+            Assert.InRange(p.Y, -1e-6, 8 + 1e-6);
+        });
+    }
 }

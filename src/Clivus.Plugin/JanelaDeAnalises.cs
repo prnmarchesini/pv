@@ -92,12 +92,14 @@ internal sealed class JanelaDeAnalises : Window
             var documento = Autodesk.AutoCAD.ApplicationServices.Core.Application.DocumentManager.GetDocument(_database)
                 ?? throw new InvalidOperationException("o desenho desta janela foi fechado");
 
-            string frase;
-            using (documento.LockDocument())
+            // Trava e cala o vigia: a pintura das análises não é edição do
+            // usuário (sem isso, as mesas pintadas viravam pendentes).
+            var frase = EscritaForaDeComando.Fazer(documento, () =>
             {
-                frase = operacao();
+                var f = operacao();
                 _atualizarTela();
-            }
+                return f;
+            });
 
             _editor.WriteMessage($"\nANÁLISES {frase}\n");
             return (true, frase);

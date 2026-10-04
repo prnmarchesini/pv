@@ -203,8 +203,7 @@ internal static class ValidacaoAoAbrir
             // antes de qualquer leitura, que procura o prefixo novo.
             if (MigracaoDoNome.TemNomeAntigo(database))
             {
-                using var trava = documento.LockDocument();
-                if (MigracaoDoNome.Migrar(database) is { } relato) documento.Editor.WriteMessage($"\n{relato}\n");
+                if (EscritaForaDeComando.Fazer(documento, () => MigracaoDoNome.Migrar(database)) is { } relato) documento.Editor.WriteMessage($"\n{relato}\n");
             }
 
             if (AreaStore.Load(database).Count == 0 && AlignmentStore.Load(database).Count == 0
@@ -234,6 +233,7 @@ internal static class ValidacaoAoAbrir
         try
         {
             using var trava = documento.LockDocument();
+            using var calado = LayoutWatcher.Calar(documento);
             using var transacao = documento.Database.TransactionManager.StartTransaction();
 
             var mudaram = LayoutLayers.AcertarCoresDaUsina(transacao, documento.Database);

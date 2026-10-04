@@ -196,6 +196,10 @@ public static class SombrasCommands
     /// sombra (do instante, ou do pior instante do período) e marca os
     /// módulos pelo pior caso. Devolve o relato.
     /// </summary>
+    /// <summary>O botão da janela: o mesmo cálculo, fora de comando, com o vigia calado.</summary>
+    internal static string GerarPelaJanela(Document documento, PeriodoDeSombra periodo) =>
+        EscritaForaDeComando.Fazer(documento, () => Gerar(documento, periodo));
+
     internal static string Gerar(Document documento, PeriodoDeSombra periodo)
     {
         var database = documento.Database;
@@ -292,7 +296,7 @@ public static class SombrasCommands
         texto.Append($": {Por(ShadowCause.Object)} por árvore, {Por(ShadowCause.Table)} por outra mesa, {Por(ShadowCause.Terrain)} pelo terreno ({Legenda}). ");
 
         if (desenhar is { } d && contornos > 0)
-            texto.Append($"Sombra das árvores desenhada {(periodo.Instante ? "às" : "no pior instante,")} {d.ToString("dd/MM/yyyy HH:mm", Brasil)} (no chão; no módulo, que fica mais alto, ela cai um pouco ao lado). ");
+            texto.Append($"Sombra das árvores desenhada {(periodo.Instante ? "às" : "no pior instante,")} {d.ToString("dd/MM/yyyy HH:mm", Brasil)}, no chão e sobre as mesas ({contornos} contorno(s)). ");
 
         texto.Append($"Conta em {relogio.Elapsed.TotalSeconds.ToString("0.0", Brasil)} s.");
 
@@ -342,7 +346,7 @@ public static class SombrasCommands
         return (comBloco.Select(f => new ShadowQuad(f.Cantos, Grupo(f.Mesa))).ToList(), comBloco.Select(f => modulos[f.Modulo]).ToList());
     }
 
-    /// <summary>Desenha a sombra de cada cilindro no terreno. Quantos contornos.</summary>
+    /// <summary>Desenha a sombra de cada cilindro no terreno e sobre as mesas. Quantos contornos.</summary>
     private static int Desenhar(Database database, ProcessedTerrain terreno, IReadOnlyList<ShadowCylinder> cilindros, SunPosition sol, DateTime instante)
     {
         double? Chao(double x, double y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null;
@@ -390,6 +394,38 @@ public static class SombrasCommands
                 transacao.AddNewlyCreatedDBObject(texto, true);
                 estilo(texto);
                 PluginXData.Save(transacao, texto, TipoDaSombra, 1, instante.ToString("s", CultureInfo.InvariantCulture));
+            }
+        }
+
+        // Sobre as mesas (04/10/2026: "a sombra é projetada somente na
+        // superfície TIN e não considera que os módulos irão receber as
+        // sombras"): a sombra de cada cilindro no plano de cada mesa,
+        // recortada pelo contorno dela, um pouco acima dos módulos.
+        var mesas = new List<IReadOnlyList<Point3>>();
+        foreach (var mesa in LayoutScan.Tables(transacao, database).Values)
+            if (mesa.Contour is { } id && transacao.GetObject(id, OpenMode.ForRead) is Polyline3d linha)
+                mesas.Add(FileiraCommands.Vertices(linha, transacao));
+
+        foreach (var cilindro in cilindros)
+        {
+            foreach (var mesa in mesas)
+            {
+                var naMesa = Shading.ShadowOnPlane(cilindro, sol.Direction, mesa);
+                if (naMesa.Count < 3) continue;
+
+                var polilinha = new Polyline3d { Closed = true, Layer = camada };
+                espaco.AppendEntity(polilinha);
+                transacao.AddNewlyCreatedDBObject(polilinha, true);
+
+                foreach (var p in naMesa)
+                {
+                    var v = new PolylineVertex3d(new Point3d(p.X, p.Y, p.Z + 0.03));
+                    polilinha.AppendVertex(v);
+                    transacao.AddNewlyCreatedDBObject(v, true);
+                }
+
+                PluginXData.Save(transacao, polilinha, TipoDaSombra, 1, instante.ToString("s", CultureInfo.InvariantCulture));
+                feitos++;
             }
         }
 

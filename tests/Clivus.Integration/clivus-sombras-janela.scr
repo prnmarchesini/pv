@@ -1,0 +1,63 @@
+; Teste de nivel 2 das sombras pela JANELA (04/10/2026): o botao da janela
+; roda fora de um comando, e o vigia tomava a pintura da sombra por edicao do
+; usuario (mesas pendentes, modulos vermelhos por cima do roxo). Arvore FORA
+; da fileira, ao norte da F1.3; o calculo pelo mesmo caminho do botao
+; (clivus-sombras-pela-janela, so no build Debug); depois um REGEN (comando
+; que nao e nosso) para o vigia agir. Exige: modulos com cor de sombra, nenhum
+; modulo vermelho de pendente, e contornos de sombra sobre as mesas (alem dos
+; dois do chao).
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area sombras")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento sombras")
+(command "CLIVUS_MESAS_EXEMPLO_AUTO")
+(command "CLIVUS_USINA_AUTO")
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:verts (e / v l)
+  (setq v (entnext e))
+  (while (and v (= (cdr (assoc 0 (entget v))) "VERTEX"))
+    (setq l (cons (cdr (assoc 10 (entget v))) l) v (entnext v)))
+  l)
+(setq clivus:ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) clivus:i 0 clivus:meio nil)
+(while (< clivus:i (clivus:conta clivus:ss))
+  (setq clivus:e (ssname clivus:ss clivus:i) clivus:xd (clivus:xdata clivus:e))
+  (if (and (= (cdr (nth 0 clivus:xd)) "Mesa") (= (cdr (nth 3 clivus:xd)) "F1.3"))
+    (setq clivus:v (clivus:verts clivus:e)))
+  (setq clivus:i (1+ clivus:i)))
+(setq clivus:meio (list (/ (apply '+ (mapcar 'car clivus:v)) 4.0) (/ (apply '+ (mapcar 'cadr clivus:v)) 4.0) 0.0))
+(setq clivus:a (mapcar '- (nth 1 clivus:v) (nth 0 clivus:v)) clivus:b (mapcar '- (nth 2 clivus:v) (nth 1 clivus:v)))
+(defun clivus:len (u) (sqrt (+ (* (car u) (car u)) (* (cadr u) (cadr u)))))
+(setq clivus:curto (if (< (clivus:len clivus:a) (clivus:len clivus:b)) clivus:a clivus:b))
+(setq clivus:w (clivus:len clivus:curto) clivus:k (* 1 (/ (+ (/ clivus:w 2.0) 3.0) clivus:w)))
+(setq clivus:pe (list (+ (car clivus:meio) (* clivus:k (car clivus:curto))) (+ (cadr clivus:meio) (* clivus:k (cadr clivus:curto))) 0.0))
+(command "CLIVUS_ARVORE_AUTO" 4 0.6 10 8 clivus:pe "")
+(setvar "OSMODE" clivus:osmode)
+
+(defun clivus:cor (c / ss i n)
+  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_MOD*"))) i 0 n 0)
+  (while (< i (clivus:conta ss))
+    (if (member (cdr (assoc 420 (entget (ssname ss i)))) c) (setq n (1+ n)))
+    (setq i (1+ i)))
+  n)
+(defun clivus:sombras ( / ss i n)
+  (setq ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) i 0 n 0)
+  (while (< i (clivus:conta ss))
+    (if (= (cdr (nth 0 (clivus:xdata (ssname ss i)))) "Sombra") (setq n (1+ n)))
+    (setq i (1+ i)))
+  n)
+
+(princ "\nCLIVUS_JANELA_ANTES")
+(clivus-sombras-pela-janela "21/06/2026" "12:00" "-3")
+(command "_.REGEN")
+(princ (strcat "\nCLIVUS_JANELA sombra=" (itoa (clivus:cor '(14136575 10509030 6231200)))
+               " vermelhos=" (itoa (clivus:cor '(16711680)))
+               " contornos=" (itoa (clivus:sombras))))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

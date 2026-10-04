@@ -227,11 +227,14 @@ internal sealed class JanelaDeSombras : Window
             Cursor = System.Windows.Input.Cursors.Wait;
             string frase;
 
-            using (_documento.LockDocument())
+            // Fora de comando: trava o documento e cala o vigia (senão as
+            // mesas com sombra viravam pendentes vermelhas na folga).
+            frase = EscritaForaDeComando.Fazer(_documento, () =>
             {
-                frase = operacao();
+                var f = operacao();
                 _documento.Editor.Regen();
-            }
+                return f;
+            });
 
             _documento.Editor.WriteMessage($"\n{frase}\n");
             _recado.Foreground = Brushes.ForestGreen;

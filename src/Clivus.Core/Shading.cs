@@ -269,6 +269,116 @@ public static class Shading
     }
 
     /// <summary>
+    /// A sombra de um cilindro sobre uma mesa (04/10/2026, Renan: "a sombra é
+    /// projetada somente na superfície TIN e não considera que os módulos irão
+    /// receber as sombras"): os círculos da base e do topo da parte do
+    /// cilindro acima do plano, projetados na direção do sol até o plano da
+    /// mesa, a envoltória deles recortada pelo contorno da mesa. Cada vértice
+    /// fica no plano. Vazio se a sombra não cai na mesa ou o sol está baixo.
+    /// </summary>
+    /// <param name="c">O cilindro.</param>
+    /// <param name="sun">O vetor que aponta para o sol.</param>
+    /// <param name="table">O contorno da mesa (plano e convexo), em ordem.</param>
+    /// <param name="segments">Quantos pontos em cada círculo.</param>
+    public static IReadOnlyList<Point3> ShadowOnPlane(ShadowCylinder c, (double X, double Y, double Z) sun, IReadOnlyList<Point3> table, int segments = 32)
+    {
+        ArgumentNullException.ThrowIfNull(c);
+        ArgumentNullException.ThrowIfNull(table);
+        if (table.Count < 3) return [];
+
+        var elevacao = Math.Asin(Math.Clamp(sun.Z, -1, 1)) * 180 / Math.PI;
+        if (elevacao < MinimumElevationDegrees) return [];
+
+        // O plano da mesa: a normal pelo produto vetorial de dois lados.
+        var p0 = table[0];
+        var (ux, uy, uz) = (table[1].X - p0.X, table[1].Y - p0.Y, table[1].Z - p0.Z);
+        var (vx, vy, vz) = (table[2].X - p0.X, table[2].Y - p0.Y, table[2].Z - p0.Z);
+        var (nx, ny, nz) = (uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
+        if (Math.Abs(nz) < 1e-9) return [];
+
+        double CotaDoPlano(double x, double y) => p0.Z - (nx * (x - p0.X) + ny * (y - p0.Y)) / nz;
+
+        var ns = nx * sun.X + ny * sun.Y + nz * sun.Z;
+        if (Math.Abs(ns) < 1e-9) return [];
+
+        // Só a parte do cilindro acima do plano faz sombra nele.
+        var baseNoPlano = CotaDoPlano(c.X, c.Y);
+        var baixo = Math.Max(c.Bottom, baseNoPlano);
+        if (c.Top <= baixo) return [];
+
+        var pontos = new List<(double X, double Y)>(2 * segments);
+
+        for (var i = 0; i < segments; i++)
+        {
+            var a = 2 * Math.PI * i / segments;
+            var x = c.X + c.Radius * Math.Cos(a);
+            var y = c.Y + c.Radius * Math.Sin(a);
+
+            foreach (var z in new[] { baixo, c.Top })
+            {
+                // q - s·t no plano: n·(q - s·t - p0) = 0.
+                var t = (nx * (x - p0.X) + ny * (y - p0.Y) + nz * (z - p0.Z)) / ns;
+                if (t < 0) continue;
+                pontos.Add((x - sun.X * t, y - sun.Y * t));
+            }
+        }
+
+        if (pontos.Count < 3) return [];
+
+        var recorte = Recortar(Envoltoria(pontos), table.Select(p => (p.X, p.Y)).ToList());
+        return recorte.Count < 3 ? [] : recorte.Select(p => new Point3(p.X, p.Y, CotaDoPlano(p.X, p.Y))).ToList();
+    }
+
+    /// <summary>Sutherland–Hodgman: o polígono recortado por um contorno convexo (os dois em planta).</summary>
+    private static List<(double X, double Y)> Recortar(IReadOnlyList<(double X, double Y)> poligono, List<(double X, double Y)> contorno)
+    {
+        // O contorno no sentido anti-horário.
+        var area = 0.0;
+        for (var i = 0; i < contorno.Count; i++)
+        {
+            var (a, b) = (contorno[i], contorno[(i + 1) % contorno.Count]);
+            area += a.X * b.Y - b.X * a.Y;
+        }
+        if (area < 0) contorno.Reverse();
+
+        var saida = poligono.ToList();
+
+        for (var i = 0; i < contorno.Count && saida.Count > 0; i++)
+        {
+            var (a, b) = (contorno[i], contorno[(i + 1) % contorno.Count]);
+            double Lado((double X, double Y) p) => (b.X - a.X) * (p.Y - a.Y) - (b.Y - a.Y) * (p.X - a.X);
+
+            var entrada = saida;
+            saida = [];
+
+            for (var j = 0; j < entrada.Count; j++)
+            {
+                var atual = entrada[j];
+                var anterior = entrada[(j + entrada.Count - 1) % entrada.Count];
+                var (la, lp) = (Lado(atual), Lado(anterior));
+
+                if (la >= 0)
+                {
+                    if (lp < 0) saida.Add(Cruzamento(anterior, atual, lp, la));
+                    saida.Add(atual);
+                }
+                else if (lp >= 0)
+                {
+                    saida.Add(Cruzamento(anterior, atual, lp, la));
+                }
+            }
+        }
+
+        return saida;
+
+        static (double X, double Y) Cruzamento((double X, double Y) p, (double X, double Y) q, double lp, double lq)
+        {
+            var t = lp / (lp - lq);
+            return (p.X + (q.X - p.X) * t, p.Y + (q.Y - p.Y) * t);
+        }
+    }
+
+    /// <summary>
     /// O ponto projetado na direção oposta ao sol até o terreno: a cota do
     /// chão muda com o lugar, então a conta é refeita algumas vezes com a
     /// cota do ponto achado.

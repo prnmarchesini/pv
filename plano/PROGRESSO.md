@@ -4941,3 +4941,43 @@ plano na cota 0 e marcado (regra 5). O módulo da beira, na altura das
 vizinhas, fica. O comando diz quantos saíram. Com isso a cota da cena volta
 a ser relativa. Itatiba de novo: 154 módulos e 40 pilares fora, 5.670 e 1.424
 no 3D, id `ohSyfskKyx1Z5B43JESgKOxH`. Teste novo na etapa 9; bateria verde.
+
+### 04/10/2026: sombra que não pintava (revisão), sombra sobre as mesas, grupo
+
+Renan: "as sombras são fake, não está pintando os módulos com sombra ...
+preciso de revisão total"; no 3D, "os módulos estão vermelhos".
+
+**Causa** (achada com a cena que ele publicou: o motor, com as mesas, as
+árvores e o sol dele, dá 92 módulos na sombra): o botão da janela de Sombras
+roda fora de um comando. O vigia tomava a pintura da sombra por edição do
+usuário e, na folga, marcava as mesas como pendentes e pintava todos os
+módulos delas de vermelho por cima do roxo. A janela de Análises tinha o
+mesmo defeito. O teste antigo só usava a linha de comando (vigia calado), com
+a árvore em cima da mesa.
+
+**Correção:**
+- `EscritaForaDeComando`: toda escrita do plugin fora de comando trava o
+  documento e cala o vigia (`LayoutWatcher.Calar`). Vale para as janelas de
+  Sombras e Análises e para a migração e as cores ao abrir o desenho.
+- **Sombra sobre as mesas** (`Shading.ShadowOnPlane`): a sombra de cada
+  cilindro projetada no plano de cada mesa, recortada pelo contorno dela,
+  além do contorno no chão.
+- Nível 2 novo `clivus-sombras-janela`: árvore fora da fileira, o caminho do
+  botão (gancho LISP só no Debug), um REGEN depois. Exige módulos com cor de
+  sombra, nenhum vermelho de pendente e contornos sobre as mesas. Sem a
+  correção ele reprova com o defeito do Renan (56 módulos vermelhos, nenhum
+  com sombra).
+
+**Criar grupo** ("passo o mouse e as mesas vão ficando brancas"): a prévia
+da seleção redesenhava a face de cima do módulo por cima do destaque. Ela fica
+desligada só durante a seleção do grupo, e o valor do usuário volta no fim.
+É coisa de tela; sem teste automático.
+
+Roteiro de tela:
+1. Num desenho que já tem mesas vermelhas de "pendente" por causa do defeito,
+   rode Edição > Recalcular pendentes uma vez.
+2. Sombreamento > Sombras, pela janela, com uma árvore ao lado de uma
+   fileira: os módulos ficam lilás/violeta/roxo, nada fica vermelho, e o
+   contorno aparece também em cima das mesas.
+3. Análises pela janela: nenhuma mesa vira "pendente".
+4. Criar grupo: selecione módulos e passe o mouse por cima; nada fica branco.

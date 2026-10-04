@@ -3774,6 +3774,75 @@ function Testar-Arvore {
 }
 
 <#
+    As sombras pelo BOTAO da janela (04/10/2026, Renan: "nao esta pintando os
+    modulos com sombra"). O botao roda fora de um comando; o vigia tomava a
+    pintura por edicao do usuario e, no proximo comando, marcava as mesas
+    pendentes e pintava os modulos de vermelho por cima do roxo. O teste de
+    antes so usava a linha de comando (vigia calado) e a arvore em cima da
+    mesa. Aqui: arvore fora da fileira, o mesmo caminho do botao, um REGEN
+    depois. Exige modulos com cor de sombra, nenhum vermelho de pendente,
+    nenhum "pendente" escrito e contornos de sombra sobre as mesas.
+#>
+function Testar-SombrasJanela {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-janela--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'clivus-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("clivus-sombras-janela: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-janela' `
+        -Script (Join-Path $PSScriptRoot 'clivus-sombras-janela.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("clivus-sombras-janela terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'CLIVUS_JANELA sombra=(\d+) vermelhos=(\d+) contornos=(\d+)') {
+        $problemas.Add("clivus-sombras-janela: sem o resumo. Veja $($r.Saida)")
+        return $false
+    }
+
+    $sombra = [int]$Matches[1]; $vermelhos = [int]$Matches[2]; $contornos = [int]$Matches[3]
+    $depois = $r.Texto.Substring($r.Texto.IndexOf('CLIVUS_JANELA_ANTES'))
+
+    $erros = @()
+    if ($sombra -le 0) { $erros += 'nenhum modulo com cor de sombra' }
+    if ($vermelhos -gt 0) { $erros += "$vermelhos modulo(s) vermelhos de pendente (o vigia tomou a sombra por edicao)" }
+    if ($depois -match 'pendente') { $erros += 'o vigia escreveu "pendente" depois da sombra' }
+    if ($contornos -le 2) { $erros += "so $contornos contorno(s): a sombra nao foi desenhada sobre as mesas" }
+
+    if ($erros.Count -gt 0) {
+        $problemas.Add("clivus-sombras-janela: $($erros -join '; '). Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (sombras pela janela: $sombra modulo(s) com sombra, nenhum pendente, $contornos contorno(s), no chao e sobre as mesas)" -ForegroundColor DarkGray
+    return $true
+}
+
+<#
     Sombras (9.7 e 9.8): usina mista e uma arvore grande no meio da F1.3. As
     09:00 de 21/06/2026 a sombra e desenhada no terreno (cota na faixa dele,
     regra 5) e marca modulos; Apagar tira os contornos e devolve exatamente
@@ -4345,6 +4414,10 @@ else {
     # Sombras num instante e no dia inteiro, pior caso (9.7 e 9.8).
     $total++
     if (Testar-Sombras -Desenho $desenhos[0]) { $passaram++ }
+
+    # As sombras pelo botao da janela (fora de comando), arvore fora da fileira.
+    $total++
+    if (Testar-SombrasJanela -Desenho $desenhos[0]) { $passaram++ }
 
     # 3D no navegador (9.9).
     $total++

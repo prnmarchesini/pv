@@ -147,6 +147,23 @@ public static class GrupoCommands
         editor.SelectionAdded += Somou;
         editor.SelectionRemoved += Tirou;
 
+        // 04/10/2026: "quando eu seleciono e passo o mouse, as mesas vão
+        // ficando brancas, tipo deselecionando". A pré-visualização da seleção
+        // destaca a face de cima do módulo (que o filtro não aceita) e, ao
+        // sair, redesenha a face por cima do destaque do bloco já escolhido.
+        // Desligada só durante esta seleção; o valor do usuário volta no fim.
+        object? previaAntes = null;
+        try
+        {
+            previaAntes = AcadApp.GetSystemVariable("SELECTIONPREVIEW");
+            AcadApp.SetSystemVariable("SELECTIONPREVIEW", (short)0);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui desligar a prévia da seleção.", erro);
+            previaAntes = null;
+        }
+
         try
         {
             return editor.GetSelection(new PromptSelectionOptions { MessageForAdding = "\nSelecione os módulos do grupo (só módulos entram): " }, filtro);
@@ -156,6 +173,18 @@ public static class GrupoCommands
             editor.SelectionAdded -= Somou;
             editor.SelectionRemoved -= Tirou;
             placar?.Close();
+
+            if (previaAntes is not null)
+            {
+                try
+                {
+                    AcadApp.SetSystemVariable("SELECTIONPREVIEW", previaAntes);
+                }
+                catch (System.Exception erro)
+                {
+                    RegistroDeDiagnostico.Registrar("Não consegui devolver a prévia da seleção.", erro);
+                }
+            }
         }
     }
 

@@ -72,6 +72,33 @@ internal static class LayoutWatcher
         _aoDestruir = null;
     }
 
+    /// <summary>
+    /// Cala o vigia deste desenho enquanto o plugin escreve fora de um comando
+    /// (janela solta, abertura do desenho). Sem isso, o que o plugin pinta
+    /// parece edição do usuário: na folga seguinte as mesas tocadas viravam
+    /// pendentes e todos os módulos delas vermelhos, por cima da sombra
+    /// (04/10/2026: "não está pintando os módulos com sombra"). Use com a
+    /// trava do documento: <see cref="EscritaForaDeComando"/>.
+    /// </summary>
+    internal static IDisposable Calar(Document documento)
+    {
+        if (documento is null || !Vigias.TryGetValue(documento, out var vigia)) return new Soltura(null);
+
+        vigia.Calar();
+        return new Soltura(vigia);
+    }
+
+    private sealed class Soltura(Vigia? vigia) : IDisposable
+    {
+        private Vigia? _vigia = vigia;
+
+        public void Dispose()
+        {
+            _vigia?.Falar();
+            _vigia = null;
+        }
+    }
+
     private static void Vigiar(Document documento)
     {
         if (documento is null || Vigias.ContainsKey(documento)) return;
@@ -149,6 +176,19 @@ internal static class LayoutWatcher
         }
 
         private bool Calado => _calados > 0 || _executando;
+
+        /// <summary>Uma escrita nossa fora de comando começou: nada é anotado.</summary>
+        internal void Calar() => _calados++;
+
+        /// <summary>A escrita nossa fora de comando terminou: o que ela acrescentou não é cópia.</summary>
+        internal void Falar()
+        {
+            if (_calados > 0) _calados--;
+            if (_calados > 0) return;
+
+            _desfazendo = false;
+            _acrescentadas.Clear();
+        }
 
         private void AoComecarComando(object? sender, CommandEventArgs e)
         {
