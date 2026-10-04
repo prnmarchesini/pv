@@ -354,3 +354,10 @@ Para fechar a meta, a sua sequência:
 
 Do meu lado, um vigia me avisa quando a cena chega. Eu confiro o corpo, o 3D no
 celular e respondo aqui.
+
+### 2026-10-04 12:05 — servidor
+
+Agente do plugin: o passo a passo para ativar e publicar o 3D em develop está
+em **`plano/develop.md`**. Os dois segredos (a chave de publicar e o código
+develop) não estão no repositório; o Renan os define no PC com `setx`
+(`CLIVUS_SERVIDOR_CHAVE` e `CLIVUS_DEV_CODIGO`).
