@@ -1,20 +1,58 @@
-"""Servidor 3D falso para o nível 2 (plano/contrato-servidor-3d.md).
+"""Servidor falso para o nível 2: o 3D (plano/contrato-servidor-3d.md) e as
+licenças (plano/contrato-ativacao.md).
 
 Segue o contrato no que o plugin usa: GET /api/v1/saude, POST /api/v1/cenas
 com Bearer e gzip. Guarda o último corpo recebido (já descomprimido) no
 arquivo dado e responde 201 com o link. Uso:
 
-    python servidor-falso.py PORTA CHAVE ARQUIVO_DO_CORPO
+    python servidor-falso.py PORTA CHAVE ARQUIVO_DO_CORPO [CHAVE_PRIVADA.pem]
+    python servidor-falso.py --gerar-chave CHAVE_PRIVADA.pem   (imprime a pública)
+
+Licenças: o código "CLV-TESTE-0001" ativa (kid "teste"); qualquer outro dá
+404 "código não encontrado".
 """
+import base64
+import datetime
 import gzip
 import json
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+
+if sys.argv[1] == '--gerar-chave':
+    privada = ec.generate_private_key(ec.SECP256R1())
+    with open(sys.argv[2], 'wb') as f:
+        f.write(privada.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+    publica = privada.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
+    print(base64.b64encode(publica).decode())
+    sys.exit(0)
+
 PORTA = int(sys.argv[1])
 CHAVE = sys.argv[2]
 SAIDA = sys.argv[3]
+PRIVADA = None
+if len(sys.argv) > 4:
+    with open(sys.argv[4], 'rb') as f:
+        PRIVADA = serialization.load_pem_private_key(f.read(), password=None)
 contador = 0
+
+
+def b64url(dados):
+    return base64.urlsafe_b64encode(dados).rstrip(b'=').decode()
+
+
+def licenca(maquina):
+    agora = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    iso = lambda d: d.strftime('%Y-%m-%dT%H:%M:%SZ')  # noqa: E731
+    payload = json.dumps({
+        'v': 1, 'kid': 'teste', 'licenca': 'lic_teste', 'conta': 'teste@clivus', 'plano': 'gratuito', 'maquina': maquina,
+        'emitida_em': iso(agora), 'revalidar_em': iso(agora + datetime.timedelta(days=30)), 'expira_em': iso(agora + datetime.timedelta(days=45)),
+    }, separators=(',', ':')).encode()
+    r, s = decode_dss_signature(PRIVADA.sign(payload, ec.ECDSA(hashes.SHA256())))
+    return b64url(payload) + '.' + b64url(r.to_bytes(32, 'big') + s.to_bytes(32, 'big'))
 
 
 class Tratador(BaseHTTPRequestHandler):
@@ -34,6 +72,14 @@ class Tratador(BaseHTTPRequestHandler):
 
     def do_POST(self):
         global contador
+        if self.path in ('/api/v1/licencas/ativar', '/api/v1/licencas/revalidar'):
+            corpo = json.loads(self.rfile.read(int(self.headers.get('Content-Length', '0'))).decode('utf-8'))
+            if self.path.endswith('ativar') and corpo.get('codigo') != 'CLV-TESTE-0001':
+                self._responder(404, {'erro': 'código não encontrado'})
+                return
+            self._responder(200, {'licenca': licenca(corpo['maquina'])})
+            return
+
         if self.path != '/api/v1/cenas':
             self._responder(404, {'erro': 'não existe'})
             return

@@ -38,6 +38,7 @@ public sealed class ClivusExtension : IExtensionApplication
         {
             LayoutWatcher.Instalar();
             ArvoreVigia.Instalar();
+            Licenciamento.Instalar();
             ValidacaoAoAbrir.Instalar();
         }
         catch (System.Exception erro)
@@ -73,6 +74,7 @@ public sealed class ClivusExtension : IExtensionApplication
         {
             ValidacaoAoAbrir.Desinstalar();
             ArvoreVigia.Desinstalar();
+            Licenciamento.Desinstalar();
             LayoutWatcher.Desinstalar();
         }
         catch (System.Exception erro)

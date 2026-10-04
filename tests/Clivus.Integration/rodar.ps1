@@ -4061,6 +4061,83 @@ function Testar-Publicar3D {
     }
 }
 
+<#
+    A ativacao (plano/contrato-ativacao.md), com o servidor falso assinando
+    licencas por uma chave gerada na hora. So o build Debug aceita a chave de
+    teste pela variavel (o bundle instalado e Release). Sem licenca o comando
+    e barrado; codigo errado e recusado; o certo ativa e o comando roda.
+#>
+function Testar-Ativar {
+    param([string] $Desenho)
+
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $python) {
+        $problemas.Add('clivus-ativar: python nao encontrado para o servidor falso.')
+        return $false
+    }
+
+    $pem = Join-Path $saida 'clivus-ativar-privada.pem'
+    $licenca = Join-Path $saida 'clivus-ativar-licenca.txt'
+    foreach ($a in $pem, $licenca) { if (Test-Path $a) { Remove-Item $a -Force } }
+
+    $publica = (& $python.Source (Join-Path $PSScriptRoot 'servidor-falso.py') '--gerar-chave' $pem).Trim()
+    $porta = 18766
+    $servidor = Start-Process -FilePath $python.Source -ArgumentList @((Join-Path $PSScriptRoot 'servidor-falso.py'), $porta, 'x', (Join-Path $saida 'clivus-ativar-corpo.json'), $pem) `
+                              -PassThru -WindowStyle Hidden
+    $antes = @{ L = $env:CLIVUS_LICENCAS; C = $env:CLIVUS_LICENCA_CHAVE_TESTE; A = $env:CLIVUS_LICENCA_ARQUIVO_TESTE }
+
+    try {
+        $noAr = $false
+        for ($i = 0; $i -lt 40 -and -not $noAr; $i++) {
+            try { $null = Invoke-WebRequest "http://127.0.0.1:$porta/api/v1/saude" -UseBasicParsing -TimeoutSec 1; $noAr = $true }
+            catch { Start-Sleep -Milliseconds 250 }
+        }
+        if (-not $noAr) { $problemas.Add('clivus-ativar: o servidor falso nao subiu.'); return $false }
+
+        $env:CLIVUS_LICENCAS = "http://127.0.0.1:$porta"
+        $env:CLIVUS_LICENCA_CHAVE_TESTE = "teste=$publica"
+        $env:CLIVUS_LICENCA_ARQUIVO_TESTE = $licenca
+
+        # Sem licenca: o veto interrompe o script, por isso a primeira parte
+        # e uma execucao so dela.
+        $barrado = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-ativar--barrado' -Script (Join-Path $PSScriptRoot 'clivus-ativar-barrado.scr')
+        $antesDe = $barrado.Texto.Substring([Math]::Max(0, $barrado.Texto.IndexOf('CLIVUS_ATIVAR_ANTES')))
+
+        $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-ativar' -Script (Join-Path $PSScriptRoot 'clivus-ativar.scr')
+
+        if ($r.Estourou -or $r.Codigo -ne 0 -or $r.Texto.IndexOf('CLIVUS_ATIVAR_FIM') -lt 0) {
+            $problemas.Add("clivus-ativar terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+            return $false
+        }
+
+        $t = $r.Texto
+        $errado = $t.Substring($t.IndexOf('CLIVUS_ATIVAR_ERRADO')); $errado = $errado.Substring(0, $errado.IndexOf('CLIVUS_ATIVAR_CERTO'))
+        $certo = $t.Substring($t.IndexOf('CLIVUS_ATIVAR_CERTO')); $certo = $certo.Substring(0, $certo.IndexOf('CLIVUS_ATIVAR_DEPOIS'))
+        $depois = $t.Substring($t.IndexOf('CLIVUS_ATIVAR_DEPOIS')); $depois = $depois.Substring(0, $depois.IndexOf('CLIVUS_ATIVAR_FIM'))
+
+        $erros = @()
+        if ($antesDe -notmatch 'sem licen.a v.lida' -or $antesDe -match 'cotas:') { $erros += 'sem licenca o comando nao foi barrado' }
+        if ($errado -notmatch 'N.o ativei: c.digo n.o encontrado') { $erros += 'o codigo errado nao foi recusado com a mensagem do servidor' }
+        if ($certo -notmatch 'Clivus Solar ativado para teste@clivus' -or -not (Test-Path $licenca)) { $erros += 'o codigo certo nao ativou' }
+        if ($depois -notmatch 'cotas:' -or $depois -match 'sem licen.a v.lida') { $erros += 'depois de ativado o comando continuou barrado' }
+
+        if ($erros.Count -gt 0) {
+            $problemas.Add("clivus-ativar: $($erros -join '; '). Veja $($r.Saida)")
+            return $false
+        }
+
+        Write-Host '  (ativar: barrado sem licenca, codigo errado recusado, codigo certo ativou, comando liberado)' -ForegroundColor DarkGray
+        return $true
+    }
+    finally {
+        $env:CLIVUS_LICENCAS = $antes.L
+        $env:CLIVUS_LICENCA_CHAVE_TESTE = $antes.C
+        $env:CLIVUS_LICENCA_ARQUIVO_TESTE = $antes.A
+        if ($servidor -and -not $servidor.HasExited) { Stop-Process -Id $servidor.Id -Force -ErrorAction SilentlyContinue }
+        if (Test-Path $pem) { Remove-Item $pem -Force }
+    }
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -4250,6 +4327,10 @@ else {
     # Envio da usina ao servidor 3D (contrato), num servidor falso local.
     $total++
     if (Testar-Publicar3D -Desenho $desenhos[0]) { $passaram++ }
+
+    # Ativacao com licenca assinada, num servidor falso local.
+    $total++
+    if (Testar-Ativar -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

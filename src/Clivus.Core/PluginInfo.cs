@@ -222,6 +222,15 @@ public static class PluginInfo
     /// <summary>A janela Sobre: o logo, a versão e onde fica o registro de diagnóstico.</summary>
     public const string ComandoSobre = "CLIVUS_SOBRE";
 
+    /// <summary>A janela da licença: o código gerado no portal do app ativa o plugin nesta máquina.</summary>
+    public const string ComandoAtivar = "CLIVUS_ATIVAR";
+
+    /// <summary>Ativa com o código pela linha de comando. Para o nível 2.</summary>
+    public const string ComandoAtivarAutomatico = "CLIVUS_ATIVAR_AUTO";
+
+    /// <summary>O portal do cliente, onde ele gera o código de ativação.</summary>
+    public const string PortalDoApp = "https://app.clivussolar.com";
+
     /// <summary>Troca a mesa clicada por uma ou mais de outro tipo, travando um lado (9.2).</summary>
     public const string ComandoTrocarMesa = "CLIVUS_TROCAR_MESA";
 

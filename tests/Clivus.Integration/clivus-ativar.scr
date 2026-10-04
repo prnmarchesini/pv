@@ -1,0 +1,19 @@
+; Teste de nivel 2 da ativacao (plano/contrato-ativacao.md), segunda parte:
+; com o licenciamento ligado por uma chave de teste (so no build Debug) e o
+; servidor falso assinando licencas, o codigo errado e recusado com a
+; mensagem do servidor; o codigo certo ativa; e o comando que estava barrado
+; (clivus-ativar-barrado.scr) passa a rodar.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(princ "\nCLIVUS_ATIVAR_ERRADO")
+(command "CLIVUS_ATIVAR_AUTO" "CLV-ERRADO-0000")
+(princ "\nCLIVUS_ATIVAR_CERTO")
+(command "CLIVUS_ATIVAR_AUTO" "clv-teste-0001")
+(princ "\nCLIVUS_ATIVAR_DEPOIS")
+(command "CLIVUS_TERRENO_AUTO")
+(princ "\nCLIVUS_ATIVAR_FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

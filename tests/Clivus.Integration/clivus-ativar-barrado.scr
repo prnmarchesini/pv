@@ -1,0 +1,12 @@
+; Teste de nivel 2 da ativacao, primeira parte: sem licenca, um comando do
+; Clivus e barrado (o veto interrompe o script aqui mesmo, por isso a
+; segunda parte e outro arquivo, clivus-ativar.scr).
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ "\nCLIVUS_ATIVAR_ANTES")
+(command "CLIVUS_TERRENO_AUTO")
+(princ)

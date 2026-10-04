@@ -48,6 +48,7 @@ public static class RibbonLayout
                 B("Configurações", PluginInfo.ComandoConfiguracoes,
                     "Estruturas (mesas do desenho, vãos, enterro), escolha das mesas e cores, parâmetros da usina e estilos do projeto.",
                     "configuracoes", grande: true),
+                B("Ativar", PluginInfo.ComandoAtivar, "Ativa o Clivus Solar neste PC com o código gerado no portal do app, e mostra a situação da licença.", "ativar"),
                 B("Sobre", PluginInfo.ComandoSobre, "O Clivus Solar: versão, onde fica o registro de diagnóstico e o que ele faz.", "sobre"),
             ]),
             new("Terreno",
