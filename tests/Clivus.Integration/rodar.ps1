@@ -4138,6 +4138,32 @@ function Testar-Ativar {
     }
 }
 
+# ---- a licenca da rodada ---------------------------------------------------
+
+# Com a chave publica de producao embutida, sem licenca todo comando do
+# Clivus e barrado. A rodada inteira usa uma chave de teste gerada na hora e
+# uma licenca assinada por ela para esta maquina (so o build Debug aceita a
+# chave pela variavel). A revalidacao aponta para uma porta fechada do proprio
+# computador: o teste nunca fala com o servidor de verdade nem mexe na
+# licenca real do usuario. O Testar-Ativar troca por outra e devolve esta.
+$licencaAntes = @{ L = $env:CLIVUS_LICENCAS; C = $env:CLIVUS_LICENCA_CHAVE_TESTE; A = $env:CLIVUS_LICENCA_ARQUIVO_TESTE }
+$pythonDaLicenca = Get-Command python -ErrorAction SilentlyContinue
+if (-not $pythonDaLicenca) {
+    Write-Host '  python nao encontrado: sem ele nao ha licenca de teste e o nivel 2 nao roda.' -ForegroundColor Red
+    exit 1
+}
+$pemDaRodada = Join-Path $saida 'rodada-privada.pem'
+$licencaDaRodada = Join-Path $saida 'rodada-licenca.txt'
+$guid = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Cryptography' -Name MachineGuid).MachineGuid
+$sha = [System.Security.Cryptography.SHA256]::Create()
+$maquina = -join ($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes('clivus:' + $guid.Trim().ToLowerInvariant())) | ForEach-Object { $_.ToString('x2') })
+$publicaDaRodada = (& $pythonDaLicenca.Source (Join-Path $PSScriptRoot 'servidor-falso.py') '--gerar-chave' $pemDaRodada).Trim()
+[System.IO.File]::WriteAllText($licencaDaRodada, (& $pythonDaLicenca.Source (Join-Path $PSScriptRoot 'servidor-falso.py') '--licenca' $pemDaRodada $maquina).Trim())
+Remove-Item $pemDaRodada -Force
+$env:CLIVUS_LICENCAS = 'http://127.0.0.1:9'
+$env:CLIVUS_LICENCA_CHAVE_TESTE = "teste=$publicaDaRodada"
+$env:CLIVUS_LICENCA_ARQUIVO_TESTE = $licencaDaRodada
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -4334,6 +4360,10 @@ else {
 }
 
 # ---- veredito --------------------------------------------------------------
+
+$env:CLIVUS_LICENCAS = $licencaAntes.L
+$env:CLIVUS_LICENCA_CHAVE_TESTE = $licencaAntes.C
+$env:CLIVUS_LICENCA_ARQUIVO_TESTE = $licencaAntes.A
 
 if ($problemas.Count -eq 0 -and $passaram -eq $total) {
     Escrever-Linha 'Nivel 2' "$passaram/$total" 'OK'

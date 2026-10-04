@@ -4912,3 +4912,24 @@ Roteiro de tela (quando a chave do servidor chegar):
 1. Rode `ClivusSolar-Setup-0.1.0.exe`, Instalar, abra o Civil 3D.
 2. Qualquer botão do Clivus avisa que precisa ativar; Configurações >
    Ativar, cole o código gerado no portal do app: "Ativado".
+
+### 04/10/2026: licença ligada, ativação e 3D reais em develop
+
+O agente do servidor embutiu no plugin a chave pública `2026a` e o endereço
+do servidor (`c421925`), e escreveu `plano/develop.md`. Daqui:
+- **Nível 2 com a licença ligada:** sem licença, todo comando era barrado e
+  só 3 de 39 passavam. Agora o runner gera, no começo da rodada, uma chave de
+  teste e uma licença assinada para esta máquina (`servidor-falso.py
+  --licenca`). Só o build Debug aceita essa chave. A revalidação aponta para
+  uma porta fechada do próprio computador: os testes não falam com o servidor
+  real nem tocam a licença do usuário. 39/39.
+- **Ativação real:** com o código develop (variável do usuário, fora do git):
+  "Clivus Solar ativado para develop@clivussolar.com (plano develop), até
+  18/11/2026".
+- **Publicação real:** Curvas Itatiba, área de 160 × 160 m, usina gerada
+  pelo motor: 5.824 módulos, 1.464 pilares, publicada em 0,4 s. O link abre
+  (200) e a API devolve a cena com origem [0,0,0].
+- Bundle Release reinstalado com a chave: no Civil 3D desta máquina a
+  licença develop já está guardada.
+
+Bateria: tudo verde.

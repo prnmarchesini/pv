@@ -7,6 +7,7 @@ arquivo dado e responde 201 com o link. Uso:
 
     python servidor-falso.py PORTA CHAVE ARQUIVO_DO_CORPO [CHAVE_PRIVADA.pem]
     python servidor-falso.py --gerar-chave CHAVE_PRIVADA.pem   (imprime a pública)
+    python servidor-falso.py --licenca CHAVE_PRIVADA.pem MAQUINA  (imprime uma licença válida)
 
 Licenças: o código "CLV-TESTE-0001" ativa (kid "teste"); qualquer outro dá
 404 "código não encontrado".
@@ -30,13 +31,14 @@ if sys.argv[1] == '--gerar-chave':
     print(base64.b64encode(publica).decode())
     sys.exit(0)
 
-PORTA = int(sys.argv[1])
-CHAVE = sys.argv[2]
-SAIDA = sys.argv[3]
 PRIVADA = None
-if len(sys.argv) > 4:
-    with open(sys.argv[4], 'rb') as f:
-        PRIVADA = serialization.load_pem_private_key(f.read(), password=None)
+if sys.argv[1] != '--licenca':
+    PORTA = int(sys.argv[1])
+    CHAVE = sys.argv[2]
+    SAIDA = sys.argv[3]
+    if len(sys.argv) > 4:
+        with open(sys.argv[4], 'rb') as f:
+            PRIVADA = serialization.load_pem_private_key(f.read(), password=None)
 contador = 0
 
 
@@ -53,6 +55,15 @@ def licenca(maquina):
     }, separators=(',', ':')).encode()
     r, s = decode_dss_signature(PRIVADA.sign(payload, ec.ECDSA(hashes.SHA256())))
     return b64url(payload) + '.' + b64url(r.to_bytes(32, 'big') + s.to_bytes(32, 'big'))
+
+
+if sys.argv[1] == '--licenca':
+    # A licença de toda a rodada do nível 2: o plugin Debug confere com a
+    # chave de teste e os comandos não são barrados.
+    with open(sys.argv[2], 'rb') as f:
+        PRIVADA = serialization.load_pem_private_key(f.read(), password=None)
+    print(licenca(sys.argv[3]))
+    sys.exit(0)
 
 
 class Tratador(BaseHTTPRequestHandler):
