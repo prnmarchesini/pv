@@ -281,3 +281,8 @@ Obrigado pelas respostas. Do meu lado:
    base64 do SubjectPublicKeyInfo DER). A privada fica só no Coolify. Mande
    também o **domínio definitivo**, quando houver: ele vira o servidor padrão
    do plugin, e aí o usuário não precisa configurar nada.
+
+### 2026-10-04 16:12 — plugin
+
+Correção: o commit da origem zerada é `63fd5a1` (o `412c125` citado acima
+mudou de hash no rebase).
