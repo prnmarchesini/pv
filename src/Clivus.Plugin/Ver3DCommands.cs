@@ -45,21 +45,21 @@ public static class Ver3DCommands
                 if (link is not null)
                 {
                     Process.Start(new ProcessStartInfo(link) { UseShellExecute = true });
-                    editor.WriteMessage("  Aberta no navegador. O link abre em qualquer aparelho, inclusive no celular.\n");
+                    editor.WriteMessage(Tr.T("  Aberta no navegador. O link abre em qualquer aparelho, inclusive no celular.\n"));
                     return;
                 }
 
-                editor.WriteMessage("  Gravo a página no PC, como antes.\n");
+                editor.WriteMessage(Tr.T("  Gravo a página no PC, como antes.\n"));
             }
 
             var caminho = Gravar(documento, cena, Caminho(documento));
             Process.Start(new ProcessStartInfo(caminho) { UseShellExecute = true });
-            editor.WriteMessage("  Aberta no navegador padrão. O arquivo pode ser mandado por e-mail: abre sem internet.\n");
+            editor.WriteMessage(Tr.T("  Aberta no navegador padrão. O arquivo pode ser mandado por e-mail: abre sem internet.\n"));
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao gerar o 3D.", erro);
-            editor.WriteMessage($"\nNão consegui gerar o 3D: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui gerar o 3D: {0}\n", erro.Message));
         }
     }
 
@@ -74,7 +74,7 @@ public static class Ver3DCommands
 
         try
         {
-            var caminho = editor.GetString(new PromptStringOptions("\nArquivo da página 3D: ") { AllowSpaces = true });
+            var caminho = editor.GetString(new PromptStringOptions(Tr.T("\nArquivo da página 3D: ")) { AllowSpaces = true });
             if (caminho.Status != PromptStatus.OK) return;
 
             if (Montar(documento) is { } cena) Gravar(documento, cena, caminho.StringResult.Trim().Trim('"'));
@@ -82,7 +82,7 @@ public static class Ver3DCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao gerar o 3D (automático).", erro);
-            editor.WriteMessage($"\nNão consegui gerar o 3D: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui gerar o 3D: {0}\n", erro.Message));
         }
     }
 
@@ -100,7 +100,7 @@ public static class Ver3DCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao publicar o 3D (automático).", erro);
-            documento.Editor.WriteMessage($"\nNão consegui publicar o 3D: {erro.Message}\n");
+            documento.Editor.WriteMessage(Tr.F("\nNão consegui publicar o 3D: {0}\n", erro.Message));
         }
     }
 
@@ -125,19 +125,19 @@ public static class Ver3DCommands
         var (cena, modulosFora, pilaresFora) = Viewer3DPage.OnTerrain(Cena(documento, terreno), (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null);
 
         if (modulosFora + pilaresFora > 0)
-            editor.WriteMessage($"\n  {modulosFora} módulo(s) e {pilaresFora} pilar(es) sem terreno embaixo ficaram fora do 3D (no desenho estão planos na cota 0 e marcados).\n");
+            editor.WriteMessage(Tr.F("\n  {0} módulo(s) e {1} pilar(es) sem terreno embaixo ficaram fora do 3D (no desenho estão planos na cota 0 e marcados).\n", modulosFora, pilaresFora));
 
         if (cena.Faces.Count == 0 && cena.Trees.Count == 0)
-            editor.WriteMessage("\n  ATENÇÃO: o desenho não tem módulo nem árvore do plugin; a página mostra só o terreno.\n");
+            editor.WriteMessage(Tr.T("\n  ATENÇÃO: o desenho não tem módulo nem árvore do plugin; a página mostra só o terreno.\n"));
 
         return cena;
     }
 
     private static string Resumo(Scene3D cena)
     {
-        var brasil = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
-        return $"{cena.Faces.Count} módulo(s), {cena.Pillars.Count} pilar(es), {cena.Trees.Count} árvore(s), {cena.Shadows.Count} contorno(s) de sombra, "
-            + $"terreno em grade de {cena.Terrain!.Step.ToString("0.#", brasil)} m";
+        return Tr.F(
+            "{0} módulo(s), {1} pilar(es), {2} árvore(s), {3} contorno(s) de sombra, terreno em grade de {4:0.#} m",
+            cena.Faces.Count, cena.Pillars.Count, cena.Trees.Count, cena.Shadows.Count, cena.Terrain!.Step);
     }
 
     /// <summary>Grava a página local. O caminho gravado.</summary>
@@ -151,9 +151,7 @@ public static class Ver3DCommands
         relogio.Stop();
 
         var tamanho = new FileInfo(caminho).Length / 1024.0 / 1024.0;
-        var brasil = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
-
-        editor.WriteMessage($"\n3D {Resumo(cena)}: {caminho} ({tamanho.ToString("0.0", brasil)} MB, {relogio.Elapsed.TotalSeconds.ToString("0.0", brasil)} s).\n");
+        editor.WriteMessage(Tr.F("\n3D {0}: {1} ({2:0.0} MB, {3:0.0} s).\n", Resumo(cena), caminho, tamanho, relogio.Elapsed.TotalSeconds));
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
 
         return caminho;
@@ -171,7 +169,7 @@ public static class Ver3DCommands
 
         if (publicada is null)
         {
-            editor.WriteMessage($"\n3D Não publiquei no servidor: {erro}.\n");
+            editor.WriteMessage(Tr.F("\n3D Não publiquei no servidor: {0}.\n", erro));
             return null;
         }
 
@@ -179,15 +177,14 @@ public static class Ver3DCommands
         // comprometido não manda o usuário para outro site.
         if (!Viewer3DPage.IsLinkFromServer(publicada.Url, Publicador3D.Endereco!))
         {
-            editor.WriteMessage($"\n3D ATENÇÃO: o servidor devolveu um link de outro endereço ({publicada.Url}); por segurança não abro.\n");
+            editor.WriteMessage(Tr.F("\n3D ATENÇÃO: o servidor devolveu um link de outro endereço ({0}); por segurança não abro.\n", publicada.Url));
             return null;
         }
 
-        var brasil = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
         editor.WriteMessage(
-            $"\n3D {Resumo(cena)}, publicado em {relogio.Elapsed.TotalSeconds.ToString("0.0", brasil)} s.\n"
-            + $"  Link: {publicada.Url}\n"
-            + (publicada.ExpiresAt is { } expira ? $"  Vale até {expira.ToLocalTime().ToString("dd/MM/yyyy HH:mm", brasil)}.\n" : string.Empty));
+            Tr.F("\n3D {0}, publicado em {1:0.0} s.\n", Resumo(cena), relogio.Elapsed.TotalSeconds)
+            + Tr.F("  Link: {0}\n", publicada.Url)
+            + (publicada.ExpiresAt is { } expira ? Tr.F("  Vale até {0:dd/MM/yyyy HH:mm}.\n", expira.ToLocalTime()) : string.Empty));
 
         return publicada.Url;
     }
@@ -263,7 +260,7 @@ public static class Ver3DCommands
         }
 
         var titulo = Path.GetFileNameWithoutExtension(documento.Name);
-        return new Scene3D(string.IsNullOrWhiteSpace(titulo) ? "Usina" : titulo, grade, faces, pilares, arvores, sombras);
+        return new Scene3D(string.IsNullOrWhiteSpace(titulo) ? Tr.T("Usina") : titulo, grade, faces, pilares, arvores, sombras);
     }
 
     /// <summary>A cor que a peça mostra: a dela, ou a da camada quando é "por camada".</summary>

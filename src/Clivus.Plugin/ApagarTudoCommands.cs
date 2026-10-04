@@ -40,7 +40,7 @@ public static class ApagarTudoCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao apagar tudo da área.", erro);
-            editor.WriteMessage($"\nNão consegui apagar: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui apagar: {0}\n", erro.Message));
         }
     }
 
@@ -59,7 +59,7 @@ public static class ApagarTudoCommands
 
             if (areas.Count == 0)
             {
-                editor.WriteMessage("\nAPAGAR Nenhuma área registrada neste desenho.\n");
+                editor.WriteMessage(Tr.T("\nAPAGAR Nenhuma área registrada neste desenho.\n"));
                 return;
             }
 
@@ -67,7 +67,7 @@ public static class ApagarTudoCommands
 
             if (area is null)
             {
-                editor.WriteMessage("\nAPAGAR A área registrada não está mais no desenho.\n");
+                editor.WriteMessage(Tr.T("\nAPAGAR A área registrada não está mais no desenho.\n"));
                 return;
             }
 
@@ -76,7 +76,7 @@ public static class ApagarTudoCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao apagar tudo da área automaticamente.", erro);
-            editor.WriteMessage($"\nNão consegui apagar: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui apagar: {0}\n", erro.Message));
         }
     }
 
@@ -89,7 +89,7 @@ public static class ApagarTudoCommands
 
         if (apagadas.Tables.Count == 0 && orfas == 0)
         {
-            editor.WriteMessage($"\nAPAGAR Nada do plugin dentro de {area.Nome}.\n");
+            editor.WriteMessage(Tr.F("\nAPAGAR Nada do plugin dentro de {0}.\n", area.Nome));
             return;
         }
 
@@ -101,16 +101,18 @@ public static class ApagarTudoCommands
         var (gruposApagados, gruposEncolhidos) = AcertarGrupos(documento, apagadas.Tables);
 
         editor.WriteMessage(
-            $"\nAPAGAR {apagadas.Tables.Count} mesa(s) apagada(s) dentro de {area.Nome} "
-            + $"({apagadas.Entities} entidade(s)"
-            + (orfas > 0 ? $", mais {orfas} nota(s) órfã(s) de desenho antigo" : string.Empty)
-            + "). A área e o alinhamento ficam. U desfaz.\n");
+            Tr.F(
+                "\nAPAGAR {0} mesa(s) apagada(s) dentro de {1} ({2} entidade(s){3}). A área e o alinhamento ficam. U desfaz.\n",
+                apagadas.Tables.Count,
+                area.Nome,
+                apagadas.Entities,
+                orfas > 0 ? ", " + Tr.F("mais {0} nota(s) órfã(s) de desenho antigo", orfas) : string.Empty));
 
         if (gruposApagados.Count > 0)
-            editor.WriteMessage($"  Grupo(s) sem mesa, apagado(s): {string.Join(", ", gruposApagados)}.\n");
+            editor.WriteMessage(Tr.F("  Grupo(s) sem mesa, apagado(s): {0}.\n", string.Join(", ", gruposApagados)));
 
         if (gruposEncolhidos.Count > 0)
-            editor.WriteMessage($"  Grupo(s) que perderam mesas e continuam com as outras: {string.Join(", ", gruposEncolhidos)}.\n");
+            editor.WriteMessage(Tr.F("  Grupo(s) que perderam mesas e continuam com as outras: {0}.\n", string.Join(", ", gruposEncolhidos)));
     }
 
     /// <summary>

@@ -45,10 +45,10 @@ internal static class MenuDeContexto
         // o Renan viu em 26/09/2026).
         _raiz = new MenuItem("Clivus Solar");
 
-        ItensDaArea.Add(Item("Refazer as mesas desta área", PluginInfo.ComandoRefazer));
-        ItensDaArea.Add(Item("Apagar tudo", PluginInfo.ComandoApagarTudo));
-        ItensDaMesa.Add(Item("Mudar inclinação (alturas das pontas)", PluginInfo.ComandoPontas));
-        ItensDaMesa.Add(Item("Recalcular esta mesa", PluginInfo.ComandoRecalcular));
+        ItensDaArea.Add(Item(Tr.T("Refazer as mesas desta área"), PluginInfo.ComandoRefazer));
+        ItensDaArea.Add(Item(Tr.T("Apagar tudo"), PluginInfo.ComandoApagarTudo));
+        ItensDaMesa.Add(Item(Tr.T("Mudar inclinação (alturas das pontas)"), PluginInfo.ComandoPontas));
+        ItensDaMesa.Add(Item(Tr.T("Recalcular esta mesa"), PluginInfo.ComandoRecalcular));
 
         foreach (var item in ItensDaArea.Concat(ItensDaMesa)) _raiz.MenuItems.Add(item);
 

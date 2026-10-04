@@ -48,14 +48,14 @@ public static class AlignmentCommands
             if (terreno is null)
             {
                 editor.WriteMessage(
-                    "\nNenhum terreno processado neste desenho. Use o botão Terreno primeiro.\n");
+                    Tr.T("\nNenhum terreno processado neste desenho. Use o botão Terreno primeiro.\n"));
                 return;
             }
 
             var aviso = TerrenoEnvelhecido.Conferir(documento);
             if (aviso is not null)
             {
-                editor.WriteMessage($"\n  ATENÇÃO: {aviso}\n");
+                editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
             }
 
             // O rastro vive por todo o comando, e não só enquanto se traça:
@@ -74,7 +74,7 @@ public static class AlignmentCommands
 
             if (curta is not null)
             {
-                editor.WriteMessage($"\nAlinhamento não criado: {curta}.\n");
+                editor.WriteMessage(Tr.F("\nAlinhamento não criado: {0}.\n", curta));
                 return;
             }
 
@@ -89,7 +89,7 @@ public static class AlignmentCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao criar o alinhamento.", erro);
-            editor.WriteMessage($"\nNão consegui criar o alinhamento: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui criar o alinhamento: {0}\n", erro.Message));
         }
     }
 
@@ -109,15 +109,15 @@ public static class AlignmentCommands
             var registro = AlignmentStore.Ler(documento.Database);
 
             if (registro.Problem is { } problema)
-                editor.WriteMessage($"\n  ATENÇÃO: {problema}.\n");
+                editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", problema));
 
             if (registro.Items.Count == 0)
             {
-                editor.WriteMessage("\nNenhum alinhamento neste desenho.\n");
+                editor.WriteMessage(Tr.T("\nNenhum alinhamento neste desenho.\n"));
                 return;
             }
 
-            editor.WriteMessage($"\n{registro.Items.Count} alinhamento(s):\n");
+            editor.WriteMessage(Tr.F("\n{0} alinhamento(s):\n", registro.Items.Count));
 
             foreach (var alinhamento in registro.Items)
             {
@@ -128,7 +128,7 @@ public static class AlignmentCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao listar os alinhamentos.", erro);
-            editor.WriteMessage($"\nNão consegui listar os alinhamentos: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui listar os alinhamentos: {0}\n", erro.Message));
         }
     }
 
@@ -148,14 +148,13 @@ public static class AlignmentCommands
         var pontos = new List<Point3d>();
 
         editor.WriteMessage(
-            "\nTrace a linha de alinhamento em planta, com quantos pontos quiser. Enter termina.\n"
-            + "Ela é a referência de onde as fileiras começam; a cota vem do terreno.\n");
+            Tr.T("\nTrace a linha de alinhamento em planta, com quantos pontos quiser. Enter termina.\nEla é a referência de onde as fileiras começam; a cota vem do terreno.\n"));
 
         while (true)
         {
             var opcoes = pontos.Count == 0
-                ? new PromptPointOptions("\nPrimeiro ponto: ")
-                : new PromptPointOptions($"\nPróximo ponto <{pontos.Count} traçados, Enter termina>: ")
+                ? new PromptPointOptions(Tr.T("\nPrimeiro ponto: "))
+                : new PromptPointOptions(Tr.F("\nPróximo ponto <{0} traçados, Enter termina>: ", pontos.Count))
                 {
                     UseBasePoint = true,
                     BasePoint = pontos[^1],
@@ -169,7 +168,7 @@ public static class AlignmentCommands
 
             if (resposta.Status == PromptStatus.Cancel)
             {
-                editor.WriteMessage("\nAlinhamento não criado.\n");
+                editor.WriteMessage(Tr.T("\nAlinhamento não criado.\n"));
                 return null;
             }
 
@@ -182,7 +181,7 @@ public static class AlignmentCommands
 
         if (pontos.Count < 2)
         {
-            editor.WriteMessage("\nUm alinhamento precisa de pelo menos dois pontos. Alinhamento não criado.\n");
+            editor.WriteMessage(Tr.T("\nUm alinhamento precisa de pelo menos dois pontos. Alinhamento não criado.\n"));
             return null;
         }
 
@@ -202,11 +201,11 @@ public static class AlignmentCommands
         while (true)
         {
             var resposta = editor.GetPoint(new PromptPointOptions(
-                "\nClique de que lado da linha ficam as mesas: "));
+                Tr.T("\nClique de que lado da linha ficam as mesas: ")));
 
             if (resposta.Status != PromptStatus.OK)
             {
-                editor.WriteMessage("\nAlinhamento não criado.\n");
+                editor.WriteMessage(Tr.T("\nAlinhamento não criado.\n"));
                 return null;
             }
 
@@ -226,7 +225,7 @@ public static class AlignmentCommands
                 RegistroDeDiagnostico.Registrar("Não consegui decidir o lado do alinhamento.", erro);
 
                 editor.WriteMessage(
-                    $"\nNão consegui decidir o lado desse clique: {erro.Message}\n");
+                    Tr.F("\nNão consegui decidir o lado desse clique: {0}\n", erro.Message));
                 return null;
             }
 
@@ -234,7 +233,7 @@ public static class AlignmentCommands
 
             // Clique em cima da linha não é escolha: é a mão tremendo. Aceitar
             // aqui seria inventar uma decisão que o usuário não tomou.
-            editor.WriteMessage("\n  Você clicou em cima da linha. Clique para um dos lados.\n");
+            editor.WriteMessage(Tr.T("\n  Você clicou em cima da linha. Clique para um dos lados.\n"));
         }
     }
 
@@ -264,7 +263,7 @@ public static class AlignmentCommands
         if (vertices.Count < 2)
         {
             editor.WriteMessage(
-                "\nA linha ficou com um vértice só depois de assentar no terreno. Alinhamento não criado.\n");
+                Tr.T("\nA linha ficou com um vértice só depois de assentar no terreno. Alinhamento não criado.\n"));
             return;
         }
 
@@ -317,7 +316,7 @@ public static class AlignmentCommands
             if (problema is not null)
             {
                 editor.WriteMessage(
-                    $"\n  ATENÇÃO: {problema}. Rode CLIVUS_REINDEXAR para refazer o registro.\n");
+                    Tr.F("\n  ATENÇÃO: {0}. Rode CLIVUS_REINDEXAR para refazer o registro.\n", problema));
             }
         }
         catch (System.Exception erro)
@@ -325,8 +324,7 @@ public static class AlignmentCommands
             RegistroDeDiagnostico.Registrar("Alinhamento criado, mas não indexado.", erro);
 
             editor.WriteMessage(
-                $"\n  ATENÇÃO: o alinhamento está no desenho, mas não entrou no registro\n"
-                + $"  ({erro.Message}). Rode CLIVUS_REINDEXAR.\n");
+                Tr.F("\n  ATENÇÃO: o alinhamento está no desenho, mas não entrou no registro\n  ({0}). Rode CLIVUS_REINDEXAR.\n", erro.Message));
         }
 
         Relatar(editor, identidade, tracado, drapejada);
@@ -345,28 +343,25 @@ public static class AlignmentCommands
         var cotaMinima = drapejada.Vertices.Min(v => v.Z);
         var cotaMaxima = drapejada.Vertices.Max(v => v.Z);
 
-        editor.WriteMessage($"\nAlinhamento criado: {identidade.Describe()}\n");
-        editor.WriteMessage($"  comprimento em planta:  {PathSides.PlanLength(tracado):0.###} m\n");
-        editor.WriteMessage($"  pontos traçados:        {tracado.Count}\n");
+        editor.WriteMessage(Tr.F("\nAlinhamento criado: {0}\n", identidade.Describe()));
+        editor.WriteMessage(Tr.F("  comprimento em planta:  {0:0.###} m\n", PathSides.PlanLength(tracado)));
+        editor.WriteMessage(Tr.F("  pontos traçados:        {0}\n", tracado.Count));
         editor.WriteMessage(
-            $"  vértices no terreno:    {noTerreno} "
-            + $"({Math.Max(acrescentados, 0)} acrescentados no contorno do relevo)\n");
-        editor.WriteMessage($"  cotas:                  {cotaMinima:0.###} m a {cotaMaxima:0.###} m\n");
+            Tr.F("  vértices no terreno:    {0} ({1} acrescentados no contorno do relevo)\n", noTerreno, Math.Max(acrescentados, 0)));
+        editor.WriteMessage(Tr.F("  cotas:                  {0:0.###} m a {1:0.###} m\n", cotaMinima, cotaMaxima));
 
         if (drapejada.HasGaps)
         {
             // Sem este aviso, o trecho sem terreno fica com a cota que o
             // usuário clicou: plausível, e sem nada que o denuncie.
             editor.WriteMessage(
-                $"  ATENÇÃO: {drapejada.OutsideCount} vértice(s) caíram fora do terreno e ficaram\n"
-                + "  com a cota do clique. Reveja o traçado ou processe uma superfície maior.\n");
+                Tr.F("  ATENÇÃO: {0} vértice(s) caíram fora do terreno e ficaram\n  com a cota do clique. Reveja o traçado ou processe uma superfície maior.\n", drapejada.OutsideCount));
         }
 
         // O sentido importa e o usuário precisa saber disso: redesenhar a
         // mesma linha ao contrário troca o lado.
         editor.WriteMessage(
-            "  O lado vale para o sentido em que a linha foi traçada. Redesenhá-la ao\n"
-            + "  contrário trocaria os lados.\n");
+            Tr.T("  O lado vale para o sentido em que a linha foi traçada. Redesenhá-la ao\n  contrário trocaria os lados.\n"));
     }
 
     /// <summary>

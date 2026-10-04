@@ -20,7 +20,7 @@ internal static class MesasDoDesenho
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Não consegui ler as mesas do desenho.", erro);
-            problemas = [$"não consegui ler as mesas do desenho: {erro.Message}"];
+            problemas = [Tr.F("não consegui ler as mesas do desenho: {0}", erro.Message)];
             return [];
         }
     }
@@ -30,7 +30,7 @@ internal static class MesasDoDesenho
     internal static void Gravar(Database database, IReadOnlyList<DrawingTable> mesas)
     {
         if (DrawingTables.WhyInvalid(mesas) is { } motivo)
-            throw new InvalidOperationException($"As mesas do desenho não podem ser gravadas: {motivo}.");
+            throw new InvalidOperationException(Tr.F("As mesas do desenho não podem ser gravadas: {0}.", motivo));
 
         PluginDictionary.Save(database, DrawingTables.StorageKey, new ResultBuffer(
             DrawingTables.Encode(mesas).Select(c => new TypedValue((int)DxfCode.Text, c)).ToArray()));

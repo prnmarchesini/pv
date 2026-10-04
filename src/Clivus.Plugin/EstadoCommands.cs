@@ -16,7 +16,7 @@ namespace Clivus.Plugin;
 /// </summary>
 public static class EstadoCommands
 {
-    private const string MotivoDoUsuario = "pedido do usuário";
+    private static readonly string MotivoDoUsuario = Tr.N("pedido do usuário");
 
     /// <summary>CLIVUS_PENDENTE: clica numa peça da mesa, e a mesa fica suja e vermelha.</summary>
     [CommandMethod(PluginInfo.ComandoPendente)]
@@ -29,8 +29,8 @@ public static class EstadoCommands
 
         try
         {
-            var opcoes = new PromptEntityOptions("\nClique numa peça da mesa a marcar como pendente: ");
-            opcoes.SetRejectMessage("\nIsso não é uma peça de mesa do plugin.");
+            var opcoes = new PromptEntityOptions(Tr.T("\nClique numa peça da mesa a marcar como pendente: "));
+            opcoes.SetRejectMessage(Tr.T("\nIsso não é uma peça de mesa do plugin."));
             opcoes.AddAllowedClass(typeof(Entity), false);
 
             var resposta = editor.GetEntity(opcoes);
@@ -43,7 +43,7 @@ public static class EstadoCommands
 
             if (guid is null)
             {
-                editor.WriteMessage("\nPENDENTE Isso não é uma peça de mesa do plugin.\n");
+                editor.WriteMessage(Tr.T("\nPENDENTE Isso não é uma peça de mesa do plugin.\n"));
                 return;
             }
 
@@ -51,24 +51,24 @@ public static class EstadoCommands
 
             if (!mesas.TryGetValue(guid.Value, out var mesa) || mesa.Identity is null)
             {
-                editor.WriteMessage("\nPENDENTE A mesa dessa peça não tem mais contorno; não há onde gravar o estado.\n");
+                editor.WriteMessage(Tr.T("\nPENDENTE A mesa dessa peça não tem mais contorno; não há onde gravar o estado.\n"));
                 return;
             }
 
             var pintadas = TableState.MarkDirty(transacao, mesa, MotivoDoUsuario);
             transacao.Commit();
 
-            editor.WriteMessage($"\nPENDENTE {mesa.Identity.Label} pendente ({MotivoDoUsuario}); {pintadas} peça(s) pintada(s) de vermelho.\n");
+            editor.WriteMessage(Tr.F("\nPENDENTE {0} pendente ({1}); {2} peça(s) pintada(s) de vermelho.\n", mesa.Identity.Label, Tr.T(MotivoDoUsuario), pintadas));
             GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
         }
         catch (Autodesk.AutoCAD.Runtime.Exception erro) when (erro.ErrorStatus == ErrorStatus.OnLockedLayer)
         {
-            editor.WriteMessage("\nPENDENTE Uma peça da mesa está em camada bloqueada; desbloqueie as camadas da usina e repita.\n");
+            editor.WriteMessage(Tr.T("\nPENDENTE Uma peça da mesa está em camada bloqueada; desbloqueie as camadas da usina e repita.\n"));
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao marcar a mesa como pendente.", erro);
-            editor.WriteMessage($"\nNão consegui marcar a mesa como pendente: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui marcar a mesa como pendente: {0}\n", erro.Message));
         }
     }
 
@@ -92,7 +92,7 @@ public static class EstadoCommands
 
             if (mesa is null)
             {
-                editor.WriteMessage("\nPENDENTE Nenhuma mesa no desenho.\n");
+                editor.WriteMessage(Tr.T("\nPENDENTE Nenhuma mesa no desenho.\n"));
                 return;
             }
 
@@ -100,13 +100,13 @@ public static class EstadoCommands
             transacao.Commit();
 
             editor.WriteMessage(
-                $"\nPENDENTE {mesa.Identity!.Label} pendente ({MotivoDoUsuario}); {pintadas} peça(s) pintada(s) de vermelho.\n"
+                Tr.F("\nPENDENTE {0} pendente ({1}); {2} peça(s) pintada(s) de vermelho.\n", mesa.Identity!.Label, Tr.T(MotivoDoUsuario), pintadas)
                 + $"  PENDENTE_GUID {mesa.Identity.Id:D} pecas={pintadas}\n");
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao marcar a mesa como pendente automaticamente.", erro);
-            editor.WriteMessage($"\nNão consegui marcar a mesa como pendente: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui marcar a mesa como pendente: {0}\n", erro.Message));
         }
     }
 
@@ -136,23 +136,23 @@ public static class EstadoCommands
             var sujas = comContorno.Where(m => m.Identity!.Dirty).ToList();
 
             editor.WriteMessage(
-                $"\nESTADO {comContorno.Count} mesa(s), {comContorno.Count - sujas.Count} limpa(s), {sujas.Count} pendente(s)"
-                + (semContorno > 0 ? $", {semContorno} com peças órfãs (sem contorno)" : string.Empty) + "\n");
+                Tr.F("\nESTADO {0} mesa(s), {1} limpa(s), {2} pendente(s)", comContorno.Count, comContorno.Count - sujas.Count, sujas.Count)
+                + (semContorno > 0 ? ", " + Tr.F("{0} com peças órfãs (sem contorno)", semContorno) : string.Empty) + "\n");
 
             foreach (var mesa in sujas)
                 editor.WriteMessage($"  {mesa.Identity!.DescribeState()}\n");
 
-            editor.WriteMessage($"  {removidas.Items.Count} removida(s)" + (removidas.Items.Count > 0 ? ":" : ".") + "\n");
+            editor.WriteMessage(Tr.F("  {0} removida(s){1}\n", removidas.Items.Count, removidas.Items.Count > 0 ? ":" : "."));
 
             foreach (var remocao in removidas.Items)
                 editor.WriteMessage($"  {remocao.Describe()}\n");
 
-            if (removidas.Problem is not null) editor.WriteMessage($"  ATENÇÃO: {removidas.Problem}.\n");
+            if (removidas.Problem is not null) editor.WriteMessage(Tr.F("  ATENÇÃO: {0}.\n", removidas.Problem));
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao ler o estado das mesas.", erro);
-            editor.WriteMessage($"\nNão consegui ler o estado: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui ler o estado: {0}\n", erro.Message));
         }
     }
 }

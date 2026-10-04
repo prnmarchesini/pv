@@ -14,12 +14,12 @@ internal sealed class JanelaDeCadastroDeModulo : Window
 {
     private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
 
-    private readonly TextBox _marca = Campo("Fabricante, como no datasheet.");
-    private readonly TextBox _modelo = Campo("Modelo, como no datasheet. É por ele que o perfil de mesa acha o módulo.");
-    private readonly TextBox _potencia = Campo("Potência de pico, em Wp (720, não 0,72).");
-    private readonly TextBox _altura = Campo("Lado maior do módulo, em metro.");
-    private readonly TextBox _largura = Campo("Lado menor do módulo, em metro.");
-    private readonly TextBox _espessura = Campo("Espessura com a moldura, em metro.");
+    private readonly TextBox _marca = Campo(Tr.T("Fabricante, como no datasheet."));
+    private readonly TextBox _modelo = Campo(Tr.T("Modelo, como no datasheet. É por ele que o perfil de mesa acha o módulo."));
+    private readonly TextBox _potencia = Campo(Tr.T("Potência de pico, em Wp (720, não 0,72)."));
+    private readonly TextBox _altura = Campo(Tr.T("Lado maior do módulo, em metro."));
+    private readonly TextBox _largura = Campo(Tr.T("Lado menor do módulo, em metro."));
+    private readonly TextBox _espessura = Campo(Tr.T("Espessura com a moldura, em metro."));
     private readonly TextBlock _recado = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0), FontSize = 12 };
 
     /// <summary>O módulo cadastrado, ou null se não houve cadastro.</summary>
@@ -28,7 +28,7 @@ internal sealed class JanelaDeCadastroDeModulo : Window
     /// <param name="partida">Medidas para começar (as que estão na janela de Mesa), ou null.</param>
     internal JanelaDeCadastroDeModulo(SolarModule? partida)
     {
-        Title = "Clivus Solar — Cadastrar módulo";
+        Title = Tr.T("Clivus Solar — Cadastrar módulo");
         Width = 380;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
@@ -43,16 +43,16 @@ internal sealed class JanelaDeCadastroDeModulo : Window
             pilha.Children.Add(campo);
         }
 
-        Linha("Marca", _marca);
-        Linha("Modelo", _modelo);
-        Linha("Potência (Wp)", _potencia);
-        Linha("Altura (m)", _altura);
-        Linha("Largura (m)", _largura);
-        Linha("Espessura (m)", _espessura);
+        Linha(Tr.T("Marca"), _marca);
+        Linha(Tr.T("Modelo"), _modelo);
+        Linha(Tr.T("Potência (Wp)"), _potencia);
+        Linha(Tr.T("Altura (m)"), _altura);
+        Linha(Tr.T("Largura (m)"), _largura);
+        Linha(Tr.T("Espessura (m)"), _espessura);
 
         pilha.Children.Add(new TextBlock
         {
-            Text = $"Vai para o serviço em {FonteDeModulos.Endereco}.",
+            Text = Tr.F("Vai para o serviço em {0}.", FonteDeModulos.Endereco),
             FontSize = 11,
             Foreground = Brushes.Gray,
             Margin = new Thickness(0, 6, 0, 0),
@@ -60,10 +60,10 @@ internal sealed class JanelaDeCadastroDeModulo : Window
         pilha.Children.Add(_recado);
 
         var botoes = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
-        var cadastrar = new Button { Content = "Cadastrar", Width = 100, Height = 26, IsDefault = true, ToolTip = "Grava o módulo no serviço; ele aparece na lista de modelos da janela de Mesa." };
+        var cadastrar = new Button { Content = Tr.T("Cadastrar"), Width = 100, Height = 26, IsDefault = true, ToolTip = Tr.T("Grava o módulo no serviço; ele aparece na lista de modelos da janela de Mesa.") };
         cadastrar.Click += (_, _) => Cadastrar();
         botoes.Children.Add(cadastrar);
-        botoes.Children.Add(new Button { Content = "Cancelar", Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true });
+        botoes.Children.Add(new Button { Content = Tr.T("Cancelar"), Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true });
         pilha.Children.Add(botoes);
 
         Content = pilha;
@@ -72,10 +72,12 @@ internal sealed class JanelaDeCadastroDeModulo : Window
         {
             // Campo que não deu para ler na janela de Mesa chega como zero;
             // zero na caixa só atrapalha.
-            _potencia.Text = Partida(partida.PowerWatts);
-            _altura.Text = Partida(partida.Height);
-            _largura.Text = Partida(partida.Width);
-            _espessura.Text = Partida(partida.Thickness);
+            // A potência fica na cultura brasileira: o ponto, na leitura dela
+            // (NumberInput.TryParseLarge), é milhar, e "545.5" não seria lido.
+            _potencia.Text = Partida(partida.PowerWatts, Brasil);
+            _altura.Text = Partida(partida.Height, Tr.Culture);
+            _largura.Text = Partida(partida.Width, Tr.Culture);
+            _espessura.Text = Partida(partida.Thickness, Tr.Culture);
         }
     }
 
@@ -90,13 +92,13 @@ internal sealed class JanelaDeCadastroDeModulo : Window
                 || !NumberInput.TryParseMeasure(_largura.Text, out var largura)
                 || !NumberInput.TryParseMeasure(_espessura.Text, out var espessura))
             {
-                Dizer("Preencha potência, altura, largura e espessura com números.", erro: true);
+                Dizer(Tr.T("Preencha potência, altura, largura e espessura com números."), erro: true);
                 return;
             }
 
             if (string.IsNullOrWhiteSpace(_modelo.Text))
             {
-                Dizer("O modelo está em branco.", erro: true);
+                Dizer(Tr.T("O modelo está em branco."), erro: true);
                 return;
             }
 
@@ -116,7 +118,7 @@ internal sealed class JanelaDeCadastroDeModulo : Window
         {
             // Manipulador de evento do WPF: exceção solta aqui fecha o Civil 3D.
             RegistroDeDiagnostico.Registrar("Falha ao cadastrar módulo.", erro);
-            Dizer($"Não consegui cadastrar: {erro.Message}", erro: true);
+            Dizer(Tr.F("Não consegui cadastrar: {0}", erro.Message), erro: true);
         }
     }
 
@@ -126,6 +128,6 @@ internal sealed class JanelaDeCadastroDeModulo : Window
         _recado.Text = recado;
     }
 
-    private static string Partida(double valor) =>
-        double.IsFinite(valor) && valor > 0 ? valor.ToString("0.###", Brasil) : string.Empty;
+    private static string Partida(double valor, CultureInfo cultura) =>
+        double.IsFinite(valor) && valor > 0 ? valor.ToString("0.###", cultura) : string.Empty;
 }

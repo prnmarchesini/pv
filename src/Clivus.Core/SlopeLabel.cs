@@ -20,8 +20,6 @@ public enum SlopeUnit
 /// </summary>
 public static class SlopeLabel
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>Desnível abaixo do qual a mesa é plana e não leva seta: um milímetro.</summary>
     public const double FlatDrop = 0.001;
 
@@ -41,8 +39,8 @@ public static class SlopeLabel
         var tangente = Math.Abs(drop) / planLength;
 
         return unit == SlopeUnit.Degrees
-            ? $"{(Math.Atan(tangente) * 180 / Math.PI).ToString("0.0", Brasil)}°"
-            : $"{(tangente * 100).ToString("0.0", Brasil)}%";
+            ? $"{(Math.Atan(tangente) * 180 / Math.PI).ToString("0.0", Tr.Culture)}°"
+            : $"{(tangente * 100).ToString("0.0", Tr.Culture)}%";
     }
 
     /// <summary>Se a mesa é plana (não leva seta).</summary>

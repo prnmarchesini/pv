@@ -58,7 +58,7 @@ public sealed record ProcessedRow(
     /// <summary>A linha que descreve a fileira para o usuário.</summary>
     public string Describe() =>
         $"F{Row.Number}: {Solution.Describe()}"
-        + (PillarProblemCount > 0 ? $", {PillarProblemCount} pilar(es) com problema" : string.Empty);
+        + (PillarProblemCount > 0 ? ", " + Tr.F("{0} pilar(es) com problema", PillarProblemCount) : string.Empty);
 }
 
 /// <summary>
@@ -316,7 +316,7 @@ public static class RowPipeline
         // junta a nota (quem escolheu) com a contagem.
         var estourou = viavel.Problem is not null || estouros > viavel.ToleratedModules;
         var motivoDaMarca = estourou && !marked
-            ? string.Join("; ", new[] { note, viavel.Problem ?? $"{estouros} módulo(s) fora da faixa, e a tolerância é {viavel.ToleratedModules}" }.Where(t => !string.IsNullOrWhiteSpace(t)))
+            ? string.Join("; ", new[] { note, viavel.Problem ?? Tr.F("{0} módulo(s) fora da faixa, e a tolerância é {1}", estouros, viavel.ToleratedModules) }.Where(t => !string.IsNullOrWhiteSpace(t)))
             : note;
 
         var resolvida = new SolvedTable(cell.Label, startElevation, endElevation, estouros, marked || estourou, motivoDaMarca, Seated: marked || estourou);
@@ -368,8 +368,9 @@ public static class RowPipeline
             if (avanco > vao + 1e-6)
             {
                 avisos.Add(
-                    $"as pontas altas de {a.Label} e {b.Label} avançam {avanco:0.00} m uma sobre a outra "
-                    + $"e o vão entre elas é {vao:0.00} m: o giro faz as mesas se cruzarem");
+                    Tr.F(
+                        "as pontas altas de {0} e {1} avançam {2:0.00} m uma sobre a outra e o vão entre elas é {3:0.00} m: o giro faz as mesas se cruzarem",
+                        a.Label, b.Label, avanco, vao));
             }
         }
 

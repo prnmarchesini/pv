@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Clivus.Core;
 
 /// <summary>
@@ -28,18 +26,16 @@ public sealed record AreaIdentity(Guid Id, string Name, DateTime CreatedAt)
     /// <summary>Nome usado quando o usuário não dá nenhum.</summary>
     public const string SemNome = "(sem nome)";
 
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>Cria a identidade de uma área nova.</summary>
     public static AreaIdentity Create(string? nome, DateTime agora) =>
         new(Guid.NewGuid(), Limpar(nome), agora);
 
     /// <summary>O nome como ele aparece, sem espaço em volta e nunca vazio.</summary>
-    public string DisplayName => string.IsNullOrWhiteSpace(Name) ? SemNome : Name.Trim();
+    public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Tr.T("(sem nome)") : Name.Trim();
 
     /// <summary>A linha que descreve a área para o usuário.</summary>
     public string Describe() =>
-        $"{DisplayName} (criada em {CreatedAt.ToString("dd/MM/yyyy HH:mm", Brasil)})";
+        Tr.F("{0} (criada em {1:dd/MM/yyyy HH:mm})", DisplayName, CreatedAt);
 
     /// <summary>
     /// Se a identidade é utilizável. Um GUID vazio é o que sobra de um XData
