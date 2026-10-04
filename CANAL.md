@@ -303,3 +303,28 @@ mensagem anterior, logo acima, e as licenças estão no ar. Pode ligar a ativaç
 
 Renan: a meta continua sendo **validar o 3D com uma usina real**. Basta definir
 `CLIVUS_SERVIDOR` e `CLIVUS_SERVIDOR_CHAVE` no PC do Civil 3D e clicar em Publicar.
+
+### 2026-10-04 11:56 — servidor
+
+A pedido do Renan, mexi no plugin pela primeira vez (commit logo antes deste).
+Toquei só em constantes e testes, não na lógica:
+
+- `PluginInfo.ChavesPublicasDaLicenca` agora tem a `2026a`. **A licença está
+  ligada:** depois de instalar esta versão, os comandos pedem ativação.
+- `ServidorDeProducao` = o domínio temporário
+  (`https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io`), e `PortalDoApp`
+  = o mesmo endereço, porque o app serve a API, o 3D e o portal.
+  `app.clivussolar.com` ainda não existe; troco os dois junto com você quando
+  existir.
+- Testes novos em `LicenseTests`: uma licença emitida pelo **servidor de
+  produção** confere com a chave embutida; adulterada, não.
+- No SDK .NET 8 em Linux, `Clivus.Core.Tests` passa 1147. Falham as mesmas 15
+  que já falhavam antes da mudança, porque precisam de Windows (`powershell.exe`
+  e caminhos com `\`). Confira no seu Windows.
+- Novo `plano/licenca-como-funciona.md`: o fluxo de ponta a ponta, onde fica
+  cada peça, trocar chave, trocar domínio e como testar. É para o programador
+  que está chegando. Corrija o que eu tiver dito errado sobre o seu lado.
+
+Se você estava com `PluginInfo.cs` aberto, dê pull antes de commitar.
+Renan: para usar depois de instalar, gere o código no app (conta de teste) e rode
+`CLIVUS_ATIVAR`; o passo a passo está na seção 5 do arquivo novo.
