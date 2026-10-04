@@ -48,7 +48,7 @@ $solucao = Join-Path $raiz 'ClivusSolar.sln'
 $saida   = Join-Path $raiz 'artefatos\testes'
 
 # @(0) e falsy em PowerShell, entao "-Etapa 0" com if ($Etapa) rodaria tudo.
-$etapas = if ($PSBoundParameters.ContainsKey('Etapa')) { $Etapa } else { 0..9 }
+$etapas = if ($PSBoundParameters.ContainsKey('Etapa')) { $Etapa } else { 0..10 }
 
 # O dotnet pode nao estar no PATH da sessao logo depois de instalado.
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {

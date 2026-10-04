@@ -104,6 +104,34 @@ Esta seção existe porque o resto do arquivo é diário de decisões, e diário
 responde "e agora?". Ela fica no topo de propósito. **Quem retomar o trabalho
 lê isto primeiro, e depois `CLAUDE.md`.**
 
+### 04/10/2026: etapa 10 (idiomas) aberta
+
+Renan: "Quero ter web e plug-in multi linguagem, iniciando por inglês e
+espanhol" e "comandos CAD também". Plano e decisões em
+`plano/etapas/etapa-10-idiomas.md` (o português é a chave; catálogos `en` e
+`es`; Configurações > Idioma com Automático; camadas, blocos, XData e nomes
+globais dos comandos não mudam; nomes digitáveis em inglês e espanhol).
+
+| passo | estado |
+|---|---|
+| 10.1 mecanismo (Core) | VALIDADO (automático) |
+| 10.2 guarda (teste) | VALIDADO (automático) |
+| 10.3 Idioma, ribbon e janelas | PENDENTE |
+| 10.4 mensagens e relatórios | PENDENTE |
+| 10.5 comandos em inglês e espanhol | PENDENTE |
+| 10.6 instalador | PENDENTE |
+| 10.7 landing | PENDENTE |
+| 10.8 app | PENDENTE |
+
+10.1: `Tr` no Core (`Tr.T`, `Tr.F`, `Tr.Current`, `Tr.Culture`, `Tr.Resolve`),
+catálogos embutidos `src/Clivus.Core/Translations/{en,es}.json`; frase sem
+tradução volta em português e fica em `Tr.Missing`. Assumi: espanhol com
+vírgula decimal (cultura "es"), inglês en-US; idioma desconhecido no
+automático vira português. 10.2: `TranslationCatalogTests` (toda frase de
+`Tr` com tradução e os mesmos marcadores; nada sobrando; `$"..."` dentro de
+`Tr` reprovado) e `tools/traducoes.py` (lista, exporta o que falta, junta,
+limpa).
+
 ### 01/10/2026: etapa 8 (Melhorias.docx) feita inteira
 
 O Renan deixou a revisão dos menus em `0 - Assets/Melhorias.docx`; virou a

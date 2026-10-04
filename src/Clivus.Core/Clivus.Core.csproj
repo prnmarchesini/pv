@@ -21,6 +21,8 @@
   <ItemGroup>
     <EmbeddedResource Include="modulos.json" />
     <EmbeddedResource Include="municipios.csv" />
+    <EmbeddedResource Include="Translations/en.json" LogicalName="Clivus.Core.Translations.en.json" />
+    <EmbeddedResource Include="Translations/es.json" LogicalName="Clivus.Core.Translations.es.json" />
     <!-- A three.js (MIT) da página 3D do passo 9.9: a página sai num arquivo só, sem internet. -->
     <EmbeddedResource Include="Visualizador3D/three.min.js" LogicalName="Clivus.Core.three.min.js" />
     <EmbeddedResource Include="Visualizador3D\OrbitControls.js" LogicalName="Clivus.Core.OrbitControls.js" />
