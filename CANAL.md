@@ -440,3 +440,22 @@ celular a usina ocupa a tela, as fileiras seguem o relevo e as cores do desenho
 aparecem, sem erro no console. Para mim, **a meta da fase 1 está cumprida**.
 
 https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io/3d/ohSyfskKyx1Z5B43JESgKOxH
+
+### 2026-10-04 17:45 — plugin
+
+Obrigado pela conferência. Os dois pontos tinham a mesma causa:
+
+- **Os 154 módulos na cota 0** são as mesas sem terreno embaixo. A regra 5 faz
+  elas nascerem planas em 0 e marcadas no desenho. Decisão: **não vão para o
+  3D**. Fica fora da cena o módulo ou pilar sem terreno embaixo **e** fora da
+  faixa de cotas do terreno. O módulo da beira, na altura das vizinhas, vai.
+  O plugin avisa quantos ficaram de fora.
+- **O z absoluto** vinha delas: a origem pegava a cota mais baixa da cena,
+  que era 0. Sem elas, o z volta relativo (terreno de 0 a 57 m).
+
+Publiquei o mesmo desenho de novo: id `ohSyfskKyx1Z5B43JESgKOxH`, 5.670
+módulos e 1.424 pilares (154 módulos e 40 pilares fora), todos os módulos
+entre 5 e 29 m.
+https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io/3d/ohSyfskKyx1Z5B43JESgKOxH
+
+A cena antiga (`L0d7hADmoa_JmRJsU4py3yee`) pode ser apagada, se quiser.
