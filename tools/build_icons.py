@@ -168,6 +168,11 @@ def icones():
         'edicao': ([T(mesa(3, 17, 15, 8)), T('M15,17 L25,7 L28,10 L18,20 L14,21 Z'), ambar_cheio('M15,17 L18,20 L14,21 Z')],
                    [t(mesa(3, 17, 15, 8)), t('M16,17 L26,7')]),
         'objetos': (arvore32[:2] + [ambar_cheio(modulo(26, 26, 6, 4))], arvore16),
+        # Elétrica: o raio (configuração elétrica) e a lista com raio (resumo).
+        'eletrica': ([T('M18,3 L8,18 H16 L13,29 L24,13 H16 Z').replace('fill="none"', f'fill="{AMBAR}"')],
+                     [t('M18,3 L8,18 H16 L13,29 L24,13 H16 Z')]),
+        'resumo_eletrico': ([T('M4,8 H15 M4,16 H15 M4,24 H15'), ambar_cheio('M24,4 L18,16 H23 L21,28 L28,14 H23 Z')],
+                            [t('M4,9 H14 M4,17 H14 M4,25 H14'), ambar_cheio('M24,4 L18,16 H23 L21,28 L28,14 H23 Z')]),
         # Elétrica (11.1): dois módulos ligados pelo cabo da string, + e -.
         'string': ([T(modulo(9, 10, 9, 6)), T(modulo(23, 10, 9, 6)), ambar_traco('M9,14 C9,24 23,24 23,14', L),
                     ambar_traco('M3,27 H9 M6,24 V30', L), T('M23,27 H29')],

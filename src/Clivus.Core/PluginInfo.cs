@@ -4,7 +4,7 @@ namespace Clivus.Core;
 /// Identificacao do plugin. Mora no Core, e nao no Plugin, para a mensagem que
 /// o usuario le poder ser testada sem abrir o AutoCAD.
 /// </summary>
-public static class PluginInfo
+public static partial class PluginInfo
 {
     /// <summary>Nome do plugin como aparece para o usuario.</summary>
     public const string Nome = "Clivus Solar";
@@ -230,6 +230,15 @@ public static class PluginInfo
 
     /// <summary>A biblioteca de tipos de string pela linha de comando. Para o nível 2.</summary>
     public const string ComandoStringTipoAutomatico = "CLIVUS_STRING_TIPO_AUTO";
+
+    /// <summary>Strings de teste, uma por fileira de cada mesa (só no build de teste; nível 2 da parte elétrica).</summary>
+    public const string ComandoStringsTesteAutomatico = "CLIVUS_STRINGS_TESTE_AUTO";
+
+    /// <summary>A janela da configuração elétrica (etapas 12 a 15): abas Subestação, Transformador, Inversor e Numeração.</summary>
+    public const string ComandoEletrica = "CLIVUS_ELETRICA";
+
+    /// <summary>O resumo do sistema elétrico pela cadeia de vínculo (etapa 16).</summary>
+    public const string ComandoEletricaResumo = "CLIVUS_ELETRICA_RESUMO";
 
     /// <summary>A janela da licença: o código gerado no portal do app ativa o plugin nesta máquina.</summary>
     public const string ComandoAtivar = "CLIVUS_ATIVAR";

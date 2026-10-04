@@ -116,6 +116,34 @@ internal static class PluginXData
     }
 
     /// <summary>
+    /// Todos os campos de texto gravados (para registros de tamanho variável,
+    /// como a lista de módulos da string), ou null se não for deste tipo e
+    /// versão ou se tiver menos que <paramref name="minimo"/> campos.
+    /// </summary>
+    internal static IReadOnlyList<string>? LoadAll(Entity entidade, string tipo, int versao, int minimo)
+    {
+        ArgumentNullException.ThrowIfNull(entidade);
+
+        try
+        {
+            using var dados = entidade.GetXDataForApplication(Aplicativo);
+            if (dados is null) return null;
+
+            var campos = dados.AsArray();
+            if (campos.Length < 3 + minimo) return null;
+            if (campos[1].Value as string != tipo) return null;
+            if (Convert.ToInt32(campos[2].Value, CultureInfo.InvariantCulture) != versao) return null;
+
+            return campos.Skip(3).Select(c => c.Value as string ?? string.Empty).ToList();
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar($"Não consegui ler o XData de uma entidade ({tipo}).", erro);
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Registra o aplicativo na tabela do desenho, se ainda não estiver.
     ///
     /// Sem este registro o AutoCAD descarta o XData sem avisar: a gravação

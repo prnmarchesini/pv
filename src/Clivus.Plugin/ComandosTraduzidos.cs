@@ -240,6 +240,18 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_INCLINACION")]
     public static void CLIVUS_INCLINACION() => DeclividadeCommands.Declividade();
 
+    [CommandMethod("CLIVUS_ELECTRICAL")]
+    public static void CLIVUS_ELECTRICAL() => ConfiguracaoEletricaCommands.Eletrica();
+
+    [CommandMethod("CLIVUS_ELECTRICA")]
+    public static void CLIVUS_ELECTRICA() => ConfiguracaoEletricaCommands.Eletrica();
+
+    [CommandMethod("CLIVUS_ELECTRICAL_SUMMARY")]
+    public static void CLIVUS_ELECTRICAL_SUMMARY() => ResumoEletricoCommands.Resumo();
+
+    [CommandMethod("CLIVUS_ELECTRICA_RESUMEN")]
+    public static void CLIVUS_ELECTRICA_RESUMEN() => ResumoEletricoCommands.Resumo();
+
     [CommandMethod("CLIVUS_STATUS", CommandFlags.Modal | CommandFlags.NoUndoMarker)]
     public static void CLIVUS_STATUS() => EstadoCommands.Estado();
 

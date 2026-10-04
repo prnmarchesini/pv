@@ -108,6 +108,8 @@ public static class RibbonLayout
             new(Tr.N("Elétrica"),
             [
                 B(Tr.N("String"), PluginInfo.ComandoString, Tr.N("Os tipos de string (a biblioteca) e a geração do traçado das strings sobre os módulos."), "string", grande: true),
+                B(Tr.N("Configuração elétrica"), PluginInfo.ComandoEletrica, Tr.N("Subestação, transformadores, inversores (com a alocação das strings) e a numeração das strings."), "eletrica", grande: true),
+                B(Tr.N("Resumo elétrico"), PluginInfo.ComandoEletricaResumo, Tr.N("O sistema inteiro pela cadeia de vínculo: subestações, trafos, inversores, strings, módulos e potência."), "resumo_eletrico"),
             ]),
             new(Tr.N("Saída"),
             [

@@ -56,6 +56,12 @@ internal static class LayoutLayers
     /// <summary>A sombra desenhada no terreno (9.7).</summary>
     internal const string Sombra = Prefixo + "SOMBRA";
 
+    /// <summary>O traçado das strings sobre os módulos (elétrica, etapa 11).</summary>
+    internal const string String = Prefixo + "STRING";
+
+    /// <summary>Os retângulos e tags dos equipamentos em campo: subestação, trafo, inversor (etapas 12 a 14).</summary>
+    internal const string Equipamento = Prefixo + "EQUIPAMENTO";
+
     /// <summary>Os módulos marcados pela sombra (9.7): a marca é cor na peça; a camada é a dos textos de sombra.</summary>
     internal const string SombraTexto = Prefixo + "SOMBRA_TEXTO";
 
