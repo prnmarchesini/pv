@@ -34,3 +34,6 @@ artefatos/
 # Desenho que vira referência de teste não fica aqui: ele entra em
 # tests/acervo/ e no MANIFESTO.sha256, congelado (ver plano/04-testes.md).
 0 - Assets/
+
+# O pacote do plugin que o instalador embute (gerado por tools/gerar-instalador.ps1).
+src/Clivus.Instalador/bundle.zip

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    O instalador do Clivus Solar (04/10/2026): um setup.exe só, com o bundle
+    do plugin dentro (bundle.zip, montado por tools\gerar-instalador.ps1 e
+    fora do git). Instala para o usuário, sem pedir administrador
+    (plano/seguranca.md), e aparece em "Adicionar ou remover programas".
+    Depende do .NET 8 Desktop, que o Civil 3D 2026 já instala.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>ClivusSolar-Setup</AssemblyName>
+    <RootNamespace>Clivus.Instalador</RootNamespace>
+    <ApplicationIcon>..\Clivus.Plugin\Resources\Branding\clivus.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Clivus.Core\Clivus.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="bundle.zip" LogicalName="bundle.zip" Condition="Exists('bundle.zip')" />
+    <Resource Include="..\Clivus.Plugin\Resources\Branding\clivus-logo-480.png" Link="Resources\clivus-logo-480.png" />
+    <Resource Include="..\Clivus.Plugin\Resources\Branding\clivus.ico" Link="Resources\clivus.ico" />
+  </ItemGroup>
+
+</Project>

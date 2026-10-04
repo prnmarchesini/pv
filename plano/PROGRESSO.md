@@ -4870,3 +4870,45 @@ Roteiro de tela:
 2. Configurações > Sobre: o logo e a versão.
 3. Edição > Marcar pendente numa mesa; Estado lista "pendente";
    Recalcular pendentes.
+
+### 04/10/2026: segurança, ativação e instalador
+
+**Segurança** (`plano/seguranca.md`; Renan: "dentro do bom senso"): o plugin
+só fala HTTPS (http só no próprio computador, para os testes), só abre link
+que é do próprio servidor, a licença carrega o `kid` da chave que a assinou
+(troca de chave sem reinstalar). O que é do servidor e da VPS ficou listado
+para o outro agente em `CANAL.md`.
+
+**Ativação** (`plano/contrato-ativacao.md`; fluxo do Renan: o usuário entra
+no portal do app, gera o código, coloca no plugin e ativa):
+- Botão "Ativar" no painel Configurações (`CLIVUS_ATIVAR`): o logo, o campo
+  do código, o link "Gerar meu código no portal".
+- A licença é assinada pelo servidor (ECDSA P-256) e presa à máquina
+  (SHA-256 do MachineGuid); fica em `%LOCALAPPDATA%\Clivus Solar\licenca.txt`
+  e é revalidada em segundo plano. Sem licença válida, os comandos do Clivus
+  são barrados (Ativar, Sobre e Migrar ficam livres).
+- **Desligada por enquanto**: só liga quando o servidor mandar a chave
+  pública (vai em `PluginInfo.ChavesPublicasDaLicenca`). Até lá, tudo
+  funciona como antes.
+- Nível 2 `clivus-ativar`: servidor falso assinando licenças; comando barrado
+  sem licença e liberado depois de ativar.
+
+**Instalador** (`src/Clivus.Instalador`, `tools/gerar-instalador.ps1`):
+- Um arquivo só, `artefatos\instalador\ClivusSolar-Setup-<versão>.exe`
+  (2,6 MB, com o `.sha256` ao lado), com o plugin dentro.
+- Instala para o usuário, sem pedir administrador; confere se há Civil 3D
+  2026; recusa com o AutoCAD aberto; tira a versão anterior e o UFV.bundle;
+  aparece em "Adicionar ou remover programas" com desinstalar.
+- Modo silencioso para o site e os testes (`/silencioso`, `/log=`).
+- Sem certificado de assinatura ainda (o Windows mostra "editor
+  desconhecido"); `-Certificado` no script assina quando houver.
+- A bateria gera o instalador, instala numa pasta de teste, confere arquivos
+  e registro, desinstala e confere que saiu (linha "Instalador").
+
+Bateria: Etapa 0 a 9, nível 2 39/39, Serviço 24/24, Instalador, Acervo:
+tudo verde.
+
+Roteiro de tela (quando a chave do servidor chegar):
+1. Rode `ClivusSolar-Setup-0.1.0.exe`, Instalar, abra o Civil 3D.
+2. Qualquer botão do Clivus avisa que precisa ativar; Configurações >
+   Ativar, cole o código gerado no portal do app: "Ativado".

@@ -65,7 +65,7 @@ function Escrever-Linha {
         'FALHOU' { 'Red' }
         default  { 'DarkGray' }
     }
-    Write-Host ('{0,-10}{1,-9}' -f $Rotulo, $Placar) -NoNewline
+    Write-Host ('{0,-11}{1,-9}' -f $Rotulo, $Placar) -NoNewline
     Write-Host $Situacao -ForegroundColor $cor
 }
 
@@ -281,6 +281,65 @@ if (-not (Test-Path $servidor)) {
     } else {
         Escrever-Linha 'Servico' "$passouServico/$totalServico" 'FALHOU'
         $problemas.Add("servidor/ (pytest) falhou:`n$saida")
+    }
+}
+
+# ---- instalador -------------------------------------------------------------
+# Gera o ClivusSolar-Setup.exe e instala e desinstala em silencio numa pasta
+# de teste (/teste=: plugins e dados dentro dela, registro com "_Teste"), sem
+# tocar a instalacao de verdade. O Civil 3D desta maquina e conferido como no
+# cliente. Precisa do AutoCAD fechado (como o instalador de verdade).
+
+if (-not $PSBoundParameters.ContainsKey('Etapa')) {
+    $falhasDoInstalador = @()
+    $logDoInstalador = Join-Path (Join-Path $raiz 'artefatos\testes') 'instalador-gerar.log'
+    $pastaDoTeste = Join-Path $env:TEMP ('clivus-instalador-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+
+    try {
+        & (Join-Path $PSScriptRoot 'gerar-instalador.ps1') *> $logDoInstalador
+        $exe = Get-ChildItem (Join-Path $raiz 'artefatos\instalador') -Filter 'ClivusSolar-Setup-*.exe' | Sort-Object LastWriteTime | Select-Object -Last 1
+
+        if (-not $exe) {
+            $falhasDoInstalador += "o instalador nao foi gerado (veja $logDoInstalador)"
+        }
+        else {
+            New-Item -ItemType Directory -Path $pastaDoTeste | Out-Null
+            $entrada = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\ClivusSolar_Teste'
+
+            $instalar = Start-Process -FilePath $exe.FullName -ArgumentList '/silencioso', "/teste=$pastaDoTeste", "/log=$pastaDoTeste\instalar.log" -Wait -PassThru
+            $bundleInstalado = Join-Path $pastaDoTeste 'ApplicationPlugins\ClivusSolar.bundle'
+
+            if ($instalar.ExitCode -ne 0) { $falhasDoInstalador += "instalar devolveu $($instalar.ExitCode): $(Get-Content "$pastaDoTeste\instalar.log" -Raw -Encoding UTF8)" }
+            foreach ($arquivo in 'PackageContents.xml', 'Contents\Clivus.Plugin.dll', 'Contents\Clivus.Core.dll', 'Contents\Clivus.Geo.dll', 'Contents\Resources\clivus.ico') {
+                if (-not (Test-Path (Join-Path $bundleInstalado $arquivo))) { $falhasDoInstalador += "faltou $arquivo no bundle instalado" }
+            }
+            if (-not (Test-Path $entrada)) { $falhasDoInstalador += 'nao registrou em Adicionar ou remover programas' }
+
+            $desinstalador = Join-Path $pastaDoTeste 'dados\desinstalar.exe'
+            if (Test-Path $desinstalador) {
+                $desinstalar = Start-Process -FilePath $desinstalador -ArgumentList '/desinstalar', '/silencioso', "/teste=$pastaDoTeste", "/log=$pastaDoTeste\desinstalar.log" -Wait -PassThru
+                if ($desinstalar.ExitCode -ne 0) { $falhasDoInstalador += "desinstalar devolveu $($desinstalar.ExitCode)" }
+                if (Test-Path $bundleInstalado) { $falhasDoInstalador += 'o bundle ficou depois de desinstalar' }
+                if (Test-Path $entrada) { $falhasDoInstalador += 'a entrada do registro ficou depois de desinstalar' }
+            }
+            else {
+                $falhasDoInstalador += 'o desinstalador nao foi copiado'
+            }
+        }
+    }
+    catch {
+        $falhasDoInstalador += "o teste lancou: $($_.Exception.Message)"
+    }
+    finally {
+        Remove-Item 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\ClivusSolar_Teste' -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    if ($falhasDoInstalador.Count -eq 0) {
+        Escrever-Linha 'Instalador' "$([math]::Round($exe.Length / 1MB, 1)) MB" 'OK'
+    }
+    else {
+        Escrever-Linha 'Instalador' '' 'FALHOU'
+        $problemas.Add("instalador: $($falhasDoInstalador -join '; ')")
     }
 }
 
