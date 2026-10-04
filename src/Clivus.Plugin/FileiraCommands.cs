@@ -24,8 +24,6 @@ namespace Clivus.Plugin;
 /// </summary>
 public static class FileiraCommands
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>CLIVUS_FILEIRA: escolhe área, alinhamento e fileira, processa e desenha.</summary>
     [CommandMethod(PluginInfo.ComandoFileira)]
     public static void Fileira()
@@ -54,7 +52,7 @@ public static class FileiraCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao processar a fileira.", erro);
-            editor.WriteMessage($"\nNão consegui processar a fileira: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui processar a fileira: {0}\n", erro.Message));
         }
     }
 
@@ -83,7 +81,7 @@ public static class FileiraCommands
 
             if (areas.Count == 0 || alinhamentos.Count == 0)
             {
-                editor.WriteMessage("\nFILEIRA Sem área ou sem alinhamento registrado neste desenho.\n");
+                editor.WriteMessage(Tr.T("\nFILEIRA Sem área ou sem alinhamento registrado neste desenho.\n"));
                 return;
             }
 
@@ -92,7 +90,7 @@ public static class FileiraCommands
 
             if (area is null || alinhamento is null)
             {
-                editor.WriteMessage("\nFILEIRA A área ou o alinhamento registrado não está mais no desenho.\n");
+                editor.WriteMessage(Tr.T("\nFILEIRA A área ou o alinhamento registrado não está mais no desenho.\n"));
                 return;
             }
 
@@ -101,7 +99,7 @@ public static class FileiraCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao processar a fileira automática.", erro);
-            editor.WriteMessage($"\nNão consegui processar a fileira: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui processar a fileira: {0}\n", erro.Message));
         }
     }
 
@@ -122,7 +120,7 @@ public static class FileiraCommands
 
             if (desligada is null)
             {
-                editor.WriteMessage($"\nAinda não há alturas no desenho: gerar não as põe (8.8); rode {PluginInfo.ComandoAlturasRegerar} primeiro.\n");
+                editor.WriteMessage(Tr.F("\nAinda não há alturas no desenho: gerar não as põe (8.8); rode {0} primeiro.\n", PluginInfo.ComandoAlturasRegerar));
                 return;
             }
 
@@ -130,15 +128,15 @@ public static class FileiraCommands
             transacao.Commit();
 
             editor.WriteMessage(desligada.Value
-                ? "\nAlturas dos pilares: mostradas.\n"
-                : "\nAlturas dos pilares: escondidas.\n");
+                ? Tr.T("\nAlturas dos pilares: mostradas.\n")
+                : Tr.T("\nAlturas dos pilares: escondidas.\n"));
 
             editor.Regen();
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao ligar as alturas.", erro);
-            editor.WriteMessage($"\nNão consegui mexer nas alturas: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui mexer nas alturas: {0}\n", erro.Message));
         }
     }
 
@@ -155,14 +153,14 @@ public static class FileiraCommands
     {
         // As mesas do desenho em uso, como na Usina (revisão do 8.6: a
         // fileira N tem que sair igual à fileira N da usina).
-        var emUso = UsinaCommands.MesasEmUso(editor, documento.Database, "FILEIRA");
+        var emUso = UsinaCommands.MesasEmUso(editor, documento.Database, Tr.T("FILEIRA"));
         if (emUso is null) return;
         if (emUso.Count > 0) perfil = emUso[0].Profile;
 
         var doProjeto = ConfigCommands.Inicial(documento, out var avisoDaConfig);
-        if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage($"\n  ATENÇÃO: {notaDoT3}.\n");
+        if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", notaDoT3));
         var settings = doProjeto.ForTable(perfil.Frame);
-        if (avisoDaConfig is not null) editor.WriteMessage($"\n  ATENÇÃO: {avisoDaConfig}\n");
+        if (avisoDaConfig is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", avisoDaConfig));
 
         AvisarSeJaHaMesas(editor, documento.Database);
 
@@ -172,10 +170,9 @@ public static class FileiraCommands
         var config = settings.Configuration;
         var celula = new TableFootprint(geometria.Length, geometria.Depth * Math.Cos(perfil.TiltRadians));
 
-        editor.WriteMessage(
-            $"\nMesa: {perfil.Describe()}\n"
-            + $"Configuração: {settings.Describe()}\n"
-            + $"Área: {area.Nome}; alinhamento: {alinhamento.Identidade.Describe()}\n");
+        editor.WriteMessage(Tr.F(
+            "\nMesa: {0}\nConfiguração: {1}\nÁrea: {2}; alinhamento: {3}\n",
+            perfil.Describe(), settings.Describe(), area.Nome, alinhamento.Identidade.Describe()));
 
         var relogio = System.Diagnostics.Stopwatch.StartNew();
 
@@ -200,13 +197,13 @@ public static class FileiraCommands
 
         if (layout.Rows.Count == 0)
         {
-            editor.WriteMessage("\nFILEIRA Nenhuma fileira cabe: a área está do outro lado da linha, a linha não a atravessa, ou ela é pequena demais.\n");
+            editor.WriteMessage(Tr.T("\nFILEIRA Nenhuma fileira cabe: a área está do outro lado da linha, a linha não a atravessa, ou ela é pequena demais.\n"));
             return;
         }
 
         if (numeroDaFileira < 1 || numeroDaFileira > layout.Rows.Count)
         {
-            editor.WriteMessage($"\nFILEIRA A distribuição tem {layout.Rows.Count} fileira(s); não há fileira {numeroDaFileira}.\n");
+            editor.WriteMessage(Tr.F("\nFILEIRA A distribuição tem {0} fileira(s); não há fileira {1}.\n", layout.Rows.Count, numeroDaFileira));
             return;
         }
 
@@ -222,7 +219,7 @@ public static class FileiraCommands
 
         relogio.Stop();
 
-        foreach (var aviso in processada.Warnings) editor.WriteMessage($"\n  ATENÇÃO: {aviso}\n");
+        foreach (var aviso in processada.Warnings) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
 
         Relatar(editor, layout, processada, desenho, relogio.Elapsed);
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
@@ -233,20 +230,19 @@ public static class FileiraCommands
         var cotas = fileira.Tables.SelectMany(t => t.Pillars.Pillars).Where(p => p.GroundZ is not null).Select(p => p.TopZ).ToList();
 
         editor.WriteMessage(
-            $"\nFILEIRA {fileira.Describe()}\n"
-            + $"  distribuição: {layout.Rows.Count} fileira(s), {layout.Tables.Count} mesa(s), "
-            + $"{layout.DroppedOutside} posição(ões) descartada(s) por passar da área\n"
-            + $"  desenhado: {desenho.Tables} mesa(s), {desenho.Pillars} pilar(es), {desenho.Modules} módulo(s) com face, "
-            + $"{desenho.Painted} peça(s) pintada(s), {desenho.Marked} marcada(s)\n"
+            Tr.F(
+                "\nFILEIRA {0}\n  distribuição: {1} fileira(s), {2} mesa(s), {3} posição(ões) descartada(s) por passar da área\n  desenhado: {4} mesa(s), {5} pilar(es), {6} módulo(s) com face, {7} peça(s) pintada(s), {8} marcada(s)\n",
+                fileira.Describe(), layout.Rows.Count, layout.Tables.Count, layout.DroppedOutside,
+                desenho.Tables, desenho.Pillars, desenho.Modules, desenho.Painted, desenho.Marked)
             + (cotas.Count > 0
-                ? $"  topo dos pilares: {cotas.Min().ToString("0.00", Brasil)} a {cotas.Max().ToString("0.00", Brasil)} m\n"
-                : "  nenhum pilar com terreno\n")
-            + $"  tempo: {tempo.TotalSeconds.ToString("0.0", Brasil)} s\n");
+                ? Tr.F("  topo dos pilares: {0:0.00} a {1:0.00} m\n", cotas.Min(), cotas.Max())
+                : Tr.T("  nenhum pilar com terreno\n"))
+            + Tr.F("  tempo: {0:0.0} s\n", tempo.TotalSeconds));
 
         foreach (var mesa in fileira.Tables)
             editor.WriteMessage($"  {mesa.Report.Describe()}; {mesa.Pillars.Describe()}\n");
 
-        editor.WriteMessage("\n  Gerado sem análise: cores, alturas e declividade saem pelo menu Análises.\n");
+        editor.WriteMessage(Tr.T("\n  Gerado sem análise: cores, alturas e declividade saem pelo menu Análises.\n"));
     }
 
     // ------------------------------------------------------------ entradas
@@ -263,12 +259,12 @@ public static class FileiraCommands
 
         if (terreno is null)
         {
-            editor.WriteMessage("\nNenhum terreno processado neste desenho. Use o botão Terreno primeiro.\n");
+            editor.WriteMessage(Tr.T("\nNenhum terreno processado neste desenho. Use o botão Terreno primeiro.\n"));
             return null;
         }
 
         var aviso = TerrenoEnvelhecido.Conferir(documento);
-        if (aviso is not null) editor.WriteMessage($"\n  ATENÇÃO: {aviso}\n");
+        if (aviso is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
 
         return terreno;
     }
@@ -283,7 +279,7 @@ public static class FileiraCommands
         var salvo = MesaCommands.PrimeiroPerfil(perfis);
 
         if (salvo is null && !silencioso)
-            editor.WriteMessage("\nNenhum perfil de mesa salvo: usando a mesa de exemplo. Salve um pela janela Mesa.\n");
+            editor.WriteMessage(Tr.T("\nNenhum perfil de mesa salvo: usando a mesa de exemplo. Salve um pela janela Mesa.\n"));
 
         return salvo ?? MesaCommands.MesaDeExemplo();
     }
@@ -356,18 +352,18 @@ public static class FileiraCommands
 
         if (areas.Count == 0)
         {
-            editor.WriteMessage("\nNenhuma área registrada neste desenho. Use o botão Área primeiro.\n");
+            editor.WriteMessage(Tr.T("\nNenhuma área registrada neste desenho. Use o botão Área primeiro.\n"));
             return null;
         }
 
         if (areas.Count == 1)
         {
-            editor.WriteMessage($"\nÁrea: {areas[0].Identity.DisplayName}.\n");
+            editor.WriteMessage(Tr.F("\nÁrea: {0}.\n", areas[0].Identity.DisplayName));
             return LerArea(documento.Database, areas[0].Handle);
         }
 
-        var opcoes = new PromptEntityOptions("\nClique na área de implantação: ");
-        opcoes.SetRejectMessage("\nIsso não é uma polilinha.");
+        var opcoes = new PromptEntityOptions(Tr.T("\nClique na área de implantação: "));
+        opcoes.SetRejectMessage(Tr.T("\nIsso não é uma polilinha."));
         opcoes.AddAllowedClass(typeof(Polyline3d), false);
 
         var resposta = editor.GetEntity(opcoes);
@@ -380,7 +376,7 @@ public static class FileiraCommands
 
         if (identidade is null)
         {
-            editor.WriteMessage("\nEssa polilinha não é uma área do plugin.\n");
+            editor.WriteMessage(Tr.T("\nEssa polilinha não é uma área do plugin.\n"));
             return null;
         }
 
@@ -393,18 +389,18 @@ public static class FileiraCommands
 
         if (alinhamentos.Count == 0)
         {
-            editor.WriteMessage("\nNenhum alinhamento registrado neste desenho. Use o botão Alinhamento primeiro.\n");
+            editor.WriteMessage(Tr.T("\nNenhum alinhamento registrado neste desenho. Use o botão Alinhamento primeiro.\n"));
             return null;
         }
 
         if (alinhamentos.Count == 1)
         {
-            editor.WriteMessage($"\nAlinhamento: {alinhamentos[0].Identity.Describe()}.\n");
+            editor.WriteMessage(Tr.F("\nAlinhamento: {0}.\n", alinhamentos[0].Identity.Describe()));
             return LerAlinhamento(documento.Database, alinhamentos[0]);
         }
 
-        var opcoes = new PromptEntityOptions("\nClique na linha de alinhamento: ");
-        opcoes.SetRejectMessage("\nIsso não é uma polilinha.");
+        var opcoes = new PromptEntityOptions(Tr.T("\nClique na linha de alinhamento: "));
+        opcoes.SetRejectMessage(Tr.T("\nIsso não é uma polilinha."));
         opcoes.AddAllowedClass(typeof(Polyline3d), false);
 
         var resposta = editor.GetEntity(opcoes);
@@ -417,7 +413,7 @@ public static class FileiraCommands
 
         if (identidade is null)
         {
-            editor.WriteMessage("\nEssa polilinha não é um alinhamento do plugin.\n");
+            editor.WriteMessage(Tr.T("\nEssa polilinha não é um alinhamento do plugin.\n"));
             return null;
         }
 
@@ -428,7 +424,7 @@ public static class FileiraCommands
     {
         // O AutoCAD acrescenta o valor padrão entre <> sozinho; escrevê-lo no
         // texto daria "<1>: <1>".
-        var opcoes = new PromptIntegerOptions("\nNúmero da fileira (1 nasce no início da linha de alinhamento)")
+        var opcoes = new PromptIntegerOptions(Tr.T("\nNúmero da fileira (1 nasce no início da linha de alinhamento)"))
         {
             AllowNegative = false,
             AllowZero = false,
@@ -464,9 +460,9 @@ public static class FileiraCommands
 
         if (quantas > 0)
         {
-            editor.WriteMessage(
-                $"\n  ATENÇÃO: o desenho já tem {quantas} mesa(s) do plugin. Este comando desenha por cima; "
-                + "apague as anteriores se não quiser duas usinas sobrepostas.\n");
+            editor.WriteMessage(Tr.F(
+                "\n  ATENÇÃO: o desenho já tem {0} mesa(s) do plugin. Este comando desenha por cima; apague as anteriores se não quiser duas usinas sobrepostas.\n",
+                quantas));
         }
     }
 

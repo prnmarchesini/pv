@@ -1,4 +1,3 @@
-using System.Globalization;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
@@ -26,8 +25,6 @@ namespace Clivus.Plugin;
 /// </summary>
 public static class PontasCommands
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>
     /// A maior PB que se aceita digitar, em metro. A tela dos Parâmetros fala
     /// em cm; aqui é metro, e "15" pensado em cm viraria 15 m sem erro.
@@ -46,7 +43,7 @@ public static class PontasCommands
         try
         {
             var guid = RecalcularCommands.MesaDaSelecao(editor, documento)
-                ?? RecalcularCommands.MesaClicada(editor, documento, "\nClique numa peça da mesa: ");
+                ?? RecalcularCommands.MesaClicada(editor, documento, Tr.T("\nClique numa peça da mesa: "));
             if (guid is null) return;
 
             var terreno = FileiraCommands.ExigirTerreno(editor, documento);
@@ -59,11 +56,11 @@ public static class PontasCommands
             var nomePrimeira = contexto.NomeDaPrimeira;
             var nomeUltima = contexto.NomeDaUltima;
 
-            editor.WriteMessage(
-                $"\n{contexto.Mesa.Identity!.Label}: PB {Medida(primeiraHoje)} m na ponta {nomePrimeira}, {Medida(ultimaHoje)} m na ponta {nomeUltima}"
-                + (contexto.Mesa.Identity.HasManualEnds ? " (escolhidas à mão)" : string.Empty) + ".\n");
+            editor.WriteMessage(contexto.Mesa.Identity!.HasManualEnds
+                ? Tr.F("\n{0}: PB {1} m na ponta {2}, {3} m na ponta {4} (escolhidas à mão).\n", contexto.Mesa.Identity.Label, Medida(primeiraHoje), nomePrimeira, Medida(ultimaHoje), nomeUltima)
+                : Tr.F("\n{0}: PB {1} m na ponta {2}, {3} m na ponta {4}.\n", contexto.Mesa.Identity.Label, Medida(primeiraHoje), nomePrimeira, Medida(ultimaHoje), nomeUltima));
 
-            var opcoes = new PromptPointOptions("\nClique perto da ponta que vai mudar (a outra fica travada), ou Enter para as duas [Duas/Automatico]: ")
+            var opcoes = new PromptPointOptions(Tr.T("\nClique perto da ponta que vai mudar (a outra fica travada), ou Enter para as duas [Duas/Automatico]: "))
             {
                 AllowNone = true,
             };
@@ -118,7 +115,7 @@ public static class PontasCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao mudar as pontas da mesa.", erro);
-            editor.WriteMessage($"\nNão consegui mudar as pontas da mesa: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui mudar as pontas da mesa: {0}\n", erro.Message));
         }
     }
 
@@ -136,11 +133,11 @@ public static class PontasCommands
 
         try
         {
-            var letreiro = editor.GetString(new PromptStringOptions("\nLetreiro da mesa: ") { AllowSpaces = false });
+            var letreiro = editor.GetString(new PromptStringOptions(Tr.T("\nLetreiro da mesa: ")) { AllowSpaces = false });
             if (letreiro.Status != PromptStatus.OK) return;
 
-            var a = editor.GetString(new PromptStringOptions("\nPB no primeiro pilar (vazio trava): ") { AllowSpaces = false });
-            var b = editor.GetString(new PromptStringOptions("\nPB no último pilar (vazio trava): ") { AllowSpaces = false });
+            var a = editor.GetString(new PromptStringOptions(Tr.T("\nPB no primeiro pilar (vazio trava): ")) { AllowSpaces = false });
+            var b = editor.GetString(new PromptStringOptions(Tr.T("\nPB no último pilar (vazio trava): ")) { AllowSpaces = false });
             if (a.Status != PromptStatus.OK || b.Status != PromptStatus.OK) return;
 
             double? primeira = NumberInput.TryParseMeasure(a.StringResult, out var va) ? va : null;
@@ -159,7 +156,7 @@ public static class PontasCommands
 
             if (guid is null)
             {
-                editor.WriteMessage($"\nPONTAS Não achei a mesa {letreiro.StringResult}.\n");
+                editor.WriteMessage(Tr.F("\nPONTAS Não achei a mesa {0}.\n", letreiro.StringResult));
                 return;
             }
 
@@ -171,7 +168,7 @@ public static class PontasCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha no CLIVUS_PONTAS_AUTO.", erro);
-            editor.WriteMessage($"\nNão consegui mudar as pontas: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui mudar as pontas: {0}\n", erro.Message));
         }
     }
 
@@ -192,9 +189,9 @@ public static class PontasCommands
     private static Contexto? Preparar(Editor editor, Document documento, ProcessedTerrain terreno, Guid guid, TableProfile perfil)
     {
         var doProjeto = ConfigCommands.Inicial(documento, out var avisoDaConfig);
-        if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage($"\n  ATENÇÃO: {notaDoT3}.\n");
+        if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", notaDoT3));
         var settings = doProjeto.ForTable(perfil.Frame);
-        if (avisoDaConfig is not null) editor.WriteMessage($"\n  ATENÇÃO: {avisoDaConfig}\n");
+        if (avisoDaConfig is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", avisoDaConfig));
 
         var pilares = perfil.Frame.Pillars(perfil.Layout);
         var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
@@ -208,7 +205,7 @@ public static class PontasCommands
 
             if (mesa?.Identity is null || mesa.Contour is not { } contorno)
             {
-                editor.WriteMessage("\nPONTAS A mesa não tem contorno; não há como saber onde ela está.\n");
+                editor.WriteMessage(Tr.T("\nPONTAS A mesa não tem contorno; não há como saber onde ela está.\n"));
                 return null;
             }
 
@@ -217,13 +214,13 @@ public static class PontasCommands
             // de um MOVE com Z, não do terreno (regra sagrada 5).
             if (mesa.Identity.Dirty)
             {
-                editor.WriteMessage($"\nPONTAS {mesa.Identity.Label} está pendente ({mesa.Identity.DirtyReason}): recalcule antes de mudar as pontas.\n");
+                editor.WriteMessage(Tr.F("\nPONTAS {0} está pendente ({1}): recalcule antes de mudar as pontas.\n", mesa.Identity.Label, Tr.T(mesa.Identity.DirtyReason ?? string.Empty)));
                 return null;
             }
 
             if (mesa.IsDuplicated)
             {
-                editor.WriteMessage($"\nPONTAS {mesa.Identity.Label} tem contornos repetidos (mesa copiada). Apague a cópia ou use o Regerar área.\n");
+                editor.WriteMessage(Tr.F("\nPONTAS {0} tem contornos repetidos (mesa copiada). Apague a cópia ou use o Regerar área.\n", mesa.Identity.Label));
                 return null;
             }
 
@@ -247,7 +244,7 @@ public static class PontasCommands
         }
         catch (ArgumentException erro)
         {
-            editor.WriteMessage($"\nPONTAS {mesa.Identity.Label}: {erro.Message} Use o Regerar área.\n");
+            editor.WriteMessage(Tr.F("\nPONTAS {0}: {1} Use o Regerar área.\n", mesa.Identity.Label, erro.Message));
             return null;
         }
 
@@ -258,7 +255,7 @@ public static class PontasCommands
 
         if (primeiro.LowEdgeClearance is not { } a || ultimo.LowEdgeClearance is not { } b)
         {
-            editor.WriteMessage($"\nPONTAS {mesa.Identity.Label}: a ponta baixa de um pilar da ponta está fora do terreno.\n");
+            editor.WriteMessage(Tr.F("\nPONTAS {0}: a ponta baixa de um pilar da ponta está fora do terreno.\n", mesa.Identity.Label));
             return null;
         }
 
@@ -290,14 +287,14 @@ public static class PontasCommands
 
         var mesa = ajuste.Row.Tables[0];
 
-        editor.WriteMessage(
-            $"\nPONTAS {c.Mesa.Identity.Label} refeita: PB {Medida(ajuste.FirstLowEdge)} m na ponta {c.NomeDaPrimeira}, "
-            + $"{Medida(ajuste.LastLowEdge)} m na ponta {c.NomeDaUltima}; declividade "
-            + $"{(Math.Abs(mesa.Pillars.LongitudinalTiltRadians) * 180 / Math.PI).ToString("0.#", Brasil)}°; {mesa.Pillars.Describe()}.\n");
+        editor.WriteMessage(Tr.F(
+            "\nPONTAS {0} refeita: PB {1} m na ponta {2}, {3} m na ponta {4}; declividade {5:0.#}°; {6}.\n",
+            c.Mesa.Identity.Label, Medida(ajuste.FirstLowEdge), c.NomeDaPrimeira, Medida(ajuste.LastLowEdge), c.NomeDaUltima,
+            Math.Abs(mesa.Pillars.LongitudinalTiltRadians) * 180 / Math.PI, mesa.Pillars.Describe()));
 
-        foreach (var aviso in ajuste.Warnings) editor.WriteMessage($"\n  ATENÇÃO: {aviso}\n");
+        foreach (var aviso in ajuste.Warnings) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
 
-        editor.WriteMessage("\n  As alturas ficam gravadas na mesa: o Recalcular as mantém; \"Automatico\" devolve a mesa ao motor.\n");
+        editor.WriteMessage(Tr.T("\n  As alturas ficam gravadas na mesa: o Recalcular as mantém; \"Automatico\" devolve a mesa ao motor.\n"));
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
     }
 
@@ -308,7 +305,7 @@ public static class PontasCommands
 
         if (!identidade.HasManualEnds)
         {
-            editor.WriteMessage($"\nPONTAS {identidade.Label} já é do motor; nada a devolver.\n");
+            editor.WriteMessage(Tr.F("\nPONTAS {0} já é do motor; nada a devolver.\n", identidade.Label));
             return;
         }
 
@@ -328,7 +325,7 @@ public static class PontasCommands
         while (true)
         {
             var resposta = editor.GetString(new PromptStringOptions(
-                $"\nPB na ponta {nome}, em metro (hoje {Medida(hoje)}; Enter mantém): ")
+                Tr.F("\nPB na ponta {0}, em metro (hoje {1}; Enter mantém): ", nome, Medida(hoje)))
             {
                 AllowSpaces = false,
             });
@@ -339,14 +336,14 @@ public static class PontasCommands
             if (NumberInput.TryParseMeasure(resposta.StringResult, out var valor) && double.IsFinite(valor) && valor > 0 && valor <= MaiorPontaBaixa)
                 return valor;
 
-            editor.WriteMessage($"\nIsso não é uma altura em metro entre 0 e {Medida(MaiorPontaBaixa)} (ex.: 0,45; em metro, não em cm).\n");
+            editor.WriteMessage(Tr.F("\nIsso não é uma altura em metro entre 0 e {0} (ex.: 0,45; em metro, não em cm).\n", Medida(MaiorPontaBaixa)));
         }
     }
 
     /// <summary>O rumo de uma direção em planta, em palavras ("leste", "sudoeste").</summary>
     private static string Rumo(double dx, double dy)
     {
-        string[] nomes = ["leste", "nordeste", "norte", "noroeste", "oeste", "sudoeste", "sul", "sudeste"];
+        string[] nomes = [Tr.T("leste"), Tr.T("nordeste"), Tr.T("norte"), Tr.T("noroeste"), Tr.T("oeste"), Tr.T("sudoeste"), Tr.T("sul"), Tr.T("sudeste")];
         var angulo = Math.Atan2(dy, dx) * 180 / Math.PI;
         var setor = (int)Math.Round(((angulo % 360) + 360) % 360 / 45) % 8;
 
@@ -355,5 +352,5 @@ public static class PontasCommands
 
     private static double Distancia2(Point3d a, Point3d b) => (a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y);
 
-    private static string Medida(double valor) => valor.ToString("0.00", Brasil);
+    private static string Medida(double valor) => valor.ToString("0.00", Tr.Culture);
 }

@@ -53,7 +53,7 @@ public static class TagsCommands
         {
             if (apagar)
             {
-                editor.WriteMessage($"\nTAGS {Tags.Name(tipo)}: {Apagar(documento.Database, tipo)} tag(s) apagada(s).\n");
+                editor.WriteMessage(Tr.F("\nTAGS {0}: {1} tag(s) apagada(s).\n", Tags.Name(tipo), Apagar(documento.Database, tipo)));
                 return;
             }
 
@@ -64,11 +64,11 @@ public static class TagsCommands
                 // lateral, e onde é a primeira e a última fileira").
                 if (!NumerarCommands.NumerarPorCliques(editor, documento)) return;
 
-                var lado = editor.GetPoint(new PromptPointOptions("\nClique do lado das fileiras onde vão as tags (F1, F2...): "));
+                var lado = editor.GetPoint(new PromptPointOptions(Tr.T("\nClique do lado das fileiras onde vão as tags (F1, F2...): ")));
                 if (lado.Status != PromptStatus.OK) return;
 
                 var feitas = InserirFileiras(documento.Database, new Point3(lado.Value.X, lado.Value.Y, 0));
-                editor.WriteMessage($"\nTAGS fileiras: {feitas} tag(s) na ponta das fileiras, do lado clicado.\n");
+                editor.WriteMessage(Tr.F("\nTAGS fileiras: {0} tag(s) na ponta das fileiras, do lado clicado.\n", feitas));
                 editor.Regen();
                 return;
             }
@@ -84,18 +84,18 @@ public static class TagsCommands
             var (criadas, mesas, incompletas) = Inserir(documento.Database, tipo, tamanho ?? 1);
 
             editor.WriteMessage(mesas == 0
-                ? $"\nTAGS {Tags.Name(tipo)}: o desenho não tem mesa gerada pelo plugin.\n"
-                : $"\nTAGS {Tags.Name(tipo)}: {criadas} tag(s) em {mesas} mesa(s), na camada {Tags.LayerName(tipo)}.\n");
+                ? Tr.F("\nTAGS {0}: o desenho não tem mesa gerada pelo plugin.\n", Tags.Name(tipo))
+                : Tr.F("\nTAGS {0}: {1} tag(s) em {2} mesa(s), na camada {3}.\n", Tags.Name(tipo), criadas, mesas, Tags.LayerName(tipo)));
 
             if (incompletas > 0)
-                editor.WriteMessage($"  {incompletas} string(s) incompleta(s), com asterisco: a mesa não fecha um número inteiro de strings de {tamanho} módulos.\n");
+                editor.WriteMessage(Tr.F("  {0} string(s) incompleta(s), com asterisco: a mesa não fecha um número inteiro de strings de {1} módulos.\n", incompletas, tamanho));
 
             editor.Regen();
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar($"Falha nas tags de {tipo}.", erro);
-            editor.WriteMessage($"\nNão consegui fazer as tags de {Tags.Name(tipo)}: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui fazer as tags de {0}: {1}\n", Tags.Name(tipo), erro.Message));
         }
     }
 
@@ -119,7 +119,7 @@ public static class TagsCommands
                 int.TryParse(texto, out gravado);
         }
 
-        var opcoes = new PromptIntegerOptions("\nMódulos por string")
+        var opcoes = new PromptIntegerOptions(Tr.T("\nMódulos por string"))
         {
             LowerLimit = 1,
             UpperLimit = 200,

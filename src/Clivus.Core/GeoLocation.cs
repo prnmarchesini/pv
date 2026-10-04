@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Clivus.Core;
 
 /// <summary>De onde veio a latitude e a longitude do terreno.</summary>
@@ -25,8 +23,6 @@ public enum GeoLocationSource
 /// <param name="Source">De onde o valor veio.</param>
 public sealed record GeoLocation(double Latitude, double Longitude, GeoLocationSource Source)
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>
     /// Se o par está dentro dos limites do planeta e não é NaN.
     ///
@@ -54,8 +50,9 @@ public sealed record GeoLocation(double Latitude, double Longitude, GeoLocationS
     /// </summary>
     public string Describe()
     {
-        var latitude = $"{Math.Abs(Latitude).ToString("N6", Brasil)}° {(Latitude < 0 ? "S" : "N")}";
-        var longitude = $"{Math.Abs(Longitude).ToString("N6", Brasil)}° {(Longitude < 0 ? "O" : "L")}";
+        // O hemisfério vai dentro da frase: "O"/"L" viram "W"/"E" no inglês.
+        var latitude = Latitude < 0 ? Tr.F("{0:N6}° S", Math.Abs(Latitude)) : Tr.F("{0:N6}° N", Math.Abs(Latitude));
+        var longitude = Longitude < 0 ? Tr.F("{0:N6}° O", Math.Abs(Longitude)) : Tr.F("{0:N6}° L", Math.Abs(Longitude));
 
         return $"{latitude}, {longitude}";
     }

@@ -90,21 +90,21 @@ internal static class Licenciamento
     /// <summary>Ativa com o código do portal. A frase do resultado, e se deu certo.</summary>
     internal static (bool Ok, string Frase) Ativar(string codigoDigitado)
     {
-        if (License.NormalizeCode(codigoDigitado) is not { } codigo) return (false, "O código só tem letras, números e hífen.");
-        if (Endereco is not { } endereco) return (false, "O servidor de licenças não está configurado.");
+        if (License.NormalizeCode(codigoDigitado) is not { } codigo) return (false, Tr.T("O código só tem letras, números e hífen."));
+        if (Endereco is not { } endereco) return (false, Tr.T("O servidor de licenças não está configurado."));
         if (Viewer3DPage.WhyServerUnsafe(endereco) is { } inseguro) return (false, char.ToUpperInvariant(inseguro[0]) + inseguro[1..] + ".");
 
         var corpo = License.ActivateBody(codigo, Maquina, Environment.MachineName, PluginInfo.VersaoLegivel(ClivusCommands.VersaoDoPlugin()));
         var (licenca, erro) = Enviar(endereco + "/api/v1/licencas/ativar", corpo);
-        if (licenca is null) return (false, $"Não ativei: {erro}.");
+        if (licenca is null) return (false, Tr.F("Não ativei: {0}.", erro));
 
         var (estado, conteudo, porque) = Ligado ? License.Check(licenca, Chaves, Maquina, DateTime.UtcNow) : (LicenseState.Valid, null, null);
-        if (estado is LicenseState.Invalid or LicenseState.Expired) return (false, $"O servidor mandou uma licença que não vale ({porque}).");
+        if (estado is LicenseState.Invalid or LicenseState.Expired) return (false, Tr.F("O servidor mandou uma licença que não vale ({0}).", porque));
 
         Gravar(licenca);
         return (true, conteudo is null
-            ? "Clivus Solar ativado."
-            : $"Clivus Solar ativado para {conteudo.Account} (plano {conteudo.Plan}), até {conteudo.ExpiresAt.ToLocalTime():dd/MM/yyyy}; renova sozinho com internet.");
+            ? Tr.T("Clivus Solar ativado.")
+            : Tr.F("Clivus Solar ativado para {0} (plano {1}), até {2:dd/MM/yyyy}; renova sozinho com internet.", conteudo.Account, conteudo.Plan, conteudo.ExpiresAt.ToLocalTime()));
     }
 
     /// <summary>Renova a licença; 403 (revogada ou máquina liberada) apaga a guardada. Se renovou.</summary>
@@ -146,7 +146,7 @@ internal static class Licenciamento
         }
         catch (Exception erro) when (erro is HttpRequestException or TaskCanceledException)
         {
-            return (null, "não consegui falar com o servidor de licenças (sem internet?)");
+            return (null, Tr.T("não consegui falar com o servidor de licenças (sem internet?)"));
         }
     }
 
@@ -195,8 +195,9 @@ internal static class Licenciamento
             if (estado is LicenseState.Valid or LicenseState.Revalidate) return;
 
             e.Veto();
-            e.Document?.Editor.WriteMessage(
-                $"\nCLIVUS SOLAR sem licença válida ({porque ?? "não ativado"}). Gere seu código no portal do app e use o botão Ativar ({PluginInfo.ComandoAtivar}).\n");
+            e.Document?.Editor.WriteMessage(Tr.F(
+                "\nCLIVUS SOLAR sem licença válida ({0}). Gere seu código no portal do app e use o botão Ativar ({1}).\n",
+                porque ?? Tr.T("não ativado"), PluginInfo.ComandoAtivar));
         }
         catch (Exception erro)
         {

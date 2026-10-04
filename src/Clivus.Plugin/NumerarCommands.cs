@@ -34,7 +34,7 @@ public static class NumerarCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao numerar.", erro);
-            editor.WriteMessage($"\nNão consegui numerar: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui numerar: {0}\n", erro.Message));
         }
     }
 
@@ -47,17 +47,17 @@ public static class NumerarCommands
     {
         {
             var settings = ConfigCommands.Inicial(documento, out var avisoDaConfig);
-            if (avisoDaConfig is not null) editor.WriteMessage($"\n  ATENÇÃO: {avisoDaConfig}\n");
+            if (avisoDaConfig is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", avisoDaConfig));
 
             var celulas = Celulas(editor, documento);
             if (celulas is null) return false;
 
-            editor.WriteMessage($"\nNUMERAR {celulas.Count} mesa(s) no desenho.\n");
+            editor.WriteMessage(Tr.F("\nNUMERAR {0} mesa(s) no desenho.\n", celulas.Count));
 
-            var primeira = MesaEscolhida(editor, documento, celulas, "Uma mesa da PRIMEIRA fileira (será a F1.1)");
+            var primeira = MesaEscolhida(editor, documento, celulas, Tr.T("Uma mesa da PRIMEIRA fileira (será a F1.1)"));
             if (primeira is null) return false;
 
-            var ultima = MesaEscolhida(editor, documento, celulas, "Uma mesa da ÚLTIMA fileira");
+            var ultima = MesaEscolhida(editor, documento, celulas, Tr.T("Uma mesa da ÚLTIMA fileira"));
             if (ultima is null) return false;
 
             var resultado = RowNumbering.Number(
@@ -66,10 +66,10 @@ public static class NumerarCommands
 
             var trocados = Regravar(documento, celulas, resultado);
 
-            editor.WriteMessage(
-                $"\nNUMERAR {resultado.RowCount} fileira(s), {resultado.Tables.Count} mesa(s), {trocados} letreiro(s) trocado(s).\n");
+            editor.WriteMessage(Tr.F(
+                "\nNUMERAR {0} fileira(s), {1} mesa(s), {2} letreiro(s) trocado(s).\n", resultado.RowCount, resultado.Tables.Count, trocados));
 
-            foreach (var aviso in resultado.Warnings) editor.WriteMessage($"  ATENÇÃO: {aviso}.\n");
+            foreach (var aviso in resultado.Warnings) editor.WriteMessage(Tr.F("  ATENÇÃO: {0}.\n", aviso));
 
             GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
             return true;
@@ -93,7 +93,7 @@ public static class NumerarCommands
 
         if (mesas.Count == 0)
         {
-            editor.WriteMessage("\nNUMERAR Não há mesa do plugin neste desenho.\n");
+            editor.WriteMessage(Tr.T("\nNUMERAR Não há mesa do plugin neste desenho.\n"));
             return null;
         }
 
@@ -103,15 +103,15 @@ public static class NumerarCommands
             {
                 // Peças cujo contorno foi apagado à mão (órfãs do 7.7): não
                 // há letreiro para regravar. Segue sem elas.
-                editor.WriteMessage($"\n  ATENÇÃO: {partes.All.Count()} peça(s) sem contorno de mesa (GUID {guid:D}) ficam fora da numeração; o Validar lista as órfãs.\n");
+                editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0} peça(s) sem contorno de mesa (GUID {1:D}) ficam fora da numeração; o Validar lista as órfãs.\n", partes.All.Count(), guid));
                 continue;
             }
 
             if (partes.IsDuplicated)
             {
-                editor.WriteMessage(
-                    $"\nNUMERAR {partes.Identity.Label} tem {partes.Contours.Count} contornos com a mesma identidade (mesa copiada e colada). "
-                    + "Apague a cópia, ou use o Regerar área.\n");
+                editor.WriteMessage(Tr.F(
+                    "\nNUMERAR {0} tem {1} contornos com a mesma identidade (mesa copiada e colada). Apague a cópia, ou use o Regerar área.\n",
+                    partes.Identity.Label, partes.Contours.Count));
                 return null;
             }
 
@@ -124,14 +124,14 @@ public static class NumerarCommands
             }
             catch (ArgumentException erro)
             {
-                editor.WriteMessage($"\nNUMERAR {partes.Identity.Label}: {erro.Message} Use o Regerar área.\n");
+                editor.WriteMessage(Tr.F("\nNUMERAR {0}: {1} Use o Regerar área.\n", partes.Identity.Label, erro.Message));
                 return null;
             }
         }
 
         if (lidas.Count == 0)
         {
-            editor.WriteMessage("\nNUMERAR Nenhuma mesa com contorno para numerar.\n");
+            editor.WriteMessage(Tr.T("\nNUMERAR Nenhuma mesa com contorno para numerar.\n"));
             return null;
         }
 
@@ -146,8 +146,8 @@ public static class NumerarCommands
     {
         while (true)
         {
-            var opcoes = new PromptEntityOptions($"\n{qual}: clique numa peça ou [Letreiro]", "Letreiro");
-            opcoes.SetRejectMessage("\nIsso não é uma peça de mesa do plugin.");
+            var opcoes = new PromptEntityOptions(Tr.F("\n{0}: clique numa peça ou [Letreiro]", qual), "Letreiro");
+            opcoes.SetRejectMessage(Tr.T("\nIsso não é uma peça de mesa do plugin."));
             opcoes.AddAllowedClass(typeof(Entity), false);
             opcoes.AllowNone = false;
 
@@ -155,7 +155,7 @@ public static class NumerarCommands
 
             if (resposta.Status == PromptStatus.Keyword)
             {
-                var letreiro = editor.GetString(new PromptStringOptions($"\n{qual}: letreiro atual (como F1.1): ") { AllowSpaces = false });
+                var letreiro = editor.GetString(new PromptStringOptions(Tr.F("\n{0}: letreiro atual (como F1.1): ", qual)) { AllowSpaces = false });
                 if (letreiro.Status != PromptStatus.OK) return null;
 
                 var achadas = celulas.Where(c => string.Equals(c.Value.Partes.Identity!.Label, letreiro.StringResult.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
@@ -163,8 +163,8 @@ public static class NumerarCommands
                 if (achadas.Count == 1) return achadas[0].Key;
 
                 editor.WriteMessage(achadas.Count == 0
-                    ? $"\nNUMERAR Não há mesa com o letreiro \"{letreiro.StringResult}\".\n"
-                    : $"\nNUMERAR Há {achadas.Count} mesas com o letreiro \"{letreiro.StringResult}\"; clique na que você quer.\n");
+                    ? Tr.F("\nNUMERAR Não há mesa com o letreiro \"{0}\".\n", letreiro.StringResult)
+                    : Tr.F("\nNUMERAR Há {0} mesas com o letreiro \"{1}\"; clique na que você quer.\n", achadas.Count, letreiro.StringResult));
                 continue;
             }
 
@@ -177,7 +177,7 @@ public static class NumerarCommands
 
             if (guid is { } g && celulas.ContainsKey(g)) return g;
 
-            editor.WriteMessage("\nNUMERAR Isso não é uma peça de mesa do plugin.\n");
+            editor.WriteMessage(Tr.T("\nNUMERAR Isso não é uma peça de mesa do plugin.\n"));
         }
     }
 

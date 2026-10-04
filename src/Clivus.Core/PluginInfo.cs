@@ -341,7 +341,7 @@ public static class PluginInfo
     /// A linha que o comando CLIVUS_OLA escreve na linha de comando do Civil 3D.
     /// </summary>
     public static string MensagemDeApresentacao(string? versao) =>
-        $"{Nome} carregado, versão {VersaoLegivel(versao)}";
+        Tr.F("{0} carregado, versão {1}", Nome, VersaoLegivel(versao));
 
     /// <summary>
     /// A versão como o usuário lê: sem o sufixo de build que o SDK acrescenta.

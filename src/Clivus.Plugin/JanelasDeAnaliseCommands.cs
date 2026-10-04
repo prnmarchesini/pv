@@ -12,10 +12,10 @@ namespace Clivus.Plugin;
 public static class JanelasDeAnaliseCommands
 {
     [CommandMethod(PluginInfo.ComandoAnalises)]
-    public static void Analises() => Abrir("análises", AbrirAnalises);
+    public static void Analises() => Abrir(Tr.N("análises"), AbrirAnalises);
 
     [CommandMethod(PluginInfo.ComandoTags)]
-    public static void Tags() => Abrir("tags", AbrirTags);
+    public static void Tags() => Abrir(Tr.N("tags"), AbrirTags);
 
     private static void Abrir(string nome, Action<Document> abrir)
     {
@@ -24,7 +24,7 @@ public static class JanelasDeAnaliseCommands
 
         if (!ClivusExtension.TemInterface())
         {
-            documento.Editor.WriteMessage($"\nA janela de {nome} precisa da interface do Civil 3D.\n");
+            documento.Editor.WriteMessage(Tr.F("\nA janela de {0} precisa da interface do Civil 3D.\n", Tr.T(nome)));
             return;
         }
 
@@ -35,7 +35,7 @@ public static class JanelasDeAnaliseCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar($"Falha na janela de {nome}.", erro);
-            documento.Editor.WriteMessage($"\nNão consegui abrir a janela de {nome}: {erro.Message}\n");
+            documento.Editor.WriteMessage(Tr.F("\nNão consegui abrir a janela de {0}: {1}\n", Tr.T(nome), erro.Message));
         }
     }
 

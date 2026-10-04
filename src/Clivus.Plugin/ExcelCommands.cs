@@ -33,12 +33,12 @@ public static class ExcelCommands
 
             // Sempre a janela do Windows (regra de 02/10/2026).
             var caminho = DialogoDeArquivo.Salvar(
-                "Exportar para o Excel", "Pasta de trabalho do Excel (*.xlsx)|*.xlsx", nome + " - quantidades.xlsx",
+                Tr.T("Exportar para o Excel"), Tr.T("Pasta de trabalho do Excel (*.xlsx)|*.xlsx"), nome + " - quantidades.xlsx",
                 documento.IsNamedDrawing ? Path.GetDirectoryName(documento.Name) : null);
 
             if (caminho is null)
             {
-                editor.WriteMessage("\nEXCEL Cancelado.\n");
+                editor.WriteMessage(Tr.T("\nEXCEL Cancelado.\n"));
                 return;
             }
 
@@ -47,7 +47,7 @@ public static class ExcelCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao exportar para o Excel.", erro);
-            editor.WriteMessage($"\nNão consegui exportar para o Excel: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui exportar para o Excel: {0}\n", erro.Message));
         }
     }
 
@@ -62,7 +62,7 @@ public static class ExcelCommands
 
         try
         {
-            var resposta = editor.GetString(new PromptStringOptions("\nArquivo XLSX: ") { AllowSpaces = true });
+            var resposta = editor.GetString(new PromptStringOptions(Tr.T("\nArquivo XLSX: ")) { AllowSpaces = true });
             if (resposta.Status != PromptStatus.OK || string.IsNullOrWhiteSpace(resposta.StringResult)) return;
 
             Gravar(editor, documento.Database, resposta.StringResult.Trim());
@@ -70,7 +70,7 @@ public static class ExcelCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha no CLIVUS_EXCEL_AUTO.", erro);
-            editor.WriteMessage($"\nNão consegui exportar para o Excel: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui exportar para o Excel: {0}\n", erro.Message));
         }
     }
 
@@ -87,12 +87,12 @@ public static class ExcelCommands
 
         File.WriteAllBytes(caminho, QuantityReport.Build(mesas, modulos, kwp, pilares, quantificacoes).ToBytes());
 
-        editor.WriteMessage(
-            $"\nEXCEL {mesas} mesa(s), {modulos} módulo(s), {pilares.Count} pilar(es), "
-            + $"{quantificacoes.Count} análise(s) quantificada(s) em {caminho}\n");
+        editor.WriteMessage(Tr.F(
+            "\nEXCEL {0} mesa(s), {1} módulo(s), {2} pilar(es), {3} análise(s) quantificada(s) em {4}\n",
+            mesas, modulos, pilares.Count, quantificacoes.Count, caminho));
 
         if (quantificacoes.Count == 0)
-            editor.WriteMessage("  Nenhuma análise quantificada ainda: use o Quantificar de cada análise para elas entrarem.\n");
+            editor.WriteMessage(Tr.T("  Nenhuma análise quantificada ainda: use o Quantificar de cada análise para elas entrarem.\n"));
     }
 
     private static (int Mesas, int Modulos, double Kwp, List<QuantityPillar> Pilares) Ler(Database database)

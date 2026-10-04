@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Clivus.Core;
 
 /// <summary>
@@ -8,8 +6,6 @@ namespace Clivus.Core;
 /// </summary>
 public static class TerrainReport
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>As linhas do resumo.</summary>
     /// <param name="terreno">O terreno processado.</param>
     /// <param name="estado">O estado do carimbo ("Atual", "Desatualizado"), ou null.</param>
@@ -20,29 +16,27 @@ public static class TerrainReport
 
         var linhas = new List<string>
         {
-            $"Terreno: {terreno.SurfaceName}" + (estado is null ? "" : $" ({estado})"),
-            $"Área: {terreno.Hectares.ToString("N2", Brasil)} ha em planta ({terreno.Area2D.ToString("N0", Brasil)} m²), "
-                + $"{(terreno.Area3D / 10_000).ToString("N2", Brasil)} ha na superfície",
-            $"Cotas: {terreno.MinZ.ToString("N2", Brasil)} a {terreno.MaxZ.ToString("N2", Brasil)} m "
-                + $"(desnível {terreno.Desnivel.ToString("N2", Brasil)} m)",
+            Tr.F("Terreno: {0}", terreno.SurfaceName) + (estado is null ? "" : $" ({estado})"),
+            Tr.F("Área: {0:N2} ha em planta ({1:N0} m²), {2:N2} ha na superfície", terreno.Hectares, terreno.Area2D, terreno.Area3D / 10_000),
+            Tr.F("Cotas: {0:N2} a {1:N2} m (desnível {2:N2} m)", terreno.MinZ, terreno.MaxZ, terreno.Desnivel),
         };
 
         if (lugar is null || !lugar.IsValid || lugar.LooksUnset)
         {
-            linhas.Add("Localização: não definida (defina com o botão Localização, ou dê um sistema de coordenadas ao desenho)");
+            linhas.Add(Tr.T("Localização: não definida (defina com o botão Localização, ou dê um sistema de coordenadas ao desenho)"));
             return linhas;
         }
 
-        linhas.Add($"Localização: {lugar.Describe()}");
+        linhas.Add(Tr.F("Localização: {0}", lugar.Describe()));
 
         var cidade = TerrainPlace.Nearest(lugar.Latitude, lugar.Longitude);
         var pais = TerrainPlace.Country(cidade);
 
         linhas.Add(pais is null
-            ? $"Cidade: fora do Brasil (a sede brasileira mais perto, {cidade.City.Name} - {cidade.City.State}, fica a {cidade.DistanceKm.ToString("N0", Brasil)} km)"
-            : $"Cidade: {cidade.City.Name} - {cidade.City.State} (sede a {cidade.DistanceKm.ToString("N1", Brasil)} km)");
-        linhas.Add($"País: {pais ?? "não identificado"}");
-        linhas.Add($"Fuso: {TerrainPlace.Utm(lugar.Latitude, lugar.Longitude).Describe()}");
+            ? Tr.F("Cidade: fora do Brasil (a sede brasileira mais perto, {0} - {1}, fica a {2:N0} km)", cidade.City.Name, cidade.City.State, cidade.DistanceKm)
+            : Tr.F("Cidade: {0} - {1} (sede a {2:N1} km)", cidade.City.Name, cidade.City.State, cidade.DistanceKm));
+        linhas.Add(Tr.F("País: {0}", pais is null ? Tr.T("não identificado") : Tr.T(pais)));
+        linhas.Add(Tr.F("Fuso: {0}", TerrainPlace.Utm(lugar.Latitude, lugar.Longitude).Describe()));
 
         return linhas;
     }

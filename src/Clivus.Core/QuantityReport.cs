@@ -20,8 +20,6 @@ public sealed record QuantityPillar(string Table, int Number, double Embedded, d
 /// </summary>
 public static class QuantityReport
 {
-    private static readonly System.Globalization.CultureInfo Brasil = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>A planilha.</summary>
     /// <param name="mesas">Quantas mesas.</param>
     /// <param name="modulos">Quantos módulos.</param>
@@ -35,35 +33,36 @@ public static class QuantityReport
 
         var planilha = new XlsxWriter();
 
-        var resumo = planilha.Sheet("Resumo");
-        resumo.Add(["Item", "Quantidade", "Unidade"]);
-        resumo.Add(["Mesas", mesas, "un"]);
-        resumo.Add(["Módulos", modulos, "un"]);
-        resumo.Add(["Potência", Math.Round(kwp, 3), "kWp"]);
-        resumo.Add(["Pilares", pilares.Count, "un"]);
-        resumo.Add(["Pilares com problema (sem comprimento)", pilares.Count(p => p.Length is null), "un"]);
-        resumo.Add(["Pilar: soma dos comprimentos totais", Math.Round(pilares.Sum(p => p.Length ?? 0), 3), "m"]);
-        resumo.Add(["Pilar: soma do enterrado", Math.Round(pilares.Sum(p => p.Embedded), 3), "m"]);
-        resumo.Add(["Pilar: soma do acima do terreno", Math.Round(pilares.Sum(p => p.Above ?? 0), 3), "m"]);
+        var un = Tr.T("un");
+        var resumo = planilha.Sheet(Tr.T("Resumo"));
+        resumo.Add([Tr.T("Item"), Tr.T("Quantidade"), Tr.T("Unidade")]);
+        resumo.Add([Tr.T("Mesas"), mesas, un]);
+        resumo.Add([Tr.T("Módulos"), modulos, un]);
+        resumo.Add([Tr.T("Potência"), Math.Round(kwp, 3), "kWp"]);
+        resumo.Add([Tr.T("Pilares"), pilares.Count, un]);
+        resumo.Add([Tr.T("Pilares com problema (sem comprimento)"), pilares.Count(p => p.Length is null), un]);
+        resumo.Add([Tr.T("Pilar: soma dos comprimentos totais"), Math.Round(pilares.Sum(p => p.Length ?? 0), 3), "m"]);
+        resumo.Add([Tr.T("Pilar: soma do enterrado"), Math.Round(pilares.Sum(p => p.Embedded), 3), "m"]);
+        resumo.Add([Tr.T("Pilar: soma do acima do terreno"), Math.Round(pilares.Sum(p => p.Above ?? 0), 3), "m"]);
 
-        var analises = planilha.Sheet("Análises");
-        analises.Add(["Análise", "Contado em", "Abaixo de", "Qtde abaixo", "Dentro", "Acima de", "Qtde acima", "Sem valor", "Total", "Quando"]);
+        var analises = planilha.Sheet(Tr.T("Análises"));
+        analises.Add([Tr.T("Análise"), Tr.T("Contado em"), Tr.T("Abaixo de"), Tr.T("Qtde abaixo"), Tr.T("Dentro"), Tr.T("Acima de"), Tr.T("Qtde acima"), Tr.T("Sem valor"), Tr.T("Total"), Tr.T("Quando")]);
 
         foreach (var q in quantificacoes.OrderBy(q => q.Kind))
         {
-            Linha(analises, q, q.Points, q.Kind == IndependentKind.Slope ? "mesas" : "pilares");
-            if (q.Modules is not null) Linha(analises, q, q.Modules, "módulos");
+            Linha(analises, q, q.Points, q.Kind == IndependentKind.Slope ? Tr.T("mesas") : Tr.T("pilares"));
+            if (q.Modules is not null) Linha(analises, q, q.Modules, Tr.T("módulos"));
         }
 
-        var aba = planilha.Sheet("Pilares");
-        aba.Add(["Mesa", "Pilar", "Enterrado (m)", "Acima do terreno (m)", "Total (m)"]);
+        var aba = planilha.Sheet(Tr.T("Pilares"));
+        aba.Add([Tr.T("Mesa"), Tr.T("Pilar"), Tr.T("Enterrado (m)"), Tr.T("Acima do terreno (m)"), Tr.T("Total (m)")]);
 
         foreach (var p in pilares.OrderBy(p => p.Table, StringComparer.Ordinal).ThenBy(p => p.Number))
             aba.Add([p.Table, p.Number, Math.Round(p.Embedded, 3), Arredondar(p.Above), Arredondar(p.Length)]);
 
         // Os comprimentos agrupados: é a lista de compra do ferro.
-        var compra = planilha.Sheet("Compra de pilares");
-        compra.Add(["Comprimento total (m)", "Quantidade"]);
+        var compra = planilha.Sheet(Tr.T("Compra de pilares"));
+        compra.Add([Tr.T("Comprimento total (m)"), Tr.T("Quantidade")]);
 
         foreach (var g in pilares.Where(p => p.Length is not null).GroupBy(p => Math.Round(p.Length!.Value, 2)).OrderBy(g => g.Key))
             compra.Add([g.Key, g.Count()]);
@@ -78,14 +77,14 @@ public static class QuantityReport
         aba.Add([
             IndependentAnalysis.Name(q.Kind),
             unidade,
-            q.Rule.Below is { } b ? b.ToString("0.###", Brasil) + sufixo : "—",
+            q.Rule.Below is { } b ? b.ToString("0.###", Tr.Culture) + sufixo : "—",
             c.Below,
             c.Inside,
-            q.Rule.Above is { } a ? a.ToString("0.###", Brasil) + sufixo : "—",
+            q.Rule.Above is { } a ? a.ToString("0.###", Tr.Culture) + sufixo : "—",
             c.Above,
             c.Missing,
             c.Total,
-            q.When.ToString("dd/MM/yyyy HH:mm", Brasil),
+            q.When.ToString("dd/MM/yyyy HH:mm", Tr.Culture),
         ]);
     }
 
