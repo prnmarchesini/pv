@@ -4255,6 +4255,10 @@ function Testar-Ativar {
     }
 }
 
+# ---- a parte eletrica (plano/eletrica): os casos ficam em eletrica-*.ps1 ---
+
+. (Join-Path $PSScriptRoot 'eletrica.ps1')
+
 # ---- a licenca da rodada ---------------------------------------------------
 
 # Com a chave publica de producao embutida, sem licenca todo comando do
@@ -4482,6 +4486,12 @@ else {
     # Os idiomas: ingles e espanhol (etapa 10).
     $total++
     if (Testar-Idioma -Desenho $desenhos[0]) { $passaram++ }
+
+    # A parte eletrica (plano/eletrica), um caso por passo.
+    foreach ($caso in $CasosEletricos) {
+        $total++
+        if (& $caso -Desenho $desenhos[0]) { $passaram++ }
+    }
 }
 
 # ---- veredito --------------------------------------------------------------

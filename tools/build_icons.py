@@ -168,6 +168,10 @@ def icones():
         'edicao': ([T(mesa(3, 17, 15, 8)), T('M15,17 L25,7 L28,10 L18,20 L14,21 Z'), ambar_cheio('M15,17 L18,20 L14,21 Z')],
                    [t(mesa(3, 17, 15, 8)), t('M16,17 L26,7')]),
         'objetos': (arvore32[:2] + [ambar_cheio(modulo(26, 26, 6, 4))], arvore16),
+        # Elétrica (11.1): dois módulos ligados pelo cabo da string, + e -.
+        'string': ([T(modulo(9, 10, 9, 6)), T(modulo(23, 10, 9, 6)), ambar_traco('M9,14 C9,24 23,24 23,14', L),
+                    ambar_traco('M3,27 H9 M6,24 V30', L), T('M23,27 H29')],
+                   [t(modulo(9, 10, 11, 7)), t(modulo(23, 10, 11, 7)), ambar_traco('M9,15 C9,28 23,28 23,15', S)]),
     }
 
 

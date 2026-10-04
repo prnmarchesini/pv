@@ -105,6 +105,10 @@ public static class RibbonLayout
                 ]),
                 B(Tr.N("Sombras"), PluginInfo.ComandoSombras, Tr.N("Escolhe o dia e o horário (ou um dia, um mês, um ano inteiro) e desenha a sombra dos objetos no terreno e sobre as mesas, marcando os módulos que ela pega; no período, o pior caso."), "sombras", grande: true),
             ]),
+            new(Tr.N("Elétrica"),
+            [
+                B(Tr.N("String"), PluginInfo.ComandoString, Tr.N("Os tipos de string (a biblioteca) e a geração do traçado das strings sobre os módulos."), "string", grande: true),
+            ]),
             new(Tr.N("Saída"),
             [
                 B(Tr.N("PVsyst"), PluginInfo.ComandoExportar, Tr.N("Exporta as faces dos módulos escolhidos para o PVsyst (DAE)."), "pvsyst", grande: true),

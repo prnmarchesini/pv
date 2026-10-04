@@ -225,6 +225,12 @@ public static class PluginInfo
     /// <summary>O idioma da tela (etapa 10): Automático, Português, English, Español.</summary>
     public const string ComandoIdioma = "CLIVUS_IDIOMA";
 
+    /// <summary>A janela das strings (elétrica, 11.1): abas Configuração (tipos de string) e Gerar.</summary>
+    public const string ComandoString = "CLIVUS_STRING";
+
+    /// <summary>A biblioteca de tipos de string pela linha de comando. Para o nível 2.</summary>
+    public const string ComandoStringTipoAutomatico = "CLIVUS_STRING_TIPO_AUTO";
+
     /// <summary>A janela da licença: o código gerado no portal do app ativa o plugin nesta máquina.</summary>
     public const string ComandoAtivar = "CLIVUS_ATIVAR";
 

@@ -12,6 +12,13 @@ O plano de EXECUÇÃO está em `plano/`. Leia nesta ordem antes de qualquer cód
 5. `plano/PROGRESSO.md` (onde você está)
 6. O arquivo da etapa atual em `plano/etapas/`
 
+## Parte elétrica (desde 04/10/2026)
+
+O módulo elétrico (strings, subestação, trafo, inversor, numeração, resumo)
+tem plano próprio em `plano/eletrica/`: comece por `plano/eletrica/LEIA-PRIMEIRO.md`
+e siga o `plano/eletrica/PROGRESSO.md`. Lá vale **um passo por vez, parando
+para o Renan validar**, com revisão por subagente em cada passo.
+
 ## Regra de ouro
 
 **Um passo por vez. Ao terminar um passo, PARE e espere o Renan validar.** Não comece o passo seguinte, não "adiante" código, não faça nada fora do escopo do passo. Se achar algo que precisa ser feito fora do escopo, anote em `plano/PROGRESSO.md` na seção "Observações" e siga.
