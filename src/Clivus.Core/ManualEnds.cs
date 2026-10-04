@@ -28,8 +28,6 @@ public sealed record ManualEndsResult(ProcessedRow Row, double FirstLowEdge, dou
 /// </summary>
 public static class ManualEnds
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>A diferença aceita entre a altura pedida e a medida, em metro.</summary>
     private const double Folga = 0.0002;
 
@@ -37,6 +35,9 @@ public static class ManualEnds
 
     /// <summary>A nota que a mesa carrega quando as pontas foram escolhidas à mão.</summary>
     public const string Note = "alturas das pontas definidas à mão";
+
+    /// <summary>A mesma nota no idioma da tela (é ela que vai para o motivo da mesa).</summary>
+    private static string NotaNaTela => Tr.T("alturas das pontas definidas à mão");
 
     /// <summary>
     /// Refaz a mesa com as alturas pedidas.
@@ -69,11 +70,11 @@ public static class ManualEnds
         foreach (var pedida in new[] { firstLowEdge, lastLowEdge })
         {
             if (pedida is { } h && (!double.IsFinite(h) || Math.Abs(h) > PillarSizing.MaiorAlturaLivre))
-                throw new ArgumentOutOfRangeException(nameof(firstLowEdge), h, "A altura pedida precisa ser um número de até 20 m.");
+                throw new ArgumentOutOfRangeException(nameof(firstLowEdge), h, Tr.T("A altura pedida precisa ser um número de até 20 m."));
         }
 
         if (geometry.Pillars.Count == 0)
-            throw new InvalidOperationException("A mesa não tem pilar para medir a altura das pontas.");
+            throw new InvalidOperationException(Tr.T("A mesa não tem pilar para medir a altura das pontas."));
 
         var sA = geometry.Pillars[0].Station;
         var sB = geometry.Pillars[^1].Station;
@@ -82,12 +83,12 @@ public static class ManualEnds
         // Um pilar só: as duas pontas são o mesmo ponto, e duas alturas
         // diferentes não têm reta que as una.
         if (Math.Abs(sB - sA) < 1e-9 && firstLowEdge is { } a1 && lastLowEdge is { } b1 && Math.Abs(a1 - b1) > Folga)
-            throw new InvalidOperationException("A mesa tem um pilar só: as duas pontas têm a mesma altura.");
+            throw new InvalidOperationException(Tr.T("A mesa tem um pilar só: as duas pontas têm a mesma altura."));
 
         var z0 = currentStart;
         var z1 = currentEnd;
 
-        var linha = RowPipeline.ProcessFixed(cell, geometry, tiltRadians, terrain, settings, z0, z1, Note);
+        var linha = RowPipeline.ProcessFixed(cell, geometry, tiltRadians, terrain, settings, z0, z1, NotaNaTela);
         var (cA, cB) = Pontas(linha);
 
         // A ponta sem valor fica como está: o alvo é o que ela mede agora.
@@ -107,7 +108,7 @@ public static class ManualEnds
             z0 += d0;
             z1 += d0 + inclinacao * l;
 
-            linha = RowPipeline.ProcessFixed(cell, geometry, tiltRadians, terrain, settings, z0, z1, Note);
+            linha = RowPipeline.ProcessFixed(cell, geometry, tiltRadians, terrain, settings, z0, z1, NotaNaTela);
             (cA, cB) = Pontas(linha);
         }
 
@@ -117,8 +118,8 @@ public static class ManualEnds
         if (Math.Abs(cA - alvoA) > Folga * 10 || Math.Abs(cB - alvoB) > Folga * 10)
         {
             throw new InvalidOperationException(
-                $"Não consegui chegar às alturas pedidas ({alvoA.ToString("0.00", Brasil)} e {alvoB.ToString("0.00", Brasil)} m): "
-                + $"fiquei em {cA.ToString("0.000", Brasil)} e {cB.ToString("0.000", Brasil)} m. O terreno sob a ponta muda demais com o giro.");
+                Tr.F("Não consegui chegar às alturas pedidas ({0:0.00} e {1:0.00} m): fiquei em {2:0.000} e {3:0.000} m. O terreno sob a ponta muda demais com o giro.",
+                    alvoA, alvoB, cA, cB));
         }
 
         var avisos = new List<string>();
@@ -127,18 +128,18 @@ public static class ManualEnds
 
         if (settings.Configuration.MaxLongitudinalSlope is { } limite && giro > limite + 1e-9)
         {
-            avisos.Add(
-                $"a mesa ficou com {(giro * 180 / Math.PI).ToString("0.#", Brasil)}° de declividade longitudinal, "
-                + $"acima do limite de {(limite * 180 / Math.PI).ToString("0.#", Brasil)}°");
+            avisos.Add(Tr.F(
+                "a mesa ficou com {0:0.#}° de declividade longitudinal, acima do limite de {1:0.#}°",
+                giro * 180 / Math.PI, limite * 180 / Math.PI));
         }
 
         var enterrados = mesa.Report.Modules.Count(m => m.Clearance is < 0);
         var foraDaFaixa = mesa.Report.ModulesOutsideBand;
 
-        if (mesa.Solved.Marked) avisos.Add($"a mesa ficou MARCADA (não cabe): {mesa.Solved.Reason}");
-        if (enterrados > 0) avisos.Add($"{enterrados} módulo(s) com a ponta baixa ENTERRADA");
-        if (foraDaFaixa > 0) avisos.Add($"{foraDaFaixa} módulo(s) com a ponta baixa fora da faixa (pintados pela análise)");
-        if (mesa.Pillars.ProblemCount > 0) avisos.Add($"{mesa.Pillars.ProblemCount} pilar(es) com problema");
+        if (mesa.Solved.Marked) avisos.Add(Tr.F("a mesa ficou MARCADA (não cabe): {0}", mesa.Solved.Reason));
+        if (enterrados > 0) avisos.Add(Tr.F("{0} módulo(s) com a ponta baixa ENTERRADA", enterrados));
+        if (foraDaFaixa > 0) avisos.Add(Tr.F("{0} módulo(s) com a ponta baixa fora da faixa (pintados pela análise)", foraDaFaixa));
+        if (mesa.Pillars.ProblemCount > 0) avisos.Add(Tr.F("{0} pilar(es) com problema", mesa.Pillars.ProblemCount));
 
         return new ManualEndsResult(linha, cA, cB, avisos);
     }
@@ -149,7 +150,7 @@ public static class ManualEnds
         var pilares = linha.Tables[0].Pillars.Pillars;
 
         if (pilares[0].LowEdgeClearance is not { } a || pilares[^1].LowEdgeClearance is not { } b)
-            throw new InvalidOperationException("A ponta baixa de um pilar da ponta está fora do terreno: não há altura a medir.");
+            throw new InvalidOperationException(Tr.T("A ponta baixa de um pilar da ponta está fora do terreno: não há altura a medir."));
 
         return (a, b);
     }

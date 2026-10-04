@@ -37,15 +37,15 @@ public static class RenomearCommands
 
             editor.WriteMessage(
                 renomeados + apagados == 0
-                    ? "\nRENOMEAR Nenhum bloco do plugin com sufixo de outro desenho.\n"
-                    : $"\nRENOMEAR {renomeados} definição(ões) renomeada(s), {trocados} referência(s) trocada(s) para o bloco padrão, {apagados} definição(ões) apagada(s).\n");
+                    ? Tr.T("\nRENOMEAR Nenhum bloco do plugin com sufixo de outro desenho.\n")
+                    : Tr.F("\nRENOMEAR {0} definição(ões) renomeada(s), {1} referência(s) trocada(s) para o bloco padrão, {2} definição(ões) apagada(s).\n", renomeados, trocados, apagados));
 
             GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao renomear os blocos.", erro);
-            editor.WriteMessage($"\nNão consegui renomear os blocos: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui renomear os blocos: {0}\n", erro.Message));
         }
     }
 

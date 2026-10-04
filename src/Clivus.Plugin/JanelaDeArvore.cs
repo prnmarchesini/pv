@@ -12,8 +12,6 @@ namespace Clivus.Plugin;
 /// </summary>
 internal sealed class JanelaDeArvore : Window
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     private readonly TextBox _alturaTronco;
     private readonly TextBox _larguraTronco;
     private readonly TextBox _alturaCopa;
@@ -24,7 +22,7 @@ internal sealed class JanelaDeArvore : Window
 
     internal JanelaDeArvore(TreeSpec atual)
     {
-        Title = "Clivus Solar — Árvore";
+        Title = Tr.T("Clivus Solar — Árvore");
         Width = 420;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
@@ -32,12 +30,12 @@ internal sealed class JanelaDeArvore : Window
         ShowInTaskbar = false;
 
         TextBox Campo(double valor, string dica) =>
-            new() { Text = valor.ToString("0.##", Brasil), Width = 70, Margin = new Thickness(0, 3, 0, 3), ToolTip = dica };
+            new() { Text = valor.ToString("0.##", Tr.Culture), Width = 70, Margin = new Thickness(0, 3, 0, 3), ToolTip = dica };
 
-        _alturaTronco = Campo(atual.TrunkHeight, "Do chão até onde a copa começa, em metro.");
-        _larguraTronco = Campo(atual.TrunkWidth, "O diâmetro do tronco, em metro.");
-        _alturaCopa = Campo(atual.CrownHeight, "Da base da copa até o topo da árvore, em metro.");
-        _larguraCopa = Campo(atual.CrownWidth, "O diâmetro da copa, em metro.");
+        _alturaTronco = Campo(atual.TrunkHeight, Tr.T("Do chão até onde a copa começa, em metro."));
+        _larguraTronco = Campo(atual.TrunkWidth, Tr.T("O diâmetro do tronco, em metro."));
+        _alturaCopa = Campo(atual.CrownHeight, Tr.T("Da base da copa até o topo da árvore, em metro."));
+        _larguraCopa = Campo(atual.CrownWidth, Tr.T("O diâmetro da copa, em metro."));
 
         var grade = new Grid();
         grade.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -49,10 +47,10 @@ internal sealed class JanelaDeArvore : Window
             grade.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var texto = new TextBlock { Text = rotulo, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
             var a = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 12, 0) };
-            a.Children.Add(new TextBlock { Text = "altura ", VerticalAlignment = VerticalAlignment.Center });
+            a.Children.Add(new TextBlock { Text = Tr.T("altura "), VerticalAlignment = VerticalAlignment.Center });
             a.Children.Add(altura);
             var l = new StackPanel { Orientation = Orientation.Horizontal };
-            l.Children.Add(new TextBlock { Text = "largura ", VerticalAlignment = VerticalAlignment.Center });
+            l.Children.Add(new TextBlock { Text = Tr.T("largura "), VerticalAlignment = VerticalAlignment.Center });
             l.Children.Add(largura);
 
             Grid.SetRow(texto, linha);
@@ -65,8 +63,8 @@ internal sealed class JanelaDeArvore : Window
             grade.Children.Add(l);
         }
 
-        Linha(0, "Copa", _alturaCopa, _larguraCopa);
-        Linha(1, "Tronco", _alturaTronco, _larguraTronco);
+        Linha(0, Tr.T("Copa"), _alturaCopa, _larguraCopa);
+        Linha(1, Tr.T("Tronco"), _alturaTronco, _larguraTronco);
 
         // O pirulito, para lembrar o que é cada medida.
         var desenho = new Canvas { Width = 60, Height = 70, Margin = new Thickness(0, 0, 14, 0) };
@@ -84,7 +82,7 @@ internal sealed class JanelaDeArvore : Window
         pilha.Children.Add(corpo);
         pilha.Children.Add(new TextBlock
         {
-            Text = "Depois clique onde pôr cada árvore (Enter termina). O pé fica no terreno, e a árvore arrastada volta ao chão do lugar novo.",
+            Text = Tr.T("Depois clique onde pôr cada árvore (Enter termina). O pé fica no terreno, e a árvore arrastada volta ao chão do lugar novo."),
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brushes.Gray,
             Margin = new Thickness(0, 8, 0, 0),
@@ -92,10 +90,10 @@ internal sealed class JanelaDeArvore : Window
         pilha.Children.Add(_recado);
 
         var botoes = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
-        var ok = new Button { Content = "Pôr árvores", Width = 100, Height = 26, IsDefault = true, ToolTip = "Fecha a janela e começa os cliques no desenho." };
+        var ok = new Button { Content = Tr.T("Pôr árvores"), Width = 100, Height = 26, IsDefault = true, ToolTip = Tr.T("Fecha a janela e começa os cliques no desenho.") };
         ok.Click += (_, _) => Confirmar();
         botoes.Children.Add(ok);
-        botoes.Children.Add(new Button { Content = "Cancelar", Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true });
+        botoes.Children.Add(new Button { Content = Tr.T("Cancelar"), Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true });
         pilha.Children.Add(botoes);
 
         Content = pilha;
@@ -107,7 +105,7 @@ internal sealed class JanelaDeArvore : Window
 
         if (!Ler(_alturaTronco, out var ht) || !Ler(_larguraTronco, out var lt) || !Ler(_alturaCopa, out var hc) || !Ler(_larguraCopa, out var lc))
         {
-            _recado.Text = "Todas as medidas precisam ser números, em metro.";
+            _recado.Text = Tr.T("Todas as medidas precisam ser números, em metro.");
             return;
         }
 
@@ -115,7 +113,7 @@ internal sealed class JanelaDeArvore : Window
 
         if (medidas.WhyInvalid() is { } porque)
         {
-            _recado.Text = char.ToUpper(porque[0], Brasil) + porque[1..] + ".";
+            _recado.Text = char.ToUpper(porque[0], Tr.Culture) + porque[1..] + ".";
             return;
         }
 

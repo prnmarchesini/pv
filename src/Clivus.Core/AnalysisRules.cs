@@ -122,8 +122,6 @@ public sealed record AnalysisRules(
     EdgeRule EdgeRule,
     double? PaintPillarsLongerThan)
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>
     /// A folga numérica na comparação com o limite: um valor a um nanômetro
     /// do limite, por arredondamento de seno, está no limite — não fora dele.
@@ -170,7 +168,7 @@ public sealed record AnalysisRules(
     /// <exception cref="InvalidOperationException">Se a regra estiver ausente (null).</exception>
     public AnalysisRule Rule(AnalysisKind kind) =>
         RuleOrNull(kind)
-        ?? throw new InvalidOperationException($"A regra da análise de {Nome(kind)} está ausente.");
+        ?? throw new InvalidOperationException(Tr.F("A regra da análise de {0} está ausente.", Nome(kind)));
 
     /// <summary>
     /// Se a análise tem mínimo. Comprimento de pilar e declividade só têm
@@ -229,26 +227,26 @@ public sealed record AnalysisRules(
             foreach (var kind in RangedKinds)
             {
                 if (RuleOrNull(kind) is null)
-                    return $"a regra da análise de {Nome(kind)} está ausente";
+                    return Tr.F("a regra da análise de {0} está ausente", Nome(kind));
             }
 
             if (EdgeRule is null)
-                return $"a regra da análise de {Nome(AnalysisKind.EdgeTable)} está ausente";
+                return Tr.F("a regra da análise de {0} está ausente", Nome(AnalysisKind.EdgeTable));
 
             if (PaintPillarsLongerThan is { } teto
                 && (!double.IsFinite(teto) || teto <= 0 || teto > MaiorMedida))
             {
-                return "o limite de comprimento de pilar não é uma medida válida";
+                return Tr.T("o limite de comprimento de pilar não é uma medida válida");
             }
 
             foreach (var kind in RangedKinds)
             {
                 if (LayerName.WhyInvalid(Rule(kind).Layer) is { } motivo)
-                    return $"a camada da análise de {Nome(kind)} {motivo}";
+                    return Tr.F("a camada da análise de {0} {1}", Nome(kind), motivo);
             }
 
             if (LayerName.WhyInvalid(EdgeRule.Layer) is { } borda)
-                return $"a camada da análise de {Nome(AnalysisKind.EdgeTable)} {borda}";
+                return Tr.F("a camada da análise de {0} {1}", Nome(AnalysisKind.EdgeTable), borda);
 
             // O AutoCAD não distingue caixa em nome de camada: "CLIVUS_X" e
             // "clivus_x" são a mesma, e duas análises nela não se separam.
@@ -257,7 +255,7 @@ public sealed record AnalysisRules(
                 .FirstOrDefault(grupo => grupo.Count() > 1);
 
             if (repetida is not null)
-                return $"a camada \"{repetida.Key}\" está em mais de uma análise";
+                return Tr.F("a camada \"{0}\" está em mais de uma análise", repetida.Key);
 
             return null;
         }
@@ -287,7 +285,7 @@ public sealed record AnalysisRules(
         Conferir();
 
         if (configuration.WhyInvalid is { } motivo)
-            throw new InvalidOperationException($"A configuração não fecha: {motivo}.");
+            throw new InvalidOperationException(Tr.F("A configuração não fecha: {0}.", motivo));
 
         if (!double.IsFinite(value))
         {
@@ -329,15 +327,13 @@ public sealed record AnalysisRules(
     /// <summary>A linha que descreve as regras para o usuário.</summary>
     public string Describe()
     {
-        if (WhyInvalid is { } motivo) return $"Regras de análise inválidas: {motivo}.";
+        if (WhyInvalid is { } motivo) return Tr.F("Regras de análise inválidas: {0}.", motivo);
 
         var ligadas = RangedKinds.Count(kind => Rule(kind).Enabled) + (EdgeRule.Enabled ? 1 : 0);
 
-        var pilar = PaintPillarsLongerThan is { } teto
-            ? $", pilar pintado acima de {teto.ToString("0.###", Brasil)} m"
-            : ", sem limite de pilar";
-
-        return $"{ligadas} análises ligadas de {RangedKinds.Count + 1}{pilar}";
+        return PaintPillarsLongerThan is { } teto
+            ? Tr.F("{0} análises ligadas de {1}, pilar pintado acima de {2:0.###} m", ligadas, RangedKinds.Count + 1, teto)
+            : Tr.F("{0} análises ligadas de {1}, sem limite de pilar", ligadas, RangedKinds.Count + 1);
     }
 
     /// <summary>
@@ -357,7 +353,7 @@ public sealed record AnalysisRules(
     private void Conferir()
     {
         if (WhyInvalid is { } motivo)
-            throw new InvalidOperationException($"As regras de análise não fecham: {motivo}.");
+            throw new InvalidOperationException(Tr.F("As regras de análise não fecham: {0}.", motivo));
     }
 
     private static AnalysisRule Faixa(string camada) =>
@@ -365,11 +361,11 @@ public sealed record AnalysisRules(
 
     private static string Nome(AnalysisKind kind) => kind switch
     {
-        AnalysisKind.LowEdge => "ponta baixa",
-        AnalysisKind.PillarLength => "comprimento de pilar",
-        AnalysisKind.Embedment => "enterro",
-        AnalysisKind.LongitudinalSlope => "declividade longitudinal",
-        AnalysisKind.EdgeTable => "mesa na borda",
+        AnalysisKind.LowEdge => Tr.T("ponta baixa"),
+        AnalysisKind.PillarLength => Tr.T("comprimento de pilar"),
+        AnalysisKind.Embedment => Tr.T("enterro"),
+        AnalysisKind.LongitudinalSlope => Tr.T("declividade longitudinal"),
+        AnalysisKind.EdgeTable => Tr.T("mesa na borda"),
         _ => kind.ToString(),
     };
 }

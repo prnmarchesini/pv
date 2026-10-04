@@ -92,8 +92,7 @@ public sealed record RowSolution(IReadOnlyList<SolvedRun> Runs)
     {
         var fora = Runs.Sum(r => r.ViolationCount);
 
-        return $"{Tables.Count} mesa(s) em {Runs.Count} trecho(s): {MarkedCount} marcada(s), "
-            + $"{fora} módulo(s) fora da faixa";
+        return Tr.F("{0} mesa(s) em {1} trecho(s): {2} marcada(s), {3} módulo(s) fora da faixa", Tables.Count, Runs.Count, MarkedCount, fora);
     }
 }
 
@@ -199,8 +198,6 @@ public sealed record ChainWeights(
 /// </summary>
 public static class RowSolver
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>O passo padrão da grade de PB: um centímetro.</summary>
     public const double DefaultStep = 0.01;
 
@@ -233,7 +230,7 @@ public static class RowSolver
         if (tables.Count == 0) throw new ArgumentException("A fileira não tem mesa.", nameof(tables));
 
         if (configuration.WhyInvalid is { } motivo)
-            throw new InvalidOperationException($"A configuração não fecha: {motivo}.");
+            throw new InvalidOperationException(Tr.F("A configuração não fecha: {0}.", motivo));
 
         if (!double.IsFinite(step) || step < 1e-4 || step > 0.5)
             throw new ArgumentOutOfRangeException(nameof(step), step, "O passo da grade precisa ficar entre 0,1 mm e 50 cm.");
@@ -312,10 +309,10 @@ public static class RowSolver
 
         var semChao = mesa.Modules.Count(m => m.Ground is not { } g || !double.IsFinite(g));
         var motivo = mesa.Modules.Count == 0
-            ? "a mesa não tem módulo na fileira de baixo para conferir a ponta baixa"
+            ? Tr.T("a mesa não tem módulo na fileira de baixo para conferir a ponta baixa")
             : semChao > 0
-                ? $"{semChao} módulo(s) da fileira de baixo sem terreno embaixo"
-                : "uma ponta da mesa sem terreno embaixo";
+                ? Tr.F("{0} módulo(s) da fileira de baixo sem terreno embaixo", semChao)
+                : Tr.T("uma ponta da mesa sem terreno embaixo");
 
         if (cotas.Count == 0) return new SolvedTable(mesa.Label, 0, 0, mesa.Modules.Count, true, motivo, Seated: true);
 
@@ -362,8 +359,8 @@ public static class RowSolver
             if (juntas is null)
             {
                 throw new InvalidOperationException(
-                    $"A fileira de {mesas[0].Label} a {mesas[^1].Label} não fecha nem com {MargemMaxima:0} m de folga na ponta baixa: "
-                    + "o terreno é mais íngreme que a declividade permite por uma extensão grande demais.");
+                    Tr.F("A fileira de {0} a {1} não fecha nem com {2:0} m de folga na ponta baixa: o terreno é mais íngreme que a declividade permite por uma extensão grande demais.",
+                        mesas[0].Label, mesas[^1].Label, MargemMaxima));
             }
 
             var finas = juntas.Select(k => k * razao).ToArray();
@@ -568,12 +565,12 @@ public static class RowSolver
 
         var marcada = enterrados.Count > 0;
         var motivo = marcada
-            ? $"{enterrados.Count} módulo(s) com a ponta baixa dentro da terra (o {string.Join(", ", enterrados)}º da fileira de baixo, "
-                + $"contando da ponta inicial), até {Cm(maisEnterrado)} cm abaixo do chão"
+            ? Tr.F("{0} módulo(s) com a ponta baixa dentro da terra (o {1}º da fileira de baixo, contando da ponta inicial), até {2} cm abaixo do chão",
+                enterrados.Count, string.Join(", ", enterrados), Cm(maisEnterrado))
             : null;
 
         return new SolvedTable(mesa.Label, z0, z1, fora, marcada, motivo);
     }
 
-    private static string Cm(double metros) => (metros * 100).ToString("0", Brasil);
+    private static string Cm(double metros) => (metros * 100).ToString("0", Tr.Culture);
 }

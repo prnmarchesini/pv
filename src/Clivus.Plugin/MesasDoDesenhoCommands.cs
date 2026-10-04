@@ -31,12 +31,12 @@ public static class MesasDoDesenhoCommands
             mesas.Add(new DrawingTable(curta, DrawingTables.NextColor(mesas), true));
 
             MesasDoDesenho.Gravar(documento.Database, mesas);
-            documento.Editor.WriteMessage($"\nMESAS {mesas.Count} mesa(s) no desenho, em uso: {string.Join(", ", mesas.Select(m => m.Name))}.\n");
+            documento.Editor.WriteMessage(Tr.F("\nMESAS {0} mesa(s) no desenho, em uso: {1}.\n", mesas.Count, string.Join(", ", mesas.Select(m => m.Name))));
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha no CLIVUS_MESAS_EXEMPLO_AUTO.", erro);
-            documento.Editor.WriteMessage($"\nNão consegui gravar as mesas: {erro.Message}\n");
+            documento.Editor.WriteMessage(Tr.F("\nNão consegui gravar as mesas: {0}\n", erro.Message));
         }
     }
 }

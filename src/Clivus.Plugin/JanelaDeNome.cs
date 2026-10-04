@@ -43,7 +43,7 @@ internal sealed class JanelaDeNome : Window
         _ok.Click += (_, _) => Confirmar();
         botoes.Children.Add(_ok);
 
-        var cancelar = new Button { Content = "Cancelar", Width = 90, IsCancel = true };
+        var cancelar = new Button { Content = Clivus.Core.Tr.T("Cancelar"), Width = 90, IsCancel = true };
         botoes.Children.Add(cancelar);
 
         painel.Children.Add(botoes);
@@ -62,7 +62,7 @@ internal sealed class JanelaDeNome : Window
         {
             var nome = _caixa.Text.Trim();
 
-            _aviso.Text = nome.Length == 0 ? "Digite um nome." : string.Empty;
+            _aviso.Text = nome.Length == 0 ? Clivus.Core.Tr.T("Digite um nome.") : string.Empty;
             _ok.IsEnabled = nome.Length > 0 && nome.Length <= Perguntas.MaiorNome;
         }
         catch (System.Exception erro)

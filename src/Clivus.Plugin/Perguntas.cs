@@ -1,4 +1,5 @@
 using Autodesk.AutoCAD.EditorInput;
+using Clivus.Core;
 
 namespace Clivus.Plugin;
 
@@ -41,21 +42,21 @@ internal static class Perguntas
         {
             var nome = NomePelaJanela(oQue);
 
-            if (nome is null) editor.WriteMessage($"\n{oQueMaiusculo} ficou sem nome; nada foi feito.\n");
+            if (nome is null) editor.WriteMessage(Tr.F("\n{0} ficou sem nome; nada foi feito.\n", oQueMaiusculo));
 
             return nome;
         }
 
         while (true)
         {
-            var resposta = editor.GetString(new PromptStringOptions($"\nNome do {oQue}: ")
+            var resposta = editor.GetString(new PromptStringOptions(Tr.F("\nNome do {0}: ", oQue))
             {
                 AllowSpaces = true,
             });
 
             if (resposta.Status != PromptStatus.OK)
             {
-                editor.WriteMessage($"\n{oQueMaiusculo} ficou sem nome; nada foi feito.\n");
+                editor.WriteMessage(Tr.F("\n{0} ficou sem nome; nada foi feito.\n", oQueMaiusculo));
                 return null;
             }
 
@@ -63,14 +64,14 @@ internal static class Perguntas
 
             if (nome.Length == 0)
             {
-                editor.WriteMessage($"\n{oQueMaiusculo} precisa de um nome.\n");
+                editor.WriteMessage(Tr.F("\n{0} precisa de um nome.\n", oQueMaiusculo));
                 continue;
             }
 
             if (nome.Length > MaiorNome)
             {
                 editor.WriteMessage(
-                    $"\nNome longo demais ({nome.Length} caracteres). O limite é {MaiorNome}.\n");
+                    Tr.F("\nNome longo demais ({0} caracteres). O limite é {1}.\n", nome.Length, MaiorNome));
                 continue;
             }
 
@@ -81,7 +82,7 @@ internal static class Perguntas
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     private static string? NomePelaJanela(string oQue)
     {
-        var janela = new JanelaDeNome($"Nome do {oQue}", $"Como se chama este {oQue}?");
+        var janela = new JanelaDeNome(Tr.F("Nome do {0}", oQue), Tr.F("Como se chama este {0}?", oQue));
         var resultado = Autodesk.AutoCAD.ApplicationServices.Core.Application.ShowModalWindow(janela);
 
         return resultado == true ? janela.Nome : null;

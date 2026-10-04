@@ -76,7 +76,7 @@ public static class AnalisesIndependentesCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha no CLIVUS_AN_TESTE_PECAS.", erro);
-            documento.Editor.WriteMessage($"\nNão consegui: {erro.Message}\n");
+            documento.Editor.WriteMessage(Tr.F("\nNão consegui: {0}\n", erro.Message));
         }
     }
 
@@ -95,7 +95,7 @@ public static class AnalisesIndependentesCommands
         {
             RegistroDeDiagnostico.Registrar($"Não consegui ler a regra da análise {tipo}.", erro);
             AcadApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
-                $"\n  ATENÇÃO: a regra gravada de {IndependentAnalysis.Name(tipo)} não pôde ser lida; valeu a padrão.\n");
+                Tr.F("\n  ATENÇÃO: a regra gravada de {0} não pôde ser lida; valeu a padrão.\n", IndependentAnalysis.Name(tipo)));
             return IndependentAnalysis.Default(tipo);
         }
     }
@@ -129,14 +129,14 @@ public static class AnalisesIndependentesCommands
                     var (criados, mesas, ignoradas) = AnalisesIndependentes.Inserir(database, tipo, unidade);
 
                     editor.WriteMessage(mesas == 0
-                        ? $"\nANÁLISE {nome}: o desenho não tem mesa gerada pelo plugin; nada inserido.\n"
-                        : $"\nANÁLISE {nome}: {criados} entidade(s) de texto em {mesas} mesa(s), na camada {IndependentAnalysis.LayerName(tipo)}.\n");
+                        ? Tr.F("\nANÁLISE {0}: o desenho não tem mesa gerada pelo plugin; nada inserido.\n", nome)
+                        : Tr.F("\nANÁLISE {0}: {1} entidade(s) de texto em {2} mesa(s), na camada {3}.\n", nome, criados, mesas, IndependentAnalysis.LayerName(tipo)));
 
                     if (mesas > 0 && criados == 0)
-                        editor.WriteMessage("  As mesas não têm pilares com identidade: recalcule-as para a análise ter o que mostrar.\n");
+                        editor.WriteMessage(Tr.T("  As mesas não têm pilares com identidade: recalcule-as para a análise ter o que mostrar.\n"));
 
                     if (ignoradas > 0)
-                        editor.WriteMessage($"  {ignoradas} mesa(s) com contorno deformado (sem quatro cantos) ficaram de fora; use Validar.\n");
+                        editor.WriteMessage(Tr.F("  {0} mesa(s) com contorno deformado (sem quatro cantos) ficaram de fora; use Validar.\n", ignoradas));
                     break;
                 }
 
@@ -149,7 +149,7 @@ public static class AnalisesIndependentesCommands
                     {
                         if (!ClivusExtension.TemInterface())
                         {
-                            editor.WriteMessage("\nA janela da regra precisa da interface do Civil 3D.\n");
+                            editor.WriteMessage(Tr.T("\nA janela da regra precisa da interface do Civil 3D.\n"));
                             return;
                         }
 
@@ -167,7 +167,7 @@ public static class AnalisesIndependentesCommands
                             if (AnalisesIndependentes.Apagar(database, tipo) > 0)
                             {
                                 AnalisesIndependentes.Inserir(database, tipo, unidade);
-                                editor.WriteMessage("\n  Unidade da declividade trocada: os textos foram inseridos de novo nela.\n");
+                                editor.WriteMessage(Tr.T("\n  Unidade da declividade trocada: os textos foram inseridos de novo nela.\n"));
                             }
                         }
 
@@ -176,25 +176,26 @@ public static class AnalisesIndependentesCommands
                     }
 
                     var (textos, pecas) = AnalisesIndependentes.Analisar(database, tipo, regra, unidade);
-                    editor.WriteMessage($"\nANÁLISE {nome}: {textos} texto(s) pintado(s)"
-                        + (regra.PaintPieces ? $", {pecas} peça(s) pintada(s)" : "") + ".\n");
+                    editor.WriteMessage(regra.PaintPieces
+                        ? Tr.F("\nANÁLISE {0}: {1} texto(s) pintado(s), {2} peça(s) pintada(s).\n", nome, textos, pecas)
+                        : Tr.F("\nANÁLISE {0}: {1} texto(s) pintado(s).\n", nome, textos));
 
                     if (textos == 0 && !regra.PaintPieces)
-                        editor.WriteMessage("  Nenhum texto desta análise no desenho: insira os textos primeiro.\n");
+                        editor.WriteMessage(Tr.T("  Nenhum texto desta análise no desenho: insira os textos primeiro.\n"));
                     break;
                 }
 
                 case Acao.Apagar:
                 {
                     var apagadas = AnalisesIndependentes.Apagar(database, tipo);
-                    editor.WriteMessage($"\nANÁLISE {nome}: {apagadas} entidade(s) de texto apagada(s).\n");
+                    editor.WriteMessage(Tr.F("\nANÁLISE {0}: {1} entidade(s) de texto apagada(s).\n", nome, apagadas));
                     break;
                 }
 
                 case Acao.TirarCores:
                 {
                     var mexidas = AnalisesIndependentes.TirarCores(database, tipo);
-                    editor.WriteMessage($"\nANÁLISE {nome}: {mexidas} entidade(s) de volta à cor de antes.\n");
+                    editor.WriteMessage(Tr.F("\nANÁLISE {0}: {1} entidade(s) de volta à cor de antes.\n", nome, mexidas));
                     break;
                 }
 
@@ -205,16 +206,12 @@ public static class AnalisesIndependentesCommands
 
                     QuantificacaoGravada.Gravar(database, tipo, regra, unidade, pontos, modulos);
 
-                    var oQue = tipo switch
-                    {
-                        IndependentKind.Slope => "mesas",
-                        _ => "pilares",
-                    };
-
-                    editor.WriteMessage($"\nQUANTIFICAR {IndependentAnalysis.Describe(tipo, regra, pontos, unidade)} — em {oQue}.\n");
+                    editor.WriteMessage(tipo == IndependentKind.Slope
+                        ? Tr.F("\nQUANTIFICAR {0} — em mesas.\n", IndependentAnalysis.Describe(tipo, regra, pontos, unidade))
+                        : Tr.F("\nQUANTIFICAR {0} — em pilares.\n", IndependentAnalysis.Describe(tipo, regra, pontos, unidade)));
 
                     if (modulos is not null)
-                        editor.WriteMessage($"  módulos: {IndependentAnalysis.Describe(tipo, regra, modulos, unidade)}.\n");
+                        editor.WriteMessage(Tr.F("  módulos: {0}.\n", IndependentAnalysis.Describe(tipo, regra, modulos, unidade)));
                     break;
                 }
             }
@@ -224,7 +221,7 @@ public static class AnalisesIndependentesCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar($"Falha na análise {tipo} ({acao}).", erro);
-            editor.WriteMessage($"\nNão consegui fazer a análise de {nome}: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui fazer a análise de {0}: {1}\n", nome, erro.Message));
         }
     }
 
