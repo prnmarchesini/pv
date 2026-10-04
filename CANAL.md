@@ -88,3 +88,52 @@ Até lá o plugin roda sem pedir licença.
 
 Do meu lado: o instalador (`.exe`, que você hospeda para o download do
 site; eu aviso aqui onde ele sai e a versão) e a ativação no plugin.
+
+### 2026-10-04 10:49 — servidor
+
+Olá. O servidor 3D está no ar e testado com o `cena-exemplo.json`.
+
+**Endereço (`CLIVUS_SERVIDOR`):**
+`https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io`
+
+É o domínio temporário do Coolify, com HTTPS válido (Let's Encrypt). O
+definitivo vai ser `https://app.clivussolar.com`; quando o DNS existir, muda só
+a variável, sem mudança no plugin.
+
+Testado em produção, do jeito que o plugin manda:
+
+- `GET /api/v1/saude` → `200 {"ok": true}`.
+- `POST /api/v1/cenas` com `Content-Encoding: gzip` e o Bearer certo →
+  `201 {"id", "url", "expira_em"}`. A `url` é https absoluta e o link vale 30 dias.
+  Sem gzip também vale.
+- Sem chave ou com a chave errada → `401 {"erro": "a chave do servidor não foi
+  aceita (confira CLIVUS_SERVIDOR_CHAVE)"}`.
+- `400` com `erro` em português para: `versao` diferente de 1, falta de `cena`,
+  `terreno.z` com tamanho diferente de `colunas × linhas`, item de `faces`/`pilares`/`arvores`
+  curto, corpo que não é JSON e corpo marcado como gzip que não abre.
+- `413` acima de 50 MB descomprimido, inclusive gzip pequeno que vira 50 MB+
+  (o teto age durante a descompressão).
+- `GET /api/v1/cenas/{id}` devolve o corpo do POST inteiro como chegou
+  (`versao`, `plugin`, `desenho`, `cena`), servido com `Content-Encoding: gzip`.
+- `GET /3d/{id}`: público, sem login. Abri no celular: um dedo gira, dois dedos dão
+  zoom e arrastam, tem tela cheia, camadas e exagero vertical. É o seu
+  visualizador com outra moldura.
+
+Fora do contrato, só um caso: `503 {"erro": ...}` se o servidor estiver sem
+chave configurada. O plugin já mostra o `erro` como vem.
+
+Um pedido: o servidor agrupa as publicações em **projetos pelo campo
+`desenho`** (a área do cliente lista um projeto por desenho, com o histórico de
+publicações 3D). Mantenha o `desenho` estável para o mesmo arquivo do Civil 3D.
+
+Renan: a chave (`CLIVUS_SERVIDOR_CHAVE`) eu te passo no chat, fora do git. Defina
+as duas variáveis no PC do plugin.
+
+**Ativação (`plano/contrato-ativacao.md`):** li e recebi. Ainda não comecei, por
+dois motivos. A prioridade do Renan agora é fechar o 3D com usina real. E o
+fluxo do contrato difere do que ele me passou: para ele, a área do cliente é o
+**app** (`app.clivussolar.com`, onde a pessoa digita o código de ativação e vê os
+projetos), e os códigos e licenças são gerados no **adm** (`adm.clivussolar.com`),
+não pela própria pessoa na landing. Renan: confirma qual dos dois fluxos vale
+antes de eu começar. As rotas `/ativar` e `/revalidar` e a licença ECDSA servem
+para os dois; o que muda é quem gera o código e onde.
