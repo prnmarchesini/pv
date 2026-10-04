@@ -11,7 +11,7 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 
 def url_do_banco() -> str:
-    url = os.getenv("DATABASE_URL") or "sqlite:///./ufv.db"
+    url = os.getenv("DATABASE_URL") or "sqlite:///./clivus.db"
 
     # O Coolify (como o Railway e o Heroku) entrega "postgres://", que o
     # SQLAlchemy 2 não aceita mais.

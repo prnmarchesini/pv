@@ -1,0 +1,80 @@
+; Teste de nivel 2 do passo 7.2: o vigia. Processa uma fileira (como no 5.8)
+; e, com comandos do AutoCAD (nao nossos):
+;   - MOVE num pilar da mesa A: a mesa A tem que ficar suja no XData com o
+;     motivo "movida ou editada", e as pecas dela vermelhas;
+;   - ERASE no contorno da mesa B: a remocao tem que ser registrada, e o
+;     CLIVUS_ESTADO tem que listar B como removida;
+;   - U (desfazer o ERASE): o contorno de B volta, sai das removidas, e B
+;     NAO fica suja (o vigia se cala no desfazer);
+;   - nenhuma outra mesa muda de estado.
+; O LISP escolhe A e B pelos GUIDs do XData, nunca pela camada.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+; A mesa e um grupo (27/09/2026): este caso simula o usuario mexendo em UMA
+; peca, entao desliga a selecao por grupo (Ctrl+Shift+A na tela). O
+; rodar.ps1 devolve o PICKSTYLE do registro no fim, como o SECURELOAD.
+(setq clivus:pickstyle (getvar "PICKSTYLE"))
+(setvar "PICKSTYLE" 0)
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area do vigia")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento do vigia")
+(command "CLIVUS_FILEIRA_AUTO")
+
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:tipo (xd) (cdr (nth 0 xd)))
+(defun clivus:vermelho (e) (if (or (= (cdr (assoc 420 (entget e))) 16711680) (= (cdr (assoc 62 (entget e))) 1)) 1 0))
+
+; A e B: os dois primeiros contornos; um pilar de A.
+(setq clivus:tudo (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))))
+(setq clivus:n (if clivus:tudo (sslength clivus:tudo) 0))
+(setq clivus:ea nil clivus:eb nil clivus:ga nil clivus:gb nil clivus:i 0)
+(while (< clivus:i clivus:n)
+  (setq clivus:en (ssname clivus:tudo clivus:i) clivus:xd (clivus:xdata clivus:en))
+  (if (= (clivus:tipo clivus:xd) "Mesa")
+    (cond ((not clivus:ea) (setq clivus:ea clivus:en clivus:ga (clivus:campo clivus:xd 0)))
+          ((not clivus:eb) (setq clivus:eb clivus:en clivus:gb (clivus:campo clivus:xd 0)))))
+  (setq clivus:i (1+ clivus:i)))
+(setq clivus:pilar nil clivus:i 0)
+(while (and (< clivus:i clivus:n) (not clivus:pilar))
+  (setq clivus:en (ssname clivus:tudo clivus:i) clivus:xd (clivus:xdata clivus:en))
+  (if (and (= (clivus:tipo clivus:xd) "Pilar") (= (clivus:campo clivus:xd 1) clivus:ga)) (setq clivus:pilar clivus:en))
+  (setq clivus:i (1+ clivus:i)))
+(setq clivus:labelb (clivus:campo (clivus:xdata clivus:eb) 1))
+
+; Os comandos do AutoCAD, como o usuario faria.
+(setq clivus:ssa (ssadd clivus:pilar))
+(command "_.MOVE" clivus:ssa "" "0,0,0" "1,0,0")
+(setq clivus:ssb (ssadd clivus:eb))
+(command "_.ERASE" clivus:ssb "")
+(setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_ESTADO")
+(command "_.U")
+(command "CLIVUS_ESTADO")
+
+; O que ficou: estado de A no XData, pecas de A vermelhas, outras mesas limpas.
+(setq clivus:xda (clivus:xdata clivus:ea))
+(setq clivus:sujaa (clivus:campo clivus:xda 7) clivus:motivoa (clivus:campo clivus:xda 8))
+(setq clivus:pecasa 0 clivus:vermelhasa 0 clivus:outrassujas 0 clivus:contornos 0 clivus:i 0)
+(setq clivus:tudo (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))))
+(setq clivus:n (if clivus:tudo (sslength clivus:tudo) 0))
+(while (< clivus:i clivus:n)
+  (setq clivus:en (ssname clivus:tudo clivus:i) clivus:xd (clivus:xdata clivus:en) clivus:t (clivus:tipo clivus:xd))
+  (if (= clivus:t "Mesa")
+    (progn (setq clivus:contornos (1+ clivus:contornos))
+           (if (and (/= (clivus:campo clivus:xd 0) clivus:ga) (= (clivus:campo clivus:xd 7) "1")) (setq clivus:outrassujas (1+ clivus:outrassujas)))))
+  (if (and (/= clivus:t "Face") (/= clivus:t "Nota") (= (if (= clivus:t "Mesa") (clivus:campo clivus:xd 0) (clivus:campo clivus:xd 1)) clivus:ga))
+    (setq clivus:pecasa (1+ clivus:pecasa) clivus:vermelhasa (+ clivus:vermelhasa (clivus:vermelho clivus:en))))
+  (setq clivus:i (1+ clivus:i)))
+
+(setq clivus:sujab (if (entget clivus:eb) (clivus:campo (clivus:xdata clivus:eb) 7) "apagada"))
+(princ (strcat "\nCLIVUS_VIGIA sujaa=" clivus:sujaa " motivoa=" clivus:motivoa " pecasa=" (itoa clivus:pecasa) " vermelhasa=" (itoa clivus:vermelhasa)
+               " outrassujas=" (itoa clivus:outrassujas) " contornos=" (itoa clivus:contornos) " labelb=" clivus:labelb " sujab=" clivus:sujab))
+(setvar "PICKSTYLE" clivus:pickstyle)
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

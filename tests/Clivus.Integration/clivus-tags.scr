@@ -1,0 +1,87 @@
+; Teste de nivel 2 das tags (passo 8.14): gera uma fileira e insere as
+; tags de fileira, mesa, modulo e string (14 por string), conta em LISP pelo
+; XData, com a cota na faixa do terreno (regra 5); strings de 20 deixam uma
+; incompleta por mesa; apagar os modulos nao mexe nas outras.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area das tags")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento das tags")
+(command "CLIVUS_FILEIRA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:tipo (xd) (cdr (nth 0 xd)))
+
+(setq clivus:zmin 1e99 clivus:zmax -1e99)
+(defun clivus:tags (tipo / ss i e xd n z)
+  (setq ss (ssget "_X" (list (cons 0 "MTEXT") (list -3 (list "CLIVUS")))) i 0 n 0)
+  (while (< i (clivus:conta ss))
+    (setq e (ssname ss i) xd (clivus:xdata e))
+    (if (and (= (clivus:tipo xd) "Tag") (= (clivus:campo xd 2) tipo))
+      (progn
+        (setq n (1+ n) z (cadddr (assoc 10 (entget e))))
+        (setq clivus:zmin (min clivus:zmin z) clivus:zmax (max clivus:zmax z))))
+    (setq i (1+ i)))
+  n)
+(defun clivus:incompletas ( / ss i e xd n)
+  (setq ss (ssget "_X" (list (cons 0 "MTEXT") (list -3 (list "CLIVUS")))) i 0 n 0)
+  (while (< i (clivus:conta ss))
+    (setq e (ssname ss i) xd (clivus:xdata e))
+    (if (and (= (clivus:tipo xd) "Tag") (= (clivus:campo xd 2) "String") (wcmatch (clivus:campo xd 3) "*`*")) (setq n (1+ n)))
+    (setq i (1+ i)))
+  n)
+
+(setq clivus:mesas (clivus:conta (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "CLIVUS_MESA,CLIVUS_MARCADA")))))
+(setq clivus:modulos (clivus:conta (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_MOD*")))))
+
+; A tag de fileira pede a primeira e a ultima fileira (pelo letreiro) e o
+; lado onde as tags vao (02/10/2026).
+(command "CLIVUS_TAG_FILEIRAS" "Letreiro" "F1.1" "Letreiro" "F1.2" "{{L1}}")
+(command "CLIVUS_TAG_MESAS")
+(command "CLIVUS_TAG_MESAS")
+(command "CLIVUS_TAG_MODULOS")
+(command "CLIVUS_TAG_STRINGS" 14)
+(setq clivus:f (clivus:tags "Row") clivus:m (clivus:tags "Table") clivus:mo (clivus:tags "Module") clivus:s14 (clivus:tags "String") clivus:inc14 (clivus:incompletas))
+; Nenhuma tag abaixo da ponta mais alta da mesa dela: no plano do meio, a
+; metade alta da mesa inclinada cobria a tag (03/10/2026, "tags ainda sendo
+; cortadas"). O topo da mesa e o vertice mais alto do contorno (o Core
+; Console nao tem COM: os vertices sao percorridos com entnext).
+(defun clivus:topo (e / v z)
+  (setq z -1e99 v (entnext e))
+  (while (and v (= (cdr (assoc 0 (entget v))) "VERTEX"))
+    (setq z (max z (cadddr (assoc 10 (entget v)))) v (entnext v)))
+  z)
+(setq clivus:ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) clivus:i 0 clivus:topos nil)
+(while (< clivus:i (clivus:conta clivus:ss))
+  (setq clivus:e (ssname clivus:ss clivus:i) clivus:xd (clivus:xdata clivus:e))
+  (if (= (clivus:tipo clivus:xd) "Mesa")
+    (setq clivus:topos (cons (cons (clivus:campo clivus:xd 0) (clivus:topo clivus:e)) clivus:topos)))
+  (setq clivus:i (1+ clivus:i)))
+(setq clivus:ss (ssget "_X" (list (cons 0 "MTEXT") (list -3 (list "CLIVUS")))) clivus:i 0 clivus:baixas 0)
+(while (< clivus:i (clivus:conta clivus:ss))
+  (setq clivus:e (ssname clivus:ss clivus:i) clivus:xd (clivus:xdata clivus:e))
+  (if (and (= (clivus:tipo clivus:xd) "Tag") (assoc (clivus:campo clivus:xd 1) clivus:topos)
+           (< (cadddr (assoc 10 (entget clivus:e))) (cdr (assoc (clivus:campo clivus:xd 1) clivus:topos))))
+    (setq clivus:baixas (1+ clivus:baixas)))
+  (setq clivus:i (1+ clivus:i)))
+(princ (strcat "\nCLIVUS_TAGS_ALTURA abaixo=" (itoa clivus:baixas) " mesas=" (itoa (length clivus:topos))))
+
+(command "CLIVUS_TAG_STRINGS" 20)
+(setq clivus:s20 (clivus:tags "String") clivus:inc20 (clivus:incompletas))
+(command "CLIVUS_TAG_MODULOS_APAGAR")
+(setq clivus:mofim (clivus:tags "Module") clivus:mfim (clivus:tags "Table"))
+
+(princ (strcat "\nCLIVUS_TAGS mesas=" (itoa clivus:mesas) " modulos=" (itoa clivus:modulos)
+               " fileiras=" (itoa clivus:f) " tmesas=" (itoa clivus:m) " tmodulos=" (itoa clivus:mo)
+               " s14=" (itoa clivus:s14) " inc14=" (itoa clivus:inc14) " s20=" (itoa clivus:s20) " inc20=" (itoa clivus:inc20)
+               " modfim=" (itoa clivus:mofim) " mesasfim=" (itoa clivus:mfim)
+               " zmin=" (rtos clivus:zmin 2 3) " zmax=" (rtos clivus:zmax 2 3)))
+(setvar "SECURELOAD" clivus:secureload)
+(princ)

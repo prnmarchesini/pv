@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    Instala o Plugin UFV, conferindo antes se a versao do Civil 3D serve.
+    Instala o Clivus Solar, conferindo antes se a versao do Civil 3D serve.
 
 .DESCRIPTION
     Passo 0.6 de etapa-0-fundacao.md: detecta a versao do Civil 3D instalada,
@@ -45,7 +45,7 @@
     usuario e gravavel, e o AutoCAD nao confia em pasta gravavel.
 
 .PARAMETER Bundle
-    Pasta UFV.bundle a instalar. O padrao e artefatos\UFV.bundle, que
+    Pasta ClivusSolar.bundle a instalar. O padrao e artefatos\ClivusSolar.bundle, que
     publicar-bundle.ps1 monta.
 
 .PARAMETER SimularSerie
@@ -78,11 +78,11 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $raiz    = (Resolve-Path (Split-Path -Parent $PSScriptRoot)).Path
-$destinoDoUsuario = Join-Path $env:APPDATA 'Autodesk\ApplicationPlugins\UFV.bundle'
-$destinoDaMaquina = Join-Path $env:ProgramFiles 'Autodesk\ApplicationPlugins\UFV.bundle'
+$destinoDoUsuario = Join-Path $env:APPDATA 'Autodesk\ApplicationPlugins\ClivusSolar.bundle'
+$destinoDaMaquina = Join-Path $env:ProgramFiles 'Autodesk\ApplicationPlugins\ClivusSolar.bundle'
 $destino = if ($ParaTodaAMaquina) { $destinoDaMaquina } else { $destinoDoUsuario }
 
-if (-not $Bundle) { $Bundle = Join-Path $raiz 'artefatos\UFV.bundle' }
+if (-not $Bundle) { $Bundle = Join-Path $raiz 'artefatos\ClivusSolar.bundle' }
 
 function Dizer {
     param([string] $Texto, [string] $Cor = 'Gray')
@@ -99,7 +99,7 @@ if ($Desinstalar) {
         if (-not (Test-Path $alvo)) { continue }
         try {
             Remove-Item $alvo -Recurse -Force
-            Dizer "Plugin UFV removido de $alvo" 'Green'
+            Dizer "Clivus Solar removido de $alvo" 'Green'
             $removidos++
         }
         catch {
@@ -107,7 +107,7 @@ if ($Desinstalar) {
             exit 1
         }
     }
-    if ($removidos -eq 0) { Dizer 'O Plugin UFV nao esta instalado.' 'DarkGray' }
+    if ($removidos -eq 0) { Dizer 'O Clivus Solar nao esta instalado.' 'DarkGray' }
     exit 0
 }
 
@@ -117,7 +117,7 @@ if ($Desinstalar) {
 
 $descritor = Join-Path $Bundle 'PackageContents.xml'
 if (-not (Test-Path $descritor)) {
-    $descritor = Join-Path $raiz 'src\UFV.Plugin\PackageContents.xml'
+    $descritor = Join-Path $raiz 'src\Clivus.Plugin\PackageContents.xml'
 }
 if (-not (Test-Path $descritor)) {
     Dizer "PackageContents.xml nao encontrado. Rode tools\publicar-bundle.ps1 antes." 'Red'
@@ -167,7 +167,7 @@ if (-not $minimo -or -not $maximo) {
 
 # ---- o que esta instalado nesta maquina ------------------------------------
 
-Dizer "Plugin UFV $versaoApp" 'Cyan'
+Dizer "Clivus Solar $versaoApp" 'Cyan'
 Dizer "Serie suportada: $serieMin$(if ($serieMin -ne $serieMax) { " a $serieMax" })" 'DarkGray'
 Dizer ''
 
@@ -213,7 +213,7 @@ $instalacoes = @($instalacoes | Sort-Object Serie, Caminho -Unique)
 
 if ($instalacoes.Count -eq 0) {
     Dizer 'Nenhum AutoCAD encontrado nesta maquina.' 'Red'
-    Dizer "O Plugin UFV precisa do Civil 3D (serie $serieMin)." 'Red'
+    Dizer "O Clivus Solar precisa do Civil 3D (serie $serieMin)." 'Red'
     exit 4
 }
 
@@ -303,6 +303,19 @@ if ($ParaTodaAMaquina) {
     }
 }
 
+# O bundle de antes da troca de nome (UFV.bundle, ate 04/10/2026): com ele
+# no lugar, o Civil 3D carregaria os dois plugins, com duas abas.
+foreach ($antigo in (Join-Path $env:APPDATA 'Autodesk\ApplicationPlugins\UFV.bundle'), (Join-Path $env:ProgramFiles 'Autodesk\ApplicationPlugins\UFV.bundle')) {
+    if (-not (Test-Path $antigo)) { continue }
+    try {
+        Remove-Item $antigo -Recurse -Force
+        Dizer "Removido o bundle do nome antigo em $antigo" 'DarkGray'
+    }
+    catch {
+        Dizer "Nao consegui remover o bundle antigo em $antigo (precisa de administrador). Remova a pasta a mao." 'Yellow'
+    }
+}
+
 try {
     if (Test-Path $destino) { Remove-Item $destino -Recurse -Force }
     New-Item -ItemType Directory -Path (Split-Path -Parent $destino) -Force | Out-Null
@@ -319,7 +332,7 @@ Dizer "Instalado em $destino" 'Green'
 # ---- por que a pasta importa -----------------------------------------------
 #
 # Estar em ApplicationPlugins faz o Civil 3D ACHAR o plugin, nao confiar nele.
-# Como UFV.Plugin.dll nao e assinada, o AutoCAD so a carrega sem perguntar se
+# Como Clivus.Plugin.dll nao e assinada, o AutoCAD so a carrega sem perguntar se
 # ela estiver numa pasta que ele considere segura. "Segura" quer dizer
 # protegida por permissao: uma pasta que o proprio usuario pode escrever nao
 # vale, e %APPDATA% e uma dessas.
@@ -344,7 +357,7 @@ if ($ParaTodaAMaquina) {
 } else {
     Dizer ''
     Dizer 'Atenção: esta pasta é gravável pelo usuário, então o Civil 3D não a' 'Yellow'
-    Dizer 'considera segura. Toda abertura vai avisar que UFV.Plugin.dll não é' 'Yellow'
+    Dizer 'considera segura. Toda abertura vai avisar que Clivus.Plugin.dll não é' 'Yellow'
     Dizer 'assinada e perguntar o que fazer.' 'Yellow'
     Dizer ''
     Dizer 'Para resolver, uma das duas:' 'Yellow'
@@ -353,5 +366,5 @@ if ($ParaTodaAMaquina) {
 }
 
 Dizer ''
-Dizer 'Abra o Civil 3D: a aba UFV aparece sem NETLOAD.' 'DarkGray'
+Dizer 'Abra o Civil 3D: a aba Clivus Solar aparece sem NETLOAD.' 'DarkGray'
 exit 0

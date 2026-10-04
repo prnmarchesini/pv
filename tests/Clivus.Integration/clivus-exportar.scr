@@ -1,0 +1,35 @@
+; Teste de nivel 2 do passo 6.2: processa uma fileira (como no 5.8) e exporta
+; todas as faces de modulo em DAE, sem janela (CLIVUS_EXPORTAR_AUTO). O LISP le
+; do desenho o que o arquivo tem que refletir:
+;   - quantas faces de modulo existem;
+;   - o primeiro vertice da primeira face e o GUID dela (XData), para o
+;     PowerShell achar o mesmo ponto (menos a origem local lida do CABECALHO
+;     do DAE) na geometria daquele GUID, ao milimetro: vertice, identidade e
+;     arquivo amarrados numa afirmacao so (regra sagrada 3 atravessando).
+; O resto (XML, contagem de geometrias, material, unidade) e conferido pelo
+; PowerShell lendo o arquivo.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area da exportacao")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento da exportacao")
+(command "CLIVUS_FILEIRA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_EXPORTAR_AUTO" "{{DAE}}")
+
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(setq clivus:faces (ssget "_X" (list (cons 0 "3DFACE") (cons 8 "CLIVUS_FACE"))))
+(setq clivus:nf (if clivus:faces (sslength clivus:faces) 0))
+(setq clivus:v0 (if clivus:faces (cdr (assoc 10 (entget (ssname clivus:faces 0)))) '(0 0 0)))
+(setq clivus:g0 (if clivus:faces (clivus:campo (clivus:xdata (ssname clivus:faces 0)) 0) "-"))
+(princ (strcat "\nCLIVUS_EXPORTAR_LISP faces=" (itoa clivus:nf)
+               " v0=" (rtos (car clivus:v0) 2 4) "," (rtos (cadr clivus:v0) 2 4) "," (rtos (caddr clivus:v0) 2 4)
+               " guid=" clivus:g0))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

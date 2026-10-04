@@ -1,0 +1,108 @@
+; Teste de nivel 2 dos passos 5.7 e 5.8: processa o terreno, traca uma area
+; e um alinhamento, processa a fileira 1 e le do proprio desenho o que foi
+; criado.
+;
+; O que se confere em LISP, e nao pelo relatorio do plugin (um numero tirado
+; do plugin concorda com o plugin mesmo quando ele erra):
+;   - quantos blocos de pilar, blocos de modulo e faces existem;
+;   - cada bloco de modulo esta onde a face dele esta: o ponto de insercao
+;     (levado ao WCS com trans, porque o 10 do INSERT e no OCS do bloco
+;     inclinado) coincide com um vertice de alguma 3DFACE. E a unica prova de
+;     que a matriz do Geo virou Matrix3d do AutoCAD na ordem certa;
+;   - toda face aponta para cima (produto vetorial dos dois primeiros lados
+;     com Z positivo), senao o PVsyst le a face virada para o chao;
+;   - a secao do pilar e a da mesa de exemplo (0,15 x 0,07) e o comprimento
+;     e positivo;
+;   - pilar, modulo, face e contorno carregam XData nosso (regra sagrada 3);
+;   - em cada pilar com terreno, topo - terreno = P3 (os tres numeros do
+;     XData e a geometria tem que fechar; regra sagrada 5 de verdade);
+;   - a camada das alturas nasce desligada; ha um aviso por mesa marcada;
+;   - a caixa dentro do bloco do pilar e "por bloco" (62 = 0): senao a cor de
+;     analise posta na instancia nao aparece.
+;
+; O OSNAP e desligado para os pontos digitados chegarem crus.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area da fileira")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento da fileira")
+(command "CLIVUS_FILEIRA_AUTO")
+; Desde o 8.8 gerar nao poe cota: as alturas vem do comando de analise.
+(command "CLIVUS_ALTURAS_REGERAR")
+(setvar "OSMODE" clivus:osmode)
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:temxdata (e) (if (assoc -3 (entget e '("CLIVUS"))) 1 0))
+
+(setq clivus:pilares (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_PILAR"))))
+(setq clivus:modulos (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_MODULO_*"))))
+(setq clivus:faces (ssget "_X" (list (cons 0 "3DFACE") (cons 8 "CLIVUS_FACE"))))
+(setq clivus:alturas (ssget "_X" (list (cons 0 "MTEXT") (cons 8 "CLIVUS_ALTURAS"))))
+(setq clivus:marcadas (ssget "_X" (list (cons 0 "MTEXT") (cons 8 "CLIVUS_MARCADA"))))
+(setq clivus:contornos (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "CLIVUS_MESA,CLIVUS_ANALISE_BORDA,CLIVUS_ANALISE_DECLIVIDADE,CLIVUS_MARCADA"))))
+(setq clivus:np (clivus:conta clivus:pilares) clivus:nm (clivus:conta clivus:modulos) clivus:nf (clivus:conta clivus:faces)
+      clivus:na (clivus:conta clivus:alturas) clivus:nk (clivus:conta clivus:marcadas) clivus:nc (clivus:conta clivus:contornos))
+
+; Os vertices das faces, para casar com os modulos.
+(setq clivus:vertices nil clivus:normais 0 clivus:i 0)
+(while (< clivus:i clivus:nf)
+  (setq clivus:e (entget (ssname clivus:faces clivus:i)))
+  (setq clivus:v0 (cdr (assoc 10 clivus:e)) clivus:v1 (cdr (assoc 11 clivus:e)) clivus:v2 (cdr (assoc 12 clivus:e)))
+  (setq clivus:vertices (cons clivus:v0 clivus:vertices))
+  (setq clivus:cz (- (* (- (car clivus:v1) (car clivus:v0)) (- (cadr clivus:v2) (cadr clivus:v0)))
+                  (* (- (cadr clivus:v1) (cadr clivus:v0)) (- (car clivus:v2) (car clivus:v0)))))
+  (if (> clivus:cz 0) (setq clivus:normais (1+ clivus:normais)))
+  (setq clivus:i (1+ clivus:i)))
+
+(defun clivus:perto (p q) (and (< (abs (- (car p) (car q))) 0.001) (< (abs (- (cadr p) (cadr q))) 0.001) (< (abs (- (caddr p) (caddr q))) 0.001)))
+(defun clivus:casa (p lista) (if lista (if (clivus:perto p (car lista)) 1 (clivus:casa p (cdr lista))) 0))
+
+(setq clivus:casados 0 clivus:xdok 0 clivus:i 0)
+(while (< clivus:i clivus:nm)
+  (setq clivus:en (ssname clivus:modulos clivus:i) clivus:e (entget clivus:en))
+  (setq clivus:p (trans (cdr (assoc 10 clivus:e)) clivus:en 0))
+  (setq clivus:casados (+ clivus:casados (clivus:casa clivus:p clivus:vertices)))
+  (setq clivus:xdok (+ clivus:xdok (clivus:temxdata clivus:en)))
+  (setq clivus:i (1+ clivus:i)))
+
+(setq clivus:secao 0 clivus:p3ok 0 clivus:p3total 0 clivus:zmin 1e99 clivus:zmax -1e99 clivus:i 0)
+(while (< clivus:i clivus:np)
+  (setq clivus:en (ssname clivus:pilares clivus:i) clivus:e (entget clivus:en))
+  (setq clivus:z (caddr (cdr (assoc 10 clivus:e))))
+  (setq clivus:zmin (min clivus:zmin clivus:z) clivus:zmax (max clivus:zmax clivus:z))
+  (if (and (< (abs (- (cdr (assoc 41 clivus:e)) 0.15)) 0.0001) (< (abs (- (cdr (assoc 42 clivus:e)) 0.07)) 0.0001) (> (cdr (assoc 43 clivus:e)) 0))
+    (setq clivus:secao (1+ clivus:secao)))
+  (setq clivus:xdok (+ clivus:xdok (clivus:temxdata clivus:en)))
+  (setq clivus:xd (clivus:xdata clivus:en))
+  (if (and clivus:xd (> (strlen (clivus:campo clivus:xd 6)) 0) (> (strlen (clivus:campo clivus:xd 8)) 0))
+    (progn
+      (setq clivus:p3total (1+ clivus:p3total))
+      (if (< (abs (- (- clivus:z (atof (clivus:campo clivus:xd 8))) (atof (clivus:campo clivus:xd 6)))) 0.001)
+        (setq clivus:p3ok (1+ clivus:p3ok)))))
+  (setq clivus:i (1+ clivus:i)))
+
+(setq clivus:i 0)
+(while (< clivus:i clivus:nf) (setq clivus:xdok (+ clivus:xdok (clivus:temxdata (ssname clivus:faces clivus:i))) clivus:i (1+ clivus:i)))
+(setq clivus:i 0)
+(while (< clivus:i clivus:nc) (setq clivus:xdok (+ clivus:xdok (clivus:temxdata (ssname clivus:contornos clivus:i))) clivus:i (1+ clivus:i)))
+
+(setq clivus:camada (tblsearch "layer" "CLIVUS_ALTURAS"))
+(setq clivus:desligada (if (and clivus:camada (< (cdr (assoc 62 clivus:camada)) 0)) 1 0))
+(setq clivus:bloco (tblsearch "block" "CLIVUS_PILAR"))
+(setq clivus:caixa62 (if clivus:bloco (cdr (assoc 62 (entget (cdr (assoc -2 clivus:bloco))))) -1))
+
+(princ (strcat "\nCLIVUS_DESENHO pilares=" (itoa clivus:np) " faces=" (itoa clivus:nf) " alturas=" (itoa clivus:na)
+               " zmin=" (rtos clivus:zmin 2 3) " zmax=" (rtos clivus:zmax 2 3)))
+(princ (strcat "\nCLIVUS_DESENHO2 modulos=" (itoa clivus:nm) " casados=" (itoa clivus:casados) " normais=" (itoa clivus:normais)
+               " secao=" (itoa clivus:secao) " xdata=" (itoa clivus:xdok) " contornos=" (itoa clivus:nc)
+               " p3ok=" (itoa clivus:p3ok) " p3total=" (itoa clivus:p3total)
+               " alturasoff=" (itoa clivus:desligada) " marcadas=" (itoa clivus:nk) " caixa62=" (itoa clivus:caixa62)))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

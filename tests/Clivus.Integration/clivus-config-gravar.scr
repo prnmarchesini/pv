@@ -1,0 +1,26 @@
+; Teste de nivel 2 do passo 4.4, primeira metade: grava no desenho a amostra
+; do Core em que todo campo difere do padrao (conferido campo a campo em
+; nivel 1), e SALVA o desenho para a segunda metade reabrir e conferir que
+; tudo sobreviveu.
+;
+; E a validacao do passo com todas as letras: "configura um projeto real e
+; confere que salvar e reabrir preserva tudo". A janela nao abre no Core
+; Console; quem grava e CLIVUS_CONFIG_TESTE, que existe para isto. Antes dele,
+; CLIVUS_CONFIG e chamado de proposito: num host sem interface ele tem que
+; dizer isso e seguir, e nao derrubar o plugin (mesma regra da janela da
+; mesa: NoInlining em quem nomeia WPF).
+;
+; O desenho gravado e uma copia em artefatos, nunca o do acervo.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_CONFIG")
+(command "CLIVUS_CONFIG_TESTE")
+(setvar "SECURELOAD" clivus:secureload)
+(setvar "FILEDIA" 0)
+(command "_.SAVEAS" "2018" "{{SAIDA}}")
+(setvar "FILEDIA" 1)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ "\nCLIVUS_GRAVADO")
+(princ)

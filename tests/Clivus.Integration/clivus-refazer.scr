@@ -1,0 +1,50 @@
+; Teste de nivel 2 do Refazer: processa uma fileira (como no 5.8) e manda
+; refazer a area inteira (CLIVUS_REFAZER_AUTO). O que se confere em LISP:
+;   - a fileira desenhada antes foi apagada, e nada ficou em dobro: os
+;     pilares sao 7 por contorno e as faces 28 por contorno;
+;   - desde o 8.8 o refazer desenha sem analise: as cotas da fileira antiga
+;     foram apagadas e nenhuma nasceu de novo;
+;   - o total de mesas e o da usina inteira (mais de uma fileira).
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area do refazer")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento do refazer")
+(command "CLIVUS_FILEIRA_AUTO")
+; Desde o 8.8 gerar nao poe cota: as alturas vem do comando de analise.
+(command "CLIVUS_ALTURAS_REGERAR")
+(setvar "OSMODE" clivus:osmode)
+(setq clivus:antes (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))))
+(setq clivus:nantes (if clivus:antes (sslength clivus:antes) 0))
+(command "CLIVUS_REFAZER_AUTO")
+
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:tipo (xd) (cdr (nth 0 xd)))
+
+(setq clivus:tudo (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))))
+(setq clivus:n (if clivus:tudo (sslength clivus:tudo) 0))
+(setq clivus:contornos 0 clivus:pilares 0 clivus:faces 0 clivus:notas 0 clivus:notasorfas 0 clivus:guids nil clivus:i 0)
+(while (< clivus:i clivus:n)
+  (setq clivus:xd (clivus:xdata (ssname clivus:tudo clivus:i)) clivus:t (clivus:tipo clivus:xd))
+  (cond ((= clivus:t "Mesa") (setq clivus:contornos (1+ clivus:contornos) clivus:guids (cons (clivus:campo clivus:xd 0) clivus:guids)))
+        ((= clivus:t "Pilar") (setq clivus:pilares (1+ clivus:pilares)))
+        ((= clivus:t "Face") (setq clivus:faces (1+ clivus:faces))))
+  (setq clivus:i (1+ clivus:i)))
+(setq clivus:i 0)
+(while (< clivus:i clivus:n)
+  (setq clivus:xd (clivus:xdata (ssname clivus:tudo clivus:i)))
+  (if (= (clivus:tipo clivus:xd) "Nota")
+    (progn (setq clivus:notas (1+ clivus:notas))
+           (if (not (member (clivus:campo clivus:xd 1) clivus:guids)) (setq clivus:notasorfas (1+ clivus:notasorfas)))))
+  (setq clivus:i (1+ clivus:i)))
+
+(princ (strcat "\nCLIVUS_REFAZER antes=" (itoa clivus:nantes) " contornos=" (itoa clivus:contornos) " pilares=" (itoa clivus:pilares)
+               " faces=" (itoa clivus:faces) " notas=" (itoa clivus:notas) " notasorfas=" (itoa clivus:notasorfas)))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

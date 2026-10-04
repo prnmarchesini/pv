@@ -1,0 +1,57 @@
+; Teste de nivel 2 do Apagar tudo (29/09/2026): cria a camada da area
+; branca (como nos desenhos de antes), traca area e alinhamento, processa
+; uma fileira, poe todas as mesas num grupo e manda apagar tudo da area
+; (CLIVUS_APAGAR_TUDO_AUTO). O que se confere em LISP:
+;   - nada do plugin sobrou alem da area e do alinhamento (uma de cada);
+;   - a marca do grupo sumiu com ele;
+;   - a camada da area ficou laranja (ACI 30), mesmo tendo nascido branca,
+;     e a do alinhamento amarela (ACI 2).
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.-LAYER" "_N" "CLIVUS_AREA" "")
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area do apagar")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento do apagar")
+(command "CLIVUS_FILEIRA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:tipo (xd) (cdr (nth 0 xd)))
+(defun clivus:contar ( / tudo n i tp areas alins outras)
+  (setq tudo (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))) n (if tudo (sslength tudo) 0) i 0 areas 0 alins 0 outras 0)
+  (while (< i n)
+    (setq tp (clivus:tipo (clivus:xdata (ssname tudo i))))
+    (cond ((= tp "Area") (setq areas (1+ areas)))
+          ((= tp "Alinhamento") (setq alins (1+ alins)))
+          (T (setq outras (1+ outras))))
+    (setq i (1+ i)))
+  (list areas alins outras))
+(defun clivus:marcas ( / ss) (setq ss (ssget "_X" (list (cons 8 "CLIVUS_GRUPO")))) (if ss (sslength ss) 0))
+(defun clivus:cor (camada) (cdr (assoc 62 (tblsearch "LAYER" camada))))
+
+; Todas as pecas de mesa num grupo.
+(setq clivus:tudo (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))) clivus:ss (ssadd) clivus:i 0)
+(while (< clivus:i (sslength clivus:tudo))
+  (setq clivus:en (ssname clivus:tudo clivus:i) clivus:t (clivus:tipo (clivus:xdata clivus:en)))
+  (if (not (member clivus:t '("Area" "Alinhamento"))) (ssadd clivus:en clivus:ss))
+  (setq clivus:i (1+ clivus:i)))
+(sssetfirst nil clivus:ss)
+(command "CLIVUS_GRUPO_CRIAR" "Grupo do apagar")
+(sssetfirst nil nil)
+(setq clivus:antes (clivus:contar) clivus:marcasAntes (clivus:marcas))
+
+(command "CLIVUS_APAGAR_TUDO_AUTO")
+(command "CLIVUS_GRUPOS")
+
+(setq clivus:depois (clivus:contar) clivus:marcasDepois (clivus:marcas))
+(princ (strcat "\nCLIVUS_APAGAR_LISP antes=" (itoa (nth 2 clivus:antes)) " marcasAntes=" (itoa clivus:marcasAntes)
+               " areas=" (itoa (nth 0 clivus:depois)) " alinhamentos=" (itoa (nth 1 clivus:depois))
+               " sobrou=" (itoa (nth 2 clivus:depois)) " marcas=" (itoa clivus:marcasDepois)
+               " corArea=" (itoa (clivus:cor "CLIVUS_AREA")) " corAlinhamento=" (itoa (clivus:cor "CLIVUS_ALINHAMENTO"))))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

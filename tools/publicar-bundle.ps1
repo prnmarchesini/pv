@@ -1,16 +1,16 @@
 <#
 .SYNOPSIS
-    Monta o UFV.bundle e, opcionalmente, instala para o usuario atual.
+    Monta o ClivusSolar.bundle e, opcionalmente, instala para o usuario atual.
 
 .DESCRIPTION
     O bundle e uma pasta com esta forma:
 
-        UFV.bundle/
+        ClivusSolar.bundle/
           PackageContents.xml
           Contents/
-            UFV.Plugin.dll
-            UFV.Core.dll
-            UFV.Geo.dll
+            Clivus.Plugin.dll
+            Clivus.Core.dll
+            Clivus.Geo.dll
 
     Colocada em %APPDATA%\Autodesk\ApplicationPlugins, o Civil 3D a carrega
     sozinho ao abrir, sem NETLOAD.
@@ -56,8 +56,8 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $raiz     = (Resolve-Path (Split-Path -Parent $PSScriptRoot)).Path
-$projeto  = Join-Path $raiz 'src\UFV.Plugin\UFV.Plugin.csproj'
-$bundle   = Join-Path $raiz 'artefatos\UFV.bundle'
+$projeto  = Join-Path $raiz 'src\Clivus.Plugin\Clivus.Plugin.csproj'
+$bundle   = Join-Path $raiz 'artefatos\ClivusSolar.bundle'
 
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
     $env:PATH = "C:\Program Files\dotnet;$env:PATH"
@@ -72,12 +72,12 @@ if ($Desinstalar) {
 
 # ---- compilar --------------------------------------------------------------
 
-Write-Host "Compilando UFV.Plugin ($Configuracao)..." -ForegroundColor DarkGray
+Write-Host "Compilando Clivus.Plugin ($Configuracao)..." -ForegroundColor DarkGray
 
 $anterior = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
 try {
-    & dotnet build $projeto -c $Configuracao -v quiet --nologo *> (Join-Path $env:TEMP 'ufv-bundle-build.log')
+    & dotnet build $projeto -c $Configuracao -v quiet --nologo *> (Join-Path $env:TEMP 'clivus-bundle-build.log')
     $codigo = $LASTEXITCODE
 }
 finally {
@@ -85,17 +85,17 @@ finally {
 }
 
 if ($codigo -ne 0) {
-    Write-Host 'UFV.Plugin nao compila.' -ForegroundColor Red
-    Get-Content (Join-Path $env:TEMP 'ufv-bundle-build.log') | Select-Object -Last 30 |
+    Write-Host 'Clivus.Plugin nao compila.' -ForegroundColor Red
+    Get-Content (Join-Path $env:TEMP 'clivus-bundle-build.log') | Select-Object -Last 30 |
         ForEach-Object { Write-Host "  $_" }
     exit 1
 }
 
 # AppendTargetFrameworkToOutputPath = false no .csproj: a saida nao tem a
 # pasta do framework.
-$saidaDoBuild = Join-Path $raiz "src\UFV.Plugin\bin\$Configuracao"
-if (-not (Test-Path (Join-Path $saidaDoBuild 'UFV.Plugin.dll'))) {
-    Write-Host "UFV.Plugin.dll nao encontrada em $saidaDoBuild." -ForegroundColor Red
+$saidaDoBuild = Join-Path $raiz "src\Clivus.Plugin\bin\$Configuracao"
+if (-not (Test-Path (Join-Path $saidaDoBuild 'Clivus.Plugin.dll'))) {
+    Write-Host "Clivus.Plugin.dll nao encontrada em $saidaDoBuild." -ForegroundColor Red
     exit 1
 }
 
@@ -105,10 +105,10 @@ if (Test-Path $bundle) { Remove-Item $bundle -Recurse -Force }
 $conteudo = Join-Path $bundle 'Contents'
 New-Item -ItemType Directory -Path $conteudo -Force | Out-Null
 
-Copy-Item (Join-Path $raiz 'src\UFV.Plugin\PackageContents.xml') $bundle
+Copy-Item (Join-Path $raiz 'src\Clivus.Plugin\PackageContents.xml') $bundle
 
 # So o que e nosso. O resto o AutoCAD ja tem.
-foreach ($nome in 'UFV.Plugin.dll', 'UFV.Core.dll', 'UFV.Geo.dll') {
+foreach ($nome in 'Clivus.Plugin.dll', 'Clivus.Core.dll', 'Clivus.Geo.dll') {
     $origem = Join-Path $saidaDoBuild $nome
     if (-not (Test-Path $origem)) {
         Write-Host "Faltando na saida do build: $nome" -ForegroundColor Red
@@ -119,7 +119,7 @@ foreach ($nome in 'UFV.Plugin.dll', 'UFV.Core.dll', 'UFV.Geo.dll') {
 
 # Os .pdb ajudam a ler a pilha de uma excecao durante o desenvolvimento.
 if ($Configuracao -eq 'Debug') {
-    Get-ChildItem $saidaDoBuild -Filter 'UFV.*.pdb' -File |
+    Get-ChildItem $saidaDoBuild -Filter 'Clivus.*.pdb' -File |
         ForEach-Object { Copy-Item $_.FullName $conteudo }
 }
 
@@ -136,7 +136,7 @@ if (-not $Instalar) {
 }
 
 $instalador = Join-Path $PSScriptRoot 'instalar.ps1'
-$daMaquina = Join-Path $env:ProgramFiles 'Autodesk\ApplicationPlugins\UFV.bundle'
+$daMaquina = Join-Path $env:ProgramFiles 'Autodesk\ApplicationPlugins\ClivusSolar.bundle'
 
 if (-not $ParaTodaAMaquina -and (Test-Path $daMaquina)) {
     Write-Host "O plugin ja esta instalado para a maquina ($daMaquina): a versao nova vai para la." -ForegroundColor DarkGray
@@ -157,7 +157,7 @@ if ($eu.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
 
 # Sem elevacao: o instalador roda elevado numa janela propria, e a saida
 # dele vai para um arquivo, que e mostrado aqui depois.
-$registro = Join-Path $env:TEMP 'ufv-instalar-maquina.txt'
+$registro = Join-Path $env:TEMP 'clivus-instalar-maquina.txt'
 Remove-Item $registro -ErrorAction SilentlyContinue
 
 Write-Host 'Pedindo elevacao ao Windows para instalar em Arquivos de Programas (responda Sim na tela)...' -ForegroundColor Yellow

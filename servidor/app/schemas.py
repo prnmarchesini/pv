@@ -1,6 +1,6 @@
 """Formato das requisições e respostas.
 
-Os limites são os mesmos de `UFV.Core.SolarModule`: o plugin recusaria um
+Os limites são os mesmos de `Clivus.Core.SolarModule`: o plugin recusaria um
 módulo fora deles, então o serviço recusa antes de gravar.
 """
 

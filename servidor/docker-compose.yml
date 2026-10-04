@@ -1,25 +1,25 @@
 # Localhost: Postgres + serviço, como vai ficar no Coolify.
 #   docker compose up -d --build
 # O plugin procura o serviço em http://localhost:8765 (ou na variável
-# de ambiente UFV_SERVICO).
+# de ambiente CLIVUS_SERVICO).
 services:
   banco:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: ufv
-      POSTGRES_USER: ufv
-      POSTGRES_PASSWORD: ufv
+      POSTGRES_DB: clivus
+      POSTGRES_USER: clivus
+      POSTGRES_PASSWORD: clivus
     volumes:
       - banco:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ufv -d ufv"]
+      test: ["CMD-SHELL", "pg_isready -U clivus -d clivus"]
       interval: 2s
       retries: 20
 
   servico:
     build: .
     environment:
-      DATABASE_URL: postgresql://ufv:ufv@banco:5432/ufv
+      DATABASE_URL: postgresql://clivus:clivus@banco:5432/clivus
     ports:
       - "127.0.0.1:8765:8765"
     depends_on:

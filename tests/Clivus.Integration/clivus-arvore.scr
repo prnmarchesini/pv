@@ -1,0 +1,48 @@
+; Teste de nivel 2 da arvore (9.4): duas arvores pelo comando (o pe no
+; terreno, nunca na cota do clique, que vem com Z = 0); depois a primeira e
+; MOVIDA com um salto de +80 m na cota, e a segunda COPIADA com -40 m: as
+; duas, e a copia, tem de voltar ao chao do lugar novo (o vigia das arvores).
+; A cota do terreno em cada lugar vem do CLIVUS_COORD, na mesma ordem; a copia
+; ganha GUID proprio.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_ARVORE_AUTO" 3 0.4 5 6 "{{P1}}" "{{P2}}" "")
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:arvores ( / ss i e l)
+  (setq ss (ssget "_X" (list (cons 0 "INSERT") (list -3 (list "CLIVUS")))) i 0)
+  (while (< i (clivus:conta ss))
+    (setq e (ssname ss i))
+    (if (= (cdr (nth 0 (clivus:xdata e))) "Arvore") (setq l (cons e l)))
+    (setq i (1+ i)))
+  (reverse l))
+
+(setq clivus:antes (clivus:arvores) clivus:zclique 0.0)
+(setq clivus:e1 (car clivus:antes) clivus:e2 (cadr clivus:antes))
+(princ (strcat "\nCLIVUS_ARVORE_ANTES n=" (itoa (length clivus:antes))
+               " z1=" (rtos (cadddr (assoc 10 (entget clivus:e1))) 2 3)
+               " z2=" (rtos (cadddr (assoc 10 (entget clivus:e2))) 2 3)))
+
+(command "_.MOVE" clivus:e1 "" "0,0,0" "10,8,80")
+(command "_.COPY" clivus:e2 "" "0,0,0" "-10,6,-40" "")
+(setvar "OSMODE" clivus:osmode)
+
+(setq clivus:depois (clivus:arvores) clivus:i 0)
+(foreach e clivus:depois
+  (setq clivus:i (1+ clivus:i) clivus:p (cdr (assoc 10 (entget e))))
+  (princ (strcat "\nCLIVUS_ARVORE_P i=" (itoa clivus:i) " z=" (rtos (caddr clivus:p) 2 3) " guid=" (cdr (nth 2 (clivus:xdata e))))))
+
+; A cota do terreno em cada arvore, na mesma ordem.
+(foreach e clivus:depois
+  (setq clivus:p (cdr (assoc 10 (entget e))))
+  (command "CLIVUS_COORD" (list (car clivus:p) (cadr clivus:p) 0.0) ""))
+
+(princ (strcat "\nCLIVUS_ARVORE_FIM n=" (itoa (length clivus:depois))))
+(setvar "SECURELOAD" clivus:secureload)
+(princ)

@@ -1,4 +1,4 @@
-# Serviço do plugin UFV. Mesmo desenho do backend do meuPlano: sobe no
+# Serviço do Clivus Solar. Mesmo desenho do backend do meuPlano: sobe no
 # Coolify com a DATABASE_URL do Postgres; sem ela, usa SQLite no container.
 FROM python:3.12-slim
 

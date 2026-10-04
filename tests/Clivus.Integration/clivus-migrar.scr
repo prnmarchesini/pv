@@ -1,0 +1,42 @@
+; Teste de nivel 2 da migracao do nome (04/10/2026: "vai chamar Clivus
+; Solar, troque tudo"): um desenho com o nome antigo e montado aqui em LISP
+; (aplicativo MARCHENG_UFV, camada MARCHENG_UFV_MESA com uma linha e XData,
+; bloco MARCHENG_UFV_PILAR, dicionario MARCHENG_UFV com uma configuracao que
+; guarda nome de camada) e uma camada do usuario MARCHENG_COTAS, que nao e do
+; plugin e nao pode mudar. CLIVUS_MIGRAR passa tudo do plugin para CLIVUS.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+
+(regapp "MARCHENG_UFV")
+(entmake '((0 . "LAYER") (100 . "AcDbSymbolTableRecord") (100 . "AcDbLayerTableRecord") (2 . "MARCHENG_UFV_MESA") (70 . 0) (62 . 7) (6 . "Continuous")))
+(entmake '((0 . "LAYER") (100 . "AcDbSymbolTableRecord") (100 . "AcDbLayerTableRecord") (2 . "MARCHENG_COTAS") (70 . 0) (62 . 7) (6 . "Continuous")))
+(entmake (list '(0 . "LINE") '(8 . "MARCHENG_UFV_MESA") '(10 0.0 0.0 0.0) '(11 10.0 0.0 0.0)
+               (list -3 (list "MARCHENG_UFV" '(1000 . "Teste") '(1071 . 1) '(1000 . "MARCHENG_UFV_ANALISE_BORDA")))))
+(setq clivus:linha (entlast))
+(entmake '((0 . "BLOCK") (2 . "MARCHENG_UFV_PILAR") (70 . 0) (10 0.0 0.0 0.0)))
+(entmake '((0 . "LINE") (8 . "0") (10 0.0 0.0 0.0) (11 1.0 0.0 0.0)))
+(entmake '((0 . "ENDBLK")))
+(setq clivus:dic (dictadd (namedobjdict) "MARCHENG_UFV" (entmakex '((0 . "DICTIONARY") (100 . "AcDbDictionary")))))
+(dictadd clivus:dic "CONFIG" (entmakex '((0 . "XRECORD") (100 . "AcDbXrecord") (1 . "MARCHENG_UFV_ANALISE_BORDA") (1 . "outro"))))
+
+(command "CLIVUS_MIGRAR")
+
+(defun clivus:tem (x) (if x "1" "0"))
+(setq clivus:xd (cdr (car (cdr (assoc -3 (entget clivus:linha '("CLIVUS")))))))
+(setq clivus:reg (dictsearch (cdr (assoc -1 (dictsearch (namedobjdict) "CLIVUS"))) "CONFIG"))
+(princ (strcat "\nCLIVUS_MIGRAR_LISP camada=" (clivus:tem (tblsearch "LAYER" "CLIVUS_MESA"))
+               " velha=" (clivus:tem (tblsearch "LAYER" "MARCHENG_UFV_MESA"))
+               " linha=" (cdr (assoc 8 (entget clivus:linha)))
+               " xdata=" (if clivus:xd (cdr (nth 2 clivus:xd)) "-")
+               " xvelho=" (clivus:tem (assoc -3 (entget clivus:linha '("MARCHENG_UFV"))))
+               " bloco=" (clivus:tem (tblsearch "BLOCK" "CLIVUS_PILAR"))
+               " blocovelho=" (clivus:tem (tblsearch "BLOCK" "MARCHENG_UFV_PILAR"))
+               " dic=" (clivus:tem (dictsearch (namedobjdict) "CLIVUS"))
+               " dicvelho=" (clivus:tem (dictsearch (namedobjdict) "MARCHENG_UFV"))
+               " reg=" (if clivus:reg (cdr (assoc 1 clivus:reg)) "-")
+               " usuario=" (clivus:tem (tblsearch "LAYER" "MARCHENG_COTAS"))))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

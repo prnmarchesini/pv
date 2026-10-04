@@ -1,0 +1,41 @@
+; Teste de nivel 2 das alturas como analise (26/09/2026): processa uma
+; fileira, conta as entidades da camada das alturas, apaga TODAS elas pelo
+; AutoCAD (como o usuario faria) e planta um texto orfao sem identidade na
+; camada; CLIVUS_ALTURAS_REGERAR apaga o orfao e redesenha o mesmo numero de
+; cotas, todas com identidade de nota e com o texto legivel (rumo em
+; (-90, 90]).
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area das alturas")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento das alturas")
+(command "CLIVUS_FILEIRA_AUTO")
+; Desde o 8.8 gerar nao poe cota: as alturas vem do comando de analise.
+(command "CLIVUS_ALTURAS_REGERAR")
+(setvar "OSMODE" clivus:osmode)
+(defun clivus:camada ( / ss) (setq ss (ssget "_X" (list (cons 8 "CLIVUS_ALTURAS")))) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(setq clivus:antes (clivus:camada))
+; A camada esta desligada: liga para o ERASE por selecao pegar.
+(command "_.-LAYER" "_ON" "CLIVUS_ALTURAS" "")
+(command "_.ERASE" (ssget "_X" (list (cons 8 "CLIVUS_ALTURAS"))) "")
+(setq clivus:zerado (clivus:camada))
+(entmake (list '(0 . "MTEXT") '(100 . "AcDbEntity") '(8 . "CLIVUS_ALTURAS") '(100 . "AcDbMText") '(10 0.0 0.0 0.0) '(40 . 0.35) '(1 . "PB 9,99 orfao")))
+(setq clivus:comOrfao (clivus:camada))
+(command "CLIVUS_ALTURAS_REGERAR")
+(setq clivus:depois (clivus:camada) clivus:semId 0 clivus:viradas 0 clivus:i 0)
+(setq clivus:ss (ssget "_X" (list (cons 8 "CLIVUS_ALTURAS"))))
+(while (< clivus:i clivus:depois)
+  (setq clivus:en (ssname clivus:ss clivus:i) clivus:ed (entget clivus:en '("CLIVUS")))
+  (if (null (assoc -3 clivus:ed)) (setq clivus:semId (1+ clivus:semId)))
+  (if (= (cdr (assoc 0 clivus:ed)) "MTEXT")
+    (progn (setq clivus:rot (cdr (assoc 50 clivus:ed)))
+           (if (or (> clivus:rot (+ (/ pi 2) 1e-6)) (<= clivus:rot (- (- (/ pi 2)) 1e-6))) (setq clivus:viradas (1+ clivus:viradas)))))
+  (setq clivus:i (1+ clivus:i)))
+(princ (strcat "\nCLIVUS_ALTURAS_LISP antes=" (itoa clivus:antes) " zerado=" (itoa clivus:zerado) " comOrfao=" (itoa clivus:comOrfao) " depois=" (itoa clivus:depois) " semId=" (itoa clivus:semId) " viradas=" (itoa clivus:viradas)))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

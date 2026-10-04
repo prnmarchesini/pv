@@ -1,0 +1,72 @@
+; Teste de nivel 2 do passo 7.1: processa uma fileira (como no 5.8), suja a
+; primeira mesa (CLIVUS_SUJAR_AUTO) e le do desenho:
+;   - o contorno da mesa suja tem, no XData (versao 2), suja=1 e um motivo;
+;   - contorno, pilares e modulos da mesa suja estao vermelhos (62 = 1);
+;     as faces dela NAO (a camada de faces e o que o PVsyst recebe);
+;   - nenhuma outra mesa esta suja no XData;
+;   - CLIVUS_ESTADO conta 1 suja.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area do estado")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento do estado")
+(command "CLIVUS_FILEIRA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:tipo (xd) (cdr (nth 0 xd)))
+; Vermelho: cor verdadeira (420 = 255*65536) ou o indice 1 que o AutoCAD deriva dela.
+(defun clivus:vermelho (e) (if (or (= (cdr (assoc 420 (entget e))) 16711680) (= (cdr (assoc 62 (entget e))) 1)) 1 0))
+
+; ANTES de sujar: os handles do que ja e vermelho (pilar com problema, peca
+; pintada por analise com vermelho). So o que ficar vermelho DEPOIS conta.
+(setq clivus:tudo (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))))
+(setq clivus:n (if clivus:tudo (sslength clivus:tudo) 0))
+(setq clivus:antes nil clivus:i 0)
+(while (< clivus:i clivus:n)
+  (setq clivus:en (ssname clivus:tudo clivus:i))
+  (if (= (clivus:vermelho clivus:en) 1) (setq clivus:antes (cons (cdr (assoc 5 (entget clivus:en))) clivus:antes)))
+  (setq clivus:i (1+ clivus:i)))
+(defun clivus:novovermelho (e) (if (and (= (clivus:vermelho e) 1) (not (member (cdr (assoc 5 (entget e))) clivus:antes))) 1 0))
+
+(command "CLIVUS_SUJAR_AUTO")
+(command "CLIVUS_ESTADO")
+
+; A mesa suja: o contorno com suja=1.
+(setq clivus:tudo (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))))
+(setq clivus:n (if clivus:tudo (sslength clivus:tudo) 0))
+(setq clivus:guid nil clivus:motivo "" clivus:sujas 0 clivus:contornos 0 clivus:i 0)
+(while (< clivus:i clivus:n)
+  (setq clivus:en (ssname clivus:tudo clivus:i) clivus:xd (clivus:xdata clivus:en))
+  (if (= (clivus:tipo clivus:xd) "Mesa")
+    (progn
+      (setq clivus:contornos (1+ clivus:contornos))
+      (if (= (clivus:campo clivus:xd 7) "1")
+        (progn (setq clivus:sujas (1+ clivus:sujas)) (setq clivus:guid (clivus:campo clivus:xd 0) clivus:motivo (clivus:campo clivus:xd 8))))))
+  (setq clivus:i (1+ clivus:i)))
+
+; As pecas da mesa suja: vermelhas, menos as faces. Das outras mesas: nada
+; que nao fosse vermelho antes.
+(setq clivus:pecas 0 clivus:pecasverm 0 clivus:faces 0 clivus:facesverm 0 clivus:outrasverm 0 clivus:i 0)
+(while (< clivus:i clivus:n)
+  (setq clivus:en (ssname clivus:tudo clivus:i) clivus:xd (clivus:xdata clivus:en) clivus:t (clivus:tipo clivus:xd))
+  (setq clivus:mesa (cond ((= clivus:t "Mesa") (clivus:campo clivus:xd 0)) ((= clivus:t "Face") (clivus:campo clivus:xd 2)) (T (clivus:campo clivus:xd 1))))
+  (if (and clivus:guid (= clivus:mesa clivus:guid))
+    (cond ((= clivus:t "Face") (setq clivus:faces (1+ clivus:faces) clivus:facesverm (+ clivus:facesverm (clivus:vermelho clivus:en))))
+          ((= clivus:t "Nota") nil)
+          (T (setq clivus:pecas (1+ clivus:pecas) clivus:pecasverm (+ clivus:pecasverm (clivus:vermelho clivus:en)))))
+    (if (/= clivus:t "Nota") (setq clivus:outrasverm (+ clivus:outrasverm (clivus:novovermelho clivus:en)))))
+  (setq clivus:i (1+ clivus:i)))
+
+(princ (strcat "\nCLIVUS_SUJO contornos=" (itoa clivus:contornos) " sujas=" (itoa clivus:sujas)
+               " motivo=" (if (> (strlen clivus:motivo) 0) "sim" "nao")
+               " pecas=" (itoa clivus:pecas) " pecasverm=" (itoa clivus:pecasverm)
+               " faces=" (itoa clivus:faces) " facesverm=" (itoa clivus:facesverm)
+               " outrasverm=" (itoa clivus:outrasverm) " guid=" (if clivus:guid clivus:guid "-")))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

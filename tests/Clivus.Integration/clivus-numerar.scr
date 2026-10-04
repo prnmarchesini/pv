@@ -1,0 +1,75 @@
+; Teste de nivel 2 do 7.10: processa a usina inteira (80 mesas em 16
+; fileiras), guarda o letreiro de cada GUID, e numera de novo com a F1.1
+; na antiga F16.5 e a ultima fileira na antiga F1.1 (pela opcao Letreiro).
+; Toda mesa F(r).(n) tem que virar F(17-r).(6-n); o aviso NAO CABE, se
+; houver, tem que comecar pelo letreiro novo. Numerar de novo com os
+; letreiros novos nao troca nada.
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area da numeracao")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento da numeracao")
+(command "CLIVUS_USINA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:tipo (xd) (cdr (nth 0 xd)))
+(defun clivus:contornos ( / tudo n i ss en)
+  (setq tudo (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))) ss (ssadd) i 0 n (if tudo (sslength tudo) 0))
+  (while (< i n)
+    (setq en (ssname tudo i))
+    (if (= (clivus:tipo (clivus:xdata en)) "Mesa") (ssadd en ss))
+    (setq i (1+ i)))
+  ss)
+; ANTES: (guid . letreiro) de cada contorno, e os outros campos do XData
+; (cota, giro, marcada, suja...) para conferir que so o letreiro muda.
+(defun clivus:resto (xd / i r) (setq i 2 r "") (while (< i 13) (setq r (strcat r "|" (clivus:campo xd i)) i (1+ i))) r)
+(setq clivus:cs (clivus:contornos) clivus:antes nil clivus:restos nil clivus:i 0)
+(while (< clivus:i (sslength clivus:cs))
+  (setq clivus:xd (clivus:xdata (ssname clivus:cs clivus:i)))
+  (setq clivus:antes (cons (cons (clivus:campo clivus:xd 0) (clivus:campo clivus:xd 1)) clivus:antes))
+  (setq clivus:restos (cons (cons (clivus:campo clivus:xd 0) (clivus:resto clivus:xd)) clivus:restos))
+  (if (= (clivus:campo clivus:xd 1) "F16.5") (setq clivus:g165 (clivus:campo clivus:xd 0)))
+  (setq clivus:i (1+ clivus:i)))
+; Planta um aviso NAO CABE na F16.5, com a identidade de nota do plugin
+; (tipo "Nota", versao 1, GUID da nota, GUID da mesa), para provar que o
+; letreiro do aviso e trocado junto.
+(entmake (list '(0 . "MTEXT") '(100 . "AcDbEntity") '(8 . "CLIVUS_MARCADA") '(100 . "AcDbMText")
+               '(10 0.0 0.0 0.0) '(40 . 0.5) '(1 . "F16.5 NAO CABE NO TERRENO\\Pplantado pelo teste")
+               (list -3 (list "CLIVUS" '(1000 . "Nota") '(1070 . 1) '(1000 . "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f") (cons 1000 clivus:g165)))))
+(command "CLIVUS_NUMERAR" "Letreiro" "F16.5" "Letreiro" "F1.1")
+; DEPOIS: F(r).(n) virou F(17-r).(6-n)?
+(defun clivus:fileira (l) (atoi (substr l 2 (- (vl-string-search "." l) 1))))
+(defun clivus:numero (l) (atoi (substr l (+ 2 (vl-string-search "." l)))))
+(defun clivus:esperado (l) (strcat "F" (itoa (- 17 (clivus:fileira l))) "." (itoa (- 6 (clivus:numero l)))))
+(setq clivus:cs (clivus:contornos) clivus:ok 0 clivus:intactas 0 clivus:letreiros nil clivus:i 0)
+(while (< clivus:i (sslength clivus:cs))
+  (setq clivus:xd (clivus:xdata (ssname clivus:cs clivus:i)))
+  (setq clivus:novo (clivus:campo clivus:xd 1) clivus:velho (cdr (assoc (clivus:campo clivus:xd 0) clivus:antes)))
+  (if (= clivus:novo (clivus:esperado clivus:velho)) (setq clivus:ok (1+ clivus:ok)))
+  (if (= (clivus:resto clivus:xd) (cdr (assoc (clivus:campo clivus:xd 0) clivus:restos))) (setq clivus:intactas (1+ clivus:intactas)))
+  (if (not (member clivus:novo clivus:letreiros)) (setq clivus:letreiros (cons clivus:novo clivus:letreiros)))
+  (setq clivus:i (1+ clivus:i)))
+; Os avisos NAO CABE: o texto comeca pelo letreiro da mesa dona.
+(setq clivus:notas (ssget "_X" (list (cons 0 "MTEXT") (cons -3 (list (list "CLIVUS"))))) clivus:ruins 0 clivus:cabe 0 clivus:i 0)
+(setq clivus:n (if clivus:notas (sslength clivus:notas) 0))
+(while (< clivus:i clivus:n)
+  (setq clivus:en (ssname clivus:notas clivus:i) clivus:txt (cdr (assoc 1 (entget clivus:en))))
+  (if (vl-string-search "CABE" clivus:txt)
+    (progn
+      (setq clivus:cabe (1+ clivus:cabe))
+      (setq clivus:dona (clivus:campo (clivus:xdata clivus:en) 1) clivus:j 0 clivus:let nil)
+      (while (< clivus:j (sslength clivus:cs))
+        (setq clivus:xd (clivus:xdata (ssname clivus:cs clivus:j)))
+        (if (= (clivus:campo clivus:xd 0) clivus:dona) (setq clivus:let (clivus:campo clivus:xd 1)))
+        (setq clivus:j (1+ clivus:j)))
+      (if (or (null clivus:let) (/= (vl-string-search (strcat clivus:let " ") clivus:txt) 0)) (setq clivus:ruins (1+ clivus:ruins)))))
+  (setq clivus:i (1+ clivus:i)))
+(command "CLIVUS_NUMERAR" "Letreiro" "F1.1" "Letreiro" "F16.1")
+(princ (strcat "\nCLIVUS_NUMERAR_LISP invertidas=" (itoa clivus:ok) " de " (itoa (sslength clivus:cs)) " letreiros=" (itoa (length clivus:letreiros)) " avisos=" (itoa clivus:ruins) " de " (itoa clivus:cabe) " intactas=" (itoa clivus:intactas)))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

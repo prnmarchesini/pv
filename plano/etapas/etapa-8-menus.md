@@ -61,7 +61,7 @@ Parâmetros das análises.
 
 ## 8.8 Gerar sem análise
 Word, Menu 3, a. `LayoutDrawer.Draw` deixa de pintar, cotar e pôr seta.
-Nível 2: depois de UFV_USINA, nenhuma entidade nas camadas de análise, de
+Nível 2: depois de CLIVUS_USINA, nenhuma entidade nas camadas de análise, de
 alturas e de seta, e nenhuma cor diferente da da camada.
 
 ## 8.9 Análise: altura das pontas

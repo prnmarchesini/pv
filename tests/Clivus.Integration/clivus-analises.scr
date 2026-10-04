@@ -1,0 +1,91 @@
+; Teste de nivel 2 das analises independentes (passos 8.9 a 8.11): gera uma
+; fileira (sem analise, 8.8) e, em LISP, confere cada passo pelas entidades:
+;   - inserir PB, PA, pilar e declividade da um texto por pilar (por mesa na
+;     declividade), com a identidade TextoAnalise no XData, a cota dentro do
+;     terreno (regra sagrada 5), e inserir de novo nao empilha;
+;   - analisar a PB pinta so textos da PB; com pecas, pinta modulos, os das
+;     mesas marcadas tambem (02/10/2026: "nao pintou o modulo");
+;   - tirar as cores volta cada peca a cor de antes (magenta na marcada);
+;     apagar a PB nao mexe na PA.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area das analises")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento das analises")
+(command "CLIVUS_FILEIRA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:tipo (xd) (cdr (nth 0 xd)))
+(defun clivus:pintada (e / d) (setq d (entget e)) (or (assoc 420 d) (and (assoc 62 d) (/= (cdr (assoc 62 d)) 256))))
+
+; Textos (MTEXT) de uma analise: quantos, quantos pintados, cota min e max.
+(defun clivus:textos (tipo / ss i e xd n p zmin zmax)
+  (setq ss (ssget "_X" (list (cons 0 "MTEXT") (list -3 (list "CLIVUS")))) i 0 n 0 p 0 zmin 1e99 zmax -1e99)
+  (while (< i (clivus:conta ss))
+    (setq e (ssname ss i) xd (clivus:xdata e))
+    (if (and (= (clivus:tipo xd) "TextoAnalise") (= (clivus:campo xd 2) tipo))
+      (progn
+        (setq n (1+ n))
+        (if (clivus:pintada e) (setq p (1+ p)))
+        (setq zmin (min zmin (cadddr (assoc 10 (entget e)))) zmax (max zmax (cadddr (assoc 10 (entget e)))))))
+    (setq i (1+ i)))
+  (list n p zmin zmax))
+
+; Modulos (das duas camadas) com a cor verdadeira dada: vermelho 16711680, magenta 16711935.
+(defun clivus:moduloscor (cor / ss i n)
+  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 8 "CLIVUS_MODULO,CLIVUS_MARCADA") (cons 2 "CLIVUS_MODULO*"))) i 0 n 0)
+  (while (< i (clivus:conta ss)) (if (= (cdr (assoc 420 (entget (ssname ss i)))) cor) (setq n (1+ n))) (setq i (1+ i)))
+  n)
+(defun clivus:modulospintados () (clivus:moduloscor 16711680))
+
+(setq clivus:pilares (clivus:conta (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_PILAR")))))
+(setq clivus:contornos (clivus:conta (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "CLIVUS_MESA,CLIVUS_MARCADA")))))
+(setq clivus:modulos (clivus:conta (ssget "_X" (list (cons 0 "INSERT") (cons 8 "CLIVUS_MODULO,CLIVUS_MARCADA") (cons 2 "CLIVUS_MODULO*")))))
+(setq clivus:magenta (clivus:moduloscor 16711935))
+
+(command "CLIVUS_AN_PB_INSERIR")
+(command "CLIVUS_AN_PB_INSERIR")
+(command "CLIVUS_AN_PA_INSERIR")
+(command "CLIVUS_AN_PILAR_INSERIR")
+(command "CLIVUS_AN_DECL_INSERIR")
+(command "CLIVUS_AN_PENT_INSERIR")
+(command "CLIVUS_AN_PTOT_INSERIR")
+(setq clivus:pb (clivus:textos "LowEdge") clivus:pa (clivus:textos "HighEdge") clivus:pi (clivus:textos "PillarAbove") clivus:de (clivus:textos "Slope"))
+(setq clivus:pe (clivus:textos "PillarBuried") clivus:pt (clivus:textos "PillarLength"))
+
+(command "CLIVUS_AN_PB_ANALISAR_AUTO")
+(setq clivus:pbpint (clivus:textos "LowEdge") clivus:papint (clivus:textos "HighEdge"))
+(command "CLIVUS_AN_PB_QUANTIFICAR")
+(command "CLIVUS_AN_PILAR_QUANTIFICAR")
+(command "CLIVUS_EXCEL_AUTO" "{{XLSX}}")
+
+(command "CLIVUS_AN_TESTE_PECAS")
+(setq clivus:modpint (clivus:modulospintados))
+; Independencia: tirar as cores da PA nao mexe no que a PB pintou.
+(command "CLIVUS_AN_PA_CORES")
+(setq clivus:modpa (clivus:modulospintados))
+
+(command "CLIVUS_AN_PB_CORES")
+(setq clivus:pbsem (clivus:textos "LowEdge") clivus:modsem (clivus:modulospintados) clivus:magentadepois (clivus:moduloscor 16711935))
+
+(command "CLIVUS_AN_PB_APAGAR")
+(setq clivus:pbfim (clivus:textos "LowEdge") clivus:pafim (clivus:textos "HighEdge"))
+
+(princ (strcat "\nCLIVUS_AN_LISP pilares=" (itoa clivus:pilares) " contornos=" (itoa clivus:contornos) " modulos=" (itoa clivus:modulos)
+               " pb=" (itoa (car clivus:pb)) " pa=" (itoa (car clivus:pa)) " pilar=" (itoa (car clivus:pi)) " decl=" (itoa (car clivus:de))
+               " zmin=" (rtos (min (caddr clivus:pb) (caddr clivus:pa) (caddr clivus:pi) (caddr clivus:pe) (caddr clivus:pt)) 2 3)
+               " zmax=" (rtos (max (cadddr clivus:pb) (cadddr clivus:pa) (cadddr clivus:pi) (cadddr clivus:pe) (cadddr clivus:pt)) 2 3)
+               " penterrado=" (itoa (car clivus:pe)) " ptotal=" (itoa (car clivus:pt))))
+(princ (strcat "\nCLIVUS_AN_LISP2 pbpintados=" (itoa (cadr clivus:pbpint)) " papintados=" (itoa (cadr clivus:papint))
+               " modpintados=" (itoa clivus:modpint) " pbsemcor=" (itoa (cadr clivus:pbsem)) " modsemcor=" (itoa clivus:modsem)
+               " pbfim=" (itoa (car clivus:pbfim)) " pafim=" (itoa (car clivus:pafim)) " modposPA=" (itoa clivus:modpa)
+               " magenta=" (itoa clivus:magenta) " magentadepois=" (itoa clivus:magentadepois)))
+(setvar "SECURELOAD" clivus:secureload)
+(princ)

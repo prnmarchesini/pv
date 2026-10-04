@@ -1,0 +1,53 @@
+; Teste de nivel 2 da usina com dois tipos de mesa (passos 8.5 e 8.6): as
+; mesas de 28 e de 14 modulos ficam no desenho, em uso; a usina e gerada
+; numa area de 90 m de largura (cabem 4 de 28 e 1 de 14 por fileira). Em
+; LISP: quantos contornos de cada perfil (o nome gravado no XData da mesa,
+; campo 15), quantos pilares e faces, a cota dos pilares (regra 5).
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area mista")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento misto")
+(command "CLIVUS_MESAS_EXEMPLO_AUTO")
+(command "CLIVUS_USINA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+
+(setq clivus:ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) clivus:i 0 clivus:n28 0 clivus:n14 0 clivus:outros 0 clivus:cor 0)
+(while (< clivus:i (clivus:conta clivus:ss))
+  (setq clivus:e (ssname clivus:ss clivus:i) clivus:xd (clivus:xdata clivus:e))
+  (if (= (cdr (nth 0 clivus:xd)) "Mesa")
+    (progn
+      (cond ((= (clivus:campo clivus:xd 15) "Mesa 2V28") (setq clivus:n28 (1+ clivus:n28)))
+            ((= (clivus:campo clivus:xd 15) "Mesa 2V14") (setq clivus:n14 (1+ clivus:n14)))
+            (T (setq clivus:outros (1+ clivus:outros))))
+      (if (assoc 420 (entget clivus:e)) (setq clivus:cor (1+ clivus:cor)))))
+  (setq clivus:i (1+ clivus:i)))
+
+(setq clivus:pilares (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_PILAR"))))
+(setq clivus:np (clivus:conta clivus:pilares) clivus:nf (clivus:conta (ssget "_X" (list (cons 0 "3DFACE") (cons 8 "CLIVUS_FACE")))))
+(setq clivus:i 0 clivus:zmin 1e99 clivus:zmax -1e99)
+(while (< clivus:i clivus:np)
+  (setq clivus:z (cadddr (assoc 10 (entget (ssname clivus:pilares clivus:i)))))
+  (setq clivus:zmin (min clivus:zmin clivus:z) clivus:zmax (max clivus:zmax clivus:z) clivus:i (1+ clivus:i)))
+
+; Os modulos fora da camada de marcadas: todos com a cor do tipo (420,
+; cor verdadeira). Bug de 03/10/2026: saiam cinza, so o contorno tinha cor.
+(setq clivus:mods (ssget "_X" (list (cons 0 "INSERT") (cons 8 "CLIVUS_MODULO"))) clivus:i 0 clivus:nmod 0 clivus:modcor 0)
+(while (< clivus:i (clivus:conta clivus:mods))
+  (setq clivus:nmod (1+ clivus:nmod))
+  (if (assoc 420 (entget (ssname clivus:mods clivus:i))) (setq clivus:modcor (1+ clivus:modcor)))
+  (setq clivus:i (1+ clivus:i)))
+
+(princ (strcat "\nCLIVUS_MISTA_MODULOS n=" (itoa clivus:nmod) " comcor=" (itoa clivus:modcor)))
+(princ (strcat "\nCLIVUS_MISTA n28=" (itoa clivus:n28) " n14=" (itoa clivus:n14) " outros=" (itoa clivus:outros) " comcor=" (itoa clivus:cor)
+               " pilares=" (itoa clivus:np) " faces=" (itoa clivus:nf) " zmin=" (rtos clivus:zmin 2 3) " zmax=" (rtos clivus:zmax 2 3)))
+(setvar "SECURELOAD" clivus:secureload)
+(princ)

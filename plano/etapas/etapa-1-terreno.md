@@ -3,7 +3,7 @@
 Objetivo: escolher a superfície TIN, processar, consultar cota rápido.
 
 ### 1.1 Modelo de TIN puro (Geo)
-Classes `Tin`, `Triangle`, `Point3` em `UFV.Geo`. Consulta `TryGetZ(x, y)` por interpolação no triângulo. Devolve falso fora do terreno.
+Classes `Tin`, `Triangle`, `Point3` em `Clivus.Geo`. Consulta `TryGetZ(x, y)` por interpolação no triângulo. Devolve falso fora do terreno.
 Testes: plano inclinado analítico (Z exato), ponto em vértice, em aresta, fora.
 
 ### 1.2 Índice espacial
@@ -19,7 +19,7 @@ Ao confirmar, extrai triângulos para o `Tin` do Geo, guarda em cache. Mensagem 
 **Validação do Renan:** confere o resumo contra as propriedades da superfície no Civil 3D.
 
 ### 1.5 Identidade e carimbo
-Registrar app `MARCHENG_UFV`, criar dicionário nomeado central, gravar qual superfície foi processada e sua data de modificação (carimbo de proveniência).
+Registrar app `CLIVUS`, criar dicionário nomeado central, gravar qual superfície foi processada e sua data de modificação (carimbo de proveniência).
 Testes: reabrir o desenho recupera o registro; superfície modificada depois é detectada.
 
 ### 1.6 Coordenada geográfica

@@ -1,10 +1,10 @@
 <Project>
 
   <PropertyGroup>
-    <!-- Versao do plugin, a que o comando UFV_OLA mostra ao usuario. -->
+    <!-- Versao do plugin, a que o comando CLIVUS_OLA mostra ao usuario. -->
     <Version>0.1.0</Version>
     <Company>MarchEng</Company>
-    <Product>Plugin UFV</Product>
+    <Product>Clivus Solar</Product>
 
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>

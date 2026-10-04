@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     Passo 8.3. Instala as dependências, cria ou atualiza o banco SQLite
-    (servidor/ufv.db), põe os módulos iniciais no banco vazio e abre o
+    (servidor/clivus.db), põe os módulos iniciais no banco vazio e abre o
     serviço numa janela própria. Com o serviço no ar, a janela de Mesa do
     plugin lista os módulos dele; fechada a janela, o plugin volta para a
     biblioteca embutida.

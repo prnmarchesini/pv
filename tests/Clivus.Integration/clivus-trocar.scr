@@ -1,0 +1,83 @@
+; Teste de nivel 2 de trocar mesa (9.2) e regerar fileira (9.3): usina mista
+; (28 e 14 em uso), a F1.2 trocada por duas de 14 travando o inicio; depois a
+; fileira 1 reespacada mantendo as mesas, e a fileira 2 regerada pelo motor.
+; Em LISP: letreiros e perfis pelo XData do contorno (campo 1 = letreiro,
+; campo 15 = perfil), o menor vao em planta entre mesas vizinhas da fileira 1
+; (antes, depois da troca e depois de reespacar) e a cota dos contornos
+; novos (regra 5).
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area troca")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento troca")
+(command "CLIVUS_MESAS_EXEMPLO_AUTO")
+(command "CLIVUS_USINA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+
+(defun clivus:verts (e / v l)
+  (setq v (entnext e))
+  (while (and v (= (cdr (assoc 0 (entget v))) "VERTEX"))
+    (setq l (cons (cdr (assoc 10 (entget v))) l) v (entnext v)))
+  (reverse l))
+
+; (letreiro perfil ename) de cada contorno de mesa.
+(defun clivus:mesas ( / ss i e xd l)
+  (setq ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) i 0)
+  (while (< i (clivus:conta ss))
+    (setq e (ssname ss i) xd (clivus:xdata e))
+    (if (= (cdr (nth 0 xd)) "Mesa") (setq l (cons (list (clivus:campo xd 1) (clivus:campo xd 15) e) l)))
+    (setq i (1+ i)))
+  l)
+
+(defun clivus:da (padrao / n) (setq n 0) (foreach m (clivus:mesas) (if (wcmatch (car m) padrao) (setq n (1+ n)))) n)
+(defun clivus:perfil (letreiro / r) (foreach m (clivus:mesas) (if (= (car m) letreiro) (setq r (cadr m)))) (if r r "-"))
+(defun clivus:ename (letreiro / r) (foreach m (clivus:mesas) (if (= (car m) letreiro) (setq r (caddr m)))) r)
+
+; O menor vao em planta entre mesas vizinhas da fileira (padrao), ao longo da
+; direcao da borda baixa da primeira mesa.
+(defun clivus:menorvao (padrao / ms v0 v1 dx dy n faixas s lst menor)
+  (setq ms (vl-remove-if-not '(lambda (m) (wcmatch (car m) padrao)) (clivus:mesas)))
+  (setq v0 (car (clivus:verts (caddr (car ms)))) v1 (cadr (clivus:verts (caddr (car ms)))))
+  (setq dx (- (car v1) (car v0)) dy (- (cadr v1) (cadr v0)) n (sqrt (+ (* dx dx) (* dy dy))) dx (/ dx n) dy (/ dy n))
+  (foreach m ms
+    (setq s (mapcar '(lambda (p) (+ (* (- (car p) (car v0)) dx) (* (- (cadr p) (cadr v0)) dy))) (clivus:verts (caddr m))))
+    (setq faixas (cons (list (apply 'min s) (apply 'max s)) faixas)))
+  (setq lst (vl-sort faixas '(lambda (a b) (< (car a) (car b)))) menor 1e99)
+  (while (cdr lst)
+    (setq menor (min menor (- (car (cadr lst)) (cadr (car lst)))) lst (cdr lst)))
+  menor)
+
+(setq clivus:total0 (length (clivus:mesas)) clivus:f1antes (clivus:da "F1`.*") clivus:perfil12 (clivus:perfil "F1.2") clivus:vao0 (clivus:menorvao "F1`.*"))
+
+(command "CLIVUS_TROCAR_MESA_AUTO" "F1.2" 2 2 "Inicio" "Nao")
+(setq clivus:total1 (length (clivus:mesas)) clivus:f1troca (clivus:da "F1`.*")
+      clivus:p2a (clivus:perfil "F1.2a") clivus:p2b (clivus:perfil "F1.2b") clivus:sem12 (clivus:perfil "F1.2")
+      clivus:vaotroca (clivus:menorvao "F1`.*"))
+
+; A cota do contorno novo: no terreno (regra 5), nunca 0.
+(setq clivus:zmin 1e99 clivus:zmax -1e99)
+(foreach p (clivus:verts (clivus:ename "F1.2a")) (setq clivus:zmin (min clivus:zmin (caddr p)) clivus:zmax (max clivus:zmax (caddr p))))
+
+(command "CLIVUS_REGERAR_FILEIRA_AUTO" "F1.1" "Manter")
+(setq clivus:f1manter (clivus:da "F1`.*") clivus:vaomanter (clivus:menorvao "F1`.*") clivus:p2amanter (clivus:perfil "F1.2a"))
+
+(setq clivus:f2antes (clivus:da "F2`.*"))
+(command "CLIVUS_REGERAR_FILEIRA_AUTO" "F2.1" "Motor")
+(setq clivus:f2motor (clivus:da "F2`.*") clivus:total2 (length (clivus:mesas)))
+
+(princ (strcat "\nCLIVUS_TROCAR total0=" (itoa clivus:total0) " total1=" (itoa clivus:total1) " total2=" (itoa clivus:total2)
+               " f1antes=" (itoa clivus:f1antes) " f1troca=" (itoa clivus:f1troca) " f1manter=" (itoa clivus:f1manter)
+               " f2antes=" (itoa clivus:f2antes) " f2motor=" (itoa clivus:f2motor)
+               " perfil12=" clivus:perfil12 " p2a=" clivus:p2a " p2b=" clivus:p2b " sem12=" clivus:sem12 " p2amanter=" clivus:p2amanter
+               " vao0=" (rtos clivus:vao0 2 3) " vaotroca=" (rtos clivus:vaotroca 2 3) " vaomanter=" (rtos clivus:vaomanter 2 3)
+               " zmin=" (rtos clivus:zmin 2 3) " zmax=" (rtos clivus:zmax 2 3)))
+(setvar "SECURELOAD" clivus:secureload)
+(princ)

@@ -1,6 +1,6 @@
 # Regras sagradas
 
-Resultado que fere qualquer uma destas regras é BUG, não caso de análise. Cada regra vira um verificador automático em `UFV.Core.Invariants`, rodado sobre toda saída do motor em todo teste (ver `04-testes.md`).
+Resultado que fere qualquer uma destas regras é BUG, não caso de análise. Cada regra vira um verificador automático em `Clivus.Core.Invariants`, rodado sobre toda saída do motor em todo teste (ver `04-testes.md`).
 
 ## 1. Pilar nunca flutua
 Todo pilar tem parte abaixo da superfície (embutimento > 0) e parte acima (altura livre > 0). Verificador: `embutimento > 0 && alturaLivre > 0` para todo pilar.

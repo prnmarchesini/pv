@@ -17,7 +17,7 @@ class Modulo(Base):
     """Um módulo fotovoltaico da biblioteca.
 
     Medidas em metro e potência em watt-pico, como no plugin
-    (`UFV.Core.SolarModule`). Marca e modelo identificam o módulo: é por eles
+    (`Clivus.Core.SolarModule`). Marca e modelo identificam o módulo: é por eles
     que o perfil de mesa o encontra de volta. O modelo sozinho já é único,
     como na biblioteca do plugin (`ModuleLibrary`), que procura só por ele,
     ignorando maiúscula: a unicidade fica em `chave`, o modelo normalizado em

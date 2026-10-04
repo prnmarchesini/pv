@@ -1,0 +1,95 @@
+; Teste de nivel 2 da analise de declividade (29/09/2026): processa uma
+; fileira e liga a declividade em graus, depois em porcentagem. Le do
+; desenho, pelo XData:
+;   - um texto de declividade por mesa, com o GUID dela, e o valor bate com
+;     o contorno (desnivel da linha do meio sobre a distancia em planta):
+;     em graus, o angulo; em porcentagem, a razao vezes cem;
+;   - trocar a unidade nao deixa texto em dobro;
+;   - a mesa recalculada nasce com a seta (o desenho da mesa consulta a
+;     analise ligada);
+;   - nada da camada fica fora da cota das mesas (regra sagrada 5);
+;   - Desligar apaga tudo da camada.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area da declividade")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento da declividade")
+(command "CLIVUS_FILEIRA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:tipo (xd) (cdr (nth 0 xd)))
+(defun clivus:verts (e / v l)
+  (setq v (entnext e) l nil)
+  (while (and v (= (cdr (assoc 0 (entget v))) "VERTEX"))
+    (setq l (cons (cdr (assoc 10 (entget v))) l) v (entnext v)))
+  (reverse l))
+(defun clivus:meio (a b) (mapcar '(lambda (x y) (/ (+ x y) 2.0)) a b))
+; O numero do texto: virgula vira ponto, e atof para no simbolo.
+(defun clivus:num (s / i c r)
+  (setq i 1 r "")
+  (while (<= i (strlen s))
+    (setq c (substr s i 1) r (strcat r (if (= c ",") "." c)) i (1+ i)))
+  (atof r))
+
+; A tangente da declividade de cada mesa, pelo contorno: (guid . tangente).
+(defun clivus:tangentes ( / ss i e xd v p0 p1 plano l zmin zmax)
+  (setq ss (ssget "_X" (list (cons 0 "POLYLINE") (cons -3 (list (list "CLIVUS"))))) i 0 l nil)
+  (setq clivus:zmin 1e99 clivus:zmax -1e99)
+  (while (and ss (< i (sslength ss)))
+    (setq e (ssname ss i) xd (clivus:xdata e))
+    (if (= (clivus:tipo xd) "Mesa")
+      (progn
+        (setq v (clivus:verts e) p0 (clivus:meio (nth 0 v) (nth 3 v)) p1 (clivus:meio (nth 1 v) (nth 2 v))
+              plano (distance (list (car p0) (cadr p0)) (list (car p1) (cadr p1))))
+        (foreach q v (setq clivus:zmin (min clivus:zmin (caddr q)) clivus:zmax (max clivus:zmax (caddr q))))
+        (setq l (cons (cons (clivus:campo xd 0) (/ (abs (- (caddr p1) (caddr p0))) plano)) l))))
+    (setq i (1+ i)))
+  l)
+
+; Conta os textos da camada, os que batem com a mesa dona na unidade dada
+; ("G" graus, "P" porcentagem), e o que sai da faixa de cota das mesas.
+(defun clivus:conferir (unidade / tang ss i e d xd g t0 esperado n ok fora z tot)
+  (setq tang (clivus:tangentes) n 0 ok 0 fora 0 i 0 tot 0)
+  (setq ss (ssget "_X" (list (cons 8 "CLIVUS_SETA_DECLIVIDADE"))))
+  (while (and ss (< i (sslength ss)))
+    (setq e (ssname ss i) d (entget e) tot (1+ tot))
+    ; No MTEXT o 11 e a direcao do texto, nao um ponto: so a linha tem 11.
+    (foreach k (if (= (cdr (assoc 0 d)) "LINE") '(10 11) '(10))
+      (if (assoc k d)
+        (progn (setq z (caddr (cdr (assoc k d))))
+               (if (or (< z (- clivus:zmin 0.2)) (> z (+ clivus:zmax 0.6))) (setq fora (1+ fora))))))
+    (if (= (cdr (assoc 0 d)) "MTEXT")
+      (progn
+        (setq n (1+ n) xd (clivus:xdata e) g (if xd (clivus:campo xd 1)) t0 (cdr (assoc g tang)))
+        (if t0
+          (progn
+            (setq esperado (if (= unidade "G") (* (atan t0) (/ 180.0 pi)) (* t0 100.0)))
+            (if (< (abs (- esperado (clivus:num (cdr (assoc 1 d))))) 0.051) (setq ok (1+ ok)))))))
+    (setq i (1+ i)))
+  (list n ok fora (length tang) tot))
+
+(command "CLIVUS_DECLIVIDADE" "Graus")
+(setq clivus:g (clivus:conferir "G"))
+(command "CLIVUS_DECLIVIDADE" "Porcentagem")
+(setq clivus:p (clivus:conferir "P"))
+(command "CLIVUS_SUJAR_AUTO")
+(command "CLIVUS_RECALCULAR_AUTO")
+(setq clivus:r (clivus:conferir "P"))
+(command "CLIVUS_DECLIVIDADE" "Desligar")
+(setq clivus:d (clivus:conferir "P"))
+
+(princ (strcat "\nCLIVUS_DECLIV contornos=" (itoa (nth 3 clivus:g))
+               " graus=" (itoa (nth 0 clivus:g)) " okg=" (itoa (nth 1 clivus:g))
+               " porc=" (itoa (nth 0 clivus:p)) " okp=" (itoa (nth 1 clivus:p))
+               " recalc=" (itoa (nth 0 clivus:r)) " okr=" (itoa (nth 1 clivus:r))
+               " desligado=" (itoa (nth 4 clivus:d))
+               " fora=" (itoa (+ (nth 2 clivus:g) (nth 2 clivus:p) (nth 2 clivus:r)))))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

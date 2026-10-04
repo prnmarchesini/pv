@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      O índice espacial e a busca linear são detalhe interno: o motor só
+      conhece TryGetZ. Os testes precisam dos dois para poder afirmar que o
+      índice não mudou resposta nenhuma.
+    -->
+    <InternalsVisibleTo Include="Clivus.Geo.Tests" />
+  </ItemGroup>
+
+</Project>

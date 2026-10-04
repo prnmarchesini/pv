@@ -32,7 +32,7 @@ Só o Renan marca VALIDADO.
 | 4.1 | Modelo de configuração | VALIDADO (automático) | Sem tela; fechado em 25/09/2026 pela regra "só valido no CAD". Cinco padrões continuam meus |
 | 4.2 | Linha de alinhamento | VALIDADO | Renan aprovou em 26/09/2026 ("deu certo o alinhamento"), depois de 2 reprovações em 25/09 |
 | 4.3 | Regras de análise | VALIDADO (automático) | Modelo no Core, sem tela; fechado em 26/09/2026 pela regra "só valido no CAD". A tela é o 4.4, a pintura é a etapa 5 |
-| 4.4 | Modal | AGUARDANDO VALIDAÇÃO | `UFV_CONFIG`: tela única, grava no desenho; nível 2 salva, reabre e compara campo a campo |
+| 4.4 | Modal | AGUARDANDO VALIDAÇÃO | `CLIVUS_CONFIG`: tela única, grava no desenho; nível 2 salva, reabre e compara campo a campo |
 | 5.1 | Distribuição em planta | VALIDADO (automático) | `RowDistributor` no Core, `Polygons` no Geo; só modelo. **Refeito em 26/09/2026**: a linha de alinhamento é o eixo transversal, toda fileira nasce nela a cada pitch e corre a 90° (a primeira versão punha as fileiras paralelas à linha; o Renan reprovou no CAD) |
 | 5.2 | Amostragem | VALIDADO (automático) | `TablePlacement` e `TerrainSampler` no Core; a ponta baixa é amostrada na aresta inteira (`Tin.TryGetMaxZAlong`); fechado em 26/09/2026 |
 | 5.3 | Cotas viáveis por mesa | VALIDADO (automático) | `ViableElevations` no Core; grade de 1 cm, intervalos por varredura; fechado em 26/09/2026 |
@@ -40,48 +40,48 @@ Só o Renan marca VALIDADO.
 | 5.5 | Pilares | VALIDADO (automático) | `PillarCalculator` no Core; comprimento ideal, sem arredondamento comercial (decisão do Renan no 4.1); fechado em 26/09/2026 |
 | 5.6 | Resultado das análises | VALIDADO (automático) | `TableAnalysis` e `RowPipeline` no Core; fechado em 26/09/2026 |
 | 5.7 | Desenho | AGUARDANDO VALIDAÇÃO | `LayoutDrawer`: pilares (bloco escalado), módulos (bloco por modelo) + face separada, contorno da mesa, alturas em camada desligada, aviso de marcada; uma transação |
-| 5.8 | Uma fileira no CAD | AGUARDANDO VALIDAÇÃO | `UFV_FILEIRA`; REPROVADO em 26/09/2026 (fileira paralela à linha; alturas ilegíveis) e refeito no mesmo dia; nível 2 com 6 mesas, 42 pilares e 168 faces sobre o Itatiba |
-| 5.9 | Área inteira | AGUARDANDO VALIDAÇÃO | `UFV_USINA`; nível 2 com 102 mesas em 17 fileiras sobre o Itatiba: motor 0,6 s, desenho 0,2 s |
+| 5.8 | Uma fileira no CAD | AGUARDANDO VALIDAÇÃO | `CLIVUS_FILEIRA`; REPROVADO em 26/09/2026 (fileira paralela à linha; alturas ilegíveis) e refeito no mesmo dia; nível 2 com 6 mesas, 42 pilares e 168 faces sobre o Itatiba |
+| 5.9 | Área inteira | AGUARDANDO VALIDAÇÃO | `CLIVUS_USINA`; nível 2 com 102 mesas em 17 fileiras sobre o Itatiba: motor 0,6 s, desenho 0,2 s |
 | 6.1 | Escritor DAE puro | VALIDADO (automático) | `ColladaWriter` no Core: Collada 1.4.1, uma geometria e um nó por face, material com o nome da camada (é por ele que o PVsyst reconhece módulos); 16 testes; fechado em 26/09/2026 |
-| 6.2 | Botão Exportar para PVsyst | AGUARDANDO VALIDAÇÃO | `UFV_EXPORTAR` (seleção por XData, formato, janela de arquivo, DAE com origem local); nível 2 relê o DAE: 168 faces, vértice ao milímetro |
-| 6.3 | Validação no PVsyst | AGUARDANDO VALIDAÇÃO | Renan importa o DAE no PVsyst, escolhe o material `MARCHENG_UFV_FACE`, confere contagem e orientação |
+| 6.2 | Botão Exportar para PVsyst | AGUARDANDO VALIDAÇÃO | `CLIVUS_EXPORTAR` (seleção por XData, formato, janela de arquivo, DAE com origem local); nível 2 relê o DAE: 168 faces, vértice ao milímetro |
+| 6.3 | Validação no PVsyst | AGUARDANDO VALIDAÇÃO | Renan importa o DAE no PVsyst, escolhe o material `CLIVUS_FACE`, confere contagem e orientação |
 | 6.4 | Estudo do formato PVC | AGUARDANDO VALIDAÇÃO | Resumo entregue em 26/09/2026 (seção "6.4: o formato PVC"); o plano manda PARAR aqui |
 | 6.5 | Escritor PVC | PENDENTE | |
-| 7.1 | Estado sujo | AGUARDANDO VALIDAÇÃO | `TableIdentity.Dirty` no XData (versão 2, lê a 1); `UFV_SUJAR` pinta contorno, pilares e módulos de vermelho; `UFV_ESTADO` lista; nível 2 confere cor e XData |
+| 7.1 | Estado sujo | AGUARDANDO VALIDAÇÃO | `TableIdentity.Dirty` no XData (versão 2, lê a 1); `CLIVUS_SUJAR` pinta contorno, pilares e módulos de vermelho; `CLIVUS_ESTADO` lista; nível 2 confere cor e XData |
 | 7.2 | O vigia | AGUARDANDO VALIDAÇÃO | `LayoutWatcher` por desenho: eventos do banco + fim de comando; `PendingChanges` (Core) decide; MOVE suja, ERASE do contorno registra remoção (`RemovalStore`); nível 2 com MOVE e ERASE por script |
-| 7.3 | Recalcular mesa | AGUARDANDO VALIDAÇÃO | `UFV_RECALCULAR` (botão e botão direito sobre a peça): célula dos cantos do contorno (`TableCells`), reamostra, refaz pilares e pontas baixas, mesmo GUID, nasce limpa |
-| 7.4 | Recalcular tudo | AGUARDANDO VALIDAÇÃO | `UFV_RECALCULAR_SUJAS` (botão "Recalcular sujas"); nível 2: suja uma, recalcula, mesmo GUID limpo, 7/28/28 peças |
-| 7.5 | Cópia | AGUARDANDO VALIDAÇÃO | `CopyFixer` no fim do comando que copiou: mesa nova e peças novas (agrupadas pelo deslocamento), suja "copiada"; `UFV_RENOMEAR` para blocos com sufixo; nível 2 com COPY e -RENAME |
-| 7.6 | Apagar e recontar | AGUARDANDO VALIDAÇÃO | remoção já era do vigia (7.2); `UFV_RECONTAR` (botão Recontar) conta pelo XData (`LayoutCensus`, Core, 3 testes) e consome as removidas; nível 2 com ERASE |
-| 7.7 | Validação | AGUARDANDO VALIDAÇÃO | `UFV_VALIDAR` (botão Validar) e ao abrir o desenho: registros que sumiram, sujas, duplicadas (mesa e peça), órfãs, removidas não recontadas, carimbo do terreno (`LayoutValidation`, Core, 3 testes); nível 2 com quatro estragos |
-| 7.8 | Auto-seleção | AGUARDANDO VALIDAÇÃO | caixa flutuante semitransparente com mesas, módulos e kWp da seleção (`AutoSelecao`, na folga do AutoCAD); a conta é o `UFV_KWP_SELECAO`, com nível 2 |
-| 7.9 | Grupos e painel de informações | AGUARDANDO VALIDAÇÃO | `TableGroup` (Core, 3 testes) no registro `GRUPOS`; `UFV_GRUPO_CRIAR`/`GRUPOS`/`GRUPO_RECALCULAR`/`GRUPO_SELECIONAR`/`GRUPO_APAGAR` com nível 2; painel (paleta WPF) com lista e botões |
-| 7.10 | Numeração | AGUARDANDO VALIDAÇÃO | `RowNumbering` (Core, 8 testes); `UFV_NUMERAR` com nível 2 (usina de 80 mesas invertida); seção Numeração na ribbon |
+| 7.3 | Recalcular mesa | AGUARDANDO VALIDAÇÃO | `CLIVUS_RECALCULAR` (botão e botão direito sobre a peça): célula dos cantos do contorno (`TableCells`), reamostra, refaz pilares e pontas baixas, mesmo GUID, nasce limpa |
+| 7.4 | Recalcular tudo | AGUARDANDO VALIDAÇÃO | `CLIVUS_RECALCULAR_SUJAS` (botão "Recalcular sujas"); nível 2: suja uma, recalcula, mesmo GUID limpo, 7/28/28 peças |
+| 7.5 | Cópia | AGUARDANDO VALIDAÇÃO | `CopyFixer` no fim do comando que copiou: mesa nova e peças novas (agrupadas pelo deslocamento), suja "copiada"; `CLIVUS_RENOMEAR` para blocos com sufixo; nível 2 com COPY e -RENAME |
+| 7.6 | Apagar e recontar | AGUARDANDO VALIDAÇÃO | remoção já era do vigia (7.2); `CLIVUS_RECONTAR` (botão Recontar) conta pelo XData (`LayoutCensus`, Core, 3 testes) e consome as removidas; nível 2 com ERASE |
+| 7.7 | Validação | AGUARDANDO VALIDAÇÃO | `CLIVUS_VALIDAR` (botão Validar) e ao abrir o desenho: registros que sumiram, sujas, duplicadas (mesa e peça), órfãs, removidas não recontadas, carimbo do terreno (`LayoutValidation`, Core, 3 testes); nível 2 com quatro estragos |
+| 7.8 | Auto-seleção | AGUARDANDO VALIDAÇÃO | caixa flutuante semitransparente com mesas, módulos e kWp da seleção (`AutoSelecao`, na folga do AutoCAD); a conta é o `CLIVUS_KWP_SELECAO`, com nível 2 |
+| 7.9 | Grupos e painel de informações | AGUARDANDO VALIDAÇÃO | `TableGroup` (Core, 3 testes) no registro `GRUPOS`; `CLIVUS_GRUPO_CRIAR`/`GRUPOS`/`GRUPO_RECALCULAR`/`GRUPO_SELECIONAR`/`GRUPO_APAGAR` com nível 2; painel (paleta WPF) com lista e botões |
+| 7.10 | Numeração | AGUARDANDO VALIDAÇÃO | `RowNumbering` (Core, 8 testes); `CLIVUS_NUMERAR` com nível 2 (usina de 80 mesas invertida); seção Numeração na ribbon |
 | 8.1 | Vãos personalizados e enterro mínimo (Core) | VALIDADO (automático) | `TableFrame.PillarSpans`, `MinEmbedment` (T3), `PillarCoverage`, `SpanDifference`, `Pillars(mesa)`; perfil JSON com os dois campos opcionais; 25 testes |
 | 8.2 | Janela da estrutura | AGUARDANDO VALIDAÇÃO | Janela de Mesa: larguras do pilar, T3 (m, opcional), botão "Vãos entre pilares..." (`JanelaDeVaos`, conta em `PillarSpanForm`), solo e T3 no croqui; o T3 chega ao motor por `ProjectSettings.ForTable` |
 | 8.3 | Serviço local de módulos | AGUARDANDO VALIDAÇÃO | `servidor/` (FastAPI, SQLAlchemy, Alembic; SQLite sem `DATABASE_URL`, Postgres no `docker-compose`), 24 testes no placar; janela de Mesa lista os módulos do serviço e diz a origem; sem serviço, a embutida |
 | 8.4 | Cadastro de módulo | AGUARDANDO VALIDAÇÃO | Botão "Cadastrar módulo..." na janela de Mesa (`JanelaDeCadastroDeModulo`), POST no serviço; recusas em português; a lista recarrega e o módulo novo fica escolhido |
 | 8.5 | Mesas do desenho | AGUARDANDO VALIDAÇÃO | `DrawingTables` (Core) no dicionário do desenho: perfil, cor e "usar"; a tela é a aba Escolha das estruturas do 8.7 |
 | 8.6 | Motor com mais de um tipo de mesa | AGUARDANDO VALIDAÇÃO | Distribuição escolhe por trecho a combinação que põe mais módulos; fileira mista no motor (regra 6 testada); mesa grava o nome do perfil (XData v6) e sai com a cor do tipo; nível 2: 64 × 28 e 16 × 14 |
-| 8.7 | Janela de Configurações com abas | AGUARDANDO VALIDAÇÃO | `UFV_CONFIGURACOES`: abas Estruturas (mesas do desenho: nova, editar na janela de Mesa, duplicar, remover), Escolha das estruturas (usar + cor), Parâmetros (o formulário do 4.4 sem a grade antiga de cores) e Projeto (estilos) |
+| 8.7 | Janela de Configurações com abas | AGUARDANDO VALIDAÇÃO | `CLIVUS_CONFIGURACOES`: abas Estruturas (mesas do desenho: nova, editar na janela de Mesa, duplicar, remover), Escolha das estruturas (usar + cor), Parâmetros (o formulário do 4.4 sem a grade antiga de cores) e Projeto (estilos) |
 | 8.8 | Gerar sem análise | AGUARDANDO VALIDAÇÃO | Usina, Fileira e Refazer desenham sem cor de análise, sem cota e sem seta; Recalcular e Pontas nunca pintam e acompanham o desenho (cotas se ele tem, seta se ligada); nível 2 da usina confere "nada analisado" |
-| 8.9 | Análise: altura das pontas | AGUARDANDO VALIDAÇÃO | PB e PA: inserir, analisar (duas cores, módulos opcional), apagar, tirar cores, quantificar; `AnalisesIndependentes`, nível 2 `ufv-analises` |
+| 8.9 | Análise: altura das pontas | AGUARDANDO VALIDAÇÃO | PB e PA: inserir, analisar (duas cores, módulos opcional), apagar, tirar cores, quantificar; `AnalisesIndependentes`, nível 2 `clivus-analises` |
 | 8.10 | Análise: declividade | AGUARDANDO VALIDAÇÃO | Mesma base do 8.9; seta + valor por mesa, % ou graus (trocar a unidade reinsere os textos), contorno opcional |
 | 8.11 | Análise: pilares | AGUARDANDO VALIDAÇÃO | Mesma base do 8.9; P (acima do terreno) em cada pilar, pilares opcionais |
-| 8.12 | Quantificar e exportar para Excel | AGUARDANDO VALIDAÇÃO | Quantificar grava a contagem no desenho; `UFV_EXCEL` grava .xlsx (Resumo, Análises, Pilares, Compra de pilares), escrito à mão no Core (`XlsxWriter`); aberto no Excel de verdade em 01/10 |
-| 8.13 | Estilos do projeto | AGUARDANDO VALIDAÇÃO | `UFV_ESTILOS` (janela) grava estilo de texto, cota e chamada no desenho; todo texto do plugin sai nele, anotativo quando o estilo é; sem escolha valem os do Renan se o desenho os tem; nível 2 no Itatiba |
-| 8.14 | Tags | AGUARDANDO VALIDAÇÃO | `UFV_TAG_FILEIRAS/MESAS/MODULOS/STRINGS` e `_APAGAR`; strings em serpentina, sem atravessar mesa, incompleta com asterisco; nível 2 com 14 e 20 por string |
-| 8.15 | Terreno | AGUARDANDO VALIDAÇÃO | `UFV_TERRENO_RESUMO`: superfície e estado, área, cotas, cidade (IBGE embutido), país e fuso UTM SIRGAS 2000 com EPSG; janela com Trocar terreno e Localização; nível 2 no Itatiba: Itatiba - SP, 23S |
+| 8.12 | Quantificar e exportar para Excel | AGUARDANDO VALIDAÇÃO | Quantificar grava a contagem no desenho; `CLIVUS_EXCEL` grava .xlsx (Resumo, Análises, Pilares, Compra de pilares), escrito à mão no Core (`XlsxWriter`); aberto no Excel de verdade em 01/10 |
+| 8.13 | Estilos do projeto | AGUARDANDO VALIDAÇÃO | `CLIVUS_ESTILOS` (janela) grava estilo de texto, cota e chamada no desenho; todo texto do plugin sai nele, anotativo quando o estilo é; sem escolha valem os do Renan se o desenho os tem; nível 2 no Itatiba |
+| 8.14 | Tags | AGUARDANDO VALIDAÇÃO | `CLIVUS_TAG_FILEIRAS/MESAS/MODULOS/STRINGS` e `_APAGAR`; strings em serpentina, sem atravessar mesa, incompleta com asterisco; nível 2 com 14 e 20 por string |
+| 8.15 | Terreno | AGUARDANDO VALIDAÇÃO | `CLIVUS_TERRENO_RESUMO`: superfície e estado, área, cotas, cidade (IBGE embutido), país e fuso UTM SIRGAS 2000 com EPSG; janela com Trocar terreno e Localização; nível 2 no Itatiba: Itatiba - SP, 23S |
 | 8.16 | Ribbon nova | AGUARDANDO VALIDAÇÃO | Três abas (UFV, UFV Análises, UFV Tags) descritas no Core (`RibbonLayout`) e testadas: todo botão com dica e comando que existe; sem Olá, Mesa, Configuração, Parâmetros e Pintar; Edição num menu |
 | 9.1 | Trocar mesa (Core) | VALIDADO (automático) | `TableSwap.Plan`: N mesas do tipo novo encostadas no lado travado (início ou fim), espaçamento da configuração entre elas, fundo do mesmo lado; diz quanto passa do espaço até a vizinha e não a move; mesmo número de mesa (a tela põe a, b, c); 9 testes |
-| 9.2 | Trocar mesa (tela) | AGUARDANDO VALIDAÇÃO | `UFV_TROCAR_MESA` (Edição > Trocar mesa): clica a mesa, janela com mesa nova (as do desenho), quantas (1 a 5), lado travado e "reespaçar a fileira depois"; apaga a antiga, desenha as novas no terreno (F3.5a, F3.5b), diz quanto passou da vizinha; nível 2 `ufv-trocar` |
-| 9.3 | Regerar fileira | AGUARDANDO VALIDAÇÃO | `UFV_REGERAR_FILEIRA` (Edição > Regerar fileira): Manter (as mesas e os tipos da fileira, reespaçadas, mesmo GUID; `TableSwap.Respace`, trechos separados por vão grande ficam) ou Motor (a área planejada de novo, só a fileira da mesa desenhada); nível 2 nos dois modos |
-| 9.4 | Objetos de sombra: árvore | AGUARDANDO VALIDAÇÃO | `UFV_ARVORE` (Sombreamento > Objetos > Árvore): janela com tronco e copa (altura e largura), cliques; bloco com dois cilindros, pé na cota do terreno, medidas no XData; `ArvoreVigia` devolve ao chão a árvore movida, arrastada ou copiada (cópia com GUID próprio); nível 2 `ufv-arvore` |
+| 9.2 | Trocar mesa (tela) | AGUARDANDO VALIDAÇÃO | `CLIVUS_TROCAR_MESA` (Edição > Trocar mesa): clica a mesa, janela com mesa nova (as do desenho), quantas (1 a 5), lado travado e "reespaçar a fileira depois"; apaga a antiga, desenha as novas no terreno (F3.5a, F3.5b), diz quanto passou da vizinha; nível 2 `clivus-trocar` |
+| 9.3 | Regerar fileira | AGUARDANDO VALIDAÇÃO | `CLIVUS_REGERAR_FILEIRA` (Edição > Regerar fileira): Manter (as mesas e os tipos da fileira, reespaçadas, mesmo GUID; `TableSwap.Respace`, trechos separados por vão grande ficam) ou Motor (a área planejada de novo, só a fileira da mesa desenhada); nível 2 nos dois modos |
+| 9.4 | Objetos de sombra: árvore | AGUARDANDO VALIDAÇÃO | `CLIVUS_ARVORE` (Sombreamento > Objetos > Árvore): janela com tronco e copa (altura e largura), cliques; bloco com dois cilindros, pé na cota do terreno, medidas no XData; `ArvoreVigia` devolve ao chão a árvore movida, arrastada ou copiada (cópia com GUID próprio); nível 2 `clivus-arvore` |
 | 9.5 | Posição do sol (Core) | VALIDADO (automático) | `SolarCalculator` (NOAA/Meeus, com refração): declinação nos solstícios e equinócio, equação do tempo, meio-dia solar em quatro latitudes, manhã a leste, fuso; 6 testes |
 | 9.6 | Sombra num instante (Core) | VALIDADO (automático) | `Shading`: cilindro bloqueia o raio de sol do ponto; fração da face numa grade 6 × 3; só faces na caixa da sombra; contorno no chão (envoltória da base e do topo) assentado no terreno; testes no plano e em rampa |
-| 9.7 | Sombras num instante (tela) | AGUARDANDO VALIDAÇÃO | `UFV_SOMBRAS` (Sombreamento > Sombras): janela solta; dia e hora, fuso pela longitude; contornos no terreno (camada SOMBRA) com etiqueta; módulos amarelos/laranja/vermelhos pela fração; Apagar sombras devolve a cor de antes; nível 2 `ufv-sombras` |
+| 9.7 | Sombras num instante (tela) | AGUARDANDO VALIDAÇÃO | `CLIVUS_SOMBRAS` (Sombreamento > Sombras): janela solta; dia e hora, fuso pela longitude; contornos no terreno (camada SOMBRA) com etiqueta; módulos amarelos/laranja/vermelhos pela fração; Apagar sombras devolve a cor de antes; nível 2 `clivus-sombras` |
 | 9.8 | Sombras por período, pior caso | AGUARDANDO VALIDAÇÃO | Na mesma janela: dia inteiro, horário fixo num período, período inteiro; atalhos Solstício de inverno, Este mês, Este ano; cada módulo pelo pior caso e quando; a sombra desenhada é a do pior instante; os 10 piores na linha de comando |
-| 9.9 | Ver em 3D no navegador | AGUARDANDO VALIDAÇÃO | `UFV_3D` (Saída > 3D): "desenho - 3D.html" ao lado do desenho, um arquivo só com a three.js r128 (MIT) embutida, abre no navegador padrão sem internet; terreno em grade (até 200 células), módulos nas cores do desenho, pilares, árvores, sombras; camadas liga/desliga, exagero vertical; nível 2 `ufv-3d` e conferido no Edge |
+| 9.9 | Ver em 3D no navegador | AGUARDANDO VALIDAÇÃO | `CLIVUS_3D` (Saída > 3D): "desenho - 3D.html" ao lado do desenho, um arquivo só com a three.js r128 (MIT) embutida, abre no navegador padrão sem internet; terreno em grade (até 200 células), módulos nas cores do desenho, pilares, árvores, sombras; camadas liga/desliga, exagero vertical; nível 2 `clivus-3d` e conferido no Edge |
 
 (As linhas das etapas seguintes são acrescentadas ao iniciar cada etapa, copiando os passos do arquivo dela.)
 
@@ -199,7 +199,7 @@ fazer além de dívidas anotadas nas Observações.
 
 Antes de começar, ler `plano/etapas/etapa-6-pvsyst.md`. O que a etapa 6
 recebe da 5: as faces superiores dos módulos são entidades `3DFACE` na
-camada `MARCHENG_UFV_FACE`, cada uma com `FaceIdentity` em XData (GUID
+camada `CLIVUS_FACE`, cada uma com `FaceIdentity` em XData (GUID
 próprio, GUID do módulo, GUID da mesa, coluna, fileira), cantos em ordem
 anti-horária vistos de cima (normal para cima, conferida no nível 2).
 `LayoutXData.LoadFace` lê a identidade de volta e ainda não tem uso nem
@@ -220,7 +220,7 @@ teste: a etapa 6 é onde passa a ter.
 - espaçamento entre mesas de 0,50 m e quebra de fileira em 5 m (exemplo do
   plano de requisitos) são padrões meus, editáveis na tela do 4.4;
 - a mesa que não cabe fica marcada com um texto vermelho no meio (camada
-  `MARCHENG_UFV_MARCADA`), podendo ficar inclinada como escada para as
+  `CLIVUS_MARCADA`), podendo ficar inclinada como escada para as
   vizinhas caberem;
 - a mesa não virou bloco (é o contorno + blocos de pilar e módulo em volta,
   todos com o GUID da mesa); o bloco por mesa fica para a etapa 7;
@@ -232,43 +232,43 @@ teste: a etapa 6 é onde passa a ter.
 ### O que está travado no Renan
 
 1. **Instalar o bundle novo**: fechar o Civil 3D e rodar
-   `.\tools\instalar.ps1` (o bundle está montado em `artefatos\UFV.bundle`,
+   `.\tools\instalar.ps1` (o bundle está montado em `artefatos\ClivusSolar.bundle`,
    em Release, com tudo até o 5.9). Com o Civil 3D aberto o instalador recusa
    (código 5); é só fechar e rodar de novo.
-2. **Testar o 4.4**: botão "Configuração" na aba UFV, ou `UFV_CONFIG`;
+2. **Testar o 4.4**: botão "Configuração" na aba UFV, ou `CLIVUS_CONFIG`;
    trocar alguns números, "Salvar no desenho", salvar o DWG, fechar,
    reabrir, abrir a tela de novo e conferir que está tudo como deixou.
-   `UFV_CONFIG_STATUS` mostra o gravado na linha de comando. Ali estão os
+   `CLIVUS_CONFIG_STATUS` mostra o gravado na linha de comando. Ali estão os
    padrões que são meus (pitch 6 m, enterro máximo 2 m, degrau 0 a 50 cm,
    espaçamento entre mesas 50 cm, quebra de fileira 5 m, tolerância de lombo
    0): trocar o que estiver errado.
 3. **Testar o 5.8 (uma fileira)**: num desenho com terreno processado
    (botão Terreno), traçar uma área (botão Área) e um alinhamento (botão
    Alinhamento, clicando o lado das mesas). Salvar uma mesa pela janela Mesa
-   se quiser outra que não a de exemplo. Botão "Fileira" (ou `UFV_FILEIRA`):
+   se quiser outra que não a de exemplo. Botão "Fileira" (ou `CLIVUS_FILEIRA`):
    usa a área e o alinhamento se houver um de cada, pergunta o número da
    fileira (1 é a que encosta na linha), processa e desenha. Orbitar em 3D:
    os pilares (blocos) do terreno até a mesa, os módulos (blocos) e as faces
-   em cima, o contorno da mesa. Botão "Alturas" (ou `UFV_ALTURAS`) liga as
+   em cima, o contorno da mesa. Botão "Alturas" (ou `CLIVUS_ALTURAS`) liga as
    cotas: em cada pilar, um risco vermelho na ponta baixa com "PB" (altura
    livre da ponta baixa), outro na ponta alta com "PA", e no centro "P3" (a
    altura livre do pilar), como no seu print de 26/09. P1 e P2 ficam no
    relatório e no XData. **Conferir à mão três ou quatro pilares** (é a
    validação do plano): P3 = PB + (sobra + T2) × sen(tilt); P1 = P3 + P2.
    A linha de comando diz mesa a mesa o que estourou e por quê.
-4. **Testar o 5.9 (área inteira)**: botão "Usina" (ou `UFV_USINA`) na mesma
+4. **Testar o 5.9 (área inteira)**: botão "Usina" (ou `CLIVUS_USINA`) na mesma
    área. Comparar com o PVcase: fileiras, mesas, módulos, kWp, pilares e a
    faixa de comprimentos de pilar (média também). O tempo do motor e do
    desenho aparecem no fim. Rodar duas vezes desenha por cima (o comando
    avisa); apagar antes de repetir.
 5. **Testar o 6.2 e o 6.3 (PVsyst)**: com a usina desenhada, botão
-   "Exportar" na seção PVsyst (ou `UFV_EXPORTAR`). Selecionar com uma janela
+   "Exportar" na seção PVsyst (ou `CLIVUS_EXPORTAR`). Selecionar com uma janela
    sobre a área (só as faces de módulo entram, o resto da seleção é
    ignorado), responder DAE ao formato, escolher o arquivo. A linha de
    comando diz quantas faces foram, o material e a ORIGEM LOCAL (as
    coordenadas do arquivo são relativas a ela; está também no cabeçalho do
    arquivo). No PVsyst: Arquivo > Importar > Importar cena 3D, escolher o
-   .dae; na janela de importação, marcar o material `MARCHENG_UFV_FACE` e
+   .dae; na janela de importação, marcar o material `CLIVUS_FACE` e
    "mesas fixas". Conferir: número de objetos = número de faces dito pelo
    comando; as mesas com a face para cima e inclinadas para o norte
    (azimute); e se cada face virou UM campo PV ou DOIS triângulos (se dois,
@@ -278,10 +278,10 @@ teste: a etapa 6 é onde passa a ter.
 6. **Ler o resumo do 6.4** (seção "6.4: o formato PVC" no fim deste arquivo)
    e responder as três perguntas do fim dele. Sem isso o 6.5 não começa.
 7. **Testar o 7.1 (estado sujo)**: com uma fileira desenhada, botão "Sujar"
-   na seção Edição (ou `UFV_SUJAR`) e clicar num pilar, num módulo ou no
+   na seção Edição (ou `CLIVUS_SUJAR`) e clicar num pilar, num módulo ou no
    contorno de uma mesa: a mesa inteira (contorno, pilares, módulos) fica
    vermelha; as faces superiores NÃO mudam (são o que o PVsyst recebe).
-   Botão "Estado" (ou `UFV_ESTADO`): "N mesa(s), N−1 limpa(s), 1 suja(s)" e
+   Botão "Estado" (ou `CLIVUS_ESTADO`): "N mesa(s), N−1 limpa(s), 1 suja(s)" e
    a linha "F1.x: SUJA (pedido do usuário)". Salvar, fechar, reabrir: a mesa
    continua suja no Estado (o estado mora no XData do contorno). Clicar
    numa entidade que não é do plugin: "Isso não é uma peça de mesa do
@@ -292,12 +292,12 @@ teste: a etapa 6 é onde passa a ter.
    confirmar: ao terminar o comando, a linha de comando diz "VIGIA F1.x
    suja (movida ou editada, comando MOVE)" e a mesa inteira fica vermelha.
    ERASE no contorno de outra mesa: "VIGIA F1.y removida (comando ERASE)";
-   `UFV_ESTADO` lista "1 removida(s): F1.y removida em <data>" e conta as
+   `CLIVUS_ESTADO` lista "1 removida(s): F1.y removida em <data>" e conta as
    peças que sobraram como órfãs. COPY de uma mesa (janela sobre ela, base
    e destino): as duas (original e cópia, que ainda compartilham GUID até
    o 7.5) ficam vermelhas com motivo "copiada". Mudar a cor de um módulo
    pela paleta de propriedades: também suja ("movida ou editada"). Rodar
-   `UFV_FILEIRA` ou `UFV_USINA` de novo: NADA fica sujo (o vigia se cala
+   `CLIVUS_FILEIRA` ou `CLIVUS_USINA` de novo: NADA fica sujo (o vigia se cala
    nos nossos comandos). Salvar, fechar, reabrir: estados e remoções ficam.
 22. **Testar a rodada de 30/09 (sem textos, declividade)**, ver "Nona
    rodada" no fim deste arquivo: Regerar ou Recalcular uma mesa que não
@@ -334,7 +334,7 @@ teste: a etapa 6 é onde passa a ter.
 18. **Testar a rodada de 29/09 (cores das camadas e Apagar tudo)**, ver
    "Quinta rodada" no fim deste arquivo:
    a) abra o desenho do Itatiba: a linha de comando diz "Camadas
-      MARCHENG_UFV_AREA (laranja) e MARCHENG_UFV_ALINHAMENTO (amarela)
+      CLIVUS_AREA (laranja) e CLIVUS_ALINHAMENTO (amarela)
       acertadas", e a área fica laranja e o alinhamento amarelo. Área e
       alinhamento novos já nascem nessas cores;
    b) botão direito na área → **UFV** → "Apagar tudo": somem as mesas
@@ -375,7 +375,7 @@ teste: a etapa 6 é onde passa a ter.
       área"; b) Recalcular uma mesa: os textos de cota ficam legíveis
       (nunca de cabeça para baixo); c) Criar grupo: contorno com hachura
       translúcida e o número do grupo no centro (camada
-      `MARCHENG_UFV_GRUPO`); Apagar o grupo tira a marca; d) "Numerar
+      `CLIVUS_GRUPO`); Apagar o grupo tira a marca; d) "Numerar
       fileiras" na seção Numeração: clique na mesa que será a F1.1 e numa
       mesa da última fileira (ou digite L e o letreiro); e) seção
       **Análises**: "Alturas" liga/desliga; "Regerar alturas" apaga tudo da
@@ -402,7 +402,7 @@ teste: a etapa 6 é onde passa a ter.
    passa pelo painel), então veja se cada um acha o grupo. Criar com um
    nome que já existe pergunta se substitui. Apague uma
    mesa do grupo e clique "Atualizar": a coluna "Sumidas" conta. Os
-   mesmos comandos existem na linha de comando (`UFV_GRUPOS` lista).
+   mesmos comandos existem na linha de comando (`CLIVUS_GRUPOS` lista).
 13. **Testar o 7.8 (auto-seleção)**: clique numa mesa, ou arraste uma
    janela sobre várias: aparece, no canto de cima à esquerda da área de
    desenho, uma caixa azul semitransparente "Seleção: N mesa(s), M
@@ -414,7 +414,7 @@ teste: a etapa 6 é onde passa a ter.
    Civil 3D: a caixa some junto. Clique em cima da caixa: o clique vai
    para o desenho e a linha de comando continua com o foco. Se algo disso
    falhar, ou a posição, o tamanho ou a cor incomodarem, me diga: é
-   ajuste em `AutoSelecao`. O comando `UFV_KWP_SELECAO` imprime a mesma
+   ajuste em `AutoSelecao`. O comando `CLIVUS_KWP_SELECAO` imprime a mesma
    conta.
 12. **Testar o 7.7 (validação)**: abra o desenho da usina: a linha de
    comando diz "AO ABRIR nada a apontar" ou lista os achados. Faça
@@ -440,7 +440,7 @@ teste: a etapa 6 é onde passa a ter.
    direito na cópia → Recalcular: ela é recalculada onde está, limpa. COPY
    com várias cópias de uma vez (opção Múltiplo): cada cópia vira uma
    mesa. Renomear: se um bloco chegou de outro desenho como
-   `MARCHENG_UFV_PILAR$0$`, o botão "Renomear" o devolve ao padrão; sem
+   `CLIVUS_PILAR$0$`, o botão "Renomear" o devolve ao padrão; sem
    sufixo nenhum, diz que não há o que renomear.
 9. **Testar o 7.3 e o 7.4 (recalcular)**: MOVE numa mesa inteira (janela
    sobre ela) para um lugar onde o terreno é outro: fica vermelha. Botão
@@ -448,7 +448,7 @@ teste: a etapa 6 é onde passa a ter.
    botão "Recalcular" na seção Edição e clicar na peça): a mesa é
    redesenhada onde está, com pilares e cotas do terreno novo, limpa (cor
    normal), mesmo letreiro. Suje duas ou três mesas (botão "Sujar") e use
-   "Recalcular sujas": só elas mudam; `UFV_ESTADO` conta 0 sujas. Trocar
+   "Recalcular sujas": só elas mudam; `CLIVUS_ESTADO` conta 0 sujas. Trocar
    a mesa na janela Mesa e recalcular: o comando recusa ("trocou de mesa?
    use o Refazer da área"). Recalcular não refaz o alinhamento com as
    vizinhas; para isso é o Refazer da área.
@@ -475,17 +475,17 @@ teste: a etapa 6 é onde passa a ter.
 ### Dívidas técnicas que valem lembrar
 
 - `AlignmentStore`, `AlignmentXData` e `AlignmentScan` não têm teste de nível 1
-  (são do plugin); o nível 2 os exercita desde o 4.2 (`ufv-alinhamento.scr`);
+  (são do plugin); o nível 2 os exercita desde o 4.2 (`clivus-alinhamento.scr`);
 - `GarantirLayer` existe em três lugares (área, alinhamento, `LayoutLayers`) e
   `PorHandle` duplica o de `TerrenoEnvelhecido`: consolidar;
-- rodar `UFV_FILEIRA` ou `UFV_USINA` duas vezes desenha por cima (o comando
+- rodar `CLIVUS_FILEIRA` ou `CLIVUS_USINA` duas vezes desenha por cima (o comando
   avisa); apagar e substituir é assunto da etapa 7;
 - ~~os textos de altura e o aviso de marcada não carregam XData~~ Pago em
   26/09/2026: são notas (`NoteIdentity`) com o GUID da mesa;
 - a análise de borda (4.3, "mesa na borda") não tem mais o que pintar
   desde que mesa não passa da área; ou some da tela de configuração, ou
   vira "mesa encostada na borda";
-- `UFV_EXPORTAR` derruba a exportação inteira se uma 3DFACE nossa foi
+- `CLIVUS_EXPORTAR` derruba a exportação inteira se uma 3DFACE nossa foi
   escalada até ficar sem área ou vertical (mensagem do Core); pular a face
   e contá-la seria melhor;
 - ~~`RowSolverTests.EDeterministaERapido` oscilava perto de 2 s sob carga~~
@@ -818,7 +818,7 @@ Corrigidos, todos com teste ou com a razão escrita no código:
 - Registro de áreas ilegível ou de outra versão era descartado **em silêncio**,
   e a gravação seguinte o substituía por uma lista quase vazia. Agora todo
   descarte deixa rastro no log e o usuário é avisado de que ficou um
-  `UFV_REINDEXAR` para rodar. O campo `QUANTIDADE`, que era gravado e nunca
+  `CLIVUS_REINDEXAR` para rodar. O campo `QUANTIDADE`, que era gravado e nunca
   lido, passou a ser conferido — é ele que denuncia registro truncado.
 - Nome de área sem limite estourava o XData (255 bytes) só na gravação, depois
   de a área inteira ter sido traçada. Conferido na hora da pergunta.
@@ -834,7 +834,7 @@ compilador (CS1061) e anotado no código para não voltar.
 
 **Pendências técnicas da etapa 2:**
 
-- A ressalva das cotas no `UFV_REINDEXAR` é um aviso em texto, não uma
+- A ressalva das cotas no `CLIVUS_REINDEXAR` é um aviso em texto, não uma
   verificação. O plugin não tem como saber se a topografia do desenho de
   destino é outra — ele avisa sempre. Conferir de verdade exigiria comparar o
   terreno de destino com as cotas que a área traz, e isso é trabalho de etapa
@@ -875,7 +875,7 @@ Corrigidos:
   acontecer (alguém editando o JSON e apagando as entradas). Agora dá erro.
 - `Default()` devolvia a `List` de dentro: qualquer chamador podia esvaziar a
   biblioteca para o resto da sessão do AutoCAD. Agora é `ReadOnlyCollection`.
-- O cache estático virou `Lazy` com publicação protegida. `UFV.Core` é C# puro
+- O cache estático virou `Lazy` com publicação protegida. `Clivus.Core` é C# puro
   e também roda fora do AutoCAD, onde não vale a garantia de thread única.
 - Dois comparadores diferentes no mesmo método (`Ordinal` para repetido,
   `CurrentCulture` para ordenar). O segundo fazia a ordem da lista depender do
@@ -966,7 +966,7 @@ o corpo descendo a espessura. Pôr a face no zero, e não a base, faz o plano do
 módulos ser o plano z = 0 — e a regra sagrada 2 vira uma conferência de uma
 linha, aqui e depois de qualquer transformação.
 
-`UFV.Core.Invariants` passou a existir, com `RigidTable` (regra sagrada 2). As
+`Clivus.Core.Invariants` passou a existir, com `RigidTable` (regra sagrada 2). As
 outras três regras ainda não têm verificador: a 1 e a 4 dependem do terreno, e
 a 3 depende de as peças terem GUID, que ainda não têm. Anotado abaixo.
 
@@ -1055,7 +1055,7 @@ Dois achados sérios:
   `Measure(0; 3,394; 0)` devolvia altura livre zero, comprimento 0,90 e
   `Fits = True` — mesa pousada no chão, aprovada. E com inclinação negativa a
   altura livre ficava francamente negativa, com `Fits` ainda verdadeiro. Pior:
-  **não existia verificador da regra 1** em `UFV.Core.Invariants`, embora este
+  **não existia verificador da regra 1** em `Clivus.Core.Invariants`, embora este
   seja o passo que torna os dois números calculáveis pela primeira vez. Agora
   existe `FloatingPillar`, e a inclinação tem faixa (0 a 90 graus);
 - **eu tinha adiantado escopo.** `PillarLimits` (faixa da ponta baixa, enterro
@@ -1093,7 +1093,7 @@ apagada): **16 testes caem**.
 - a faixa da ponta baixa (0,30 a 0,80 m) não é conferida por ninguém ainda.
   Ela é a regra sagrada 4 propriamente dita, e o lugar dela é o 4.1, junto com
   os outros limites de configuração;
-- falta o verificador da regra sagrada 4 em `UFV.Core.Invariants`. Ele depende
+- falta o verificador da regra sagrada 4 em `Clivus.Core.Invariants`. Ele depende
   da tolerância de invasão por lombo ("o usuário define quantos módulos por
   mesa podem estourar a ponta baixa"), que também é configuração do 4.1.
 
@@ -1161,7 +1161,7 @@ Cinco mutações conferidas: **15 testes caem**.
 
 **Etapa 3.7: a janela da mesa.**
 
-`UFV_MESA` abre um modal com todos os campos, o comprimento recalculado a cada
+`CLIVUS_MESA` abre um modal com todos os campos, o comprimento recalculado a cada
 tecla e a planta baixa com os módulos, os pilares e as sobras das pontas. Botão
 **Mesa** na ribbon, com ícone.
 
@@ -1174,7 +1174,7 @@ módulos em 1V dão 37,224 m, que parece tão razoável quanto 18,702 m. O que
 denuncia é a forma mudando na hora.
 
 **Um teste de nível 2 novo, e é o que guarda a regra mais cara deste projeto.**
-`ufv-mesa-sem-interface.scr` roda `UFV_OLA` e `UFV_MESA` no Core Console.
+`clivus-mesa-sem-interface.scr` roda `CLIVUS_OLA` e `CLIVUS_MESA` no Core Console.
 Nomear um tipo WPF num método faz o runtime resolver as assemblies de interface
 ao carregá-lo, e num host sem elas isso derruba o NETLOAD inteiro — o sintoma é
 o plugin sumir, não a janela falhar. Conferido por mutação: tirando a guarda de
@@ -1476,7 +1476,7 @@ Clicar não tem ambiguidade nenhuma.
 O lado só faz sentido junto com o **sentido** do traçado, e é isso que a
 identidade guarda. Desenhar a mesma linha ao contrário troca os dois lados.
 
-Comandos: `UFV_ALINHAMENTO` e `UFV_ALINHAMENTOS`. Botão na ribbon, com ícone.
+Comandos: `CLIVUS_ALINHAMENTO` e `CLIVUS_ALINHAMENTOS`. Botão na ribbon, com ícone.
 
 ### O que a revisão do 4.2 apontou, e o que foi feito
 
@@ -1494,7 +1494,7 @@ de nível 1 que recusa `"0"`, `"1"`, `"2"`, `"+1"` e `" 2 "`.
 e nunca lida por caminho nenhum: um alinhamento copiado para outro desenho
 ficava invisível e irrecuperável, enquanto o código prometia por escrito que "o
 XData é a verdade e o reindexar o reconstrói". Verdadeiro para a área, falso
-para o alinhamento. Agora existe `AlignmentScan.Varrer`, e o `UFV_REINDEXAR`
+para o alinhamento. Agora existe `AlignmentScan.Varrer`, e o `CLIVUS_REINDEXAR`
 refaz os dois registros.
 
 **A quantidade de campos por item morava em dois lugares soltos** — a constante
@@ -1532,7 +1532,7 @@ reaproveitado pelo alinhamento. A revisão apontou duas coisas:
    conferida por leitura: o revisor teve que reimplementar os dois algoritmos
    fora do repositório para comparar.
 
-   Agora o miolo é `UFV.Core.RecordTable`, que é texto virando lista e tem 17
+   Agora o miolo é `Clivus.Core.RecordTable`, que é texto virando lista e tem 17
    testes de nível 1. O plugin ficou com o adaptador de `ResultBuffer`.
 
 E a pergunta de nome, que estava escrita palavra por palavra em dois comandos,
@@ -1553,7 +1553,7 @@ Ele classificou como erro grave, e é. Duas coisas mudaram:
 - **regra sagrada 5** em `01-regras-sagradas.md`: tudo que o plugin desenha
   acompanha o terreno, e passo que desenha não sai para validação sem teste
   de nível 2 que leia a cota da entidade;
-- **`ufv-alinhamento.scr`** e `Testar-Alinhamento` no runner: entrega cotas
+- **`clivus-alinhamento.scr`** e `Testar-Alinhamento` no runner: entrega cotas
   de clique absurdas (0 e 9999) e lê as pontas direto da entidade, em LISP.
 
 A correção: `Assentar` no comando. Com terreno processado e as duas pontas
@@ -1572,9 +1572,9 @@ Depois da correção da cota, o Renan disse o que de fato estava errado:
 
 Três coisas, todas já existentes na área e que eu não reaproveitei:
 
-- **vários pontos**: `Tracar` virou o laço do UFV_AREA (Enter termina, mínimo
+- **vários pontos**: `Tracar` virou o laço do CLIVUS_AREA (Enter termina, mínimo
   dois). A entidade é `Polyline3d`, não `Line`. O varredor e o índice não
-  dependem do tipo, então o UFV_REINDEXAR segue igual;
+  dependem do tipo, então o CLIVUS_REINDEXAR segue igual;
 - **acompanha o terreno**: `Draping.Along` sobre o traçado, como a área. A
   linha ganha vértices onde cruza o relevo. Exige terreno processado, como
   a área; sem terreno o comando recusa;
@@ -1642,7 +1642,7 @@ Não contradiz a decisão dele: não há teto, só cor.
 | **cor da mesa na borda** | **magenta** | **meu** (precisa se distinguir das outras duas) |
 | **pintar pilar mais comprido que** (`PaintPillarsLongerThan`) | **desligado (null)** | **meu**: o número de onde a cor começa é dele, e ele põe na tela do 4.4 |
 | **todas as análises ligadas** | **sim** | **meu** |
-| **camadas** | `MARCHENG_UFV_ANALISE_PONTA_BAIXA`, `_PILAR`, `_ENTERRO`, `_DECLIVIDADE`, `_BORDA` | **meu** |
+| **camadas** | `CLIVUS_ANALISE_PONTA_BAIXA`, `_PILAR`, `_ENTERRO`, `_DECLIVIDADE`, `_BORDA` | **meu** |
 
 ### Decisões miúdas que valem registrar
 
@@ -1727,7 +1727,7 @@ Placar final do passo: **82 testes** em `AnalysisRulesTests`, etapa 4 com
 
 ## 4.4: a tela de configuração
 
-`UFV_CONFIG`, botão "Configuração" na ribbon. Uma janela só: os limites do
+`CLIVUS_CONFIG`, botão "Configuração" na ribbon. Uma janela só: os limites do
 sistema (4.1) à esquerda, as regras de análise (4.3) à direita, e "Salvar no
 desenho" grava tudo no dicionário nomeado do DWG, ao lado do carimbo do
 terreno. É do desenho, não do usuário: a faixa da ponta baixa é deste projeto
@@ -1771,10 +1771,10 @@ Garantias, todas com teste de nível 1 (22 testes):
 
 ### Teste de nível 2: salvar e reabrir preserva tudo
 
-`ufv-config-gravar.scr` chama `UFV_CONFIG` (num host sem interface tem que
-avisar e seguir, não derrubar o plugin), depois `UFV_CONFIG_TESTE`, que grava
+`clivus-config-gravar.scr` chama `CLIVUS_CONFIG` (num host sem interface tem que
+avisar e seguir, não derrubar o plugin), depois `CLIVUS_CONFIG_TESTE`, que grava
 uma configuração em que **todo campo difere do padrão**, e salva o DWG numa
-cópia. `ufv-config-ler.scr` reabre e chama `UFV_CONFIG_STATUS`, que escreve
+cópia. `clivus-config-ler.scr` reabre e chama `CLIVUS_CONFIG_STATUS`, que escreve
 campo a campo. O runner compara o conjunto inteiro de `CONFIG_CAMPO` das duas
 metades, e exige que o pitch gravado seja 7,5 (um plugin que perdesse o
 registro e caísse no padrão, 6, passaria o resto).
@@ -2469,7 +2469,7 @@ degrau.
 ## 5.7 e 5.8: o desenho e a primeira fileira no CAD
 
 Feitos juntos, porque um sem o outro não se vê: `LayoutDrawer` desenha uma
-fileira processada e `UFV_FILEIRA` é o comando que a processa e chama o
+fileira processada e `CLIVUS_FILEIRA` é o comando que a processa e chama o
 desenho. Botão "Fileira" na aba UFV, seção Processar, com o botão pequeno
 "Alturas" ao lado.
 
@@ -2478,18 +2478,18 @@ desenho. Botão "Fileira" na aba UFV, seção Processar, com o botão pequeno
 Tudo numa transação só, na ordem do plano: pilares, depois módulos, depois
 o resto.
 
-- **pilar**: um bloco só, `MARCHENG_UFV_PILAR`, caixa unitária com o topo na
+- **pilar**: um bloco só, `CLIVUS_PILAR`, caixa unitária com o topo na
   origem; cada instância é escalada para a largura e a profundidade da
   seção e o comprimento do pilar, inserida no topo (onde encosta na mesa) e
   girada com a fileira. O comprimento varia pilar a pilar, e um bloco por
   comprimento seria um bloco por pilar. Pilar com problema (regra sagrada 1,
   fora de escala, fora do terreno) é desenhado com 1 m, vermelho, na camada
   de marcadas, com o motivo no texto de altura;
-- **módulo**: um bloco por modelo (`MARCHENG_UFV_MODULO_<modelo>`), caixa de
+- **módulo**: um bloco por modelo (`CLIVUS_MODULO_<modelo>`), caixa de
   largura × altura × espessura com a face superior em z = 0 e o canto da
   ponta baixa esquerda na origem, como a geometria local; cada instância
   leva a matriz da mesa. **A face superior é entidade separada** (`3DFACE`),
-  na camada `MARCHENG_UFV_FACE`, com a mesma identidade do módulo — é a
+  na camada `CLIVUS_FACE`, com a mesma identidade do módulo — é a
   decisão do Renan sobre o PVsyst: a camada de face tem só faces, e a face
   nunca é pintada por análise;
 - **mesa**: o contorno do plano dos módulos (`Polyline3d` fechada) na camada
@@ -2506,9 +2506,9 @@ o resto.
   de análise são criadas mesmo quando nada as pinta, para o usuário ligar e
   desligar;
 - **"Mostrar alturas"**: um texto por pilar (P1, e entre parênteses P3 + P2,
-  a nomenclatura do desenho do Renan) na camada `MARCHENG_UFV_ALTURAS`, que
-  **nasce desligada**. `UFV_ALTURAS` (botão "Alturas") liga e desliga;
-- **mesa marcada**: um texto no meio dela, na camada `MARCHENG_UFV_MARCADA`,
+  a nomenclatura do desenho do Renan) na camada `CLIVUS_ALTURAS`, que
+  **nasce desligada**. `CLIVUS_ALTURAS` (botão "Alturas") liga e desliga;
+- **mesa marcada**: um texto no meio dela, na camada `CLIVUS_MARCADA`,
   com o letreiro e o motivo. Era a decisão pendente do 5.6: sem cor de
   análise (no plano a "cor própria" é da borda), o aviso é o que se vê;
 - **identidade** (regra sagrada 3): GUID próprio por mesa, pilar e módulo,
@@ -2518,7 +2518,7 @@ o resto.
 
 ### O comando
 
-`UFV_FILEIRA` pede o mínimo: a área (se houver uma só, nem pergunta), o
+`CLIVUS_FILEIRA` pede o mínimo: a área (se houver uma só, nem pergunta), o
 alinhamento (idem) e o número da fileira (1 é a que encosta na linha). A
 mesa é o primeiro perfil salvo, ou a de exemplo; a configuração e as regras
 vêm do desenho (4.4) ou do padrão. Tudo isso é dito na linha de comando,
@@ -2526,7 +2526,7 @@ com a distribuição inteira (quantas fileiras, quantas mesas, quantas na
 borda), o relatório por mesa e a faixa de cotas de topo dos pilares. Avisa
 quando a linha diverge mais de 5° do azimute configurado.
 
-`UFV_FILEIRA_AUTO` (primeira área, primeiro alinhamento, fileira 1, sem
+`CLIVUS_FILEIRA_AUTO` (primeira área, primeiro alinhamento, fileira 1, sem
 perguntar) existe para o nível 2.
 
 ### O que o nível 2 pegou antes do Renan
@@ -2568,7 +2568,7 @@ nenhuma cota da ponta baixa respeita a faixa com a inclinação máxima de
 `PlantPipeline.ProcessAll` no Core (todas as fileiras da distribuição, uma
 a uma, com o tempo medido e os totais: mesas, módulos, potência como soma
 dos módulos — regra sagrada 3 —, pilares, marcadas, pilares com problema)
-e `UFV_USINA` no plugin, botão "Usina" na seção Processar. O comando mede
+e `CLIVUS_USINA` no plugin, botão "Usina" na seção Processar. O comando mede
 o motor e o desenho em separado e diz os dois.
 
 As fileiras são independentes (o plano diz que as pontas baixas de
@@ -2600,7 +2600,7 @@ terreno real com 10° de limite: encaixou o máximo, marcou o resto.
 **O que fica para o Renan (validação do 5.9 pelo plano):** rodar numa usina
 que ele conhece do PVcase e comparar contagens e alturas. O relatório dá
 mesas, módulos, kWp, pilares e a faixa de comprimentos; os textos de altura
-(`UFV_ALTURAS`) dão P1, P2 e P3 pilar a pilar.
+(`CLIVUS_ALTURAS`) dão P1, P2 e P3 pilar a pilar.
 
 **Acervo:** o plano diz que o resultado da 5.8 e da 5.9, conferido pelo
 Renan, vira referência congelada. Fica para depois da conferência dele.
@@ -2616,7 +2616,7 @@ Um bloqueante, três importantes, todos corrigidos.
   fora e pilar com problema sairiam brancos; o nível 2 dizia "9 pintadas" e
   o Renan veria nada. Agora a caixa é "por bloco" (índice 0), e o LISP lê o
   62 da caixa da definição;
-- **o nível 2 dependia do estado da máquina**: `UFV_FILEIRA_AUTO` usava o
+- **o nível 2 dependia do estado da máquina**: `CLIVUS_FILEIRA_AUTO` usava o
   primeiro perfil salvo, e o teste fixava 7 pilares e 28 módulos. Com um
   perfil salvo do 3.6, quebrava ou passava por sorte. Os comandos
   automáticos usam sempre a mesa de exemplo; os do produto continuam com o
@@ -2653,7 +2653,7 @@ simétrico, para as etapas 6 e 7).
 ## 6.1: o escritor DAE
 
 Fechado em 26/09/2026, só modelo, `VALIDADO (automático)`. `ColladaWriter`
-em `UFV.Core` recebe `ModuleFace` (GUID da face + quatro cantos em metro) e
+em `Clivus.Core` recebe `ModuleFace` (GUID da face + quatro cantos em metro) e
 devolve um `XDocument` Collada 1.4.1: unidade metro, `Z_UP`, uma geometria
 (quatro vértices, dois triângulos, uma normal) e um nó por face. Dezesseis
 testes: XML bem formado e relido, contagem, os doze números de cada face
@@ -2666,7 +2666,7 @@ O plano dizia "indica a layer do módulo" na importação. O help do PVsyst 7
 e 8 diz outra coisa: "pick up one or more materials used in the imported
 scene and convert the faces which use them to PV fields". Não há camada em
 Collada; o que o PVsyst lista é o material. Então todas as faces usam um
-único material cujo NOME é o nome da camada de faces (`MARCHENG_UFV_FACE`
+único material cujo NOME é o nome da camada de faces (`CLIVUS_FACE`
 hoje), e o mesmo nome vai nos nós para quem abrir o arquivo noutro
 programa. É esse nome que o Renan escolhe no PVsyst no 6.3. O exemplo
 oficial da especificação PVCollada (`SampleFixedPVC.pvc`, do repositório
@@ -2704,23 +2704,23 @@ dezenas de milhares de objetos, que o PVsyst importa devagar.
 
 Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO` (é tela: seleção, janela de
 arquivo, e o resultado só se vê no PVsyst, que é o 6.3). Nível 1: 19 testes
-na etapa 6. Nível 2: `ufv-exportar.scr` processa a fileira do 5.8, exporta
-com `UFV_EXPORTAR_AUTO` e o PowerShell RELÊ O ARQUIVO: XML válido, uma
+na etapa 6. Nível 2: `clivus-exportar.scr` processa a fileira do 5.8, exporta
+com `CLIVUS_EXPORTAR_AUTO` e o PowerShell RELÊ O ARQUIVO: XML válido, uma
 geometria e um nó por face contada em LISP (168), material único chamado
-`MARCHENG_UFV_FACE`, unidade metro, e o primeiro vértice da primeira face
+`CLIVUS_FACE`, unidade metro, e o primeiro vértice da primeira face
 do desenho (menos a origem dita pelo comando) achado no DAE ao milímetro.
 
 ### O que o comando faz
 
-- `UFV_EXPORTAR` (botão "Exportar", seção PVsyst): pede uma seleção com um
+- `CLIVUS_EXPORTAR` (botão "Exportar", seção PVsyst): pede uma seleção com um
   filtro de 3DFACE que tenham o nosso XData (código 1001, nome de
-  aplicativo `MARCHENG_UFV`); aceita seleção prévia (`UsePickSet`). Cada
+  aplicativo `CLIVUS`); aceita seleção prévia (`UsePickSet`). Cada
   face é lida pelo `LayoutXData.LoadFace` (que passa a ter uso e teste de
   nível 2); face sem identidade é ignorada e contada. Pergunta o formato
   (`DAE`/`PVC`; PVC responde "ainda não, é o 6.5"), abre a janela padrão de
   salvar do AutoCAD (`GetFileNameForSave`, sugere o nome do desenho), grava
   sem BOM e diz: faces, material, origem local;
-- `UFV_EXPORTAR_AUTO`: todas as faces do espaço do modelo, caminho pedido na
+- `CLIVUS_EXPORTAR_AUTO`: todas as faces do espaço do modelo, caminho pedido na
   linha de comando, sem janela. Só para o nível 2.
 
 ### Decisões que são minhas
@@ -2735,7 +2735,7 @@ do desenho (menos a origem dita pelo comando) achado no DAE ao milímetro.
   cena dele é local), é um campo a mais na tela;
 - o GUID da face é o id da geometria e do nó no arquivo: a regra sagrada 3
   atravessa para o PVsyst;
-- o material leva o nome da camada das faces (`MARCHENG_UFV_FACE`) como
+- o material leva o nome da camada das faces (`CLIVUS_FACE`) como
   RÓTULO; quem diz que a face é nossa é o XData, e a seleção filtra por ele;
 - o formato é perguntado mesmo só havendo DAE, para o botão não mudar de
   comportamento quando o PVC chegar.
@@ -2903,11 +2903,11 @@ PVsyst do Renan permitir (pergunta 1).
 ## 7.1: o estado sujo
 
 Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO` (a cor na tela). Nível 1:
-cinco testes na etapa 7 (`LayoutIdentitiesTests`). Nível 2: `ufv-sujo.scr`
-processa a fileira do 5.8, suja a primeira mesa com `UFV_SUJAR_AUTO` e lê
+cinco testes na etapa 7 (`LayoutIdentitiesTests`). Nível 2: `clivus-sujo.scr`
+processa a fileira do 5.8, suja a primeira mesa com `CLIVUS_SUJAR_AUTO` e lê
 em LISP, pelo XData: exatamente um contorno com suja=1 e motivo; as 36
 peças pintáveis dessa mesa (contorno, 7 pilares, 28 módulos) vermelhas; as
-28 faces dela intactas; `UFV_ESTADO` contando 1 suja de 6.
+28 faces dela intactas; `CLIVUS_ESTADO` contando 1 suja de 6.
 
 ### Onde o estado mora, e por quê
 
@@ -2926,7 +2926,7 @@ para os desenhos de antes não perderem as mesas.
 entidades por GUID de mesa, lido do XData (contorno → id; pilar, módulo e
 face → campo "mesa"). Devolve `TableParts` (identidade, contorno, pilares,
 módulos, faces), inclusive mesas cujo contorno sumiu (peças órfãs, que o
-`UFV_ESTADO` conta). Nunca pela camada. É a base do resto da etapa 7:
+`CLIVUS_ESTADO` conta). Nunca pela camada. É a base do resto da etapa 7:
 vigia, recalcular, cópia, validar e numerar precisam de "quais peças são
 desta mesa". É varredura inteira a cada chamada; um índice fica para
 quando medir mostrar que precisa.
@@ -2942,7 +2942,7 @@ Sujar de novo uma mesa suja só troca o motivo.
 
 ### Decisões que são minhas
 
-- os comandos chamam-se `UFV_SUJAR` e `UFV_ESTADO` (botões "Sujar" e
+- os comandos chamam-se `CLIVUS_SUJAR` e `CLIVUS_ESTADO` (botões "Sujar" e
   "Estado" numa seção Edição): "sujo" é a palavra do plano, e "marcar" já
   significa outra coisa (a mesa que o alinhamento marcou);
 - o motivo do sujar manual é "pedido do usuário"; o vigia (7.2) vai gravar
@@ -2980,11 +2980,11 @@ altura e de marcada precisam de identidade antes do 7.3 (Dívidas).
 
 Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO` (é comportamento de tela:
 mover, apagar, copiar). Nível 1: sete testes (`TableChangesTests`). Nível 2:
-`ufv-vigia.scr` processa a fileira do 5.8 e, com comandos do PRÓPRIO
+`clivus-vigia.scr` processa a fileira do 5.8 e, com comandos do PRÓPRIO
 AutoCAD (`_.MOVE` num pilar da mesa A, `_.ERASE` no contorno da mesa B),
 lê pelo XData: A suja com motivo "movida ou editada" e as 36 peças
 vermelhas; nenhuma outra mesa suja; um contorno a menos; o vigia anunciou
-as duas coisas; `UFV_ESTADO` conta 1 suja, 1 órfã e lista B como removida.
+as duas coisas; `CLIVUS_ESTADO` conta 1 suja, 1 órfã e lista B como removida.
 Os eventos do banco e de comando disparam no Core Console, o que não era
 garantido antes de rodar.
 
@@ -3006,15 +3006,15 @@ inclusive sem interface) e nos que abrirem depois.
 ### Os dois silêncios
 
 Sem eles o vigia se morde: (1) durante um comando NOSSO (nome começa com
-`UFV_`, `PluginInfo.PrefixoDeComando`) nada é anotado, e o livro é
-esvaziado no fim, senão `UFV_FILEIRA` sujaria tudo que desenha; (2)
+`CLIVUS_`, `PluginInfo.PrefixoDeComando`) nada é anotado, e o livro é
+esvaziado no fim, senão `CLIVUS_FILEIRA` sujaria tudo que desenha; (2)
 enquanto o próprio vigia pinta nada é anotado, porque pintar é modificar.
 
 ### Decisões que são minhas
 
 - "apagar mesa" = apagar o CONTORNO. Apagar só pilares ou módulos suja a
   mesa com "peça apagada"; apagar o contorno registra a remoção e deixa as
-  peças que sobraram como órfãs (o `UFV_ESTADO` as conta; o 7.6 reconta);
+  peças que sobraram como órfãs (o `CLIVUS_ESTADO` as conta; o 7.6 reconta);
 - a remoção mora no dicionário do desenho (`REMOVIDAS`, GUID, letreiro,
   data), no mesmo formato de registro das áreas e alinhamentos, sem
   repetir mesa. Consumir é do 7.6;
@@ -3050,7 +3050,7 @@ em andamento, o descarregamento é agendado para a folga do AutoCAD
 `ResultBuffer` do XData com `using`; `RemovalStore.Load` e
 `PendingChanges.Count` sem uso, apagados; `Anotar` reaproveita
 `LayoutScan.TableOf`; os handlers do `DocumentManager` são guardados e
-desassinados. Descoberto no nível 2: `UFV_ESTADO` deixava marca de undo e
+desassinados. Descoberto no nível 2: `CLIVUS_ESTADO` deixava marca de undo e
 um `U` depois dele desfazia o ESTADO em vez do ERASE; comando que só lê
 agora leva `NoUndoMarker`. Anotado, não feito: cancelar um comando no meio
 deixa a mesa suja (conservador); o 7.4 é o lugar de medir a varredura
@@ -3147,14 +3147,14 @@ e 2 verdes.
    alinhamento, ou com pilar sem altura livre / fora do terreno, é pintada
    INTEIRA de magenta na camada de marcadas (contorno, pilares, módulos;
    a face não), com o aviso "F1.x NÃO CABE NO TERRENO" e o motivo no meio.
-4. **"Botão direito na área → Refazer."** `UFV_REFAZER` (botão Refazer na
+4. **"Botão direito na área → Refazer."** `CLIVUS_REFAZER` (botão Refazer na
    seção Processar, e o item "Refazer as mesas desta área" no menu de
    botão direito sobre a polilinha da área, via `MenuDeContexto`): apaga
    tudo que o plugin desenhou dentro da área (pelo XData: mesa, pilares,
    módulos, faces e notas) e desenha de novo com a configuração ATUAL. As
    cotas e os avisos ganharam identidade (`NoteIdentity`, XData "Nota"
    com o GUID da mesa) para serem apagados junto: era a dívida anotada
-   antes do 7.3, paga aqui. Nível 2 (`ufv-refazer.scr`): fileira, refazer,
+   antes do 7.3, paga aqui. Nível 2 (`clivus-refazer.scr`): fileira, refazer,
    80 mesas, 7 pilares e 28 faces por contorno, nenhuma nota órfã.
 5. **"Quando o sistema pede o nome, poderia aparecer uma janela."**
    `JanelaDeNome` (WPF) para área e alinhamento quando há interface; no
@@ -3184,10 +3184,10 @@ ela, corte e aterro contra a original); fica para depois.
 ## 7.3 e 7.4: recalcular uma mesa, recalcular as sujas
 
 Feitos em 26/09/2026, `AGUARDANDO VALIDAÇÃO`. Nível 1: sete testes
-(`TableCellsTests`). Nível 2: `ufv-recalcular.scr` processa a fileira do
+(`TableCellsTests`). Nível 2: `clivus-recalcular.scr` processa a fileira do
 5.8, suja a primeira mesa e manda recalcular as sujas: a mesa com o MESMO
 GUID continua existindo, limpa, com 7 pilares, 28 módulos e 28 faces, o
-total de contornos não muda, `UFV_ESTADO` conta 0 sujas.
+total de contornos não muda, `CLIVUS_ESTADO` conta 0 sujas.
 
 ### O que "recalcular" significa
 
@@ -3208,12 +3208,12 @@ usuário.
 
 ### Onde está
 
-- `UFV_RECALCULAR` (botão "Recalcular" na seção Edição, e o item
+- `CLIVUS_RECALCULAR` (botão "Recalcular" na seção Edição, e o item
   "Recalcular esta mesa" no botão direito sobre contorno, pilar, módulo ou
   face); aceita a seleção prévia ou pede um clique;
-- `UFV_RECALCULAR_SUJAS` (botão "Recalcular sujas"): as sujas, em ordem de
+- `CLIVUS_RECALCULAR_SUJAS` (botão "Recalcular sujas"): as sujas, em ordem de
   letreiro;
-- `UFV_RECALCULAR_AUTO`: as sujas com a mesa de exemplo, para o nível 2.
+- `CLIVUS_RECALCULAR_AUTO`: as sujas com a mesa de exemplo, para o nível 2.
 
 ### Decisões que são minhas
 
@@ -3255,14 +3255,14 @@ clique (sem teste).
 
 ## 7.5: a cópia
 
-Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO`. Nível 2: `ufv-copia.scr`
+Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO`. Nível 2: `clivus-copia.scr`
 copia a mesa F1.x inteira (106 entidades: contorno, 7 pilares, 28 módulos,
 28 faces, cotas e riscos) 300 m para o norte com o COPY do AutoCAD e lê
 pelo XData: a original continua única e limpa; a cópia tem contorno com
 GUID novo, suja "copiada", com 7/28/28 peças apontando para ela; nenhum
 GUID de peça se repete no desenho (regra sagrada 3 conferida
 literalmente). Depois renomeia o bloco do pilar para `…$0$` com o -RENAME
-e o `UFV_RENOMEAR` o devolve ao padrão.
+e o `CLIVUS_RENOMEAR` o devolve ao padrão.
 
 ### Como a cópia ganha identidade
 
@@ -3285,7 +3285,7 @@ ignora modificações em peças que ele viu nascer no comando.
   seu grupo, sem contorno, e aparece como "peças órfãs" no Estado. É
   raro, e o Refazer da área resolve;
 - o letreiro da cópia é o da original (F1.3 e F1.3); renumerar é o 7.10;
-- `UFV_RENOMEAR` age só em definições com o nosso prefixo e sufixo
+- `CLIVUS_RENOMEAR` age só em definições com o nosso prefixo e sufixo
   `$n$`: renomeia se o padrão não existe, senão passa as referências para
   o padrão e apaga a definição. Nunca sozinho: só pelo botão.
 
@@ -3328,16 +3328,16 @@ ARRAY associativo e INSERT de bloco com mesa dentro não são cobertos;
 Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO`. A metade "apagar" já era do
 vigia (7.2): apagar o contorno registra a remoção, apagar peças suja a
 mesa, desfazer devolve. A metade nova é o botão **Recontar**
-(`UFV_RECONTAR`): conta a usina como ela ESTÁ no desenho, pelo XData, e
+(`CLIVUS_RECONTAR`): conta a usina como ela ESTÁ no desenho, pelo XData, e
 não pelo que o motor calculou. `LayoutCensus` (Core, 3 testes) recebe uma
 lista de mesas contadas (identidade ou null se órfã, módulos, comprimentos
 de pilar, pilares sem comprimento) e devolve mesas, órfãs, sujas, que não
 cabem, módulos, kWp, pilares com faixa e média, em linhas prontas. O
 comando lista as removidas registradas desde a última recontagem e limpa o
-registro. Nível 2 (`ufv-recontar.scr`): apaga o contorno de uma mesa com
+registro. Nível 2 (`clivus-recontar.scr`): apaga o contorno de uma mesa com
 ERASE e reconta: os totais batem com o que o LISP conta pelo XData (uma
 mesa a menos, mesma quantidade de módulos e pilares, uma órfã), a removida
-é listada e o `UFV_ESTADO` depois diz 0.
+é listada e o `CLIVUS_ESTADO` depois diz 0.
 
 ### Decisões que são minhas
 
@@ -3345,7 +3345,7 @@ mesa a menos, mesma quantidade de módulos e pilares, uma órfã), a removida
   mesa desenhada antes usa a do perfil atual, com aviso;
 - "recontar" não renumera (7.10) nem apaga peças órfãs: só conta e diz;
 - o registro de removidas é consumido pelo Recontar (é o que "refaz as
-  listas" significa aqui); o `UFV_ESTADO` continua mostrando as removidas
+  listas" significa aqui); o `CLIVUS_ESTADO` continua mostrando as removidas
   enquanto ninguém recontar.
 
 ### O que a revisão do 7.6 apontou, e o que foi feito
@@ -3372,7 +3372,7 @@ linha das órfãs diz quantos módulos delas entraram no total.
 
 Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO`. `LayoutValidation` (Core, 3
 testes) recebe os achados e monta o relatório, uma linha por tipo, cada
-uma com o que fazer. `UFV_VALIDAR` (botão Validar) coleta: áreas e
+uma com o que fazer. `CLIVUS_VALIDAR` (botão Validar) coleta: áreas e
 alinhamentos registrados cujo handle não aponta mais para uma entidade
 com a identidade registrada; mesas sujas (é assim que "algo mudou de
 posição" chega: pelo vigia); mesas com mais de um contorno na mesma
@@ -3381,7 +3381,7 @@ com peças; removidas não recontadas; e o carimbo da superfície
 (`TerrenoEnvelhecido`, que já existia). `ValidacaoAoAbrir` roda a mesma
 conferência em `DocumentCreated`, só em desenho que tem área, alinhamento
 ou registro de removidas nosso, e escreve "AO ABRIR …". Nível 2
-(`ufv-validar.scr`): valida limpo, apaga a polilinha da área, suja uma
+(`clivus-validar.scr`): valida limpo, apaga a polilinha da área, suja uma
 mesa, apaga um contorno e copia uma mesa; a segunda validação diz 1 área
 faltando, 2 sujas (a sujada e a cópia), 0 duplicadas, 0 peças repetidas, 1
 órfã, 1 removida, terreno ok.
@@ -3425,7 +3425,7 @@ reconstruir, e se travar ao abrir o remédio é adiar para `Idle`.
 ## 7.8: auto-seleção
 
 Feito em 26/09/2026, `AGUARDANDO VALIDAÇÃO` (é tela). A conta ficou num
-comando, `UFV_KWP_SELECAO` (`SelecaoCommands.Resumir`): as mesas com
+comando, `CLIVUS_KWP_SELECAO` (`SelecaoCommands.Resumir`): as mesas com
 alguma peça na seleção entram inteiras, e mesas, módulos e kWp saem do
 `LayoutCensus` (Core) sobre elas, cada mesa com a sua potência. A caixa
 (`AutoSelecao`) escuta o evento `ImpliedSelectionChanged` de cada
@@ -3433,7 +3433,7 @@ documento, esconde no começo de todo comando e reavalia no fim, reconta
 só quando o conjunto de MESAS tocadas muda, e mostra
 uma janela WPF sem borda, semitransparente, filha da janela do Civil 3D
 (minimiza com ele) e transparente ao clique, no canto de cima à esquerda;
-some quando a seleção esvazia ou não tem mesa nossa, e durante comandos. Nível 2 (`ufv-selecao.scr`):
+some quando a seleção esvazia ou não tem mesa nossa, e durante comandos. Nível 2 (`clivus-selecao.scr`):
 duas mesas inteiras e um pilar de uma terceira na seleção prévia dão "3
 mesa(s), 84 módulo(s), 60,5 kWp"; uma linha do usuário dá "nenhuma mesa".
 
@@ -3476,16 +3476,16 @@ testes): GUID, nome, GUIDs das mesas e data, no registro `GRUPOS` do
 dicionário do desenho (`GroupStore`, nome único sem distinguir
 maiúsculas; criar com nome que existe substitui). A mesa não sabe do
 grupo; o grupo aponta para as mesas, e mesa que sumiu é contada como
-"sumida" na lista. Comandos: `UFV_GRUPO_CRIAR` (a seleção prévia, ou
+"sumida" na lista. Comandos: `CLIVUS_GRUPO_CRIAR` (a seleção prévia, ou
 uma pedida, vira grupo com o nome perguntado; mesa inteira com qualquer
-peça, como no 7.8), `UFV_GRUPOS` (lista com mesas, módulos, pilares e kWp
-pelo `LayoutCensus`), `UFV_GRUPO_RECALCULAR` (o `RecalcularMesas` do 7.3
-com as mesas do grupo), `UFV_GRUPO_SELECIONAR` (põe as peças do grupo na
-seleção), `UFV_GRUPO_APAGAR` (só o registro). O painel (`PainelDeGrupos`,
+peça, como no 7.8), `CLIVUS_GRUPOS` (lista com mesas, módulos, pilares e kWp
+pelo `LayoutCensus`), `CLIVUS_GRUPO_RECALCULAR` (o `RecalcularMesas` do 7.3
+com as mesas do grupo), `CLIVUS_GRUPO_SELECIONAR` (põe as peças do grupo na
+seleção), `CLIVUS_GRUPO_APAGAR` (só o registro). O painel (`PainelDeGrupos`,
 paleta do AutoCAD com uma lista WPF e botões) chama esses comandos pela
 linha de comando com o nome entre aspas, e é atualizado por eles; só
 com interface (tocar no tipo da paleta derruba o Core Console, que foi
-o crash pego no nível 2). Nível 2 (`ufv-grupos.scr`): cria "Bloco A" com
+o crash pego no nível 2). Nível 2 (`clivus-grupos.scr`): cria "Bloco A" com
 F1.1 e F1.2, lista 2/56/14/40,3 kWp, suja F1.1 e recalcula o grupo (2 de
 2, ESTADO sem suja), seleciona (as entidades das duas mesas) e apaga.
 
@@ -3506,7 +3506,7 @@ F1.1 e F1.2, lista 2/56/14/40,3 kWp, suja F1.1 e recalcula o grupo (2 de
   O painel manda o nome cru e o prompt tolera aspas envolventes. O nível 2
   não pegou porque o LISP entrega o texto sem aspas; **é o primeiro item
   do roteiro do Renan**.
-- **Importante, corrigido**: `UFV_GRUPOS_PAINEL` tocava a paleta no corpo
+- **Importante, corrigido**: `CLIVUS_GRUPOS_PAINEL` tocava a paleta no corpo
   do comando (a segunda porta do crash do Core Console); agora por método
   não embutido, como o Atualizar.
 - **Importante, corrigido**: o painel não escutava a troca de documento e
@@ -3554,7 +3554,7 @@ ordena as fileiras pela perpendicular à F1.1, no sentido da última; dentro
 da fileira as mesas correm a partir da ponta em que está a F1.1. Mesa
 girada de 180° (cópia virada) é a mesma reta. Avisos quando a F1.1
 indicada não é ponta, ou há fileira antes dela ou depois da última.
-`UFV_NUMERAR` (seção Numeração, botão "Gerar numeração") lê toda mesa,
+`CLIVUS_NUMERAR` (seção Numeração, botão "Gerar numeração") lê toda mesa,
 pede as duas por clique ou pela opção Letreiro, e regrava o letreiro no
 XData do contorno e no aviso "NÃO CABE" (pilar e módulo têm número dentro
 da mesa, que é a mesma). Nível 2: a usina inteira (80 mesas, 16 fileiras)
@@ -3639,7 +3639,7 @@ ganharem identidade), o que explica os textos que ficavam para trás.
    `ConvexHull` (Core, 2 testes) dá a casca dos cantos das mesas;
    `GroupDrawer` desenha a polilinha fechada, o hachurado sólido 80 %
    translúcido e o letreiro "N \ nome" no centro, na camada
-   `MARCHENG_UFV_GRUPO`, com o GUID do grupo no XData (`GroupMarkIdentity`).
+   `CLIVUS_GRUPO`, com o GUID do grupo no XData (`GroupMarkIdentity`).
    Apagar o grupo apaga a marca; criar com nome repetido troca a marca. A
    marca NÃO acompanha mesa movida ou apagada: recriar o grupo redesenha.
 4. **"Gerar numeração não está funcionando".** Sem erro no log (quatro
@@ -3654,11 +3654,11 @@ ganharem identidade), o que explica os textos que ficavam para trás.
    O Refazer agora apaga também as notas órfãs (sem XData) das camadas de
    alturas e de marcadas dentro da área. E a ribbon ganhou a seção
    **Análises**: "Alturas" (liga/desliga, saiu de Processar) e "Regerar
-   alturas" (`UFV_ALTURAS_REGERAR`: apaga TUDO da camada das alturas e
+   alturas" (`CLIVUS_ALTURAS_REGERAR`: apaga TUDO da camada das alturas e
    redesenha as cotas a partir do XData dos pilares e do contorno). Para
    isso o pilar passou a gravar as alturas de ponta baixa e alta (XData
    v2; v1 lido sem elas, e aí só o P3 é regerado, com aviso). Nível 2
-   `ufv-alturas.scr`: 210 cotas apagadas à mão, um órfão plantado, regerar
+   `clivus-alturas.scr`: 210 cotas apagadas à mão, um órfão plantado, regerar
    devolve 210 com identidade e nenhuma virada.
 6. **"Mesas na altura das nuvens".** Mesa marcada (não cabe) num buraco de
    10 m ficava na cota das vizinhas, porque a opção marcada da programação
@@ -3693,7 +3693,7 @@ Placar: Core 894 (etapa 5 256, etapa 7 46), nível 2 23/23, tudo verde.
   contorno (peças órfãs do desenho velho), que é a hipótese mais forte
   para o "não está funcionando"; agora pula com aviso e segue.
 - **Importante, corrigido**: a reprovação dos textos virados não tinha
-  teste; o `ufv-recalcular.scr` agora lê a rotação dos textos da mesa
+  teste; o `clivus-recalcular.scr` agora lê a rotação dos textos da mesa
   recalculada (≥ 21 textos, nenhum fora de (-90°, 90°]).
 - **Menores**: summary órfão no LayoutDrawer, `Find` duplicado ao criar
   grupo.
@@ -3727,7 +3727,7 @@ Status: `AGUARDANDO VALIDAÇÃO` (é tela).
 
 ### O diagnóstico, com números (bancada)
 
-Novo comando `UFV_BANCADA` exporta terreno, configuração, perfil e os
+Novo comando `CLIVUS_BANCADA` exporta terreno, configuração, perfil e os
 contornos de todas as mesas para um JSON (`%LOCALAPPDATA%\MarchEng\UFV\bancada`).
 Rodado no Core Console sobre uma cópia do `0 - Assets\Curvas Itatiba.dwg`
 (salvo em 26/09 21:25), o motor fora do CAD reproduz o desenho exatamente
@@ -3764,7 +3764,7 @@ Rodado no Core Console sobre uma cópia do `0 - Assets\Curvas Itatiba.dwg`
    inclinação ao longo da mesa e o limite é 10°" ou "o terreno sob a ponta
    baixa tem um lombo ou vale de 123 cm que nenhuma inclinação vence (a
    faixa da ponta baixa aceita 50 cm)".
-3. **Pontas à mão** (`UFV_PONTAS`, botão "Pontas" na Edição e no botão
+3. **Pontas à mão** (`CLIVUS_PONTAS`, botão "Pontas" na Edição e no botão
    direito "Alturas das pontas desta mesa"; `ManualEnds` no Core). Clique
    perto da ponta que vai mudar (a outra fica travada) e digite a PB, ou
    "Duas" para as duas, ou "Automatico" para devolver ao motor. A PB é a
@@ -3777,8 +3777,8 @@ Rodado no Core Console sobre uma cópia do `0 - Assets\Curvas Itatiba.dwg`
    O **Refazer/Regerar avisa** quais mesas com pontas à mão voltam ao motor.
 4. **Seção Análises** na ribbon: "Parâmetros" (a tela de configuração só
    com faixa da ponta baixa, lombo, degraus, declividade e as cores),
-   "Pintar estouros" (`UFV_PINTAR`: repinta toda mesa como está, com as
-   regras gravadas; mesa suja fica de fora) e "Regerar" (`UFV_REGERAR`:
+   "Pintar estouros" (`CLIVUS_PINTAR`: repinta toda mesa como está, com as
+   regras gravadas; mesa suja fica de fora) e "Regerar" (`CLIVUS_REGERAR`:
    o Refazer de cada área registrada, com o alinhamento mais perto dela).
 5. **O módulo fora da faixa é pintado também na mesa que não cabe**: a
    peça pintada pela análise leva a cor dela (na camada de marcadas, para
@@ -3839,9 +3839,9 @@ Segundo revisor (pontas, Análises, grupos):
   `OQueFogeDaRegraEDito` e `NoPlanoAsDuasAlturasSaemAoMilimetro`).
 - **Regra 5, corrigido**: o Pontas recusa mesa suja (a cota do contorno de
   uma mesa movida pode ter vindo de um MOVE com Z). E os testes de nível 2
-  passaram a ler a cota da entidade: no `ufv-pontas.scr`, topo do pilar
+  passaram a ler a cota da entidade: no `clivus-pontas.scr`, topo do pilar
   menos o terreno gravado fecha com a altura livre, e as cotas da borda
-  baixa e do chão caem na faixa do terreno; no `ufv-pintar.scr`, a cota da
+  baixa e do chão caem na faixa do terreno; no `clivus-pintar.scr`, a cota da
   borda baixa de cada mesa não muda ao repintar.
 - **Corrigido**: o ajuste das pontas que não converge recusa (não grava
   uma altura que ninguém pediu); um pilar só com duas alturas diferentes
@@ -3868,7 +3868,7 @@ Segundo revisor (pontas, Análises, grupos):
   qual usou.
 - A cópia de uma mesa com pontas à mão leva as pontas junto (o `CopyFixer`
   copia a identidade); recalculada no lugar novo, fica com as mesmas PB.
-- `UFV_ALTURAS_REGERAR` refaz as cotas fora do grupo (de propósito).
+- `CLIVUS_ALTURAS_REGERAR` refaz as cotas fora do grupo (de propósito).
 - Os pesos não estão na tela; se o Renan quiser mexer, vão para os
   Parâmetros.
 - O motor por pesos só reposiciona a MARCADA; as viáveis continuam pela
@@ -3881,15 +3881,15 @@ laranja, veja um nome. O alinhamento quero outro alinhamento com cor
 amarela. Quero clicar com o botão direito na área da usina e ter a opção
 dentro do menu UFV, opção de 'apagar tudo'." `AGUARDANDO VALIDAÇÃO`.
 
-- **Nomes**: ficaram os que já existiam, `MARCHENG_UFV_AREA` e
-  `MARCHENG_UFV_ALINHAMENTO` (já eram camadas separadas, só sem cor), para
+- **Nomes**: ficaram os que já existiam, `CLIVUS_AREA` e
+  `CLIVUS_ALINHAMENTO` (já eram camadas separadas, só sem cor), para
   não mover entidade de desenho existente. Cores ACI: laranja 30, amarelo 2
   (`LayoutLayers.GarantirComCor`).
 - **Desenhos antigos**: ao abrir um desenho com área ou alinhamento, a
   camada que ainda está no branco (ACI 7, a cor com que o plugin criava)
   passa para a cor nova; cor escolhida pelo usuário fica. Isso deixa o
   desenho modificado uma vez ao abrir; salvo, não muda mais.
-- **`UFV_APAGAR_TUDO`** (botão direito na área → UFV → "Apagar tudo", ou
+- **`CLIVUS_APAGAR_TUDO`** (botão direito na área → UFV → "Apagar tudo", ou
   digitado, pedindo a área): apaga tudo que o plugin desenhou dentro da área
   (o mesmo apagador do Refazer, com as notas órfãs de desenho antigo) e
   **deixa a área e o alinhamento**. Decisão tomada sozinha, o Renan
@@ -3902,9 +3902,9 @@ dentro do menu UFV, opção de 'apagar tudo'." `AGUARDANDO VALIDAÇÃO`.
 - O item aparece também no botão direito de um contorno de mesa (o
   AutoCAD mostra por classe, e mesa e área são `Polyline3d`); ali ele
   pergunta a área.
-- Nível 2: `ufv-apagar-tudo.scr` cria a camada da área branca antes do
+- Nível 2: `clivus-apagar-tudo.scr` cria a camada da área branca antes do
   NETLOAD (como num desenho antigo), traça área e alinhamento, processa uma
-  fileira, agrupa todas as mesas e roda `UFV_APAGAR_TUDO_AUTO`: sobram só a
+  fileira, agrupa todas as mesas e roda `CLIVUS_APAGAR_TUDO_AUTO`: sobram só a
   área e o alinhamento, a marca do grupo some, camadas com ACI 30 e 2.
 
 ## Sexta rodada: o motor refeito, a corrente (29/09/2026)
@@ -3974,7 +3974,7 @@ bruta igual à programação dinâmica, pontas presas, vão que quebra, mesa
 sem terreno, lombo tolerado, determinismo e tempo, recusas. Em todo teste
 da corrente as juntas são conferidas (`CorrenteFechada`), e nos do
 pipeline pelo verificador novo `EqualTips` (regra sagrada 6). Nível 2: o
-`ufv-recalcular` confere que a mesa prendeu as pontas nas vizinhas.
+`clivus-recalcular` confere que a mesa prendeu as pontas nas vizinhas.
 
 **Revisão independente.** Achou um defeito: na grade grossa a PB presa
 da vizinha era arredondada para 5 cm e, com a declividade no limite, a
@@ -3985,7 +3985,7 @@ fechar perto da grossa tenta a grade fina inteira antes de soltar; o
 Recalcular diz "presas" só quando o solver as usou, e avisa quando soltou.
 Teste novo `PontaPresaForaDaGradeGrossaNoLimiteDaDeclividade`.
 
-**Nível 2 do Recalcular.** O `ufv-recalcular` exigia "nenhuma peça
+**Nível 2 do Recalcular.** O `clivus-recalcular` exigia "nenhuma peça
 vermelha" na mesa recalculada. Com o motor novo a primeira mesa da fileira
 de teste é marcada (o terreno ali pede 10,9° e o limite é 10°), e a
 pintura das análises deixa 7 módulos vermelhos, legítimos. A exigência
@@ -4025,7 +4025,7 @@ pontas" — e, com print: "negativo, botão direito da mesa não abre nada".
   "Mudar inclinação (alturas das pontas)" e "Recalcular esta mesa"; área
   mostra "Refazer as mesas desta área" e "Apagar tudo"; seleção sem nada
   nosso não mostra o submenu UFV.
-- **Mudar inclinação** é o `UFV_PONTAS` de 27/09 (renomeado no menu):
+- **Mudar inclinação** é o `CLIVUS_PONTAS` de 27/09 (renomeado no menu):
   clique perto de uma ponta e digite a PB dela (a outra fica travada), ou
   **Enter** (novo) / D para digitar as duas; A devolve ao motor. As pontas
   são nomeadas pelo rumo (leste/oeste), não por direita/esquerda, porque a
@@ -4033,7 +4033,7 @@ pontas" — e, com print: "negativo, botão direito da mesa não abre nada".
 - **Perfil da mesa desenhada.** Às 22:54 o Renan salvou "Mesa 14 módulos";
   o "perfil atual" é o primeiro da biblioteca em ordem alfabética, e o
   Recalcular, o Pontas e o Recalcular do grupo passaram a recusar as mesas
-  de 28 ("Trocou de mesa?"). Achado pelo nível 2 (`ufv-grupos`), que lê a
+  de 28 ("Trocou de mesa?"). Achado pelo nível 2 (`clivus-grupos`), que lê a
   biblioteca do Renan. Agora quem refaz mesa já desenhada escolhe o perfil
   pelo comprimento da borda baixa do contorno
   (`FileiraCommands.PerfilDaMesaDesenhada`: biblioteca e mesa de exemplo,
@@ -4122,17 +4122,17 @@ unidade". `AGUARDANDO VALIDAÇÃO` (item 22).
   saiu. O nível 2 da fileira passou a exigir ZERO textos na camada de
   marcadas (antes exigia um por mesa marcada). O aviso antigo, em desenho
   velho, continua sendo renomeado pelo Numerar.
-- **Declividade** (`UFV_DECLIVIDADE`, botão "Declividade" na seção
+- **Declividade** (`CLIVUS_DECLIVIDADE`, botão "Declividade" na seção
   Análises): pergunta [Porcentagem/Graus/Desligar]. Em cada mesa, uma
   seta no plano dela (linha do meio, de 25% a 75% do comprimento, ponta de
   0,8 m) apontando para onde a mesa desce, e o valor ao lado, para o lado
   da borda alta ("5,2%" ou "3,0°"; `SlopeLabel`, Core, 5 testes). Mesa
   plana (desnível menor que 1 mm) leva só o valor. Camada
-  `MARCHENG_UFV_SETA_DECLIVIDADE` (ciano); notas da mesa, fora do grupo.
+  `CLIVUS_SETA_DECLIVIDADE` (ciano); notas da mesa, fora do grupo.
   Ligada e unidade gravadas no desenho (registro `DECLIVIDADE_SETA`): mesa
   desenhada, recalculada, refeita ou repintada já nasce com a seta; o
   comando refaz as de todas as mesas; Desligar apaga e grava desligada.
-- Nível 2 novo, `ufv-declividade`: um texto por mesa com o GUID dela e o
+- Nível 2 novo, `clivus-declividade`: um texto por mesa com o GUID dela e o
   valor que o contorno dá (graus e porcentagem), nada em dobro ao trocar a
   unidade, a mesa recalculada nasce com a seta, nada fora da cota das
   mesas (regra 5), desligar limpa. Placar: tudo verde, nível 2 27/27.
@@ -4209,7 +4209,7 @@ Word, que o Renan confirma na tela:
   `docker compose up -d --build` em `servidor/` (Postgres; o Docker da
   máquina estava parado em 01/10, o compose não foi rodado).
 - Plugin: `FonteDeModulos` busca `http://localhost:8765/modulos` (ou
-  `UFV_SERVICO`) com 1,5 s de limite; fora do ar, usa a biblioteca embutida,
+  `CLIVUS_SERVICO`) com 1,5 s de limite; fora do ar, usa a biblioteca embutida,
   guarda isso por 1 minuto e escreve a origem embaixo do campo Modelo.
 - O placar ganhou a linha `Servico` (pytest de `servidor/`).
 - **Observações que ficam:** o serviço não tem autenticação; antes de ir
@@ -4280,7 +4280,7 @@ existe o módulo TESTE-600."
 - Nível 2: a usina confere zero cotas, zero setas, nenhuma camada de
   análise criada, nenhuma peça pintada e as peças da mesa marcada só
   magenta. Os testes que conferiam cotas (fileira, alturas, recalcular)
-  passaram a chamar `UFV_ALTURAS_REGERAR` depois de gerar, com as mesmas
+  passaram a chamar `CLIVUS_ALTURAS_REGERAR` depois de gerar, com as mesmas
   conferências; o do refazer agora exige que as cotas antigas sumam e
   nenhuma nasça (antes exigia uma por pilar, requisito que o Word revogou).
 - **Decisão minha, o Renan confirma na tela:** a mesa magenta (não cabe)
@@ -4296,11 +4296,11 @@ alturas: as cotas aparecem (camada desligada, ligar com Alturas).
 - Quatro análises com a mesma base (`IndependentAnalysis` no Core,
   `AnalisesIndependentes` no plugin): ponta baixa (PB), ponta alta (PA),
   declividade e pilar acima do terreno. Cada uma tem cinco comandos:
-  `UFV_AN_<PB|PA|DECL|PILAR>_INSERIR`, `_ANALISAR` (janela da regra: abaixo
+  `CLIVUS_AN_<PB|PA|DECL|PILAR>_INSERIR`, `_ANALISAR` (janela da regra: abaixo
   de X uma cor, acima de Y outra, pintar também as peças ou só os textos),
   `_APAGAR`, `_CORES` e `_QUANTIFICAR`.
 - Textos com identidade própria no XData (`AnalysisTextIdentity`, com o
-  valor), cada análise na sua camada `MARCHENG_UFV_TXT_*`, no plano da mesa
+  valor), cada análise na sua camada `CLIVUS_TXT_*`, no plano da mesa
   (regra 5); vão junto com a mesa ao recalcular, apagar e copiar.
 - Independência: cada análise guarda no desenho as peças que pintou; quem
   fica dentro da faixa não é tocado, e Tirar cores só desfaz o que ela
@@ -4308,7 +4308,7 @@ alturas: as cotas aparecem (camada desligada, ligar com Alturas).
   dela, sim.
 - Quantificar conta pilares (mesas, na declividade) e, nas pontas, módulos
   (o pilar mais perto da coluna). Fica gravado no desenho e vai para o
-  Excel (`UFV_EXCEL`): Resumo (mesas, módulos, kWp, pilares, metros de
+  Excel (`CLIVUS_EXCEL`): Resumo (mesas, módulos, kWp, pilares, metros de
   pilar enterrado, acima e total), Análises, Pilares (um por linha) e
   Compra de pilares (comprimentos agrupados).
 - **Decisões minhas, o Renan confirma na tela:** limites padrão (PB abaixo
@@ -4331,7 +4331,7 @@ Analisar com graus; 7) Excel: abrir o arquivo e conferir as quatro abas.
 
 ### 8.15 (01/10/2026): resumo do terreno
 
-- `UFV_TERRENO_RESUMO` mostra (janela e linha de comando): a superfície
+- `CLIVUS_TERRENO_RESUMO` mostra (janela e linha de comando): a superfície
   escolhida e se o carimbo está Atual, área em planta e na superfície,
   cotas, localização, cidade, país e fuso UTM.
 - Cidade: o município do IBGE com a sede mais perto (base de 5.570
@@ -4341,7 +4341,7 @@ Analisar com graus; 7) Excel: abrir o arquivo e conferir as quatro abas.
   Sul (31977 a 31985 no sul, 31971 a 31976 no norte); fora dela, só o fuso
   ("demais países a gente pensa depois").
 - A janela tem "Trocar terreno..." (abre a escolha de superfície) e
-  "Localização..." (o UFV_LOCAL). O nome do terreno escolhido na própria
+  "Localização..." (o CLIVUS_LOCAL). O nome do terreno escolhido na própria
   ribbon fica para o 8.16.
 
 **Roteiro de tela do 8.15:** Terreno → Resumo: no Itatiba deve aparecer
@@ -4350,7 +4350,7 @@ Analisar com graus; 7) Excel: abrir o arquivo e conferir as quatro abas.
 
 ### 8.13 (01/10/2026): estilos do projeto
 
-- `UFV_ESTILOS` abre a escolha do estilo de texto, de cota e de chamada
+- `CLIVUS_ESTILOS` abre a escolha do estilo de texto, de cota e de chamada
   (listas tiradas do desenho; "o corrente do desenho" é não escolher). Fica
   gravado no desenho.
 - Todo texto que o plugin escreve passa pelo estilo: cotas de altura, seta
@@ -4367,7 +4367,7 @@ Analisar com graus; 7) Excel: abrir o arquivo e conferir as quatro abas.
 
 **Roteiro de tela do 8.13:** 1) Inserir PB numa área: os textos saem no
 "Marcheng Anotativa - Detalhe", anotativos (aparecem no layout na escala do
-viewport); 2) `UFV_ESTILOS`: escolher Standard no texto, Salvar; inserir PB
+viewport); 2) `CLIVUS_ESTILOS`: escolher Standard no texto, Salvar; inserir PB
 de novo: saem no Standard.
 
 ### 8.14 (01/10/2026): tags
@@ -4375,7 +4375,7 @@ de novo: saem no Standard.
 - Quatro tags, cada uma com inserir e apagar: fileiras ("F1", antes da
   primeira mesa), mesas ("F1.2", no meio), módulos (o número dentro da
   mesa) e strings ("S1", "S2"... na usina toda, no meio dos módulos dela).
-  Camadas `MARCHENG_UFV_TAG_*`, identidade no XData (`TagIdentity`), vão
+  Camadas `CLIVUS_TAG_*`, identidade no XData (`TagIdentity`), vão
   junto com a mesa ao recalcular, apagar e copiar; estilo do projeto.
 - A ordem é a dos letreiros (o Numerar arruma). Dentro da mesa, os módulos
   andam em serpentina: a fileira de baixo da esquerda para a direita, a de
@@ -4415,7 +4415,7 @@ dela; a linha de comando diz quantas de cada.
 
 ### 8.7 e 8.16 (01/10/2026): janela de Configurações e ribbon nova
 
-- `UFV_CONFIGURACOES` (botão Configurações) abre uma janela com abas:
+- `CLIVUS_CONFIGURACOES` (botão Configurações) abre uma janela com abas:
   Estruturas (as mesas do desenho; "Nova mesa..." e "Editar..." abrem a
   janela de Mesa de sempre, com vãos e T3; "Duplicar" faz a de 14 a partir
   da de 28), Escolha das estruturas (marcar quais entram e a cor de cada
@@ -4456,14 +4456,14 @@ abas, algo MUITO estruturado". Refeito:
 
 - Uma aba só, a UFV. Os painéis Análises e Tags têm um botão cada, que abre
   uma janela com abas.
-- **Janela Análises** (`UFV_ANALISES`): abas Ponta baixa, Ponta alta,
+- **Janela Análises** (`CLIVUS_ANALISES`): abas Ponta baixa, Ponta alta,
   Declividade, Pilares e Quantidades. Cada aba de análise em três seções
   numeradas: 1. Textos (Inserir, Apagar), 2. Cores (abaixo de X / acima de
   Y com a cor de cada um, pintar também as peças, unidade na declividade;
   Analisar, Tirar cores), 3. Quantidades (Quantificar, com os números na
   própria janela). A aba Quantidades mostra a última quantificação de cada
   análise e exporta o Excel. O desenho atualiza atrás da janela a cada botão.
-- **Janela Tags** (`UFV_TAGS`): abas Fileiras, Mesas, Módulos e Strings,
+- **Janela Tags** (`CLIVUS_TAGS`): abas Fileiras, Mesas, Módulos e Strings,
   cada uma com Inserir e Apagar; Strings com o campo "módulos por string".
 
 **Roteiro de tela:** aba UFV → Análises: na aba Ponta baixa, Inserir
@@ -4608,7 +4608,7 @@ Renan, quatro pedidos na mesma rodada:
    módulo na camada de módulo, quando estão com a cor antiga do tipo, por
    camada ou por bloco. Mesa marcada, suja ou peça pintada por análise
    ficam como estão; a "cor de antes" das análises passa à nova. Teste de
-   nível 2 `ufv-usina-mista`: todo módulo fora das marcadas com cor (420).
+   nível 2 `clivus-usina-mista`: todo módulo fora das marcadas com cor (420).
 2. "O não cabe deve ser somente módulo que entra na terra, o resto não; o
    resto eu valido por análises." `RowSolver.Relatar`: marcada é só a mesa
    com módulo da fileira de baixo com a ponta baixa abaixo do chão. Fora
@@ -4628,7 +4628,7 @@ Renan, quatro pedidos na mesma rodada:
    novo traz a mesma para a frente, fechar o desenho fecha a janela. Cada
    botão trava o documento enquanto escreve.
 4. "Pode apagar o menu Fileira." Botão tirado da ribbon (painel
-   Processar). O comando `UFV_FILEIRA` continua, sem botão, porque os
+   Processar). O comando `CLIVUS_FILEIRA` continua, sem botão, porque os
    testes de nível 2 usam.
 
 Roteiro de tela:
@@ -4648,7 +4648,7 @@ Renan mandou print: "F46.6" e "F46.7" com a metade de baixo sumida no
 sombreado. A tag ficava 15 cm acima do plano da mesa NO PONTO dela (o meio),
 e a metade alta da mesa inclinada passava por cima. Agora toda tag (mesa,
 módulo, string e fileira) fica 15 cm acima da ponta MAIS ALTA da mesa dela.
-Teste de nível 2 `ufv-tags`: nenhuma tag abaixo do vértice mais alto do
+Teste de nível 2 `clivus-tags`: nenhuma tag abaixo do vértice mais alto do
 contorno da mesa dela (pegou a de fileira, que tinha caminho próprio).
 
 Roteiro de tela: Tags > Mesas (e Fileiras) numa usina em morro, vista
@@ -4703,7 +4703,7 @@ sombra por enquanto; mesa sobre mesa (fileira na sombra da da frente) não.
 
 **9.9 3D.** Saída > 3D grava "nome do desenho - 3D.html" ao lado do desenho
 (desenho nunca salvo: Documentos) e abre no navegador padrão. Um arquivo só,
-com a three.js r128 (MIT, licença em `src/UFV.Core/Visualizador3D`) dentro:
+com a three.js r128 (MIT, licença em `src/Clivus.Core/Visualizador3D`) dentro:
 abre sem internet e pode ir por e-mail. Terreno reduzido a uma grade de até
 200 células no lado maior; módulos nas cores do desenho; pilares; árvores;
 sombras. Liga e desliga cada camada, exagero vertical 1× a 5×, Enquadrar.
@@ -4783,9 +4783,45 @@ todos elementos do desenho".
 - "Este ano" é um dia por semana (campo novo "a cada N dias").
 - Tempo: 0,5 s por conta na usina do teste (2.240 módulos); o horizonte é
   um por mesa (por face levava 14 s).
-- Nível 2 `ufv-sombras` agora numa usina com várias fileiras: às 07:30 exige
+- Nível 2 `clivus-sombras` agora numa usina com várias fileiras: às 07:30 exige
   módulos na sombra de outra mesa.
 
 Roteiro de tela: Sombreamento > Sombras, Solstício de inverno, Gerar: os
 módulos com sombra ficam roxos e a linha de comando diz a causa (árvore,
 mesa, terreno). Instante às 07:30: a fileira da frente sombreia a de trás.
+
+### 04/10/2026: o nome agora é Clivus Solar
+
+Renan: "escolhi o nome do projeto, vai chamar Clivus Solar, troque tudo do
+sistema, pastas, código, layers etc".
+
+- Projetos e pastas: `src/Clivus.Core`, `Clivus.Geo`, `Clivus.Plugin`,
+  `Clivus.Cli`; `tests/Clivus.Core.Tests`, `Clivus.Geo.Tests`,
+  `Clivus.Integration`; solução `ClivusSolar.sln`; namespaces `Clivus.*`.
+  Os scripts de nível 2 são `clivus-*.scr`.
+- Comandos `CLIVUS_*` (eram `UFV_*`). Camadas, blocos, aplicativo de XData
+  e dicionário do desenho com o prefixo `CLIVUS` (era `MARCHENG_UFV`):
+  `CLIVUS_MESA`, `CLIVUS_PILAR`, `CLIVUS_MODULO_...`, `CLIVUS_ARVORE_...`.
+- Aba da ribbon, janelas, menu de botão direito e paleta: "Clivus Solar".
+- Bundle `ClivusSolar.bundle`; o instalador remove o `UFV.bundle` antigo
+  (os dois juntos dariam duas abas).
+- Pasta do usuário `%LOCALAPPDATA%\Clivus Solar` (perfis de mesa, log,
+  bancada); os perfis da pasta antiga (`MarchEng\UFV`) são copiados uma vez.
+- Variável do serviço `CLIVUS_SERVICO` (a antiga `UFV_SERVICO` ainda vale);
+  banco do serviço `clivus`.
+- **Desenhos já feitos:** ao abrir, o desenho com o nome antigo é migrado
+  sozinho (`MigracaoDoNome`, também pelo comando `CLIVUS_MIGRAR`): XData de
+  toda peça, camadas e blocos do plugin, o dicionário do desenho e os nomes
+  de camada gravados nas configurações. Só o que é do plugin muda: camada do
+  usuário com "MARCHENG" no nome (que não comece com `MARCHENG_UFV_`) fica.
+  Nível 2 `clivus-migrar` monta um desenho antigo em LISP e confere.
+- Fica como estava: "MarchEng" como empresa nos metadados da DLL e do
+  bundle (é a empresa, não o nome do sistema), "UFV" como termo técnico
+  (usina fotovoltaica) nos textos, e este diário.
+
+Roteiro de tela:
+1. Abra o Civil 3D: a aba se chama Clivus Solar, e não há mais aba UFV.
+2. Abra um desenho feito antes: a linha de comando diz "MIGRAR Desenho
+   passado para o nome Clivus Solar", e as camadas viram `CLIVUS_...`.
+   Salve o desenho.
+3. Os comandos agora são `CLIVUS_...` (os botões continuam os mesmos).

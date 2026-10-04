@@ -1,0 +1,76 @@
+; Teste de nivel 2 do 7.7: processa uma fileira e faz estragos que a
+; validacao tem que apontar: apaga a polilinha da area (o registro fica),
+; copia a polilinha do alinhamento (identidade repetida), suja uma mesa,
+; apaga o contorno de outra (removida + pecas orfas), copia uma terceira (a
+; copia ganha identidade, entao NAO e duplicada) e move uma quarta apagando
+; depois a marca de suja no XData (como se o plugin nao estivesse
+; carregado: a validacao pega pela ancora). CLIVUS_VALIDAR tem que dizer: 1
+; area faltando, 0 alinhamentos faltando, 1 alinhamento duplicado, 2 sujas
+; (a sujada e a copia), 1 movida, 0 duplicadas, 0 pecas repetidas, 1 orfa,
+; 1 removida nao recontada, terreno ok. Antes de estragar, valida limpo.
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+; A mesa e um grupo (27/09/2026): este caso simula o usuario mexendo em UMA
+; peca, entao desliga a selecao por grupo (Ctrl+Shift+A na tela). O
+; rodar.ps1 devolve o PICKSTYLE do registro no fim, como o SECURELOAD.
+(setq clivus:pickstyle (getvar "PICKSTYLE"))
+(setvar "PICKSTYLE" 0)
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area da validacao")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento da validacao")
+(command "CLIVUS_FILEIRA_AUTO")
+(command "CLIVUS_VALIDAR")
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:tipo (xd) (cdr (nth 0 xd)))
+(defun clivus:mesa (xd) (cond ((= (clivus:tipo xd) "Mesa") (clivus:campo xd 0)) ((= (clivus:tipo xd) "Face") (clivus:campo xd 2)) (T (clivus:campo xd 1))))
+(setq clivus:tudo (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))))
+(setq clivus:n (if clivus:tudo (sslength clivus:tudo) 0))
+; A area, o alinhamento, o segundo, o terceiro e o quarto contornos.
+(setq clivus:area nil clivus:alin nil clivus:e2 nil clivus:g3 nil clivus:e4 nil clivus:g4 nil clivus:vistos 0 clivus:i 0)
+(while (< clivus:i clivus:n)
+  (setq clivus:en (ssname clivus:tudo clivus:i) clivus:xd (clivus:xdata clivus:en) clivus:t (clivus:tipo clivus:xd))
+  (if (= clivus:t "Area") (setq clivus:area clivus:en))
+  (if (= clivus:t "Alinhamento") (setq clivus:alin clivus:en))
+  (if (= clivus:t "Mesa")
+    (progn (setq clivus:vistos (1+ clivus:vistos))
+           (if (= clivus:vistos 2) (setq clivus:e2 clivus:en))
+           (if (= clivus:vistos 3) (setq clivus:g3 (clivus:campo clivus:xd 0)))
+           (if (= clivus:vistos 4) (setq clivus:e4 clivus:en clivus:g4 (clivus:campo clivus:xd 0)))))
+  (setq clivus:i (1+ clivus:i)))
+(setq clivus:ss3 (ssadd) clivus:ss4 (ssadd) clivus:i 0)
+(while (< clivus:i clivus:n)
+  (setq clivus:en (ssname clivus:tudo clivus:i) clivus:m (clivus:mesa (clivus:xdata clivus:en)))
+  (if (= clivus:m clivus:g3) (ssadd clivus:en clivus:ss3))
+  (if (= clivus:m clivus:g4) (ssadd clivus:en clivus:ss4))
+  (setq clivus:i (1+ clivus:i)))
+(setq clivus:ssa (ssadd clivus:area))
+(command "_.ERASE" clivus:ssa "")
+(setq clivus:copymode (getvar "COPYMODE"))
+(setvar "COPYMODE" 1)
+(setq clivus:ssl (ssadd clivus:alin))
+(command "_.COPY" clivus:ssl "" "0,0,0" "3,0,0")
+(command "CLIVUS_SUJAR_AUTO")
+(setq clivus:ss2 (ssadd clivus:e2))
+(command "_.ERASE" clivus:ss2 "")
+(command "_.COPY" clivus:ss3 "" "0,0,0" "0,300,0")
+(command "_.MOVE" clivus:ss4 "" "0,0,0" "0,-120,0")
+(setvar "COPYMODE" clivus:copymode)
+; A mesa 4 ficou suja pelo vigia; apaga a marca no XData, como se o plugin nao estivesse carregado.
+(setq clivus:e (entget clivus:e4 '("CLIVUS")))
+(setq clivus:xd (cdr (car (cdr (assoc -3 clivus:e)))))
+(setq clivus:novo nil clivus:i 0)
+(foreach clivus:par clivus:xd
+  (setq clivus:novo (append clivus:novo (list (cond ((= clivus:i 9) (cons 1000 "0")) ((= clivus:i 10) (cons 1000 "")) (T clivus:par)))))
+  (setq clivus:i (1+ clivus:i)))
+(setq clivus:e (subst (list -3 (cons "CLIVUS" clivus:novo)) (assoc -3 clivus:e) clivus:e))
+(entmod clivus:e)
+(setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_VALIDAR")
+(setvar "PICKSTYLE" clivus:pickstyle)
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

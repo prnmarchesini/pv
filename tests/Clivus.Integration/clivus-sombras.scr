@@ -1,0 +1,79 @@
+; Teste de nivel 2 das sombras (9.7 e 9.8): usina com 28 e 14, uma arvore grande
+; (tronco 4 m, copa 10 m de altura e 8 m de largura) no meio da F1.3; a sombra
+; de 21/06/2026 as 09:00 (fuso -3) e desenhada no terreno e pega modulos, que
+; ficam em tons de roxo; Apagar tira os contornos e devolve a cor de antes; o
+; dia inteiro (06:00 as 18:00, de hora em hora) marca pelo pior caso pelo
+; menos os mesmos modulos; as 07:30 (sol baixo) a fileira da frente faz sombra
+; na de tras (as mesas tambem fazem sombra).
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area sombras")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento sombras")
+(command "CLIVUS_MESAS_EXEMPLO_AUTO")
+(command "CLIVUS_USINA_AUTO")
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:verts (e / v l)
+  (setq v (entnext e))
+  (while (and v (= (cdr (assoc 0 (entget v))) "VERTEX"))
+    (setq l (cons (cdr (assoc 10 (entget v))) l) v (entnext v)))
+  l)
+
+; O meio da F1.3, pelos cantos do contorno.
+(setq clivus:ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) clivus:i 0 clivus:meio nil)
+(while (< clivus:i (clivus:conta clivus:ss))
+  (setq clivus:e (ssname clivus:ss clivus:i) clivus:xd (clivus:xdata clivus:e))
+  (if (and (= (cdr (nth 0 clivus:xd)) "Mesa") (= (cdr (nth 3 clivus:xd)) "F1.3"))
+    (setq clivus:v (clivus:verts clivus:e)
+          clivus:meio (list (/ (apply '+ (mapcar 'car clivus:v)) 4.0) (/ (apply '+ (mapcar 'cadr clivus:v)) 4.0) 0.0)))
+  (setq clivus:i (1+ clivus:i)))
+
+(command "CLIVUS_ARVORE_AUTO" 4 0.6 10 8 clivus:meio "")
+(setvar "OSMODE" clivus:osmode)
+
+; Cores dos modulos: as tres da sombra e as outras.
+(defun clivus:cores ( / ss i c n)
+  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_MOD*"))) i 0 n 0)
+  (while (< i (clivus:conta ss))
+    (setq c (cdr (assoc 420 (entget (ssname ss i)))))
+    (if (member c '(14136575 10509030 6231200)) (setq n (1+ n)))
+    (setq i (1+ i)))
+  n)
+(defun clivus:assinatura ( / ss i l)
+  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_MOD*"))) i 0)
+  (while (< i (clivus:conta ss))
+    (setq l (cons (list (cdr (assoc 5 (entget (ssname ss i)))) (cdr (assoc 62 (entget (ssname ss i)))) (cdr (assoc 420 (entget (ssname ss i))))) l) i (1+ i)))
+  l)
+(defun clivus:sombras ( / ss i n zmin zmax)
+  (setq ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) i 0 n 0 zmin 1e99 zmax -1e99)
+  (while (< i (clivus:conta ss))
+    (if (= (cdr (nth 0 (clivus:xdata (ssname ss i)))) "Sombra")
+      (progn
+        (setq n (1+ n))
+        (foreach p (clivus:verts (ssname ss i)) (setq zmin (min zmin (caddr p)) zmax (max zmax (caddr p))))))
+    (setq i (1+ i)))
+  (list n zmin zmax))
+
+(setq clivus:antes (clivus:assinatura))
+(command "CLIVUS_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "09:00" "09:00" "30" "-3" "1")
+(setq clivus:s1 (clivus:sombras) clivus:c1 (clivus:cores))
+(command "CLIVUS_SOMBRAS_APAGAR")
+(setq clivus:s2 (clivus:sombras) clivus:c2 (clivus:cores) clivus:volta (equal clivus:antes (clivus:assinatura)))
+(command "CLIVUS_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "06:00" "18:00" "60" "-3" "1")
+(setq clivus:s3 (clivus:sombras) clivus:c3 (clivus:cores))
+
+; Sol baixo (07:30): a fileira da frente faz sombra na de tras (a linha de
+; comando diz quantos modulos por outra mesa).
+(command "CLIVUS_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "07:30" "07:30" "30" "-3" "1")
+
+(princ (strcat "\nCLIVUS_SOMBRAS instante=" (itoa (car clivus:s1)) " zmin=" (rtos (cadr clivus:s1) 2 3) " zmax=" (rtos (caddr clivus:s1) 2 3)
+               " marcados=" (itoa clivus:c1) " apagado=" (itoa (car clivus:s2)) " marcadosdepois=" (itoa clivus:c2)
+               " volta=" (if clivus:volta "1" "0") " dia=" (itoa (car clivus:s3)) " marcadosdia=" (itoa clivus:c3)))
+(setvar "SECURELOAD" clivus:secureload)
+(princ)

@@ -1,0 +1,106 @@
+; Teste de nivel 2 do 7.5: a copia. Processa uma fileira, copia a mesa A
+; inteira (todas as entidades com o GUID dela, pelo XData) 300 m para o
+; norte com o COPY do proprio AutoCAD, e le do desenho:
+;   - so um contorno continua com o GUID de A, limpo;
+;   - existe um contorno novo, sujo com o motivo "copiada", e as pecas dele
+;     (7 pilares, 28 modulos, 28 faces) apontam para o GUID novo;
+;   - nenhum GUID de peca se repete no desenho inteiro (regra sagrada 3);
+;   - U desfaz a copia sem registrar a original como removida; REDO a traz
+;     de volta ainda unica.
+; Depois renomeia o bloco do pilar com sufixo de outro desenho, desenha de
+; novo (o bloco padrao renasce) e manda CLIVUS_RENOMEAR trocar as referencias.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area da copia")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento da copia")
+(command "CLIVUS_FILEIRA_AUTO")
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:tipo (xd) (cdr (nth 0 xd)))
+(defun clivus:mesa (xd) (cond ((= (clivus:tipo xd) "Mesa") (clivus:campo xd 0)) ((= (clivus:tipo xd) "Face") (clivus:campo xd 2)) (T (clivus:campo xd 1))))
+; A mesa A: o primeiro contorno; todas as entidades dela.
+(setq clivus:tudo (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))))
+(setq clivus:n (if clivus:tudo (sslength clivus:tudo) 0))
+(setq clivus:ga nil clivus:i 0)
+(while (and (< clivus:i clivus:n) (not clivus:ga))
+  (setq clivus:xd (clivus:xdata (ssname clivus:tudo clivus:i)))
+  (if (= (clivus:tipo clivus:xd) "Mesa") (setq clivus:ga (clivus:campo clivus:xd 0)))
+  (setq clivus:i (1+ clivus:i)))
+(setq clivus:ssa (ssadd) clivus:i 0)
+(while (< clivus:i clivus:n)
+  (setq clivus:en (ssname clivus:tudo clivus:i))
+  (if (= (clivus:mesa (clivus:xdata clivus:en)) clivus:ga) (ssadd clivus:en clivus:ssa))
+  (setq clivus:i (1+ clivus:i)))
+(setq clivus:nssa (sslength clivus:ssa))
+(setq clivus:copymode (getvar "COPYMODE"))
+(setvar "COPYMODE" 1)
+(command "_.COPY" clivus:ssa "" "0,0,0" "0,300,0")
+(setvar "COPYMODE" clivus:copymode)
+(setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_ESTADO")
+; O que ficou.
+(setq clivus:tudo (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))))
+(setq clivus:n (if clivus:tudo (sslength clivus:tudo) 0))
+(setq clivus:conta 0 clivus:sujaa "-" clivus:gb nil clivus:sujab "-" clivus:motivob "-" clivus:contb 0 clivus:pilb 0 clivus:modb 0 clivus:facb 0 clivus:ids nil clivus:repetidos 0 clivus:i 0)
+(while (< clivus:i clivus:n)
+  (setq clivus:en (ssname clivus:tudo clivus:i) clivus:xd (clivus:xdata clivus:en) clivus:t (clivus:tipo clivus:xd))
+  (setq clivus:id (clivus:campo clivus:xd 0))
+  (if (member clivus:id clivus:ids) (setq clivus:repetidos (1+ clivus:repetidos)) (setq clivus:ids (cons clivus:id clivus:ids)))
+  (if (= clivus:t "Mesa")
+    (if (= clivus:id clivus:ga)
+      (setq clivus:conta (1+ clivus:conta) clivus:sujaa (clivus:campo clivus:xd 7))
+      (if (= (clivus:campo clivus:xd 7) "1") (setq clivus:gb clivus:id clivus:sujab "1" clivus:motivob (clivus:campo clivus:xd 8)))))
+  (setq clivus:i (1+ clivus:i)))
+(setq clivus:i 0)
+(while (< clivus:i clivus:n)
+  (setq clivus:en (ssname clivus:tudo clivus:i) clivus:xd (clivus:xdata clivus:en) clivus:t (clivus:tipo clivus:xd))
+  (if (and clivus:gb (= (clivus:mesa clivus:xd) clivus:gb))
+    (cond ((= clivus:t "Mesa") (setq clivus:contb (1+ clivus:contb)))
+          ((= clivus:t "Pilar") (setq clivus:pilb (1+ clivus:pilb)))
+          ((= clivus:t "Modulo") (setq clivus:modb (1+ clivus:modb)))
+          ((= clivus:t "Face") (setq clivus:facb (1+ clivus:facb)))))
+  (setq clivus:i (1+ clivus:i)))
+(princ (strcat "\nCLIVUS_COPIA copiadas=" (itoa clivus:nssa) " conta=" (itoa clivus:conta) " sujaa=" clivus:sujaa
+               " contb=" (itoa clivus:contb) " sujab=" clivus:sujab " motivob=" clivus:motivob
+               " pilb=" (itoa clivus:pilb) " modb=" (itoa clivus:modb) " facb=" (itoa clivus:facb) " repetidos=" (itoa clivus:repetidos)))
+; U: a copia some; a original continua unica e NAO e registrada como removida.
+(command "_.U")
+(command "CLIVUS_ESTADO")
+(defun clivus:conta-por-guid (g / ss n i c xd)
+  (setq ss (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))) n (if ss (sslength ss) 0) i 0 c 0)
+  (while (< i n)
+    (setq xd (clivus:xdata (ssname ss i)))
+    (if (and (= (clivus:tipo xd) "Mesa") (= (clivus:campo xd 0) g)) (setq c (1+ c)))
+    (setq i (1+ i)))
+  c)
+(defun clivus:repetidos-no-desenho ( / ss n i id ids r)
+  (setq ss (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))) n (if ss (sslength ss) 0) i 0 ids nil r 0)
+  (while (< i n)
+    (setq id (clivus:campo (clivus:xdata (ssname ss i)) 0))
+    (if (member id ids) (setq r (1+ r)) (setq ids (cons id ids)))
+    (setq i (1+ i)))
+  r)
+(princ (strcat "\nCLIVUS_COPIA_U conta=" (itoa (clivus:conta-por-guid clivus:ga)) " contb=" (itoa (if clivus:gb (clivus:conta-por-guid clivus:gb) 0)) " repetidos=" (itoa (clivus:repetidos-no-desenho))))
+; REDO: a copia volta, e continua sem GUID repetido.
+(command "_.REDO")
+(princ (strcat "\nCLIVUS_COPIA_REDO conta=" (itoa (clivus:conta-por-guid clivus:ga)) " repetidos=" (itoa (clivus:repetidos-no-desenho))))
+; Renomear: o bloco do pilar ganha sufixo de outro desenho; a fileira
+; desenhada de novo recria o padrao; o comando troca as referencias e apaga
+; a definicao com sufixo.
+(command "_.-RENAME" "_B" "CLIVUS_PILAR" "CLIVUS_PILAR$0$")
+(setq clivus:antes (if (tblsearch "block" "CLIVUS_PILAR$0$") 1 0))
+(setvar "OSMODE" 0)
+(command "CLIVUS_FILEIRA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_RENOMEAR")
+(setq clivus:depois (if (tblsearch "block" "CLIVUS_PILAR") 1 0))
+(setq clivus:sufixo (if (tblsearch "block" "CLIVUS_PILAR$0$") 1 0))
+(princ (strcat "\nCLIVUS_RENOMEAR_LISP antes=" (itoa clivus:antes) " padrao=" (itoa clivus:depois) " sufixo=" (itoa clivus:sufixo)))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

@@ -1,0 +1,60 @@
+; Teste de nivel 2 do passo 5.9: a area inteira. Mesma area e alinhamento do
+; teste da fileira, todas as fileiras processadas e desenhadas, e o LISP conta
+; o que existe: os pilares tem que ser 7 por mesa, as faces 28, e a cota de
+; topo de todo pilar tem que cair na faixa do terreno (regra sagrada 5).
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area da usina")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento da usina")
+(command "CLIVUS_USINA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+(setq clivus:pilares (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_PILAR"))))
+(setq clivus:faces (ssget "_X" (list (cons 0 "3DFACE") (cons 8 "CLIVUS_FACE"))))
+; O contorno da mesa pintada por analise (borda, declividade) muda para a
+; camada da analise; um contorno esta numa das tres camadas.
+(setq clivus:mesas (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "CLIVUS_MESA,CLIVUS_ANALISE_BORDA,CLIVUS_ANALISE_DECLIVIDADE,CLIVUS_MARCADA"))))
+; Passo 8.8: gerar nao analisa. Nenhuma cota na camada das alturas,
+; nenhuma seta, nenhum contorno nas camadas de analise, e nenhum pilar ou
+; modulo fora da camada fixa com cor propria (a mesa que nao cabe fica na
+; camada de marcadas, magenta: e aviso do motor, nao analise).
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(setq clivus:cotas (clivus:conta (ssget "_X" (list (cons 8 "CLIVUS_ALTURAS")))))
+(setq clivus:setas (clivus:conta (ssget "_X" (list (cons 8 "CLIVUS_SETA_DECLIVIDADE")))))
+(setq clivus:analise (clivus:conta (ssget "_X" (list (cons 8 "CLIVUS_ANALISE_*")))))
+(setq clivus:pecas (ssget "_X" (list (cons 0 "INSERT") (cons 8 "CLIVUS_PILAR,CLIVUS_MODULO"))))
+(setq clivus:i 0 clivus:cores 0)
+(while (< clivus:i (clivus:conta clivus:pecas))
+  (setq clivus:e (entget (ssname clivus:pecas clivus:i)))
+  (if (or (assoc 420 clivus:e) (and (assoc 62 clivus:e) (/= (cdr (assoc 62 clivus:e)) 256))) (setq clivus:cores (1+ clivus:cores)))
+  (setq clivus:i (1+ clivus:i)))
+; As pecas da mesa que nao cabe: so magenta (16711935), nunca a cor de uma
+; analise.
+(setq clivus:marcadas (ssget "_X" (list (cons 0 "INSERT") (cons 8 "CLIVUS_MARCADA"))))
+(setq clivus:i 0)
+(while (< clivus:i (clivus:conta clivus:marcadas))
+  (if (/= (cdr (assoc 420 (entget (ssname clivus:marcadas clivus:i)))) 16711935) (setq clivus:cores (1+ clivus:cores)))
+  (setq clivus:i (1+ clivus:i)))
+; E nem as camadas de analise e de alturas nascem ao gerar.
+(setq clivus:camadas 0)
+(foreach clivus:c '("CLIVUS_ALTURAS" "CLIVUS_SETA_DECLIVIDADE" "CLIVUS_ANALISE_PONTA_BAIXA" "CLIVUS_ANALISE_PILAR" "CLIVUS_ANALISE_ENTERRO" "CLIVUS_ANALISE_BORDA" "CLIVUS_ANALISE_DECLIVIDADE")
+  (if (tblsearch "LAYER" clivus:c) (setq clivus:camadas (1+ clivus:camadas))))
+(setq clivus:analise (+ clivus:analise clivus:camadas))
+(princ (strcat "\nCLIVUS_USINA_LIMPA cotas=" (itoa clivus:cotas) " setas=" (itoa clivus:setas) " analise=" (itoa clivus:analise) " cores=" (itoa clivus:cores)))
+(setq clivus:np (if clivus:pilares (sslength clivus:pilares) 0))
+(setq clivus:nf (if clivus:faces (sslength clivus:faces) 0))
+(setq clivus:nm (if clivus:mesas (sslength clivus:mesas) 0))
+(setq clivus:i 0 clivus:zmin 1e99 clivus:zmax -1e99)
+(while (< clivus:i clivus:np)
+  (setq clivus:z (caddr (cdr (assoc 10 (entget (ssname clivus:pilares clivus:i))))))
+  (setq clivus:zmin (min clivus:zmin clivus:z) clivus:zmax (max clivus:zmax clivus:z))
+  (setq clivus:i (1+ clivus:i)))
+(princ (strcat "\nCLIVUS_USINA_DESENHO pilares=" (itoa clivus:np) " faces=" (itoa clivus:nf) " contornos=" (itoa clivus:nm)
+               " zmin=" (rtos clivus:zmin 2 3) " zmax=" (rtos clivus:zmax 2 3)))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

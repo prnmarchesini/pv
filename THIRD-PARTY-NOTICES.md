@@ -1,6 +1,6 @@
 # Avisos de terceiros
 
-## Municípios do Brasil (src/UFV.Core/municipios.csv)
+## Municípios do Brasil (src/Clivus.Core/municipios.csv)
 
 Nome, UF, latitude e longitude das sedes dos municípios, de
 https://github.com/kelvins/municipios-brasileiros (dados do IBGE).

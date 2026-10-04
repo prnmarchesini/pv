@@ -15,16 +15,16 @@ C:\Program Files\Autodesk\AutoCAD 2026\C3D\AeccDbMgd.dll
 ## Solução
 
 ```
-UFV.sln
+ClivusSolar.sln
 src/
-  UFV.Core/        net8.0      Motor de cálculo. SEM referência de CAD.
-  UFV.Geo/         net8.0      Terreno, TIN, índice espacial, drapeamento. SEM referência de CAD.
-  UFV.Cli/         net8.0      Executável de linha de comando que roda o motor em lote (JSON entra, JSON sai).
-  UFV.Plugin/      net8.0-windows  Casca fina. Única que referencia AcCoreMgd, AcDbMgd, AcMgd, AeccDbMgd.
+  Clivus.Core/        net8.0      Motor de cálculo. SEM referência de CAD.
+  Clivus.Geo/         net8.0      Terreno, TIN, índice espacial, drapeamento. SEM referência de CAD.
+  Clivus.Cli/         net8.0      Executável de linha de comando que roda o motor em lote (JSON entra, JSON sai).
+  Clivus.Plugin/      net8.0-windows  Casca fina. Única que referencia AcCoreMgd, AcDbMgd, AcMgd, AeccDbMgd.
 tests/
-  UFV.Core.Tests/  xUnit
-  UFV.Geo.Tests/   xUnit
-  UFV.Integration/ scripts para o Core Console (accoreconsole.exe)
+  Clivus.Core.Tests/  xUnit
+  Clivus.Geo.Tests/   xUnit
+  Clivus.Integration/ scripts para o Core Console (accoreconsole.exe)
   acervo/          IMUTÁVEL. Entradas, desenhos de referência e resultados esperados congelados.
 tools/
   rodar-testes.ps1 Roda tudo e imprime o placar por etapa.
@@ -34,17 +34,17 @@ tools/
 ## Dependências permitidas
 
 ```
-UFV.Plugin -> UFV.Core -> UFV.Geo
-UFV.Cli    -> UFV.Core -> UFV.Geo
+Clivus.Plugin -> Clivus.Core -> Clivus.Geo
+Clivus.Cli    -> Clivus.Core -> Clivus.Geo
 ```
 
-Nada aponta para `UFV.Plugin`. `UFV.Core` e `UFV.Geo` não sabem que o AutoCAD existe. Um teste de arquitetura (passo 0.2) falha se isso for violado.
+Nada aponta para `Clivus.Plugin`. `Clivus.Core` e `Clivus.Geo` não sabem que o AutoCAD existe. Um teste de arquitetura (passo 0.2) falha se isso for violado.
 
 ## Convenções
 
 - Unidade interna: **metro**, `double`. Ângulos internos em **radianos**; graus só na interface.
 - Tolerância geométrica padrão: 1e-6 m em comparações, 1 mm em verificadores de regra.
 - Mesa construída em coordenadas locais (origem, plano horizontal, azimute zero) e posicionada por **uma matriz** (tilt, azimute, translação). Nada de trigonometria canto a canto.
-- Identidade: XData / extension dictionary sob `MARCHENG_UFV` (tipo, GUID, nome, parâmetros) + handle + dicionário nomeado central. **Layer nunca é fonte de verdade.**
+- Identidade: XData / extension dictionary sob `CLIVUS` (tipo, GUID, nome, parâmetros) + handle + dicionário nomeado central. **Layer nunca é fonte de verdade.**
 - Escrita no desenho: uma transação por operação do usuário, nunca uma por mesa.
 - Terreno amostrado uma vez e guardado; o motor não volta à superfície durante a otimização.

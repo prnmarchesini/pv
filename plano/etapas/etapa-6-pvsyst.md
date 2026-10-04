@@ -3,7 +3,7 @@
 O PVsyst importa cena 3D em 3DS, DAE e PVC (Arquivo > Importar > Importar cena 3D). PVC é PV Collada, derivado do DAE, que carrega também dados de módulos e mesas.
 
 ### 6.1 Escritor DAE puro
-Em `UFV.Core`: recebe lista de faces superiores de módulo e escreve Collada 1.4 válido.
+Em `Clivus.Core`: recebe lista de faces superiores de módulo e escreve Collada 1.4 válido.
 Testes: XML bem formado, contagem de faces, coordenadas conferidas.
 
 ### 6.2 Botão Exportar para PVsyst

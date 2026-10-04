@@ -44,7 +44,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $raiz    = Split-Path -Parent $PSScriptRoot
-$solucao = Join-Path $raiz 'UFV.sln'
+$solucao = Join-Path $raiz 'ClivusSolar.sln'
 $saida   = Join-Path $raiz 'artefatos\testes'
 
 # @(0) e falsy em PowerShell, entao "-Etapa 0" com if ($Etapa) rodaria tudo.
@@ -132,7 +132,7 @@ function Invoke-ProjetoDeTeste {
 if (-not $SemCompilar) {
     Write-Host 'Compilando...' -ForegroundColor DarkGray
 
-    $logBuild = Join-Path $env:TEMP 'ufv-build.log'
+    $logBuild = Join-Path $env:TEMP 'clivus-build.log'
     $anterior = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
@@ -231,7 +231,7 @@ if (-not $PSBoundParameters.ContainsKey('Etapa')) {
 # ---- nivel 2: Core Console -------------------------------------------------
 # Entra no placar no passo 0.5.
 
-$nivel2 = Join-Path $raiz 'tests\UFV.Integration\rodar.ps1'
+$nivel2 = Join-Path $raiz 'tests\Clivus.Integration\rodar.ps1'
 if (Test-Path $nivel2) {
     & $nivel2
     if ($LASTEXITCODE -ne 0) { $problemas.Add('nivel 2 (Core Console) falhou.') }

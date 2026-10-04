@@ -1,0 +1,24 @@
+; Teste de nivel 2 do 3D no navegador (9.9): uma fileira, uma arvore e a
+; sombra das 09:00 de 21/06/2026; a pagina e gravada (sem abrir o navegador)
+; em {{HTML}}. O runner le o arquivo: um so, sem nada de fora, com tantas
+; faces quantas 3DFACE o desenho tem, a arvore, as sombras e o terreno.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area 3D")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento 3D")
+(command "CLIVUS_FILEIRA_AUTO")
+(command "CLIVUS_ARVORE_AUTO" 4 0.6 10 8 "{{P}}" "")
+(setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "09:00" "09:00" "30" "-3" "1")
+(command "CLIVUS_3D_AUTO" "{{HTML}}")
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(princ (strcat "\nCLIVUS_3D faces=" (itoa (clivus:conta (ssget "_X" (list (cons 0 "3DFACE") (cons 8 "CLIVUS_FACE")))))
+               " pilares=" (itoa (clivus:conta (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_PILAR")))))))
+(setvar "SECURELOAD" clivus:secureload)
+(princ)

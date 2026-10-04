@@ -166,7 +166,7 @@ def test_semear_poe_os_modulos_do_plugin_so_no_banco_vazio(fabrica):
 
 def test_os_modulos_iniciais_sao_os_do_plugin():
     """O semeador lê uma cópia do modulos.json do Core; as duas não podem divergir."""
-    do_core = (RAIZ.parent / "src" / "UFV.Core" / "modulos.json").read_text(encoding="utf-8")
+    do_core = (RAIZ.parent / "src" / "Clivus.Core" / "modulos.json").read_text(encoding="utf-8")
     do_servico = (RAIZ / "app" / "modulos_iniciais.json").read_text(encoding="utf-8")
     assert do_core == do_servico
 

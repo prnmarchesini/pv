@@ -1,4 +1,4 @@
-# Serviço do plugin UFV
+# Serviço do Clivus Solar
 
 Biblioteca de módulos do plugin (passo 8.3, Melhorias.docx de 01/10/2026).
 FastAPI, SQLAlchemy e Alembic, no padrão do meuPlano. Sobe no Coolify com a
@@ -10,7 +10,7 @@ Com Docker (Postgres de verdade):
 
     docker compose up -d --build
 
-Sem Docker (SQLite em `ufv.db`):
+Sem Docker (SQLite em `clivus.db`):
 
     pip install -r requirements-dev.txt   # com os de teste
     alembic upgrade head
@@ -18,7 +18,7 @@ Sem Docker (SQLite em `ufv.db`):
     uvicorn app.main:app --port 8765
 
 O plugin procura o serviço em `http://localhost:8765`. Para outro endereço,
-defina a variável de ambiente `UFV_SERVICO` antes de abrir o Civil 3D. Sem
+defina a variável de ambiente `CLIVUS_SERVICO` antes de abrir o Civil 3D. Sem
 serviço no ar, o plugin usa a biblioteca embutida e avisa.
 
 ## Rotas

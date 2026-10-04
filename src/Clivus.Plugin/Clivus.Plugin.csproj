@@ -1,0 +1,75 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- A ribbon do AutoCAD (Autodesk.Windows) e WPF. -->
+    <UseWPF>true</UseWPF>
+    <!-- A janela de cor do Windows (RGB, cores personalizadas) nas escolhas de cor. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- O AutoCAD carrega a DLL no proprio processo: nada de copiar as libs dele. -->
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!--
+      MSB3277: as DLLs do AutoCAD apontam para Microsoft.VisualBasic 10.1.0.0
+      (.NET Framework) e o net8.0-windows traz a 10.0.0.0. O plugin nao usa
+      nenhuma das duas; quem resolve em tempo de execucao e o proprio AutoCAD.
+    -->
+    <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>
+  </PropertyGroup>
+
+  <!-- Sem os using automáticos do Windows Forms: Button, ComboBox... são os do WPF. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Clivus.Core\Clivus.Core.csproj" />
+  </ItemGroup>
+
+  <!--
+    DLLs gerenciadas do AutoCAD / Civil 3D 2026.
+    Private = false: o AutoCAD ja tem essas assemblies carregadas. Copiar
+    para a pasta de saida faz o plugin carregar uma segunda copia e quebrar.
+  -->
+  <ItemGroup>
+    <Reference Include="AcCoreMgd">
+      <HintPath>$(Civil3DPath)accoremgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="AcDbMgd">
+      <HintPath>$(Civil3DPath)acdbmgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="AcMgd">
+      <HintPath>$(Civil3DPath)acmgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="AeccDbMgd">
+      <HintPath>$(Civil3DPath)C3D\AeccDbMgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!--
+      AecBaseMgd traz a Entity de que a superfície TIN herda. Sem ela o
+      compilador não consegue nem perguntar "isto é uma TinSurface?".
+      Mora em ACA\, não em C3D\: é a camada comum do Architecture.
+    -->
+    <Reference Include="AecBaseMgd">
+      <HintPath>$(Civil3DPath)ACA\AecBaseMgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Ribbon: aba, painel e botao. -->
+    <Reference Include="AdWindows">
+      <HintPath>$(Civil3DPath)AdWindows.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="ConferirCivil3D" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(Civil3DPath)acmgd.dll')"
+           Text="Civil 3D 2026 nao encontrado em '$(Civil3DPath)'. Passe -p:Civil3DPath=&quot;caminho\da\instalacao\&quot; (com a barra no fim)." />
+    <Error Condition="!Exists('$(Civil3DPath)C3D\AeccDbMgd.dll')"
+           Text="AeccDbMgd.dll nao encontrada em '$(Civil3DPath)C3D\'. Isso indica AutoCAD sem Civil 3D instalado." />
+  </Target>
+
+</Project>

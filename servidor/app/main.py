@@ -1,4 +1,4 @@
-"""Serviço do plugin UFV: biblioteca de módulos.
+"""Serviço do Clivus Solar: biblioteca de módulos.
 
 Passo 8.3 (Melhorias.docx, 01/10/2026). Roda no localhost agora e sobe no
 Coolify depois, sem mudar o código: só a `DATABASE_URL`.
@@ -20,7 +20,7 @@ VERSAO = "1"
 
 MODULOS_INICIAIS = Path(__file__).with_name("modulos_iniciais.json")
 
-app = FastAPI(title="UFV — serviço do plugin", version=VERSAO)
+app = FastAPI(title="Clivus Solar — serviço do plugin", version=VERSAO)
 
 
 @app.get("/saude")

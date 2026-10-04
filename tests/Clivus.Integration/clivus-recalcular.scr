@@ -1,0 +1,79 @@
+; Teste de nivel 2 do 7.3/7.4: processa uma fileira, suja a primeira mesa
+; (CLIVUS_SUJAR_AUTO) e manda recalcular as sujas (CLIVUS_RECALCULAR_AUTO). Le do
+; desenho, pelo XData:
+;   - o contorno com o MESMO GUID continua existindo, com suja=0;
+;   - a mesa tem 7 pilares, 28 modulos e 28 faces (nada em dobro, nada
+;     faltando) e as mesmas pecas vermelhas que tinha antes de ser suja
+;     (a pintura das analises; o vermelho da sujeira some);
+;   - o total de contornos nao mudou; CLIVUS_ESTADO conta 0 sujas.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area do recalcular")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento do recalcular")
+(command "CLIVUS_FILEIRA_AUTO")
+; Desde o 8.8 gerar nao poe cota; com cotas no desenho, a mesa recalculada
+; nasce com as dela.
+(command "CLIVUS_ALTURAS_REGERAR")
+(setvar "OSMODE" clivus:osmode)
+
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:tipo (xd) (cdr (nth 0 xd)))
+(defun clivus:vermelho (e) (if (or (= (cdr (assoc 420 (entget e))) 16711680) (= (cdr (assoc 62 (entget e))) 1)) 1 0))
+(defun clivus:mesa (xd) (cond ((= (clivus:tipo xd) "Mesa") (clivus:campo xd 0)) ((= (clivus:tipo xd) "Face") (clivus:campo xd 2)) (T (clivus:campo xd 1))))
+
+; LIMPA: as pecas vermelhas de cada mesa antes de sujar. Vermelho aqui e a
+; pintura das analises (modulo abaixo da faixa numa mesa marcada), que o
+; recalcular tem que devolver igual; o vermelho da sujeira tem que sumir.
+(setq clivus:tudo (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))) clivus:limpas nil clivus:i 0)
+(while (< clivus:i (if clivus:tudo (sslength clivus:tudo) 0))
+  (setq clivus:en (ssname clivus:tudo clivus:i) clivus:xd (clivus:xdata clivus:en))
+  (if (member (clivus:tipo clivus:xd) '("Mesa" "Pilar" "Modulo"))
+    (progn (setq clivus:g (clivus:mesa clivus:xd) clivus:par (assoc clivus:g clivus:limpas))
+           (if clivus:par
+             (setq clivus:limpas (subst (cons clivus:g (+ (cdr clivus:par) (clivus:vermelho clivus:en))) clivus:par clivus:limpas))
+             (setq clivus:limpas (cons (cons clivus:g (clivus:vermelho clivus:en)) clivus:limpas)))))
+  (setq clivus:i (1+ clivus:i)))
+
+(command "CLIVUS_SUJAR_AUTO")
+
+; ANTES: o GUID da mesa suja e a contagem de contornos.
+(setq clivus:tudo (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))))
+(setq clivus:n (if clivus:tudo (sslength clivus:tudo) 0))
+(setq clivus:guid nil clivus:antes 0 clivus:i 0)
+(while (< clivus:i clivus:n)
+  (setq clivus:xd (clivus:xdata (ssname clivus:tudo clivus:i)))
+  (if (= (clivus:tipo clivus:xd) "Mesa")
+    (progn (setq clivus:antes (1+ clivus:antes)) (if (= (clivus:campo clivus:xd 7) "1") (setq clivus:guid (clivus:campo clivus:xd 0)))))
+  (setq clivus:i (1+ clivus:i)))
+
+(command "CLIVUS_RECALCULAR_AUTO")
+(command "CLIVUS_ESTADO")
+
+; DEPOIS: a mesa do MESMO GUID, limpa, com 7 pilares, 28 modulos, 28 faces e nada vermelho.
+(setq clivus:tudo (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))))
+(setq clivus:n (if clivus:tudo (sslength clivus:tudo) 0))
+(setq clivus:contornos 0 clivus:cont 0 clivus:suja "-" clivus:pil 0 clivus:mod 0 clivus:fac 0 clivus:verm 0 clivus:notas 0 clivus:viradas 0 clivus:i 0)
+(while (< clivus:i clivus:n)
+  (setq clivus:en (ssname clivus:tudo clivus:i) clivus:xd (clivus:xdata clivus:en) clivus:t (clivus:tipo clivus:xd))
+  (if (= clivus:t "Mesa") (setq clivus:contornos (1+ clivus:contornos)))
+  (if (and clivus:guid (= (clivus:mesa clivus:xd) clivus:guid))
+    (cond ((= clivus:t "Mesa") (setq clivus:cont (1+ clivus:cont) clivus:suja (clivus:campo clivus:xd 7) clivus:verm (+ clivus:verm (clivus:vermelho clivus:en))))
+          ((= clivus:t "Pilar") (setq clivus:pil (1+ clivus:pil) clivus:verm (+ clivus:verm (clivus:vermelho clivus:en))))
+          ((= clivus:t "Modulo") (setq clivus:mod (1+ clivus:mod) clivus:verm (+ clivus:verm (clivus:vermelho clivus:en))))
+          ((= clivus:t "Face") (setq clivus:fac (1+ clivus:fac)))
+          ((= clivus:t "Nota")
+           (if (= (cdr (assoc 0 (entget clivus:en))) "MTEXT")
+             (progn (setq clivus:notas (1+ clivus:notas) clivus:rot (cdr (assoc 50 (entget clivus:en))))
+                    (if (or (> clivus:rot (+ (/ pi 2) 1e-6)) (<= clivus:rot (- (- (/ pi 2)) 1e-6))) (setq clivus:viradas (1+ clivus:viradas))))))))
+  (setq clivus:i (1+ clivus:i)))
+(princ (strcat "\nCLIVUS_RECALC_LISP antes=" (itoa clivus:antes) " contornos=" (itoa clivus:contornos) " guid=" (if clivus:guid clivus:guid "-")
+               " cont=" (itoa clivus:cont) " suja=" clivus:suja " pilares=" (itoa clivus:pil) " modulos=" (itoa clivus:mod) " faces=" (itoa clivus:fac) " vermelhas=" (itoa clivus:verm) " vermelhaslimpa=" (itoa (if (assoc clivus:guid clivus:limpas) (cdr (assoc clivus:guid clivus:limpas)) -1)) " notas=" (itoa clivus:notas) " viradas=" (itoa clivus:viradas)))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

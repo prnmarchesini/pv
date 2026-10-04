@@ -13,5 +13,5 @@ Usuário desenha em planta, dá nome, o plugin drapeja e confirma OK.
 **Validação do Renan:** orbita em 3D e vê a linha seguindo o terreno.
 
 ### 2.4 Reindexar
-Comando que varre o desenho, acha entidades com XData `MARCHENG_UFV` e reconstrói o dicionário central. Roda sozinho ao abrir quando achar entidade sem registro.
+Comando que varre o desenho, acha entidades com XData `CLIVUS` e reconstrói o dicionário central. Roda sozinho ao abrir quando achar entidade sem registro.
 **Validação do Renan:** copia uma área para outro desenho e vê ela reconhecida lá.
