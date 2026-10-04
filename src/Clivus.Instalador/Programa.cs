@@ -12,7 +12,7 @@ namespace Clivus.Instalador;
 /// <c>/desinstalar</c>, <c>/silencioso</c> (sem janela, o resultado no
 /// <c>/log=arquivo</c> e no código de saída), <c>/teste=pasta</c> (tudo dentro
 /// da pasta, sem tocar a instalação de verdade), <c>/ignorar-civil3d</c> (só
-/// com /teste). Códigos de saída: 0 ok, 2/3/4/6 os da regra de versão, 5
+/// com /teste), <c>/idioma=pt|en|es</c> (por cima do idioma do Windows). Códigos de saída: 0 ok, 2/3/4/6 os da regra de versão, 5
 /// AutoCAD aberto, 1 falha.
 /// </summary>
 internal static class Programa
@@ -22,6 +22,9 @@ internal static class Programa
     {
         string? Valor(string nome) => args.FirstOrDefault(a => a.StartsWith(nome + "=", StringComparison.OrdinalIgnoreCase))?[(nome.Length + 1)..].Trim('"');
         bool Tem(string nome) => args.Any(a => string.Equals(a, nome, StringComparison.OrdinalIgnoreCase));
+
+        // O idioma do Windows (10.6); /idioma=pt|en|es por cima, para os testes.
+        Tr.Current = Tr.Resolve(Valor("/idioma"), System.Globalization.CultureInfo.CurrentUICulture);
 
         var teste = Valor("/teste");
         var instalacao = new Instalacao(teste);

@@ -24,10 +24,11 @@ internal static class Licenciamento
     private static readonly HttpClient Cliente = new() { Timeout = TimeSpan.FromSeconds(20) };
 
     /// <summary>Comandos que rodam sem licença: ativar, sobre, olá e a migração do nome.</summary>
-    private static readonly HashSet<string> Livres = new(StringComparer.OrdinalIgnoreCase)
-    {
-        PluginInfo.ComandoAtivar, PluginInfo.ComandoAtivarAutomatico, PluginInfo.ComandoSobre, PluginInfo.ComandoOla, PluginInfo.ComandoMigrar,
-    };
+    // Os livres em todo idioma: o nome global e os traduzidos (10.5).
+    private static readonly HashSet<string> Livres = new(
+        new[] { PluginInfo.ComandoAtivar, PluginInfo.ComandoAtivarAutomatico, PluginInfo.ComandoSobre, PluginInfo.ComandoOla, PluginInfo.ComandoMigrar, PluginInfo.ComandoIdioma }
+            .SelectMany(CommandNames.AllNamesOf),
+        StringComparer.OrdinalIgnoreCase);
 
     private static bool _instalado;
     private static int _revalidando;
@@ -139,6 +140,7 @@ internal static class Licenciamento
         try
         {
             using var pedido = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent(corpo, Encoding.UTF8, "application/json") };
+            pedido.Headers.AcceptLanguage.ParseAdd(Tr.AcceptLanguage);
             using var resposta = Cliente.Send(pedido);
             using var leitor = new StreamReader(resposta.Content.ReadAsStream(), Encoding.UTF8);
             status = (int)resposta.StatusCode;

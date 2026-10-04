@@ -4131,6 +4131,54 @@ function Testar-Publicar3D {
 }
 
 <#
+    Os idiomas (etapa 10): o plugin aberto em ingles e em espanhol
+    (CLIVUS_IDIOMA_TESTE, so no build Debug) atende pelo nome traduzido do
+    comando e pelo global, e a mensagem sai no idioma, sem o portugues.
+#>
+function Testar-Idioma {
+    param([string] $Desenho)
+
+    $casos = @(
+        @{ Idioma = 'en'; Nome = 'CLIVUS_HELLO'; Esperado = "Clivus Solar loaded, version $versao" },
+        @{ Idioma = 'es'; Nome = 'CLIVUS_HOLA';  Esperado = "Clivus Solar cargado, versión $versao" }
+    )
+    $antes = $env:CLIVUS_IDIOMA_TESTE
+
+    try {
+        foreach ($caso in $casos) {
+            $env:CLIVUS_IDIOMA_TESTE = $caso.Idioma
+            $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo "clivus-idioma-$($caso.Idioma)" `
+                                    -Script (Join-Path $PSScriptRoot 'clivus-idioma.scr') -Substituicoes @{ '{{NOME}}' = $caso.Nome }
+
+            if ($r.Estourou -or $r.Codigo -ne 0 -or $r.Texto.IndexOf('CLIVUS_IDIOMA_FIM') -lt 0) {
+                $problemas.Add("clivus-idioma-$($caso.Idioma) terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+                return $false
+            }
+
+            $t = $r.Texto
+            $traduzido = $t.Substring($t.IndexOf('CLIVUS_IDIOMA_TRADUZIDO')); $traduzido = $traduzido.Substring(0, $traduzido.IndexOf('CLIVUS_IDIOMA_GLOBAL'))
+            $global = $t.Substring($t.IndexOf('CLIVUS_IDIOMA_GLOBAL')); $global = $global.Substring(0, $global.IndexOf('CLIVUS_IDIOMA_FIM'))
+
+            $erros = @()
+            if (-not $traduzido.Contains($caso.Esperado)) { $erros += "o nome $($caso.Nome) nao respondeu `"$($caso.Esperado)`"" }
+            if (-not $global.Contains($caso.Esperado)) { $erros += "CLIVUS_OLA nao respondeu no idioma" }
+            if ($t -match 'carregado, vers') { $erros += 'saiu mensagem em portugues' }
+
+            if ($erros.Count -gt 0) {
+                $problemas.Add("clivus-idioma-$($caso.Idioma): $($erros -join '; '). Veja $($r.Saida)")
+                return $false
+            }
+        }
+
+        Write-Host '  (idiomas: ingles e espanhol pelo nome traduzido e pelo global)' -ForegroundColor DarkGray
+        return $true
+    }
+    finally {
+        $env:CLIVUS_IDIOMA_TESTE = $antes
+    }
+}
+
+<#
     A ativacao (plano/contrato-ativacao.md), com o servidor falso assinando
     licencas por uma chave gerada na hora. So o build Debug aceita a chave de
     teste pela variavel (o bundle instalado e Release). Sem licenca o comando
@@ -4430,6 +4478,10 @@ else {
     # Ativacao com licenca assinada, num servidor falso local.
     $total++
     if (Testar-Ativar -Desenho $desenhos[0]) { $passaram++ }
+
+    # Os idiomas: ingles e espanhol (etapa 10).
+    $total++
+    if (Testar-Idioma -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

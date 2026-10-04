@@ -49,6 +49,8 @@ internal static class Publicador3D
 
             using var pedido = new HttpRequestMessage(HttpMethod.Post, endereco + "/api/v1/cenas") { Content = conteudo };
             if (Chave is { } chave) pedido.Headers.Authorization = new AuthenticationHeaderValue("Bearer", chave);
+            // O erro do servidor volta no idioma da tela (etapa 10).
+            pedido.Headers.AcceptLanguage.ParseAdd(Tr.AcceptLanguage);
 
             using var resposta = Cliente.Send(pedido);
             using var leitor = new StreamReader(resposta.Content.ReadAsStream(), Encoding.UTF8);

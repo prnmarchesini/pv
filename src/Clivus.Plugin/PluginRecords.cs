@@ -68,7 +68,7 @@ internal static class PluginRecords
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar($"Não consegui ler o registro {oQueE} do desenho.", erro);
-            return new RecordTableResult<T>([], Tr.F("o registro {0} está ilegível", oQueE));
+            return new RecordTableResult<T>([], Tr.F("o registro {0} está ilegível", Tr.T(oQueE)));
         }
     }
 }

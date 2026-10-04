@@ -103,3 +103,11 @@ Erros: `400` (JSON fora do contrato, com `{"erro": "..."}` em português),
 
 Cores do Clivus: azul-petróleo `#0F2533`, âmbar `#F4A51C`, branco. A página
 do servidor usa as mesmas da página local.
+
+## Idioma
+
+A mensagem de `{"erro": ...}` de `POST /api/v1/cenas` e `GET /api/v1/cenas/{id}`
+segue o `Accept-Language` do pedido: `pt*` → português, `es*` → espanhol,
+outro → inglês. Sem o cabeçalho, português, com o mesmo texto de antes (o
+plugin antigo não muda nada). Status, rotas e campos não mudam com o idioma.
+O plugin manda `Accept-Language: pt-BR`, `en` ou `es` conforme o idioma dele.

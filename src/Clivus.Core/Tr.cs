@@ -143,6 +143,17 @@ public static class Tr
         };
     }
 
+    /// <summary>
+    /// O cabeçalho Accept-Language dos pedidos ao servidor: o erro da API
+    /// volta no idioma da tela (contratos, seção "Idioma").
+    /// </summary>
+    public static string AcceptLanguage => Current switch
+    {
+        UiLanguage.English => "en",
+        UiLanguage.Spanish => "es",
+        _ => "pt-BR",
+    };
+
     /// <summary>O código curto do idioma ("pt", "en", "es").</summary>
     public static string Code(UiLanguage idioma) => idioma switch
     {

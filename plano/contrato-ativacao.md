@@ -88,3 +88,11 @@ máquina deixa de revalidar.
 Formato livre para o servidor; o plugin só aceita letras, números e hífen e
 manda em maiúsculas. Sugestão legível: `CLV-XXXX-XXXX-XXXX` sem letras
 ambíguas (0/O, 1/I).
+
+## Idioma
+
+A mensagem de `{"erro": ...}` de `/api/v1/licencas/ativar` e `/revalidar`
+segue o `Accept-Language` do pedido: `pt*` → português, `es*` → espanhol,
+outro → inglês. Sem o cabeçalho, português, com o mesmo texto de antes (o
+plugin antigo não muda nada). Status, campos e o formato da licença não mudam
+com o idioma. O plugin manda `Accept-Language: pt-BR`, `en` ou `es`.

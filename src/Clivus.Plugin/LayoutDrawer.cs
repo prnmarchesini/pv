@@ -408,7 +408,7 @@ internal static class LayoutDrawer
         }
 
         private static string NomeDaCor(RgbColor cor) =>
-            PaletaDeCores.Cores.FirstOrDefault(c => c.Cor == cor).Nome ?? cor.ToHex();
+            PaletaDeCores.Cores.FirstOrDefault(c => c.Cor == cor).Nome is { } nome ? Tr.T(nome) : cor.ToHex();
 
         internal static TiposDeMesa? DaMesa(Database database, string? nome, TableGeometry geometria, SolarModule modulo) =>
             DrawingTables.Find(MesasDoDesenho.Ler(database), nome) is { } registro

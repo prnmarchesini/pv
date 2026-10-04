@@ -31,7 +31,7 @@ internal static class AlignmentStore
     /// <summary>GUID, nome, lado, handle e data.</summary>
     private const int CamposPorAlinhamento = 5;
 
-    private const string OQueE = "de alinhamentos";
+    private static readonly string OQueE = Tr.N("de alinhamentos");
 
     /// <summary>Os alinhamentos registrados, na ordem em que foram gravados.</summary>
     internal static IReadOnlyList<AlignmentRecord> Load(Database database) => Ler(database).Items;

@@ -4,7 +4,9 @@ namespace Clivus.Core;
 /// Os nomes digitáveis dos comandos em inglês e espanhol (etapa 10, 10.5;
 /// Renan: "Se possível, comandos CAD também"). O nome global (português,
 /// <c>CLIVUS_*</c>) não muda e vale sempre: é o que os botões, os scripts e os
-/// testes usam. O plugin registra, além dele, o nome do idioma atual.
+/// testes usam. Os nomes em inglês e espanhol valem sempre, em qualquer
+/// idioma da tela: são declarados em <c>ComandosTraduzidos.cs</c>, gerado por
+/// <c>tools/gerar-comandos-traduzidos.py</c> a partir desta tabela.
 /// Comandos de teste (<c>_AUTO</c>) não ganham nome traduzido.
 /// </summary>
 public static class CommandNames
@@ -102,6 +104,19 @@ public static class CommandNames
         ["CLIVUS_USINA"] = ("CLIVUS_PLANT", "CLIVUS_PLANTA"),
         ["CLIVUS_VALIDAR"] = ("CLIVUS_VALIDATE", "CLIVUS_VALIDAR"),
     };
+
+    /// <summary>
+    /// Todos os nomes de um comando: o global e os traduzidos. A trava da
+    /// licença usa para deixar passar, em qualquer idioma, os comandos livres
+    /// (sem isso, CLIVUS_ACTIVATE seria barrado sem licença).
+    /// </summary>
+    public static IEnumerable<string> AllNamesOf(string global)
+    {
+        yield return global;
+        if (!Table.TryGetValue(global, out var nomes)) yield break;
+        yield return nomes.En;
+        yield return nomes.Es;
+    }
 
     /// <summary>O nome no idioma, ou null quando é igual ao global (nada a registrar).</summary>
     public static string? LocalName(string global, UiLanguage idioma)

@@ -121,4 +121,15 @@ public class TrTests
     [InlineData("XYZ", UiLanguage.Portuguese)]
     public void OLocaleDoCivil3DEscolheOIdiomaNoAutomatico(string locale, UiLanguage esperado) =>
         Assert.Equal(esperado, Tr.Resolve("auto", UserPreferences.CultureOfAutoCadLocale(locale)));
+
+    [Theory]
+    [Trait("Etapa", "10")]
+    [InlineData(UiLanguage.Portuguese, "pt-BR")]
+    [InlineData(UiLanguage.English, "en")]
+    [InlineData(UiLanguage.Spanish, "es")]
+    public void OPedidoAoServidorLevaOIdiomaDaTela(UiLanguage idioma, string esperado)
+    {
+        using var _ = Tr.Use(idioma);
+        Assert.Equal(esperado, Tr.AcceptLanguage);
+    }
 }

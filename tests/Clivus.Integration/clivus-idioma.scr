@@ -1,0 +1,16 @@
+; Teste de nivel 2 dos idiomas (etapa 10): o plugin abre no idioma pedido
+; (CLIVUS_IDIOMA_TESTE, so no build Debug), o comando atende pelo nome
+; traduzido ({{NOME}}: CLIVUS_HELLO, CLIVUS_HOLA) e pelo global (CLIVUS_OLA),
+; e a mensagem sai no idioma.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(princ "\nCLIVUS_IDIOMA_TRADUZIDO")
+(command "{{NOME}}")
+(princ "\nCLIVUS_IDIOMA_GLOBAL")
+(command "CLIVUS_OLA")
+(princ "\nCLIVUS_IDIOMA_FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

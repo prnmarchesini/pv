@@ -69,6 +69,8 @@ public class NumberInputTests
     [InlineData("1500", 1500)]
     [InlineData("1.500,5", 1500.5)]
     [InlineData("720,5", 720.5)]
+    [InlineData("545.5", 545.5)]
+    [InlineData("545.55", 545.55)]
     public void NaPotenciaOPontoEMilhar(string texto, double esperado)
     {
         Assert.True(NumberInput.TryParseLarge(texto, out var valor));

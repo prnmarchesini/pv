@@ -57,4 +57,47 @@ public class CommandNamesTests
         Assert.Null(CommandNames.LocalName("CLIVUS_EXCEL", UiLanguage.English));
         Assert.Null(CommandNames.LocalName("CLIVUS_QUE_NAO_EXISTE", UiLanguage.English));
     }
+
+    [Fact]
+    [Trait("Etapa", "10")]
+    public void TodosOsNomesDoComandoIncluemOGlobalEOsTraduzidos()
+    {
+        Assert.Equal(["CLIVUS_ATIVAR", "CLIVUS_ACTIVATE", "CLIVUS_ACTIVAR"], CommandNames.AllNamesOf(PluginInfo.ComandoAtivar));
+        Assert.Equal(["CLIVUS_ATIVAR_AUTO"], CommandNames.AllNamesOf(PluginInfo.ComandoAtivarAutomatico));
+    }
+
+    /// <summary>Inglês e espanhol valem ao mesmo tempo: nenhum nome pode servir a dois comandos.</summary>
+    [Fact]
+    [Trait("Etapa", "10")]
+    public void EntreOsDoisIdiomasNenhumNomeServeADoisComandos()
+    {
+        var dono = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var conflitos = new List<string>();
+
+        foreach (var global in CommandNames.Table.Keys)
+            foreach (var nome in CommandNames.AllNamesOf(global))
+                if (dono.TryGetValue(nome, out var outro) && outro != global) conflitos.Add($"{nome}: {outro} e {global}");
+                else dono[nome] = global;
+
+        Assert.True(conflitos.Count == 0, string.Join("; ", conflitos));
+    }
+
+    /// <summary>O arquivo gerado (ComandosTraduzidos.cs) está em dia com a tabela.</summary>
+    [Fact]
+    [Trait("Etapa", "10")]
+    public void OsComandosTraduzidosGeradosEstaoEmDia()
+    {
+        var gerado = File.ReadAllText(Path.Combine(Repositorio.Raiz, "src", "Clivus.Plugin", "ComandosTraduzidos.cs"));
+        var declarados = System.Text.RegularExpressions.Regex.Matches(gerado, @"\[CommandMethod\(""(CLIVUS_\w+)""")
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet();
+
+        var esperados = CommandNames.Table
+            .SelectMany(par => new[] { par.Value.En, par.Value.Es }.Where(n => n != par.Key))
+            .ToHashSet();
+
+        Assert.True(esperados.SetEquals(declarados),
+            "ComandosTraduzidos.cs desatualizado (python tools/gerar-comandos-traduzidos.py). Faltam: "
+            + string.Join(", ", esperados.Except(declarados)) + "; sobram: " + string.Join(", ", declarados.Except(esperados)));
+    }
 }

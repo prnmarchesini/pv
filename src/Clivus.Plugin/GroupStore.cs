@@ -12,7 +12,7 @@ internal static class GroupStore
 {
     private const string Chave = "GRUPOS";
     private const int VersaoDoFormato = 1;
-    private const string OQueE = "de grupos";
+    private static readonly string OQueE = Tr.N("de grupos");
 
     internal static RecordTableResult<TableGroup> Ler(Database database) =>
         PluginRecords.Load<TableGroup>(database, Chave, VersaoDoFormato, TableGroup.FieldCount, TableGroup.Parse, OQueE);

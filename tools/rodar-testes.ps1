@@ -317,10 +317,15 @@ if (-not $PSBoundParameters.ContainsKey('Etapa')) {
 
             $desinstalador = Join-Path $pastaDoTeste 'dados\desinstalar.exe'
             if (Test-Path $desinstalador) {
-                $desinstalar = Start-Process -FilePath $desinstalador -ArgumentList '/desinstalar', '/silencioso', "/teste=$pastaDoTeste", "/log=$pastaDoTeste\desinstalar.log" -Wait -PassThru
+                $desinstalar = Start-Process -FilePath $desinstalador -ArgumentList '/desinstalar', '/silencioso', "/teste=$pastaDoTeste", "/log=$pastaDoTeste\desinstalar.log", '/idioma=es' -Wait -PassThru
                 if ($desinstalar.ExitCode -ne 0) { $falhasDoInstalador += "desinstalar devolveu $($desinstalar.ExitCode)" }
                 if (Test-Path $bundleInstalado) { $falhasDoInstalador += 'o bundle ficou depois de desinstalar' }
                 if (Test-Path $entrada) { $falhasDoInstalador += 'a entrada do registro ficou depois de desinstalar' }
+                # Etapa 10: a desinstalacao rodou em espanhol (/idioma=es).
+                $logDaDesinstalacao = Join-Path $pastaDoTeste 'desinstalar.log'
+                if (-not (Test-Path $logDaDesinstalacao) -or (Get-Content $logDaDesinstalacao -Raw -Encoding UTF8) -notmatch 'La licencia y los perfiles') {
+                    $falhasDoInstalador += 'a desinstalacao com /idioma=es nao respondeu em espanhol'
+                }
             }
             else {
                 $falhasDoInstalador += 'o desinstalador nao foi copiado'

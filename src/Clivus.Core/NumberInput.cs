@@ -66,9 +66,22 @@ public static class NumberInput
     ///
     /// Aqui "1.500" é mil e quinhentos, que é o que qualquer projetista quer
     /// dizer ao digitar isso num campo de watt.
+    /// <para>
+    /// Em inglês (etapa 10) a janela mostra "545.5": um ponto só, sem vírgula,
+    /// com um ou dois algarismos depois, não é milhar (milhar tem três), e vale
+    /// como decimal. "1.500" continua mil e quinhentos.
+    /// </para>
     /// </summary>
-    public static bool TryParseLarge(string? texto, out double valor) =>
-        Ler(SemMilhar(texto?.Trim() ?? string.Empty), out valor);
+    public static bool TryParseLarge(string? texto, out double valor)
+    {
+        var limpo = texto?.Trim() ?? string.Empty;
+
+        if (DecimalComPonto.IsMatch(limpo)) return Ler(limpo.Replace('.', ','), out valor);
+
+        return Ler(SemMilhar(limpo), out valor);
+    }
+
+    private static readonly Regex DecimalComPonto = new(@"^[+-]?\d+\.\d{1,2}$", RegexOptions.CultureInvariant);
 
     /// <summary>
     /// Lê uma contagem inteira, com a mesma regra de <see cref="TryParseLarge"/>.
