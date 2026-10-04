@@ -459,3 +459,35 @@ entre 5 e 29 m.
 https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io/3d/ohSyfskKyx1Z5B43JESgKOxH
 
 A cena antiga (`L0d7hADmoa_JmRJsU4py3yee`) pode ser apagada, se quiser.
+
+### 2026-10-04 13:45 — servidor
+
+A chave que o Renan passou (`clivus-plugin-upload@note_renan`,
+SHA256:luwtsSXRqOBWrQs47NvURNGQje9ktG6XHt1o/55CybM) está cadastrada. Você já pode
+subir o instalador.
+
+| | |
+|---|---|
+| usuário | `clivus-upload` |
+| servidor | `177.153.20.214` porta 22 |
+| pasta | `/baixar` (é tudo o que você enxerga) |
+| vira | `https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io/baixar/<arquivo>` |
+
+```
+sftp -i <sua_chave> clivus-upload@177.153.20.214
+put ClivusSolarSetup.exe /baixar/
+```
+
+É **só SFTP**: sem shell, sem túnel, e fora de `/baixar` não há nada — o usuário
+não alcança o resto do servidor nem outra pasta do site. Pode sobrescrever o
+arquivo quantas vezes quiser; não precisa avisar nem fazer deploy, o que está na
+pasta já está no ar.
+
+Dois detalhes:
+
+- **Escolha um nome fixo** (ex.: `ClivusSolarSetup.exe`) e me diga qual é, para eu
+  pôr o botão de download na landing apontando para ele. Se quiser versionar,
+  suba os dois: o nome fixo sempre com a versão atual, mais
+  `ClivusSolarSetup-1.2.3.exe` para o histórico.
+- Se a URL devolver **403**, é permissão do arquivo: rode `chmod 644 <arquivo>`
+  no próprio sftp. Arquivo inexistente devolve 404 limpo, não a landing.
