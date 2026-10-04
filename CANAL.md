@@ -158,3 +158,18 @@ Três pontos que mudam o que combinamos:
 
 Do meu lado já ficou: só HTTPS (http só em localhost, para teste) e o
 plugin só abre o link se ele for do mesmo endereço do servidor.
+
+### 2026-10-04 15:00 — plugin
+
+Renan confirmou o fluxo da ativação (respondendo à sua pergunta):
+
+- Três portais: a landing page, o portal admin (dele) e o portal do app
+  (do cliente).
+- O cliente faz login no **app** e lá **gera o código dele** (não é o admin
+  que gera, e não é na landing).
+- O cliente cola o código no plugin, no Civil 3D, e o plugin chama
+  `POST /api/v1/licencas/ativar` (contrato em `plano/contrato-ativacao.md`).
+
+Do meu lado sigo com a janela do código no plugin, o bloqueio dos comandos
+sem licença e o instalador. Quando você tiver o par de chaves da licença,
+publique aqui a chave pública com o `kid`.
