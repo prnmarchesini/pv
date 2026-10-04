@@ -31,31 +31,31 @@ public static class RecontarCommands
             var removidas = RemovalStore.Ler(documento.Database);
             var linhas = censo.Lines();
 
-            editor.WriteMessage($"\nRECONTAR {linhas[0]}\n");
+            editor.WriteMessage(Tr.F("\nRECONTAR {0}\n", linhas[0]));
             foreach (var linha in linhas.Skip(1)) editor.WriteMessage($"  {linha}\n");
 
             editor.WriteMessage($"  RECONTAR_TOTAIS mesas={censo.Tables} modulos={censo.Modules} pilares={censo.Pillars} orfas={censo.Orphans}\n");
 
             if (removidas.Items.Count > 0)
             {
-                editor.WriteMessage($"  {removidas.Items.Count} removida(s) desde a última recontagem: {string.Join(", ", removidas.Items.Select(r => r.Label))}. Registro limpo.\n");
+                editor.WriteMessage(Tr.F("  {0} removida(s) desde a última recontagem: {1}. Registro limpo.\n", removidas.Items.Count, string.Join(", ", removidas.Items.Select(r => r.Label))));
                 RemovalStore.Save(documento.Database, []);
             }
             else if (removidas.Problem is not null)
             {
                 // Registro ilegível e vazio: descartado, senão o aviso repete para sempre.
-                editor.WriteMessage($"  ATENÇÃO: {removidas.Problem}; registro descartado.\n");
+                editor.WriteMessage(Tr.F("  ATENÇÃO: {0}; registro descartado.\n", removidas.Problem));
                 RemovalStore.Save(documento.Database, []);
             }
             else
             {
-                editor.WriteMessage("  nenhuma removida desde a última recontagem.\n");
+                editor.WriteMessage(Tr.T("  nenhuma removida desde a última recontagem.\n"));
             }
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao recontar.", erro);
-            editor.WriteMessage($"\nNão consegui recontar: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui recontar: {0}\n", erro.Message));
         }
     }
 

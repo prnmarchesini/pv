@@ -23,8 +23,6 @@ namespace Clivus.Core;
 /// </summary>
 public sealed record PillarTable
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>
     /// Um milímetro. Diferença menor que isso entre a soma e o comprimento é
     /// arredondamento de quem digitou, não erro de projeto — e é a mesma
@@ -83,12 +81,12 @@ public sealed record PillarTable
         get
         {
             if (!double.IsFinite(Cantilever) || Cantilever < 0)
-                return "o balanço das pontas não é uma distância válida";
+                return Tr.T("o balanço das pontas não é uma distância válida");
 
             if (Cantilever > MaiorVao)
-                return $"o balanço tem {Texto(Cantilever)} m, mais que os {MaiorVao:0} m possíveis";
+                return Tr.F("o balanço tem {0} m, mais que os {1:0} m possíveis", Texto(Cantilever), MaiorVao);
 
-            if (_vaos.Length == 0) return "a tabela precisa de pelo menos um vão";
+            if (_vaos.Length == 0) return Tr.T("a tabela precisa de pelo menos um vão");
 
             for (var i = 0; i < _vaos.Length; i++)
             {
@@ -98,10 +96,10 @@ public sealed record PillarTable
                 // trás. Os dois passariam pela soma, se ela fosse a única
                 // conferência.
                 if (!double.IsFinite(vao) || vao <= 0)
-                    return $"o vão {i + 1} não é uma distância válida";
+                    return Tr.F("o vão {0} não é uma distância válida", i + 1);
 
                 if (vao > MaiorVao)
-                    return $"o vão {i + 1} tem {Texto(vao)} m, mais que os {MaiorVao:0} m possíveis";
+                    return Tr.F("o vão {0} tem {1} m, mais que os {2:0} m possíveis", i + 1, Texto(vao), MaiorVao);
             }
 
             return null;
@@ -186,17 +184,16 @@ public sealed record PillarTable
         if (WhyInvalid is { } motivo) return motivo;
 
         if (!double.IsFinite(comprimento) || comprimento <= 0)
-            return "o comprimento da mesa não é uma medida válida";
+            return Tr.T("o comprimento da mesa não é uma medida válida");
 
         var total = TotalLength;
         var diferenca = total - comprimento;
 
         if (Math.Abs(diferenca) <= Tolerancia) return null;
 
-        var sinal = diferenca > 0 ? "sobra" : "falta";
-
-        return $"a tabela de pilares não fecha com a mesa: ela cobre {Texto(total)} m "
-            + $"e a mesa tem {Texto(comprimento)} m ({sinal} {Texto(Math.Abs(diferenca))} m)";
+        return diferenca > 0
+            ? Tr.F("a tabela de pilares não fecha com a mesa: ela cobre {0} m e a mesa tem {1} m (sobra {2} m)", Texto(total), Texto(comprimento), Texto(Math.Abs(diferenca)))
+            : Tr.F("a tabela de pilares não fecha com a mesa: ela cobre {0} m e a mesa tem {1} m (falta {2} m)", Texto(total), Texto(comprimento), Texto(Math.Abs(diferenca)));
     }
 
     /// <summary>
@@ -224,21 +221,20 @@ public sealed record PillarTable
     {
         if (!double.IsFinite(comprimento) || comprimento <= 0)
             throw new ArgumentOutOfRangeException(nameof(comprimento), comprimento,
-                "O comprimento da mesa precisa ser positivo.");
+                Tr.T("O comprimento da mesa precisa ser positivo."));
 
         if (!double.IsFinite(alvo) || alvo <= 0)
             throw new ArgumentOutOfRangeException(nameof(alvo), alvo,
-                "O vão pretendido precisa ser positivo.");
+                Tr.T("O vão pretendido precisa ser positivo."));
 
         if (!double.IsFinite(balanco) || balanco < 0)
             throw new ArgumentOutOfRangeException(nameof(balanco), balanco,
-                "O balanço não pode ser negativo.");
+                Tr.T("O balanço não pode ser negativo."));
 
         if (2 * balanco >= comprimento)
         {
             throw new ArgumentOutOfRangeException(nameof(balanco), balanco,
-                $"Os dois balanços somam {Texto(2 * balanco)} m numa mesa de "
-                + $"{Texto(comprimento)} m: não sobra estrutura entre os pilares das pontas.");
+                Tr.F("Os dois balanços somam {0} m numa mesa de {1} m: não sobra estrutura entre os pilares das pontas.", Texto(2 * balanco), Texto(comprimento)));
         }
 
         // O que os vãos iguais cobrem é o miolo, do primeiro ao último pilar —
@@ -253,8 +249,7 @@ public sealed record PillarTable
             // Antes do cast para int, que satura em silêncio e devolveria uma
             // tabela sem relação nenhuma com o que foi pedido.
             throw new ArgumentOutOfRangeException(nameof(comprimento), comprimento,
-                $"Uma mesa de {Texto(comprimento)} m com vão de {Texto(alvo)} m passaria dos "
-                + $"{MaiorQuantidadeDeVaos} vãos que uma tabela comporta.");
+                Tr.F("Uma mesa de {0} m com vão de {1} m passaria dos {2} vãos que uma tabela comporta.", Texto(comprimento), Texto(alvo), MaiorQuantidadeDeVaos));
         }
 
         // Pelo menos um vão: uma mesa mais curta que o alvo ainda precisa de
@@ -274,16 +269,13 @@ public sealed record PillarTable
     /// <summary>A linha que descreve a tabela para o usuário.</summary>
     public string Describe()
     {
-        if (WhyInvalid is { } motivo) return $"Tabela de pilares inválida: {motivo}.";
+        if (WhyInvalid is { } motivo) return Tr.F("Tabela de pilares inválida: {0}.", motivo);
 
         var vaos = string.Join(" + ", _vaos.Select(Texto));
 
-        var balanco = Cantilever > 0
-            ? $", com balanço de {Texto(Cantilever)} m em cada ponta"
-            : ", com o pilar na ponta da estrutura";
-
-        return $"{_vaos.Length + 1} pilares em {_vaos.Length} vão(s): {vaos} = "
-            + $"{Texto(TotalSpan)} m{balanco}";
+        return Cantilever > 0
+            ? Tr.F("{0} pilares em {1} vão(s): {2} = {3} m, com balanço de {4} m em cada ponta", _vaos.Length + 1, _vaos.Length, vaos, Texto(TotalSpan), Texto(Cantilever))
+            : Tr.F("{0} pilares em {1} vão(s): {2} = {3} m, com o pilar na ponta da estrutura", _vaos.Length + 1, _vaos.Length, vaos, Texto(TotalSpan));
     }
 
     /// <summary>
@@ -323,13 +315,13 @@ public sealed record PillarTable
         return true;
     }
 
-    private static string Texto(double valor) => valor.ToString("0.###", Brasil);
+    private static string Texto(double valor) => valor.ToString("0.###", Tr.Culture);
 
     private void Conferir()
     {
         if (WhyInvalid is { } motivo)
         {
-            throw new InvalidOperationException($"A tabela de pilares não serve: {motivo}.");
+            throw new InvalidOperationException(Tr.F("A tabela de pilares não serve: {0}.", motivo));
         }
     }
 }

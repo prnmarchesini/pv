@@ -235,7 +235,7 @@ public static class Viewer3DPage
                 return (new PublishedScene(id.GetString()!, endereco.ToString(), expira), null);
             }
 
-            return (null, "o servidor respondeu sem o link da página 3D");
+            return (null, Tr.T("o servidor respondeu sem o link da página 3D"));
         }
 
         if (temJson && raiz.TryGetProperty("erro", out var erro) && erro.ValueKind == System.Text.Json.JsonValueKind.String)
@@ -243,9 +243,9 @@ public static class Viewer3DPage
 
         return (null, status switch
         {
-            401 or 403 => "a chave do servidor não foi aceita (confira CLIVUS_SERVIDOR_CHAVE)",
-            413 => "a usina é grande demais para o servidor",
-            _ => $"o servidor respondeu {status}",
+            401 or 403 => Tr.T("a chave do servidor não foi aceita (confira CLIVUS_SERVIDOR_CHAVE)"),
+            413 => Tr.T("a usina é grande demais para o servidor"),
+            _ => Tr.F("o servidor respondeu {0}", status),
         });
     }
 
@@ -255,10 +255,10 @@ public static class Viewer3DPage
     /// </summary>
     public static string? WhyServerUnsafe(string? endereco)
     {
-        if (!Uri.TryCreate(endereco, UriKind.Absolute, out var uri)) return "o endereço do servidor não é um endereço web";
+        if (!Uri.TryCreate(endereco, UriKind.Absolute, out var uri)) return Tr.T("o endereço do servidor não é um endereço web");
         if (uri.Scheme == Uri.UriSchemeHttps) return null;
         if (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback) return null;
-        return "o servidor precisa ser HTTPS (http só em localhost, para teste)";
+        return Tr.T("o servidor precisa ser HTTPS (http só em localhost, para teste)");
     }
 
     /// <summary>
@@ -284,7 +284,20 @@ public static class Viewer3DPage
 
         // O título por último: um nome de desenho com "{{ORBITA}}" não pode
         // virar o lugar onde o script entra.
+        static string H(string texto) => System.Net.WebUtility.HtmlEncode(texto);
+
         return Modelo
+            .Replace("{{LANG}}", Tr.Culture.Name, StringComparison.Ordinal)
+            .Replace("{{TXT_TERRENO}}", H(Tr.T("Terreno")), StringComparison.Ordinal)
+            .Replace("{{TXT_MESAS}}", H(Tr.T("Mesas")), StringComparison.Ordinal)
+            .Replace("{{TXT_PILARES}}", H(Tr.T("Pilares")), StringComparison.Ordinal)
+            .Replace("{{TXT_ARVORES}}", H(Tr.T("Árvores")), StringComparison.Ordinal)
+            .Replace("{{TXT_SOMBRAS}}", H(Tr.T("Sombras")), StringComparison.Ordinal)
+            .Replace("{{TXT_EXAGERO}}", H(Tr.T("Exagero vertical")), StringComparison.Ordinal)
+            .Replace("{{TXT_ENQUADRAR}}", H(Tr.T("Enquadrar")), StringComparison.Ordinal)
+            .Replace("{{TXT_DICA}}", H(Tr.T("Botão esquerdo gira, o direito arrasta, a roda dá zoom.")), StringComparison.Ordinal)
+            .Replace("{{TXT_RESUMO}}", Texto(Tr.T("{0} módulos, {1} pilares, {2} árvore(s)")), StringComparison.Ordinal)
+            .Replace("{{TXT_RESUMO_SOMBRAS}}", Texto(Tr.T(", {0} contorno(s) de sombra")), StringComparison.Ordinal)
             .Replace("{{THREE}}", three, StringComparison.Ordinal)
             .Replace("{{ORBITA}}", orbita, StringComparison.Ordinal)
             .Replace("{{CENA}}", Json(scene).Replace("</", "<\\/", StringComparison.Ordinal), StringComparison.Ordinal)
@@ -328,7 +341,7 @@ public static class Viewer3DPage
     /// </summary>
     private const string Modelo = """
 <!doctype html>
-<html lang="pt-BR">
+<html lang="{{LANG}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -347,16 +360,16 @@ public static class Viewer3DPage
 <div id="painel">
   <h1>{{TITULO}}</h1>
   <div>
-    <label><input type="checkbox" id="vTerreno" checked> Terreno</label>
-    <label><input type="checkbox" id="vMesas" checked> Mesas</label>
-    <label><input type="checkbox" id="vPilares" checked> Pilares</label>
-    <label><input type="checkbox" id="vArvores" checked> Árvores</label>
-    <label><input type="checkbox" id="vSombras" checked> Sombras</label>
+    <label><input type="checkbox" id="vTerreno" checked> {{TXT_TERRENO}}</label>
+    <label><input type="checkbox" id="vMesas" checked> {{TXT_MESAS}}</label>
+    <label><input type="checkbox" id="vPilares" checked> {{TXT_PILARES}}</label>
+    <label><input type="checkbox" id="vArvores" checked> {{TXT_ARVORES}}</label>
+    <label><input type="checkbox" id="vSombras" checked> {{TXT_SOMBRAS}}</label>
   </div>
-  <div>Exagero vertical <select id="exagero"><option value="1">1×</option><option value="2">2×</option><option value="3">3×</option><option value="5">5×</option></select>
-    <button id="enquadrar">Enquadrar</button></div>
+  <div>{{TXT_EXAGERO}} <select id="exagero"><option value="1">1×</option><option value="2">2×</option><option value="3">3×</option><option value="5">5×</option></select>
+    <button id="enquadrar">{{TXT_ENQUADRAR}}</button></div>
   <div class="dica" id="resumo"></div>
-  <div class="dica">Botão esquerdo gira, o direito arrasta, a roda dá zoom.</div>
+  <div class="dica">{{TXT_DICA}}</div>
 </div>
 <script>{{THREE}}</script>
 <script>{{ORBITA}}</script>
@@ -478,8 +491,9 @@ for (const [id, nome] of [['vTerreno', 'terreno'], ['vMesas', 'mesas'], ['vPilar
 }
 document.getElementById('exagero').onchange = e => { mundo.scale.set(1, Number(e.target.value), 1); enquadrar(); };
 document.getElementById('enquadrar').onclick = enquadrar;
+const preencher = (modelo, ...valores) => modelo.replace(/\{(\d)\}/g, (_, i) => valores[Number(i)]);
 document.getElementById('resumo').textContent =
-  `${D.faces.length} módulos, ${D.pilares.length} pilares, ${D.arvores.length} árvore(s)` + (D.sombras.length ? `, ${D.sombras.length} contorno(s) de sombra` : '') + '.';
+  preencher({{TXT_RESUMO}}, D.faces.length, D.pilares.length, D.arvores.length) + (D.sombras.length ? preencher({{TXT_RESUMO_SOMBRAS}}, D.sombras.length) : '') + '.';
 
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); render.setSize(innerWidth, innerHeight); });
 enquadrar();

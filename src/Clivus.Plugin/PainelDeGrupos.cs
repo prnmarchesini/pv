@@ -35,14 +35,14 @@ internal static class PainelDeGrupos
             AcadApp.DocumentManager.DocumentActivated += _aoAtivar;
             AcadApp.DocumentManager.DocumentToBeDestroyed += _aoDestruir;
 
-            _paleta = new PaletteSet("Clivus Solar: grupos", new Guid("6B4D2E0A-6E7C-4B5B-9C3B-2F0A7D9E1C21"))
+            _paleta = new PaletteSet(Tr.T("Clivus Solar: grupos"), new Guid("6B4D2E0A-6E7C-4B5B-9C3B-2F0A7D9E1C21"))
             {
                 Style = PaletteSetStyles.ShowPropertiesMenu | PaletteSetStyles.ShowAutoHideButton | PaletteSetStyles.ShowCloseButton,
                 MinimumSize = new System.Drawing.Size(360, 240),
             };
 
             if (AparenciaDasJanelas.IconeDoWindows() is { } icone) _paleta.Icon = icone;
-            _paleta.AddVisual("Grupos", Montar());
+            _paleta.AddVisual(Tr.T("Grupos"), Montar());
         }
 
         _paleta.Visible = true;
@@ -93,7 +93,7 @@ internal static class PainelDeGrupos
         if (_lista is null || _rodape is null) return;
 
         _lista.ItemsSource = null;
-        _rodape.Text = "Nenhum desenho aberto.";
+        _rodape.Text = Tr.T("Nenhum desenho aberto.");
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -107,12 +107,12 @@ internal static class PainelDeGrupos
 
         _lista.ItemsSource = resumos.Select(r => new Linha(
             r.Group.Number, r.Group.Name, r.Census.Tables, r.Census.Modules, r.Census.Pillars,
-            r.Census.PowerKwp.ToString("0.#", System.Globalization.CultureInfo.GetCultureInfo("pt-BR")),
+            r.Census.PowerKwp.ToString("0.#", Tr.Culture),
             r.Census.Dirty, r.MissingTables)).ToList();
 
         _rodape.Text = resumos.Count == 0
-            ? "Nenhum grupo. Selecione mesas e clique em Criar grupo."
-            : $"{resumos.Count} grupo(s). Escolha um e use os botões.";
+            ? Tr.T("Nenhum grupo. Selecione mesas e clique em Criar grupo.")
+            : Tr.F("{0} grupo(s). Escolha um e use os botões.", resumos.Count);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -121,11 +121,11 @@ internal static class PainelDeGrupos
         var raiz = new DockPanel { Margin = new Thickness(8) };
 
         var botoes = new WrapPanel { Margin = new Thickness(0, 0, 0, 6) };
-        botoes.Children.Add(Botao("Criar grupo", PluginInfo.ComandoGrupoCriar, comNome: false));
-        botoes.Children.Add(Botao("Atualizar", null, comNome: false));
-        botoes.Children.Add(Botao("Selecionar", PluginInfo.ComandoGrupoSelecionar, comNome: true));
-        botoes.Children.Add(Botao("Recalcular", PluginInfo.ComandoGrupoRecalcular, comNome: true));
-        botoes.Children.Add(Botao("Apagar", PluginInfo.ComandoGrupoApagar, comNome: true));
+        botoes.Children.Add(Botao(Tr.N("Criar grupo"), PluginInfo.ComandoGrupoCriar, comNome: false));
+        botoes.Children.Add(Botao(Tr.N("Atualizar"), null, comNome: false));
+        botoes.Children.Add(Botao(Tr.N("Selecionar"), PluginInfo.ComandoGrupoSelecionar, comNome: true));
+        botoes.Children.Add(Botao(Tr.N("Recalcular"), PluginInfo.ComandoGrupoRecalcular, comNome: true));
+        botoes.Children.Add(Botao(Tr.N("Apagar"), PluginInfo.ComandoGrupoApagar, comNome: true));
         DockPanel.SetDock(botoes, Dock.Top);
         raiz.Children.Add(botoes);
 
@@ -134,14 +134,14 @@ internal static class PainelDeGrupos
         raiz.Children.Add(_rodape);
 
         var grade = new GridView();
-        grade.Columns.Add(Coluna("Nº", nameof(Linha.Numero), 35));
-        grade.Columns.Add(Coluna("Grupo", nameof(Linha.Nome), 120));
-        grade.Columns.Add(Coluna("Mesas", nameof(Linha.Mesas), 50));
-        grade.Columns.Add(Coluna("Módulos", nameof(Linha.Modulos), 60));
-        grade.Columns.Add(Coluna("Pilares", nameof(Linha.Pilares), 55));
+        grade.Columns.Add(Coluna(Tr.T("Nº"), nameof(Linha.Numero), 35));
+        grade.Columns.Add(Coluna(Tr.T("Grupo"), nameof(Linha.Nome), 120));
+        grade.Columns.Add(Coluna(Tr.T("Mesas"), nameof(Linha.Mesas), 50));
+        grade.Columns.Add(Coluna(Tr.T("Módulos"), nameof(Linha.Modulos), 60));
+        grade.Columns.Add(Coluna(Tr.T("Pilares"), nameof(Linha.Pilares), 55));
         grade.Columns.Add(Coluna("kWp", nameof(Linha.Kwp), 60));
-        grade.Columns.Add(Coluna("Pendentes", nameof(Linha.Sujas), 45));
-        grade.Columns.Add(Coluna("Sumidas", nameof(Linha.Sumidas), 55));
+        grade.Columns.Add(Coluna(Tr.T("Pendentes"), nameof(Linha.Sujas), 45));
+        grade.Columns.Add(Coluna(Tr.T("Sumidas"), nameof(Linha.Sumidas), 55));
 
         _lista = new ListView { View = grade, SelectionMode = SelectionMode.Single };
         raiz.Children.Add(_lista);
@@ -154,7 +154,7 @@ internal static class PainelDeGrupos
 
     private static Button Botao(string rotulo, string? comando, bool comNome)
     {
-        var botao = new Button { Content = rotulo, Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(8, 3, 8, 3) };
+        var botao = new Button { Content = Tr.T(rotulo), Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(8, 3, 8, 3) };
 
         botao.Click += (_, _) =>
         {
@@ -173,7 +173,7 @@ internal static class PainelDeGrupos
                 {
                     if (_lista?.SelectedItem is not Linha linha)
                     {
-                        if (_rodape is not null) _rodape.Text = "Escolha um grupo na lista primeiro.";
+                        if (_rodape is not null) _rodape.Text = Tr.T("Escolha um grupo na lista primeiro.");
                         return;
                     }
 

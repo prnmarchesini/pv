@@ -1,4 +1,3 @@
-using System.Globalization;
 using Clivus.Geo;
 
 namespace Clivus.Core;
@@ -36,19 +35,21 @@ public sealed record AlignmentIdentity(Guid Id, string Name, LineSide Side, Date
     /// <summary>Nome usado quando o usuário não dá nenhum.</summary>
     public const string SemNome = "(sem nome)";
 
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>Cria a identidade de um alinhamento novo.</summary>
     public static AlignmentIdentity Create(string? nome, LineSide lado, DateTime agora) =>
         new(Guid.NewGuid(), Limpar(nome), lado, agora);
 
     /// <summary>O nome como ele aparece, sem espaço em volta e nunca vazio.</summary>
-    public string DisplayName => string.IsNullOrWhiteSpace(Name) ? SemNome : Name.Trim();
+    public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Tr.T("(sem nome)") : Name.Trim();
 
     /// <summary>A linha que descreve o alinhamento para o usuário.</summary>
     public string Describe() =>
-        $"{DisplayName} — mesas à {Side.Describe()} "
-        + $"(criado em {CreatedAt.ToString("dd/MM/yyyy HH:mm", Brasil)})";
+        Side switch
+        {
+            LineSide.Left => Tr.F("{0} — mesas à esquerda (criado em {1:dd/MM/yyyy HH:mm})", DisplayName, CreatedAt),
+            LineSide.Right => Tr.F("{0} — mesas à direita (criado em {1:dd/MM/yyyy HH:mm})", DisplayName, CreatedAt),
+            _ => Tr.F("{0} — mesas à sobre a linha (criado em {1:dd/MM/yyyy HH:mm})", DisplayName, CreatedAt),
+        };
 
     /// <summary>
     /// Se a identidade é utilizável.

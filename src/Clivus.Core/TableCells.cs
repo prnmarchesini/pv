@@ -61,7 +61,7 @@ public static class TableCells
         if (bordaBaixa > length + 1e-3 || bordaBaixa < length * 0.7)
         {
             throw new ArgumentException(
-                $"a borda baixa desenhada tem {bordaBaixa:0.00} m e o perfil atual tem {length:0.00} m de comprimento. Trocou de mesa?",
+                Tr.F("a borda baixa desenhada tem {0:0.00} m e o perfil atual tem {1:0.00} m de comprimento. Trocou de mesa?", bordaBaixa, length),
                 nameof(corners));
         }
 

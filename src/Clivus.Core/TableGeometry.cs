@@ -130,10 +130,10 @@ public sealed class TableGeometry
         ArgumentNullException.ThrowIfNull(estrutura);
 
         if (mesa.WhyInvalid is { } porCausaDaMesa)
-            throw new InvalidOperationException($"A mesa não fecha: {porCausaDaMesa}.");
+            throw new InvalidOperationException(Tr.F("A mesa não fecha: {0}.", porCausaDaMesa));
 
         if (estrutura.WhyInvalid is { } porCausaDaEstrutura)
-            throw new InvalidOperationException($"A estrutura não fecha: {porCausaDaEstrutura}.");
+            throw new InvalidOperationException(Tr.F("A estrutura não fecha: {0}.", porCausaDaEstrutura));
 
         if (pilares.WhyDoesNotFit(mesa.Length) is { } porCausaDosPilares)
             throw new InvalidOperationException(porCausaDosPilares);
@@ -141,7 +141,7 @@ public sealed class TableGeometry
         // A exigência do plano ("tesoura menor que o módulo") mora em
         // TableFrame, para o perfil e a geometria nunca divergirem sobre ela.
         if (estrutura.WhyDoesNotFit(mesa) is { } porCausaDaTesoura)
-            throw new InvalidOperationException($"A estrutura não serve para a mesa: {porCausaDaTesoura}.");
+            throw new InvalidOperationException(Tr.F("A estrutura não serve para a mesa: {0}.", porCausaDaTesoura));
 
         var profundidade = mesa.Depth;
 

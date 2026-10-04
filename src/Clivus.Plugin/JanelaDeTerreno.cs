@@ -23,7 +23,7 @@ internal sealed class JanelaDeTerreno : Window
 
     internal JanelaDeTerreno(IReadOnlyList<SurfaceEntry> superficies)
     {
-        Title = "Clivus Solar — Terreno";
+        Title = Tr.T("Clivus Solar — Terreno");
         Width = 460;
         Height = 360;
         // CenterOwner, e não CenterScreen: com dois monitores, a janela tem
@@ -62,7 +62,7 @@ internal sealed class JanelaDeTerreno : Window
 
         _confirmar = new Button
         {
-            Content = "Usar como terreno",
+            Content = Tr.T("Usar como terreno"),
             Width = 150,
             Height = 26,
             IsDefault = true,
@@ -72,7 +72,7 @@ internal sealed class JanelaDeTerreno : Window
 
         var cancelar = new Button
         {
-            Content = "Cancelar",
+            Content = Tr.T("Cancelar"),
             Width = 90,
             Height = 26,
             Margin = new Thickness(8, 0, 0, 0),
@@ -91,7 +91,7 @@ internal sealed class JanelaDeTerreno : Window
 
         var titulo = new TextBlock
         {
-            Text = "Qual destas superfícies é o terreno?",
+            Text = Tr.T("Qual destas superfícies é o terreno?"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 4),
         };

@@ -7,6 +7,7 @@ using System.Windows.Media;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
+using Clivus.Core;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
 namespace Clivus.Plugin;
@@ -290,7 +291,7 @@ internal sealed class CaixaDeSelecao : Window
 
     internal string Texto
     {
-        set => _texto.Text = "Seleção: " + value;
+        set => _texto.Text = Tr.F("Seleção: {0}", value);
     }
 
     /// <summary>O texto como vem, sem o "Seleção:" (o placar do grupo).</summary>

@@ -41,14 +41,14 @@ public static class TrocarMesaCommands
         try
         {
             var guid = RecalcularCommands.MesaDaSelecao(editor, documento)
-                ?? RecalcularCommands.MesaClicada(editor, documento, "\nClique numa peça da mesa a trocar: ");
+                ?? RecalcularCommands.MesaClicada(editor, documento, Tr.T("\nClique numa peça da mesa a trocar: "));
             if (guid is null) return;
 
             var mesas = MesasDoDesenho.Ler(documento.Database);
 
             if (mesas.Count == 0)
             {
-                editor.WriteMessage("\nTROCAR Este desenho não tem mesas cadastradas: cadastre em Configurações > Estruturas e salve no desenho.\n");
+                editor.WriteMessage(Tr.T("\nTROCAR Este desenho não tem mesas cadastradas: cadastre em Configurações > Estruturas e salve no desenho.\n"));
                 return;
             }
 
@@ -75,7 +75,7 @@ public static class TrocarMesaCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao trocar a mesa.", erro);
-            editor.WriteMessage($"\nNão consegui trocar a mesa: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui trocar a mesa: {0}\n", erro.Message));
         }
     }
 
@@ -90,7 +90,7 @@ public static class TrocarMesaCommands
 
         try
         {
-            var letreiro = editor.GetString(new PromptStringOptions("\nLetreiro da mesa: ") { AllowSpaces = false });
+            var letreiro = editor.GetString(new PromptStringOptions(Tr.T("\nLetreiro da mesa: ")) { AllowSpaces = false });
             if (letreiro.Status != PromptStatus.OK) return;
 
             var mesas = MesasDoDesenho.Ler(documento.Database);
@@ -101,7 +101,7 @@ public static class TrocarMesaCommands
 
             if (guid is null)
             {
-                editor.WriteMessage($"\nTROCAR Não há mesa com o letreiro \"{letreiro.StringResult}\".\n");
+                editor.WriteMessage(Tr.F("\nTROCAR Não há mesa com o letreiro \"{0}\".\n", letreiro.StringResult));
                 return;
             }
 
@@ -113,7 +113,7 @@ public static class TrocarMesaCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao trocar a mesa (automático).", erro);
-            editor.WriteMessage($"\nNão consegui trocar a mesa: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui trocar a mesa: {0}\n", erro.Message));
         }
     }
 
@@ -122,24 +122,24 @@ public static class TrocarMesaCommands
     {
         if (mesas.Count == 0)
         {
-            editor.WriteMessage("\nTROCAR Este desenho não tem mesas cadastradas.\n");
+            editor.WriteMessage(Tr.T("\nTROCAR Este desenho não tem mesas cadastradas.\n"));
             return null;
         }
 
         for (var i = 0; i < mesas.Count; i++)
-            editor.WriteMessage($"\n  {i + 1}: {mesas[i].Name} ({mesas[i].Profile.Layout.ModuleCount} módulos)");
+            editor.WriteMessage(Tr.F("\n  {0}: {1} ({2} módulos)", i + 1, mesas[i].Name, mesas[i].Profile.Layout.ModuleCount));
 
-        var tipo = editor.GetInteger(new PromptIntegerOptions($"\nMesa nova (1 a {mesas.Count}): ") { LowerLimit = 1, UpperLimit = mesas.Count });
+        var tipo = editor.GetInteger(new PromptIntegerOptions(Tr.F("\nMesa nova (1 a {0}): ", mesas.Count)) { LowerLimit = 1, UpperLimit = mesas.Count });
         if (tipo.Status != PromptStatus.OK) return null;
 
-        var quantas = editor.GetInteger(new PromptIntegerOptions("\nQuantas no lugar (1 a 5): ") { LowerLimit = 1, UpperLimit = 5, DefaultValue = 1, UseDefaultValue = true });
+        var quantas = editor.GetInteger(new PromptIntegerOptions(Tr.T("\nQuantas no lugar (1 a 5): ")) { LowerLimit = 1, UpperLimit = 5, DefaultValue = 1, UseDefaultValue = true });
         if (quantas.Status != PromptStatus.OK) return null;
 
-        var lado = new PromptKeywordOptions("\nLado travado [Inicio/Fim]: ", "Inicio Fim") { AllowNone = false };
+        var lado = new PromptKeywordOptions(Tr.T("\nLado travado [Inicio/Fim]: "), "Inicio Fim") { AllowNone = false };
         var respostaLado = editor.GetKeywords(lado);
         if (respostaLado.Status != PromptStatus.OK) return null;
 
-        var reespacar = new PromptKeywordOptions("\nReespaçar a fileira depois? [Sim/Nao]: ", "Sim Nao") { AllowNone = false };
+        var reespacar = new PromptKeywordOptions(Tr.T("\nReespaçar a fileira depois? [Sim/Nao]: "), "Sim Nao") { AllowNone = false };
         var respostaReespacar = editor.GetKeywords(reespacar);
         if (respostaReespacar.Status != PromptStatus.OK) return null;
 
@@ -162,20 +162,20 @@ public static class TrocarMesaCommands
 
         if (!lida.Mesas.TryGetValue(guid, out var mesa) || mesa.Identity is null || !lida.Cantos.TryGetValue(guid, out var cantos))
         {
-            editor.WriteMessage("\nTROCAR A mesa não tem contorno; não há como saber onde ela está.\n");
+            editor.WriteMessage(Tr.T("\nTROCAR A mesa não tem contorno; não há como saber onde ela está.\n"));
             return false;
         }
 
         if (mesa.IsDuplicated)
         {
-            editor.WriteMessage($"\nTROCAR {mesa.Identity.Label} tem contornos repetidos (mesa copiada). Apague a cópia ou use o Regerar área.\n");
+            editor.WriteMessage(Tr.F("\nTROCAR {0} tem contornos repetidos (mesa copiada). Apague a cópia ou use o Regerar área.\n", mesa.Identity.Label));
             return false;
         }
 
         var celula = Celula(cantos, mesa.Identity, database, nova.Profile);
         if (celula is null)
         {
-            editor.WriteMessage($"\nTROCAR {mesa.Identity.Label}: o contorno não descreve uma mesa. Use o Regerar área.\n");
+            editor.WriteMessage(Tr.F("\nTROCAR {0}: o contorno não descreve uma mesa. Use o Regerar área.\n", mesa.Identity.Label));
             return false;
         }
 
@@ -185,7 +185,7 @@ public static class TrocarMesaCommands
         var perfil = nova.Profile;
         var geometria = FileiraCommands.GeometriaDe(perfil);
         var doProjeto = ConfigCommands.Inicial(documento, out var aviso);
-        if (aviso is not null) editor.WriteMessage($"\n  ATENÇÃO: {aviso}\n");
+        if (aviso is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
         var settings = doProjeto.ForTable(perfil.Frame);
 
         var pegada = new TableFootprint(geometria.Length, geometria.Depth * Math.Cos(perfil.TiltRadians));
@@ -204,22 +204,21 @@ public static class TrocarMesaCommands
 
         RecalcularCommands.Apagar(documento, mesa);
 
-        foreach (var a in fileira.Warnings) editor.WriteMessage($"\n  ATENÇÃO: {a}\n");
+        foreach (var a in fileira.Warnings) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", a));
 
-        var brasil = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+        var magenta = desenho.Marked > 0 ? Tr.F(", {0} com módulo dentro da terra (magenta)", desenho.Marked) : string.Empty;
+        var novas = string.Join(", ", troca.Tables.Select(t => t.Label));
 
-        editor.WriteMessage(
-            $"\nTROCAR {mesa.Identity.Label} virou {quantas} × {nova.Name} ({string.Join(", ", troca.Tables.Select(t => t.Label))}), "
-            + $"travada no {(lado == SwapAnchor.Start ? "início" : "fim")}: {desenho.Tables} mesa(s), {desenho.Modules} módulo(s)"
-            + (desenho.Marked > 0 ? $", {desenho.Marked} com módulo dentro da terra (magenta)" : string.Empty) + ".\n");
+        editor.WriteMessage(lado == SwapAnchor.Start
+            ? Tr.F("\nTROCAR {0} virou {1} × {2} ({3}), travada no início: {4} mesa(s), {5} módulo(s){6}.\n", mesa.Identity.Label, quantas, nova.Name, novas, desenho.Tables, desenho.Modules, magenta)
+            : Tr.F("\nTROCAR {0} virou {1} × {2} ({3}), travada no fim: {4} mesa(s), {5} módulo(s){6}.\n", mesa.Identity.Label, quantas, nova.Name, novas, desenho.Tables, desenho.Modules, magenta));
 
-        AvisarForaDaArea(editor, database, troca.Tables, "TROCAR");
+        AvisarForaDaArea(editor, database, troca.Tables, Tr.T("TROCAR"));
 
         if (troca.Overflows && !reespacar)
         {
             editor.WriteMessage(
-                $"  ATENÇÃO: as mesas novas passam {troca.Overflow.ToString("0.00", brasil)} m do espaço até a vizinha "
-                + $"(com o espaçamento de {settings.Configuration.TableGap.ToString("0.00", brasil)} m). Use Regerar fileira > Manter para acertar.\n");
+                Tr.F("  ATENÇÃO: as mesas novas passam {0:0.00} m do espaço até a vizinha (com o espaçamento de {1:0.00} m). Use Regerar fileira > Manter para acertar.\n", troca.Overflow, settings.Configuration.TableGap));
         }
 
         if (reespacar) Regerar(editor, documento, terreno, troca.Tables[0].Label, troca.Tables[0].Corners, manter: true, alinhamento: null);
@@ -241,11 +240,11 @@ public static class TrocarMesaCommands
         try
         {
             var guid = RecalcularCommands.MesaDaSelecao(editor, documento)
-                ?? RecalcularCommands.MesaClicada(editor, documento, "\nClique numa peça de uma mesa da fileira: ");
+                ?? RecalcularCommands.MesaClicada(editor, documento, Tr.T("\nClique numa peça de uma mesa da fileira: "));
             if (guid is null) return;
 
             var modo = new PromptKeywordOptions(
-                "\nRegerar a fileira [Manter as mesas e acertar o espaçamento/Motor com as mesas em uso] <Manter>: ", "Manter Motor")
+                Tr.T("\nRegerar a fileira [Manter as mesas e acertar o espaçamento/Motor com as mesas em uso] <Manter>: "), "Manter Motor")
             { AllowNone = true };
             var resposta = editor.GetKeywords(modo);
             if (resposta.Status != PromptStatus.OK && resposta.Status != PromptStatus.None) return;
@@ -256,7 +255,7 @@ public static class TrocarMesaCommands
             var lida = Ler(documento);
             if (!lida.Cantos.TryGetValue(guid.Value, out var cantos) || lida.Mesas[guid.Value].Identity is not { } identidade)
             {
-                editor.WriteMessage("\nREGERAR FILEIRA A mesa não tem contorno; não há como saber onde ela está.\n");
+                editor.WriteMessage(Tr.T("\nREGERAR FILEIRA A mesa não tem contorno; não há como saber onde ela está.\n"));
                 return;
             }
 
@@ -265,7 +264,7 @@ public static class TrocarMesaCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao regerar a fileira.", erro);
-            editor.WriteMessage($"\nNão consegui regerar a fileira: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui regerar a fileira: {0}\n", erro.Message));
         }
     }
 
@@ -280,10 +279,10 @@ public static class TrocarMesaCommands
 
         try
         {
-            var letreiro = editor.GetString(new PromptStringOptions("\nLetreiro de uma mesa da fileira: ") { AllowSpaces = false });
+            var letreiro = editor.GetString(new PromptStringOptions(Tr.T("\nLetreiro de uma mesa da fileira: ")) { AllowSpaces = false });
             if (letreiro.Status != PromptStatus.OK) return;
 
-            var modo = editor.GetKeywords(new PromptKeywordOptions("\nModo [Manter/Motor]: ", "Manter Motor"));
+            var modo = editor.GetKeywords(new PromptKeywordOptions(Tr.T("\nModo [Manter/Motor]: "), "Manter Motor"));
             if (modo.Status != PromptStatus.OK) return;
 
             var terreno = FileiraCommands.ExigirTerreno(editor, documento);
@@ -294,7 +293,7 @@ public static class TrocarMesaCommands
 
             if (guid is null || !lida.Cantos.TryGetValue(guid.Value, out var cantos))
             {
-                editor.WriteMessage($"\nREGERAR FILEIRA Não há mesa com o letreiro \"{letreiro.StringResult}\".\n");
+                editor.WriteMessage(Tr.F("\nREGERAR FILEIRA Não há mesa com o letreiro \"{0}\".\n", letreiro.StringResult));
                 return;
             }
 
@@ -306,7 +305,7 @@ public static class TrocarMesaCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao regerar a fileira (automático).", erro);
-            editor.WriteMessage($"\nNão consegui regerar a fileira: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui regerar a fileira: {0}\n", erro.Message));
         }
     }
 
@@ -327,7 +326,7 @@ public static class TrocarMesaCommands
 
         if (area is null)
         {
-            editor.WriteMessage($"\nREGERAR FILEIRA A mesa {letreiro} não está dentro de nenhuma área registrada.\n");
+            editor.WriteMessage(Tr.F("\nREGERAR FILEIRA A mesa {0} não está dentro de nenhuma área registrada.\n", letreiro));
             return;
         }
 
@@ -392,7 +391,7 @@ public static class TrocarMesaCommands
         var ruins = daFileira.Count(g => lida.Mesas[g].Identity is null || lida.Mesas[g].IsDuplicated);
         if (ruins > 0)
         {
-            editor.WriteMessage($"\nREGERAR FILEIRA {ruins} mesa(s) da fileira de {letreiro} sem identidade ou com contorno repetido (copiada). Use Validar ou o Regerar área. Nada foi mexido.\n");
+            editor.WriteMessage(Tr.F("\nREGERAR FILEIRA {0} mesa(s) da fileira de {1} sem identidade ou com contorno repetido (copiada). Use Validar ou o Regerar área. Nada foi mexido.\n", ruins, letreiro));
             return;
         }
 
@@ -413,7 +412,7 @@ public static class TrocarMesaCommands
             var celula = Celula(lida.Cantos[guid], mesa.Identity!, database, perfil);
             if (celula is null)
             {
-                editor.WriteMessage($"\nREGERAR FILEIRA O contorno de {mesa.Identity!.Label} não descreve uma mesa. Use o Regerar área. Nada foi mexido.\n");
+                editor.WriteMessage(Tr.F("\nREGERAR FILEIRA O contorno de {0} não descreve uma mesa. Use o Regerar área. Nada foi mexido.\n", mesa.Identity!.Label));
                 return;
             }
 
@@ -423,7 +422,7 @@ public static class TrocarMesaCommands
 
         if (celulas.Count == 0)
         {
-            editor.WriteMessage($"\nREGERAR FILEIRA Não achei as mesas da fileira de {letreiro}.\n");
+            editor.WriteMessage(Tr.F("\nREGERAR FILEIRA Não achei as mesas da fileira de {0}.\n", letreiro));
             return;
         }
 
@@ -431,7 +430,7 @@ public static class TrocarMesaCommands
         // em planta e a cota dependem dela): recusado, dito.
         if (tipos.Select(t => Math.Round(t.Profile.TiltRadians, 6)).Distinct().Count() > 1)
         {
-            editor.WriteMessage($"\nREGERAR FILEIRA A fileira de {letreiro} tem mesas de inclinações diferentes ({string.Join(", ", tipos.Select(t => t.Name))}). Use o Regerar área. Nada foi mexido.\n");
+            editor.WriteMessage(Tr.F("\nREGERAR FILEIRA A fileira de {0} tem mesas de inclinações diferentes ({1}). Use o Regerar área. Nada foi mexido.\n", letreiro, string.Join(", ", tipos.Select(t => t.Name))));
             return;
         }
 
@@ -456,14 +455,12 @@ public static class TrocarMesaCommands
             database, fileira, desenhoDosTipos.Geometrias[0], tipos[0].Profile.Layout.Module, tilt, settings.Analyses,
             idDaMesa: m => guids.TryGetValue(m.Label, out var g) ? g : Guid.NewGuid(), analisar: analise, tipos: desenhoDosTipos);
 
-        AvisarForaDaArea(editor, database, reespacadas, "REGERAR FILEIRA");
+        AvisarForaDaArea(editor, database, reespacadas, Tr.T("REGERAR FILEIRA"));
 
-        foreach (var a in fileira.Warnings) editor.WriteMessage($"\n  ATENÇÃO: {a}\n");
+        foreach (var a in fileira.Warnings) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", a));
 
         editor.WriteMessage(
-            $"\nREGERAR FILEIRA {fileira.Row.Number}: {desenho.Tables} mesa(s) reespaçada(s), mantidos os tipos "
-            + $"({string.Join(", ", tipos.Select(t => t.Name))}); {desenho.Modules} módulo(s)"
-            + (desenho.Marked > 0 ? $", {desenho.Marked} com módulo dentro da terra (magenta)" : string.Empty) + ".\n");
+            Tr.F("\nREGERAR FILEIRA {0}: {1} mesa(s) reespaçada(s), mantidos os tipos ({2}); {3} módulo(s){4}.\n", fileira.Row.Number, desenho.Tables, string.Join(", ", tipos.Select(t => t.Name)), desenho.Modules, (desenho.Marked > 0 ? Tr.F(", {0} com módulo dentro da terra (magenta)", desenho.Marked) : string.Empty)));
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
     }
 
@@ -481,7 +478,7 @@ public static class TrocarMesaCommands
 
         if (plano is null)
         {
-            editor.WriteMessage("\nREGERAR FILEIRA Nada foi apagado.\n");
+            editor.WriteMessage(Tr.T("\nREGERAR FILEIRA Nada foi apagado.\n"));
             return;
         }
 
@@ -501,7 +498,7 @@ public static class TrocarMesaCommands
 
         if (escolhida is null || !naFaixa(escolhida))
         {
-            editor.WriteMessage($"\nREGERAR FILEIRA O motor não pôs fileira na faixa de {letreiro} (a configuração mudou a distância entre fileiras?). Use o Regerar área. Nada foi apagado.\n");
+            editor.WriteMessage(Tr.F("\nREGERAR FILEIRA O motor não pôs fileira na faixa de {0} (a configuração mudou a distância entre fileiras?). Use o Regerar área. Nada foi apagado.\n", letreiro));
             return;
         }
 
@@ -512,11 +509,10 @@ public static class TrocarMesaCommands
 
         RecalcularCommands.Apagar(documento, daFileira.Select(g => lida.Mesas[g]).ToList());
 
-        foreach (var a in escolhida.Warnings) editor.WriteMessage($"\n  ATENÇÃO: {a}\n");
+        foreach (var a in escolhida.Warnings) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", a));
 
         editor.WriteMessage(
-            $"\nREGERAR FILEIRA {escolhida.Row.Number} pelo motor: {daFileira.Count} mesa(s) apagada(s), {desenho.Tables} desenhada(s), "
-            + $"{desenho.Modules} módulo(s)" + (desenho.Marked > 0 ? $", {desenho.Marked} com módulo dentro da terra (magenta)" : string.Empty) + ".\n");
+            Tr.F("\nREGERAR FILEIRA {0} pelo motor: {1} mesa(s) apagada(s), {2} desenhada(s), {3} módulo(s){4}.\n", escolhida.Row.Number, daFileira.Count, desenho.Tables, desenho.Modules, (desenho.Marked > 0 ? Tr.F(", {0} com módulo dentro da terra (magenta)", desenho.Marked) : string.Empty)));
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
     }
 
@@ -531,7 +527,9 @@ public static class TrocarMesaCommands
         var fora = mesas.Where(m => m.Corners.Any(p => !Polygons.Contains(area.Vertices, p.X, p.Y))).Select(m => m.Label).ToList();
 
         if (fora.Count > 0)
-            editor.WriteMessage($"  ATENÇÃO: {prefixo} {string.Join(", ", fora)} {(fora.Count == 1 ? "passa" : "passam")} da borda da área {area.Nome}.\n");
+            editor.WriteMessage(fora.Count == 1
+                ? Tr.F("  ATENÇÃO: {0} {1} passa da borda da área {2}.\n", prefixo, string.Join(", ", fora), area.Nome)
+                : Tr.F("  ATENÇÃO: {0} {1} passam da borda da área {2}.\n", prefixo, string.Join(", ", fora), area.Nome));
     }
 
     // ------------------------------------------------------------- leitura

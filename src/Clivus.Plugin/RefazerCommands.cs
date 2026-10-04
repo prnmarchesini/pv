@@ -46,7 +46,7 @@ public static class RefazerCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao refazer as mesas.", erro);
-            editor.WriteMessage($"\nNão consegui refazer as mesas: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui refazer as mesas: {0}\n", erro.Message));
         }
     }
 
@@ -69,7 +69,7 @@ public static class RefazerCommands
 
             if (areas.Count == 0 || alinhamentos.Count == 0)
             {
-                editor.WriteMessage("\nREFAZER Sem área ou sem alinhamento registrado neste desenho.\n");
+                editor.WriteMessage(Tr.T("\nREFAZER Sem área ou sem alinhamento registrado neste desenho.\n"));
                 return;
             }
 
@@ -78,7 +78,7 @@ public static class RefazerCommands
 
             if (area is null || alinhamento is null)
             {
-                editor.WriteMessage("\nREFAZER A área ou o alinhamento registrado não está mais no desenho.\n");
+                editor.WriteMessage(Tr.T("\nREFAZER A área ou o alinhamento registrado não está mais no desenho.\n"));
                 return;
             }
 
@@ -87,7 +87,7 @@ public static class RefazerCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao refazer as mesas automaticamente.", erro);
-            editor.WriteMessage($"\nNão consegui refazer as mesas: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui refazer as mesas: {0}\n", erro.Message));
         }
     }
 
@@ -107,8 +107,7 @@ public static class RefazerCommands
         if (aMao.Count > 0)
         {
             editor.WriteMessage(
-                $"\n  ATENÇÃO: {aMao.Count} mesa(s) com as pontas escolhidas à mão nesta área voltam ao motor: "
-                + $"{string.Join(", ", aMao.Take(12))}{(aMao.Count > 12 ? "…" : string.Empty)}. U desfaz.\n");
+                Tr.F("\n  ATENÇÃO: {0} mesa(s) com as pontas escolhidas à mão nesta área voltam ao motor: {1}{2}. U desfaz.\n", aMao.Count, string.Join(", ", aMao.Take(12)), aMao.Count > 12 ? "…" : string.Empty));
         }
 
         // Planeja ANTES de apagar: se a distribuição não dá fileira (linha
@@ -117,7 +116,7 @@ public static class RefazerCommands
 
         if (plano is null)
         {
-            editor.WriteMessage("\nREFAZER Nada foi apagado.\n");
+            editor.WriteMessage(Tr.T("\nREFAZER Nada foi apagado.\n"));
             return;
         }
 
@@ -127,10 +126,9 @@ public static class RefazerCommands
         if (apagadas.Tables.Count > 0) RemovalStore.Remove(documento.Database, apagadas.Tables);
 
         editor.WriteMessage(
-            $"\nREFAZER {apagadas.Tables.Count} mesa(s) apagada(s) dentro de {area.Nome} "
-            + $"({apagadas.Entities} entidade(s)"
-            + (orfas > 0 ? $", mais {orfas} nota(s) órfã(s) de desenho antigo" : string.Empty)
-            + "); desenhando de novo com a configuração atual (se algo falhar, U devolve as apagadas)...\n");
+            orfas > 0
+                ? Tr.F("\nREFAZER {0} mesa(s) apagada(s) dentro de {1} ({2} entidade(s), mais {3} nota(s) órfã(s) de desenho antigo); desenhando de novo com a configuração atual (se algo falhar, U devolve as apagadas)...\n", apagadas.Tables.Count, area.Nome, apagadas.Entities, orfas)
+                : Tr.F("\nREFAZER {0} mesa(s) apagada(s) dentro de {1} ({2} entidade(s)); desenhando de novo com a configuração atual (se algo falhar, U devolve as apagadas)...\n", apagadas.Tables.Count, area.Nome, apagadas.Entities));
 
         UsinaCommands.Desenhar(editor, documento, plano);
     }
@@ -172,7 +170,7 @@ public static class RefazerCommands
             if (identidade is null) continue;
 
             editor.SetImpliedSelection([]);
-            editor.WriteMessage($"\nÁrea: {identidade.DisplayName}.\n");
+            editor.WriteMessage(Tr.F("\nÁrea: {0}.\n", identidade.DisplayName));
 
             return (FileiraCommands.Vertices(polilinha, transacao), identidade.DisplayName);
         }
