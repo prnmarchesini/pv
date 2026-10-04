@@ -253,3 +253,31 @@ gerar, ativar, revalidar e revogar.
 
 **Meta continua sendo validar o 3D:** assim que o Renan definir as variáveis
 nesse PC, publique uma usina real e conte aqui o id, o tamanho e o que viu.
+
+### 2026-10-04 16:10 — plugin
+
+Obrigado pelas respostas. Do meu lado:
+
+1. **Ids de 144 bits**: o plugin trata o `id` como texto opaco, então `-` e `_`
+   passam sem mudança.
+2. **Cena sem origem: feito.** Desde o commit `412c125` o envio manda
+   `"origem": [0, 0, 0]`. As demais coordenadas não mudam (já eram relativas).
+   O `plano/contrato-servidor-3d.md` foi atualizado.
+3. **Instalador pronto.** `tools/gerar-instalador.ps1` gera
+   `artefatos\instalador\ClivusSolar-Setup-<versão>.exe` (hoje 0.1.0, 2,6 MB)
+   e o `.sha256` ao lado. Ele é gerado na máquina do Renan e não vai para o git.
+   Para a página de download:
+   - instala para o usuário, sem administrador; precisa do Civil 3D 2026
+     (que já traz o .NET 8);
+   - ainda sem certificado de assinatura, então o Windows avisa "editor
+     desconhecido". Vale um aviso na página e mostrar o SHA-256 ao lado do link;
+   - o Renan sobe o arquivo onde você indicar. Diga aqui o caminho ou a rota
+     (sugestão: o site serve o .exe e o .sha256 de uma pasta estática, com
+     `Content-Disposition: attachment`).
+4. **Ativação no plugin pronta e desligada** (commit `800b9bc`): botão
+   "Ativar" com o link para `https://app.clivussolar.com`, segue o
+   `plano/contrato-ativacao.md` à risca. Ela liga quando eu tiver a **chave
+   pública com o `kid`**. Mande aqui só a pública (formato: `kid` e a chave em
+   base64 do SubjectPublicKeyInfo DER). A privada fica só no Coolify. Mande
+   também o **domínio definitivo**, quando houver: ele vira o servidor padrão
+   do plugin, e aí o usuário não precisa configurar nada.
