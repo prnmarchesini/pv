@@ -26,7 +26,7 @@ namespace Clivus.Plugin;
 /// </summary>
 internal sealed class CorteDaMesa : FrameworkElement
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
+    private static CultureInfo Cultura => Tr.Culture;
 
     private static readonly Brush Fundo = Congelar(new SolidColorBrush(Color.FromRgb(0x1B, 0x20, 0x27)));
     private static readonly Brush Texto = Congelar(new SolidColorBrush(Color.FromRgb(0xC8, 0xD0, 0xD8)));
@@ -175,7 +175,7 @@ internal sealed class CorteDaMesa : FrameworkElement
         if (_enterro is { } escrito)
             CotaVertical(tela, encosto.X - 26, ySolo, yPe, $"T3 {Medida(escrito)}", Terra, aEsquerda: true);
         else
-            Escrever(tela, "T3: o da configuração", Fraco, 10, new Point(encosto.X + 8, (ySolo + yPe) / 2 - 7));
+            Escrever(tela, Tr.T("T3: o da configuração"), Fraco, 10, new Point(encosto.X + 8, (ySolo + yPe) / 2 - 7));
 
         Angulo(tela, No(0), k);
 
@@ -190,8 +190,7 @@ internal sealed class CorteDaMesa : FrameworkElement
 
         Escrever(
             tela,
-            $"o pilar encosta {Medida(subida)} m acima da ponta baixa · "
-            + $"tracejado: o resto depende do terreno",
+            Tr.F("o pilar encosta {0} m acima da ponta baixa · tracejado: o resto depende do terreno", Medida(subida)),
             Fraco,
             10.5,
             new Point(Margem, ActualHeight - 16));
@@ -236,7 +235,7 @@ internal sealed class CorteDaMesa : FrameworkElement
         tela.DrawGeometry(null, Cota, arco);
 
         var graus = _tilt * 180 / Math.PI;
-        Escrever(tela, $"{graus.ToString("0.#", Brasil)}°", Fraco, 11,
+        Escrever(tela, $"{graus.ToString("0.#", Cultura)}°", Fraco, 11,
             new Point(origem.X + raio + 4, origem.Y - raio * 0.55));
     }
 
@@ -299,7 +298,7 @@ internal sealed class CorteDaMesa : FrameworkElement
         for (var x = de + 4; x < ate; x += 9)
             tela.DrawLine(Solo, new Point(x, y), new Point(x - 6, y + 6));
 
-        Escrever(tela, "solo", Fraco, 10, new Point(ate - 26, y - 15));
+        Escrever(tela, Tr.T("solo"), Fraco, 10, new Point(ate - 26, y - 15));
     }
 
     private void Escrever(DrawingContext tela, string texto, Brush cor, double tamanho, Point onde) =>
@@ -308,7 +307,7 @@ internal sealed class CorteDaMesa : FrameworkElement
     private FormattedText Formatar(string texto, double tamanho, Brush cor) =>
         new(
             texto,
-            Brasil,
+            Cultura,
             FlowDirection.LeftToRight,
             new Typeface("Segoe UI"),
             tamanho,
@@ -318,7 +317,7 @@ internal sealed class CorteDaMesa : FrameworkElement
     private static double Distancia(Point a, Point b) =>
         Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
 
-    private static string Medida(double valor) => valor.ToString("0.###", Brasil);
+    private static string Medida(double valor) => valor.ToString("0.###", Cultura);
 
     private static T Congelar<T>(T objeto) where T : Freezable
     {

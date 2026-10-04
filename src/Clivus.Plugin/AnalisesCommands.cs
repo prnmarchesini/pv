@@ -40,7 +40,7 @@ public static class AnalisesCommands
 
         if (!ClivusExtension.TemInterface())
         {
-            editor.WriteMessage("\nA tela dos parâmetros precisa da interface do Civil 3D.\n");
+            editor.WriteMessage(Tr.T("\nA tela dos parâmetros precisa da interface do Civil 3D.\n"));
             return;
         }
 
@@ -51,7 +51,7 @@ public static class AnalisesCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao abrir os parâmetros das análises.", erro);
-            editor.WriteMessage($"\nNão consegui abrir os parâmetros: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui abrir os parâmetros: {0}\n", erro.Message));
         }
     }
 
@@ -77,7 +77,7 @@ public static class AnalisesCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao pintar os estouros.", erro);
-            editor.WriteMessage($"\nNão consegui pintar os estouros: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui pintar os estouros: {0}\n", erro.Message));
         }
     }
 
@@ -100,7 +100,7 @@ public static class AnalisesCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha no CLIVUS_PINTAR_AUTO.", erro);
-            editor.WriteMessage($"\nNão consegui pintar os estouros: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui pintar os estouros: {0}\n", erro.Message));
         }
     }
 
@@ -123,7 +123,7 @@ public static class AnalisesCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao regerar as áreas.", erro);
-            editor.WriteMessage($"\nNão consegui regerar: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui regerar: {0}\n", erro.Message));
         }
     }
 
@@ -136,7 +136,7 @@ public static class AnalisesCommands
     private static void Repintar(Editor editor, Document documento, ProcessedTerrain terreno, TableProfile perfil)
     {
         var settings = ConfigCommands.Inicial(documento, out var avisoDaConfig);
-        if (avisoDaConfig is not null) editor.WriteMessage($"\n  ATENÇÃO: {avisoDaConfig}\n");
+        if (avisoDaConfig is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", avisoDaConfig));
 
         var pilares = perfil.Frame.Pillars(perfil.Layout);
         var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
@@ -168,7 +168,7 @@ public static class AnalisesCommands
 
                 if (mesa.Contour is not { } contorno)
                 {
-                    puladas.Add($"{identidade.Label} (sem contorno)");
+                    puladas.Add(Tr.F("{0} (sem contorno)", identidade.Label));
                     continue;
                 }
 
@@ -224,7 +224,7 @@ public static class AnalisesCommands
 
         if (processadas.Count == 0)
         {
-            editor.WriteMessage("\nPINTAR Nenhuma mesa para pintar.\n");
+            editor.WriteMessage(Tr.T("\nPINTAR Nenhuma mesa para pintar.\n"));
             return;
         }
 
@@ -261,11 +261,11 @@ public static class AnalisesCommands
         var acima = processadas.Sum(p => p.Report.Modules.Count(m => m.Verdict.Outcome == AnalysisOutcome.Above));
 
         editor.WriteMessage(
-            $"\nPINTAR {processadas.Count} mesa(s) repintada(s) com as regras gravadas: {abaixo} módulo(s) com a ponta baixa abaixo "
-            + $"da faixa, {acima} acima; {pintadas} peça(s) pintada(s); {marcadas} mesa(s) que não cabem.\n");
+            Tr.F("\nPINTAR {0} mesa(s) repintada(s) com as regras gravadas: {1} módulo(s) com a ponta baixa abaixo da faixa, {2} acima; {3} peça(s) pintada(s); {4} mesa(s) que não cabem.\n",
+                processadas.Count, abaixo, acima, pintadas, marcadas));
 
-        if (sujas > 0) editor.WriteMessage($"  {sujas} mesa(s) pendente(s) ficaram como estão: use Recalcular pendentes.\n");
-        if (puladas.Count > 0) editor.WriteMessage($"  Não repintei {string.Join(", ", puladas)}: sem contorno, contorno repetido ou de outra mesa. Use o Regerar área.\n");
+        if (sujas > 0) editor.WriteMessage(Tr.F("  {0} mesa(s) pendente(s) ficaram como estão: use Recalcular pendentes.\n", sujas));
+        if (puladas.Count > 0) editor.WriteMessage(Tr.F("  Não repintei {0}: sem contorno, contorno repetido ou de outra mesa. Use o Regerar área.\n", string.Join(", ", puladas)));
 
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
     }
@@ -278,7 +278,7 @@ public static class AnalisesCommands
 
         if (areas.Count == 0 || alinhamentos.Count == 0)
         {
-            editor.WriteMessage("\nREGERAR Sem área ou sem alinhamento registrado neste desenho.\n");
+            editor.WriteMessage(Tr.T("\nREGERAR Sem área ou sem alinhamento registrado neste desenho.\n"));
             return;
         }
 
@@ -290,7 +290,7 @@ public static class AnalisesCommands
 
         if (linhas.Count == 0)
         {
-            editor.WriteMessage("\nREGERAR Os alinhamentos registrados não estão mais no desenho.\n");
+            editor.WriteMessage(Tr.T("\nREGERAR Os alinhamentos registrados não estão mais no desenho.\n"));
             return;
         }
 
@@ -302,18 +302,18 @@ public static class AnalisesCommands
 
             if (area is null)
             {
-                editor.WriteMessage($"\nREGERAR A área {registro.Identity.DisplayName} não está mais no desenho; pulada.\n");
+                editor.WriteMessage(Tr.F("\nREGERAR A área {0} não está mais no desenho; pulada.\n", registro.Identity.DisplayName));
                 continue;
             }
 
             var alinhamento = linhas.MinBy(l => Distancia(l.Vertices, area.Value.Vertices));
 
-            editor.WriteMessage($"\nREGERAR {area.Value.Nome} com o alinhamento {alinhamento.Identidade.Describe()}.\n");
+            editor.WriteMessage(Tr.F("\nREGERAR {0} com o alinhamento {1}.\n", area.Value.Nome, alinhamento.Identidade.Describe()));
             RefazerCommands.Executar(editor, documento, terreno, area.Value, alinhamento, perfil);
             feitas++;
         }
 
-        editor.WriteMessage($"\nREGERAR {feitas} de {areas.Count} área(s) refeita(s) com a configuração atual.\n");
+        editor.WriteMessage(Tr.F("\nREGERAR {0} de {1} área(s) refeita(s) com a configuração atual.\n", feitas, areas.Count));
     }
 
     /// <summary>Zero se algum vértice da linha cai na área; senão, a menor distância entre vértices.</summary>

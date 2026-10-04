@@ -13,7 +13,7 @@ namespace Clivus.Plugin;
 /// </summary>
 internal sealed class JanelaDeVaos : Window
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
+    private static CultureInfo Cultura => Tr.Culture;
 
     private readonly double _cobrir;
     private readonly TextBox _pilares = new() { Width = 60, Height = 24, Margin = new Thickness(6, 0, 6, 0) };
@@ -35,7 +35,7 @@ internal sealed class JanelaDeVaos : Window
 
         _cobrir = estrutura.PillarCoverage(mesa);
 
-        Title = "Clivus Solar — Vãos entre pilares";
+        Title = Tr.T("Clivus Solar — Vãos entre pilares");
         Width = 420;
         Height = 560;
         MinHeight = 360;
@@ -48,27 +48,26 @@ internal sealed class JanelaDeVaos : Window
         {
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12,
-            Text = $"Os pilares precisam cobrir {Numero(_cobrir)} m: a mesa de {Numero(mesa.Length)} m "
-                + "(módulos, espaçamentos e sobras) menos o balanço de "
-                + $"{Numero(estrutura.PillarCantilever)} m em cada ponta.",
+            Text = Tr.F("Os pilares precisam cobrir {0} m: a mesa de {1} m (módulos, espaçamentos e sobras) menos o balanço de {2} m em cada ponta.",
+                Numero(_cobrir), Numero(mesa.Length), Numero(estrutura.PillarCantilever)),
         };
         DockPanel.SetDock(explicacao, Dock.Top);
         pilha.Children.Add(explicacao);
 
         var quantos = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 8) };
-        quantos.Children.Add(new TextBlock { Text = "Pilares:", VerticalAlignment = VerticalAlignment.Center });
+        quantos.Children.Add(new TextBlock { Text = Tr.T("Pilares:"), VerticalAlignment = VerticalAlignment.Center });
         quantos.Children.Add(_pilares);
 
         var igual = new Button
         {
-            Content = "Distribuir igual",
+            Content = Tr.T("Distribuir igual"),
             Height = 24,
             Padding = new Thickness(8, 0, 8, 0),
-            ToolTip = "Refaz a lista com vãos iguais (ao milímetro) para este número de pilares; o último leva o resto.",
+            ToolTip = Tr.T("Refaz a lista com vãos iguais (ao milímetro) para este número de pilares; o último leva o resto."),
         };
         igual.Click += (_, _) => DistribuirIgual();
         quantos.Children.Add(igual);
-        _pilares.ToolTip = "Quantos pilares a mesa tem. N pilares dão N-1 vãos.";
+        _pilares.ToolTip = Tr.T("Quantos pilares a mesa tem. N pilares dão N-1 vãos.");
 
         DockPanel.SetDock(quantos, Dock.Top);
         pilha.Children.Add(quantos);
@@ -77,19 +76,19 @@ internal sealed class JanelaDeVaos : Window
 
         var alvo = new Button
         {
-            Content = "Usar o vão-alvo",
+            Content = Tr.T("Usar o vão-alvo"),
             Height = 26,
             Padding = new Thickness(8, 0, 8, 0),
-            ToolTip = "Apaga os vãos escritos: a tabela volta a sair do vão-alvo, com vãos iguais.",
+            ToolTip = Tr.T("Apaga os vãos escritos: a tabela volta a sair do vão-alvo, com vãos iguais."),
         };
         alvo.Click += (_, _) => { Vaos = null; Confirmou = true; DialogResult = true; };
 
-        _ok = new Button { Content = "OK", Width = 80, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsDefault = true, ToolTip = "Guarda estes vãos na mesa. Só libera quando a soma fecha." };
+        _ok = new Button { Content = "OK", Width = 80, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsDefault = true, ToolTip = Tr.T("Guarda estes vãos na mesa. Só libera quando a soma fecha.") };
         _ok.Click += (_, _) => Confirmar();
 
         botoes.Children.Add(alvo);
         botoes.Children.Add(_ok);
-        botoes.Children.Add(new Button { Content = "Cancelar", Width = 80, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true });
+        botoes.Children.Add(new Button { Content = Tr.T("Cancelar"), Width = 80, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true });
 
         DockPanel.SetDock(botoes, Dock.Bottom);
         pilha.Children.Add(botoes);
@@ -114,7 +113,7 @@ internal sealed class JanelaDeVaos : Window
         {
             var linha = new DockPanel { Margin = new Thickness(0, 2, 0, 2) };
             var rotulo = new TextBlock { Text = PillarSpanForm.Label(i) + " (m)", Width = 110, VerticalAlignment = VerticalAlignment.Center };
-            var campo = new TextBox { Height = 24, Text = Numero(vaos[i]), ToolTip = $"Distância do eixo do pilar {i + 1} ao eixo do pilar {i + 2}, em metro." };
+            var campo = new TextBox { Height = 24, Text = Numero(vaos[i]), ToolTip = Tr.F("Distância do eixo do pilar {0} ao eixo do pilar {1}, em metro.", i + 1, i + 2) };
 
             campo.TextChanged += (_, _) => Somar();
 
@@ -124,7 +123,7 @@ internal sealed class JanelaDeVaos : Window
             _campos.Add(campo);
         }
 
-        _pilares.Text = (vaos.Count + 1).ToString(Brasil);
+        _pilares.Text = (vaos.Count + 1).ToString(Cultura);
         Somar();
     }
 
@@ -133,7 +132,7 @@ internal sealed class JanelaDeVaos : Window
         if (!NumberInput.TryParseCount(_pilares.Text, out var pilares) || pilares < 2)
         {
             _soma.Foreground = Brushes.Firebrick;
-            _soma.Text = "O número de pilares precisa ser um inteiro de 2 para cima.";
+            _soma.Text = Tr.T("O número de pilares precisa ser um inteiro de 2 para cima.");
             return;
         }
 
@@ -144,7 +143,7 @@ internal sealed class JanelaDeVaos : Window
         catch (ArgumentOutOfRangeException)
         {
             _soma.Foreground = Brushes.Firebrick;
-            _soma.Text = $"Não dá para distribuir {pilares} pilares em {Numero(_cobrir)} m (de 2 a 1001 pilares, vão de pelo menos 1 mm).";
+            _soma.Text = Tr.F("Não dá para distribuir {0} pilares em {1} m (de 2 a 1001 pilares, vão de pelo menos 1 mm).", pilares, Numero(_cobrir));
         }
     }
 
@@ -153,7 +152,7 @@ internal sealed class JanelaDeVaos : Window
         if (!PillarSpanForm.TryRead(_campos.Select(c => c.Text).ToList(), out var vaos, out var motivo))
         {
             _soma.Foreground = Brushes.Firebrick;
-            _soma.Text = char.ToUpper(motivo[0], Brasil) + motivo[1..];
+            _soma.Text = char.ToUpper(motivo[0], Cultura) + motivo[1..];
             _ok.IsEnabled = false;
             return;
         }
@@ -176,5 +175,5 @@ internal sealed class JanelaDeVaos : Window
         DialogResult = true;
     }
 
-    private static string Numero(double valor) => valor.ToString("0.###", Brasil);
+    private static string Numero(double valor) => valor.ToString("0.###", Cultura);
 }

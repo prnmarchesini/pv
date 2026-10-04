@@ -37,7 +37,7 @@ public static class DeclividadeCommands
         {
             var (ligada, unidade) = SetaDeDeclividade.Ler(documento.Database);
 
-            var opcoes = new PromptKeywordOptions("\nDeclividade das mesas, em que unidade? [Porcentagem/Graus/Desligar]");
+            var opcoes = new PromptKeywordOptions(Tr.T("\nDeclividade das mesas, em que unidade?") + " [Porcentagem/Graus/Desligar]");
             opcoes.Keywords.Add(Porcentagem);
             opcoes.Keywords.Add(Graus);
             opcoes.Keywords.Add(Desligar);
@@ -53,7 +53,7 @@ public static class DeclividadeCommands
             {
                 SetaDeDeclividade.Gravar(documento.Database, false, unidade);
                 var apagadas = Apagar(documento.Database);
-                editor.WriteMessage($"\nDECLIVIDADE desligada: {apagadas} entidade(s) apagada(s) da camada {LayoutLayers.SetaDeclividade}.\n");
+                editor.WriteMessage(Tr.F("\nDECLIVIDADE desligada: {0} entidade(s) apagada(s) da camada {1}.\n", apagadas, LayoutLayers.SetaDeclividade));
                 editor.Regen();
                 return;
             }
@@ -64,8 +64,8 @@ public static class DeclividadeCommands
             var (mesas, entidades) = Regerar(documento.Database, nova);
 
             editor.WriteMessage(
-                $"\nDECLIVIDADE em {(nova == SlopeUnit.Degrees ? "graus" : "porcentagem")}: seta e valor em {mesas} mesa(s) "
-                + $"({entidades} entidade(s)), na camada {LayoutLayers.SetaDeclividade}. A seta aponta para onde a mesa desce.\n");
+                Tr.F("\nDECLIVIDADE em {0}: seta e valor em {1} mesa(s) ({2} entidade(s)), na camada {3}. A seta aponta para onde a mesa desce.\n",
+                    nova == SlopeUnit.Degrees ? Tr.T("graus") : Tr.T("porcentagem"), mesas, entidades, LayoutLayers.SetaDeclividade));
 
             editor.Regen();
             GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
@@ -73,7 +73,7 @@ public static class DeclividadeCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha na análise de declividade.", erro);
-            editor.WriteMessage($"\nNão consegui desenhar a declividade: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui desenhar a declividade: {0}\n", erro.Message));
         }
     }
 

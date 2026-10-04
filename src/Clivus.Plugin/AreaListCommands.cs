@@ -32,14 +32,14 @@ public static class AreaListCommands
             var registradas = AreaStore.Load(documento.Database);
             var noDesenho = Varrer(documento.Database);
 
-            editor.WriteMessage($"\nÁreas registradas: {registradas.Count}\n");
+            editor.WriteMessage(Tr.F("\nÁreas registradas: {0}\n", registradas.Count));
             foreach (var area in registradas)
             {
                 editor.WriteMessage(
                     $"  REGISTRADA {area.Identity.Id:D} {area.Identity.DisplayName} handle={area.Handle}\n");
             }
 
-            editor.WriteMessage($"Áreas no desenho: {noDesenho.Count}\n");
+            editor.WriteMessage(Tr.F("Áreas no desenho: {0}\n", noDesenho.Count));
             foreach (var area in noDesenho)
             {
                 editor.WriteMessage(
@@ -50,14 +50,13 @@ public static class AreaListCommands
             if (faltando > 0)
             {
                 editor.WriteMessage(
-                    $"  {faltando} área(s) do desenho não estão no registro. "
-                    + $"Use {PluginInfo.ComandoReindexar}.\n");
+                    Tr.F("  {0} área(s) do desenho não estão no registro. Use {1}.\n", faltando, PluginInfo.ComandoReindexar));
             }
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao listar as áreas.", erro);
-            editor.WriteMessage($"\nNão consegui listar as áreas: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui listar as áreas: {0}\n", erro.Message));
         }
     }
 

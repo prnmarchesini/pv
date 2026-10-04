@@ -44,7 +44,7 @@ public static class RecalcularCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao recalcular a mesa.", erro);
-            editor.WriteMessage($"\nNão consegui recalcular a mesa: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui recalcular a mesa: {0}\n", erro.Message));
         }
     }
 
@@ -66,7 +66,7 @@ public static class RecalcularCommands
 
             if (sujas.Count == 0)
             {
-                editor.WriteMessage("\nRECALCULAR Nenhuma mesa pendente.\n");
+                editor.WriteMessage(Tr.T("\nRECALCULAR Nenhuma mesa pendente.\n"));
                 return;
             }
 
@@ -75,7 +75,7 @@ public static class RecalcularCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao recalcular as mesas pendentes.", erro);
-            editor.WriteMessage($"\nNão consegui recalcular as mesas pendentes: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui recalcular as mesas pendentes: {0}\n", erro.Message));
         }
     }
 
@@ -97,7 +97,7 @@ public static class RecalcularCommands
 
             if (sujas.Count == 0)
             {
-                editor.WriteMessage("\nRECALCULAR Nenhuma mesa pendente.\n");
+                editor.WriteMessage(Tr.T("\nRECALCULAR Nenhuma mesa pendente.\n"));
                 return;
             }
 
@@ -106,7 +106,7 @@ public static class RecalcularCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao recalcular automaticamente.", erro);
-            editor.WriteMessage($"\nNão consegui recalcular: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui recalcular: {0}\n", erro.Message));
         }
     }
 
@@ -124,9 +124,9 @@ public static class RecalcularCommands
     internal static void RecalcularMesas(Editor editor, Document documento, ProcessedTerrain terreno, IReadOnlyList<Guid> mesas, TableProfile perfil)
     {
         var doProjeto = ConfigCommands.Inicial(documento, out var avisoDaConfig);
-        if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage($"\n  ATENÇÃO: {notaDoT3}.\n");
+        if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", notaDoT3));
         var settings = doProjeto.ForTable(perfil.Frame);
-        if (avisoDaConfig is not null) editor.WriteMessage($"\n  ATENÇÃO: {avisoDaConfig}\n");
+        if (avisoDaConfig is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", avisoDaConfig));
 
         var pilares = perfil.Frame.Pillars(perfil.Layout);
         var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
@@ -161,7 +161,7 @@ public static class RecalcularCommands
             }
         }
 
-        editor.WriteMessage($"\nRECALCULAR {feitas} de {mesas.Count} mesa(s) recalculada(s) com a configuração atual.\n");
+        editor.WriteMessage(Tr.F("\nRECALCULAR {0} de {1} mesa(s) recalculada(s) com a configuração atual.\n", feitas, mesas.Count));
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
     }
 
@@ -171,15 +171,14 @@ public static class RecalcularCommands
     {
         if (!todas.TryGetValue(guid, out var mesa) || mesa.Identity is null || mesa.Contour is not { } contorno)
         {
-            editor.WriteMessage($"\nRECALCULAR A mesa {guid:D} não tem contorno; não há como saber onde ela está.\n");
+            editor.WriteMessage(Tr.F("\nRECALCULAR A mesa {0:D} não tem contorno; não há como saber onde ela está.\n", guid));
             return false;
         }
 
         if (mesa.IsDuplicated)
         {
             editor.WriteMessage(
-                $"\nRECALCULAR {mesa.Identity.Label} tem {mesa.Contours.Count} contornos com a mesma identidade (mesa copiada e colada). "
-                + "Apague a cópia, ou use o Regerar área.\n");
+                Tr.F("\nRECALCULAR {0} tem {1} contornos com a mesma identidade (mesa copiada e colada). Apague a cópia, ou use o Regerar área.\n", mesa.Identity.Label, mesa.Contours.Count));
             return false;
         }
 
@@ -209,7 +208,7 @@ public static class RecalcularCommands
         }
         catch (ArgumentException erro)
         {
-            editor.WriteMessage($"\nRECALCULAR {mesa.Identity!.Label}: {erro.Message} Use o Regerar área.\n");
+            editor.WriteMessage(Tr.F("\nRECALCULAR {0}: {1} Use o Regerar área.\n", mesa.Identity!.Label, erro.Message));
             return false;
         }
 
@@ -235,14 +234,14 @@ public static class RecalcularCommands
             }
             catch (InvalidOperationException erro)
             {
-                editor.WriteMessage($"\nRECALCULAR {mesa.Identity.Label} tem as pontas escolhidas à mão e não deu para refazê-las: {erro.Message} Use Pontas > Automatico.\n");
+                editor.WriteMessage(Tr.F("\nRECALCULAR {0} tem as pontas escolhidas à mão e não deu para refazê-las: {1} Use Pontas > Automatico.\n", mesa.Identity.Label, erro.Message));
                 return false;
             }
 
             fileira = ajuste.Row;
             pontas = (mesa.Identity.ManualFirstLowEdge!.Value, mesa.Identity.ManualLastLowEdge!.Value);
             avisos.AddRange(ajuste.Warnings);
-            editor.WriteMessage($"\n  {mesa.Identity.Label} tem as pontas escolhidas à mão: mantidas.\n");
+            editor.WriteMessage(Tr.F("\n  {0} tem as pontas escolhidas à mão: mantidas.\n", mesa.Identity.Label));
         }
         else
         {
@@ -257,7 +256,6 @@ public static class RecalcularCommands
 
             // O que o solver de fato usou: a ponta presa que a declividade
             // não deixou ligar foi solta, e isso é dito.
-            var brasil = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
             var juntas = fileira.Solution.Runs.Count == 1 ? fileira.Solution.Runs[0].JointClearances : [];
             var presas = new List<string>();
             var soltas = new List<string>();
@@ -266,7 +264,7 @@ public static class RecalcularCommands
             {
                 if (ponta is null) return;
 
-                var texto = $"{ponta.Label} (PB {ponta.Clearance.ToString("0.00", brasil)})";
+                var texto = Tr.F("{0} (PB {1:0.00})", ponta.Label, ponta.Clearance);
 
                 if (juntas.Count == 2 && Math.Abs(juntas[indice] - ponta.Clearance) <= 0.015) presas.Add(texto);
                 else soltas.Add(texto);
@@ -276,12 +274,12 @@ public static class RecalcularCommands
             Conferir(ultima, 1);
 
             if (presas.Count > 0)
-                editor.WriteMessage($"\n  {mesa.Identity.Label}: pontas presas nas vizinhas {string.Join(" e ", presas)}.\n");
+                editor.WriteMessage(Tr.F("\n  {0}: pontas presas nas vizinhas {1}.\n", mesa.Identity.Label, string.Join(Tr.T(" e "), presas)));
 
             if (soltas.Count > 0)
                 editor.WriteMessage(
-                    $"\n  ATENÇÃO: {mesa.Identity.Label} não conseguiu prender a ponta em {string.Join(" e ", soltas)}: "
-                    + "a declividade não deixa. A junta ficou aberta; use o Regerar área.\n");
+                    Tr.F("\n  ATENÇÃO: {0} não conseguiu prender a ponta em {1}: a declividade não deixa. A junta ficou aberta; use o Regerar área.\n",
+                        mesa.Identity.Label, string.Join(Tr.T(" e "), soltas)));
         }
 
         Apagar(documento, mesa);
@@ -291,18 +289,19 @@ public static class RecalcularCommands
             LayoutDrawer.TiposDeMesa.DaMesa(documento.Database, mesa.Identity!.ProfileName, geometria, perfil.Layout.Module));
         var processada = fileira.Tables[0];
 
-        foreach (var aviso in fileira.Warnings.Concat(avisos)) editor.WriteMessage($"\n  ATENÇÃO: {aviso}\n");
+        foreach (var aviso in fileira.Warnings.Concat(avisos)) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
 
         if (processada.Orientation.DivergenceRadians > 5 * Math.PI / 180)
         {
             editor.WriteMessage(
-                $"\n  ATENÇÃO: {mesa.Identity.Label} está girada {processada.Orientation.DivergenceRadians * 180 / Math.PI:0.#}° em relação ao azimute "
-                + "configurado (foi girada à mão?). A mesa foi recalculada como está.\n");
+                Tr.F("\n  ATENÇÃO: {0} está girada {1:0.#}° em relação ao azimute configurado (foi girada à mão?). A mesa foi recalculada como está.\n",
+                    mesa.Identity.Label, processada.Orientation.DivergenceRadians * 180 / Math.PI));
         }
 
         editor.WriteMessage(
-            $"\nRECALCULAR {mesa.Identity!.Label} refeita onde está: {processada.Report.Describe()}; {processada.Pillars.Describe()}; "
-            + $"{desenho.Pillars} pilar(es), {desenho.Modules} módulo(s)" + (desenho.Marked > 0 ? ", NÃO CABE NO TERRENO" : string.Empty) + ".\n");
+            Tr.F("\nRECALCULAR {0} refeita onde está: {1}; {2}; {3} pilar(es), {4} módulo(s){5}.\n",
+                mesa.Identity!.Label, processada.Report.Describe(), processada.Pillars.Describe(), desenho.Pillars, desenho.Modules,
+                desenho.Marked > 0 ? Tr.T(", NÃO CABE NO TERRENO") : string.Empty));
 
         return true;
     }
@@ -349,10 +348,10 @@ public static class RecalcularCommands
         return null;
     }
 
-    internal static Guid? MesaClicada(Editor editor, Document documento, string pergunta = "\nClique numa peça da mesa a recalcular: ")
+    internal static Guid? MesaClicada(Editor editor, Document documento, string? pergunta = null)
     {
-        var opcoes = new PromptEntityOptions(pergunta);
-        opcoes.SetRejectMessage("\nIsso não é uma peça de mesa do plugin.");
+        var opcoes = new PromptEntityOptions(pergunta ?? Tr.T("\nClique numa peça da mesa a recalcular: "));
+        opcoes.SetRejectMessage(Tr.T("\nIsso não é uma peça de mesa do plugin."));
         opcoes.AddAllowedClass(typeof(Entity), false);
 
         var resposta = editor.GetEntity(opcoes);
@@ -363,7 +362,7 @@ public static class RecalcularCommands
         var entidade = (Entity)transacao.GetObject(resposta.ObjectId, OpenMode.ForRead);
         var guid = LayoutScan.TableOf(entidade);
 
-        if (guid is null) editor.WriteMessage("\nRECALCULAR Isso não é uma peça de mesa do plugin.\n");
+        if (guid is null) editor.WriteMessage(Tr.T("\nRECALCULAR Isso não é uma peça de mesa do plugin.\n"));
 
         return guid;
     }

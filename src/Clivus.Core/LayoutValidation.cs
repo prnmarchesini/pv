@@ -41,46 +41,46 @@ public sealed record LayoutValidation(
     /// <summary>As linhas do relatório, em português, cada uma dizendo o que fazer.</summary>
     public IReadOnlyList<string> Lines()
     {
-        if (IsClean) return ["nada a apontar: registros, mesas e terreno em dia."];
+        if (IsClean) return [Tr.T("nada a apontar: registros, mesas e terreno em dia.")];
 
         var linhas = new List<string>();
 
         if (MissingAreas.Count > 0)
-            linhas.Add($"{MissingAreas.Count} área(s) registrada(s) não está(ão) no desenho ({Juntar(MissingAreas)}): rode Reindexar, ou trace de novo.");
+            linhas.Add(Tr.F("{0} área(s) registrada(s) não está(ão) no desenho ({1}): rode Reindexar, ou trace de novo.", MissingAreas.Count, Juntar(MissingAreas)));
 
         if (MissingAlignments.Count > 0)
-            linhas.Add($"{MissingAlignments.Count} alinhamento(s) registrado(s) não está(ão) no desenho ({Juntar(MissingAlignments)}): rode Reindexar, ou trace de novo.");
+            linhas.Add(Tr.F("{0} alinhamento(s) registrado(s) não está(ão) no desenho ({1}): rode Reindexar, ou trace de novo.", MissingAlignments.Count, Juntar(MissingAlignments)));
 
         if (DirtyTables.Count > 0)
-            linhas.Add($"{DirtyTables.Count} mesa(s) marcada(s) pendente(s) pelo vigia ({Juntar(DirtyTables)}): movida, editada ou copiada; use Recalcular pendentes.");
+            linhas.Add(Tr.F("{0} mesa(s) marcada(s) pendente(s) pelo vigia ({1}): movida, editada ou copiada; use Recalcular pendentes.", DirtyTables.Count, Juntar(DirtyTables)));
 
         if (MovedTables.Count > 0)
-            linhas.Add($"{MovedTables.Count} mesa(s) fora de onde foi(ram) desenhada(s) sem o vigia ver ({Juntar(MovedTables)}): movida(s) com o plugin descarregado; use Recalcular nelas.");
+            linhas.Add(Tr.F("{0} mesa(s) fora de onde foi(ram) desenhada(s) sem o vigia ver ({1}): movida(s) com o plugin descarregado; use Recalcular nelas.", MovedTables.Count, Juntar(MovedTables)));
 
         if (DuplicatedAreas > 0)
-            linhas.Add($"{DuplicatedAreas} identidade(s) de área em mais de uma polilinha (área copiada): apague a cópia, ou trace de novo.");
+            linhas.Add(Tr.F("{0} identidade(s) de área em mais de uma polilinha (área copiada): apague a cópia, ou trace de novo.", DuplicatedAreas));
 
         if (DuplicatedAlignments > 0)
-            linhas.Add($"{DuplicatedAlignments} identidade(s) de alinhamento em mais de uma polilinha (alinhamento copiado): apague a cópia, ou trace de novo.");
+            linhas.Add(Tr.F("{0} identidade(s) de alinhamento em mais de uma polilinha (alinhamento copiado): apague a cópia, ou trace de novo.", DuplicatedAlignments));
 
         if (DuplicatedTables.Count > 0)
-            linhas.Add($"{DuplicatedTables.Count} mesa(s) com mais de um contorno na mesma identidade ({Juntar(DuplicatedTables)}): apague a cópia, ou use o Regerar área.");
+            linhas.Add(Tr.F("{0} mesa(s) com mais de um contorno na mesma identidade ({1}): apague a cópia, ou use o Regerar área.", DuplicatedTables.Count, Juntar(DuplicatedTables)));
 
         if (DuplicatedPieces > 0)
-            linhas.Add($"{DuplicatedPieces} peça(s) com identidade repetida: use o Regerar área.");
+            linhas.Add(Tr.F("{0} peça(s) com identidade repetida: use o Regerar área.", DuplicatedPieces));
 
         if (Orphans > 0)
-            linhas.Add($"{Orphans} mesa(s) só com peças, sem contorno: apague as peças, ou use o Regerar área.");
+            linhas.Add(Tr.F("{0} mesa(s) só com peças, sem contorno: apague as peças, ou use o Regerar área.", Orphans));
 
         if (PendingRemovals.Count > 0)
-            linhas.Add($"{PendingRemovals.Count} mesa(s) removida(s) ainda não recontada(s) ({Juntar(PendingRemovals)}): use Recontar.");
+            linhas.Add(Tr.F("{0} mesa(s) removida(s) ainda não recontada(s) ({1}): use Recontar.", PendingRemovals.Count, Juntar(PendingRemovals)));
 
         if (TerrainWarning is not null)
-            linhas.Add($"terreno: {TerrainWarning}");
+            linhas.Add(Tr.F("terreno: {0}", TerrainWarning));
 
         return linhas;
     }
 
     private static string Juntar(IReadOnlyList<string> nomes) =>
-        nomes.Count <= 5 ? string.Join(", ", nomes) : string.Join(", ", nomes.Take(5)) + $" e mais {nomes.Count - 5}";
+        nomes.Count <= 5 ? string.Join(", ", nomes) : string.Join(", ", nomes.Take(5)) + Tr.F(" e mais {0}", nomes.Count - 5);
 }

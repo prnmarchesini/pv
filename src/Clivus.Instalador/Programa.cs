@@ -45,7 +45,7 @@ internal static class Programa
         try
         {
             if (Instalacao.AutoCadAberto())
-                return (5, "Feche o Civil 3D (e o AutoCAD) antes de continuar: ele segura os arquivos do plugin.");
+                return (5, Tr.T("Feche o Civil 3D (e o AutoCAD) antes de continuar: ele segura os arquivos do plugin."));
 
             if (desinstalar) return (0, instalacao.Desinstalar());
 
@@ -60,7 +60,7 @@ internal static class Programa
         }
         catch (Exception erro)
         {
-            return (1, $"Não consegui {(desinstalar ? "desinstalar" : "instalar")}: {erro.Message}");
+            return (1, desinstalar ? Tr.F("Não consegui desinstalar: {0}", erro.Message) : Tr.F("Não consegui instalar: {0}", erro.Message));
         }
     }
 }
@@ -73,7 +73,7 @@ internal sealed class JanelaDoInstalador : Window
 
     internal JanelaDoInstalador(Instalacao instalacao, bool desinstalar, bool ignorarCivil)
     {
-        Title = desinstalar ? "Desinstalar o Clivus Solar" : $"Instalar o Clivus Solar {Instalacao.Versao}";
+        Title = desinstalar ? Tr.T("Desinstalar o Clivus Solar") : Tr.F("Instalar o Clivus Solar {0}", Instalacao.Versao);
         Width = 520;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
@@ -109,9 +109,8 @@ internal sealed class JanelaDoInstalador : Window
         TextBlock Texto(string t) => new() { Text = t, TextWrapping = TextWrapping.Wrap, Foreground = Petroleo, Margin = new Thickness(0, 0, 0, 8), FontSize = 13 };
 
         var explicacao = Texto(desinstalar
-            ? "Tira o Clivus Solar deste computador. Sua licença e seus perfis de mesa ficam guardados, para uma próxima instalação."
-            : "Instala o plugin de layout de usinas fotovoltaicas para o Civil 3D 2026, só para o seu usuário (não precisa de administrador). "
-              + "Depois de instalar, abra o Civil 3D e ative com o código gerado no portal do app.");
+            ? Tr.T("Tira o Clivus Solar deste computador. Sua licença e seus perfis de mesa ficam guardados, para uma próxima instalação.")
+            : Tr.T("Instala o plugin de layout de usinas fotovoltaicas para o Civil 3D 2026, só para o seu usuário (não precisa de administrador). Depois de instalar, abra o Civil 3D e ative com o código gerado no portal do app."));
         pilha.Children.Add(explicacao);
 
         var situacao = Texto(string.Empty);
@@ -121,7 +120,7 @@ internal sealed class JanelaDoInstalador : Window
         var botoes = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
         var acao = new Button
         {
-            Content = desinstalar ? "Desinstalar" : "Instalar",
+            Content = desinstalar ? Tr.T("Desinstalar") : Tr.T("Instalar"),
             Width = 120,
             Height = 32,
             Background = Ambar,
@@ -130,7 +129,7 @@ internal sealed class JanelaDoInstalador : Window
             BorderThickness = new Thickness(0),
             IsDefault = true,
         };
-        var fechar = new Button { Content = "Cancelar", Width = 100, Height = 32, Margin = new Thickness(10, 0, 0, 0), IsCancel = true };
+        var fechar = new Button { Content = Tr.T("Cancelar"), Width = 100, Height = 32, Margin = new Thickness(10, 0, 0, 0), IsCancel = true };
         fechar.Click += (_, _) => Close();
         botoes.Children.Add(acao);
         botoes.Children.Add(fechar);
@@ -147,7 +146,7 @@ internal sealed class JanelaDoInstalador : Window
             situacao.Text = frase;
             situacao.Foreground = codigo == 0 ? Brushes.ForestGreen : Brushes.Firebrick;
 
-            fechar.Content = "Fechar";
+            fechar.Content = Tr.T("Fechar");
             acao.Visibility = codigo == 0 ? Visibility.Collapsed : Visibility.Visible;
             acao.IsEnabled = codigo != 0;
         };
