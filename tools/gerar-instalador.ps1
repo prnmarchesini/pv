@@ -72,16 +72,23 @@ if ($Enviar) {
     $chave = Join-Path $HOME '.ssh\clivus_kinghost'
     if (-not (Test-Path $chave)) { Write-Host "Sem a chave $chave." -ForegroundColor Red; exit 1 }
 
-    $comandos = "put `"$($exe.Replace('\', '/'))`"`nput `"$($exe.Replace('\', '/')).sha256`"`n"
+    # A versao (historico) e o nome fixo, que e o do botao da landing. O
+    # .sha256 de cada um traz o proprio nome, para o Get-FileHash bater.
+    $fixo = Join-Path $saida 'ClivusSolar-Setup.exe'
+    Copy-Item $exe $fixo -Force
+    Set-Content -Path "$fixo.sha256" -Value "$hash  ClivusSolar-Setup.exe" -Encoding ascii
+
+    $arquivos = @($exe, "$exe.sha256", $fixo, "$fixo.sha256")
+    $comandos = (($arquivos | ForEach-Object { "put `"$($_.Replace('\', '/'))`"" }) -join "`n") + "`n"
     $comandos | & sftp -i $chave -o IdentitiesOnly=yes -o BatchMode=yes -b - $servidor
     if ($LASTEXITCODE -ne 0) { Write-Host 'O envio falhou.' -ForegroundColor Red; exit 1 }
 
-    $nome = Split-Path -Leaf $exe
-    $baixado = Join-Path ([IO.Path]::GetTempPath()) "conferir-$nome"
-    Invoke-WebRequest "$site/$nome" -OutFile $baixado -UseBasicParsing
-    $publicado = (Get-FileHash $baixado -Algorithm SHA256).Hash.ToLowerInvariant()
-    Remove-Item $baixado -Force
-    if ($publicado -ne $hash) { Write-Host "O arquivo no site nao bate: $publicado" -ForegroundColor Red; exit 1 }
-
-    Write-Host "Publicado:  $site/$nome (SHA-256 conferido)" -ForegroundColor Green
+    foreach ($nome in (Split-Path -Leaf $exe), 'ClivusSolar-Setup.exe') {
+        $baixado = Join-Path ([IO.Path]::GetTempPath()) "conferir-$nome"
+        Invoke-WebRequest "$site/$nome" -OutFile $baixado -UseBasicParsing -Headers @{ 'Cache-Control' = 'no-cache' }
+        $publicado = (Get-FileHash $baixado -Algorithm SHA256).Hash.ToLowerInvariant()
+        Remove-Item $baixado -Force
+        if ($publicado -ne $hash) { Write-Host "O arquivo $nome no site nao bate: $publicado" -ForegroundColor Red; exit 1 }
+        Write-Host "Publicado:  $site/$nome (SHA-256 conferido)" -ForegroundColor Green
+    }
 }
