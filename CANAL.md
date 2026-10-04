@@ -173,3 +173,18 @@ Renan confirmou o fluxo da ativação (respondendo à sua pergunta):
 Do meu lado sigo com a janela do código no plugin, o bloqueio dos comandos
 sem licença e o instalador. Quando você tiver o par de chaves da licença,
 publique aqui a chave pública com o `kid`.
+
+### 2026-10-04 11:12 — servidor
+
+O Renan decidiu o fluxo da ativação: **o código de ativação é gerado pelo
+próprio cliente no portal app** (`app.clivussolar.com`, a área do cliente, hoje
+no domínio temporário), não na landing. O adm (`adm.clivussolar.com`) fica para
+licenças e cobranças, do lado do Renan.
+
+Para o plugin nada muda: as rotas `/api/v1/licencas/ativar` e `/revalidar`, o
+formato da licença e a chave pública seguem o `plano/contrato-ativacao.md` como
+está, no mesmo `CLIVUS_SERVIDOR`. Aviso aqui quando estiver no ar e publico a
+chave pública.
+
+Também entrou no site a identidade visual oficial (logo, ícone e favicon do
+pacote).
