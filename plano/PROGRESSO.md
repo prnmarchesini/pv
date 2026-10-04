@@ -4933,3 +4933,11 @@ do servidor (`c421925`), e escreveu `plano/develop.md`. Daqui:
   licença develop já está guardada.
 
 Bateria: tudo verde.
+
+**3D sem as mesas soltas na cota 0** (o servidor viu, no CANAL.md, 154
+módulos uns 720 m abaixo da usina): o módulo ou pilar sem terreno embaixo e
+fora da faixa de cotas do terreno fica fora da cena. No desenho ele nasce
+plano na cota 0 e marcado (regra 5). O módulo da beira, na altura das
+vizinhas, fica. O comando diz quantos saíram. Com isso a cota da cena volta
+a ser relativa. Itatiba de novo: 154 módulos e 40 pilares fora, 5.670 e 1.424
+no 3D, id `ohSyfskKyx1Z5B43JESgKOxH`. Teste novo na etapa 9; bateria verde.

@@ -122,7 +122,10 @@ public static class Ver3DCommands
         var terreno = FileiraCommands.ExigirTerreno(editor, documento);
         if (terreno is null) return null;
 
-        var cena = Cena(documento, terreno);
+        var (cena, modulosFora, pilaresFora) = Viewer3DPage.OnTerrain(Cena(documento, terreno), (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null);
+
+        if (modulosFora + pilaresFora > 0)
+            editor.WriteMessage($"\n  {modulosFora} módulo(s) e {pilaresFora} pilar(es) sem terreno embaixo ficaram fora do 3D (no desenho estão planos na cota 0 e marcados).\n");
 
         if (cena.Faces.Count == 0 && cena.Trees.Count == 0)
             editor.WriteMessage("\n  ATENÇÃO: o desenho não tem módulo nem árvore do plugin; a página mostra só o terreno.\n");

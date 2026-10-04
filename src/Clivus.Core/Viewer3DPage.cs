@@ -69,6 +69,42 @@ public static class Viewer3DPage
         return new Scene3DTerrain(minX, minY, passo, colunas, linhas, cotas);
     }
 
+    /// <summary>
+    /// A cena sem o que nasceu sem chão: módulo cujo centro não tem terreno
+    /// embaixo e que está fora da faixa de cotas do terreno (no desenho, plano
+    /// na cota 0 e marcado, regra 5) fica fora; pilar idem. No 3D seriam uma
+    /// mesa solta centenas de metros abaixo da usina, e o enquadramento ficaria
+    /// pequeno (CANAL.md, 04/10/2026). Módulo na beira, sem terreno embaixo mas
+    /// na altura das vizinhas, fica. A cota não é inventada.
+    /// </summary>
+    public static (Scene3D Cena, int ModulosFora, int PilaresFora) OnTerrain(Scene3D scene, Func<double, double, double?> ground)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(ground);
+
+        var cotas = scene.Terrain?.Z.Where(v => v is not null).Select(v => v!.Value).ToList() ?? [];
+        if (cotas.Count == 0) return (scene, 0, 0);
+
+        // A faixa de cotas do terreno, com folga para a mesa alta e o pilar enterrado.
+        double baixo = cotas.Min() - MargemAbaixo, alto = cotas.Max() + MargemAcima;
+        bool NaFaixa(double z) => z >= baixo && z <= alto;
+
+        var faces = scene.Faces
+            .Where(f => ground(f.Corners.Average(p => p.X), f.Corners.Average(p => p.Y)) is not null || f.Corners.All(p => NaFaixa(p.Z)))
+            .ToList();
+        var pilares = scene.Pillars
+            .Where(p => ground(p.X, p.Y) is not null || (NaFaixa(p.Top) && NaFaixa(p.Bottom)))
+            .ToList();
+
+        return (scene with { Faces = faces, Pillars = pilares }, scene.Faces.Count - faces.Count, scene.Pillars.Count - pilares.Count);
+    }
+
+    /// <summary>Folga abaixo da cota mais baixa do terreno (pilar enterrado), em metros.</summary>
+    public const double MargemAbaixo = 5;
+
+    /// <summary>Folga acima da cota mais alta do terreno (mesa alta), em metros.</summary>
+    public const double MargemAcima = 15;
+
     /// <summary>A origem da cena: o centro da caixa de tudo que ela tem.</summary>
     public static Point3 Origin(Scene3D scene)
     {

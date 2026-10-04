@@ -20,6 +20,48 @@ public class Viewer3DPageTests
             [[new(314_050, 7_456_020, 702), new(314_055, 7_456_025, 702.5), new(314_045, 7_456_025, 702.5)]]);
     }
 
+    /// <summary>
+    /// Módulo e pilar sem terreno embaixo e fora da faixa de cotas (no desenho,
+    /// planos na cota 0) ficam fora da cena; o da beira, na altura das
+    /// vizinhas, fica; a origem volta à cota da usina.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "9")]
+    public void ModuloEPilarSemTerrenoEmbaixoFicamForaDaCena()
+    {
+        double? Chao(double x, double y) => x < 314_000 + 95 ? 700 : null;
+
+        var cena = Cena();
+        var solto = new Scene3DFace([new(314_097, 7_456_010, 0), new(314_099, 7_456_010, 0), new(314_099, 7_456_011, 0.815), new(314_097, 7_456_011, 0.815)], new RgbColor(255, 0, 255));
+        var meioFora = new Scene3DFace([new(314_093, 7_456_012, 0), new(314_098, 7_456_012, 0), new(314_098, 7_456_013, 0.5), new(314_093, 7_456_013, 0.5)], new RgbColor(255, 0, 255));
+        // Na beira: sem terreno embaixo, mas na altura das vizinhas. Fica.
+        var naBeira = new Scene3DFace([new(314_096, 7_456_020, 702), new(314_098, 7_456_020, 702), new(314_098, 7_456_021, 702.5), new(314_096, 7_456_021, 702.5)], new RgbColor(0, 160, 0));
+        var comSoltos = cena with
+        {
+            Faces = [.. cena.Faces, solto, meioFora, naBeira],
+            Pillars = [.. cena.Pillars, new Scene3DPillar(314_098, 7_456_010.5, 0.5, 0)],
+        };
+
+        Assert.Equal(0, Viewer3DPage.Origin(comSoltos).Z, 9);
+
+        var (limpa, modulos, pilares) = Viewer3DPage.OnTerrain(comSoltos, Chao);
+
+        Assert.Equal(2, modulos);
+        Assert.Equal(1, pilares);
+        Assert.Equal([.. cena.Faces, naBeira], limpa.Faces);
+        Assert.Equal(cena.Pillars, limpa.Pillars);
+        Assert.Equal(cena.Trees, limpa.Trees);
+        Assert.Equal(cena.Shadows, limpa.Shadows);
+        Assert.Same(cena.Terrain, limpa.Terrain);
+        Assert.Equal(Viewer3DPage.Origin(cena), Viewer3DPage.Origin(limpa));
+        Assert.True(Viewer3DPage.Origin(limpa).Z > 690);
+
+        // Tudo com chão: nada sai.
+        var (igual, nenhum, nenhumPilar) = Viewer3DPage.OnTerrain(cena, Chao);
+        Assert.Equal((0, 0), (nenhum, nenhumPilar));
+        Assert.Equal(cena.Faces, igual.Faces);
+    }
+
     [Fact]
     [Trait("Etapa", "9")]
     public void OTerrenoViraUmaGradeDeNoMaximoNCelulas()
