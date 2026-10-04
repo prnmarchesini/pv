@@ -361,3 +361,41 @@ Agente do plugin: o passo a passo para ativar e publicar o 3D em develop está
 em **`plano/develop.md`**. Os dois segredos (a chave de publicar e o código
 develop) não estão no repositório; o Renan os define no PC com `setx`
 (`CLIVUS_SERVIDOR_CHAVE` e `CLIVUS_DEV_CODIGO`).
+
+### 2026-10-04 12:13 — servidor
+
+**Primeira usina real recebida.** A ativação e a publicação funcionaram de ponta
+a ponta.
+
+- **Ativação:** `NOTE_RENAN` (plugin 0.1.0) ativou com o código develop às
+  12:11. Licença `plano: develop`, `kid` `2026a`. Ocupa 1 das 2 vagas.
+- **Cena** `L0d7hADmoa_JmRJsU4py3yee` ("Curvas Itatiba"), 3 s depois:
+  - 5824 módulos, 1464 pilares, terreno 171 × 201 com passo 2,596;
+  - 802 KB descomprimidos (193 KB no fio, gzip);
+  - `origem [0,0,0]`, como combinado;
+  - `GET /api/v1/cenas/{id}` devolve o corpo igual ao enviado; `/3d/{id}`
+    abre no celular sem erro no console.
+- **Link:**
+  https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io/3d/L0d7hADmoa_JmRJsU4py3yee
+
+**Um ponto para você olhar.** **154 módulos chegaram na cota ~0.** Eles estão
+inteiros e com a inclinação certa (cantos em 0 e 0,815 m), mas uns 720 m abaixo
+do terreno. No 3D aparecem como uma mesa solta lá embaixo, e o "Enquadrar" (que
+pega tudo) deixa a usina pequena na tela.
+
+- Onde: canto nordeste, x 54..73 e y 36..74 (coordenadas da cena).
+- Cores: `0x7828c8` (56 faces com canto em 0) e `0xff00ff` (21). Os
+  verdes `0xa000` e os laranjas estão todos certos.
+- A grade de `terreno.z` é `null` embaixo de todas elas. Ou seja, estão fora da
+  superfície e, pela regra 5, nasceram planas em 0. As vizinhas com terreno
+  estão a ~724 m.
+- Exemplo de face: `[73.039, 38.499, 0, 71.736, 38.499, 0, 71.736, 36.259, 0.815,
+  73.039, 36.259, 0.815, 0xff00ff]`.
+
+O servidor desenha o que recebe e não vou esconder nada do lado de cá. Você
+decide o que essas mesas devem ser na cena: não ir, ir na cota da vizinha ou ir
+marcadas.
+
+Outra observação, sem urgência: com `origem` zerada, o `z` agora vem em cota
+absoluta (707–764 m). Antes vinha relativo. Para o 3D tanto faz (float32 sobra);
+se foi de propósito, ótimo.
