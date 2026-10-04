@@ -26,7 +26,7 @@ public static class AtivarCommands
 
         if (!ClivusExtension.TemInterface())
         {
-            documento.Editor.WriteMessage($"\nA janela de ativação precisa da interface; use {PluginInfo.ComandoAtivarAutomatico}.\n");
+            documento.Editor.WriteMessage(Tr.F("\nA janela de ativação precisa da interface; use {0}.\n", PluginInfo.ComandoAtivarAutomatico));
             return;
         }
 
@@ -37,7 +37,7 @@ public static class AtivarCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha na janela de ativação.", erro);
-            documento.Editor.WriteMessage($"\nNão consegui abrir a ativação: {erro.Message}\n");
+            documento.Editor.WriteMessage(Tr.F("\nNão consegui abrir a ativação: {0}\n", erro.Message));
         }
     }
 
@@ -52,31 +52,31 @@ public static class AtivarCommands
 
         try
         {
-            var codigo = editor.GetString(new PromptStringOptions("\nCódigo de ativação: ") { AllowSpaces = false });
+            var codigo = editor.GetString(new PromptStringOptions(Tr.T("\nCódigo de ativação: ")) { AllowSpaces = false });
             if (codigo.Status != PromptStatus.OK) return;
 
             var (_, frase) = Licenciamento.Ativar(codigo.StringResult);
-            editor.WriteMessage($"\nATIVAR {frase}\n");
+            editor.WriteMessage(Tr.F("\nATIVAR {0}\n", frase));
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao ativar (automático).", erro);
-            editor.WriteMessage($"\nNão consegui ativar: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui ativar: {0}\n", erro.Message));
         }
     }
 
     /// <summary>A situação da licença, em uma frase.</summary>
     internal static string Situacao()
     {
-        if (!Licenciamento.Ligado) return "Esta versão do Clivus Solar não pede ativação.";
+        if (!Licenciamento.Ligado) return Tr.T("Esta versão do Clivus Solar não pede ativação.");
 
         var (estado, conteudo, porque) = Licenciamento.Estado();
 
         return estado switch
         {
-            LicenseState.Valid => $"Ativado para {conteudo!.Account} (plano {conteudo.Plan}), até {conteudo.ExpiresAt.ToLocalTime():dd/MM/yyyy}.",
-            LicenseState.Revalidate => $"Ativado para {conteudo!.Account}; a licença renova na próxima vez com internet (vale até {conteudo.ExpiresAt.ToLocalTime():dd/MM/yyyy}).",
-            _ => $"Não ativado ({porque}).",
+            LicenseState.Valid => Tr.F("Ativado para {0} (plano {1}), até {2:dd/MM/yyyy}.", conteudo!.Account, conteudo.Plan, conteudo.ExpiresAt.ToLocalTime()),
+            LicenseState.Revalidate => Tr.F("Ativado para {0}; a licença renova na próxima vez com internet (vale até {1:dd/MM/yyyy}).", conteudo!.Account, conteudo.ExpiresAt.ToLocalTime()),
+            _ => Tr.F("Não ativado ({0}).", porque),
         };
     }
 }
@@ -87,12 +87,12 @@ internal sealed class JanelaDeAtivacao : Window
     private static readonly Brush Petroleo = new SolidColorBrush(Color.FromRgb(0x0F, 0x25, 0x33));
 
     private readonly TextBlock _situacao = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) };
-    private readonly TextBox _codigo = new() { Width = 260, ToolTip = "O código gerado no portal do app (Clivus Solar), como CLV-XXXX-XXXX-XXXX." };
+    private readonly TextBox _codigo = new() { Width = 260, ToolTip = Tr.T("O código gerado no portal do app (Clivus Solar), como CLV-XXXX-XXXX-XXXX.") };
     private readonly TextBlock _recado = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
 
     internal JanelaDeAtivacao()
     {
-        Title = "Clivus Solar — Ativação";
+        Title = Tr.T("Clivus Solar — Ativação");
         Width = 480;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
@@ -103,10 +103,10 @@ internal sealed class JanelaDeAtivacao : Window
         _situacao.Text = AtivarCommands.Situacao();
 
         var linha = new StackPanel { Orientation = Orientation.Horizontal };
-        linha.Children.Add(new TextBlock { Text = "Código", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+        linha.Children.Add(new TextBlock { Text = Tr.T("Código"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
         linha.Children.Add(_codigo);
 
-        var ativar = new Button { Content = "Ativar", Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsDefault = true, ToolTip = "Manda o código ao servidor e guarda a licença neste PC." };
+        var ativar = new Button { Content = Tr.T("Ativar"), Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsDefault = true, ToolTip = Tr.T("Manda o código ao servidor e guarda a licença neste PC.") };
         ativar.Click += (_, _) =>
         {
             try
@@ -122,7 +122,7 @@ internal sealed class JanelaDeAtivacao : Window
                 // Clique de WPF: exceção solta derrubaria o Civil 3D.
                 RegistroDeDiagnostico.Registrar("Falha ao ativar.", erro);
                 _recado.Foreground = Brushes.Firebrick;
-                _recado.Text = $"Não consegui ativar: {erro.Message}";
+                _recado.Text = Tr.F("Não consegui ativar: {0}", erro.Message);
             }
             finally
             {
@@ -133,12 +133,12 @@ internal sealed class JanelaDeAtivacao : Window
 
         var portal = new Button
         {
-            Content = "Gerar meu código no portal",
+            Content = Tr.T("Gerar meu código no portal"),
             Padding = new Thickness(10, 0, 10, 0),
             Height = 26,
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 10, 0, 0),
-            ToolTip = "Abre o portal do app no navegador: entre na sua conta e gere o código desta máquina.",
+            ToolTip = Tr.T("Abre o portal do app no navegador: entre na sua conta e gere o código desta máquina."),
         };
         portal.Click += (_, _) =>
         {
@@ -154,7 +154,7 @@ internal sealed class JanelaDeAtivacao : Window
         pilha.Children.Add(_recado);
         pilha.Children.Add(portal);
 
-        var fechar = new Button { Content = "Fechar", Width = 90, Height = 26, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0), IsCancel = true };
+        var fechar = new Button { Content = Tr.T("Fechar"), Width = 90, Height = 26, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0), IsCancel = true };
         pilha.Children.Add(fechar);
 
         Content = pilha;

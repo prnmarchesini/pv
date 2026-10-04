@@ -16,18 +16,18 @@ internal static class PaletaDeCores
 {
     internal static readonly (string Nome, RgbColor Cor)[] Cores =
     [
-        ("Vermelho", RgbColor.Red),
-        ("Azul", RgbColor.Blue),
-        ("Magenta", RgbColor.Magenta),
-        ("Amarelo", new RgbColor(255, 255, 0)),
-        ("Laranja", new RgbColor(255, 128, 0)),
-        ("Verde", new RgbColor(0, 160, 0)),
-        ("Ciano", new RgbColor(0, 200, 200)),
-        ("Roxo", new RgbColor(128, 0, 200)),
-        ("Rosa", new RgbColor(255, 105, 180)),
-        ("Marrom", new RgbColor(150, 90, 40)),
-        ("Branco", new RgbColor(255, 255, 255)),
-        ("Preto", new RgbColor(0, 0, 0)),
+        (Tr.N("Vermelho"), RgbColor.Red),
+        (Tr.N("Azul"), RgbColor.Blue),
+        (Tr.N("Magenta"), RgbColor.Magenta),
+        (Tr.N("Amarelo"), new RgbColor(255, 255, 0)),
+        (Tr.N("Laranja"), new RgbColor(255, 128, 0)),
+        (Tr.N("Verde"), new RgbColor(0, 160, 0)),
+        (Tr.N("Ciano"), new RgbColor(0, 200, 200)),
+        (Tr.N("Roxo"), new RgbColor(128, 0, 200)),
+        (Tr.N("Rosa"), new RgbColor(255, 105, 180)),
+        (Tr.N("Marrom"), new RgbColor(150, 90, 40)),
+        (Tr.N("Branco"), new RgbColor(255, 255, 255)),
+        (Tr.N("Preto"), new RgbColor(0, 0, 0)),
     ];
 
     /// <summary>Uma caixa de escolha de cor, já com a cor dada escolhida.</summary>
@@ -35,7 +35,7 @@ internal static class PaletaDeCores
     {
         var caixa = new ComboBox { Height = 24, MinWidth = 130, ToolTip = dica };
 
-        foreach (var (nome, cor) in Cores) caixa.Items.Add(Item(nome, cor));
+        foreach (var (nome, cor) in Cores) caixa.Items.Add(Item(Tr.T(nome), cor));
 
         var indice = Array.FindIndex(Cores, c => c.Cor == escolhida);
 
@@ -70,9 +70,9 @@ internal static class PaletaDeCores
     {
         var mais = new ComboBoxItem
         {
-            Content = new TextBlock { Text = "Mais cores...", FontStyle = FontStyles.Italic },
+            Content = new TextBlock { Text = Tr.T("Mais cores..."), FontStyle = FontStyles.Italic },
             Tag = new MaisCores(),
-            ToolTip = "Abre a janela de cor do Windows: qualquer cor, por RGB ou pela paleta.",
+            ToolTip = Tr.T("Abre a janela de cor do Windows: qualquer cor, por RGB ou pela paleta."),
         };
 
         caixa.Items.Add(mais);

@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Autodesk.AutoCAD.ApplicationServices;
+using Clivus.Core;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
 namespace Clivus.Plugin;
@@ -20,27 +21,27 @@ internal sealed class JanelaDeSombras : Window
     private static readonly Dictionary<Document, JanelaDeSombras> Abertas = [];
 
     private readonly Document _documento;
-    private readonly ComboBox _modo = new() { Width = 260, ToolTip = "Um instante; um dia inteiro; o mesmo horário em cada dia de um período; ou todas as horas de um período. No período, cada módulo fica com a cor do pior caso." };
-    private readonly DatePicker _de = new() { Width = 130, ToolTip = "O dia (ou o primeiro dia do período)." };
-    private readonly DatePicker _ate = new() { Width = 130, ToolTip = "O último dia do período." };
-    private readonly TextBox _horaDe = new() { Width = 60, ToolTip = "A hora (ou a primeira hora de cada dia), hh:mm, no relógio local." };
-    private readonly TextBox _horaAte = new() { Width = 60, ToolTip = "A última hora de cada dia, hh:mm." };
-    private readonly TextBox _passo = new() { Width = 50, Text = "30", ToolTip = "De quantos em quantos minutos a sombra é calculada no dia." };
-    private readonly TextBox _dias = new() { Width = 40, Text = "1", ToolTip = "De quantos em quantos dias, no período: 1 é todo dia, 7 é um dia por semana (o ano inteiro fica rápido)." };
-    private readonly TextBox _fuso = new() { Width = 50, ToolTip = "O fuso do relógio, em horas: -3 em Brasília." };
+    private readonly ComboBox _modo = new() { Width = 260, ToolTip = Tr.T("Um instante; um dia inteiro; o mesmo horário em cada dia de um período; ou todas as horas de um período. No período, cada módulo fica com a cor do pior caso.") };
+    private readonly DatePicker _de = new() { Width = 130, ToolTip = Tr.T("O dia (ou o primeiro dia do período).") };
+    private readonly DatePicker _ate = new() { Width = 130, ToolTip = Tr.T("O último dia do período.") };
+    private readonly TextBox _horaDe = new() { Width = 60, ToolTip = Tr.T("A hora (ou a primeira hora de cada dia), hh:mm, no relógio local.") };
+    private readonly TextBox _horaAte = new() { Width = 60, ToolTip = Tr.T("A última hora de cada dia, hh:mm.") };
+    private readonly TextBox _passo = new() { Width = 50, Text = "30", ToolTip = Tr.T("De quantos em quantos minutos a sombra é calculada no dia.") };
+    private readonly TextBox _dias = new() { Width = 40, Text = "1", ToolTip = Tr.T("De quantos em quantos dias, no período: 1 é todo dia, 7 é um dia por semana (o ano inteiro fica rápido).") };
+    private readonly TextBox _fuso = new() { Width = 50, ToolTip = Tr.T("O fuso do relógio, em horas: -3 em Brasília.") };
     private readonly TextBlock _recado = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) };
 
     private JanelaDeSombras(Document documento)
     {
         _documento = documento;
 
-        Title = "Clivus Solar — Sombras";
+        Title = Tr.T("Clivus Solar — Sombras");
         Width = 640;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        foreach (var m in new[] { "Instante (dia e hora)", "Dia inteiro", "Horário fixo num período", "Período inteiro (todas as horas)" }) _modo.Items.Add(m);
+        foreach (var m in new[] { Tr.T("Instante (dia e hora)"), Tr.T("Dia inteiro"), Tr.T("Horário fixo num período"), Tr.T("Período inteiro (todas as horas)") }) _modo.Items.Add(m);
 
         var hoje = DateTime.Today;
         _de.SelectedDate = hoje;
@@ -78,18 +79,18 @@ internal sealed class JanelaDeSombras : Window
             return b;
         }
 
-        pilha.Children.Add(Linha(R("Modo", 70), _modo));
-        pilha.Children.Add(Linha(R("Dias", 70), _de, R("  a"), _ate, R("   a cada"), _dias, R(" dia(s)")));
-        pilha.Children.Add(Linha(R("Horário", 70), _horaDe, R("  às"), _horaAte, R("   passo"), _passo, R(" min    fuso"), _fuso, R(" h")));
+        pilha.Children.Add(Linha(R(Tr.T("Modo"), 70), _modo));
+        pilha.Children.Add(Linha(R(Tr.T("Dias"), 70), _de, R(Tr.T("  a")), _ate, R(Tr.T("   a cada")), _dias, R(Tr.T(" dia(s)"))));
+        pilha.Children.Add(Linha(R(Tr.T("Horário"), 70), _horaDe, R(Tr.T("  às")), _horaAte, R(Tr.T("   passo")), _passo, R(Tr.T(" min    fuso")), _fuso, R(" h")));
         pilha.Children.Add(Linha(
-            R("Atalhos", 70),
-            Atalho("Solstício de inverno", "21 de junho, das 9h às 15h de meia em meia hora: o critério usual (sem sombra das 9h às 15h no dia de sombra mais longa do ano no Brasil).", () => Preencher(1, new DateTime(hoje.Year, 6, 21), new DateTime(hoje.Year, 6, 21), "09:00", "15:00", "30", "1")),
-            Atalho("Este mês", "Todos os dias do mês do primeiro dia, das 9h às 15h, de hora em hora.", () =>
+            R(Tr.T("Atalhos"), 70),
+            Atalho(Tr.T("Solstício de inverno"), Tr.T("21 de junho, das 9h às 15h de meia em meia hora: o critério usual (sem sombra das 9h às 15h no dia de sombra mais longa do ano no Brasil)."), () => Preencher(1, new DateTime(hoje.Year, 6, 21), new DateTime(hoje.Year, 6, 21), "09:00", "15:00", "30", "1")),
+            Atalho(Tr.T("Este mês"), Tr.T("Todos os dias do mês do primeiro dia, das 9h às 15h, de hora em hora."), () =>
             {
                 var d = _de.SelectedDate ?? hoje;
                 Preencher(3, new DateTime(d.Year, d.Month, 1), new DateTime(d.Year, d.Month, DateTime.DaysInMonth(d.Year, d.Month)), "09:00", "15:00", "60", "1");
             }),
-            Atalho("Este ano", "Um dia por semana do ano do primeiro dia, das 9h às 15h, de hora em hora.", () =>
+            Atalho(Tr.T("Este ano"), Tr.T("Um dia por semana do ano do primeiro dia, das 9h às 15h, de hora em hora."), () =>
             {
                 var d = _de.SelectedDate ?? hoje;
                 Preencher(3, new DateTime(d.Year, 1, 1), new DateTime(d.Year, 12, 31), "09:00", "15:00", "60", "7");
@@ -97,7 +98,7 @@ internal sealed class JanelaDeSombras : Window
 
         pilha.Children.Add(new TextBlock
         {
-            Text = "Fazem sombra as árvores (Sombreamento > Objetos), as outras mesas (a fileira da frente na de trás) e o relevo. Os módulos com sombra ficam lilás (até 25% da face), violeta (até 50%) ou roxo-escuro (acima); a linha de comando diz a causa de cada um. A sombra das árvores é desenhada no chão: no módulo, mais alto, ela cai um pouco ao lado. No período, vale o pior caso de cada módulo.",
+            Text = Tr.T("Fazem sombra as árvores (Sombreamento > Objetos), as outras mesas (a fileira da frente na de trás) e o relevo. Os módulos com sombra ficam lilás (até 25% da face), violeta (até 50%) ou roxo-escuro (acima); a linha de comando diz a causa de cada um. A sombra das árvores é desenhada no chão: no módulo, mais alto, ela cai um pouco ao lado. No período, vale o pior caso de cada módulo."),
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brushes.Gray,
             Margin = new Thickness(0, 8, 0, 0),
@@ -106,16 +107,16 @@ internal sealed class JanelaDeSombras : Window
         pilha.Children.Add(_recado);
 
         var botoes = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
-        var gerar = new Button { Content = "Gerar sombras", Width = 120, Height = 26, IsDefault = true, ToolTip = "Apaga as sombras anteriores, calcula e desenha as novas, marcando os módulos." };
+        var gerar = new Button { Content = Tr.T("Gerar sombras"), Width = 120, Height = 26, IsDefault = true, ToolTip = Tr.T("Apaga as sombras anteriores, calcula e desenha as novas, marcando os módulos.") };
         gerar.Click += (_, _) => Fazer(() =>
         {
             var periodo = SombrasCommands.Ler(Data(_de), Data(_ate), _horaDe.Text, _horaAte.Text, _passo.Text, _fuso.Text, out var porque, _dias.Text)
                 ?? throw new ArgumentException(porque);
             return SombrasCommands.Gerar(_documento, periodo);
         });
-        var apagar = new Button { Content = "Apagar sombras", Width = 120, Height = 26, Margin = new Thickness(8, 0, 0, 0), ToolTip = "Apaga os contornos de sombra e devolve a cor de antes dos módulos marcados." };
+        var apagar = new Button { Content = Tr.T("Apagar sombras"), Width = 120, Height = 26, Margin = new Thickness(8, 0, 0, 0), ToolTip = Tr.T("Apaga os contornos de sombra e devolve a cor de antes dos módulos marcados.") };
         apagar.Click += (_, _) => Fazer(() => SombrasCommands.Apagar(_documento.Database));
-        var fechar = new Button { Content = "Fechar", Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true, ToolTip = "Fecha a janela; as sombras desenhadas ficam." };
+        var fechar = new Button { Content = Tr.T("Fechar"), Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true, ToolTip = Tr.T("Fecha a janela; as sombras desenhadas ficam.") };
         fechar.Click += (_, _) => Close();
         botoes.Children.Add(gerar);
         botoes.Children.Add(apagar);
@@ -245,7 +246,7 @@ internal sealed class JanelaDeSombras : Window
             // Clique de WPF: exceção solta aqui derrubaria o Civil 3D.
             RegistroDeDiagnostico.Registrar("Falha na janela de sombras.", erro);
             _recado.Foreground = Brushes.Firebrick;
-            _recado.Text = erro is ArgumentException ? erro.Message : $"Não consegui: {erro.Message}";
+            _recado.Text = erro is ArgumentException ? erro.Message : Tr.F("Não consegui: {0}", erro.Message);
         }
         finally
         {

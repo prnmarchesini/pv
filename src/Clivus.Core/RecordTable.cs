@@ -116,10 +116,10 @@ public static class RecordTable
         if (texto is null) return new RecordTableResult<T>([], null);
 
         if (texto.Count < CamposDoCabecalho)
-            return Perdido<T>($"o registro {whatItIs} está truncado");
+            return Perdido<T>(Tr.F("o registro {0} está truncado", Tr.T(whatItIs)));
 
         if (Campo(texto, 0) != CampoVersao)
-            return Perdido<T>($"o registro {whatItIs} não tem o cabeçalho esperado");
+            return Perdido<T>(Tr.F("o registro {0} não tem o cabeçalho esperado", Tr.T(whatItIs)));
 
         if (!int.TryParse(
                 Campo(texto, 1),
@@ -129,8 +129,8 @@ public static class RecordTable
             || gravada != version)
         {
             return Perdido<T>(
-                $"o registro {whatItIs} foi gravado por outra versão do plugin "
-                + $"(formato {Campo(texto, 1)}, esperado {version})");
+                Tr.F("o registro {0} foi gravado por outra versão do plugin (formato {1}, esperado {2})",
+                    Tr.T(whatItIs), Campo(texto, 1), version));
         }
 
         // O cabeçalho é de tamanho fixo: se o terceiro campo não for a marca
@@ -139,7 +139,7 @@ public static class RecordTable
         // seja, justamente a garantia contra truncamento sumia quando o
         // cabeçalho estava corrompido.
         if (Campo(texto, 2) != CampoQuantidade)
-            return Perdido<T>($"o registro {whatItIs} não tem o cabeçalho esperado");
+            return Perdido<T>(Tr.F("o registro {0} não tem o cabeçalho esperado", Tr.T(whatItIs)));
 
         var itens = new List<T>();
         var ilegiveis = 0;
@@ -159,7 +159,7 @@ public static class RecordTable
         if (ilegiveis > 0)
         {
             return Perdido(
-                $"{ilegiveis} entrada(s) do registro {whatItIs} não puderam ser lidas", itens);
+                Tr.F("{0} entrada(s) do registro {1} não puderam ser lidas", ilegiveis, Tr.T(whatItIs)), itens);
         }
 
         // A quantidade declarada no cabeçalho existe exatamente para isto: sem
@@ -173,8 +173,7 @@ public static class RecordTable
             && declarados != itens.Count)
         {
             return Perdido(
-                $"o registro {whatItIs} diz ter {declarados} item(ns) e só {itens.Count} "
-                + "foram lidos",
+                Tr.F("o registro {0} diz ter {1} item(ns) e só {2} foram lidos", Tr.T(whatItIs), declarados, itens.Count),
                 itens);
         }
 

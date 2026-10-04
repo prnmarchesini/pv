@@ -100,7 +100,7 @@ public static class RowNumbering
         var inverter = naFileira.Count > 1 && posicao == naFileira.Count - 1;
 
         if (naFileira.Count > 1 && posicao > 0 && posicao < naFileira.Count - 1)
-            avisos.Add($"a mesa indicada para F1.1 não está na ponta da fileira: ficou F1.{posicao + 1}");
+            avisos.Add(Tr.F("a mesa indicada para F1.1 não está na ponta da fileira: ficou F1.{0}", posicao + 1));
 
         // 6. A ordem das fileiras: o eixo é a perpendicular às fileiras da
         //    F1.1, apontada para a última; se a última está na mesma reta,
@@ -114,7 +114,7 @@ public static class RowNumbering
             sentido = eixo.X * (c[3].X - c[0].X) + eixo.Y * (c[3].Y - c[0].Y);
 
             if (fileiraDaPrimeira == fileiraDaUltima && fileiras.Count > 1)
-                avisos.Add("a mesa da F1.1 e a da última fileira estão na mesma fileira; as fileiras foram ordenadas no sentido da subida da mesa");
+                avisos.Add(Tr.T("a mesa da F1.1 e a da última fileira estão na mesma fileira; as fileiras foram ordenadas no sentido da subida da mesa"));
         }
 
         if (sentido < 0) eixo = new Point3(-eixo.X, -eixo.Y, 0);
@@ -155,10 +155,10 @@ public static class RowNumbering
         var fileiraDaUltimaNumero = ordenadas.IndexOf(fileiraDaUltima) + 1;
 
         if (fileiraDaPrimeiraNumero != 1)
-            avisos.Add($"a mesa indicada para F1.1 ficou na F{fileiraDaPrimeiraNumero}: há {fileiraDaPrimeiraNumero - 1} fileira(s) antes dela, no sentido contrário");
+            avisos.Add(Tr.F("a mesa indicada para F1.1 ficou na F{0}: há {1} fileira(s) antes dela, no sentido contrário", fileiraDaPrimeiraNumero, fileiraDaPrimeiraNumero - 1));
 
         if (fileiraDaUltimaNumero != ordenadas.Count)
-            avisos.Add($"a mesa indicada como da última fileira ficou na F{fileiraDaUltimaNumero}: há {ordenadas.Count - fileiraDaUltimaNumero} fileira(s) depois dela");
+            avisos.Add(Tr.F("a mesa indicada como da última fileira ficou na F{0}: há {1} fileira(s) depois dela", fileiraDaUltimaNumero, ordenadas.Count - fileiraDaUltimaNumero));
 
         // Fileiras com número de mesas diferente da maioria: o sintoma visível
         // de mesa girada, de vão ou de reta mal agrupada.
@@ -168,8 +168,8 @@ public static class RowNumbering
         if (diferentes.Count > 0)
         {
             avisos.Add(
-                $"as fileiras não têm o mesmo número de mesas: a maioria tem {maioria}, e "
-                + string.Join(", ", diferentes.Select(f => $"F{f.Numero} tem {f.Mesas}")));
+                Tr.F("as fileiras não têm o mesmo número de mesas: a maioria tem {0}, e {1}",
+                    maioria, string.Join(", ", diferentes.Select(f => Tr.F("F{0} tem {1}", f.Numero, f.Mesas)))));
         }
 
         return new NumberingResult(numeradas, ordenadas.Count, avisos);

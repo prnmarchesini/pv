@@ -18,11 +18,11 @@ internal sealed record GroupSummary(TableGroup Group, LayoutCensus Census, int M
 
     /// <summary>"Bloco A: 12 mesa(s), 336 módulo(s), 84 pilar(es), 241,9 kWp".</summary>
     public string Describe() =>
-        $"{Group.Name}: {Census.Tables} mesa(s), {Census.Modules} módulo(s), {Census.Pillars} pilar(es), {Census.PowerKwp.ToString("0.#", Brasil)} kWp"
-        + (Census.Dirty > 0 ? $", {Census.Dirty} pendente(s)" : string.Empty)
-        + (Census.Duplicated > 0 ? $", {Census.Duplicated} duplicada(s)" : string.Empty)
-        + (Census.TablesWithoutPower > 0 ? $", {Census.TablesWithoutPower} sem potência gravada" : string.Empty)
-        + (MissingTables > 0 ? $", {MissingTables} que não está(ão) mais no desenho" : string.Empty);
+        Tr.F("{0}: {1} mesa(s), {2} módulo(s), {3} pilar(es), {4:0.#} kWp", Group.Name, Census.Tables, Census.Modules, Census.Pillars, Census.PowerKwp)
+        + (Census.Dirty > 0 ? Tr.F(", {0} pendente(s)", Census.Dirty) : string.Empty)
+        + (Census.Duplicated > 0 ? Tr.F(", {0} duplicada(s)", Census.Duplicated) : string.Empty)
+        + (Census.TablesWithoutPower > 0 ? Tr.F(", {0} sem potência gravada", Census.TablesWithoutPower) : string.Empty)
+        + (MissingTables > 0 ? Tr.F(", {0} que não está(ão) mais no desenho", MissingTables) : string.Empty);
 }
 
 /// <summary>
@@ -55,18 +55,18 @@ public static class GrupoCommands
 
             if (mesas.Count == 0)
             {
-                editor.WriteMessage("\nGRUPO Nenhuma mesa do plugin na seleção.\n");
+                editor.WriteMessage(Tr.T("\nGRUPO Nenhuma mesa do plugin na seleção.\n"));
                 return;
             }
 
-            var nome = Perguntas.Nome(editor, "grupo", "O grupo");
+            var nome = Perguntas.Nome(editor, Tr.T("grupo"), Tr.T("O grupo"));
             if (nome is null) return;
 
             var anterior = GroupStore.Find(documento.Database, nome);
 
             if (anterior is not null && !ConfirmarSubstituir(editor, anterior))
             {
-                editor.WriteMessage($"\nGRUPO \"{anterior.Name}\" mantido como estava.\n");
+                editor.WriteMessage(Tr.F("\nGRUPO \"{0}\" mantido como estava.\n", anterior.Name));
                 return;
             }
 
@@ -80,10 +80,12 @@ public static class GrupoCommands
             var marca = GroupDrawer.Desenhar(documento.Database, grupo, CantosDasMesas(documento, grupo));
 
             editor.WriteMessage(
-                $"\nGRUPO {grupo.Number} \"{nome}\" {(substituiu ? "substituído" : "criado")} com {mesas.Count} mesa(s). {Resumir(documento, grupo).Describe()}"
-                + (marca > 0 ? $" Marca desenhada na camada {LayoutLayers.Grupo}." : string.Empty) + "\n");
+                (substituiu
+                    ? Tr.F("\nGRUPO {0} \"{1}\" substituído com {2} mesa(s). {3}", grupo.Number, nome, mesas.Count, Resumir(documento, grupo).Describe())
+                    : Tr.F("\nGRUPO {0} \"{1}\" criado com {2} mesa(s). {3}", grupo.Number, nome, mesas.Count, Resumir(documento, grupo).Describe()))
+                + (marca > 0 ? Tr.F(" Marca desenhada na camada {0}.", LayoutLayers.Grupo) : string.Empty) + "\n");
 
-            if (problema is not null) editor.WriteMessage($"  ATENÇÃO: {problema}.\n");
+            if (problema is not null) editor.WriteMessage(Tr.F("  ATENÇÃO: {0}.\n", problema));
 
             AtualizarPainel();
             GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
@@ -91,7 +93,7 @@ public static class GrupoCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao criar o grupo.", erro);
-            editor.WriteMessage($"\nNão consegui criar o grupo: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui criar o grupo: {0}\n", erro.Message));
         }
     }
 
@@ -116,7 +118,7 @@ public static class GrupoCommands
                 var resumo = SelecaoCommands.Resumir(documento, mesas);
 
                 placar ??= NovoPlacar();
-                placar.TextoLivre = mesas.Count == 0 ? "Grupo: nada selecionado" : $"Grupo: {resumo.Describe()}";
+                placar.TextoLivre = mesas.Count == 0 ? Tr.T("Grupo: nada selecionado") : Tr.F("Grupo: {0}", resumo.Describe());
                 if (!placar.IsVisible) placar.Show();
             }
             catch (System.Exception erro)
@@ -166,7 +168,7 @@ public static class GrupoCommands
 
         try
         {
-            return editor.GetSelection(new PromptSelectionOptions { MessageForAdding = "\nSelecione os módulos do grupo (só módulos entram): " }, filtro);
+            return editor.GetSelection(new PromptSelectionOptions { MessageForAdding = Tr.T("\nSelecione os módulos do grupo (só módulos entram): ") }, filtro);
         }
         finally
         {
@@ -220,14 +222,14 @@ public static class GrupoCommands
         {
             var resumos = Resumir(documento);
 
-            editor.WriteMessage($"\nGRUPOS {resumos.Count} grupo(s).\n");
+            editor.WriteMessage(Tr.F("\nGRUPOS {0} grupo(s).\n", resumos.Count));
 
             foreach (var resumo in resumos) editor.WriteMessage($"  {resumo.Describe()}\n");
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao listar os grupos.", erro);
-            editor.WriteMessage($"\nNão consegui listar os grupos: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui listar os grupos: {0}\n", erro.Message));
         }
     }
 
@@ -242,7 +244,7 @@ public static class GrupoCommands
 
         try
         {
-            var nome = PerguntarNome(editor, documento, "recalcular");
+            var nome = PerguntarNome(editor, documento, Tr.T("recalcular"));
             if (nome is null) return;
 
             RecalcularGrupo(documento, nome);
@@ -250,7 +252,7 @@ public static class GrupoCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao recalcular o grupo.", erro);
-            editor.WriteMessage($"\nNão consegui recalcular o grupo: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui recalcular o grupo: {0}\n", erro.Message));
         }
     }
 
@@ -265,7 +267,7 @@ public static class GrupoCommands
 
         try
         {
-            var nome = PerguntarNome(editor, documento, "selecionar");
+            var nome = PerguntarNome(editor, documento, Tr.T("selecionar"));
             if (nome is null) return;
 
             SelecionarGrupo(documento, nome);
@@ -273,7 +275,7 @@ public static class GrupoCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao selecionar o grupo.", erro);
-            editor.WriteMessage($"\nNão consegui selecionar o grupo: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui selecionar o grupo: {0}\n", erro.Message));
         }
     }
 
@@ -288,7 +290,7 @@ public static class GrupoCommands
 
         try
         {
-            var nome = PerguntarNome(editor, documento, "apagar");
+            var nome = PerguntarNome(editor, documento, Tr.T("apagar"));
             if (nome is null) return;
 
             var grupo = GroupStore.Find(documento.Database, nome);
@@ -296,11 +298,11 @@ public static class GrupoCommands
             if (grupo is not null && GroupStore.Remove(documento.Database, grupo.Name))
             {
                 var marca = GroupDrawer.Apagar(documento.Database, grupo.Id);
-                editor.WriteMessage($"\nGRUPO \"{grupo.Name}\" apagado, com {marca} entidade(s) da marca. As mesas continuam no desenho.\n");
+                editor.WriteMessage(Tr.F("\nGRUPO \"{0}\" apagado, com {1} entidade(s) da marca. As mesas continuam no desenho.\n", grupo.Name, marca));
             }
             else
             {
-                editor.WriteMessage($"\nGRUPO Não há grupo \"{nome}\".\n");
+                editor.WriteMessage(Tr.F("\nGRUPO Não há grupo \"{0}\".\n", nome));
             }
 
             AtualizarPainel();
@@ -308,7 +310,7 @@ public static class GrupoCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao apagar o grupo.", erro);
-            editor.WriteMessage($"\nNão consegui apagar o grupo: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui apagar o grupo: {0}\n", erro.Message));
         }
     }
 
@@ -323,7 +325,7 @@ public static class GrupoCommands
         {
             if (!ClivusExtension.TemInterface())
             {
-                documento.Editor.WriteMessage("\nO painel dos grupos precisa da interface do Civil 3D. Use CLIVUS_GRUPOS.\n");
+                documento.Editor.WriteMessage(Tr.T("\nO painel dos grupos precisa da interface do Civil 3D. Use CLIVUS_GRUPOS.\n"));
                 return;
             }
 
@@ -332,7 +334,7 @@ public static class GrupoCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao abrir o painel dos grupos.", erro);
-            documento.Editor.WriteMessage($"\nNão consegui abrir o painel: {erro.Message}\n");
+            documento.Editor.WriteMessage(Tr.F("\nNão consegui abrir o painel: {0}\n", erro.Message));
         }
     }
 
@@ -354,7 +356,7 @@ public static class GrupoCommands
     private static bool ConfirmarSubstituir(Editor editor, TableGroup existente)
     {
         var pergunta = new PromptKeywordOptions(
-            $"\nJá existe o grupo \"{existente.Name}\" com {existente.Tables.Count} mesa(s). Substituir pela seleção? [Sim/Não]", "Sim Não")
+            Tr.F("\nJá existe o grupo \"{0}\" com {1} mesa(s). Substituir pela seleção?", existente.Name, existente.Tables.Count) + " [Sim/Não]", "Sim Não")
         {
             AllowNone = true,
         };
@@ -448,14 +450,14 @@ public static class GrupoCommands
 
         if (grupo is null)
         {
-            editor.WriteMessage($"\nGRUPO Não há grupo \"{nome}\".\n");
+            editor.WriteMessage(Tr.F("\nGRUPO Não há grupo \"{0}\".\n", nome));
             return;
         }
 
         var terreno = FileiraCommands.ExigirTerreno(editor, documento);
         if (terreno is null) return;
 
-        editor.WriteMessage($"\nGRUPO \"{grupo.Name}\": recalculando {grupo.Tables.Count} mesa(s)...\n");
+        editor.WriteMessage(Tr.F("\nGRUPO \"{0}\": recalculando {1} mesa(s)...\n", grupo.Name, grupo.Tables.Count));
         RecalcularCommands.RecalcularMesas(editor, documento, terreno, grupo.Tables, FileiraCommands.PerfilDaMesa(editor));
         AtualizarPainel();
     }
@@ -467,7 +469,7 @@ public static class GrupoCommands
 
         if (grupo is null)
         {
-            editor.WriteMessage($"\nGRUPO Não há grupo \"{nome}\".\n");
+            editor.WriteMessage(Tr.F("\nGRUPO Não há grupo \"{0}\".\n", nome));
             return;
         }
 
@@ -484,7 +486,7 @@ public static class GrupoCommands
         }
 
         editor.SetImpliedSelection([.. ids]);
-        editor.WriteMessage($"\nGRUPO \"{grupo.Name}\": {ids.Count} entidade(s) selecionada(s).\n");
+        editor.WriteMessage(Tr.F("\nGRUPO \"{0}\": {1} entidade(s) selecionada(s).\n", grupo.Name, ids.Count));
     }
 
     private static string? PerguntarNome(Editor editor, Document documento, string paraQue)
@@ -493,13 +495,13 @@ public static class GrupoCommands
 
         if (grupos.Count == 0)
         {
-            editor.WriteMessage("\nGRUPO Nenhum grupo neste desenho. Selecione mesas e use Criar grupo.\n");
+            editor.WriteMessage(Tr.T("\nGRUPO Nenhum grupo neste desenho. Selecione mesas e use Criar grupo.\n"));
             return null;
         }
 
-        editor.WriteMessage($"\nGrupos: {string.Join(", ", grupos.Select(g => g.Name))}\n");
+        editor.WriteMessage(Tr.F("\nGrupos: {0}\n", string.Join(", ", grupos.Select(g => g.Name))));
 
-        var resposta = editor.GetString(new PromptStringOptions($"\nNome do grupo a {paraQue}: ") { AllowSpaces = true });
+        var resposta = editor.GetString(new PromptStringOptions(Tr.F("\nNome do grupo a {0}: ", paraQue)) { AllowSpaces = true });
 
         if (resposta.Status != PromptStatus.OK || string.IsNullOrWhiteSpace(resposta.StringResult)) return null;
 

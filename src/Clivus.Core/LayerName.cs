@@ -26,16 +26,16 @@ public static class LayerName
     /// <summary>Por que este nome não serve, ou null se serve.</summary>
     public static string? WhyInvalid(string? nome)
     {
-        if (string.IsNullOrWhiteSpace(nome)) return "está vazio";
+        if (string.IsNullOrWhiteSpace(nome)) return Tr.T("está vazio");
 
-        if (nome.Length > MaxLength) return $"tem mais de {MaxLength} caracteres";
+        if (nome.Length > MaxLength) return Tr.F("tem mais de {0} caracteres", MaxLength);
 
-        if (nome != nome.Trim()) return "começa ou termina com espaço";
+        if (nome != nome.Trim()) return Tr.T("começa ou termina com espaço");
 
         foreach (var caractere in nome)
         {
             if (Proibidos.Contains(caractere) || char.IsControl(caractere))
-                return $"tem o caractere '{caractere}', que o AutoCAD não aceita";
+                return Tr.F("tem o caractere '{0}', que o AutoCAD não aceita", caractere);
         }
 
         return null;

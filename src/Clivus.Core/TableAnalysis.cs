@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Clivus.Core;
 
 /// <summary>Um módulo da fileira de baixo com o seu valor e o seu veredito.</summary>
@@ -66,8 +64,6 @@ public sealed record TableReport(
     AnalysisVerdict SlopeVerdict,
     AnalysisVerdict EdgeVerdict)
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>
     /// Todos os vereditos que pedem pintura: um por módulo, um por pilar (o
     /// <see cref="PillarReport.PaintVerdict"/>), o da declividade e o da
@@ -95,15 +91,15 @@ public sealed record TableReport(
         string Conta(AnalysisKind kind, string nome) =>
             pintadas.TryGetValue(kind, out var n) && n > 0 ? $", {n} {nome}" : string.Empty;
 
-        return $"{Label}: {Modules.Count} módulo(s) na fileira de baixo, {Pillars.Count} pilar(es)"
-            + (Marked ? $", MARCADA ({MarkedReason})" : string.Empty)
-            + Conta(AnalysisKind.LowEdge, "ponta(s) baixa(s) fora")
-            + Conta(AnalysisKind.PillarLength, "pilar(es) compridos")
-            + Conta(AnalysisKind.Embedment, "enterro(s) fora")
+        return Tr.F("{0}: {1} módulo(s) na fileira de baixo, {2} pilar(es)", Label, Modules.Count, Pillars.Count)
+            + (Marked ? Tr.F(", MARCADA ({0})", MarkedReason) : string.Empty)
+            + Conta(AnalysisKind.LowEdge, Tr.T("ponta(s) baixa(s) fora"))
+            + Conta(AnalysisKind.PillarLength, Tr.T("pilar(es) compridos"))
+            + Conta(AnalysisKind.Embedment, Tr.T("enterro(s) fora"))
             + (SlopeVerdict.Color is not null
-                ? $", declividade de {(LongitudinalSlopeRadians * 180 / Math.PI).ToString("0.#", Brasil)}° acima do limite"
+                ? Tr.F(", declividade de {0:0.#}° acima do limite", LongitudinalSlopeRadians * 180 / Math.PI)
                 : string.Empty)
-            + (EdgeVerdict.Color is not null ? ", na borda da área" : string.Empty);
+            + (EdgeVerdict.Color is not null ? Tr.T(", na borda da área") : string.Empty);
     }
 }
 

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Clivus.Core;
 
 namespace Clivus.Plugin;
 
@@ -18,7 +19,7 @@ internal sealed class JanelaDeResumoDoTerreno : Window
 
     internal JanelaDeResumoDoTerreno(IReadOnlyList<string> linhas)
     {
-        Title = "Clivus Solar — Terreno";
+        Title = Tr.T("Clivus Solar — Terreno");
         Width = 520;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
@@ -48,12 +49,12 @@ internal sealed class JanelaDeResumoDoTerreno : Window
             return b;
         }
 
-        botoes.Children.Add(Botao("Localização...", "Informar ou corrigir a latitude e a longitude, quando o desenho não tem sistema de coordenadas.", Acao.Localizacao));
-        botoes.Children.Add(Botao("Fechar", "Fecha o resumo.", Acao.Nada, cancela: true));
+        botoes.Children.Add(Botao(Tr.T("Localização..."), Tr.T("Informar ou corrigir a latitude e a longitude, quando o desenho não tem sistema de coordenadas."), Acao.Localizacao));
+        botoes.Children.Add(Botao(Tr.T("Fechar"), Tr.T("Fecha o resumo."), Acao.Nada, cancela: true));
 
         pilha.Children.Add(new TextBlock
         {
-            Text = "A cidade é o município do IBGE com a sede mais perto; o fuso sai da longitude.",
+            Text = Tr.T("A cidade é o município do IBGE com a sede mais perto; o fuso sai da longitude."),
             Foreground = Brushes.Gray,
             FontSize = 11,
             TextWrapping = TextWrapping.Wrap,

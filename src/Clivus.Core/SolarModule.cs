@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Clivus.Core;
 
 /// <summary>
@@ -33,8 +31,6 @@ public sealed record SolarModule(
     double Width,
     double Thickness)
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>
     /// Maior medida aceita, em metro.
     ///
@@ -89,9 +85,8 @@ public sealed record SolarModule(
     /// </summary>
     public string? LooksSwapped =>
         IsValid && Height < Width
-            ? $"o módulo {DisplayName} está mais largo ({Width.ToString("0.###", Brasil)} m) "
-              + $"que alto ({Height.ToString("0.###", Brasil)} m); confira se os dois campos "
-              + "não foram trocados"
+            ? Tr.F("o módulo {0} está mais largo ({1:0.###} m) que alto ({2:0.###} m); confira se os dois campos não foram trocados",
+                DisplayName, Width, Height)
             : null;
 
     /// <summary>Marca e modelo juntos, do jeito que o usuário reconhece.</summary>
@@ -100,9 +95,8 @@ public sealed record SolarModule(
 
     /// <summary>A linha que descreve o módulo para o usuário.</summary>
     public string Describe() =>
-        $"{DisplayName} — {PowerWatts.ToString("0.#", Brasil)} Wp, "
-        + $"{Height.ToString("0.###", Brasil)} × {Width.ToString("0.###", Brasil)} × "
-        + $"{Thickness.ToString("0.###", Brasil)} m";
+        string.Format(Tr.Culture, "{0} — {1:0.#} Wp, {2:0.###} × {3:0.###} × {4:0.###} m",
+            DisplayName, PowerWatts, Height, Width, Thickness);
 
     private static bool Medida(double valor) =>
         double.IsFinite(valor) && valor >= MenorMedida && valor <= MaiorMedida;

@@ -59,7 +59,7 @@ internal static class SettingsStore
             if (dados is null)
             {
                 return PluginDictionary.Contains(database, Chave)
-                    ? new ProjectSettingsResult(null, "a configuração gravada no desenho está ilegível")
+                    ? new ProjectSettingsResult(null, Tr.T("a configuração gravada no desenho está ilegível"))
                     : ProjectSettings.Parse(null);
             }
 
@@ -83,7 +83,7 @@ internal static class SettingsStore
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Não consegui ler a configuração do desenho.", erro);
-            return new ProjectSettingsResult(null, "a configuração gravada no desenho está ilegível");
+            return new ProjectSettingsResult(null, Tr.T("a configuração gravada no desenho está ilegível"));
         }
     }
 }

@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Clivus.Core;
 
 /// <summary>
@@ -51,8 +49,6 @@ public sealed record TableLayout(
     double LeftMargin,
     double RightMargin)
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>
     /// Maior folga aceita, em metro.
     ///
@@ -104,31 +100,31 @@ public sealed record TableLayout(
     {
         get
         {
-            if (Module is null) return "não há módulo escolhido";
+            if (Module is null) return Tr.T("não há módulo escolhido");
 
             if (!Module.IsValid)
-                return $"o módulo {Module.DisplayName} tem medida impossível";
+                return Tr.F("o módulo {0} tem medida impossível", Module.DisplayName);
 
-            if (ModuleCount <= 0) return "a mesa precisa de pelo menos um módulo";
+            if (ModuleCount <= 0) return Tr.T("a mesa precisa de pelo menos um módulo");
 
             if (ModuleCount > MaiorContagem)
-                return $"a mesa tem {ModuleCount} módulos, mais que os {MaiorContagem} possíveis";
+                return Tr.F("a mesa tem {0} módulos, mais que os {1} possíveis", ModuleCount, MaiorContagem);
 
             if (Arrangement == TableArrangement.DoubleRow && ModuleCount % 2 != 0)
             {
                 // Uma coluna pela metade é decisão de projeto — qual ponta fica
                 // vazia, se a fileira de cima ou a de baixo —, e não é o plugin
                 // que escolhe.
-                return $"uma mesa 2V precisa de um número par de módulos, e foram {ModuleCount}";
+                return Tr.F("uma mesa 2V precisa de um número par de módulos, e foram {0}", ModuleCount);
             }
 
-            if (!Folga(HorizontalGap)) return "o espaçamento entre módulos não é uma medida válida";
-            if (!Folga(LeftMargin)) return "a sobra da esquerda não é uma medida válida";
-            if (!Folga(RightMargin)) return "a sobra da direita não é uma medida válida";
+            if (!Folga(HorizontalGap)) return Tr.T("o espaçamento entre módulos não é uma medida válida");
+            if (!Folga(LeftMargin)) return Tr.T("a sobra da esquerda não é uma medida válida");
+            if (!Folga(RightMargin)) return Tr.T("a sobra da direita não é uma medida válida");
 
             // O espaçamento vertical só é conferido quando participa da conta.
             if (Arrangement == TableArrangement.DoubleRow && !Folga(VerticalGap))
-                return "o espaçamento entre as duas fileiras não é uma medida válida";
+                return Tr.T("o espaçamento entre as duas fileiras não é uma medida válida");
 
             return null;
         }
@@ -184,13 +180,12 @@ public sealed record TableLayout(
     /// <summary>A linha que descreve a mesa para o usuário.</summary>
     public string Describe()
     {
-        if (WhyInvalid is { } motivo) return $"Mesa inválida: {motivo}.";
+        if (WhyInvalid is { } motivo) return Tr.F("Mesa inválida: {0}.", motivo);
 
         var arranjo = Arrangement == TableArrangement.DoubleRow ? "2V" : "1V";
 
-        return $"{ModuleCount} módulos em {arranjo} ({Columns} colunas) — "
-            + $"{Length.ToString("0.###", Brasil)} m de comprimento por "
-            + $"{Depth.ToString("0.###", Brasil)} m";
+        return Tr.F("{0} módulos em {1} ({2} colunas) — {3:0.###} m de comprimento por {4:0.###} m",
+            ModuleCount, arranjo, Columns, Length, Depth);
     }
 
     private void Conferir()
