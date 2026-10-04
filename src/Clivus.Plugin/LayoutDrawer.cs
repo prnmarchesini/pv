@@ -34,8 +34,6 @@ internal sealed record DrawnRow(int Tables, int Pillars, int Modules, int Painte
 /// </summary>
 internal static class LayoutDrawer
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>Comprimento com que se desenha um pilar sem comprimento (problema), só para ele existir na tela.</summary>
     private const double ComprimentoDoPilarComProblema = 1.0;
 
@@ -402,11 +400,11 @@ internal static class LayoutDrawer
                 }
             }
 
-            partes.Add("cinza = mesa sem cor de tipo");
-            partes.Add($"magenta = mesa com módulo dentro da terra ({marcadas}; o motivo de cada uma está acima e no Estado)");
-            if (tipos is { Nomes.Count: > 1 }) partes.Add("roxo = tentei todas as mesas da lista nesse lugar, nenhuma coube; ficou a 1ª");
+            partes.Add(Tr.T("cinza = mesa sem cor de tipo"));
+            partes.Add(Tr.F("magenta = mesa com módulo dentro da terra ({0}; o motivo de cada uma está acima e no Estado)", marcadas));
+            if (tipos is { Nomes.Count: > 1 }) partes.Add(Tr.T("roxo = tentei todas as mesas da lista nesse lugar, nenhuma coube; ficou a 1ª"));
 
-            return "  Cores: " + string.Join("; ", partes) + ".";
+            return Tr.F("  Cores: {0}.", string.Join("; ", partes));
         }
 
         private static string NomeDaCor(RgbColor cor) =>
@@ -487,7 +485,7 @@ internal static class LayoutDrawer
             Layer = camada,
             Attachment = AttachmentPoint.MiddleCenter,
             Rotation = rumo,
-            Contents = valor is { } v ? $"{sigla} {v.ToString("0.00", Brasil)}" : $"{sigla} s/ terreno",
+            Contents = valor is { } v ? $"{sigla} {v.ToString("0.00", Tr.Culture)}" : Tr.F("{0} s/ terreno", sigla),
         };
 
         espaco.AppendEntity(texto);

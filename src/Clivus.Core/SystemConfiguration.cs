@@ -92,8 +92,6 @@ public sealed record SystemConfiguration(
     double TableGap,
     double MaxGapBeforeBreak)
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>Maior medida aceita em metro, como rede para erro de escala.</summary>
     private const double MaiorMedida = 50.0;
 
@@ -168,39 +166,39 @@ public sealed record SystemConfiguration(
             if (!double.IsFinite(FacingAzimuthRadians)
                 || FacingAzimuthRadians < 0 || FacingAzimuthRadians >= 2 * Math.PI)
             {
-                return "o azimute está fora de uma volta";
+                return Tr.T("o azimute está fora de uma volta");
             }
 
-            if (!Medida(Pitch)) return "o pitch entre mesas não é uma medida válida";
+            if (!Medida(Pitch)) return Tr.T("o pitch entre mesas não é uma medida válida");
 
             if (Faixa(MinLowEdge, MaxLowEdge) is { } pontaBaixa)
-                return $"a faixa da ponta baixa {pontaBaixa}";
+                return Tr.F("a faixa da ponta baixa {0}", pontaBaixa);
 
             if (MinEmbedment < MenorEnterro && double.IsFinite(MinEmbedment) && MinEmbedment > 0)
-                return "a faixa de enterro tem mínimo menor que um milímetro, que não é enterro";
+                return Tr.T("a faixa de enterro tem mínimo menor que um milímetro, que não é enterro");
 
             if (Faixa(MinEmbedment, MaxEmbedment) is { } enterro)
-                return $"a faixa de enterro {enterro}";
+                return Tr.F("a faixa de enterro {0}", enterro);
 
             if (Faixa(MinStep, MaxStep, minimoPodeSerZero: true) is { } degrau)
-                return $"a faixa de degrau entre mesas {degrau}";
+                return Tr.F("a faixa de degrau entre mesas {0}", degrau);
 
             if (BumpToleranceModules < 0)
-                return "a tolerância de invasão por lombo não pode ser negativa";
+                return Tr.T("a tolerância de invasão por lombo não pode ser negativa");
 
             if (MaxLongitudinalSlope is { } inclinacao
                 && (!double.IsFinite(inclinacao) || inclinacao <= 0 || inclinacao >= Math.PI / 2))
             {
-                return "o limite de declividade longitudinal precisa ficar entre 0 e 90 graus";
+                return Tr.T("o limite de declividade longitudinal precisa ficar entre 0 e 90 graus");
             }
 
             if (!double.IsFinite(TableGap) || TableGap < 0 || TableGap > MaiorMedida)
-                return "o espaçamento entre mesas não é uma medida válida";
+                return Tr.T("o espaçamento entre mesas não é uma medida válida");
 
             if (!double.IsFinite(MaxGapBeforeBreak)
                 || MaxGapBeforeBreak < 0 || MaxGapBeforeBreak > MaiorMedida)
             {
-                return "o limite de espaçamento que quebra fileira não é uma medida válida";
+                return Tr.T("o limite de espaçamento que quebra fileira não é uma medida válida");
             }
 
             // A primeira conferência cruzada da configuração: com o limite de
@@ -208,8 +206,8 @@ public sealed record SystemConfiguration(
             // nasceria quebrada em cada mesa.
             if (MaxGapBeforeBreak < TableGap)
             {
-                return $"o limite de espaçamento que quebra fileira ({Texto(MaxGapBeforeBreak)} m) é menor "
-                    + $"que o espaçamento entre mesas ({Texto(TableGap)} m)";
+                return Tr.F("o limite de espaçamento que quebra fileira ({0} m) é menor que o espaçamento entre mesas ({1} m)",
+                    Texto(MaxGapBeforeBreak), Texto(TableGap));
             }
 
             return null;
@@ -247,18 +245,16 @@ public sealed record SystemConfiguration(
     /// </summary>
     public string? WhyEmbedmentIsWrong(double embedment)
     {
-        if (!double.IsFinite(embedment)) return "o enterro do pilar não é um número";
+        if (!double.IsFinite(embedment)) return Tr.T("o enterro do pilar não é um número");
 
         if (embedment < MinEmbedment)
         {
-            return $"o pilar entra {Texto(embedment)} m no chão e o mínimo é "
-                + $"{Texto(MinEmbedment)} m";
+            return Tr.F("o pilar entra {0} m no chão e o mínimo é {1} m", Texto(embedment), Texto(MinEmbedment));
         }
 
         if (embedment > MaxEmbedment)
         {
-            return $"o pilar entra {Texto(embedment)} m no chão e o máximo é "
-                + $"{Texto(MaxEmbedment)} m";
+            return Tr.F("o pilar entra {0} m no chão e o máximo é {1} m", Texto(embedment), Texto(MaxEmbedment));
         }
 
         return null;
@@ -282,22 +278,20 @@ public sealed record SystemConfiguration(
     /// <summary>A linha que descreve a configuração para o usuário.</summary>
     public string Describe()
     {
-        if (WhyInvalid is { } motivo) return $"Configuração inválida: {motivo}.";
+        if (WhyInvalid is { } motivo) return Tr.F("Configuração inválida: {0}.", motivo);
 
-        var declividade = MaxLongitudinalSlopeDegrees is { } graus
-            ? $", declividade até {Texto(graus)}°"
-            : ", sem limite de declividade";
-
-        return $"ponta baixa de {Texto(MinLowEdge)} a {Texto(MaxLowEdge)} m, enterro de "
-            + $"{Texto(MinEmbedment)} a {Texto(MaxEmbedment)} m, pitch de "
-            + $"{Texto(Pitch)} m{declividade}";
+        return MaxLongitudinalSlopeDegrees is { } graus
+            ? Tr.F("ponta baixa de {0} a {1} m, enterro de {2} a {3} m, pitch de {4} m, declividade até {5}°",
+                Texto(MinLowEdge), Texto(MaxLowEdge), Texto(MinEmbedment), Texto(MaxEmbedment), Texto(Pitch), Texto(graus))
+            : Tr.F("ponta baixa de {0} a {1} m, enterro de {2} a {3} m, pitch de {4} m, sem limite de declividade",
+                Texto(MinLowEdge), Texto(MaxLowEdge), Texto(MinEmbedment), Texto(MaxEmbedment), Texto(Pitch));
     }
 
     private void Conferir()
     {
         if (WhyInvalid is { } motivo)
         {
-            throw new InvalidOperationException($"A configuração não fecha: {motivo}.");
+            throw new InvalidOperationException(Tr.F("A configuração não fecha: {0}.", motivo));
         }
     }
 
@@ -313,13 +307,13 @@ public sealed record SystemConfiguration(
             ? double.IsFinite(minimo) && minimo >= 0 && minimo <= MaiorMedida
             : Medida(minimo);
 
-        if (!minimoValido) return "tem mínimo que não é uma medida válida";
+        if (!minimoValido) return Tr.T("tem mínimo que não é uma medida válida");
 
         if (!double.IsFinite(maximo) || maximo <= 0 || maximo > MaiorMedida)
-            return "tem máximo que não é uma medida válida";
+            return Tr.T("tem máximo que não é uma medida válida");
 
         if (minimo > maximo)
-            return $"está invertida: {Texto(minimo)} m de mínimo e {Texto(maximo)} m de máximo";
+            return Tr.F("está invertida: {0} m de mínimo e {1} m de máximo", Texto(minimo), Texto(maximo));
 
         return null;
     }
@@ -338,5 +332,5 @@ public sealed record SystemConfiguration(
     private static bool Medida(double valor) =>
         double.IsFinite(valor) && valor > 0 && valor <= MaiorMedida;
 
-    private static string Texto(double valor) => valor.ToString("0.###", Brasil);
+    private static string Texto(double valor) => valor.ToString("0.###", Tr.Culture);
 }

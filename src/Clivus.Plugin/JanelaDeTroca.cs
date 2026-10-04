@@ -11,14 +11,14 @@ namespace Clivus.Plugin;
 /// </summary>
 internal sealed class JanelaDeTroca : Window
 {
-    private readonly ComboBox _tipo = new() { Width = 300, ToolTip = "A mesa que entra no lugar: as mesas cadastradas neste desenho (Configurações > Estruturas)." };
-    private readonly ComboBox _quantas = new() { Width = 60, ToolTip = "Quantas mesas novas no lugar da antiga, uma depois da outra, com o espaçamento entre mesas da configuração." };
-    private readonly RadioButton _inicio = new() { Content = "Início", IsChecked = true, Margin = new Thickness(0, 0, 14, 0), ToolTip = "A primeira mesa nova começa onde a antiga começava (o lado do primeiro pilar)." };
-    private readonly RadioButton _fim = new() { Content = "Fim", ToolTip = "A última mesa nova termina onde a antiga terminava (o lado do último pilar)." };
+    private readonly ComboBox _tipo = new() { Width = 300, ToolTip = Tr.T("A mesa que entra no lugar: as mesas cadastradas neste desenho (Configurações > Estruturas).") };
+    private readonly ComboBox _quantas = new() { Width = 60, ToolTip = Tr.T("Quantas mesas novas no lugar da antiga, uma depois da outra, com o espaçamento entre mesas da configuração.") };
+    private readonly RadioButton _inicio = new() { Content = Tr.T("Início"), IsChecked = true, Margin = new Thickness(0, 0, 14, 0), ToolTip = Tr.T("A primeira mesa nova começa onde a antiga começava (o lado do primeiro pilar).") };
+    private readonly RadioButton _fim = new() { Content = Tr.T("Fim"), ToolTip = Tr.T("A última mesa nova termina onde a antiga terminava (o lado do último pilar).") };
     private readonly CheckBox _reespacar = new()
     {
-        Content = "Reespaçar a fileira depois (mantém as mesas, acerta o espaçamento)",
-        ToolTip = "Depois da troca, as mesas da fileira são postas de novo com o espaçamento da configuração, cada uma com o tipo dela. Sem isso, as vizinhas não se mexem e a troca pode passar delas.",
+        Content = Tr.T("Reespaçar a fileira depois (mantém as mesas, acerta o espaçamento)"),
+        ToolTip = Tr.T("Depois da troca, as mesas da fileira são postas de novo com o espaçamento da configuração, cada uma com o tipo dela. Sem isso, as vizinhas não se mexem e a troca pode passar delas."),
         Margin = new Thickness(0, 8, 0, 0),
     };
 
@@ -26,14 +26,14 @@ internal sealed class JanelaDeTroca : Window
 
     internal JanelaDeTroca(IReadOnlyList<DrawingTable> mesas, string letreiro)
     {
-        Title = $"Clivus Solar — Trocar a mesa {letreiro}";
+        Title = Tr.F("Clivus Solar — Trocar a mesa {0}", letreiro);
         Width = 480;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        foreach (var m in mesas) _tipo.Items.Add($"{m.Name} — {m.Profile.Layout.ModuleCount} módulos, {m.Profile.Layout.Length:0.##} m");
+        foreach (var m in mesas) _tipo.Items.Add(Tr.F("{0} — {1} módulos, {2:0.##} m", m.Name, m.Profile.Layout.ModuleCount, m.Profile.Layout.Length));
         _tipo.SelectedIndex = 0;
 
         for (var i = 1; i <= 5; i++) _quantas.Items.Add(i);
@@ -60,9 +60,9 @@ internal sealed class JanelaDeTroca : Window
         lados.Children.Add(_inicio);
         lados.Children.Add(_fim);
 
-        Linha(0, "Mesa nova", _tipo);
-        Linha(1, "Quantas", _quantas);
-        Linha(2, "Lado travado", lados);
+        Linha(0, Tr.T("Mesa nova"), _tipo);
+        Linha(1, Tr.T("Quantas"), _quantas);
+        Linha(2, Tr.T("Lado travado"), lados);
 
         grade.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         Grid.SetRow(_reespacar, 3);
@@ -70,7 +70,7 @@ internal sealed class JanelaDeTroca : Window
         grade.Children.Add(_reespacar);
 
         var botoes = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
-        var ok = new Button { Content = "Trocar", Width = 90, Height = 26, IsDefault = true, ToolTip = "Apaga a mesa clicada e desenha as novas no lugar, assentadas no terreno." };
+        var ok = new Button { Content = Tr.T("Trocar"), Width = 90, Height = 26, IsDefault = true, ToolTip = Tr.T("Apaga a mesa clicada e desenha as novas no lugar, assentadas no terreno.") };
         ok.Click += (_, _) =>
         {
             Escolhida = new TrocarMesaCommands.Escolha(
@@ -78,7 +78,7 @@ internal sealed class JanelaDeTroca : Window
             DialogResult = true;
         };
         botoes.Children.Add(ok);
-        botoes.Children.Add(new Button { Content = "Cancelar", Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true });
+        botoes.Children.Add(new Button { Content = Tr.T("Cancelar"), Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true });
 
         grade.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         Grid.SetRow(botoes, 4);

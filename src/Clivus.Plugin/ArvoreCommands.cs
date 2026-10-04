@@ -59,7 +59,7 @@ public static class ArvoreCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao inserir árvores.", erro);
-            editor.WriteMessage($"\nNão consegui inserir as árvores: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui inserir as árvores: {0}\n", erro.Message));
         }
     }
 
@@ -85,7 +85,7 @@ public static class ArvoreCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao inserir árvores (automático).", erro);
-            editor.WriteMessage($"\nNão consegui inserir as árvores: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui inserir as árvores: {0}\n", erro.Message));
         }
     }
 
@@ -103,16 +103,16 @@ public static class ArvoreCommands
             return r.Status == PromptStatus.OK ? r.Value : null;
         }
 
-        if (Medida("Altura do tronco", padrao.TrunkHeight) is not { } ht) return null;
-        if (Medida("Largura do tronco", padrao.TrunkWidth) is not { } lt) return null;
-        if (Medida("Altura da copa", padrao.CrownHeight) is not { } hc) return null;
-        if (Medida("Largura da copa", padrao.CrownWidth) is not { } lc) return null;
+        if (Medida(Tr.T("Altura do tronco"), padrao.TrunkHeight) is not { } ht) return null;
+        if (Medida(Tr.T("Largura do tronco"), padrao.TrunkWidth) is not { } lt) return null;
+        if (Medida(Tr.T("Altura da copa"), padrao.CrownHeight) is not { } hc) return null;
+        if (Medida(Tr.T("Largura da copa"), padrao.CrownWidth) is not { } lc) return null;
 
         var medidas = new TreeSpec(ht, lt, hc, lc);
 
         if (medidas.WhyInvalid() is { } porque)
         {
-            editor.WriteMessage($"\nÁRVORE {porque}.\n");
+            editor.WriteMessage(Tr.F("\nÁRVORE {0}.\n", porque));
             return null;
         }
 
@@ -122,13 +122,13 @@ public static class ArvoreCommands
     /// <summary>Clique a clique, uma árvore em cada ponto, com o pé no terreno; Enter termina.</summary>
     private static void Clicar(Editor editor, Document documento, ProcessedTerrain terreno, TreeSpec medidas)
     {
-        editor.WriteMessage($"\nÁRVORE {medidas.Describe()}. Clique onde pôr cada árvore; Enter termina.\n");
+        editor.WriteMessage(Tr.F("\nÁRVORE {0}. Clique onde pôr cada árvore; Enter termina.\n", medidas.Describe()));
 
         var postas = 0;
 
         while (true)
         {
-            var ponto = editor.GetPoint(new PromptPointOptions("\nOnde pôr a árvore (Enter termina): ") { AllowNone = true });
+            var ponto = editor.GetPoint(new PromptPointOptions(Tr.T("\nOnde pôr a árvore (Enter termina): ")) { AllowNone = true });
             if (ponto.Status != PromptStatus.OK) break;
 
             // O clique é em coordenadas do usuário; a cota vem do terreno.
@@ -136,7 +136,7 @@ public static class ArvoreCommands
 
             if (!terreno.Mesh.TryGetZ(mundo.X, mundo.Y, out var chao))
             {
-                editor.WriteMessage("\nÁRVORE Esse ponto está fora do terreno; a árvore não foi posta.\n");
+                editor.WriteMessage(Tr.T("\nÁRVORE Esse ponto está fora do terreno; a árvore não foi posta.\n"));
                 continue;
             }
 
@@ -144,7 +144,7 @@ public static class ArvoreCommands
             postas++;
         }
 
-        editor.WriteMessage($"\nÁRVORE {postas} árvore(s) posta(s) no terreno. Arrastadas, elas voltam ao chão do lugar novo.\n");
+        editor.WriteMessage(Tr.F("\nÁRVORE {0} árvore(s) posta(s) no terreno. Arrastadas, elas voltam ao chão do lugar novo.\n", postas));
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
     }
 

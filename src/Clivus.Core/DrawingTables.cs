@@ -86,7 +86,7 @@ public static class DrawingTables
 
         if (campos[0] != Versao || campos.Count < 2 || !int.TryParse(campos[1], NumberStyles.None, CultureInfo.InvariantCulture, out var quantas))
         {
-            erros.Add("o registro das mesas do desenho é de outra versão ou está quebrado");
+            erros.Add(Tr.T("o registro das mesas do desenho é de outra versão ou está quebrado"));
             return lista;
         }
 
@@ -99,7 +99,7 @@ public static class DrawingTables
                 || !int.TryParse(campos[i + 2], NumberStyles.None, CultureInfo.InvariantCulture, out var pedacos)
                 || i + 3 + pedacos > campos.Count)
             {
-                erros.Add($"a mesa {n + 1} do registro está quebrada; as seguintes não puderam ser lidas");
+                erros.Add(Tr.F("a mesa {0} do registro está quebrada; as seguintes não puderam ser lidas", n + 1));
                 return lista;
             }
 
@@ -113,7 +113,7 @@ public static class DrawingTables
             }
             catch (InvalidOperationException erro)
             {
-                erros.Add($"a mesa {n + 1} do registro não pôde ser lida: {erro.Message}");
+                erros.Add(Tr.F("a mesa {0} do registro não pôde ser lida: {1}", n + 1, erro.Message));
             }
         }
 
@@ -125,10 +125,10 @@ public static class DrawingTables
     {
         ArgumentNullException.ThrowIfNull(mesas);
 
-        if (mesas.Any(m => m.Name.Length == 0)) return "há mesa sem nome";
+        if (mesas.Any(m => m.Name.Length == 0)) return Tr.T("há mesa sem nome");
 
         var repetido = mesas.GroupBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase).FirstOrDefault(g => g.Count() > 1);
-        return repetido is null ? null : $"há duas mesas chamadas \"{repetido.Key}\"";
+        return repetido is null ? null : Tr.F("há duas mesas chamadas \"{0}\"", repetido.Key);
     }
 
     /// <summary>
