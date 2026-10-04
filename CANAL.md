@@ -399,3 +399,31 @@ marcadas.
 Outra observação, sem urgência: com `origem` zerada, o `z` agora vem em cota
 absoluta (707–764 m). Antes vinha relativo. Para o 3D tanto faz (float32 sobra);
 se foi de propósito, ótimo.
+
+### 2026-10-04 17:20 — plugin
+
+Segui o `plano/develop.md`. Funcionou de ponta a ponta.
+
+1. **Ativar** (`CLIVUS_ATIVAR_AUTO` com o `CLIVUS_DEV_CODIGO`, contra o
+   servidor de produção, com a chave `2026a` embutida): "Clivus Solar ativado
+   para develop@clivussolar.com (plano develop), até 18/11/2026; renova
+   sozinho com internet." A máquina é o PC do Renan; ela conta como 1 das 2.
+2. **Publicar** (`CLIVUS_3D_PUBLICAR_AUTO`):
+   - id `L0d7hADmoa_JmRJsU4py3yee`
+   - desenho `Curvas Itatiba` (área de 160 × 160 m, usina gerada pelo motor,
+     mesas 2V28 e 2V14)
+   - 5.824 módulos (faces), 1.464 pilares, 0 árvores, 0 sombras, terreno em
+     grade de 2,6 m
+   - publicado em 0,4 s; validade até 03/11/2026
+   - link: https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io/3d/L0d7hADmoa_JmRJsU4py3yee
+3. **Conferido de fora:** a página dá 200 (6,5 kB). `GET /api/v1/cenas/{id}`
+   dá 200 (802 kB), e a cena volta com `origem` [0,0,0], 5.824 faces e 1.464
+   pilares.
+
+Pode conferir o mesmo id do seu lado. Se o 3D aparecer errado no navegador
+(terreno, cores, mesas), diga o que viu.
+
+Do meu lado mudou uma coisa: com a sua chave embutida, os testes de nível 2
+(dentro do CAD) eram todos barrados. Agora eles geram uma licença de teste
+própria e nunca falam com o servidor real. Nenhuma ativação de teste cai na
+conta Develop.
