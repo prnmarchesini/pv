@@ -206,6 +206,31 @@ public static class Viewer3DPage
         });
     }
 
+    /// <summary>
+    /// Se o endereço do servidor serve (plano/seguranca.md): HTTPS; http só em
+    /// localhost (o servidor falso dos testes). Null se serve, o porquê se não.
+    /// </summary>
+    public static string? WhyServerUnsafe(string? endereco)
+    {
+        if (!Uri.TryCreate(endereco, UriKind.Absolute, out var uri)) return "o endereço do servidor não é um endereço web";
+        if (uri.Scheme == Uri.UriSchemeHttps) return null;
+        if (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback) return null;
+        return "o servidor precisa ser HTTPS (http só em localhost, para teste)";
+    }
+
+    /// <summary>
+    /// Se o link devolvido pode ser aberto no navegador: do mesmo host e
+    /// esquema do servidor configurado. Um servidor comprometido não consegue
+    /// mandar o usuário para outro site (plano/seguranca.md).
+    /// </summary>
+    public static bool IsLinkFromServer(string link, string servidor) =>
+        Uri.TryCreate(link, UriKind.Absolute, out var l)
+        && Uri.TryCreate(servidor, UriKind.Absolute, out var s)
+        && string.Equals(l.Scheme, s.Scheme, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(l.Host, s.Host, StringComparison.OrdinalIgnoreCase)
+        && l.Port == s.Port
+        && WhyServerUnsafe(servidor) is null;
+
     /// <summary>A página inteira: a three.js, os controles de órbita, a cena e o visualizador.</summary>
     public static string Html(Scene3D scene)
     {

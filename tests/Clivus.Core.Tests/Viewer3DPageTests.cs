@@ -112,6 +112,26 @@ public class Viewer3DPageTests
         Assert.Null(Viewer3DPage.ParseResponse(201, "{\"id\":\"a\",\"url\":\"https://x/3d/a\"}").Publicada!.ExpiresAt);
     }
 
+    /// <summary>Segurança (plano/seguranca.md): só HTTPS (http em localhost), e só abre link do próprio servidor.</summary>
+    [Fact]
+    [Trait("Etapa", "9")]
+    public void SoHttpsESoLinkDoProprioServidor()
+    {
+        Assert.Null(Viewer3DPage.WhyServerUnsafe("https://clivus.exemplo.com.br"));
+        Assert.Null(Viewer3DPage.WhyServerUnsafe("http://127.0.0.1:18765"));
+        Assert.Null(Viewer3DPage.WhyServerUnsafe("http://localhost:8000"));
+        Assert.NotNull(Viewer3DPage.WhyServerUnsafe("http://clivus.exemplo.com.br"));
+        Assert.NotNull(Viewer3DPage.WhyServerUnsafe("ftp://x"));
+        Assert.NotNull(Viewer3DPage.WhyServerUnsafe(null));
+
+        const string servidor = "https://clivus.exemplo.com.br";
+        Assert.True(Viewer3DPage.IsLinkFromServer("https://clivus.exemplo.com.br/3d/abc", servidor));
+        Assert.False(Viewer3DPage.IsLinkFromServer("https://clivus.exemplo.com.br.golpe.com/3d/abc", servidor));
+        Assert.False(Viewer3DPage.IsLinkFromServer("http://clivus.exemplo.com.br/3d/abc", servidor));
+        Assert.False(Viewer3DPage.IsLinkFromServer("https://outro.com/3d/abc", servidor));
+        Assert.False(Viewer3DPage.IsLinkFromServer("https://x.com/3d/abc", "http://x.com"));
+    }
+
     /// <summary>Um desenho chamado "x{{ORBITA}}" não faz o script entrar no título.</summary>
     [Fact]
     [Trait("Etapa", "9")]

@@ -19,6 +19,7 @@ Um texto `{payload}.{assinatura}`, as duas partes em base64url sem `=`.
 ```json
 {
   "v": 1,
+  "kid": "2026a",
   "licenca": "lic_8f2k1",
   "conta": "fulano@empresa.com.br",
   "plano": "gratuito",
@@ -33,9 +34,12 @@ Um texto `{payload}.{assinatura}`, as duas partes em base64url sem `=`.
   formato IEEE P1363 (r‖s, 64 bytes). Em Python (`cryptography`):
   `der = chave.sign(payload, ec.ECDSA(hashes.SHA256()))`, depois
   `r, s = decode_dss_signature(der)` e `r.to_bytes(32) + s.to_bytes(32)`.
+- `kid`: qual chave assinou (troca de chave sem derrubar as licenças da
+  anterior). O plugin guarda as chaves públicas por `kid` e escolhe por ele;
+  `kid` que o plugin não conhece não vale.
 - A chave privada fica só no servidor (variável de ambiente no Coolify,
   nunca no git). A chave **pública** (SubjectPublicKeyInfo, DER em base64)
-  vai para o plugin, em `PluginInfo.ChavePublicaDaLicenca`: o agente do
+  vai para o plugin, com o `kid`, em `PluginInfo.ChavesPublicasDaLicenca`: o agente do
   servidor publica no canal, e o do plugin grava. Enquanto ela estiver vazia,
   o plugin roda sem pedir licença (é o modo dos testes e de hoje).
 - `maquina`: o plugin manda; é o SHA-256 (hex minúsculo) do MachineGuid do

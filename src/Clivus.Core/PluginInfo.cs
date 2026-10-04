@@ -273,6 +273,21 @@ public static class PluginInfo
     /// </summary>
     public const string PrefixoDeDados = "CLIVUS";
 
+    /// <summary>
+    /// O endereço de produção do servidor (3D e licenças), embutido para não
+    /// depender de variável de ambiente (plano/seguranca.md). Vazio até o
+    /// agente do servidor publicar o domínio; CLIVUS_SERVIDOR vale por cima.
+    /// </summary>
+    public const string ServidorDeProducao = "";
+
+    /// <summary>
+    /// As chaves públicas que assinam licenças, por <c>kid</c> (SubjectPublicKeyInfo,
+    /// DER em base64; plano/contrato-ativacao.md). Vazio: o plugin roda sem
+    /// pedir licença (testes e hoje). Mais de uma: troca de chave sem
+    /// derrubar licença emitida pela anterior.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> ChavesPublicasDaLicenca = new Dictionary<string, string>();
+
     /// <summary>A pasta do plugin em %LOCALAPPDATA% (perfis de mesa, log, bancada).</summary>
     public const string PastaDoUsuario = "Clivus Solar";
 

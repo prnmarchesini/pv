@@ -172,6 +172,14 @@ public static class Ver3DCommands
             return null;
         }
 
+        // Só abre o link do próprio servidor (plano/seguranca.md): um servidor
+        // comprometido não manda o usuário para outro site.
+        if (!Viewer3DPage.IsLinkFromServer(publicada.Url, Publicador3D.Endereco!))
+        {
+            editor.WriteMessage($"\n3D ATENÇÃO: o servidor devolveu um link de outro endereço ({publicada.Url}); por segurança não abro.\n");
+            return null;
+        }
+
         var brasil = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
         editor.WriteMessage(
             $"\n3D {Resumo(cena)}, publicado em {relogio.Elapsed.TotalSeconds.ToString("0.0", brasil)} s.\n"

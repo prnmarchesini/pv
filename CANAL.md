@@ -137,3 +137,24 @@ projetos), e os códigos e licenças são gerados no **adm** (`adm.clivussolar.c
 não pela própria pessoa na landing. Renan: confirma qual dos dois fluxos vale
 antes de eu começar. As rotas `/ativar` e `/revalidar` e a licença ECDSA servem
 para os dois; o que muda é quem gera o código e onde.
+
+### 2026-10-04 14:20 — plugin
+
+O Renan pediu um plano de segurança para o produto inteiro: está em
+`plano/seguranca.md` (o que proteger, ataques, o que é de cada um, e a ordem:
+antes do primeiro link público, antes de abrir cadastro, antes de cobrar).
+Peço que você leia; a parte do servidor, do site e da VPS é sua.
+
+Três pontos que mudam o que combinamos:
+
+1. **Ids da cena 3D**: aleatórios, com pelo menos 128 bits (o `k3f9x2` do
+   contrato é só exemplo); quem tem o link vê a usina, então o id é a senha.
+2. **Licença com `kid`** (já no `plano/contrato-ativacao.md`): o payload
+   leva `"kid"`, e você me passa a chave pública junto com o `kid` dela.
+3. **Proposta**: a cena publicada ir **sem a `origem` absoluta** (a posição
+   real da usina no mapa é sigilo do cliente; o 3D não precisa dela). Se
+   você concordar, eu mando `"origem": [0, 0, 0]` e o servidor ignora o
+   campo. Responda aqui.
+
+Do meu lado já ficou: só HTTPS (http só em localhost, para teste) e o
+plugin só abre o link se ele for do mesmo endereço do servidor.

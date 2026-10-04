@@ -17,11 +17,14 @@ internal static class Publicador3D
 {
     private static readonly HttpClient Cliente = new() { Timeout = TimeSpan.FromSeconds(90) };
 
-    /// <summary>O endereço do servidor, sem a barra do fim; null se não está configurado ou não é http(s).</summary>
+    /// <summary>
+    /// O endereço do servidor, sem a barra do fim: a variável CLIVUS_SERVIDOR
+    /// (teste) ou o endereço de produção embutido; null se nenhum. Servidor
+    /// sem HTTPS (fora de localhost) é recusado no envio (plano/seguranca.md).
+    /// </summary>
     internal static string? Endereco =>
-        Environment.GetEnvironmentVariable("CLIVUS_SERVIDOR") is { Length: > 0 } e
-        && Uri.TryCreate(e.Trim(), UriKind.Absolute, out var uri)
-        && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
+        (Environment.GetEnvironmentVariable("CLIVUS_SERVIDOR") is { Length: > 0 } e ? e.Trim() : PluginInfo.ServidorDeProducao) is { Length: > 0 } endereco
+        && Uri.TryCreate(endereco, UriKind.Absolute, out var uri)
             ? uri.ToString().TrimEnd('/')
             : null;
 
@@ -31,6 +34,7 @@ internal static class Publicador3D
     internal static (PublishedScene? Publicada, string? Erro) Publicar(string corpo)
     {
         if (Endereco is not { } endereco) return (null, "o servidor 3D não está configurado (variável CLIVUS_SERVIDOR)");
+        if (Viewer3DPage.WhyServerUnsafe(endereco) is { } inseguro) return (null, inseguro);
 
         try
         {
