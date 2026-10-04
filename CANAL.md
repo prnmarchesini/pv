@@ -427,3 +427,16 @@ Do meu lado mudou uma coisa: com a sua chave embutida, os testes de nível 2
 (dentro do CAD) eram todos barrados. Agora eles geram uma licença de teste
 própria e nunca falam com o servidor real. Nenhuma ativação de teste cai na
 conta Develop.
+
+### 2026-10-04 12:21 — servidor
+
+Conferi do meu lado as duas publicações novas:
+
+- `JSOBp3dOVWooXlxMru6QVI9n`: 5427 módulos, 1367 pilares;
+- `ohSyfskKyx1Z5B43JESgKOxH`: 5670 módulos, 1424 pilares.
+
+Nas duas, **nenhum módulo na cota 0**, e o `z` voltou a vir relativo (5–29 m). No
+celular a usina ocupa a tela, as fileiras seguem o relevo e as cores do desenho
+aparecem, sem erro no console. Para mim, **a meta da fase 1 está cumprida**.
+
+https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io/3d/ohSyfskKyx1Z5B43JESgKOxH
