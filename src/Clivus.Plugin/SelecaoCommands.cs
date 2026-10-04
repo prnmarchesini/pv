@@ -20,8 +20,8 @@ internal sealed record SelectionSummary(LayoutCensus Census)
     /// <summary>"3 mesa(s), 84 módulo(s), 60,5 kWp", e os avisos de duplicada e de potência do perfil quando há.</summary>
     public string Describe() =>
         Census.Lines()[0]
-        + (Census.Duplicated > 0 ? $" ({Census.Duplicated} com contorno duplicado)" : string.Empty)
-        + (Census.TablesWithoutPower > 0 ? $" ({Census.TablesWithoutPower} com a potência do perfil atual)" : string.Empty);
+        + (Census.Duplicated > 0 ? Tr.F(" ({0} com contorno duplicado)", Census.Duplicated) : string.Empty)
+        + (Census.TablesWithoutPower > 0 ? Tr.F(" ({0} com a potência do perfil atual)", Census.TablesWithoutPower) : string.Empty);
 }
 
 /// <summary>
@@ -46,20 +46,20 @@ public static class SelecaoCommands
 
             if (selecao.Status != PromptStatus.OK)
             {
-                selecao = editor.GetSelection(new PromptSelectionOptions { MessageForAdding = "\nSelecione as mesas: " });
+                selecao = editor.GetSelection(new PromptSelectionOptions { MessageForAdding = Tr.T("\nSelecione as mesas: ") });
                 if (selecao.Status != PromptStatus.OK) return;
             }
 
             var resumo = Resumir(documento, MesasTocadas(documento, selecao.Value.GetObjectIds()));
 
             editor.WriteMessage(resumo.IsEmpty
-                ? "\nSELECAO nenhuma mesa do plugin na seleção.\n"
-                : $"\nSELECAO {resumo.Describe()}\n");
+                ? Tr.T("\nSELECAO nenhuma mesa do plugin na seleção.\n")
+                : Tr.F("\nSELECAO {0}\n", resumo.Describe()));
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao resumir a seleção.", erro);
-            editor.WriteMessage($"\nNão consegui resumir a seleção: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui resumir a seleção: {0}\n", erro.Message));
         }
     }
 

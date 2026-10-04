@@ -42,29 +42,27 @@ public static class GeoCommands
             }
 
             editor.WriteMessage(
-                "\nInforme a localização do terreno. Negativo para sul e para oeste:\n"
-                + "no Brasil, a latitude é sempre negativa.\n");
+                Tr.T("\nInforme a localização do terreno. Negativo para sul e para oeste:\nno Brasil, a latitude é sempre negativa.\n"));
 
-            if (!PerguntarGrau(editor, "Latitude", -90, 90, out var latitude)) return;
-            if (!PerguntarGrau(editor, "Longitude", -180, 180, out var longitude)) return;
+            if (!PerguntarGrau(editor, Tr.T("Latitude"), -90, 90, out var latitude)) return;
+            if (!PerguntarGrau(editor, Tr.T("Longitude"), -180, 180, out var longitude)) return;
 
             var lugar = new GeoLocation(latitude, longitude, GeoLocationSource.Usuario);
 
             if (!lugar.IsValid)
             {
-                editor.WriteMessage("  Valor fora dos limites; nada foi gravado.\n");
+                editor.WriteMessage(Tr.T("  Valor fora dos limites; nada foi gravado.\n"));
                 return;
             }
 
             // Confirmação em palavras, e não em números: é o hemisfério que se
             // erra, e "23° N" salta aos olhos de quem esperava sul.
-            editor.WriteMessage($"\n  Gravando: {lugar.Describe()}\n");
+            editor.WriteMessage(Tr.F("\n  Gravando: {0}\n", lugar.Describe()));
 
             if (lugar.Latitude > 0)
             {
                 editor.WriteMessage(
-                    "  ATENÇÃO: latitude positiva é hemisfério NORTE. "
-                    + "No Brasil ela é negativa.\n");
+                    Tr.T("  ATENÇÃO: latitude positiva é hemisfério NORTE. No Brasil ela é negativa.\n"));
             }
 
             GeoStore.Save(documento.Database, lugar);
@@ -73,7 +71,7 @@ public static class GeoCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao definir a localização do terreno.", erro);
-            editor.WriteMessage($"\nNão consegui definir a localização: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui definir a localização: {0}\n", erro.Message));
         }
     }
 
@@ -83,12 +81,12 @@ public static class GeoCommands
 
         if (gravada is not null)
         {
-            var origem = gravada.Source == GeoLocationSource.Desenho ? "do desenho" : "informada";
-            editor.WriteMessage($"\nLocalização gravada: {gravada.Describe()}  ({origem})\n");
+            var origem = gravada.Source == GeoLocationSource.Desenho ? Tr.T("do desenho") : Tr.T("informada");
+            editor.WriteMessage(Tr.F("\nLocalização gravada: {0}  ({1})\n", gravada.Describe(), origem));
             return;
         }
 
-        editor.WriteMessage("\nEste desenho ainda não tem localização gravada pelo plugin.\n");
+        editor.WriteMessage(Tr.T("\nEste desenho ainda não tem localização gravada pelo plugin.\n"));
     }
 
     private static bool PerguntarGrau(
@@ -100,20 +98,20 @@ public static class GeoCommands
     {
         valor = 0;
 
-        var resposta = editor.GetDouble(new PromptDoubleOptions($"\n  {rotulo} em graus: ")
+        var resposta = editor.GetDouble(new PromptDoubleOptions(Tr.F("\n  {0} em graus: ", rotulo))
         {
             AllowNone = false,
         });
 
         if (resposta.Status != PromptStatus.OK)
         {
-            editor.WriteMessage("  Nada foi gravado.\n");
+            editor.WriteMessage(Tr.T("  Nada foi gravado.\n"));
             return false;
         }
 
         if (resposta.Value < minimo || resposta.Value > maximo)
         {
-            editor.WriteMessage($"  {rotulo} precisa ficar entre {minimo} e {maximo}.\n");
+            editor.WriteMessage(Tr.F("  {0} precisa ficar entre {1} e {2}.\n", rotulo, minimo, maximo));
             return false;
         }
 
@@ -133,11 +131,10 @@ public static class GeoCommands
         if (documento.IsReadOnly)
         {
             editor.WriteMessage(
-                "  ATENÇÃO: este desenho está somente para leitura. O que foi gravado vale\n"
-                + "  nesta sessão e se perde ao fechar.\n");
+                Tr.T("  ATENÇÃO: este desenho está somente para leitura. O que foi gravado vale\n  nesta sessão e se perde ao fechar.\n"));
             return;
         }
 
-        editor.WriteMessage("  (salve o desenho para isto ficar guardado no arquivo)\n");
+        editor.WriteMessage(Tr.T("  (salve o desenho para isto ficar guardado no arquivo)\n"));
     }
 }

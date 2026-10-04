@@ -71,7 +71,7 @@ public static class TerrainCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao listar as superfícies do desenho.", erro);
-            editor.WriteMessage($"\nNão consegui ler as superfícies deste desenho: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui ler as superfícies deste desenho: {0}\n", erro.Message));
         }
     }
 
@@ -118,7 +118,7 @@ public static class TerrainCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao processar a superfície automaticamente.", erro);
-            editor.WriteMessage($"\nNão consegui processar a superfície: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui processar a superfície: {0}\n", erro.Message));
         }
     }
 
@@ -186,7 +186,7 @@ public static class TerrainCommands
 
             if (carimbo is null)
             {
-                editor.WriteMessage("\nSTATUS SemCarimbo: este desenho ainda não teve terreno processado.\n");
+                editor.WriteMessage(Tr.T("\nSTATUS SemCarimbo: este desenho ainda não teve terreno processado.\n"));
                 return;
             }
 
@@ -194,9 +194,8 @@ public static class TerrainCommands
             var estado = ProvenanceCheck.Evaluate(carimbo, agora);
 
             editor.WriteMessage(
-                $"\nSTATUS {estado}: terreno de {carimbo.Surface.Name}, "
-                + $"processado em {carimbo.ProcessedAtText} pela versão "
-                + $"{PluginInfo.VersaoLegivel(carimbo.PluginVersion)}.\n");
+                Tr.F("\nSTATUS {0}: terreno de {1}, processado em {2} pela versão {3}.\n",
+                    estado, carimbo.Surface.Name, carimbo.ProcessedAtText, PluginInfo.VersaoLegivel(carimbo.PluginVersion)));
 
             // A localização gravada aparece aqui, e não só no processamento:
             // é o único lugar onde o usuário pode conferir o que ficou
@@ -209,7 +208,7 @@ public static class TerrainCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao conferir o carimbo do terreno.", erro);
-            editor.WriteMessage($"\nNão consegui conferir o terreno deste desenho: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui conferir o terreno deste desenho: {0}\n", erro.Message));
         }
     }
 
@@ -242,17 +241,17 @@ public static class TerrainCommands
             if (lugar is null)
             {
                 editor.WriteMessage(
-                    $"  localização:    não definida. Use {PluginInfo.ComandoLocalizacao} para informar.\n");
+                    Tr.F("  localização:    não definida. Use {0} para informar.\n", PluginInfo.ComandoLocalizacao));
                 return;
             }
 
-            var origem = lugar.Source == GeoLocationSource.Desenho ? "do desenho" : "informada";
-            editor.WriteMessage($"  localização:    {lugar.Describe()}  ({origem})\n");
+            var origem = lugar.Source == GeoLocationSource.Desenho ? Tr.T("do desenho") : Tr.T("informada");
+            editor.WriteMessage(Tr.F("  localização:    {0}  ({1})\n", lugar.Describe(), origem));
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao obter a localização geográfica.", erro);
-            editor.WriteMessage("  localização:    não consegui obter (ver log)\n");
+            editor.WriteMessage(Tr.T("  localização:    não consegui obter (ver log)\n"));
         }
     }
 
@@ -263,13 +262,13 @@ public static class TerrainCommands
             var lugar = GeoStore.Gravada(documento.Database);
             if (lugar is null) return;
 
-            var origem = lugar.Source == GeoLocationSource.Desenho ? "do desenho" : "informada";
-            editor.WriteMessage($"  localização:    {lugar.Describe()}  ({origem})\n");
+            var origem = lugar.Source == GeoLocationSource.Desenho ? Tr.T("do desenho") : Tr.T("informada");
+            editor.WriteMessage(Tr.F("  localização:    {0}  ({1})\n", lugar.Describe(), origem));
 
             if (lugar.Source == GeoLocationSource.Usuario)
             {
                 editor.WriteMessage(
-                    $"  (para corrigir, use {PluginInfo.ComandoLocalizacao})\n");
+                    Tr.F("  (para corrigir, use {0})\n", PluginInfo.ComandoLocalizacao));
             }
         }
         catch (System.Exception erro)
@@ -293,14 +292,13 @@ public static class TerrainCommands
             // não vale desfazer o trabalho.
             RegistroDeDiagnostico.Registrar("Não consegui gravar o carimbo de proveniência.", erro);
             editor.WriteMessage(
-                "\n  ATENÇÃO: não consegui gravar o carimbo no desenho. O terreno funciona nesta "
-                + "sessão, mas ao reabrir o arquivo não haverá como saber se ele envelheceu.\n");
+                Tr.T("\n  ATENÇÃO: não consegui gravar o carimbo no desenho. O terreno funciona nesta sessão, mas ao reabrir o arquivo não haverá como saber se ele envelheceu.\n"));
         }
     }
 
     private static void Listar(Editor editor, IReadOnlyList<SurfaceEntry> superficies)
     {
-        editor.WriteMessage($"\nSuperfícies do desenho: {superficies.Count}\n");
+        editor.WriteMessage(Tr.F("\nSuperfícies do desenho: {0}\n", superficies.Count));
 
         foreach (var superficie in superficies)
             editor.WriteMessage($"  {superficie.Summary.Describe()}\n");
@@ -312,11 +310,11 @@ public static class TerrainCommands
 
         if (escolhida is null)
         {
-            editor.WriteMessage("\nNenhuma superfície escolhida.\n");
+            editor.WriteMessage(Tr.T("\nNenhuma superfície escolhida.\n"));
             return;
         }
 
-        editor.WriteMessage($"\nTerreno escolhido: {escolhida.Summary.Describe()}\n");
+        editor.WriteMessage(Tr.F("\nTerreno escolhido: {0}\n", escolhida.Summary.Describe()));
         Processar(editor, escolhida);
     }
 
@@ -348,9 +346,9 @@ public static class TerrainCommands
                     var homonima = candidatas.Any(e => e.Summary.DisplayName == carimbo.Surface.Name);
 
                     editor.WriteMessage(
-                        $"\nA superfície \"{carimbo.Surface.Name}\" processada em {carimbo.ProcessedAtText} não está mais no desenho"
-                        + (homonima ? " (há outra com o mesmo nome, recriada)" : string.Empty)
-                        + ". Use o botão Terreno para escolher a superfície e processar de novo.\n");
+                        (homonima
+                            ? Tr.F("\nA superfície \"{0}\" processada em {1} não está mais no desenho (há outra com o mesmo nome, recriada). Use o botão Terreno para escolher a superfície e processar de novo.\n", carimbo.Surface.Name, carimbo.ProcessedAtText)
+                            : Tr.F("\nA superfície \"{0}\" processada em {1} não está mais no desenho. Use o botão Terreno para escolher a superfície e processar de novo.\n", carimbo.Surface.Name, carimbo.ProcessedAtText)));
 
                     return false;
                 }
@@ -363,8 +361,9 @@ public static class TerrainCommands
             if (escolhida is null) return false;
 
             editor.WriteMessage(
-                $"\nO terreno não estava na memória (o desenho foi reaberto). Reprocessando {escolhida.Summary.DisplayName}"
-                + (carimbo is not null ? $", processada em {carimbo.ProcessedAtText}" : string.Empty) + "...\n");
+                (carimbo is not null
+                    ? Tr.F("\nO terreno não estava na memória (o desenho foi reaberto). Reprocessando {0}, processada em {1}...\n", escolhida.Summary.DisplayName, carimbo.ProcessedAtText)
+                    : Tr.F("\nO terreno não estava na memória (o desenho foi reaberto). Reprocessando {0}...\n", escolhida.Summary.DisplayName)));
 
             Processar(editor, escolhida);
 
@@ -392,12 +391,12 @@ public static class TerrainCommands
         // consegui ler as superfícies", que aponta para o lugar errado.
         if (escolhida.Id.IsNull || escolhida.Id.IsErased)
         {
-            editor.WriteMessage("\nA superfície escolhida não está mais no desenho.\n");
+            editor.WriteMessage(Tr.T("\nA superfície escolhida não está mais no desenho.\n"));
             TerrainCache.Forget(documento);
             return;
         }
 
-        editor.WriteMessage($"\nProcessando {escolhida.Summary.DisplayName}...\n");
+        editor.WriteMessage(Tr.F("\nProcessando {0}...\n", escolhida.Summary.DisplayName));
 
         var relogio = Stopwatch.StartNew();
         SurfaceMesh lida;
@@ -410,7 +409,7 @@ public static class TerrainCommands
         {
             if (transacao.GetObject(escolhida.Id, OpenMode.ForRead) is not TinSurface superficie)
             {
-                editor.WriteMessage("\nA superfície escolhida não está mais no desenho.\n");
+                editor.WriteMessage(Tr.T("\nA superfície escolhida não está mais no desenho.\n"));
                 TerrainCache.Forget(documento);
                 return;
             }
@@ -444,8 +443,7 @@ public static class TerrainCommands
             TerrainCache.Forget(documento);
 
             editor.WriteMessage(
-                "\nA superfície não tem nenhum triângulo aproveitável. "
-                + "Confira se ela está construída e visível no Civil 3D.\n");
+                Tr.T("\nA superfície não tem nenhum triângulo aproveitável. Confira se ela está construída e visível no Civil 3D.\n"));
             return;
         }
 
@@ -477,10 +475,9 @@ public static class TerrainCommands
             // sistematicamente ilegível produz um resumo de aparência normal,
             // calculado sobre um punhado de triângulos, e ninguém desconfia.
             editor.WriteMessage(
-                $"  ATENÇÃO: {lida.UnreadableCount} triângulo(s) não puderam ser lidos "
-                + "e viraram buraco no terreno.\n");
+                Tr.F("  ATENÇÃO: {0} triângulo(s) não puderam ser lidos e viraram buraco no terreno.\n", lida.UnreadableCount));
         }
 
-        editor.WriteMessage($"  em {relogio.Elapsed.TotalSeconds:0.0} s\n");
+        editor.WriteMessage(Tr.F("  em {0:0.0} s\n", relogio.Elapsed.TotalSeconds));
     }
 }

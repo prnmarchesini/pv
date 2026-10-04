@@ -35,7 +35,7 @@ internal static class AreaStore
     /// <summary>GUID, nome, handle e data.</summary>
     private const int CamposPorArea = 4;
 
-    private const string OQueE = "de áreas";
+    private static readonly string OQueE = Tr.N("de áreas");
 
     /// <summary>As áreas registradas, na ordem em que foram gravadas.</summary>
     internal static IReadOnlyList<AreaRecord> Load(Database database) => Ler(database).Items;

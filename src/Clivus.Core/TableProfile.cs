@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -84,8 +83,6 @@ public sealed record TableProfile(
     /// </summary>
     private const int CasasDoGrau = 9;
 
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     private static readonly JsonSerializerOptions Opcoes = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -109,16 +106,16 @@ public sealed record TableProfile(
     {
         get
         {
-            if (string.IsNullOrWhiteSpace(Name)) return "o perfil precisa de um nome";
+            if (string.IsNullOrWhiteSpace(Name)) return Tr.T("o perfil precisa de um nome");
 
-            if (Layout is null) return "o perfil não traz a mesa";
-            if (Frame is null) return "o perfil não traz a estrutura";
+            if (Layout is null) return Tr.T("o perfil não traz a mesa");
+            if (Frame is null) return Tr.T("o perfil não traz a estrutura");
 
             if (Layout.WhyInvalid is { } porCausaDaMesa) return porCausaDaMesa;
             if (Frame.WhyInvalid is { } porCausaDaEstrutura) return porCausaDaEstrutura;
 
             if (!double.IsFinite(TiltRadians) || TiltRadians < 0 || TiltRadians > PillarSizing.MaiorInclinacao)
-                return "a inclinação está fora da faixa de uma mesa";
+                return Tr.T("a inclinação está fora da faixa de uma mesa");
 
             // A mesma conferência que a geometria faz, e do mesmo lugar: sem
             // ela aqui, um perfil errado só explodiria na hora de desenhar,
@@ -144,7 +141,7 @@ public sealed record TableProfile(
     public string ToJson()
     {
         if (WhyInvalid is { } motivo)
-            throw new InvalidOperationException($"O perfil não pode ser salvo: {motivo}.");
+            throw new InvalidOperationException(Tr.F("O perfil não pode ser salvo: {0}.", motivo));
 
         var arquivo = new Arquivo
         {
@@ -208,30 +205,29 @@ public sealed record TableProfile(
             // tipo interno. Isso serve para o log, não para a janela: o texto
             // do usuário é nosso, e o detalhe fica na exceção de dentro.
             throw new InvalidOperationException(
-                "O arquivo não é um perfil de mesa que este plugin saiba ler.", erro);
+                Tr.T("O arquivo não é um perfil de mesa que este plugin saiba ler."), erro);
         }
 
-        if (arquivo is null) throw new InvalidOperationException("O perfil de mesa está vazio.");
+        if (arquivo is null) throw new InvalidOperationException(Tr.T("O perfil de mesa está vazio."));
 
         if (arquivo.FormatVersion is not { } versao)
-            throw new InvalidOperationException("O perfil de mesa não diz de que versão do formato é.");
+            throw new InvalidOperationException(Tr.T("O perfil de mesa não diz de que versão do formato é."));
 
         if (versao != VersaoDoFormato)
         {
             throw new InvalidOperationException(
-                $"O perfil de mesa é da versão {versao} do formato, e este plugin "
-                + $"lê a versão {VersaoDoFormato}.");
+                Tr.F("O perfil de mesa é da versão {0} do formato, e este plugin lê a versão {1}.", versao, VersaoDoFormato));
         }
 
-        if (arquivo.Layout is null) throw new InvalidOperationException("O perfil de mesa não traz a mesa.");
-        if (arquivo.Frame is null) throw new InvalidOperationException("O perfil de mesa não traz a estrutura.");
+        if (arquivo.Layout is null) throw new InvalidOperationException(Tr.T("O perfil de mesa não traz a mesa."));
+        if (arquivo.Frame is null) throw new InvalidOperationException(Tr.T("O perfil de mesa não traz a estrutura."));
 
         var arranjo = Exigir(arquivo.Layout.Arrangement, "layout.arrangement");
 
         if (!Enum.IsDefined(arranjo))
         {
             throw new InvalidOperationException(
-                $"O perfil de mesa traz um arranjo que este plugin não conhece: {arranjo}.");
+                Tr.F("O perfil de mesa traz um arranjo que este plugin não conhece: {0}.", arranjo));
         }
 
         var modulo = new SolarModule(
@@ -268,7 +264,7 @@ public sealed record TableProfile(
             Exigir(arquivo.TiltDegrees, "tiltDegrees") * Math.PI / 180);
 
         if (perfil.WhyInvalid is { } motivo)
-            throw new InvalidOperationException($"O perfil de mesa não descreve uma mesa: {motivo}.");
+            throw new InvalidOperationException(Tr.F("O perfil de mesa não descreve uma mesa: {0}.", motivo));
 
         return perfil;
     }
@@ -276,9 +272,9 @@ public sealed record TableProfile(
     /// <summary>A linha que descreve o perfil para o usuário.</summary>
     public string Describe()
     {
-        if (WhyInvalid is { } motivo) return $"Perfil inválido: {motivo}.";
+        if (WhyInvalid is { } motivo) return Tr.F("Perfil inválido: {0}.", motivo);
 
-        return $"{Name.Trim()} — {Layout.Describe()}, a {Texto(TiltDegrees)}°";
+        return Tr.F("{0} — {1}, a {2:0.###}°", Name.Trim(), Layout.Describe(), TiltDegrees);
     }
 
     /// <summary>
@@ -291,9 +287,7 @@ public sealed record TableProfile(
     /// </summary>
     private static T Exigir<T>(T? valor, string campo) where T : struct =>
         valor ?? throw new InvalidOperationException(
-            $"O perfil de mesa não traz o campo \"{campo}\".");
-
-    private static string Texto(double valor) => valor.ToString("0.###", Brasil);
+            Tr.F("O perfil de mesa não traz o campo \"{0}\".", campo));
 
     /// <summary>
     /// O perfil como ele está no arquivo.

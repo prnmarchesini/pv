@@ -12,7 +12,7 @@ namespace Clivus.Plugin;
 /// </summary>
 internal sealed class JanelaDeEstilos : Window
 {
-    internal const string Corrente = "(o corrente do desenho)";
+    internal static string Corrente => Tr.T("(o corrente do desenho)");
 
     private readonly PainelDeEstilos _painel;
 
@@ -20,7 +20,7 @@ internal sealed class JanelaDeEstilos : Window
 
     internal JanelaDeEstilos(IReadOnlyList<string> textos, IReadOnlyList<string> cotas, IReadOnlyList<string> chamadas, ProjectStyles atuais)
     {
-        Title = "Clivus Solar — Estilos do projeto";
+        Title = Tr.T("Clivus Solar — Estilos do projeto");
         Width = 460;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
@@ -33,10 +33,10 @@ internal sealed class JanelaDeEstilos : Window
         pilha.Children.Add(_painel);
 
         var botoes = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
-        var ok = new Button { Content = "Salvar no desenho", Height = 26, Padding = new Thickness(10, 0, 10, 0), IsDefault = true, ToolTip = "Grava a escolha no desenho; vale para os próximos textos do plugin." };
+        var ok = new Button { Content = Tr.T("Salvar no desenho"), Height = 26, Padding = new Thickness(10, 0, 10, 0), IsDefault = true, ToolTip = Tr.T("Grava a escolha no desenho; vale para os próximos textos do plugin.") };
         ok.Click += (_, _) => { Escolhidos = _painel.Ler(); DialogResult = true; };
         botoes.Children.Add(ok);
-        botoes.Children.Add(new Button { Content = "Cancelar", Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true });
+        botoes.Children.Add(new Button { Content = Tr.T("Cancelar"), Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true });
         pilha.Children.Add(botoes);
 
         Content = pilha;
@@ -52,21 +52,21 @@ internal sealed class PainelDeEstilos : StackPanel
 
     internal PainelDeEstilos(IReadOnlyList<string> textos, IReadOnlyList<string> cotas, IReadOnlyList<string> chamadas, ProjectStyles atuais)
     {
-        _texto = Caixa(textos, atuais.TextStyle, "O estilo dos textos do plugin: alturas, análises, declividade, tags, grupos. Anotativo, o texto sai na altura de papel do estilo pela escala de anotação corrente.");
-        _cota = Caixa(cotas, atuais.DimensionStyle, "O estilo das cotas (DIMSTYLE) que o plugin vier a desenhar.");
-        _chamada = Caixa(chamadas, atuais.LeaderStyle, "O estilo das chamadas (MLEADERSTYLE) que o plugin vier a desenhar.");
+        _texto = Caixa(textos, atuais.TextStyle, Tr.T("O estilo dos textos do plugin: alturas, análises, declividade, tags, grupos. Anotativo, o texto sai na altura de papel do estilo pela escala de anotação corrente."));
+        _cota = Caixa(cotas, atuais.DimensionStyle, Tr.T("O estilo das cotas (DIMSTYLE) que o plugin vier a desenhar."));
+        _chamada = Caixa(chamadas, atuais.LeaderStyle, Tr.T("O estilo das chamadas (MLEADERSTYLE) que o plugin vier a desenhar."));
 
         Children.Add(new TextBlock
         {
-            Text = "Para imprimir com a mesma escala do layout, use estilos anotativos.",
+            Text = Tr.T("Para imprimir com a mesma escala do layout, use estilos anotativos."),
             Foreground = Brushes.Gray,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8),
         });
 
-        Linha("Estilo de texto", _texto);
-        Linha("Estilo de cota", _cota);
-        Linha("Estilo de chamada (leader)", _chamada);
+        Linha(Tr.T("Estilo de texto"), _texto);
+        Linha(Tr.T("Estilo de cota"), _cota);
+        Linha(Tr.T("Estilo de chamada (leader)"), _chamada);
     }
 
     internal ProjectStyles Ler() => new(Nome(_texto), Nome(_cota), Nome(_chamada));

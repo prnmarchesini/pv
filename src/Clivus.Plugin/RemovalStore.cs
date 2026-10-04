@@ -12,7 +12,7 @@ internal static class RemovalStore
 {
     private const string Chave = "REMOVIDAS";
     private const int VersaoDoFormato = 1;
-    private const string OQueE = "de mesas removidas";
+    private static readonly string OQueE = Tr.N("de mesas removidas");
 
     internal static RecordTableResult<TableRemoval> Ler(Database database) =>
         PluginRecords.Load<TableRemoval>(database, Chave, VersaoDoFormato, TableRemoval.FieldCount, TableRemoval.Parse, OQueE);

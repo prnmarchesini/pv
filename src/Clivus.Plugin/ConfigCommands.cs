@@ -26,7 +26,7 @@ public static class ConfigCommands
 
         if (!ClivusExtension.TemInterface())
         {
-            editor.WriteMessage("\nA tela de configuração precisa da interface do Civil 3D.\n");
+            editor.WriteMessage(Tr.T("\nA tela de configuração precisa da interface do Civil 3D.\n"));
             return;
         }
 
@@ -37,7 +37,7 @@ public static class ConfigCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao abrir a tela de configuração.", erro);
-            editor.WriteMessage($"\nNão consegui abrir a tela de configuração: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui abrir a tela de configuração: {0}\n", erro.Message));
         }
     }
 
@@ -60,26 +60,25 @@ public static class ConfigCommands
 
             if (lido.Problem is { } problema)
             {
-                editor.WriteMessage($"\nCONFIG Problema: {problema}.\n");
+                editor.WriteMessage(Tr.F("\nCONFIG Problema: {0}.\n", problema));
                 return;
             }
 
             if (lido.Settings is null)
             {
                 editor.WriteMessage(
-                    "\nCONFIG Ausente: este desenho ainda não tem configuração gravada; "
-                    + "vale o padrão do plugin.\n");
+                    Tr.T("\nCONFIG Ausente: este desenho ainda não tem configuração gravada; vale o padrão do plugin.\n"));
                 Escrever(editor, ProjectSettings.Default);
                 return;
             }
 
-            editor.WriteMessage("\nCONFIG Gravada no desenho.\n");
+            editor.WriteMessage(Tr.T("\nCONFIG Gravada no desenho.\n"));
             Escrever(editor, lido.Settings);
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao ler a configuração do desenho.", erro);
-            editor.WriteMessage($"\nNão consegui ler a configuração: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui ler a configuração: {0}\n", erro.Message));
         }
     }
 
@@ -107,13 +106,13 @@ public static class ConfigCommands
 
             SettingsStore.Save(documento.Database, amostra);
 
-            editor.WriteMessage("\nCONFIG Gravada para teste.\n");
+            editor.WriteMessage(Tr.T("\nCONFIG Gravada para teste.\n"));
             Escrever(editor, amostra);
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao gravar a configuração de teste.", erro);
-            editor.WriteMessage($"\nNão consegui gravar a configuração de teste: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui gravar a configuração de teste: {0}\n", erro.Message));
         }
     }
 
@@ -130,8 +129,7 @@ public static class ConfigCommands
         var lido = SettingsStore.Load(documento.Database);
 
         aviso = lido.Problem is { } problema
-            ? $"A configuração gravada neste desenho não pôde ser lida ({problema}). "
-              + "A tela abriu com o padrão; salvar grava por cima."
+            ? Tr.F("A configuração gravada neste desenho não pôde ser lida ({0}). A tela abriu com o padrão; salvar grava por cima.", problema)
             : null;
 
         return lido.Settings ?? ProjectSettings.Default;
@@ -172,16 +170,16 @@ public static class ConfigCommands
 
         if (janela.Escolhida is not { } configuracao)
         {
-            editor.WriteMessage("\nTela de configuração fechada sem salvar.\n");
+            editor.WriteMessage(Tr.T("\nTela de configuração fechada sem salvar.\n"));
             return;
         }
 
         SettingsStore.Save(documento.Database, configuracao);
 
-        editor.WriteMessage($"\nConfiguração gravada no desenho: {configuracao.Describe()}.\n");
-        editor.WriteMessage("\n  Ela vai junto com o arquivo: salve o desenho para ela ficar.\n");
+        editor.WriteMessage(Tr.F("\nConfiguração gravada no desenho: {0}.\n", configuracao.Describe()));
+        editor.WriteMessage(Tr.T("\n  Ela vai junto com o arquivo: salve o desenho para ela ficar.\n"));
 
         if (soAnalises)
-            editor.WriteMessage("\n  Para ver o efeito: \"Pintar estouros\" repinta as mesas como estão; \"Regerar\" refaz as áreas com os parâmetros novos.\n");
+            editor.WriteMessage(Tr.T("\n  Para ver o efeito: \"Pintar estouros\" repinta as mesas como estão; \"Regerar\" refaz as áreas com os parâmetros novos.\n"));
     }
 }

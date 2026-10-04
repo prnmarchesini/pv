@@ -80,23 +80,22 @@ public sealed record SurfaceFingerprint(
         var mudancas = new List<string>();
 
         if (!string.Equals(Handle, anterior.Handle, StringComparison.OrdinalIgnoreCase))
-            mudancas.Add("é outra superfície");
+            mudancas.Add(Tr.T("é outra superfície"));
 
         if (RevisionNumber != anterior.RevisionNumber)
-            mudancas.Add($"foi editada (revisão {anterior.RevisionNumber} → {RevisionNumber})");
+            mudancas.Add(Tr.F("foi editada (revisão {0} → {1})", anterior.RevisionNumber, RevisionNumber));
 
         if (PointCount != anterior.PointCount)
-            mudancas.Add($"pontos: {anterior.PointCount:N0} → {PointCount:N0}");
+            mudancas.Add(Tr.F("pontos: {0:N0} → {1:N0}", anterior.PointCount, PointCount));
 
         if (TriangleCount != anterior.TriangleCount)
-            mudancas.Add($"triângulos: {anterior.TriangleCount:N0} → {TriangleCount:N0}");
+            mudancas.Add(Tr.F("triângulos: {0:N0} → {1:N0}", anterior.TriangleCount, TriangleCount));
 
         if (Math.Abs(MinZ - anterior.MinZ) > ToleranciaDeCota
             || Math.Abs(MaxZ - anterior.MaxZ) > ToleranciaDeCota)
         {
             mudancas.Add(
-                $"cotas: {anterior.MinZ:0.000} a {anterior.MaxZ:0.000} m "
-                + $"→ {MinZ:0.000} a {MaxZ:0.000} m");
+                Tr.F("cotas: {0:0.000} a {1:0.000} m → {2:0.000} a {3:0.000} m", anterior.MinZ, anterior.MaxZ, MinZ, MaxZ));
         }
 
         if (Math.Abs(MinX - anterior.MinX) > ToleranciaDeCota
@@ -112,9 +111,8 @@ public sealed record SurfaceFingerprint(
                 && Math.Abs((MaxY - MinY) - (anterior.MaxY - anterior.MinY)) <= ToleranciaDeCota;
 
             mudancas.Add(deslocou
-                ? $"foi movida ({MinX - anterior.MinX:+0.000;-0.000} m em X, "
-                  + $"{MinY - anterior.MinY:+0.000;-0.000} m em Y)"
-                : "mudou de posição ou de tamanho em planta");
+                ? Tr.F("foi movida ({0:+0.000;-0.000} m em X, {1:+0.000;-0.000} m em Y)", MinX - anterior.MinX, MinY - anterior.MinY)
+                : Tr.T("mudou de posição ou de tamanho em planta"));
         }
 
         return mudancas;
