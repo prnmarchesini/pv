@@ -32,7 +32,11 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $Civil3DPath = 'C:\Program Files\Autodesk\AutoCAD 2026\'
+    [string] $Civil3DPath = 'C:\Program Files\Autodesk\AutoCAD 2026\',
+    # Só os casos da parte elétrica (eletrica-*.ps1), opcionalmente os que têm
+    # este pedaço no nome da função: para quem trabalha num passo elétrico.
+    [switch] $SoEletrica,
+    [string] $Filtro = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -4289,6 +4293,22 @@ $env:CLIVUS_LICENCA_ARQUIVO_TESTE = $licencaDaRodada
 
 $passaram = 0
 $total = 0
+
+if ($SoEletrica) {
+    foreach ($caso in $CasosEletricos | Where-Object { $_ -like "*$Filtro*" }) {
+        $total++
+        if (& $caso -Desenho $desenhos[0]) { $passaram++ }
+    }
+
+    $env:CLIVUS_LICENCAS = $licencaAntes.L
+    $env:CLIVUS_LICENCA_CHAVE_TESTE = $licencaAntes.C
+    $env:CLIVUS_LICENCA_ARQUIVO_TESTE = $licencaAntes.A
+
+    if ($problemas.Count -eq 0 -and $passaram -eq $total) { Escrever-Linha 'Eletrica' "$passaram/$total" 'OK'; exit 0 }
+    Escrever-Linha 'Eletrica' "$passaram/$total" 'FALHOU'
+    foreach ($p in $problemas) { Write-Host "  $p" -ForegroundColor Red }
+    exit 1
+}
 
 $total++
 if (Testar-Caso -Rotulo 'clivus-ola' -Desenho $desenhoVazio -Script (Join-Path $PSScriptRoot 'clivus-ola.scr') `
