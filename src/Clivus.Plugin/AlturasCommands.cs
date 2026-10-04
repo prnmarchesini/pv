@@ -33,15 +33,15 @@ public static class AlturasCommands
         {
             var (apagadas, mesas, cotas, semPontas) = Regerar(documento.Database);
 
-            editor.WriteMessage(
-                $"\nALTURAS {apagadas} entidade(s) apagada(s) da camada {LayoutLayers.Alturas}; "
-                + $"{cotas} cota(s) redesenhada(s) em {mesas} mesa(s).\n");
+            editor.WriteMessage(Tr.F(
+                "\nALTURAS {0} entidade(s) apagada(s) da camada {1}; {2} cota(s) redesenhada(s) em {3} mesa(s).\n",
+                apagadas, LayoutLayers.Alturas, cotas, mesas));
 
             if (semPontas > 0)
             {
-                editor.WriteMessage(
-                    $"  {semPontas} pilar(es) de desenho antigo sem as alturas de ponta gravadas: só o P3 foi redesenhado. "
-                    + "Recalcular a mesa grava as pontas.\n");
+                editor.WriteMessage(Tr.F(
+                    "  {0} pilar(es) de desenho antigo sem as alturas de ponta gravadas: só o P3 foi redesenhado. Recalcular a mesa grava as pontas.\n",
+                    semPontas));
             }
 
             editor.Regen();
@@ -50,7 +50,7 @@ public static class AlturasCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao regerar as alturas.", erro);
-            editor.WriteMessage($"\nNão consegui regerar as alturas: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui regerar as alturas: {0}\n", erro.Message));
         }
     }
 

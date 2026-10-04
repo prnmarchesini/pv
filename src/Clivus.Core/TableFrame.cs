@@ -47,8 +47,6 @@ public sealed record TableFrame(
     double PillarSpanTarget,
     double PillarCantilever)
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>
     /// Maior medida aceita, em metro. Rede para erro de escala, como nas
     /// outras classes: quem digitou 300 achando que o campo era em centímetro.
@@ -135,23 +133,23 @@ public sealed record TableFrame(
     {
         get
         {
-            if (!Medida(RafterLength)) return "o comprimento da tesoura não é uma medida válida";
-            if (!Medida(PillarWidth)) return "a largura do pilar não é uma medida válida";
-            if (!Medida(PillarDepth)) return "a largura do pilar na inclinação (a antiga profundidade do pilar) não é uma medida válida";
+            if (!Medida(RafterLength)) return Tr.T("o comprimento da tesoura não é uma medida válida");
+            if (!Medida(PillarWidth)) return Tr.T("a largura do pilar não é uma medida válida");
+            if (!Medida(PillarDepth)) return Tr.T("a largura do pilar na inclinação (a antiga profundidade do pilar) não é uma medida válida");
 
             if (!double.IsFinite(PillarAlongRafter) || PillarAlongRafter < 0)
-                return "a posição do pilar na tesoura não é uma distância válida";
+                return Tr.T("a posição do pilar na tesoura não é uma distância válida");
 
-            if (!Medida(PillarSpanTarget)) return "o vão pretendido entre pilares não é uma medida válida";
+            if (!Medida(PillarSpanTarget)) return Tr.T("o vão pretendido entre pilares não é uma medida válida");
 
             if (!double.IsFinite(PillarCantilever) || PillarCantilever < 0 || PillarCantilever > MaiorMedida)
-                return "o balanço das pontas não é uma medida válida";
+                return Tr.T("o balanço das pontas não é uma medida válida");
 
             // De 1 mm (o piso do SystemConfiguration, senão ForTable montaria
             // uma configuração inválida) a 5 m: acima disso é quase certo
             // alguém digitando em centímetro num campo em metro.
             if (MinEmbedment is { } t3 && (!double.IsFinite(t3) || t3 < MenorEnterro || t3 > MaiorEnterro))
-                return $"o enterro mínimo do pilar (T3) não é uma medida válida: precisa ficar entre 0,001 e {MaiorEnterro:0} m (o campo é em metro)";
+                return Tr.F("o enterro mínimo do pilar (T3) não é uma medida válida: precisa ficar entre 0,001 e {0:0} m (o campo é em metro)", MaiorEnterro);
 
             if (_vaos is not null)
             {
@@ -162,7 +160,7 @@ public sealed record TableFrame(
                 for (var i = 0; i < _vaos.Length; i++)
                 {
                     if (_vaos[i] > MaiorMedida)
-                        return $"o vão {i + 1} tem {Texto(_vaos[i])} m, mais que os {MaiorMedida:0} m possíveis";
+                        return Tr.F("o vão {0} tem {1} m, mais que os {2:0} m possíveis", i + 1, Texto(_vaos[i]), MaiorMedida);
                 }
             }
 
@@ -170,8 +168,7 @@ public sealed record TableFrame(
             {
                 // Pilar fora da tesoura é peça pendurada no ar. Passaria em
                 // qualquer conferência de sinal.
-                return $"o pilar está a {Texto(PillarAlongRafter)} m de uma tesoura de "
-                    + $"{Texto(RafterLength)} m, ou seja, fora dela";
+                return Tr.F("o pilar está a {0} m de uma tesoura de {1} m, ou seja, fora dela", Texto(PillarAlongRafter), Texto(RafterLength));
             }
 
             return null;
@@ -191,14 +188,13 @@ public sealed record TableFrame(
     /// </summary>
     public string? WhyDoesNotFit(TableLayout mesa)
     {
-        if (mesa is null) return "não há mesa para a estrutura segurar";
+        if (mesa is null) return Tr.T("não há mesa para a estrutura segurar");
         if (WhyInvalid is { } porCausaDaEstrutura) return porCausaDaEstrutura;
         if (mesa.WhyInvalid is { } porCausaDaMesa) return porCausaDaMesa;
 
         if (RafterLength > mesa.Depth)
         {
-            return $"a tesoura tem {Texto(RafterLength)} m e os módulos ocupam "
-                + $"{Texto(mesa.Depth)} m na inclinação: ela precisa ser menor que eles";
+            return Tr.F("a tesoura tem {0} m e os módulos ocupam {1} m na inclinação: ela precisa ser menor que eles", Texto(RafterLength), Texto(mesa.Depth));
         }
 
         // Os dois balanços juntos não podem comer a mesa inteira: sobraria um
@@ -206,8 +202,7 @@ public sealed record TableFrame(
         // pilar, que é pilar em cima de pilar.
         if (2 * PillarCantilever >= mesa.Length)
         {
-            return $"os dois balanços somam {Texto(2 * PillarCantilever)} m numa mesa de "
-                + $"{Texto(mesa.Length)} m: não sobra estrutura entre os pilares das pontas";
+            return Tr.F("os dois balanços somam {0} m numa mesa de {1} m: não sobra estrutura entre os pilares das pontas", Texto(2 * PillarCantilever), Texto(mesa.Length));
         }
 
         // Vãos escritos têm que fechar com a mesa: é a conferência que o
@@ -221,17 +216,17 @@ public sealed record TableFrame(
     /// <summary>A linha que descreve a estrutura para o usuário.</summary>
     public string Describe()
     {
-        if (WhyInvalid is { } motivo) return $"Estrutura inválida: {motivo}.";
+        if (WhyInvalid is { } motivo) return Tr.F("Estrutura inválida: {0}.", motivo);
 
         var vao = _vaos is null
-            ? $"vão de {Texto(PillarSpanTarget)} m"
-            : $"vãos escritos ({string.Join(" + ", _vaos.Select(Texto))} m)";
+            ? Tr.F("vão de {0} m", Texto(PillarSpanTarget))
+            : Tr.F("vãos escritos ({0} m)", string.Join(" + ", _vaos.Select(Texto)));
 
-        var enterro = MinEmbedment is { } t3 ? $", enterro mínimo (T3) de {Texto(t3)} m" : "";
+        var enterro = MinEmbedment is { } t3 ? Tr.F(", enterro mínimo (T3) de {0} m", Texto(t3)) : "";
 
-        return $"tesoura de {Texto(RafterLength)} m, pilar a {Texto(PillarAlongRafter)} m dela, "
-            + $"seção {Texto(PillarWidth)} × {Texto(PillarDepth)} m, {vao} e balanço de "
-            + $"{Texto(PillarCantilever)} m{enterro}";
+        return Tr.F(
+            "tesoura de {0} m, pilar a {1} m dela, seção {2} × {3} m, {4} e balanço de {5} m{6}",
+            Texto(RafterLength), Texto(PillarAlongRafter), Texto(PillarWidth), Texto(PillarDepth), vao, Texto(PillarCantilever), enterro);
     }
 
     /// <summary>
@@ -271,7 +266,7 @@ public sealed record TableFrame(
         return codigo.ToHashCode();
     }
 
-    private static string Texto(double valor) => valor.ToString("0.###", Brasil);
+    private static string Texto(double valor) => valor.ToString("0.###", Tr.Culture);
 
     private static bool Medida(double valor) =>
         double.IsFinite(valor) && valor > 0 && valor <= MaiorMedida;

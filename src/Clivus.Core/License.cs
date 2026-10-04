@@ -65,10 +65,10 @@ public static class License
         ArgumentNullException.ThrowIfNull(publicKeys);
         if (publicKeys.Count == 0) throw new ArgumentException("nenhuma chave pública", nameof(publicKeys));
 
-        if (string.IsNullOrWhiteSpace(licenca)) return (LicenseState.Invalid, null, "sem licença");
+        if (string.IsNullOrWhiteSpace(licenca)) return (LicenseState.Invalid, null, Tr.T("sem licença"));
 
         var partes = licenca.Trim().Split('.');
-        if (partes.Length != 2) return (LicenseState.Invalid, null, "licença em formato errado");
+        if (partes.Length != 2) return (LicenseState.Invalid, null, Tr.T("licença em formato errado"));
 
         byte[] payload, assinatura;
         try
@@ -78,7 +78,7 @@ public static class License
         }
         catch (FormatException)
         {
-            return (LicenseState.Invalid, null, "licença em formato errado");
+            return (LicenseState.Invalid, null, Tr.T("licença em formato errado"));
         }
 
         // O kid escolhe a chave; ele ainda não está conferido, mas só serve
@@ -92,18 +92,18 @@ public static class License
         }
         catch (JsonException)
         {
-            return (LicenseState.Invalid, null, "licença com conteúdo incompleto");
+            return (LicenseState.Invalid, null, Tr.T("licença com conteúdo incompleto"));
         }
 
         var candidatas = kid is null ? publicKeys.Values : publicKeys.TryGetValue(kid, out var chaveDoKid) ? [chaveDoKid] : [];
-        if (!candidatas.Any(c => Confere(payload, assinatura, c))) return (LicenseState.Invalid, null, "a assinatura da licença não confere");
+        if (!candidatas.Any(c => Confere(payload, assinatura, c))) return (LicenseState.Invalid, null, Tr.T("a assinatura da licença não confere"));
 
         LicensePayload conteudo;
         try
         {
             using var json = JsonDocument.Parse(payload);
             var r = json.RootElement;
-            if (r.GetProperty("v").GetInt32() != 1) return (LicenseState.Invalid, null, "licença de uma versão que este plugin não conhece");
+            if (r.GetProperty("v").GetInt32() != 1) return (LicenseState.Invalid, null, Tr.T("licença de uma versão que este plugin não conhece"));
 
             conteudo = new LicensePayload(
                 r.GetProperty("licenca").GetString()!, r.GetProperty("conta").GetString()!, r.GetProperty("plano").GetString()!,
@@ -111,13 +111,13 @@ public static class License
         }
         catch (Exception erro) when (erro is JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
         {
-            return (LicenseState.Invalid, null, "licença com conteúdo incompleto");
+            return (LicenseState.Invalid, null, Tr.T("licença com conteúdo incompleto"));
         }
 
         if (!string.Equals(conteudo.Machine, machine, StringComparison.OrdinalIgnoreCase))
-            return (LicenseState.Invalid, null, "a licença é de outra máquina");
+            return (LicenseState.Invalid, null, Tr.T("a licença é de outra máquina"));
 
-        if (nowUtc > conteudo.ExpiresAt) return (LicenseState.Expired, conteudo, "a licença expirou: conecte à internet para revalidar, ou ative de novo");
+        if (nowUtc > conteudo.ExpiresAt) return (LicenseState.Expired, conteudo, Tr.T("a licença expirou: conecte à internet para revalidar, ou ative de novo"));
         if (nowUtc > conteudo.RevalidateAt) return (LicenseState.Revalidate, conteudo, null);
 
         return (LicenseState.Valid, conteudo, null);
@@ -181,14 +181,14 @@ public static class License
         }
 
         if (status is >= 200 and < 300)
-            return licenca is { Length: > 0 } ? (licenca, null) : (null, "o servidor respondeu sem a licença");
+            return licenca is { Length: > 0 } ? (licenca, null) : (null, Tr.T("o servidor respondeu sem a licença"));
 
         return (null, erro ?? (status switch
         {
-            404 => "código não encontrado",
-            403 => "código revogado ou máquina liberada",
-            409 => "este código já está ativo no número máximo de máquinas",
-            _ => $"o servidor de licenças respondeu {status}",
+            404 => Tr.T("código não encontrado"),
+            403 => Tr.T("código revogado ou máquina liberada"),
+            409 => Tr.T("este código já está ativo no número máximo de máquinas"),
+            _ => Tr.F("o servidor de licenças respondeu {0}", status),
         }));
     }
 }

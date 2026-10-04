@@ -20,7 +20,7 @@ public sealed record UtmZone(int Zone, bool South, int? SirgasEpsg)
 
     /// <summary>"SIRGAS 2000 / UTM zone 23S (EPSG:31983)", ou só o fuso fora da América do Sul.</summary>
     public string Describe() =>
-        SirgasEpsg is { } epsg ? $"SIRGAS 2000 / UTM zone {Label} (EPSG:{epsg})" : $"UTM fuso {Label} (fora da América do Sul: datum a definir)";
+        SirgasEpsg is { } epsg ? Tr.F("SIRGAS 2000 / UTM zone {0} (EPSG:{1})", Label, epsg) : Tr.F("UTM fuso {0} (fora da América do Sul: datum a definir)", Label);
 }
 
 /// <summary>
@@ -70,7 +70,7 @@ public static class TerrainPlace
 
     /// <summary>"Brasil", ou null quando a sede mais perto está longe demais para afirmar.</summary>
     public static string? Country(NearestCity cidade) =>
-        cidade.DistanceKm <= BrazilRadiusKm ? "Brasil" : null;
+        cidade.DistanceKm <= BrazilRadiusKm ? Tr.N("Brasil") : null;
 
     /// <summary>O fuso UTM do ponto, com o EPSG do SIRGAS 2000 na América do Sul.</summary>
     public static UtmZone Utm(double latitude, double longitude)

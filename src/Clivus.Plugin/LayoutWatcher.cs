@@ -317,7 +317,7 @@ internal static class LayoutWatcher
             if (!string.IsNullOrEmpty(_documento.CommandInProgress)) return;
 
             using var trava = _documento.LockDocument();
-            Descarregar(_livro.Resolve(DateTime.UtcNow), "Propriedades", soRegistro: false);
+            Descarregar(_livro.Resolve(DateTime.UtcNow), Tr.T("Propriedades"), soRegistro: false);
         }
 
         private void Descarregar(ChangeResolution decisao, string comando, bool soRegistro)
@@ -333,7 +333,7 @@ internal static class LayoutWatcher
             catch (System.Exception erro)
             {
                 RegistroDeDiagnostico.Registrar("O vigia não conseguiu marcar as mesas.", erro);
-                _documento.Editor.WriteMessage($"\nVIGIA Não consegui marcar as mesas tocadas: {erro.Message}\n");
+                _documento.Editor.WriteMessage(Tr.F("\nVIGIA Não consegui marcar as mesas tocadas: {0}\n", erro.Message));
             }
             finally
             {
@@ -365,17 +365,17 @@ internal static class LayoutWatcher
                     foreach (var copia in CopyFixer.Reidentify(transacao, _banco, acrescentadas))
                     {
                         sujas[copia.Table] = PendingChanges.ReasonAppended;
-                        editor.WriteMessage(
-                            $"\nVIGIA cópia de {copia.Label}: {copia.Pieces} peça(s) com identidade nova"
-                            + (copia.HasContour ? string.Empty : " (sem contorno: peças órfãs)") + $" (comando {comando}).\n");
+                        editor.WriteMessage(copia.HasContour
+                            ? Tr.F("\nVIGIA cópia de {0}: {1} peça(s) com identidade nova (comando {2}).\n", copia.Label, copia.Pieces, comando)
+                            : Tr.F("\nVIGIA cópia de {0}: {1} peça(s) com identidade nova (sem contorno: peças órfãs) (comando {2}).\n", copia.Label, copia.Pieces, comando));
                     }
                 }
                 catch (System.Exception erro)
                 {
                     RegistroDeDiagnostico.Registrar("Não consegui dar identidade à cópia.", erro);
-                    editor.WriteMessage(
-                        $"\nVIGIA ATENÇÃO: a cópia ficou com a identidade da original ({erro.Message}). "
-                        + "Apague a cópia, ou use o Regerar área.\n");
+                    editor.WriteMessage(Tr.F(
+                        "\nVIGIA ATENÇÃO: a cópia ficou com a identidade da original ({0}). Apague a cópia, ou use o Regerar área.\n",
+                        erro.Message));
                 }
             }
 
@@ -397,8 +397,8 @@ internal static class LayoutWatcher
                     TableState.MarkDirty(transacao, mesa, motivo);
 
                     editor.WriteMessage(motivo == PendingChanges.ReasonAppended
-                        ? $"\nVIGIA cópia de {mesa.Identity.Label} pendente (copiada, comando {comando}).\n"
-                        : $"\nVIGIA {mesa.Identity.Label} pendente ({motivo}, comando {comando}).\n");
+                        ? Tr.F("\nVIGIA cópia de {0} pendente (copiada, comando {1}).\n", mesa.Identity.Label, comando)
+                        : Tr.F("\nVIGIA {0} pendente ({1}, comando {2}).\n", mesa.Identity.Label, Tr.T(motivo), comando));
                 }
             }
 
@@ -410,7 +410,7 @@ internal static class LayoutWatcher
                 RemovalStore.Remove(_banco, voltaram);
 
                 foreach (var guid in voltaram)
-                    editor.WriteMessage($"\nVIGIA {mesas[guid].Identity!.Label} voltou (comando {comando}); saiu das removidas.\n");
+                    editor.WriteMessage(Tr.F("\nVIGIA {0} voltou (comando {1}); saiu das removidas.\n", mesas[guid].Identity!.Label, comando));
             }
 
             // Só é removida a mesa que de fato não tem mais contorno. O undo
@@ -424,9 +424,9 @@ internal static class LayoutWatcher
                 var problema = RemovalStore.Add(_banco, removidas);
 
                 foreach (var remocao in removidas)
-                    editor.WriteMessage($"\nVIGIA {remocao.Label} removida (comando {comando}); {PluginInfo.ComandoEstado} lista.\n");
+                    editor.WriteMessage(Tr.F("\nVIGIA {0} removida (comando {1}); {2} lista.\n", remocao.Label, comando, PluginInfo.ComandoEstado));
 
-                if (problema is not null) editor.WriteMessage($"\n  ATENÇÃO: {problema}.\n");
+                if (problema is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", problema));
             }
 
             transacao.Commit();
