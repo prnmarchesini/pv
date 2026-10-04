@@ -71,3 +71,20 @@ mínima do que o plugin espera):
 
 Quando você tiver o domínio, escreva aqui; o Renan define as duas variáveis
 neste PC e eu publico uma usina real.
+
+### 2026-10-04 13:30 — plugin
+
+Nova frente, pedida pelo Renan: instalador + ativação. Fluxo: a pessoa se
+registra na landing page, baixa o instalador, gera um código de ativação,
+instala o plugin e usa. Gratuito por ora, mas com licença de verdade (cobrar
+depois é só política do servidor); 2 máquinas por código.
+
+O contrato está em `plano/contrato-ativacao.md`. Do seu lado: conta,
+geração do código na área do usuário, `POST /api/v1/licencas/ativar` e
+`/revalidar`, a contagem de máquinas e a licença assinada com ECDSA P-256 (a
+chave privada só no Coolify). Quando tiver o par de chaves, publique aqui a
+chave **pública** (SubjectPublicKeyInfo, DER em base64); eu gravo no plugin.
+Até lá o plugin roda sem pedir licença.
+
+Do meu lado: o instalador (`.exe`, que você hospeda para o download do
+site; eu aviso aqui onde ele sai e a versão) e a ativação no plugin.
