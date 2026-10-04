@@ -119,4 +119,35 @@ public class LicenseTests
 
         Assert.Contains("\"codigo\":\"CLV-1\"", License.ActivateBody("CLV-1", "m", "PC", "0.1.0"), StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// Uma licença emitida pelo servidor de produção (chave kid 2026a, máquina
+    /// fictícia): a chave pública embutida no plugin confere a assinatura dela.
+    /// Se este teste quebrar, o plugin e o servidor estão com chaves diferentes.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "9")]
+    public void AChaveEmbutidaConfereALicencaDoServidor()
+    {
+        const string doServidor = "eyJ2IjoxLCJraWQiOiIyMDI2YSIsImxpY2VuY2EiOiJsaWNfdmV0b3JfZGVfdGVzdGUiLCJjb250YSI6InRlc3RlQGNsaXZ1c3NvbGFyLmNvbSIsInBsYW5vIjoiZ3JhdHVpdG8iLCJtYXF1aW5hIjoiZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZiIsImVtaXRpZGFfZW0iOiIyMDI2LTEwLTA0VDE0OjUzOjA3WiIsInJldmFsaWRhcl9lbSI6IjIwMjYtMTEtMDNUMTQ6NTM6MDdaIiwiZXhwaXJhX2VtIjoiMjAyNi0xMS0xOFQxNDo1MzowN1oifQ.SF3mYM7knPMRXQogiRhWbwzfcJnVGcXY7D_hq9VtpFsBMOyC8SLIJbSloZYb6b6DvK9M6lbSENHO412DyHmqdQ";
+        var maquina = new string('f', 64);
+        var noPrazo = new DateTime(2026, 10, 5, 12, 0, 0, DateTimeKind.Utc);
+
+        var (estado, conteudo, porque) = License.Check(doServidor, PluginInfo.ChavesPublicasDaLicenca, maquina, noPrazo);
+        Assert.True(estado == LicenseState.Valid, porque);
+        Assert.Equal("teste@clivussolar.com", conteudo!.Account);
+
+        // Um caractere trocado na assinatura: não vale.
+        var adulterada = doServidor[..^2] + (doServidor[^2] == 'A' ? 'B' : 'A') + doServidor[^1];
+        Assert.Equal(LicenseState.Invalid, License.Check(adulterada, PluginInfo.ChavesPublicasDaLicenca, maquina, noPrazo).State);
+    }
+
+    /// <summary>O servidor embutido é HTTPS, e o portal do app é ele mesmo.</summary>
+    [Fact]
+    [Trait("Etapa", "9")]
+    public void OServidorEmbutidoEHttpsEOPortalEEle()
+    {
+        Assert.Null(Viewer3DPage.WhyServerUnsafe(PluginInfo.ServidorDeProducao));
+        Assert.Equal(PluginInfo.ServidorDeProducao, PluginInfo.PortalDoApp);
+    }
 }

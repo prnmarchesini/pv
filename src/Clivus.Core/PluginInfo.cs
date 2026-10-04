@@ -228,8 +228,11 @@ public static class PluginInfo
     /// <summary>Ativa com o código pela linha de comando. Para o nível 2.</summary>
     public const string ComandoAtivarAutomatico = "CLIVUS_ATIVAR_AUTO";
 
-    /// <summary>O portal do cliente, onde ele gera o código de ativação.</summary>
-    public const string PortalDoApp = "https://app.clivussolar.com";
+    /// <summary>
+    /// O portal do cliente, onde ele gera o código de ativação. É o próprio
+    /// servidor: o app serve a API, o 3D e a área do cliente no mesmo endereço.
+    /// </summary>
+    public const string PortalDoApp = ServidorDeProducao;
 
     /// <summary>Troca a mesa clicada por uma ou mais de outro tipo, travando um lado (9.2).</summary>
     public const string ComandoTrocarMesa = "CLIVUS_TROCAR_MESA";
@@ -283,11 +286,13 @@ public static class PluginInfo
     public const string PrefixoDeDados = "CLIVUS";
 
     /// <summary>
-    /// O endereço de produção do servidor (3D e licenças), embutido para não
-    /// depender de variável de ambiente (plano/seguranca.md). Vazio até o
-    /// agente do servidor publicar o domínio; CLIVUS_SERVIDOR vale por cima.
+    /// O endereço de produção do servidor (3D, licenças e portal do app),
+    /// embutido para não depender de variável de ambiente (plano/seguranca.md);
+    /// CLIVUS_SERVIDOR vale por cima. Hoje é o domínio temporário do Coolify
+    /// (HTTPS válido); vira https://app.clivussolar.com quando o DNS existir,
+    /// combinado no CANAL.md (o servidor segue atendendo no temporário).
     /// </summary>
-    public const string ServidorDeProducao = "";
+    public const string ServidorDeProducao = "https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io";
 
     /// <summary>
     /// As chaves públicas que assinam licenças, por <c>kid</c> (SubjectPublicKeyInfo,
@@ -295,7 +300,11 @@ public static class PluginInfo
     /// pedir licença (testes e hoje). Mais de uma: troca de chave sem
     /// derrubar licença emitida pela anterior.
     /// </summary>
-    public static readonly IReadOnlyDictionary<string, string> ChavesPublicasDaLicenca = new Dictionary<string, string>();
+    public static readonly IReadOnlyDictionary<string, string> ChavesPublicasDaLicenca = new Dictionary<string, string>
+    {
+        // A privada só no Coolify (CANAL.md, 04/10/2026). Chave nova = kid novo, acrescentado aqui antes de o servidor assinar com ela.
+        ["2026a"] = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEtsuRk/AR0RIQv3A3385u+BfQKT+xlSxpgtlDnduVxWSr8FzRTEIfg71tQtnxMYXD32WYZLWmU2H8bDetmUvnzw==",
+    };
 
     /// <summary>A pasta do plugin em %LOCALAPPDATA% (perfis de mesa, log, bancada).</summary>
     public const string PastaDoUsuario = "Clivus Solar";
