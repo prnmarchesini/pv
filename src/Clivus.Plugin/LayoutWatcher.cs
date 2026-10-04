@@ -357,8 +357,8 @@ internal static class LayoutWatcher
                     TableState.MarkDirty(transacao, mesa, motivo);
 
                     editor.WriteMessage(motivo == PendingChanges.ReasonAppended
-                        ? $"\nVIGIA cópia de {mesa.Identity.Label} suja (copiada, comando {comando}).\n"
-                        : $"\nVIGIA {mesa.Identity.Label} suja ({motivo}, comando {comando}).\n");
+                        ? $"\nVIGIA cópia de {mesa.Identity.Label} pendente (copiada, comando {comando}).\n"
+                        : $"\nVIGIA {mesa.Identity.Label} pendente ({motivo}, comando {comando}).\n");
                 }
             }
 

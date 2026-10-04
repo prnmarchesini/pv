@@ -1,5 +1,5 @@
 ; Teste de nivel 2 do passo 7.1: processa uma fileira (como no 5.8), suja a
-; primeira mesa (CLIVUS_SUJAR_AUTO) e le do desenho:
+; primeira mesa (CLIVUS_PENDENTE_AUTO) e le do desenho:
 ;   - o contorno da mesa suja tem, no XData (versao 2), suja=1 e um motivo;
 ;   - contorno, pilares e modulos da mesa suja estao vermelhos (62 = 1);
 ;     as faces dela NAO (a camada de faces e o que o PVsyst recebe);
@@ -33,7 +33,7 @@
   (setq clivus:i (1+ clivus:i)))
 (defun clivus:novovermelho (e) (if (and (= (clivus:vermelho e) 1) (not (member (cdr (assoc 5 (entget e))) clivus:antes))) 1 0))
 
-(command "CLIVUS_SUJAR_AUTO")
+(command "CLIVUS_PENDENTE_AUTO")
 (command "CLIVUS_ESTADO")
 
 ; A mesa suja: o contorno com suja=1.

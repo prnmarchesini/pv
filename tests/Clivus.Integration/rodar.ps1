@@ -1650,7 +1650,7 @@ function Testar-Sujo {
         return $false
     }
 
-    if ($r.Texto -notmatch 'SUJAR_GUID ([0-9a-fA-F-]+) pecas=(\d+)') {
+    if ($r.Texto -notmatch 'PENDENTE_GUID ([0-9a-fA-F-]+) pecas=(\d+)') {
         $problemas.Add("clivus-sujo: o comando nao sujou a mesa. Veja $($r.Saida)")
         return $false
     }
@@ -1658,7 +1658,7 @@ function Testar-Sujo {
     $guidRelatado = $Matches[1].ToLowerInvariant()
     $pecasRelatadas = [int] $Matches[2]
 
-    if ($r.Texto -notmatch '(?m)^ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), (\d+) suja\(s\)') {
+    if ($r.Texto -notmatch '(?m)^ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), (\d+) pendente\(s\)') {
         $problemas.Add("clivus-sujo: CLIVUS_ESTADO nao respondeu. Veja $($r.Saida)")
         return $false
     }
@@ -1790,13 +1790,13 @@ function Testar-Vigia {
         return $false
     }
 
-    if ($r.Texto -notmatch "(?m)^VIGIA \S+ suja \(movida ou editada, comando MOVE\)") {
+    if ($r.Texto -notmatch "(?m)^VIGIA \S+ pendente \(movida ou editada, comando MOVE\)") {
         $problemas.Add("clivus-vigia: o vigia nao anunciou a mesa movida. Veja $($r.Saida)")
         return $false
     }
 
     # Dois ESTADOs: depois do ERASE e depois do U.
-    $estados = @([regex]::Matches($r.Texto, '(?m)^ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), (\d+) suja\(s\)(, (\d+) com peças órfãs \(sem contorno\))?[\s\S]*?(\d+) removida\(s\)'))
+    $estados = @([regex]::Matches($r.Texto, '(?m)^ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), (\d+) pendente\(s\)(, (\d+) com peças órfãs \(sem contorno\))?[\s\S]*?(\d+) removida\(s\)'))
 
     if ($estados.Count -ne 2) {
         $problemas.Add("clivus-vigia: esperava dois CLIVUS_ESTADO, achei $($estados.Count). Veja $($r.Saida)")
@@ -2367,7 +2367,7 @@ function Testar-Recalcular {
         return $false
     }
 
-    if ($r.Texto -notmatch 'SUJAR_GUID ([0-9a-fA-F-]+) pecas=(\d+)') {
+    if ($r.Texto -notmatch 'PENDENTE_GUID ([0-9a-fA-F-]+) pecas=(\d+)') {
         $problemas.Add("clivus-recalcular: nada foi sujado. Veja $($r.Saida)")
         return $false
     }
@@ -2392,7 +2392,7 @@ function Testar-Recalcular {
     }
 
     # Depois do recalcular, ESTADO conta zero sujas.
-    $estados = @([regex]::Matches($r.Texto, '(?m)^ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), (\d+) suja\(s\)'))
+    $estados = @([regex]::Matches($r.Texto, '(?m)^ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), (\d+) pendente\(s\)'))
     if ($estados.Count -lt 1 -or [int] $estados[$estados.Count - 1].Groups[3].Value -ne 0) {
         $problemas.Add("clivus-recalcular: CLIVUS_ESTADO ainda conta mesa suja. Veja $($r.Saida)")
         return $false
@@ -2709,7 +2709,7 @@ function Testar-Validar {
         return $false
     }
 
-    $totais = @([regex]::Matches($r.Texto, 'VALIDAR_TOTAIS areas=(\d+) alinhamentos=(\d+) sujas=(\d+) movidas=(\d+) areasdup=(\d+) alinhdup=(\d+) duplicadas=(\d+) pecas=(\d+) orfas=(\d+) removidas=(\d+) terreno=(\w+)'))
+    $totais = @([regex]::Matches($r.Texto, 'VALIDAR_TOTAIS areas=(\d+) alinhamentos=(\d+) pendentes=(\d+) movidas=(\d+) areasdup=(\d+) alinhdup=(\d+) duplicadas=(\d+) pecas=(\d+) orfas=(\d+) removidas=(\d+) terreno=(\w+)'))
 
     if ($totais.Count -ne 2) {
         $problemas.Add("clivus-validar: esperava duas validacoes, achei $($totais.Count). Veja $($r.Saida)")
@@ -2717,7 +2717,7 @@ function Testar-Validar {
     }
 
     $limpa = $totais[0]
-    if ($limpa.Value -notmatch 'areas=0 alinhamentos=0 sujas=0 movidas=0 areasdup=0 alinhdup=0 duplicadas=0 pecas=0 orfas=0 removidas=0 terreno=ok') {
+    if ($limpa.Value -notmatch 'areas=0 alinhamentos=0 pendentes=0 movidas=0 areasdup=0 alinhdup=0 duplicadas=0 pecas=0 orfas=0 removidas=0 terreno=ok') {
         $problemas.Add("clivus-validar: a primeira validacao devia ser limpa: '$($limpa.Value)'. Veja $($r.Saida)")
         return $false
     }
@@ -2728,8 +2728,8 @@ function Testar-Validar {
     }
 
     $suja = $totais[1]
-    if ($suja.Value -notmatch 'areas=1 alinhamentos=0 sujas=2 movidas=1 areasdup=0 alinhdup=1 duplicadas=0 pecas=0 orfas=1 removidas=1 terreno=ok') {
-        $problemas.Add("clivus-validar: depois dos estragos esperava areas=1 sujas=2 movidas=1 alinhdup=1 orfas=1 removidas=1: '$($suja.Value)'. Veja $($r.Saida)")
+    if ($suja.Value -notmatch 'areas=1 alinhamentos=0 pendentes=2 movidas=1 areasdup=0 alinhdup=1 duplicadas=0 pecas=0 orfas=1 removidas=1 terreno=ok') {
+        $problemas.Add("clivus-validar: depois dos estragos esperava areas=1 pendentes=2 movidas=1 alinhdup=1 orfas=1 removidas=1: '$($suja.Value)'. Veja $($r.Saida)")
         return $false
     }
 
@@ -2884,7 +2884,7 @@ function Testar-Grupos {
         return $false
     }
 
-    $estados = @([regex]::Matches($r.Texto, '(?m)^ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), (\d+) suja\(s\)'))
+    $estados = @([regex]::Matches($r.Texto, '(?m)^ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), (\d+) pendente\(s\)'))
     if ($estados.Count -lt 1 -or [int] $estados[$estados.Count - 1].Groups[3].Value -ne 0) {
         $problemas.Add("clivus-grupos: depois do recalcular por grupo ainda ha mesa suja. Veja $($r.Saida)")
         return $false

@@ -136,10 +136,10 @@ public static class PluginInfo
     public const string ComandoExportarAutomatico = "CLIVUS_EXPORTAR_AUTO";
 
     /// <summary>Comando que marca uma mesa como suja (precisa de recálculo) e a pinta de vermelho.</summary>
-    public const string ComandoSujar = "CLIVUS_SUJAR";
+    public const string ComandoPendente = "CLIVUS_PENDENTE";
 
     /// <summary>Comando que suja a primeira mesa do desenho sem perguntar. Existe para o teste de nível 2.</summary>
-    public const string ComandoSujarAutomatico = "CLIVUS_SUJAR_AUTO";
+    public const string ComandoPendenteAutomatico = "CLIVUS_PENDENTE_AUTO";
 
     /// <summary>Comando que diz quantas mesas estão limpas e quais estão sujas, e por quê.</summary>
     public const string ComandoEstado = "CLIVUS_ESTADO";
@@ -154,7 +154,7 @@ public static class PluginInfo
     public const string ComandoRecalcular = "CLIVUS_RECALCULAR";
 
     /// <summary>Comando que recalcula só as mesas sujas.</summary>
-    public const string ComandoRecalcularSujas = "CLIVUS_RECALCULAR_SUJAS";
+    public const string ComandoRecalcularPendentes = "CLIVUS_RECALCULAR_PENDENTES";
 
     /// <summary>Comando que recalcula as sujas com a mesa de exemplo, sem perguntar. Para o nível 2.</summary>
     public const string ComandoRecalcularAutomatico = "CLIVUS_RECALCULAR_AUTO";

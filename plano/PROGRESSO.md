@@ -4830,3 +4830,43 @@ Roteiro de tela:
    passado para o nome Clivus Solar", e as camadas viram `CLIVUS_...`.
    Salve o desenho.
 3. Os comandos agora são `CLIVUS_...` (os botões continuam os mesmos).
+
+### 04/10/2026: identidade visual, 3D publicado no servidor, "pendente"
+
+**Identidade visual** (pacote do Renan: azul-petróleo `#0F2533`, âmbar
+`#F4A51C`, branco; logos em SVG; regras dos ícones):
+- Cada botão e menu da ribbon tem ícone próprio, desenhado na grade de 32
+  (traço de 2,5, âmbar só no elemento da ação ou no módulo), com versão
+  simplificada para 16 px, nos temas claro e escuro, em 16, 32 e @2x.
+  Tudo sai de `tools/build_icons.py` (cairosvg + Pillow): os SVG-fonte em
+  `src/Clivus.Plugin/Resources/Icons/src/`, os PNG em `Light/` e `Dark/`, a
+  marca em `Resources/Branding/` (logos, `clivus.ico` de 16 a 256 px, logo da
+  janela Sobre em 480 e 960 px). Prévia para revisar: `tools/icons_preview.html`.
+- A ribbon carrega os PNG embutidos na DLL (pack URI), escolhe o tema pela
+  variável `COLORTHEME` (e troca sozinha quando o tema muda) e a versão @2x
+  com a tela acima de 100%. Os ícones desenhados em código saíram.
+- Botão novo "Sobre" (painel Configurações, `CLIVUS_SOBRE`): logo, versão e
+  onde fica o registro de diagnóstico. O `clivus.ico` vai em toda janela do
+  plugin, no painel de grupos e no pacote (`Icon` do `PackageContents.xml`,
+  conferido na documentação da Autodesk: ICO de 32×32, caminho relativo ao
+  bundle).
+- Teste: todo botão com ícone próprio, nos dois temas e quatro tamanhos, com
+  o SVG-fonte; o pacote aponta o ícone.
+
+**3D publicado no servidor** (`plano/contrato-servidor-3d.md`; o servidor e o
+site são do outro agente, conversa em `CANAL.md`): com `CLIVUS_SERVIDOR`
+definido, o comando 3D manda a usina (gzip, chave `CLIVUS_SERVIDOR_CHAVE`) e
+abre o link devolvido; sem servidor ou com falha, a página local. Nível 2
+`clivus-publicar` contra um servidor falso local (`servidor-falso.py`):
+corpo do contrato recebido, link escrito, chave errada recusada.
+
+**"Sujar" virou "pendente"** (Renan: "a palavra sujar é estranha"): o botão
+é "Marcar pendente" (`CLIVUS_PENDENTE`), "Recalcular pendentes"
+(`CLIVUS_RECALCULAR_PENDENTES`), e as mensagens dizem "mesa pendente".
+
+Roteiro de tela:
+1. Abra o Civil 3D: cada botão com o ícone novo; troque o tema (OPTIONS >
+   Display > Color theme): os ícones trocam junto.
+2. Configurações > Sobre: o logo e a versão.
+3. Edição > Marcar pendente numa mesa; Estado lista "pendente";
+   Recalcular pendentes.

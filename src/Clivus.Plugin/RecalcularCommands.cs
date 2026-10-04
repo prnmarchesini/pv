@@ -48,8 +48,8 @@ public static class RecalcularCommands
         }
     }
 
-    /// <summary>CLIVUS_RECALCULAR_SUJAS: só as mesas sujas, uma a uma.</summary>
-    [CommandMethod(PluginInfo.ComandoRecalcularSujas)]
+    /// <summary>CLIVUS_RECALCULAR_PENDENTES: só as mesas sujas, uma a uma.</summary>
+    [CommandMethod(PluginInfo.ComandoRecalcularPendentes)]
     public static void RecalcularSujas()
     {
         var documento = AcadApp.DocumentManager.MdiActiveDocument;
@@ -66,7 +66,7 @@ public static class RecalcularCommands
 
             if (sujas.Count == 0)
             {
-                editor.WriteMessage("\nRECALCULAR Nenhuma mesa suja.\n");
+                editor.WriteMessage("\nRECALCULAR Nenhuma mesa pendente.\n");
                 return;
             }
 
@@ -74,8 +74,8 @@ public static class RecalcularCommands
         }
         catch (System.Exception erro)
         {
-            RegistroDeDiagnostico.Registrar("Falha ao recalcular as mesas sujas.", erro);
-            editor.WriteMessage($"\nNão consegui recalcular as mesas sujas: {erro.Message}\n");
+            RegistroDeDiagnostico.Registrar("Falha ao recalcular as mesas pendentes.", erro);
+            editor.WriteMessage($"\nNão consegui recalcular as mesas pendentes: {erro.Message}\n");
         }
     }
 
@@ -97,7 +97,7 @@ public static class RecalcularCommands
 
             if (sujas.Count == 0)
             {
-                editor.WriteMessage("\nRECALCULAR Nenhuma mesa suja.\n");
+                editor.WriteMessage("\nRECALCULAR Nenhuma mesa pendente.\n");
                 return;
             }
 

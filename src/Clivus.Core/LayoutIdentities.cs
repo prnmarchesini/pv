@@ -83,8 +83,8 @@ public sealed record TableIdentity(
     /// <summary>A mesma mesa, limpa.</summary>
     public TableIdentity AsClean() => this with { Dirty = false, DirtyReason = null };
 
-    /// <summary>"F1.3: limpa" ou "F1.3: SUJA (movida)".</summary>
-    public string DescribeState() => Dirty ? $"{Label}: SUJA ({DirtyReason})" : $"{Label}: limpa";
+    /// <summary>"F1.3: limpa" ou "F1.3: PENDENTE (movida)".</summary>
+    public string DescribeState() => Dirty ? $"{Label}: PENDENTE ({DirtyReason})" : $"{Label}: limpa";
 }
 
 /// <summary>A identidade de um pilar desenhado.</summary>

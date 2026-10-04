@@ -1,5 +1,5 @@
 ; Teste de nivel 2 do 7.3/7.4: processa uma fileira, suja a primeira mesa
-; (CLIVUS_SUJAR_AUTO) e manda recalcular as sujas (CLIVUS_RECALCULAR_AUTO). Le do
+; (CLIVUS_PENDENTE_AUTO) e manda recalcular as sujas (CLIVUS_RECALCULAR_AUTO). Le do
 ; desenho, pelo XData:
 ;   - o contorno com o MESMO GUID continua existindo, com suja=0;
 ;   - a mesa tem 7 pilares, 28 modulos e 28 faces (nada em dobro, nada
@@ -40,7 +40,7 @@
              (setq clivus:limpas (cons (cons clivus:g (clivus:vermelho clivus:en)) clivus:limpas)))))
   (setq clivus:i (1+ clivus:i)))
 
-(command "CLIVUS_SUJAR_AUTO")
+(command "CLIVUS_PENDENTE_AUTO")
 
 ; ANTES: o GUID da mesa suja e a contagem de contornos.
 (setq clivus:tudo (ssget "_X" (list (cons -3 (list (list "CLIVUS"))))))

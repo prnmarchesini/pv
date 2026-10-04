@@ -264,7 +264,7 @@ public static class AnalisesCommands
             $"\nPINTAR {processadas.Count} mesa(s) repintada(s) com as regras gravadas: {abaixo} módulo(s) com a ponta baixa abaixo "
             + $"da faixa, {acima} acima; {pintadas} peça(s) pintada(s); {marcadas} mesa(s) que não cabem.\n");
 
-        if (sujas > 0) editor.WriteMessage($"  {sujas} mesa(s) suja(s) ficaram como estão: use Recalcular sujas.\n");
+        if (sujas > 0) editor.WriteMessage($"  {sujas} mesa(s) pendente(s) ficaram como estão: use Recalcular pendentes.\n");
         if (puladas.Count > 0) editor.WriteMessage($"  Não repintei {string.Join(", ", puladas)}: sem contorno, contorno repetido ou de outra mesa. Use o Regerar área.\n");
 
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);

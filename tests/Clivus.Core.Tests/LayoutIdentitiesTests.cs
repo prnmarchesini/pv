@@ -29,7 +29,7 @@ public class LayoutIdentitiesTests
         Assert.True(suja.Dirty);
         Assert.Equal("movida", suja.DirtyReason);
         Assert.True(suja.IsValid);
-        Assert.Equal("F1.3: SUJA (movida)", suja.DescribeState());
+        Assert.Equal("F1.3: PENDENTE (movida)", suja.DescribeState());
 
         var limpa = suja.AsClean();
 

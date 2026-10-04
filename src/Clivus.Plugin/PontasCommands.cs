@@ -217,7 +217,7 @@ public static class PontasCommands
             // de um MOVE com Z, não do terreno (regra sagrada 5).
             if (mesa.Identity.Dirty)
             {
-                editor.WriteMessage($"\nPONTAS {mesa.Identity.Label} está suja ({mesa.Identity.DirtyReason}): recalcule antes de mudar as pontas.\n");
+                editor.WriteMessage($"\nPONTAS {mesa.Identity.Label} está pendente ({mesa.Identity.DirtyReason}): recalcule antes de mudar as pontas.\n");
                 return null;
             }
 

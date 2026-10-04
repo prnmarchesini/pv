@@ -78,7 +78,7 @@
 (setq clivus:g (clivus:conferir "G"))
 (command "CLIVUS_DECLIVIDADE" "Porcentagem")
 (setq clivus:p (clivus:conferir "P"))
-(command "CLIVUS_SUJAR_AUTO")
+(command "CLIVUS_PENDENTE_AUTO")
 (command "CLIVUS_RECALCULAR_AUTO")
 (setq clivus:r (clivus:conferir "P"))
 (command "CLIVUS_DECLIVIDADE" "Desligar")

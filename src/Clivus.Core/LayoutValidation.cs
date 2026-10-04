@@ -52,7 +52,7 @@ public sealed record LayoutValidation(
             linhas.Add($"{MissingAlignments.Count} alinhamento(s) registrado(s) não está(ão) no desenho ({Juntar(MissingAlignments)}): rode Reindexar, ou trace de novo.");
 
         if (DirtyTables.Count > 0)
-            linhas.Add($"{DirtyTables.Count} mesa(s) marcada(s) suja(s) pelo vigia ({Juntar(DirtyTables)}): movida, editada ou copiada; use Recalcular sujas.");
+            linhas.Add($"{DirtyTables.Count} mesa(s) marcada(s) pendente(s) pelo vigia ({Juntar(DirtyTables)}): movida, editada ou copiada; use Recalcular pendentes.");
 
         if (MovedTables.Count > 0)
             linhas.Add($"{MovedTables.Count} mesa(s) fora de onde foi(ram) desenhada(s) sem o vigia ver ({Juntar(MovedTables)}): movida(s) com o plugin descarregado; use Recalcular nelas.");

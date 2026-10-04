@@ -53,7 +53,7 @@
 (setvar "COPYMODE" 1)
 (setq clivus:ssl (ssadd clivus:alin))
 (command "_.COPY" clivus:ssl "" "0,0,0" "3,0,0")
-(command "CLIVUS_SUJAR_AUTO")
+(command "CLIVUS_PENDENTE_AUTO")
 (setq clivus:ss2 (ssadd clivus:e2))
 (command "_.ERASE" clivus:ss2 "")
 (command "_.COPY" clivus:ss3 "" "0,0,0" "0,300,0")

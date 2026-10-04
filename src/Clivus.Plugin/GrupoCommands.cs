@@ -19,7 +19,7 @@ internal sealed record GroupSummary(TableGroup Group, LayoutCensus Census, int M
     /// <summary>"Bloco A: 12 mesa(s), 336 módulo(s), 84 pilar(es), 241,9 kWp".</summary>
     public string Describe() =>
         $"{Group.Name}: {Census.Tables} mesa(s), {Census.Modules} módulo(s), {Census.Pillars} pilar(es), {Census.PowerKwp.ToString("0.#", Brasil)} kWp"
-        + (Census.Dirty > 0 ? $", {Census.Dirty} suja(s)" : string.Empty)
+        + (Census.Dirty > 0 ? $", {Census.Dirty} pendente(s)" : string.Empty)
         + (Census.Duplicated > 0 ? $", {Census.Duplicated} duplicada(s)" : string.Empty)
         + (Census.TablesWithoutPower > 0 ? $", {Census.TablesWithoutPower} sem potência gravada" : string.Empty)
         + (MissingTables > 0 ? $", {MissingTables} que não está(ão) mais no desenho" : string.Empty);

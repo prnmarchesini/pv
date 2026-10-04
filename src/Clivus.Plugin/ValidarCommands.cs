@@ -51,7 +51,7 @@ public static class ValidarCommands
 
         editor.WriteMessage(
             $"  VALIDAR_TOTAIS areas={validacao.MissingAreas.Count} alinhamentos={validacao.MissingAlignments.Count} "
-            + $"sujas={validacao.DirtyTables.Count} movidas={validacao.MovedTables.Count} "
+            + $"pendentes={validacao.DirtyTables.Count} movidas={validacao.MovedTables.Count} "
             + $"areasdup={validacao.DuplicatedAreas} alinhdup={validacao.DuplicatedAlignments} "
             + $"duplicadas={validacao.DuplicatedTables.Count} pecas={validacao.DuplicatedPieces} "
             + $"orfas={validacao.Orphans} removidas={validacao.PendingRemovals.Count} terreno={(validacao.TerrainWarning is null ? "ok" : "aviso")}\n");

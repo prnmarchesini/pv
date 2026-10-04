@@ -140,7 +140,7 @@ internal static class PainelDeGrupos
         grade.Columns.Add(Coluna("Módulos", nameof(Linha.Modulos), 60));
         grade.Columns.Add(Coluna("Pilares", nameof(Linha.Pilares), 55));
         grade.Columns.Add(Coluna("kWp", nameof(Linha.Kwp), 60));
-        grade.Columns.Add(Coluna("Sujas", nameof(Linha.Sujas), 45));
+        grade.Columns.Add(Coluna("Pendentes", nameof(Linha.Sujas), 45));
         grade.Columns.Add(Coluna("Sumidas", nameof(Linha.Sumidas), 55));
 
         _lista = new ListView { View = grade, SelectionMode = SelectionMode.Single };

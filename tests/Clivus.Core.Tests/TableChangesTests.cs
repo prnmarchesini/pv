@@ -130,7 +130,7 @@ public class TableChangesTests
         Assert.False(PluginInfo.IsSilencedCommand(null));
 
         Assert.True(PluginInfo.IsUndoCommand("u"));
-        Assert.False(PluginInfo.IsUndoCommand("CLIVUS_SUJAR"));
+        Assert.False(PluginInfo.IsUndoCommand("CLIVUS_PENDENTE"));
     }
 
     [Fact]

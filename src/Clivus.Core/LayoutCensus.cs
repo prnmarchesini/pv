@@ -102,7 +102,7 @@ public sealed record LayoutCensus(
         if (Dirty > 0 || Marked > 0 || Orphans > 0)
         {
             linhas.Add(
-                $"{Dirty} suja(s), {Marked} que não cabe(m) no terreno, {Orphans} com peças órfãs (sem contorno"
+                $"{Dirty} pendente(s), {Marked} que não cabe(m) no terreno, {Orphans} com peças órfãs (sem contorno"
                 + (OrphanModules > 0 ? $"; {OrphanModules} módulo(s) órfão(s) contado(s) acima" : string.Empty) + ")");
         }
 

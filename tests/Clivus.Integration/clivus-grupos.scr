@@ -61,7 +61,7 @@
 (defun clivus:zhachura ( / ss) (setq ss (ssget "_X" (list (cons 0 "HATCH") (cons 8 "CLIVUS_GRUPO")))) (if ss (cadddr (assoc 10 (entget (ssname ss 0)))) -1e99))
 (setq clivus:zh (clivus:zhachura) clivus:zm (clivus:zmesas))
 (command "CLIVUS_GRUPOS")
-(command "CLIVUS_SUJAR_AUTO")
+(command "CLIVUS_PENDENTE_AUTO")
 (command "CLIVUS_GRUPO_RECALCULAR" "Bloco A")
 (command "CLIVUS_ESTADO")
 (setq clivus:depois (+ (sslength (clivus:pecas clivus:g1)) (sslength (clivus:pecas clivus:g2))))

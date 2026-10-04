@@ -32,7 +32,7 @@ public class LayoutValidationTests
         Assert.Equal(11, linhas.Count);
         Assert.Contains(linhas, l => l.Contains("1 área(s)") && l.Contains("Área da usina") && l.Contains("Reindexar"));
         Assert.Contains(linhas, l => l.Contains("2 alinhamento(s)") && l.Contains("Alinhamento 2"));
-        Assert.Contains(linhas, l => l.Contains("2 mesa(s) marcada(s) suja(s)") && l.Contains("F2.3") && l.Contains("Recalcular sujas"));
+        Assert.Contains(linhas, l => l.Contains("2 mesa(s) marcada(s) pendente(s)") && l.Contains("F2.3") && l.Contains("Recalcular pendentes"));
         Assert.Contains(linhas, l => l.Contains("1 mesa(s) fora de onde") && l.Contains("F3.1") && l.Contains("plugin descarregado"));
         Assert.Contains(linhas, l => l.Contains("1 identidade(s) de área"));
         Assert.Contains(linhas, l => l.Contains("2 identidade(s) de alinhamento"));

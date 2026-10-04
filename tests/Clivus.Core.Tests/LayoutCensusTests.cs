@@ -39,7 +39,7 @@ public class LayoutCensusTests
         Assert.Equal(3, linhas.Count);
         Assert.Contains("3 mesa(s), 89 módulo(s), 63 kWp", linhas[0]);
         Assert.Contains("22 pilar(es), 8 sem comprimento; comprimento de 1,50 a 2,70 m", linhas[1]);
-        Assert.Contains("1 suja(s), 1 que não cabe(m) no terreno, 1 com peças órfãs (sem contorno; 5 módulo(s) órfão(s)", linhas[2]);
+        Assert.Contains("1 pendente(s), 1 que não cabe(m) no terreno, 1 com peças órfãs (sem contorno; 5 módulo(s) órfão(s)", linhas[2]);
     }
 
     /// <summary>Cada mesa entra com a SUA potência; a sem potência gravada usa a reserva e o relatório avisa.</summary>

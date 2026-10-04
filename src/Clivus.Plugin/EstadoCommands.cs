@@ -18,8 +18,8 @@ public static class EstadoCommands
 {
     private const string MotivoDoUsuario = "pedido do usuário";
 
-    /// <summary>CLIVUS_SUJAR: clica numa peça da mesa, e a mesa fica suja e vermelha.</summary>
-    [CommandMethod(PluginInfo.ComandoSujar)]
+    /// <summary>CLIVUS_PENDENTE: clica numa peça da mesa, e a mesa fica suja e vermelha.</summary>
+    [CommandMethod(PluginInfo.ComandoPendente)]
     public static void Sujar()
     {
         var documento = AcadApp.DocumentManager.MdiActiveDocument;
@@ -29,7 +29,7 @@ public static class EstadoCommands
 
         try
         {
-            var opcoes = new PromptEntityOptions("\nClique numa peça da mesa a sujar: ");
+            var opcoes = new PromptEntityOptions("\nClique numa peça da mesa a marcar como pendente: ");
             opcoes.SetRejectMessage("\nIsso não é uma peça de mesa do plugin.");
             opcoes.AddAllowedClass(typeof(Entity), false);
 
@@ -43,7 +43,7 @@ public static class EstadoCommands
 
             if (guid is null)
             {
-                editor.WriteMessage("\nSUJAR Isso não é uma peça de mesa do plugin.\n");
+                editor.WriteMessage("\nPENDENTE Isso não é uma peça de mesa do plugin.\n");
                 return;
             }
 
@@ -51,29 +51,29 @@ public static class EstadoCommands
 
             if (!mesas.TryGetValue(guid.Value, out var mesa) || mesa.Identity is null)
             {
-                editor.WriteMessage("\nSUJAR A mesa dessa peça não tem mais contorno; não há onde gravar o estado.\n");
+                editor.WriteMessage("\nPENDENTE A mesa dessa peça não tem mais contorno; não há onde gravar o estado.\n");
                 return;
             }
 
             var pintadas = TableState.MarkDirty(transacao, mesa, MotivoDoUsuario);
             transacao.Commit();
 
-            editor.WriteMessage($"\nSUJAR {mesa.Identity.Label} suja ({MotivoDoUsuario}); {pintadas} peça(s) pintada(s) de vermelho.\n");
+            editor.WriteMessage($"\nPENDENTE {mesa.Identity.Label} pendente ({MotivoDoUsuario}); {pintadas} peça(s) pintada(s) de vermelho.\n");
             GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
         }
         catch (Autodesk.AutoCAD.Runtime.Exception erro) when (erro.ErrorStatus == ErrorStatus.OnLockedLayer)
         {
-            editor.WriteMessage("\nSUJAR Uma peça da mesa está em camada bloqueada; desbloqueie as camadas da usina e repita.\n");
+            editor.WriteMessage("\nPENDENTE Uma peça da mesa está em camada bloqueada; desbloqueie as camadas da usina e repita.\n");
         }
         catch (System.Exception erro)
         {
-            RegistroDeDiagnostico.Registrar("Falha ao sujar a mesa.", erro);
-            editor.WriteMessage($"\nNão consegui sujar a mesa: {erro.Message}\n");
+            RegistroDeDiagnostico.Registrar("Falha ao marcar a mesa como pendente.", erro);
+            editor.WriteMessage($"\nNão consegui marcar a mesa como pendente: {erro.Message}\n");
         }
     }
 
-    /// <summary>CLIVUS_SUJAR_AUTO: suja a mesa de menor letreiro, sem perguntar. Para o nível 2.</summary>
-    [CommandMethod(PluginInfo.ComandoSujarAutomatico)]
+    /// <summary>CLIVUS_PENDENTE_AUTO: suja a mesa de menor letreiro, sem perguntar. Para o nível 2.</summary>
+    [CommandMethod(PluginInfo.ComandoPendenteAutomatico)]
     public static void SujarAutomatico()
     {
         var documento = AcadApp.DocumentManager.MdiActiveDocument;
@@ -92,7 +92,7 @@ public static class EstadoCommands
 
             if (mesa is null)
             {
-                editor.WriteMessage("\nSUJAR Nenhuma mesa no desenho.\n");
+                editor.WriteMessage("\nPENDENTE Nenhuma mesa no desenho.\n");
                 return;
             }
 
@@ -100,13 +100,13 @@ public static class EstadoCommands
             transacao.Commit();
 
             editor.WriteMessage(
-                $"\nSUJAR {mesa.Identity!.Label} suja ({MotivoDoUsuario}); {pintadas} peça(s) pintada(s) de vermelho.\n"
-                + $"  SUJAR_GUID {mesa.Identity.Id:D} pecas={pintadas}\n");
+                $"\nPENDENTE {mesa.Identity!.Label} pendente ({MotivoDoUsuario}); {pintadas} peça(s) pintada(s) de vermelho.\n"
+                + $"  PENDENTE_GUID {mesa.Identity.Id:D} pecas={pintadas}\n");
         }
         catch (System.Exception erro)
         {
-            RegistroDeDiagnostico.Registrar("Falha ao sujar a mesa automaticamente.", erro);
-            editor.WriteMessage($"\nNão consegui sujar a mesa: {erro.Message}\n");
+            RegistroDeDiagnostico.Registrar("Falha ao marcar a mesa como pendente automaticamente.", erro);
+            editor.WriteMessage($"\nNão consegui marcar a mesa como pendente: {erro.Message}\n");
         }
     }
 
@@ -136,7 +136,7 @@ public static class EstadoCommands
             var sujas = comContorno.Where(m => m.Identity!.Dirty).ToList();
 
             editor.WriteMessage(
-                $"\nESTADO {comContorno.Count} mesa(s), {comContorno.Count - sujas.Count} limpa(s), {sujas.Count} suja(s)"
+                $"\nESTADO {comContorno.Count} mesa(s), {comContorno.Count - sujas.Count} limpa(s), {sujas.Count} pendente(s)"
                 + (semContorno > 0 ? $", {semContorno} com peças órfãs (sem contorno)" : string.Empty) + "\n");
 
             foreach (var mesa in sujas)
