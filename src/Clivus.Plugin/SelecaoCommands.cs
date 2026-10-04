@@ -75,7 +75,9 @@ public static class SelecaoCommands
             if (id.IsNull || id.IsErased || !LayoutScan.ENossaClasse(id)) continue;
             if (transacao.GetObject(id, OpenMode.ForRead) is not Entity entidade) continue;
 
-            if (LayoutScan.TableOf(entidade) is { } guid) tocadas.Add(guid);
+            // Peça sem mesa válida (GUID vazio) não entra: um grupo com ela é
+            // gravado mas não volta a ser lido (04/10/2026, registro de grupos).
+            if (LayoutScan.TableOf(entidade) is { } guid && guid != Guid.Empty) tocadas.Add(guid);
         }
 
         return tocadas;

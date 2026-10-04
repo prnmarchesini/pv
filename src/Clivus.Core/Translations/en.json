@@ -450,6 +450,7 @@
  "GRUPO \"{0}\": {1} entidade(s) selecionada(s).": "GROUP \"{0}\": {1} entity(ies) selected.",
  "GRUPO Nenhum grupo neste desenho. Selecione mesas e use Criar grupo.": "GROUP No group in this drawing. Select tables and use Create group.",
  "GRUPO Nenhuma mesa do plugin na seleção.": "GROUP No plugin table in the selection.",
+ "GRUPO Não gravei: a seleção não forma um grupo válido (mesa sem identidade). Rode Validar e tente de novo.": "GROUP Not saved: the selection does not form a valid group (table without identity). Run Validate and try again.",
  "GRUPO Não há grupo \"{0}\".": "GROUP There is no group \"{0}\".",
  "GRUPO {0} \"{1}\" criado com {2} mesa(s). {3}": "GROUP {0} \"{1}\" created with {2} table(s). {3}",
  "GRUPO {0} \"{1}\" substituído com {2} mesa(s). {3}": "GROUP {0} \"{1}\" replaced with {2} table(s). {3}",

@@ -61,7 +61,12 @@ internal static class PluginRecords
             var lido = RecordTable.Read(texto, versao, camposPorItem, montar, oQueE);
 
             if (lido.Problem is { } problema)
-                RegistroDeDiagnostico.Registrar($"Registro com problema: {problema}.");
+            {
+                // O conteúdo cru vai junto (até 4000 caracteres): sem ele não se
+                // sabe por que um item não foi lido.
+                var cru = texto is null ? "(vazio)" : string.Join(" | ", texto);
+                RegistroDeDiagnostico.Registrar($"Registro com problema: {problema}. Conteúdo: {(cru.Length > 4000 ? cru[..4000] + "..." : cru)}");
+            }
 
             return lido;
         }

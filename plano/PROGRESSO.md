@@ -116,12 +116,12 @@ globais dos comandos não mudam; nomes digitáveis em inglês e espanhol).
 |---|---|
 | 10.1 mecanismo (Core) | VALIDADO (automático) |
 | 10.2 guarda (teste) | VALIDADO (automático) |
-| 10.3 Idioma, ribbon e janelas | PENDENTE |
-| 10.4 mensagens e relatórios | PENDENTE |
-| 10.5 comandos em inglês e espanhol | PENDENTE |
-| 10.6 instalador | PENDENTE |
-| 10.7 landing | PENDENTE |
-| 10.8 app | PENDENTE |
+| 10.3 Idioma, ribbon e janelas | AGUARDANDO VALIDAÇÃO |
+| 10.4 mensagens e relatórios | AGUARDANDO VALIDAÇÃO |
+| 10.5 comandos em inglês e espanhol | AGUARDANDO VALIDAÇÃO |
+| 10.6 instalador | AGUARDANDO VALIDAÇÃO |
+| 10.7 landing | AGUARDANDO VALIDAÇÃO (no ar) |
+| 10.8 app | AGUARDANDO VALIDAÇÃO (no ar) |
 
 10.1: `Tr` no Core (`Tr.T`, `Tr.F`, `Tr.Current`, `Tr.Culture`, `Tr.Resolve`),
 catálogos embutidos `src/Clivus.Core/Translations/{en,es}.json`; frase sem
@@ -5009,3 +5009,50 @@ Roteiro de tela:
    contorno aparece também em cima das mesas.
 3. Análises pela janela: nenhuma mesa vira "pendente".
 4. Criar grupo: selecione módulos e passe o mouse por cima; nada fica branco.
+
+### 04/10/2026: etapa 10 (idiomas) feita
+
+- **Plugin:** 1.471 frases com tradução em inglês e espanhol (catálogos
+  `src/Clivus.Core/Translations`), marcadas por 7 agentes em paralelo, cada
+  um num grupo de arquivos, e juntadas por mim. Em português a saída ficou
+  idêntica: nível 2 41/41 sem mudar teste. Números e datas da tela na cultura
+  do idioma; o que vai para arquivo, XData e servidor continua invariante.
+  Motivos gravados no desenho (pendente, marcada) ficam em português no XData
+  e são traduzidos na tela.
+- **Idioma:** Configurações > Idioma (Automático pelo LOCALE do Civil 3D,
+  Português, English, Español) e `CLIVUS_IDIOMA`; guardado em
+  `%LOCALAPPDATA%\Clivus Solar\preferencias.json`; a ribbon é refeita na hora,
+  as janelas mudam ao reabrir.
+- **Comandos:** 149 nomes em inglês e espanhol (`CLIVUS_SWAP_TABLE`,
+  `CLIVUS_CAMBIAR_MESA`...), gerados da tabela `CommandNames` por
+  `tools/gerar-comandos-traduzidos.py`, sempre valendo. Registrar em tempo de
+  execução derrubava o Core Console. Os livres da licença valem nos três
+  idiomas (sem isso, `CLIVUS_ACTIVATE` seria barrado).
+- **Instalador:** no idioma do Windows (`/idioma=` para teste; a bateria
+  desinstala em espanhol).
+- **Servidor:** o plugin manda `Accept-Language`; o erro da API volta no
+  idioma (contratos, seção "Idioma"). Landing em `/pt/`, `/en/` e `/es/`, e a
+  raiz leva ao idioma do navegador. App (3D, entrar, área do cliente) nos três
+  idiomas com seletor, e gate `validate_idiomas`.
+- **Potência:** "545.5" passa a ser lido como decimal (em inglês a janela
+  mostra ponto); "1.500" continua mil e quinhentos.
+- Ficou em português de propósito: as palavras-chave entre colchetes das
+  perguntas da linha de comando (`[Sim/Não]`, `[Inicio/Fim]`): elas precisam
+  bater com as palavras-chave globais. Traduzir exige palavra-chave local
+  por idioma; fica como melhoria.
+
+**Grupo que não voltava a ser lido** (registro de diagnóstico desta máquina,
+13:56: "o registro de grupos diz ter 1 item(ns) e só 0 foram lidos"): não
+reproduzi (80 mesas, salvo e reaberto, lê). Defesas: peça sem mesa válida não
+entra no grupo; grupo inválido é recusado ao criar, com aviso; registro com
+problema grava o conteúdo cru no diagnóstico, para achar a causa na próxima.
+
+Roteiro de tela:
+1. Configurações > Idioma: English. A ribbon muda na hora; abra Sombras,
+   Análises e Configurações: em inglês. Digite `CLIVUS_SWAP_TABLE`: é o Trocar
+   mesa. Volte para Automático.
+2. Español: idem (`CLIVUS_CAMBIAR_MESA`), números com vírgula.
+3. Landing: https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io/en/ e /es/.
+4. Área do cliente e 3D: o seletor PT · EN · ES no topo.
+5. Grupos: se a mensagem do registro aparecer de novo, me mande o fim de
+   `%LOCALAPPDATA%\Clivus Solar\clivus.log`.

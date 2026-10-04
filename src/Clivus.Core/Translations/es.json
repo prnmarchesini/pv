@@ -450,6 +450,7 @@
  "GRUPO \"{0}\": {1} entidade(s) selecionada(s).": "GRUPO \"{0}\": {1} entidad(es) seleccionada(s).",
  "GRUPO Nenhum grupo neste desenho. Selecione mesas e use Criar grupo.": "GRUPO Ningún grupo en este dibujo. Seleccione mesas y use Crear grupo.",
  "GRUPO Nenhuma mesa do plugin na seleção.": "GRUPO Ninguna mesa del plugin en la selección.",
+ "GRUPO Não gravei: a seleção não forma um grupo válido (mesa sem identidade). Rode Validar e tente de novo.": "GRUPO No se guardó: la selección no forma un grupo válido (mesa sin identidad). Ejecute Validar e intente de nuevo.",
  "GRUPO Não há grupo \"{0}\".": "GRUPO No hay grupo \"{0}\".",
  "GRUPO {0} \"{1}\" criado com {2} mesa(s). {3}": "GRUPO {0} \"{1}\" creado con {2} mesa(s). {3}",
  "GRUPO {0} \"{1}\" substituído com {2} mesa(s). {3}": "GRUPO {0} \"{1}\" sustituido con {2} mesa(s). {3}",

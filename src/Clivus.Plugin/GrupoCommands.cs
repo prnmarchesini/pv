@@ -71,6 +71,15 @@ public static class GrupoCommands
             }
 
             var grupo = new TableGroup(anterior?.Id ?? Guid.NewGuid(), nome, mesas.OrderBy(g => g).ToList(), DateTime.UtcNow);
+
+            // Grupo que não se lê de volta não é gravado (04/10/2026: um grupo
+            // gravado "sumia" ao reabrir, com "diz ter 1 item e só 0 foram lidos").
+            if (!grupo.IsValid)
+            {
+                RegistroDeDiagnostico.Registrar($"Grupo inválido recusado: {string.Join(" | ", grupo.ToFields())}.");
+                editor.WriteMessage(Tr.T("\nGRUPO Não gravei: a seleção não forma um grupo válido (mesa sem identidade). Rode Validar e tente de novo.\n"));
+                return;
+            }
             var problema = GroupStore.Upsert(documento.Database, grupo, out var substituiu);
             grupo = GroupStore.Find(documento.Database, nome) ?? grupo;
 
