@@ -37,3 +37,6 @@ artefatos/
 
 # O pacote do plugin que o instalador embute (gerado por tools/gerar-instalador.ps1).
 src/Clivus.Instalador/bundle.zip
+
+# Cópias de trabalho dos agentes do Claude Code.
+.claude/
