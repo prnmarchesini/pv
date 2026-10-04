@@ -23,6 +23,9 @@ public sealed record Scene3DTree(double X, double Y, double Ground, TreeSpec Spe
 /// </summary>
 public sealed record Scene3DTerrain(double X0, double Y0, double Step, int Columns, int Rows, IReadOnlyList<double?> Z);
 
+/// <summary>A cena publicada no servidor 3D: o id, o link da página e quando ela expira.</summary>
+public sealed record PublishedScene(string Id, string Url, DateTime? ExpiresAt);
+
 /// <summary>A cena da página 3D.</summary>
 public sealed record Scene3D(
     string Title,
@@ -136,6 +139,71 @@ public static class Viewer3DPage
         s.Append("]}");
 
         return s.ToString();
+    }
+
+    /// <summary>
+    /// O corpo do envio ao servidor 3D (plano/contrato-servidor-3d.md): versão
+    /// do contrato, versão do plugin, nome do desenho e a cena.
+    /// </summary>
+    public static string PublishBody(Scene3D scene, string pluginVersion, string drawing)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+
+        return "{\"versao\":1,\"plugin\":" + Texto(pluginVersion ?? string.Empty)
+            + ",\"desenho\":" + Texto(drawing ?? string.Empty)
+            + ",\"cena\":" + Json(scene) + "}";
+    }
+
+    /// <summary>
+    /// A resposta do servidor: o link da página 3D, ou o erro em português
+    /// que o servidor mandou (ou um nosso, quando a resposta não é do contrato).
+    /// </summary>
+    public static (PublishedScene? Publicada, string? Erro) ParseResponse(int status, string? corpo)
+    {
+        System.Text.Json.JsonElement raiz = default;
+        var temJson = false;
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(corpo))
+            {
+                raiz = System.Text.Json.JsonDocument.Parse(corpo).RootElement;
+                temJson = raiz.ValueKind == System.Text.Json.JsonValueKind.Object;
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            temJson = false;
+        }
+
+        if (status is >= 200 and < 300)
+        {
+            if (temJson
+                && raiz.TryGetProperty("id", out var id) && id.ValueKind == System.Text.Json.JsonValueKind.String
+                && raiz.TryGetProperty("url", out var url) && url.ValueKind == System.Text.Json.JsonValueKind.String
+                && Uri.TryCreate(url.GetString(), UriKind.Absolute, out var endereco)
+                && (endereco.Scheme == Uri.UriSchemeHttps || endereco.Scheme == Uri.UriSchemeHttp))
+            {
+                DateTime? expira = raiz.TryGetProperty("expira_em", out var e) && e.ValueKind == System.Text.Json.JsonValueKind.String
+                    && DateTime.TryParse(e.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var quando)
+                    ? quando
+                    : null;
+
+                return (new PublishedScene(id.GetString()!, endereco.ToString(), expira), null);
+            }
+
+            return (null, "o servidor respondeu sem o link da página 3D");
+        }
+
+        if (temJson && raiz.TryGetProperty("erro", out var erro) && erro.ValueKind == System.Text.Json.JsonValueKind.String)
+            return (null, erro.GetString());
+
+        return (null, status switch
+        {
+            401 or 403 => "a chave do servidor não foi aceita (confira CLIVUS_SERVIDOR_CHAVE)",
+            413 => "a usina é grande demais para o servidor",
+            _ => $"o servidor respondeu {status}",
+        });
     }
 
     /// <summary>A página inteira: a three.js, os controles de órbita, a cena e o visualizador.</summary>

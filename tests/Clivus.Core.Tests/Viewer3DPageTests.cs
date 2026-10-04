@@ -76,6 +76,42 @@ public class Viewer3DPageTests
         Assert.Equal(3, html.Split("</script>").Length - 1);
     }
 
+    /// <summary>O corpo do envio é o do contrato: versão, plugin, desenho e a cena igual à da página local.</summary>
+    [Fact]
+    [Trait("Etapa", "9")]
+    public void OCorpoDoEnvioSegueOContrato()
+    {
+        var cena = Cena();
+        var corpo = Viewer3DPage.PublishBody(cena, "0.1.0", "Itatiba \"A\"");
+
+        using var json = System.Text.Json.JsonDocument.Parse(corpo);
+        var raiz = json.RootElement;
+
+        Assert.Equal(1, raiz.GetProperty("versao").GetInt32());
+        Assert.Equal("0.1.0", raiz.GetProperty("plugin").GetString());
+        Assert.Equal("Itatiba \"A\"", raiz.GetProperty("desenho").GetString());
+        Assert.Equal(Viewer3DPage.Json(cena), raiz.GetProperty("cena").GetRawText());
+        Assert.Equal(1, raiz.GetProperty("cena").GetProperty("faces").GetArrayLength());
+    }
+
+    [Fact]
+    [Trait("Etapa", "9")]
+    public void ARespostaDoServidorViraLinkOuErro()
+    {
+        var (ok, erro) = Viewer3DPage.ParseResponse(201, "{\"id\":\"k3f9x2\",\"url\":\"https://x.sslip.io/3d/k3f9x2\",\"expira_em\":\"2026-11-03T12:00:00Z\"}");
+        Assert.Null(erro);
+        Assert.Equal("k3f9x2", ok!.Id);
+        Assert.Equal("https://x.sslip.io/3d/k3f9x2", ok.Url);
+        Assert.Equal(new DateTime(2026, 11, 3, 12, 0, 0, DateTimeKind.Utc), ok.ExpiresAt);
+
+        Assert.Equal("a cena não tem faces", Viewer3DPage.ParseResponse(400, "{\"erro\":\"a cena não tem faces\"}").Erro);
+        Assert.Contains("CLIVUS_SERVIDOR_CHAVE", Viewer3DPage.ParseResponse(401, "").Erro, StringComparison.Ordinal);
+        Assert.Contains("grande demais", Viewer3DPage.ParseResponse(413, "<html>").Erro, StringComparison.Ordinal);
+        Assert.Equal("o servidor respondeu 502", Viewer3DPage.ParseResponse(502, "Bad Gateway").Erro);
+        Assert.Equal("o servidor respondeu sem o link da página 3D", Viewer3DPage.ParseResponse(200, "{\"id\":\"a\",\"url\":\"javascript:alert(1)\"}").Erro);
+        Assert.Null(Viewer3DPage.ParseResponse(201, "{\"id\":\"a\",\"url\":\"https://x/3d/a\"}").Publicada!.ExpiresAt);
+    }
+
     /// <summary>Um desenho chamado "x{{ORBITA}}" não faz o script entrar no título.</summary>
     [Fact]
     [Trait("Etapa", "9")]

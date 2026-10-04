@@ -17,7 +17,9 @@ namespace Clivus.Plugin;
 /// three.js dentro) com o terreno, os módulos nas cores do desenho, os
 /// pilares, as árvores e as sombras desenhadas, e abre no navegador padrão.
 /// A página fica ao lado do desenho ("nome do desenho - 3D.html"); desenho
-/// nunca salvo, em Documentos.
+/// nunca salvo, em Documentos. Com o servidor 3D configurado (CLIVUS_SERVIDOR),
+/// a usina é publicada nele e o link abre em qualquer aparelho
+/// (plano/contrato-servidor-3d.md).
 /// </summary>
 public static class Ver3DCommands
 {
@@ -31,9 +33,26 @@ public static class Ver3DCommands
 
         try
         {
-            var caminho = Gravar(documento, Caminho(documento));
-            if (caminho is null) return;
+            var cena = Montar(documento);
+            if (cena is null) return;
 
+            // Com o servidor 3D configurado, a usina vai para ele e o link
+            // abre (no PC e, mandado, no celular). Sem servidor, ou se ele
+            // falhar, a página local de sempre.
+            if (Publicador3D.Endereco is not null)
+            {
+                var link = Publicar(documento, cena);
+                if (link is not null)
+                {
+                    Process.Start(new ProcessStartInfo(link) { UseShellExecute = true });
+                    editor.WriteMessage("  Aberta no navegador. O link abre em qualquer aparelho, inclusive no celular.\n");
+                    return;
+                }
+
+                editor.WriteMessage("  Gravo a página no PC, como antes.\n");
+            }
+
+            var caminho = Gravar(documento, cena, Caminho(documento));
             Process.Start(new ProcessStartInfo(caminho) { UseShellExecute = true });
             editor.WriteMessage("  Aberta no navegador padrão. O arquivo pode ser mandado por e-mail: abre sem internet.\n");
         }
@@ -58,12 +77,30 @@ public static class Ver3DCommands
             var caminho = editor.GetString(new PromptStringOptions("\nArquivo da página 3D: ") { AllowSpaces = true });
             if (caminho.Status != PromptStatus.OK) return;
 
-            Gravar(documento, caminho.StringResult.Trim().Trim('"'));
+            if (Montar(documento) is { } cena) Gravar(documento, cena, caminho.StringResult.Trim().Trim('"'));
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao gerar o 3D (automático).", erro);
             editor.WriteMessage($"\nNão consegui gerar o 3D: {erro.Message}\n");
+        }
+    }
+
+    /// <summary>CLIVUS_3D_PUBLICAR_AUTO: publica no servidor 3D (CLIVUS_SERVIDOR) e escreve o link, sem abrir o navegador. Para o nível 2.</summary>
+    [CommandMethod(PluginInfo.ComandoVer3DPublicarAutomatico)]
+    public static void Ver3DPublicarAutomatico()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        try
+        {
+            if (Montar(documento) is { } cena) Publicar(documento, cena);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao publicar o 3D (automático).", erro);
+            documento.Editor.WriteMessage($"\nNão consegui publicar o 3D: {erro.Message}\n");
         }
     }
 
@@ -77,20 +114,34 @@ public static class Ver3DCommands
         return Path.Combine(pasta, $"{nome} - 3D.html");
     }
 
-    /// <summary>Monta a cena e grava a página. O caminho gravado, ou null (com a mensagem).</summary>
-    private static string? Gravar(Document documento, string caminho)
+    /// <summary>A cena do desenho, ou null (sem terreno, com a mensagem).</summary>
+    private static Scene3D? Montar(Document documento)
     {
         var editor = documento.Editor;
-        var database = documento.Database;
 
         var terreno = FileiraCommands.ExigirTerreno(editor, documento);
         if (terreno is null) return null;
 
-        var relogio = Stopwatch.StartNew();
         var cena = Cena(documento, terreno);
 
         if (cena.Faces.Count == 0 && cena.Trees.Count == 0)
             editor.WriteMessage("\n  ATENÇÃO: o desenho não tem módulo nem árvore do plugin; a página mostra só o terreno.\n");
+
+        return cena;
+    }
+
+    private static string Resumo(Scene3D cena)
+    {
+        var brasil = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+        return $"{cena.Faces.Count} módulo(s), {cena.Pillars.Count} pilar(es), {cena.Trees.Count} árvore(s), {cena.Shadows.Count} contorno(s) de sombra, "
+            + $"terreno em grade de {cena.Terrain!.Step.ToString("0.#", brasil)} m";
+    }
+
+    /// <summary>Grava a página local. O caminho gravado.</summary>
+    private static string Gravar(Document documento, Scene3D cena, string caminho)
+    {
+        var editor = documento.Editor;
+        var relogio = Stopwatch.StartNew();
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(caminho))!);
         File.WriteAllText(caminho, Viewer3DPage.Html(cena), new System.Text.UTF8Encoding(false));
@@ -99,12 +150,35 @@ public static class Ver3DCommands
         var tamanho = new FileInfo(caminho).Length / 1024.0 / 1024.0;
         var brasil = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
 
-        editor.WriteMessage(
-            $"\n3D {cena.Faces.Count} módulo(s), {cena.Pillars.Count} pilar(es), {cena.Trees.Count} árvore(s), {cena.Shadows.Count} contorno(s) de sombra, "
-            + $"terreno em grade de {cena.Terrain!.Step.ToString("0.#", brasil)} m: {caminho} ({tamanho.ToString("0.0", brasil)} MB, {relogio.Elapsed.TotalSeconds.ToString("0.0", brasil)} s).\n");
+        editor.WriteMessage($"\n3D {Resumo(cena)}: {caminho} ({tamanho.ToString("0.0", brasil)} MB, {relogio.Elapsed.TotalSeconds.ToString("0.0", brasil)} s).\n");
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
 
         return caminho;
+    }
+
+    /// <summary>Publica no servidor 3D. O link, ou null (com o erro dito).</summary>
+    private static string? Publicar(Document documento, Scene3D cena)
+    {
+        var editor = documento.Editor;
+        var relogio = Stopwatch.StartNew();
+
+        var corpo = Viewer3DPage.PublishBody(cena, PluginInfo.VersaoLegivel(ClivusCommands.VersaoDoPlugin()), cena.Title);
+        var (publicada, erro) = Publicador3D.Publicar(corpo);
+        relogio.Stop();
+
+        if (publicada is null)
+        {
+            editor.WriteMessage($"\n3D Não publiquei no servidor: {erro}.\n");
+            return null;
+        }
+
+        var brasil = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+        editor.WriteMessage(
+            $"\n3D {Resumo(cena)}, publicado em {relogio.Elapsed.TotalSeconds.ToString("0.0", brasil)} s.\n"
+            + $"  Link: {publicada.Url}\n"
+            + (publicada.ExpiresAt is { } expira ? $"  Vale até {expira.ToLocalTime().ToString("dd/MM/yyyy HH:mm", brasil)}.\n" : string.Empty));
+
+        return publicada.Url;
     }
 
     private static Scene3D Cena(Document documento, ProcessedTerrain terreno)

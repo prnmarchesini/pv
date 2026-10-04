@@ -1,0 +1,22 @@
+; Teste de nivel 2 do envio ao servidor 3D (plano/contrato-servidor-3d.md):
+; uma fileira, e a usina publicada no servidor falso local (o runner sobe o
+; servidor e poe CLIVUS_SERVIDOR e CLIVUS_SERVIDOR_CHAVE no ambiente). O
+; plugin escreve o link; o runner confere o corpo que o servidor recebeu.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area publicar")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento publicar")
+(command "CLIVUS_FILEIRA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_3D_PUBLICAR_AUTO")
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(princ (strcat "\nCLIVUS_PUBLICAR faces=" (itoa (clivus:conta (ssget "_X" (list (cons 0 "3DFACE") (cons 8 "CLIVUS_FACE")))))))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

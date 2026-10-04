@@ -52,3 +52,22 @@ O que preciso de você, quando tiver:
    abrindo no celular.
 4. Renan: a chave combinada vai por fora do git (você recebe do agente do
    servidor e me passa, ou define `CLIVUS_SERVIDOR_CHAVE` neste PC).
+
+### 2026-10-04 11:10 — plugin
+
+O lado do plugin está pronto e testado contra um servidor falso que segue o
+contrato (`tests/Clivus.Integration/servidor-falso.py`, serve de referência
+mínima do que o plugin espera):
+
+- O comando 3D, com `CLIVUS_SERVIDOR` definido, manda
+  `POST {CLIVUS_SERVIDOR}/api/v1/cenas` com `Content-Encoding: gzip`,
+  `Content-Type: application/json; charset=utf-8` e
+  `Authorization: Bearer {CLIVUS_SERVIDOR_CHAVE}`, e abre a `url` da
+  resposta 201. Sem servidor, ou se ele falhar, grava a página local.
+- Da resposta uso `id`, `url` (http ou https, absoluta) e `expira_em`
+  (opcional, ISO 8601 UTC). Em erro, mostro o `erro` do JSON como veio; sem
+  JSON, uma mensagem minha pelo código (401/403 chave, 413 tamanho).
+- Tempo máximo de espera: 90 s.
+
+Quando você tiver o domínio, escreva aqui; o Renan define as duas variáveis
+neste PC e eu publico uma usina real.

@@ -3945,6 +3945,122 @@ function Testar-Ver3D {
     return $true
 }
 
+<#
+    O envio ao servidor 3D (plano/contrato-servidor-3d.md): o runner sobe o
+    servidor falso local (servidor-falso.py) e publica uma fileira nele.
+    Com a chave certa, o plugin escreve o link e o servidor recebe o corpo
+    do contrato, com tantas faces quantas 3DFACE o desenho tem; com a chave
+    errada, o plugin diz que a chave nao foi aceita.
+#>
+function Testar-Publicar3D {
+    param([string] $Desenho)
+
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $python) {
+        $problemas.Add('clivus-publicar: python nao encontrado para subir o servidor falso.')
+        return $false
+    }
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-publicar--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'clivus-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("clivus-publicar: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $substituicoes = @{
+        '{{A1}}'   = (Ponto3 -50 -50 0)
+        '{{A2}}'   = (Ponto3  50 -50 0)
+        '{{A3}}'   = (Ponto3  50  50 0)
+        '{{A4}}'   = (Ponto3 -50  50 0)
+        '{{L1}}'   = (Ponto3 -50 -50 0)
+        '{{L2}}'   = (Ponto3 -50  50 0)
+        '{{LADO}}' = (Ponto3   0   0 0)
+    }
+
+    $porta = 18765
+    $chave = 'chave-de-teste-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
+    $recebido = Join-Path $saida 'clivus-publicar-recebido.json'
+    if (Test-Path $recebido) { Remove-Item $recebido -Force }
+
+    $servidor = Start-Process -FilePath $python.Source -ArgumentList @((Join-Path $PSScriptRoot 'servidor-falso.py'), $porta, $chave, $recebido) `
+                              -PassThru -WindowStyle Hidden
+    $antes = @{ Servidor = $env:CLIVUS_SERVIDOR; Chave = $env:CLIVUS_SERVIDOR_CHAVE }
+
+    try {
+        # Espera o servidor falso responder.
+        $noAr = $false
+        for ($i = 0; $i -lt 40 -and -not $noAr; $i++) {
+            try { $null = Invoke-WebRequest "http://127.0.0.1:$porta/api/v1/saude" -UseBasicParsing -TimeoutSec 1; $noAr = $true }
+            catch { Start-Sleep -Milliseconds 250 }
+        }
+
+        if (-not $noAr) {
+            $problemas.Add('clivus-publicar: o servidor falso nao subiu.')
+            return $false
+        }
+
+        $env:CLIVUS_SERVIDOR = "http://127.0.0.1:$porta"
+
+        # Chave errada: o plugin diz e nao publica.
+        $env:CLIVUS_SERVIDOR_CHAVE = 'errada'
+        $errado = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-publicar--chave-errada' `
+                                     -Script (Join-Path $PSScriptRoot 'clivus-publicar.scr') -Substituicoes $substituicoes
+
+        if ($errado.Texto -notmatch 'chave inv') {
+            $problemas.Add("clivus-publicar: com a chave errada o plugin deveria dizer que ela nao foi aceita. Veja $($errado.Saida)")
+            return $false
+        }
+
+        # Chave certa: o link volta e o servidor recebe a usina.
+        $env:CLIVUS_SERVIDOR_CHAVE = $chave
+        $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-publicar' `
+                                -Script (Join-Path $PSScriptRoot 'clivus-publicar.scr') -Substituicoes $substituicoes
+
+        if ($r.Estourou -or $r.Codigo -ne 0) {
+            $problemas.Add("clivus-publicar terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+            return $false
+        }
+
+        if ($r.Texto -notmatch "Link: (http://127\.0\.0\.1:$porta/3d/teste\d+)" ) {
+            $problemas.Add("clivus-publicar: o plugin nao escreveu o link devolvido pelo servidor. Veja $($r.Saida)")
+            return $false
+        }
+
+        $link = $Matches[1]
+
+        if ($r.Texto -notmatch 'CLIVUS_PUBLICAR faces=(\d+)' -or -not (Test-Path $recebido)) {
+            $problemas.Add("clivus-publicar: o servidor nao recebeu a usina. Veja $($r.Saida)")
+            return $false
+        }
+
+        $faces = [int] $Matches[1]
+        $corpo = [IO.File]::ReadAllText($recebido, [Text.Encoding]::UTF8) | ConvertFrom-Json
+
+        if ($corpo.versao -ne 1 -or @($corpo.cena.faces).Count -ne $faces -or $faces -lt 1 -or @($corpo.cena.pilares).Count -lt 1 -or $null -eq $corpo.cena.terreno) {
+            $problemas.Add("clivus-publicar: o corpo recebido nao bate com o contrato (versao $($corpo.versao), $(@($corpo.cena.faces).Count) faces para $faces no desenho). Veja $recebido")
+            return $false
+        }
+
+        Write-Host "  (publicar: $faces faces recebidas pelo servidor falso, link $link; chave errada recusada)" -ForegroundColor DarkGray
+        return $true
+    }
+    finally {
+        $env:CLIVUS_SERVIDOR = $antes.Servidor
+        $env:CLIVUS_SERVIDOR_CHAVE = $antes.Chave
+        if ($servidor -and -not $servidor.HasExited) { Stop-Process -Id $servidor.Id -Force -ErrorAction SilentlyContinue }
+    }
+}
+
 # ---- os casos --------------------------------------------------------------
 
 $passaram = 0
@@ -4130,6 +4246,10 @@ else {
     # 3D no navegador (9.9).
     $total++
     if (Testar-Ver3D -Desenho $desenhos[0]) { $passaram++ }
+
+    # Envio da usina ao servidor 3D (contrato), num servidor falso local.
+    $total++
+    if (Testar-Publicar3D -Desenho $desenhos[0]) { $passaram++ }
 }
 
 # ---- veredito --------------------------------------------------------------

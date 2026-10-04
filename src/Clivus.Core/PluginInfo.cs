@@ -252,6 +252,9 @@ public static class PluginInfo
     /// <summary>Grava a página 3D sem abrir o navegador, no caminho dado. Para o nível 2.</summary>
     public const string ComandoVer3DAutomatico = "CLIVUS_3D_AUTO";
 
+    /// <summary>Publica a usina no servidor 3D (CLIVUS_SERVIDOR) e escreve o link, sem abrir o navegador. Para o nível 2.</summary>
+    public const string ComandoVer3DPublicarAutomatico = "CLIVUS_3D_PUBLICAR_AUTO";
+
     /// <summary>A análise de declividade: seta e valor em cada mesa, em porcentagem ou graus, ou desligada.</summary>
     public const string ComandoDeclividade = "CLIVUS_DECLIVIDADE";
 
