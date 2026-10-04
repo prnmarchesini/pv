@@ -104,15 +104,27 @@ link do mesmo endereço do servidor.
 
 ## 5. Operação
 
-### Primeira ativação (Renan)
+### Desenvolvimento: a conta Develop
 
-1. Instale o plugin com esta versão (que já tem a chave `2026a`). A partir
-   daí, os comandos do Clivus pedem licença.
-2. Entre no app (o endereço acima), na conta de teste, e clique em
-   **Gerar código**. Copie o código: ele só aparece essa vez.
-3. No Civil 3D, rode `CLIVUS_ATIVAR`, cole o código e confirme. A mensagem
-   diz a conta e até quando vale.
-4. A área do cliente passa a listar o computador.
+Enquanto o plugin está em desenvolvimento (DLLs trocadas direto, sem
+instalador), tudo roda na **conta Develop** do app (`develop@clivussolar.com`):
+
+- as licenças dela saem com `plano: "develop"`;
+- o que o plugin publica com `CLIVUS_SERVIDOR_CHAVE` cai nos projetos dela;
+- o código de ativação develop já foi gerado. O Renan tem o código e a senha da
+  conta; nada disso vai para o git.
+
+Ativar o PC de desenvolvimento:
+
+1. Use uma build com a chave `2026a` (a partir do commit `c421925`). Os comandos
+   do Clivus passam a pedir licença.
+2. No Civil 3D, rode `CLIVUS_ATIVAR`, cole o código develop e confirme. A
+   mensagem diz `develop@clivussolar.com`, plano `develop`, e até quando vale.
+3. Na área do cliente (conta Develop), o computador aparece na lista. São 2
+   vagas por código; a de uma máquina antiga se libera ali.
+
+Cliente de verdade (depois do cadastro): faz o mesmo com o código que ele
+mesmo gera na conta dele, e a licença sai com `plano: "gratuito"`.
 
 ### Trocar de chave (vazou, ou rotina)
 

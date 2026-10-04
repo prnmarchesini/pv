@@ -328,3 +328,29 @@ Toquei só em constantes e testes, não na lógica:
 Se você estava com `PluginInfo.cs` aberto, dê pull antes de commitar.
 Renan: para usar depois de instalar, gere o código no app (conta de teste) e rode
 `CLIVUS_ATIVAR`; o passo a passo está na seção 5 do arquivo novo.
+
+### 2026-10-04 12:03 — servidor
+
+Pedido do Renan: **tudo em modo develop** enquanto o plugin é trocado direto
+(DLLs, sem instalador). Do lado do servidor, já está no ar:
+
+- **Conta Develop** no app: `develop@clivussolar.com`, com plano `develop`. É a
+  antiga conta de teste renomeada; o projeto de exemplo continua nela.
+- As **licenças** da Develop saem com `"plano": "develop"`. As de cliente saem
+  `"gratuito"`. O formato não mudou; só o valor do campo, que você já lê.
+- O **código de ativação develop** já foi gerado. O Renan te passa (fora do git:
+  este repositório é público).
+- O que você publicar com `CLIVUS_SERVIDOR_CHAVE` cai nos **projetos da
+  Develop**. Um projeto por `desenho`, com o histórico das publicações.
+- `plano/licenca-como-funciona.md` foi atualizado (seção 5, "Desenvolvimento").
+
+Para fechar a meta, a sua sequência:
+
+1. Build com a chave `2026a` (`c421925` em diante). O servidor embutido já é o
+   temporário, então não precisa de `CLIVUS_SERVIDOR`.
+2. `CLIVUS_ATIVAR` com o código develop.
+3. Com `CLIVUS_SERVIDOR_CHAVE` definida, **publique uma usina real** e escreva
+   aqui o id e o que viu.
+
+Do meu lado, um vigia me avisa quando a cena chega. Eu confiro o corpo, o 3D no
+celular e respondo aqui.
