@@ -256,14 +256,14 @@ internal static class ArvoreVigia
 
                 transacao.Commit();
 
-                if (assentadas > 0) _documento.Editor.WriteMessage($"\nÁRVORE {assentadas} árvore(s) de volta ao chão do lugar novo.\n");
-                if (foraDoTerreno > 0) _documento.Editor.WriteMessage($"\nÁRVORE ATENÇÃO: {foraDoTerreno} árvore(s) fora do terreno ficaram onde o arrasto deixou.\n");
-                if (terreno is null && mexidas.Count > 0) _documento.Editor.WriteMessage("\nÁRVORE Sem terreno processado, a árvore mexida não pôde voltar ao chão. Use o botão Terreno.\n");
+                if (assentadas > 0) _documento.Editor.WriteMessage(Tr.F("\nÁRVORE {0} árvore(s) de volta ao chão do lugar novo.\n", assentadas));
+                if (foraDoTerreno > 0) _documento.Editor.WriteMessage(Tr.F("\nÁRVORE ATENÇÃO: {0} árvore(s) fora do terreno ficaram onde o arrasto deixou.\n", foraDoTerreno));
+                if (terreno is null && mexidas.Count > 0) _documento.Editor.WriteMessage(Tr.T("\nÁRVORE Sem terreno processado, a árvore mexida não pôde voltar ao chão. Use o botão Terreno.\n"));
             }
             catch (System.Exception erro)
             {
                 RegistroDeDiagnostico.Registrar("O vigia das árvores não conseguiu assentar.", erro);
-                _documento.Editor.WriteMessage($"\nÁRVORE Não consegui pôr a árvore no chão: {erro.Message}\n");
+                _documento.Editor.WriteMessage(Tr.F("\nÁRVORE Não consegui pôr a árvore no chão: {0}\n", erro.Message));
             }
             finally
             {

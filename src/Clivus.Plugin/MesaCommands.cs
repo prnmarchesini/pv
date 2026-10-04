@@ -30,7 +30,7 @@ public static class MesaCommands
         {
             // Sem interface não há janela. Dizer isso é melhor que a exceção
             // que viria de tentar criar uma Window num host sem WPF.
-            editor.WriteMessage("\nA janela da mesa precisa da interface do Civil 3D.\n");
+            editor.WriteMessage(Tr.T("\nA janela da mesa precisa da interface do Civil 3D.\n"));
             return;
         }
 
@@ -41,7 +41,7 @@ public static class MesaCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao abrir a janela da mesa.", erro);
-            editor.WriteMessage($"\nNão consegui abrir a janela da mesa: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui abrir a janela da mesa: {0}\n", erro.Message));
         }
     }
 
@@ -95,13 +95,13 @@ public static class MesaCommands
 
         if (janela.Escolhida is not { } mesa)
         {
-            editor.WriteMessage("\nJanela da mesa fechada sem escolher.\n");
+            editor.WriteMessage(Tr.T("\nJanela da mesa fechada sem escolher.\n"));
             return;
         }
 
         editor.WriteMessage($"\n{mesa.Describe()}\n");
         editor.WriteMessage(
-            "\n  A mesa ainda não é desenhada: isto vem na etapa 5, quando ela encontra o terreno.\n");
+            Tr.T("\n  A mesa ainda não é desenhada: isto vem na etapa 5, quando ela encontra o terreno.\n"));
     }
 
     /// <summary>

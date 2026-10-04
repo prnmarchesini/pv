@@ -34,14 +34,11 @@ public sealed record TerrainSummary(
     double Area2D,
     double Area3D)
 {
-    /// <summary>
-    /// A cultura do número na tela. Fixa, e não a da máquina, pelo mesmo
-    /// motivo de <see cref="SurfaceSummary"/> — e com a mesma dependência:
-    /// InvariantGlobalization precisa continuar falso em
-    /// Directory.Build.props, senão esta busca devolve a cultura invariante
-    /// em silêncio e o separador de milhar vira vírgula.
-    /// </summary>
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
+    // A cultura do número na tela é a do idioma (Tr.Culture), e não a da
+    // máquina, pelo mesmo motivo de SurfaceSummary, e com a mesma
+    // dependência: InvariantGlobalization precisa continuar falso em
+    // Directory.Build.props, senão a busca da cultura devolve a invariante
+    // em silêncio e o separador de milhar vira vírgula.
 
     /// <summary>Diferença entre a cota mais alta e a mais baixa, em metros.</summary>
     public double Desnivel => MaxZ - MinZ;
@@ -56,11 +53,11 @@ public sealed record TerrainSummary(
     {
         var linhas = new List<string>
         {
-            $"Terreno processado: {SurfaceName}",
-            $"  triângulos:      {TriangleCount.ToString("N0", Brasil)}",
-            $"  cotas:           {Metros(MinZ)} a {Metros(MaxZ)}  (desnível de {Metros(Desnivel)})",
-            $"  área em planta:  {Metros2(Area2D)}  ({Hectares.ToString("N2", Brasil)} ha)",
-            $"  área do terreno: {Metros2(Area3D)}",
+            Tr.F("Terreno processado: {0}", SurfaceName),
+            Tr.F("  triângulos:      {0:N0}", TriangleCount),
+            Tr.F("  cotas:           {0} a {1}  (desnível de {2})", Metros(MinZ), Metros(MaxZ), Metros(Desnivel)),
+            Tr.F("  área em planta:  {0}  ({1:N2} ha)", Metros2(Area2D), Hectares),
+            Tr.F("  área do terreno: {0}", Metros2(Area3D)),
         };
 
         // Só aparece quando há o que dizer. Malha com muitos descartes é
@@ -69,16 +66,15 @@ public sealed record TerrainSummary(
         if (DiscardedTriangleCount > 0)
         {
             linhas.Add(
-                $"  descartados:     {DiscardedTriangleCount.ToString("N0", Brasil)} "
-                + "triângulo(s) sem área útil (faceta vertical ou ponto repetido)");
+                Tr.F("  descartados:     {0:N0} triângulo(s) sem área útil (faceta vertical ou ponto repetido)", DiscardedTriangleCount));
         }
 
         return linhas;
     }
 
     private static string Metros(double valor) =>
-        valor.ToString("N3", Brasil) + " m";
+        valor.ToString("N3", Tr.Culture) + " m";
 
     private static string Metros2(double valor) =>
-        valor.ToString("N2", Brasil) + " m²";
+        valor.ToString("N2", Tr.Culture) + " m²";
 }

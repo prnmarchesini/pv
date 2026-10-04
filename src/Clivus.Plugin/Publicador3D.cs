@@ -33,7 +33,7 @@ internal static class Publicador3D
     /// <summary>Publica o corpo (já no formato do contrato). O link, ou o erro em português.</summary>
     internal static (PublishedScene? Publicada, string? Erro) Publicar(string corpo)
     {
-        if (Endereco is not { } endereco) return (null, "o servidor 3D não está configurado (variável CLIVUS_SERVIDOR)");
+        if (Endereco is not { } endereco) return (null, Tr.T("o servidor 3D não está configurado (variável CLIVUS_SERVIDOR)"));
         if (Viewer3DPage.WhyServerUnsafe(endereco) is { } inseguro) return (null, inseguro);
 
         try
@@ -58,11 +58,11 @@ internal static class Publicador3D
         catch (HttpRequestException erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao publicar no servidor 3D.", erro);
-            return (null, $"não consegui falar com o servidor 3D em {endereco} ({erro.Message})");
+            return (null, Tr.F("não consegui falar com o servidor 3D em {0} ({1})", endereco, erro.Message));
         }
         catch (TaskCanceledException)
         {
-            return (null, $"o servidor 3D em {endereco} não respondeu a tempo");
+            return (null, Tr.F("o servidor 3D em {0} não respondeu a tempo", endereco));
         }
     }
 }

@@ -111,7 +111,7 @@ public static class ModuleLibrary
         catch (JsonException erro)
         {
             throw new InvalidOperationException(
-                $"A biblioteca de módulos não pôde ser lida: {erro.Message}", erro);
+                Tr.F("A biblioteca de módulos não pôde ser lida: {0}", erro.Message), erro);
         }
 
         // O array vazio conta como biblioteca quebrada, e não como biblioteca
@@ -120,7 +120,7 @@ public static class ModuleLibrary
         // produzir.
         if (entradas is null or { Count: 0 })
         {
-            throw new InvalidOperationException("A biblioteca de módulos está vazia.");
+            throw new InvalidOperationException(Tr.T("A biblioteca de módulos está vazia."));
         }
 
         return Validar(entradas);
@@ -147,11 +147,11 @@ public static class ModuleLibrary
         catch (JsonException erro)
         {
             throw new InvalidOperationException(
-                $"A lista de módulos do serviço não pôde ser lida: {erro.Message}", erro);
+                Tr.F("A lista de módulos do serviço não pôde ser lida: {0}", erro.Message), erro);
         }
 
         if (doServico is null or { Count: 0 })
-            throw new InvalidOperationException("O serviço não tem nenhum módulo cadastrado.");
+            throw new InvalidOperationException(Tr.T("O serviço não tem nenhum módulo cadastrado."));
 
         return Validar(doServico.Select(m => new Entrada
         {
@@ -179,20 +179,19 @@ public static class ModuleLibrary
         if (!modulo.IsValid)
         {
             throw new InvalidOperationException(
-                "O módulo não pode ser cadastrado: falta o modelo ou há medida impossível "
-                + "(potência de 1 a 2000 Wp, medidas em metro até 3 m, espessura menor que a largura).");
+                Tr.T("O módulo não pode ser cadastrado: falta o modelo ou há medida impossível (potência de 1 a 2000 Wp, medidas em metro até 3 m, espessura menor que a largura)."));
         }
 
         if (modulo.LooksSwapped is { } aviso)
-            throw new InvalidOperationException($"O módulo não pode ser cadastrado: {aviso}.");
+            throw new InvalidOperationException(Tr.F("O módulo não pode ser cadastrado: {0}.", aviso));
 
         // O serviço exige marca e limita os dois nomes a 120 caracteres
         // (servidor/app/schemas.py); recusar aqui dá a mensagem em português.
         if (string.IsNullOrWhiteSpace(modulo.Brand))
-            throw new InvalidOperationException("O módulo não pode ser cadastrado: a marca está em branco.");
+            throw new InvalidOperationException(Tr.T("O módulo não pode ser cadastrado: a marca está em branco."));
 
         if (modulo.Brand.Trim().Length > MaiorNome || modulo.Model.Trim().Length > MaiorNome)
-            throw new InvalidOperationException($"O módulo não pode ser cadastrado: marca e modelo vão até {MaiorNome} caracteres.");
+            throw new InvalidOperationException(Tr.F("O módulo não pode ser cadastrado: marca e modelo vão até {0} caracteres.", MaiorNome));
 
         return JsonSerializer.Serialize(new DoServico
         {
@@ -222,8 +221,7 @@ public static class ModuleLibrary
             if (!modulo.IsValid)
             {
                 throw new InvalidOperationException(
-                    "A biblioteca de módulos traz um módulo com medida impossível: "
-                    + $"{Identificar(entrada)}.");
+                    Tr.F("A biblioteca de módulos traz um módulo com medida impossível: {0}.", Identificar(entrada)));
             }
 
             if (modulo.LooksSwapped is { } aviso)
@@ -232,7 +230,7 @@ public static class ModuleLibrary
                 // medida e sai uma mesa com metade do comprimento. Na
                 // biblioteca, que é dado nosso, isso é defeito e não aviso.
                 throw new InvalidOperationException(
-                    $"A biblioteca de módulos traz um módulo suspeito: {aviso}.");
+                    Tr.F("A biblioteca de módulos traz um módulo suspeito: {0}.", aviso));
             }
 
             modulos.Add(modulo);
@@ -248,7 +246,7 @@ public static class ModuleLibrary
             // sem critério, e o projeto sai com as medidas de um ou de outro
             // conforme a ordem do arquivo.
             throw new InvalidOperationException(
-                $"A biblioteca de módulos tem o modelo {repetido.Key} repetido.");
+                Tr.F("A biblioteca de módulos tem o modelo {0} repetido.", repetido.Key));
         }
 
         // AsReadOnly e não a List: devolver a lista de dentro deixaria qualquer
@@ -262,7 +260,7 @@ public static class ModuleLibrary
     }
 
     private static string Identificar(Entrada entrada) =>
-        string.IsNullOrWhiteSpace(entrada.Model) ? "(sem modelo)" : entrada.Model.Trim();
+        string.IsNullOrWhiteSpace(entrada.Model) ? Tr.T("(sem modelo)") : entrada.Model.Trim();
 
     private static IReadOnlyList<SolarModule> Ler()
     {

@@ -91,10 +91,10 @@ internal sealed class Instalacao
     /// <summary>A série suportada, lida do PackageContents.xml de dentro do pacote.</summary>
     internal static (string Min, string Max) SerieSuportada()
     {
-        using var pacote = Pacote() ?? throw new InvalidOperationException("este instalador foi gerado sem o plugin dentro");
+        using var pacote = Pacote() ?? throw new InvalidOperationException(Tr.T("este instalador foi gerado sem o plugin dentro"));
         using var zip = new ZipArchive(pacote, ZipArchiveMode.Read);
         var entrada = zip.Entries.FirstOrDefault(e => e.FullName.EndsWith("PackageContents.xml", StringComparison.OrdinalIgnoreCase))
-            ?? throw new InvalidOperationException("o pacote não tem PackageContents.xml");
+            ?? throw new InvalidOperationException(Tr.T("o pacote não tem PackageContents.xml"));
 
         using var leitor = entrada.Open();
         var requisitos = XDocument.Load(leitor).Descendants("RuntimeRequirements").First();
@@ -108,16 +108,16 @@ internal sealed class Instalacao
     /// <summary>Instala. A frase do resultado.</summary>
     internal string Instalar(Action<string>? progresso = null)
     {
-        progresso?.Invoke("Tirando versões anteriores...");
+        progresso?.Invoke(Tr.T("Tirando versões anteriores..."));
 
         // O bundle do nome antigo e a versão anterior deste.
         foreach (var velho in new[] { Path.Combine(PastaDosPlugins, "UFV.bundle"), PastaDoBundle })
             if (Directory.Exists(velho)) Directory.Delete(velho, recursive: true);
 
-        progresso?.Invoke("Copiando o Clivus Solar...");
+        progresso?.Invoke(Tr.T("Copiando o Clivus Solar..."));
 
         Directory.CreateDirectory(PastaDosPlugins);
-        using (var pacote = Pacote() ?? throw new InvalidOperationException("este instalador foi gerado sem o plugin dentro"))
+        using (var pacote = Pacote() ?? throw new InvalidOperationException(Tr.T("este instalador foi gerado sem o plugin dentro")))
         using (var zip = new ZipArchive(pacote, ZipArchiveMode.Read))
         {
             // O zip tem a pasta ClivusSolar.bundle na raiz; cada entrada é
@@ -127,7 +127,7 @@ internal sealed class Instalacao
             foreach (var entrada in zip.Entries)
             {
                 var caminho = Path.GetFullPath(Path.Combine(PastaDosPlugins, entrada.FullName));
-                if (!caminho.StartsWith(destino, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException($"entrada fora da pasta no pacote: {entrada.FullName}");
+                if (!caminho.StartsWith(destino, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException(Tr.F("entrada fora da pasta no pacote: {0}", entrada.FullName));
 
                 if (entrada.FullName.EndsWith('/'))
                 {
@@ -140,10 +140,10 @@ internal sealed class Instalacao
             }
         }
 
-        progresso?.Invoke("Registrando em Adicionar ou remover programas...");
+        progresso?.Invoke(Tr.T("Registrando em Adicionar ou remover programas..."));
 
         Directory.CreateDirectory(PastaDeDados);
-        var esteExe = Environment.ProcessPath ?? throw new InvalidOperationException("não sei onde está o instalador");
+        var esteExe = Environment.ProcessPath ?? throw new InvalidOperationException(Tr.T("não sei onde está o instalador"));
         if (!string.Equals(Path.GetFullPath(esteExe), Path.GetFullPath(Desinstalador), StringComparison.OrdinalIgnoreCase))
             File.Copy(esteExe, Desinstalador, overwrite: true);
 
@@ -163,7 +163,7 @@ internal sealed class Instalacao
             chave.SetValue("NoRepair", 1, RegistryValueKind.DWord);
         }
 
-        return $"Clivus Solar {Versao} instalado. Abra o Civil 3D: a aba Clivus Solar aparece sozinha.";
+        return Tr.F("Clivus Solar {0} instalado. Abra o Civil 3D: a aba Clivus Solar aparece sozinha.", Versao);
     }
 
     /// <summary>Desinstala: o bundle e a entrada saem; os dados do usuário ficam. A frase do resultado.</summary>
@@ -189,7 +189,7 @@ internal sealed class Instalacao
             File.Delete(Desinstalador);
         }
 
-        return "Clivus Solar desinstalado. Sua licença e seus perfis de mesa ficaram na pasta do usuário, para uma próxima instalação.";
+        return Tr.T("Clivus Solar desinstalado. Sua licença e seus perfis de mesa ficaram na pasta do usuário, para uma próxima instalação.");
     }
 
     /// <summary>Se está instalado (a entrada existe).</summary>

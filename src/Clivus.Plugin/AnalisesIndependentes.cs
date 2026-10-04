@@ -191,7 +191,7 @@ internal static class AnalisesIndependentes
     {
         var conteudo = double.IsFinite(valor)
             ? IndependentAnalysis.Label(tipo, valor, unidade)
-            : IndependentAnalysis.Label(tipo, 0, unidade).Split(' ')[0] + " s/ terreno";
+            : Tr.F("{0} s/ terreno", IndependentAnalysis.Label(tipo, 0, unidade).Split(' ')[0]);
 
         var texto = new MText
         {

@@ -39,7 +39,7 @@ public static class CoordinateCommands
                 // Sem terreno processado não há o que consultar. A mensagem diz
                 // o que fazer, e não só que não dá.
                 editor.WriteMessage(
-                    "\nNenhum terreno processado neste desenho. Use o botão Terreno primeiro.\n");
+                    Tr.T("\nNenhum terreno processado neste desenho. Use o botão Terreno primeiro.\n"));
                 return;
             }
 
@@ -51,7 +51,7 @@ public static class CoordinateCommands
 
             while (true)
             {
-                var opcoes = new PromptPointOptions("\nPonto no terreno (Enter para sair): ")
+                var opcoes = new PromptPointOptions(Tr.T("\nPonto no terreno (Enter para sair): "))
                 {
                     AllowNone = true,
                 };
@@ -67,7 +67,7 @@ public static class CoordinateCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao consultar a cota do terreno.", erro);
-            editor.WriteMessage($"\nNão consegui consultar o terreno: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui consultar o terreno: {0}\n", erro.Message));
         }
     }
 
@@ -82,7 +82,7 @@ public static class CoordinateCommands
             var aviso = TerrenoEnvelhecido.Conferir(documento);
             if (aviso is null) return;
 
-            editor.WriteMessage($"\n  ATENÇÃO: {aviso}\n");
+            editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
         }
         catch (System.Exception erro)
         {
@@ -94,25 +94,22 @@ public static class CoordinateCommands
 
     private static void Responder(Editor editor, ProcessedTerrain terreno, Point3d ponto)
     {
-        var ptbr = CultureInfo.GetCultureInfo("pt-BR");
-
         // A cota vem do terreno, não do Z do clique: o usuário aponta em
         // planta, e o que interessa é a superfície embaixo do dedo dele.
         if (!terreno.Mesh.TryGetZ(ponto.X, ponto.Y, out var z))
         {
-            editor.WriteMessage(string.Format(
-                ptbr, "\n  X {0:N3}   Y {1:N3}   fora do terreno\n", ponto.X, ponto.Y));
+            editor.WriteMessage(Tr.F("\n  X {0:N3}   Y {1:N3}   fora do terreno\n", ponto.X, ponto.Y));
 
             // "Fora do terreno" tem duas causas bem diferentes, e o usuário
             // precisa saber qual: clicou fora da borda, ou achou um buraco na
             // triangulação. Dizer só "não sei" o deixaria procurando o erro no
             // lugar errado.
             editor.WriteMessage(
-                "  (fora da borda da superfície, ou num buraco da triangulação)\n");
+                Tr.T("  (fora da borda da superfície, ou num buraco da triangulação)\n"));
             return;
         }
 
         editor.WriteMessage(string.Format(
-            ptbr, "\n  X {0:N3}   Y {1:N3}   Z {2:N3}\n", ponto.X, ponto.Y, z));
+            Tr.Culture, "\n  X {0:N3}   Y {1:N3}   Z {2:N3}\n", ponto.X, ponto.Y, z));
     }
 }

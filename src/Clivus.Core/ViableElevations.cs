@@ -71,8 +71,6 @@ public sealed record ViableStart(double StartElevation, IReadOnlyList<ElevationR
 /// </summary>
 public sealed class ViableElevations
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>Folga numérica das comparações, em metro.</summary>
     private const double Tolerancia = 1e-9;
 
@@ -162,7 +160,7 @@ public sealed class ViableElevations
             throw new ArgumentOutOfRangeException(nameof(step), step, "O passo da grade precisa ficar entre 0,1 mm e 1 m.");
 
         if (configuration.WhyInvalid is { } motivo)
-            throw new InvalidOperationException($"A configuração não fecha: {motivo}.");
+            throw new InvalidOperationException(Tr.F("A configuração não fecha: {0}.", motivo));
 
         var modulos = new List<(double Station, double Ground)>();
         var semTerreno = 0;
@@ -181,13 +179,13 @@ public sealed class ViableElevations
         if (total == 0)
         {
             return new ViableElevations(length, step, configuration, total, modulos, [],
-                "a mesa não tem módulo na fileira de baixo para conferir a ponta baixa", false);
+                Tr.T("a mesa não tem módulo na fileira de baixo para conferir a ponta baixa"), false);
         }
 
         if (semTerreno > 0)
         {
             return new ViableElevations(length, step, configuration, total, modulos, [],
-                $"{semTerreno} módulo(s) da fileira de baixo sem terreno embaixo", false);
+                Tr.F("{0} módulo(s) da fileira de baixo sem terreno embaixo", semTerreno), false);
         }
 
         foreach (var (estacao, _) in modulos)
@@ -343,11 +341,11 @@ public sealed class ViableElevations
     /// <summary>A linha que descreve o conjunto para o usuário.</summary>
     public string Describe()
     {
-        if (Problem is { } problema) return $"Sem cota viável: {problema}.";
-        if (IsEmpty) return "Sem cota viável: nenhuma cota da ponta baixa respeita a faixa nesta mesa.";
+        if (Problem is { } problema) return Tr.F("Sem cota viável: {0}.", problema);
+        if (IsEmpty) return Tr.T("Sem cota viável: nenhuma cota da ponta baixa respeita a faixa nesta mesa.");
 
-        return $"cota inicial de {Starts[0].StartElevation.ToString("0.00", Brasil)} a "
-            + $"{Starts[^1].StartElevation.ToString("0.00", Brasil)} m, {Starts.Count} posições";
+        return Tr.F("cota inicial de {0:0.00} a {1:0.00} m, {2} posições",
+            Starts[0].StartElevation, Starts[^1].StartElevation, Starts.Count);
     }
 
     /// <summary>
@@ -397,8 +395,8 @@ public sealed class ViableElevations
 
         if (menorDispersao > faixa + 1e-6)
         {
-            return $"o terreno sob a ponta baixa tem um lombo ou vale de {(menorDispersao * 100).ToString("0", Brasil)} cm que nenhuma "
-                + $"inclinação vence (a faixa da ponta baixa aceita {(faixa * 100).ToString("0", Brasil)} cm)";
+            return Tr.F("o terreno sob a ponta baixa tem um lombo ou vale de {0:0} cm que nenhuma inclinação vence (a faixa da ponta baixa aceita {1:0} cm)",
+                menorDispersao * 100, faixa * 100);
         }
 
         if (Dispersao(0) <= faixa + 1e-6) return null;
@@ -420,7 +418,7 @@ public sealed class ViableElevations
         // Cabe dentro do limite: não há o que explicar por aqui.
         if (Configuration.MaxLongitudinalSlopeDegrees is not { } limite || precisa <= limite + 1e-6) return null;
 
-        return $"o terreno pede {precisa.ToString("0.#", Brasil)}° de inclinação ao longo da mesa e o limite é {limite.ToString("0.#", Brasil)}°";
+        return Tr.F("o terreno pede {0:0.#}° de inclinação ao longo da mesa e o limite é {1:0.#}°", precisa, limite);
     }
 
     /// <summary>
