@@ -23,8 +23,6 @@ public sealed record ProcessedPlant(
     IReadOnlyList<int>? ModulesByKind = null,
     IReadOnlyList<double>? PowerByKind = null)
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>Todas as mesas, fileira a fileira.</summary>
     public IReadOnlyList<ProcessedTable> Tables => Rows.SelectMany(r => r.Tables).ToList();
 
@@ -56,11 +54,10 @@ public sealed record ProcessedPlant(
 
     /// <summary>A linha que descreve a usina para o usuário.</summary>
     public string Describe() =>
-        $"{Rows.Count} fileira(s), {Tables.Count} mesa(s), {ModuleCount} módulo(s), "
-        + $"{PowerKwp.ToString("0.#", Brasil)} kWp, {PillarCount} pilar(es); "
-        + $"{MarkedCount} mesa(s) marcada(s), {PillarProblemCount} pilar(es) com problema, "
-        + $"{Layout.DroppedOutside} posição(ões) descartada(s) por passar da área; "
-        + $"{Elapsed.TotalSeconds.ToString("0.0", Brasil)} s";
+        Tr.F(
+            "{0} fileira(s), {1} mesa(s), {2} módulo(s), {3:0.#} kWp, {4} pilar(es); {5} mesa(s) marcada(s), {6} pilar(es) com problema, {7} posição(ões) descartada(s) por passar da área; {8:0.0} s",
+            Rows.Count, Tables.Count, ModuleCount, PowerKwp, PillarCount,
+            MarkedCount, PillarProblemCount, Layout.DroppedOutside, Elapsed.TotalSeconds);
 }
 
 /// <summary>

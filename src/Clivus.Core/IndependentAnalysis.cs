@@ -56,12 +56,12 @@ public sealed record ThresholdRule(double? Below, RgbColor BelowColor, double? A
     {
         get
         {
-            if (Below is null && Above is null) return "ligue pelo menos um dos dois limites";
-            if (Below is { } b && !double.IsFinite(b)) return "o limite de baixo não é um número";
-            if (Above is { } a && !double.IsFinite(a)) return "o limite de cima não é um número";
+            if (Below is null && Above is null) return Tr.T("ligue pelo menos um dos dois limites");
+            if (Below is { } b && !double.IsFinite(b)) return Tr.T("o limite de baixo não é um número");
+            if (Above is { } a && !double.IsFinite(a)) return Tr.T("o limite de cima não é um número");
 
             if (Below is { } baixo && Above is { } cima && baixo > cima)
-                return "o limite de baixo é maior que o de cima";
+                return Tr.T("o limite de baixo é maior que o de cima");
 
             return null;
         }
@@ -124,20 +124,18 @@ public sealed record BandCount(int Below, int Inside, int Above, int Missing)
 /// </summary>
 public static class IndependentAnalysis
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>A versão do registro da regra no desenho.</summary>
     private const string Versao = "1";
 
     /// <summary>O nome da análise para o usuário.</summary>
     public static string Name(IndependentKind tipo) => tipo switch
     {
-        IndependentKind.LowEdge => "ponta baixa",
-        IndependentKind.HighEdge => "ponta alta",
-        IndependentKind.Slope => "declividade",
-        IndependentKind.PillarBuried => "parte enterrada do pilar",
-        IndependentKind.PillarLength => "comprimento total do pilar",
-        _ => "parte livre do pilar (fora da terra)",
+        IndependentKind.LowEdge => Tr.T("ponta baixa"),
+        IndependentKind.HighEdge => Tr.T("ponta alta"),
+        IndependentKind.Slope => Tr.T("declividade"),
+        IndependentKind.PillarBuried => Tr.T("parte enterrada do pilar"),
+        IndependentKind.PillarLength => Tr.T("comprimento total do pilar"),
+        _ => Tr.T("parte livre do pilar (fora da terra)"),
     };
 
     /// <summary>Se a análise é de pilar (um valor por pilar, escrito no pilar).</summary>
@@ -163,12 +161,12 @@ public static class IndependentAnalysis
     /// <summary>O texto que vai ao desenho: "PB 0,45", "PA 2,10", "P 1,86", "5,0%".</summary>
     public static string Label(IndependentKind tipo, double valor, SlopeUnit unidade) => tipo switch
     {
-        IndependentKind.LowEdge => $"PB {valor.ToString("0.00", Brasil)}",
-        IndependentKind.HighEdge => $"PA {valor.ToString("0.00", Brasil)}",
-        IndependentKind.PillarAbove => $"P {valor.ToString("0.00", Brasil)}",
-        IndependentKind.PillarBuried => $"E {valor.ToString("0.00", Brasil)}",
-        IndependentKind.PillarLength => $"PT {valor.ToString("0.00", Brasil)}",
-        _ => unidade == SlopeUnit.Degrees ? $"{valor.ToString("0.0", Brasil)}°" : $"{valor.ToString("0.0", Brasil)}%",
+        IndependentKind.LowEdge => Tr.F("PB {0:0.00}", valor),
+        IndependentKind.HighEdge => Tr.F("PA {0:0.00}", valor),
+        IndependentKind.PillarAbove => Tr.F("P {0:0.00}", valor),
+        IndependentKind.PillarBuried => Tr.F("E {0:0.00}", valor),
+        IndependentKind.PillarLength => Tr.F("PT {0:0.00}", valor),
+        _ => unidade == SlopeUnit.Degrees ? $"{valor.ToString("0.0", Tr.Culture)}°" : $"{valor.ToString("0.0", Tr.Culture)}%",
     };
 
     /// <summary>A camada dos textos da análise. Só para o usuário ligar e desligar: a identidade vai no XData.</summary>
@@ -252,18 +250,18 @@ public static class IndependentAnalysis
 
         var partes = new List<string>();
 
-        if (regra.Below is { } b) partes.Add($"{conta.Below} abaixo de {Limite(tipo, b, unidade)}");
-        partes.Add($"{conta.Inside} dentro");
-        if (regra.Above is { } a) partes.Add($"{conta.Above} acima de {Limite(tipo, a, unidade)}");
-        if (conta.Missing > 0) partes.Add($"{conta.Missing} sem valor");
+        if (regra.Below is { } b) partes.Add(Tr.F("{0} abaixo de {1}", conta.Below, Limite(tipo, b, unidade)));
+        partes.Add(Tr.F("{0} dentro", conta.Inside));
+        if (regra.Above is { } a) partes.Add(Tr.F("{0} acima de {1}", conta.Above, Limite(tipo, a, unidade)));
+        if (conta.Missing > 0) partes.Add(Tr.F("{0} sem valor", conta.Missing));
 
-        return $"{Name(tipo)}: {string.Join(", ", partes)} (total {conta.Total})";
+        return Tr.F("{0}: {1} (total {2})", Name(tipo), string.Join(", ", partes), conta.Total);
     }
 
     private static string Limite(IndependentKind tipo, double valor, SlopeUnit unidade) =>
         tipo == IndependentKind.Slope
-            ? (unidade == SlopeUnit.Degrees ? $"{valor.ToString("0.0", Brasil)}°" : $"{valor.ToString("0.0", Brasil)}%")
-            : $"{valor.ToString("0.00", Brasil)} m";
+            ? (unidade == SlopeUnit.Degrees ? $"{valor.ToString("0.0", Tr.Culture)}°" : $"{valor.ToString("0.0", Tr.Culture)}%")
+            : $"{valor.ToString("0.00", Tr.Culture)} m";
 
     private static bool Opcional(string texto, out double? valor)
     {

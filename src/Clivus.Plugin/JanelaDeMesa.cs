@@ -42,10 +42,10 @@ internal sealed class JanelaDeMesa : Window
     private IReadOnlyList<SolarModule> _modulos;
     private readonly Button _cadastrarModulo = new()
     {
-        Content = "Cadastrar módulo...",
+        Content = Tr.T("Cadastrar módulo..."),
         Height = 24,
         Margin = new Thickness(0, 2, 0, 6),
-        ToolTip = "Grava um módulo novo no serviço local (biblioteca de módulos). Precisa do serviço no ar: tools\\servico-local.ps1.",
+        ToolTip = Tr.T("Grava um módulo novo no serviço local (biblioteca de módulos). Precisa do serviço no ar: tools\\servico-local.ps1."),
     };
     private readonly TextBlock _origemDosModulos = new() { FontSize = 11, Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap };
 
@@ -72,10 +72,10 @@ internal sealed class JanelaDeMesa : Window
     private readonly TextBox _enterro = Campo();
     private readonly Button _botaoDosVaos = new()
     {
-        Content = "Vãos entre pilares...",
+        Content = Tr.T("Vãos entre pilares..."),
         Height = 24,
         Margin = new Thickness(0, 2, 0, 2),
-        ToolTip = "Abre a lista P1-P2, P2-P3... para escrever cada vão; mostra a soma e se ela fecha com a mesa.",
+        ToolTip = Tr.T("Abre a lista P1-P2, P2-P3... para escrever cada vão; mostra a soma e se ela fecha com a mesa."),
     };
     private readonly TextBlock _resumoDosVaos = new() { FontSize = 11, Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) };
 
@@ -119,7 +119,7 @@ internal sealed class JanelaDeMesa : Window
     {
         _perfis = perfis ?? throw new ArgumentNullException(nameof(perfis));
 
-        Title = "Clivus Solar — Mesa";
+        Title = Tr.T("Clivus Solar — Mesa");
         Width = 1320;
         Height = 800;
         MinWidth = 1100;
@@ -132,21 +132,21 @@ internal sealed class JanelaDeMesa : Window
 
         _arranjo.Items.Add(new ComboBoxItem
         {
-            Content = "1V — uma fileira de módulos em pé",
+            Content = Tr.T("1V — uma fileira de módulos em pé"),
             Tag = TableArrangement.SingleRow,
         });
         _arranjo.Items.Add(new ComboBoxItem
         {
-            Content = "2V — duas fileiras, uma acima da outra",
+            Content = Tr.T("2V — duas fileiras, uma acima da outra"),
             Tag = TableArrangement.DoubleRow,
         });
 
-        _salvar = new Button { Content = "Salvar perfil", Width = 110, Height = 26 };
+        _salvar = new Button { Content = Tr.T("Salvar perfil"), Width = 110, Height = 26 };
         _salvar.Click += (_, _) => Salvar();
 
         _usar = new Button
         {
-            Content = "Usar esta mesa",
+            Content = Tr.T("Usar esta mesa"),
             Width = 130,
             Height = 26,
             Margin = new Thickness(8, 0, 0, 0),
@@ -207,8 +207,8 @@ internal sealed class JanelaDeMesa : Window
         desenhos.RowDefinitions.Add(new RowDefinition { Height = new GridLength(10) });
         desenhos.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        var emCima = Emoldurar("PLANTA BAIXA", _planta);
-        var embaixo = Emoldurar("VISTA LATERAL — na direção da inclinação", _corte);
+        var emCima = Emoldurar(Tr.T("PLANTA BAIXA"), _planta);
+        var embaixo = Emoldurar(Tr.T("VISTA LATERAL — na direção da inclinação"), _corte);
 
         Grid.SetRow(emCima, 0);
         Grid.SetRow(embaixo, 2);
@@ -233,7 +233,7 @@ internal sealed class JanelaDeMesa : Window
         botoes.Children.Add(_usar);
         botoes.Children.Add(new Button
         {
-            Content = "Fechar",
+            Content = Tr.T("Fechar"),
             Width = 90,
             Height = 26,
             Margin = new Thickness(8, 0, 0, 0),
@@ -293,38 +293,38 @@ internal sealed class JanelaDeMesa : Window
             pilha.Children.Add(campo);
         }
 
-        Secao("Perfil");
-        Linha("Perfil salvo", _salvos);
-        Linha("Nome", _nome);
+        Secao(Tr.T("Perfil"));
+        Linha(Tr.T("Perfil salvo"), _salvos);
+        Linha(Tr.T("Nome"), _nome);
 
-        Secao("Módulo");
-        Linha("Modelo", _modelo);
+        Secao(Tr.T("Módulo"));
+        Linha(Tr.T("Modelo"), _modelo);
         pilha.Children.Add(_origemDosModulos);
         pilha.Children.Add(_cadastrarModulo);
-        Linha("Altura (m)", _altura);
-        Linha("Largura (m)", _largura);
-        Linha("Espessura (m)", _espessura);
-        Linha("Potência (Wp)", _potencia);
+        Linha(Tr.T("Altura (m)"), _altura);
+        Linha(Tr.T("Largura (m)"), _largura);
+        Linha(Tr.T("Espessura (m)"), _espessura);
+        Linha(Tr.T("Potência (Wp)"), _potencia);
 
-        Secao("Mesa");
-        Linha("Módulos", _quantidade);
-        Linha("Arranjo", _arranjo);
-        Linha("Espaçamento entre módulos (m)", _espacamentoH);
-        Linha("Espaçamento entre fileiras (m)", _espacamentoV);
-        Linha("Sobra da esquerda (m)", _sobraEsquerda);
-        Linha("Sobra da direita (m)", _sobraDireita);
-        Linha("Inclinação (graus)", _inclinacao);
+        Secao(Tr.T("Mesa"));
+        Linha(Tr.T("Módulos"), _quantidade);
+        Linha(Tr.T("Arranjo"), _arranjo);
+        Linha(Tr.T("Espaçamento entre módulos (m)"), _espacamentoH);
+        Linha(Tr.T("Espaçamento entre fileiras (m)"), _espacamentoV);
+        Linha(Tr.T("Sobra da esquerda (m)"), _sobraEsquerda);
+        Linha(Tr.T("Sobra da direita (m)"), _sobraDireita);
+        Linha(Tr.T("Inclinação (graus)"), _inclinacao);
 
-        Secao("Estrutura");
-        Linha("Tesoura T1 (m)", _tesoura, "Comprimento da tesoura, ao longo da inclinação.");
-        Linha("Pilar na tesoura T2 (m)", _pilarNaTesoura, "Onde o pilar encosta na tesoura, medido da ponta baixa dela.");
-        Linha("Pilar: largura ao longo da fileira (m)", _pilarLargura, "Lado da seção do pilar no sentido da fileira (comprimento da mesa).");
-        Linha("Pilar: largura na inclinação (m)", _pilarProfundidade, "Lado da seção do pilar no sentido da inclinação (tesoura).");
-        Linha("Enterro mínimo T3 (m)", _enterro, "O mínimo que o pilar fica dentro do solo. Em branco, vale o enterro mínimo da configuração do projeto.");
-        Linha("Vão-alvo entre pilares (m)", _vaoAlvo, "Vão pretendido; a tabela divide a mesa em vãos iguais perto dele. Não vale quando há vãos escritos.");
+        Secao(Tr.T("Estrutura"));
+        Linha(Tr.T("Tesoura T1 (m)"), _tesoura, Tr.T("Comprimento da tesoura, ao longo da inclinação."));
+        Linha(Tr.T("Pilar na tesoura T2 (m)"), _pilarNaTesoura, Tr.T("Onde o pilar encosta na tesoura, medido da ponta baixa dela."));
+        Linha(Tr.T("Pilar: largura ao longo da fileira (m)"), _pilarLargura, Tr.T("Lado da seção do pilar no sentido da fileira (comprimento da mesa)."));
+        Linha(Tr.T("Pilar: largura na inclinação (m)"), _pilarProfundidade, Tr.T("Lado da seção do pilar no sentido da inclinação (tesoura)."));
+        Linha(Tr.T("Enterro mínimo T3 (m)"), _enterro, Tr.T("O mínimo que o pilar fica dentro do solo. Em branco, vale o enterro mínimo da configuração do projeto."));
+        Linha(Tr.T("Vão-alvo entre pilares (m)"), _vaoAlvo, Tr.T("Vão pretendido; a tabela divide a mesa em vãos iguais perto dele. Não vale quando há vãos escritos."));
         pilha.Children.Add(_botaoDosVaos);
         pilha.Children.Add(_resumoDosVaos);
-        Linha("Balanço nas pontas (m)", _balanco, "Quanto de estrutura sobra para fora do primeiro e do último pilar.");
+        Linha(Tr.T("Balanço nas pontas (m)"), _balanco, Tr.T("Quanto de estrutura sobra para fora do primeiro e do último pilar."));
 
         foreach (var (campo, _) in Todos()) campo.TextChanged += (_, _) => Recalcular();
 
@@ -348,23 +348,23 @@ internal sealed class JanelaDeMesa : Window
     /// </summary>
     private IEnumerable<(TextBox Campo, string Nome)> Todos()
     {
-        yield return (_nome, "Nome");
-        yield return (_altura, "Altura");
-        yield return (_largura, "Largura");
-        yield return (_espessura, "Espessura");
-        yield return (_potencia, "Potência");
-        yield return (_quantidade, "Módulos");
-        yield return (_espacamentoH, "Espaçamento entre módulos");
-        yield return (_espacamentoV, "Espaçamento entre fileiras");
-        yield return (_sobraEsquerda, "Sobra da esquerda");
-        yield return (_sobraDireita, "Sobra da direita");
-        yield return (_inclinacao, "Inclinação");
-        yield return (_tesoura, "Tesoura T1");
-        yield return (_pilarNaTesoura, "Pilar na tesoura T2");
-        yield return (_pilarLargura, "Pilar: largura ao longo da fileira");
-        yield return (_pilarProfundidade, "Pilar: largura na inclinação");
-        yield return (_vaoAlvo, "Vão-alvo entre pilares");
-        yield return (_balanco, "Balanço nas pontas");
+        yield return (_nome, Tr.T("Nome"));
+        yield return (_altura, Tr.T("Altura"));
+        yield return (_largura, Tr.T("Largura"));
+        yield return (_espessura, Tr.T("Espessura"));
+        yield return (_potencia, Tr.T("Potência"));
+        yield return (_quantidade, Tr.T("Módulos"));
+        yield return (_espacamentoH, Tr.T("Espaçamento entre módulos"));
+        yield return (_espacamentoV, Tr.T("Espaçamento entre fileiras"));
+        yield return (_sobraEsquerda, Tr.T("Sobra da esquerda"));
+        yield return (_sobraDireita, Tr.T("Sobra da direita"));
+        yield return (_inclinacao, Tr.T("Inclinação"));
+        yield return (_tesoura, Tr.T("Tesoura T1"));
+        yield return (_pilarNaTesoura, Tr.T("Pilar na tesoura T2"));
+        yield return (_pilarLargura, Tr.T("Pilar: largura ao longo da fileira"));
+        yield return (_pilarProfundidade, Tr.T("Pilar: largura na inclinação"));
+        yield return (_vaoAlvo, Tr.T("Vão-alvo entre pilares"));
+        yield return (_balanco, Tr.T("Balanço nas pontas"));
     }
 
     // --------------------------------------------------------- ida e volta
@@ -372,7 +372,7 @@ internal sealed class JanelaDeMesa : Window
     private void ListarSalvos()
     {
         _salvos.Items.Clear();
-        _salvos.Items.Add(new ComboBoxItem { Content = "(nenhum — mesa atual)", Tag = null });
+        _salvos.Items.Add(new ComboBoxItem { Content = Tr.T("(nenhum — mesa atual)"), Tag = null });
 
         try
         {
@@ -406,7 +406,7 @@ internal sealed class JanelaDeMesa : Window
         {
             _preenchendo = false;
             RegistroDeDiagnostico.Registrar($"Não consegui abrir o perfil \"{nome}\".", erro);
-            Avisar($"Não consegui abrir o perfil \"{nome}\": {erro.Message}");
+            Avisar(Tr.F("Não consegui abrir o perfil \"{0}\": {1}", nome, erro.Message));
         }
     }
 
@@ -420,9 +420,9 @@ internal sealed class JanelaDeMesa : Window
         _altura.Text = Numero(perfil.Layout.Module.Height);
         _largura.Text = Numero(perfil.Layout.Module.Width);
         _espessura.Text = Numero(perfil.Layout.Module.Thickness);
-        _potencia.Text = Numero(perfil.Layout.Module.PowerWatts);
+        _potencia.Text = NumeroGrande(perfil.Layout.Module.PowerWatts);
 
-        _quantidade.Text = perfil.Layout.ModuleCount.ToString(Brasil);
+        _quantidade.Text = perfil.Layout.ModuleCount.ToString(Tr.Culture);
         _espacamentoH.Text = Numero(perfil.Layout.HorizontalGap);
         _espacamentoV.Text = Numero(perfil.Layout.VerticalGap);
         _sobraEsquerda.Text = Numero(perfil.Layout.LeftMargin);
@@ -464,8 +464,8 @@ internal sealed class JanelaDeMesa : Window
             if (certo) continue;
 
             motivo = string.IsNullOrWhiteSpace(campo.Text)
-                ? $"o campo \"{nome}\" está em branco."
-                : $"não consigo ler o número do campo \"{nome}\".";
+                ? Tr.F("o campo \"{0}\" está em branco.", nome)
+                : Tr.F("não consigo ler o número do campo \"{0}\".", nome);
 
             return null;
         }
@@ -493,7 +493,7 @@ internal sealed class JanelaDeMesa : Window
         {
             if (!NumberInput.TryParseMeasure(_enterro.Text, out var t3))
             {
-                motivo = "não consigo ler o número do campo \"Enterro mínimo T3\".";
+                motivo = Tr.F("não consigo ler o número do campo \"{0}\".", Tr.T("Enterro mínimo T3"));
                 return null;
             }
 
@@ -502,7 +502,7 @@ internal sealed class JanelaDeMesa : Window
 
         if (!NumberInput.TryParseCount(_quantidade.Text, out var quantidade))
         {
-            motivo = "o número de módulos precisa ser inteiro.";
+            motivo = Tr.T("o número de módulos precisa ser inteiro.");
             return null;
         }
 
@@ -562,7 +562,7 @@ internal sealed class JanelaDeMesa : Window
         _altura.Text = Numero(modulo.Height);
         _largura.Text = Numero(modulo.Width);
         _espessura.Text = Numero(modulo.Thickness);
-        _potencia.Text = Numero(modulo.PowerWatts);
+        _potencia.Text = NumeroGrande(modulo.PowerWatts);
     }
 
     // ------------------------------------------------------------- o cálculo
@@ -605,19 +605,18 @@ internal sealed class JanelaDeMesa : Window
             var subida = PillarSizing.FreeHeight(0, geometria.PillarRow, perfil.TiltRadians);
 
             _resumo.Text =
-                $"Comprimento {Numero(perfil.Layout.Length)} m · {Numero(perfil.Layout.Depth)} m na "
-                + $"inclinação · {perfil.Layout.Columns} colunas · "
-                + $"{potencia.ToString("0.#", Brasil)} kWp\n"
-                + $"{pilares.PillarCount} pilares em {pilares.Spans.Count} vãos "
+                Tr.F("Comprimento {0} m · {1} m na inclinação · {2} colunas · {3:0.#} kWp",
+                    Numero(perfil.Layout.Length), Numero(perfil.Layout.Depth), perfil.Layout.Columns, potencia)
+                + "\n"
                 + (_vaosEscritos is null
-                    ? $"de {Numero(pilares.Spans[0])} m"
-                    : $"escritos ({string.Join(" + ", pilares.Spans.Select(Numero))} m)")
+                    ? Tr.F("{0} pilares em {1} vãos de {2} m", pilares.PillarCount, pilares.Spans.Count, Numero(pilares.Spans[0]))
+                    : Tr.F("{0} pilares em {1} vãos escritos ({2} m)", pilares.PillarCount, pilares.Spans.Count, string.Join(" + ", pilares.Spans.Select(Numero))))
                 + (pilares.Cantilever > 0
-                    ? $", com balanço de {Numero(pilares.Cantilever)} m em cada ponta\n"
-                    : ", com o pilar na ponta da estrutura\n")
-                + $"O pilar encosta na mesa a {Numero(geometria.PillarRow)} m da ponta baixa do "
-                + $"módulo (sobra da tesoura {Numero(geometria.RafterOffset)} m), e sobe "
-                + $"{Numero(subida)} m acima dela.";
+                    ? Tr.F(", com balanço de {0} m em cada ponta", Numero(pilares.Cantilever))
+                    : Tr.T(", com o pilar na ponta da estrutura"))
+                + "\n"
+                + Tr.F("O pilar encosta na mesa a {0} m da ponta baixa do módulo (sobra da tesoura {1} m), e sobe {2} m acima dela.",
+                    Numero(geometria.PillarRow), Numero(geometria.RafterOffset), Numero(subida));
 
             _usar.IsEnabled = true;
             _salvar.IsEnabled = true;
@@ -636,7 +635,7 @@ internal sealed class JanelaDeMesa : Window
         foreach (var modulo in _modulos)
             _modelo.Items.Add(new ComboBoxItem { Content = modulo.Describe(), Tag = modulo });
 
-        _modelo.Items.Add(new ComboBoxItem { Content = "(outro módulo, medidas à mão)", Tag = null });
+        _modelo.Items.Add(new ComboBoxItem { Content = Tr.T("(outro módulo, medidas à mão)"), Tag = null });
     }
 
     /// <summary>
@@ -676,8 +675,8 @@ internal sealed class JanelaDeMesa : Window
                 _altura.Text = Numero(novo.Height);
                 _largura.Text = Numero(novo.Width);
                 _espessura.Text = Numero(novo.Thickness);
-                _potencia.Text = Numero(novo.PowerWatts);
-                Avisar($"O módulo {novo.DisplayName} foi cadastrado, mas a lista não recarregou do serviço; as medidas dele ficaram nos campos.");
+                _potencia.Text = NumeroGrande(novo.PowerWatts);
+                Avisar(Tr.F("O módulo {0} foi cadastrado, mas a lista não recarregou do serviço; as medidas dele ficaram nos campos.", novo.DisplayName));
             }
             else
             {
@@ -690,15 +689,15 @@ internal sealed class JanelaDeMesa : Window
         {
             _preenchendo = false;
             RegistroDeDiagnostico.Registrar("Falha ao cadastrar módulo pela janela de Mesa.", erro);
-            Avisar($"Não consegui cadastrar o módulo: {erro.Message}");
+            Avisar(Tr.F("Não consegui cadastrar o módulo: {0}", erro.Message));
         }
     }
 
     /// <summary>A linha embaixo do botão: de onde sai a tabela de pilares.</summary>
     private void MostrarOrigemDosVaos() =>
         _resumoDosVaos.Text = _vaosEscritos is null
-            ? "Vãos iguais pelo vão-alvo."
-            : $"{_vaosEscritos.Count} vãos escritos à mão; o vão-alvo não vale.";
+            ? Tr.T("Vãos iguais pelo vão-alvo.")
+            : Tr.F("{0} vãos escritos à mão; o vão-alvo não vale.", _vaosEscritos.Count);
 
     private void EscreverVaos()
     {
@@ -711,7 +710,7 @@ internal sealed class JanelaDeMesa : Window
         catch (Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao abrir os vãos entre pilares.", erro);
-            Avisar($"Não consegui abrir os vãos: {erro.Message}");
+            Avisar(Tr.F("Não consegui abrir os vãos: {0}", erro.Message));
         }
     }
 
@@ -735,7 +734,7 @@ internal sealed class JanelaDeMesa : Window
 
         if (perfil is null)
         {
-            Avisar("Antes dos vãos, a mesa precisa fechar: " + motivo);
+            Avisar(Tr.F("Antes dos vãos, a mesa precisa fechar: {0}", motivo));
             return;
         }
 
@@ -749,8 +748,8 @@ internal sealed class JanelaDeMesa : Window
 
     private void NaoDeu(string motivo)
     {
-        _planta.Dizer("A mesa ainda não fecha.");
-        _corte.Dizer("A mesa ainda não fecha.");
+        _planta.Dizer(Tr.T("A mesa ainda não fecha."));
+        _corte.Dizer(Tr.T("A mesa ainda não fecha."));
         _resumo.Text = motivo;
         _usar.IsEnabled = false;
         _salvar.IsEnabled = false;
@@ -777,7 +776,7 @@ internal sealed class JanelaDeMesa : Window
             {
                 var resposta = MessageBox.Show(
                     this,
-                    $"Já existe um perfil chamado \"{perfil.Name}\". Substituir?",
+                    Tr.F("Já existe um perfil chamado \"{0}\". Substituir?", perfil.Name),
                     Title,
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Question);
@@ -791,13 +790,13 @@ internal sealed class JanelaDeMesa : Window
             ListarSalvos();
             _preenchendo = false;
 
-            Avisar($"Perfil \"{perfil.Name}\" salvo em {_perfis.Folder}.");
+            Avisar(Tr.F("Perfil \"{0}\" salvo em {1}.", perfil.Name, _perfis.Folder));
         }
         catch (Exception erro)
         {
             _preenchendo = false;
             RegistroDeDiagnostico.Registrar("Falha ao salvar o perfil de mesa.", erro);
-            Avisar($"Não consegui salvar: {erro.Message}");
+            Avisar(Tr.F("Não consegui salvar: {0}", erro.Message));
         }
     }
 
@@ -820,7 +819,13 @@ internal sealed class JanelaDeMesa : Window
 
     // ------------------------------------------------------------ números
 
-    private static string Numero(double valor) => valor.ToString("0.####", Brasil);
+    private static string Numero(double valor) => valor.ToString("0.####", Tr.Culture);
+
+    /// <summary>
+    /// Potência no campo: fica no formato brasileiro, porque o campo é lido
+    /// por <see cref="NumberInput.TryParseLarge"/>, onde o ponto é milhar.
+    /// </summary>
+    private static string NumeroGrande(double valor) => valor.ToString("0.####", Brasil);
 
     private static void Selecionar(ComboBox caixa, object valor)
     {

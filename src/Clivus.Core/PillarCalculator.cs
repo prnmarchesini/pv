@@ -55,8 +55,6 @@ public sealed record TablePillars(
     double LongitudinalTiltRadians,
     IReadOnlyList<PillarResult> Pillars)
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>Quantos pilares estouraram.</summary>
     public int ProblemCount => Pillars.Count(p => !p.IsSound);
 
@@ -83,11 +81,10 @@ public sealed record TablePillars(
         var comprimentos = Comprimentos();
 
         var faixa = comprimentos.Count == 0
-            ? "sem comprimento"
-            : $"de {comprimentos.Min().ToString("0.00", Brasil)} a {comprimentos.Max().ToString("0.00", Brasil)} m";
+            ? Tr.F("{0} pilar(es), sem comprimento", Pillars.Count)
+            : Tr.F("{0} pilar(es), de {1:0.00} a {2:0.00} m", Pillars.Count, comprimentos.Min(), comprimentos.Max());
 
-        return $"{Pillars.Count} pilar(es), {faixa}"
-            + (ProblemCount > 0 ? $", {ProblemCount} com problema" : string.Empty);
+        return faixa + (ProblemCount > 0 ? Tr.F(", {0} com problema", ProblemCount) : string.Empty);
     }
 }
 
@@ -150,7 +147,7 @@ public static class PillarCalculator
         ArgumentNullException.ThrowIfNull(configuration);
 
         if (configuration.WhyInvalid is { } motivo)
-            throw new InvalidOperationException($"A configuração não fecha: {motivo}.");
+            throw new InvalidOperationException(Tr.F("A configuração não fecha: {0}.", motivo));
 
         if (!double.IsFinite(solved.StartElevation) || !double.IsFinite(solved.EndElevation))
             throw new ArgumentOutOfRangeException(nameof(solved), "A cota da mesa não é um número.");
@@ -159,7 +156,7 @@ public static class PillarCalculator
         // não derruba.
         var desnivel = solved.EndElevation - solved.StartElevation;
         string? semGiro = Math.Abs(desnivel) >= geometry.Length - 1e-9
-            ? $"o desnível entre as pontas ({Math.Abs(desnivel):0.##} m) é maior que o comprimento da mesa: não há giro que o produza"
+            ? Tr.F("o desnível entre as pontas ({0:0.##} m) é maior que o comprimento da mesa: não há giro que o produza", Math.Abs(desnivel))
             : null;
 
         var colocacao = semGiro is null
@@ -182,7 +179,7 @@ public static class PillarCalculator
                 {
                     return new PillarResult(
                         p.Station, topo.X, topo.Y, null, topo.Z, null, enterro, null,
-                        "o pé do pilar caiu fora do terreno");
+                        Tr.T("o pé do pilar caiu fora do terreno"));
                 }
 
                 var livre = topo.Z - terreno;
@@ -200,7 +197,7 @@ public static class PillarCalculator
                 // pilar: marcado, sem comprimento.
                 var problema = FloatingPillar.Check(livre, enterro)
                     ?? (livre > PillarSizing.MaiorAlturaLivre
-                        ? $"altura livre de {livre:0.#} m: fora de escala, o terreno sob este pé não é confiável"
+                        ? Tr.F("altura livre de {0:0.#} m: fora de escala, o terreno sob este pé não é confiável", livre)
                         : null);
 
                 double? comprimento = problema is null ? PillarSizing.Length(livre, enterro) : null;

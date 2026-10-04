@@ -59,10 +59,10 @@ public static class Tags
     /// <summary>O nome da tag para o usuário.</summary>
     public static string Name(TagKind tipo) => tipo switch
     {
-        TagKind.Row => "fileiras",
-        TagKind.Table => "mesas",
-        TagKind.Module => "módulos",
-        _ => "strings",
+        TagKind.Row => Tr.T("fileiras"),
+        TagKind.Table => Tr.T("mesas"),
+        TagKind.Module => Tr.T("módulos"),
+        _ => Tr.T("strings"),
     };
 
     /// <summary>A fileira e o número de um letreiro "F3.12".</summary>

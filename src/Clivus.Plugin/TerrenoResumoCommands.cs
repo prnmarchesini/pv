@@ -38,7 +38,7 @@ public static class TerrenoResumoCommands
 
             if (terreno is null)
             {
-                if (ClivusExtension.TemInterface() && Perguntar(["Nenhum terreno escolhido neste desenho."]) == Proximo.TrocarTerreno)
+                if (ClivusExtension.TemInterface() && Perguntar([Tr.T("Nenhum terreno escolhido neste desenho.")]) == Proximo.TrocarTerreno)
                     documento.SendStringToExecute(PluginInfo.ComandoTerreno + " ", true, false, true);
                 return;
             }
@@ -55,7 +55,7 @@ public static class TerrenoResumoCommands
             var lugar = GeoStore.Read(documento.Database, Centro(terreno));
             var linhas = TerrainReport.Lines(terreno.Summary, estado, lugar);
 
-            editor.WriteMessage("\nRESUMO DO TERRENO\n");
+            editor.WriteMessage(Tr.T("\nRESUMO DO TERRENO\n"));
             foreach (var linha in linhas) editor.WriteMessage($"  {linha}\n");
 
             if (!ClivusExtension.TemInterface()) return;
@@ -73,7 +73,7 @@ public static class TerrenoResumoCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha no resumo do terreno.", erro);
-            editor.WriteMessage($"\nNão consegui montar o resumo do terreno: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui montar o resumo do terreno: {0}\n", erro.Message));
         }
     }
 

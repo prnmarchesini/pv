@@ -34,10 +34,8 @@ public sealed record ProvenanceStamp(
     DateTime ProcessedAt,
     string PluginVersion)
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>Data e hora do processamento, como o usuário lê.</summary>
-    public string ProcessedAtText => ProcessedAt.ToString("dd/MM/yyyy HH:mm", Brasil);
+    public string ProcessedAtText => Tr.F("{0:dd/MM/yyyy HH:mm}", ProcessedAt);
 }
 
 /// <summary>
@@ -84,14 +82,14 @@ public static class ProvenanceCheck
             ProvenanceState.Atual => null,
 
             ProvenanceState.SuperficieSumiu =>
-                $"O terreno deste desenho foi calculado sobre a superfície "
-                + $"\"{gravado!.Surface.Name}\", que não está mais aqui. "
-                + "Os resultados estão desatualizados: processe o terreno de novo.",
+                Tr.F(
+                    "O terreno deste desenho foi calculado sobre a superfície \"{0}\", que não está mais aqui. Os resultados estão desatualizados: processe o terreno de novo.",
+                    gravado!.Surface.Name),
 
             ProvenanceState.Desatualizado =>
-                $"A superfície \"{agora!.Name}\" mudou depois do processamento de "
-                + $"{gravado!.ProcessedAtText} ({string.Join("; ", agora.DescribeChangesFrom(gravado.Surface))}). "
-                + "Os resultados estão desatualizados: processe o terreno de novo.",
+                Tr.F(
+                    "A superfície \"{0}\" mudou depois do processamento de {1} ({2}). Os resultados estão desatualizados: processe o terreno de novo.",
+                    agora!.Name, gravado!.ProcessedAtText, string.Join("; ", agora.DescribeChangesFrom(gravado.Surface))),
 
             _ => null,
         };

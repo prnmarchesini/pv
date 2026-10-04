@@ -66,12 +66,12 @@ public static class BancadaCommands
             };
 
             File.WriteAllText(arquivo, JsonSerializer.Serialize(conteudo));
-            editor.WriteMessage($"\nBANCADA {mesas.Count} mesa(s), {triangulos.Count} triângulo(s) em {arquivo}\n");
+            editor.WriteMessage(Tr.F("\nBANCADA {0} mesa(s), {1} triângulo(s) em {2}\n", mesas.Count, triangulos.Count, arquivo));
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao exportar a bancada.", erro);
-            editor.WriteMessage($"\nNão consegui exportar a bancada: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui exportar a bancada: {0}\n", erro.Message));
         }
     }
 }

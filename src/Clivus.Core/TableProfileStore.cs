@@ -132,7 +132,7 @@ public sealed class TableProfileStore
         var caminho = Caminho(nome);
 
         if (!File.Exists(caminho))
-            throw new FileNotFoundException($"Não há perfil de mesa chamado \"{nome}\".", caminho);
+            throw new FileNotFoundException(Tr.F("Não há perfil de mesa chamado \"{0}\".", nome), caminho);
 
         return TableProfile.Parse(File.ReadAllText(caminho, System.Text.Encoding.UTF8));
     }
@@ -155,7 +155,7 @@ public sealed class TableProfileStore
     private string Caminho(string nome)
     {
         if (string.IsNullOrWhiteSpace(nome))
-            throw new InvalidOperationException("O perfil de mesa precisa de um nome.");
+            throw new InvalidOperationException(Tr.T("O perfil de mesa precisa de um nome."));
 
         // Sem Trim: " Mesa " e "Mesa" são nomes diferentes, e trimar aqui
         // faria um sobrescrever o arquivo do outro enquanto a listagem
@@ -166,7 +166,7 @@ public sealed class TableProfileStore
         if (limpo.Length > MaiorNome)
         {
             throw new InvalidOperationException(
-                $"O nome do perfil tem {limpo.Length} caracteres, e o limite é {MaiorNome}.");
+                Tr.F("O nome do perfil tem {0} caracteres, e o limite é {1}.", limpo.Length, MaiorNome));
         }
 
         var escapado = Escapar(limpo);
@@ -177,8 +177,7 @@ public sealed class TableProfileStore
         if (escapado.Length > MaiorArquivo)
         {
             throw new InvalidOperationException(
-                $"O nome \"{limpo}\" tem caracteres demais que precisam ser convertidos "
-                + "para virar nome de arquivo. Use um nome mais simples.");
+                Tr.F("O nome \"{0}\" tem caracteres demais que precisam ser convertidos para virar nome de arquivo. Use um nome mais simples.", limpo));
         }
 
         var arquivo = escapado + Extensao;
@@ -189,7 +188,7 @@ public sealed class TableProfileStore
         if (!string.Equals(Path.GetDirectoryName(caminho), _pasta, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"O nome \"{limpo}\" não serve para um arquivo de perfil.");
+                Tr.F("O nome \"{0}\" não serve para um arquivo de perfil.", limpo));
         }
 
         return caminho;
@@ -220,8 +219,7 @@ public sealed class TableProfileStore
             var outro = Desescapar(arquivo[..^Extensao.Length]);
 
             throw new InvalidOperationException(
-                $"Já existe um perfil chamado \"{outro}\", que difere de \"{nome}\" só em "
-                + "maiúsculas e minúsculas. O Windows não distingue os dois: escolha outro nome.");
+                Tr.F("Já existe um perfil chamado \"{0}\", que difere de \"{1}\" só em maiúsculas e minúsculas. O Windows não distingue os dois: escolha outro nome.", outro, nome));
         }
     }
 
