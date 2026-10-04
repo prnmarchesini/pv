@@ -97,8 +97,13 @@ public static class Viewer3DPage
             cotas.Count > 0 ? cotas.Min() : 0);
     }
 
-    /// <summary>A cena em JSON, relativa à origem, com milímetro.</summary>
-    public static string Json(Scene3D scene)
+    /// <summary>
+    /// A cena em JSON, relativa à origem, com milímetro. Sem
+    /// <paramref name="comOrigem"/>, a origem vai [0,0,0]: a coordenada real da
+    /// usina não sai do computador (plano/seguranca.md; o visualizador do
+    /// servidor não usa o campo, CANAL.md de 04/10/2026).
+    /// </summary>
+    public static string Json(Scene3D scene, bool comOrigem = true)
     {
         ArgumentNullException.ThrowIfNull(scene);
 
@@ -111,7 +116,8 @@ public static class Viewer3DPage
         string Z(double z) => N(z - o.Z);
 
         s.Append("{\"titulo\":").Append(Texto(scene.Title));
-        s.Append(",\"origem\":[").Append(N(o.X)).Append(',').Append(N(o.Y)).Append(',').Append(N(o.Z)).Append(']');
+        if (comOrigem) s.Append(",\"origem\":[").Append(N(o.X)).Append(',').Append(N(o.Y)).Append(',').Append(N(o.Z)).Append(']');
+        else s.Append(",\"origem\":[0,0,0]");
 
         if (scene.Terrain is { } t)
         {
@@ -143,7 +149,8 @@ public static class Viewer3DPage
 
     /// <summary>
     /// O corpo do envio ao servidor 3D (plano/contrato-servidor-3d.md): versão
-    /// do contrato, versão do plugin, nome do desenho e a cena.
+    /// do contrato, versão do plugin, nome do desenho e a cena, sem a origem
+    /// absoluta.
     /// </summary>
     public static string PublishBody(Scene3D scene, string pluginVersion, string drawing)
     {
@@ -151,7 +158,7 @@ public static class Viewer3DPage
 
         return "{\"versao\":1,\"plugin\":" + Texto(pluginVersion ?? string.Empty)
             + ",\"desenho\":" + Texto(drawing ?? string.Empty)
-            + ",\"cena\":" + Json(scene) + "}";
+            + ",\"cena\":" + Json(scene, comOrigem: false) + "}";
     }
 
     /// <summary>

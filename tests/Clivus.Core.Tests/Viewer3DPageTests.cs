@@ -76,7 +76,7 @@ public class Viewer3DPageTests
         Assert.Equal(3, html.Split("</script>").Length - 1);
     }
 
-    /// <summary>O corpo do envio é o do contrato: versão, plugin, desenho e a cena igual à da página local.</summary>
+    /// <summary>O corpo do envio é o do contrato: versão, plugin, desenho e a cena da página local com a origem zerada.</summary>
     [Fact]
     [Trait("Etapa", "9")]
     public void OCorpoDoEnvioSegueOContrato()
@@ -90,8 +90,16 @@ public class Viewer3DPageTests
         Assert.Equal(1, raiz.GetProperty("versao").GetInt32());
         Assert.Equal("0.1.0", raiz.GetProperty("plugin").GetString());
         Assert.Equal("Itatiba \"A\"", raiz.GetProperty("desenho").GetString());
-        Assert.Equal(Viewer3DPage.Json(cena), raiz.GetProperty("cena").GetRawText());
+        Assert.Equal(Viewer3DPage.Json(cena, comOrigem: false), raiz.GetProperty("cena").GetRawText());
         Assert.Equal(1, raiz.GetProperty("cena").GetProperty("faces").GetArrayLength());
+
+        // A coordenada real da usina não sai do computador: origem zerada e
+        // as mesmas coordenadas relativas da página local.
+        Assert.Equal("[0,0,0]", raiz.GetProperty("cena").GetProperty("origem").GetRawText());
+        using var local = System.Text.Json.JsonDocument.Parse(Viewer3DPage.Json(cena));
+        Assert.NotEqual("[0,0,0]", local.RootElement.GetProperty("origem").GetRawText());
+        Assert.Equal(local.RootElement.GetProperty("faces").GetRawText(), raiz.GetProperty("cena").GetProperty("faces").GetRawText());
+        Assert.DoesNotContain("314050", corpo, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -33,12 +33,15 @@ Corpo:
 A cena é exatamente o JSON que o plugin já gera para a página 3D local
 (`Viewer3DPage.Json`, em `src/Clivus.Core/Viewer3DPage.cs`). Coordenadas em
 metro, relativas a `origem` (para caber em float de 32 bits no navegador);
-X a leste, Y ao norte, Z para cima (cota).
+X a leste, Y ao norte, Z para cima (cota). Desde 04/10/2026 o plugin manda
+`origem` como `[0, 0, 0]`: a coordenada real da usina não sai do computador
+(plano/seguranca.md; o visualizador do servidor não usa o campo, combinado no
+CANAL.md). A página local continua com a origem verdadeira.
 
 ```json
 {
   "titulo": "Curvas Itatiba",
-  "origem": [314050.0, 7456025.0, 700.0],
+  "origem": [0, 0, 0],
   "terreno": {
     "x0": -50.0, "y0": -25.0, "passo": 2.0,
     "colunas": 51, "linhas": 26,

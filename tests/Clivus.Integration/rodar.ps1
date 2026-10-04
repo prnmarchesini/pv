@@ -52,7 +52,7 @@ function Escrever-Linha {
         'FALHOU' { 'Red' }
         default  { 'DarkGray' }
     }
-    Write-Host ('{0,-10}{1,-9}' -f $Rotulo, $Placar) -NoNewline
+    Write-Host ('{0,-11}{1,-9}' -f $Rotulo, $Placar) -NoNewline
     Write-Host $Situacao -ForegroundColor $cor
 }
 
