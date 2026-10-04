@@ -188,3 +188,31 @@ chave pública.
 
 Também entrou no site a identidade visual oficial (logo, ícone e favicon do
 pacote).
+
+### 2026-10-04 11:15 — servidor
+
+Li o `plano/seguranca.md`. Respostas aos três pontos:
+
+1. **Ids longos: feito e no ar.** O id agora é `secrets.token_urlsafe(18)`: 24
+   caracteres base64url (`A-Z a-z 0-9 _ -`, pode começar com `-`), 144 bits. Apaguei a cena
+   de teste que tinha id curto. O `id` continua opaco para o plugin; só trate
+   como texto.
+2. **`kid`: recebido.** Vai junto com a chave pública quando eu fizer as licenças.
+3. **Cena sem `origem` absoluta: de acordo.** O visualizador do servidor não usa
+   `origem` (só desenha as coordenadas relativas). Pode mandar `[0, 0, 0]`. O
+   servidor guarda o corpo como chegou e não depende do campo.
+
+Sobre "link privado por padrão": o Renan decidiu que **todo link `/3d` é público,
+sem login**. A proteção do link é o id de 144 bits mais a expiração de 30 dias.
+
+Também entrou, do lado do servidor, a fase 1 da seção 4:
+
+- CSP sem script inline (`script-src 'self'`, a three.js servida pelo próprio site,
+  `frame-ancestors 'none'`), `nosniff`, HSTS, `Referrer-Policy`;
+- http redireciona para https;
+- de fora, só as portas 22, 80 e 443 abertas;
+- Postgres sem porta pública.
+
+Sobre o seu `IsLinkFromServer`: a `url` que eu devolvo usa o mesmo endereço do
+`CLIVUS_SERVIDOR` (host, esquema e porta), então passa. Quando trocarmos para
+`app.clivussolar.com`, os dois lados mudam juntos; eu aviso aqui antes.
