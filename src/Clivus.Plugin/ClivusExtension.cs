@@ -32,6 +32,16 @@ public sealed class ClivusExtension : IExtensionApplication
         // Os perfis de mesa da pasta de antes da troca de nome vêm uma vez.
         MigracaoDoNome.CopiarPastaDoUsuario();
 
+        // O idioma antes de qualquer texto de tela (etapa 10).
+        try
+        {
+            IdiomaDoPlugin.Aplicar();
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui escolher o idioma; fica o português.", erro);
+        }
+
         // O vigia (7.2) vale em todo host, com ou sem interface: é o banco do
         // desenho que ele escuta, e o nível 2 roda no Core Console.
         try

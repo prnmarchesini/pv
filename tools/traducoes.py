@@ -1,6 +1,6 @@
 """As frases do Clivus Solar que precisam de tradução (etapa 10).
 
-Lê do código toda frase passada a Tr.T("...") ou Tr.F("..."), a mesma regra
+Lê do código toda frase passada a Tr.T("..."), Tr.F("...") ou Tr.N("..."), a mesma regra
 do teste TranslationCatalogTests, e compara com os catálogos
 src/Clivus.Core/Translations/{en,es}.json.
 
@@ -20,7 +20,7 @@ import sys
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PASTAS = ['src/Clivus.Core', 'src/Clivus.Plugin', 'src/Clivus.Instalador']
-CHAMADA = re.compile(r'\bTr\.[TF]\(\s*(\$?)"((?:[^"\\]|\\.)*)"')
+CHAMADA = re.compile(r'\bTr\.[TFN]\(\s*(\$?)"((?:[^"\\]|\\.)*)"')
 ESCAPES = {'n': '\n', 't': '\t', 'r': '\r', '0': '\0'}
 
 

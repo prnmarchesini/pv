@@ -67,7 +67,7 @@ public class TrTests
     [InlineData("auto", "en-US", UiLanguage.English)]
     [InlineData("auto", "es-MX", UiLanguage.Spanish)]
     [InlineData("auto", "pt-BR", UiLanguage.Portuguese)]
-    [InlineData(null, "de-DE", UiLanguage.Portuguese)]
+    [InlineData(null, "de-DE", UiLanguage.English)]
     [InlineData("", "es-ES", UiLanguage.Spanish)]
     public void OIdiomaVemDaEscolhaOuDoCivil3D(string? escolha, string cultura, UiLanguage esperado) =>
         Assert.Equal(esperado, Tr.Resolve(escolha, CultureInfo.GetCultureInfo(cultura)));
@@ -80,4 +80,45 @@ public class TrTests
         Assert.NotNull(Tr.CatalogOf(UiLanguage.Spanish));
         Assert.Empty(Tr.CatalogOf(UiLanguage.Portuguese));
     }
+
+    [Fact]
+    [Trait("Etapa", "10")]
+    public void SemCulturaDoProdutoFicaEmPortugues() =>
+        Assert.Equal(UiLanguage.Portuguese, Tr.Resolve("auto", null));
+
+    [Fact]
+    [Trait("Etapa", "10")]
+    public void AsPreferenciasGuardamOIdiomaEToleramArquivoEstragado()
+    {
+        var pasta = Path.Combine(Path.GetTempPath(), "clivus-pref-" + Guid.NewGuid().ToString("N"));
+        var arquivo = Path.Combine(pasta, "preferencias.json");
+
+        try
+        {
+            Assert.Equal("auto", UserPreferences.Load(arquivo).Language);
+
+            new UserPreferences("es").Save(arquivo);
+            Assert.Equal("es", UserPreferences.Load(arquivo).Language);
+
+            File.WriteAllText(arquivo, "{ isto não é json");
+            Assert.Equal("auto", UserPreferences.Load(arquivo).Language);
+
+            File.WriteAllText(arquivo, "{\"idioma\": \"klingon\"}");
+            Assert.Equal("auto", UserPreferences.Load(arquivo).Language);
+        }
+        finally
+        {
+            if (Directory.Exists(pasta)) Directory.Delete(pasta, true);
+        }
+    }
+
+    [Theory]
+    [Trait("Etapa", "10")]
+    [InlineData("PTB", UiLanguage.Portuguese)]
+    [InlineData("ENU", UiLanguage.English)]
+    [InlineData("esp", UiLanguage.Spanish)]
+    [InlineData("DEU", UiLanguage.English)]
+    [InlineData("XYZ", UiLanguage.Portuguese)]
+    public void OLocaleDoCivil3DEscolheOIdiomaNoAutomatico(string locale, UiLanguage esperado) =>
+        Assert.Equal(esperado, Tr.Resolve("auto", UserPreferences.CultureOfAutoCadLocale(locale)));
 }

@@ -99,6 +99,13 @@ public static class Tr
         return portugues[..inicio] + traducao + portugues[fim..];
     }
 
+    /// <summary>
+    /// Marca uma frase de tela guardada como dado (a ribbon) sem traduzir:
+    /// ela é traduzida com <see cref="T"/> na hora de mostrar, e a guarda dos
+    /// idiomas a enxerga no código.
+    /// </summary>
+    public static string N(string portugues) => portugues;
+
     /// <summary>A frase com marcadores ({0}, {1:0.0}) no idioma atual, os números na cultura dele.</summary>
     public static string F(string portugues, params object?[] valores) =>
         string.Format(Culture, T(portugues), valores);
@@ -113,8 +120,8 @@ public static class Tr
 
     /// <summary>
     /// O idioma pela escolha do usuário ("auto", "pt", "en", "es") e, no
-    /// automático, pela cultura do Civil 3D (inglês e espanhol pelo prefixo;
-    /// o resto, português).
+    /// automático, pela cultura do Civil 3D (português e espanhol pelo
+    /// prefixo; outro idioma, inglês; sem cultura, português).
     /// </summary>
     public static UiLanguage Resolve(string? escolha, CultureInfo? culturaDoProduto)
     {
@@ -125,11 +132,14 @@ public static class Tr
             case "es": return UiLanguage.Spanish;
         }
 
+        // Sem saber o idioma do Civil 3D, português; Civil 3D noutro idioma
+        // que não temos (alemão, francês), inglês.
         return culturaDoProduto?.TwoLetterISOLanguageName switch
         {
-            "en" => UiLanguage.English,
+            null => UiLanguage.Portuguese,
+            "pt" => UiLanguage.Portuguese,
             "es" => UiLanguage.Spanish,
-            _ => UiLanguage.Portuguese,
+            _ => UiLanguage.English,
         };
     }
 

@@ -75,9 +75,16 @@ internal sealed class JanelaDeConfiguracoes : Window
         botoes.Children.Add(salvar);
         botoes.Children.Add(new Button { Content = "Fechar", Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true, ToolTip = "Fecha sem gravar nada." });
 
+        // O idioma (etapa 10) é do usuário, não do desenho: vale na hora,
+        // sem "Salvar no desenho", e fica no lado esquerdo do rodapé.
+        var rodape = new DockPanel();
+        DockPanel.SetDock(botoes, Dock.Right);
+        rodape.Children.Add(botoes);
+        rodape.Children.Add(SeletorDeIdioma());
+
         var raiz = new DockPanel();
-        DockPanel.SetDock(botoes, Dock.Bottom);
-        raiz.Children.Add(botoes);
+        DockPanel.SetDock(rodape, Dock.Bottom);
+        raiz.Children.Add(rodape);
         DockPanel.SetDock(_recado, Dock.Bottom);
         _recado.Margin = new Thickness(12, 0, 12, 0);
         raiz.Children.Add(_recado);
@@ -398,5 +405,42 @@ internal sealed class JanelaDeConfiguracoes : Window
             RegistroDeDiagnostico.Registrar("Falha na janela de Configurações.", erro);
             _recado.Text = erro.Message;
         }
+    }
+
+    /// <summary>"Idioma: [Automático ▾]" — troca na hora e refaz a ribbon.</summary>
+    private StackPanel SeletorDeIdioma()
+    {
+        var nomes = new Dictionary<string, string>
+        {
+            ["auto"] = Tr.T("Automático (o do Civil 3D)"),
+            ["pt"] = "Português",
+            ["en"] = "English",
+            ["es"] = "Español",
+        };
+
+        var lista = new ComboBox { Width = 190, Height = 24, VerticalContentAlignment = VerticalAlignment.Center, ToolTip = Tr.T("O idioma das janelas, da ribbon e das mensagens do Clivus Solar. Vale para este usuário, em todos os desenhos.") };
+        foreach (var escolha in UserPreferences.LanguageChoices) lista.Items.Add(new ComboBoxItem { Content = nomes[escolha], Tag = escolha });
+        lista.SelectedIndex = Math.Max(0, UserPreferences.LanguageChoices.ToList().IndexOf(IdiomaDoPlugin.Escolha));
+
+        lista.SelectionChanged += (_, _) =>
+        {
+            if (lista.SelectedItem is not ComboBoxItem { Tag: string escolha }) return;
+
+            try
+            {
+                if (IdiomaDoPlugin.Trocar(escolha))
+                    _recado.Text = Tr.T("Idioma trocado: a ribbon já mudou; as janelas mudam quando forem abertas de novo.");
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao trocar o idioma.", erro);
+                _recado.Text = Tr.F("Não consegui trocar o idioma: {0}", erro.Message);
+            }
+        };
+
+        var painel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 10, 0, 10), VerticalAlignment = VerticalAlignment.Center };
+        painel.Children.Add(new TextBlock { Text = Tr.T("Idioma:"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        painel.Children.Add(lista);
+        return painel;
     }
 }

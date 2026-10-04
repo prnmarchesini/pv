@@ -222,6 +222,9 @@ public static class PluginInfo
     /// <summary>A janela Sobre: o logo, a versão e onde fica o registro de diagnóstico.</summary>
     public const string ComandoSobre = "CLIVUS_SOBRE";
 
+    /// <summary>O idioma da tela (etapa 10): Automático, Português, English, Español.</summary>
+    public const string ComandoIdioma = "CLIVUS_IDIOMA";
+
     /// <summary>A janela da licença: o código gerado no portal do app ativa o plugin nesta máquina.</summary>
     public const string ComandoAtivar = "CLIVUS_ATIVAR";
 

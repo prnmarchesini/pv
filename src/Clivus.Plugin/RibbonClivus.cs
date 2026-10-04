@@ -96,6 +96,24 @@ internal static class RibbonClivus
     /// que vai em cada aba, painel e botão é dado do Core, testado lá (todo
     /// botão com dica, comando que existe). Aqui só se traduz para a ribbon.
     /// </summary>
+    /// <summary>
+    /// Refaz a aba no idioma atual (Configurações > Idioma): tira a nossa e
+    /// monta de novo, no mesmo lugar e ativa se estava ativa.
+    /// </summary>
+    internal static void Remontar()
+    {
+        var ribbon = ComponentManager.Ribbon;
+        if (ribbon is null) return;
+
+        var antiga = ribbon.Tabs.FirstOrDefault(t => t.Id == IdDaAba);
+        var ativa = antiga is not null && ribbon.ActiveTab == antiga;
+        if (antiga is not null) ribbon.Tabs.Remove(antiga);
+
+        Montar();
+
+        if (ativa && ribbon.Tabs.FirstOrDefault(t => t.Id == IdDaAba) is { } nova) ribbon.ActiveTab = nova;
+    }
+
     private static void Montar()
     {
         var ribbon = ComponentManager.Ribbon;
@@ -117,7 +135,7 @@ internal static class RibbonClivus
             var aba = new RibbonTab
             {
                 Id = especificacao.Id,
-                Title = especificacao.Title,
+                Title = Tr.T(especificacao.Title),
                 Name = especificacao.Title,
             };
 
@@ -139,7 +157,7 @@ internal static class RibbonClivus
     /// </summary>
     private static RibbonPanel MontarPainel(RibbonPanelSpec painel)
     {
-        var origem = new RibbonPanelSource { Title = painel.Title };
+        var origem = new RibbonPanelSource { Title = Tr.T(painel.Title) };
         RibbonRowPanel? coluna = null;
         var naColuna = 0;
 
@@ -234,13 +252,13 @@ internal static class RibbonClivus
     {
         return ComImagens(new RibbonButton
         {
-            Text = b.Text,
+            Text = Tr.T(b.Text),
             ShowText = true,
             ShowImage = true,
             Size = RibbonItemSize.Large,
             Orientation = System.Windows.Controls.Orientation.Vertical,
             CommandHandler = new ComandoDaRibbon(b.Command),
-            ToolTip = b.Tooltip,
+            ToolTip = Tr.T(b.Tooltip),
         }, b.Icon);
     }
 
@@ -248,13 +266,13 @@ internal static class RibbonClivus
     private static RibbonButton BotaoPequeno(RibbonButtonSpec b) =>
         ComImagens(new RibbonButton
         {
-            Text = b.Text,
+            Text = Tr.T(b.Text),
             ShowText = true,
             ShowImage = true,
             Size = RibbonItemSize.Standard,
             Orientation = System.Windows.Controls.Orientation.Horizontal,
             CommandHandler = new ComandoDaRibbon(b.Command),
-            ToolTip = b.Tooltip,
+            ToolTip = Tr.T(b.Tooltip),
         }, b.Icon);
 
     /// <summary>
@@ -265,7 +283,7 @@ internal static class RibbonClivus
     {
         var botao = ComImagens(new RibbonSplitButton
         {
-            Text = menu.Text,
+            Text = Tr.T(menu.Text),
             ShowText = true,
             ShowImage = true,
             Size = RibbonItemSize.Large,
@@ -275,7 +293,7 @@ internal static class RibbonClivus
             // Sem isto o botão passa a mostrar o último item clicado
             // ("Recalcular") no lugar de "Edição".
             IsSynchronizedWithCurrentItem = false,
-            ToolTip = menu.Tooltip,
+            ToolTip = Tr.T(menu.Tooltip),
         }, menu.Icon);
 
         foreach (var item in menu.Items) botao.Items.Add(BotaoPequeno(item));

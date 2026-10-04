@@ -5,13 +5,13 @@ using System.Text.RegularExpressions;
 namespace Clivus.Core.Tests;
 
 /// <summary>
-/// A guarda dos idiomas (10.2): toda frase passada a <c>Tr.T</c> ou <c>Tr.F</c>
+/// A guarda dos idiomas (10.2): toda frase passada a <c>Tr.T</c>, <c>Tr.F</c> ou <c>Tr.N</c>
 /// no código tem tradução em inglês e em espanhol, com os mesmos marcadores, e
 /// o catálogo não guarda tradução de frase que saiu do código.
 /// </summary>
 public partial class TranslationCatalogTests
 {
-    [GeneratedRegex(@"\bTr\.[TF]\(\s*(\$?)""((?:[^""\\]|\\.)*)""")]
+    [GeneratedRegex(@"\bTr\.[TFN]\(\s*(\$?)""((?:[^""\\]|\\.)*)""")]
     private static partial Regex Chamada();
 
     [GeneratedRegex(@"\{(\d+)(?:[,:][^}]*)?\}")]
