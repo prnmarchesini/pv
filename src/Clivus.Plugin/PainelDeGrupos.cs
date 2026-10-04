@@ -41,6 +41,7 @@ internal static class PainelDeGrupos
                 MinimumSize = new System.Drawing.Size(360, 240),
             };
 
+            if (AparenciaDasJanelas.IconeDoWindows() is { } icone) _paleta.Icon = icone;
             _paleta.AddVisual("Grupos", Montar());
         }
 

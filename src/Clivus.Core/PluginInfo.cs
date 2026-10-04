@@ -219,6 +219,9 @@ public static class PluginInfo
     /// <summary>Passa o desenho feito com o nome antigo para o Clivus Solar. Roda sozinho ao abrir.</summary>
     public const string ComandoMigrar = "CLIVUS_MIGRAR";
 
+    /// <summary>A janela Sobre: o logo, a versão e onde fica o registro de diagnóstico.</summary>
+    public const string ComandoSobre = "CLIVUS_SOBRE";
+
     /// <summary>Troca a mesa clicada por uma ou mais de outro tipo, travando um lado (9.2).</summary>
     public const string ComandoTrocarMesa = "CLIVUS_TROCAR_MESA";
 

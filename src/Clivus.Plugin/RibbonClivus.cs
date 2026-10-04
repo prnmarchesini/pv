@@ -126,6 +126,8 @@ internal static class RibbonClivus
             ribbon.Tabs.Add(aba);
         }
 
+        OuvirTema();
+
         var temDocumento = AcadApp.DocumentManager.MdiActiveDocument is not null;
         RegistroDeDiagnostico.Registrar($"Aba Clivus Solar montada (documento aberto: {temDocumento}).");
     }
@@ -179,40 +181,49 @@ internal static class RibbonClivus
         return new RibbonPanel { Source = origem };
     }
 
-    /// <summary>O ícone pelo nome; nome que não existe cai no da configuração.</summary>
-    private static ImageSource Icone(string nome) => nome switch
+    /// <summary>
+    /// Os itens com ícone e o nome do ícone de cada um: ao trocar o tema do
+    /// AutoCAD (COLORTHEME), as imagens são recarregadas da pasta do tema novo.
+    /// </summary>
+    private static readonly List<(RibbonItem Item, string Icone)> ComIcone = [];
+
+    private static bool _ouvindoTema;
+
+    /// <summary>Põe no item as imagens do tema atual (16 px e 32 px).</summary>
+    private static void PorImagens(RibbonItem item, string icone)
     {
-        "Terreno" => IconesDaRibbon.Terreno(),
-        "Coordenada" => IconesDaRibbon.Coordenada(),
-        "Status" => IconesDaRibbon.Status(),
-        "Area" => IconesDaRibbon.Area(),
-        "Alinhamento" => IconesDaRibbon.Alinhamento(),
-        "Usina" => IconesDaRibbon.Usina(),
-        "Refazer" => IconesDaRibbon.Refazer(),
-        "Recalcular" => IconesDaRibbon.Recalcular(),
-        "Pontas" => IconesDaRibbon.Pontas(),
-        "Parametros" => IconesDaRibbon.Parametros(),
-        "PintarEstouros" => IconesDaRibbon.PintarEstouros(),
-        "RegerarTudo" => IconesDaRibbon.RegerarTudo(),
-        "RecalcularSujas" => IconesDaRibbon.RecalcularSujas(),
-        "Numerar" => IconesDaRibbon.Numerar(),
-        "Grupos" => IconesDaRibbon.Grupos(),
-        "Validar" => IconesDaRibbon.Validar(),
-        "Recontar" => IconesDaRibbon.Recontar(),
-        "Renomear" => IconesDaRibbon.Renomear(),
-        "Alturas" => IconesDaRibbon.Alturas(),
-        "Declividade" => IconesDaRibbon.Declividade(),
-        "RegerarAlturas" => IconesDaRibbon.RegerarAlturas(),
-        "Exportar" => IconesDaRibbon.Exportar(),
-        "Sujar" => IconesDaRibbon.Sujar(),
-        "Estado" => IconesDaRibbon.Estado(),
-        "Mesa" => IconesDaRibbon.Mesa(),
-        "Trocar" => IconesDaRibbon.Trocar(),
-        "Arvore" => IconesDaRibbon.Arvore(),
-        "Sombras" => IconesDaRibbon.Sombras(),
-        "Ver3D" => IconesDaRibbon.Ver3D(),
-        _ => IconesDaRibbon.Configuracao(),
-    };
+        item.Image = IconesClivus.Pequeno(icone);
+        item.LargeImage = IconesClivus.Grande(icone);
+    }
+
+    private static T ComImagens<T>(T item, string icone) where T : RibbonItem
+    {
+        PorImagens(item, icone);
+        ComIcone.Add((item, icone));
+        return item;
+    }
+
+    /// <summary>Recarrega as imagens quando o usuário troca o tema (claro ou escuro).</summary>
+    private static void OuvirTema()
+    {
+        if (_ouvindoTema) return;
+
+        Autodesk.AutoCAD.ApplicationServices.Application.SystemVariableChanged += (_, e) =>
+        {
+            if (!string.Equals(e.Name, "COLORTHEME", StringComparison.OrdinalIgnoreCase)) return;
+
+            try
+            {
+                foreach (var (item, icone) in ComIcone) PorImagens(item, icone);
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao trocar os ícones de tema.", erro);
+            }
+        };
+
+        _ouvindoTema = true;
+    }
 
     /// <summary>
     /// Botão grande: ícone em cima, rótulo embaixo. Quem guarda o comando é
@@ -221,40 +232,30 @@ internal static class RibbonClivus
     /// </summary>
     private static RibbonButton BotaoGrande(RibbonButtonSpec b)
     {
-        var icone = Icone(b.Icon);
-
-        return new RibbonButton
+        return ComImagens(new RibbonButton
         {
             Text = b.Text,
             ShowText = true,
             ShowImage = true,
-            LargeImage = icone,
-            Image = icone,
             Size = RibbonItemSize.Large,
             Orientation = System.Windows.Controls.Orientation.Vertical,
             CommandHandler = new ComandoDaRibbon(b.Command),
             ToolTip = b.Tooltip,
-        };
+        }, b.Icon);
     }
 
     /// <summary>Botão pequeno: ícone à esquerda, rótulo ao lado.</summary>
-    private static RibbonButton BotaoPequeno(RibbonButtonSpec b)
-    {
-        var icone = Icone(b.Icon);
-
-        return new RibbonButton
+    private static RibbonButton BotaoPequeno(RibbonButtonSpec b) =>
+        ComImagens(new RibbonButton
         {
             Text = b.Text,
             ShowText = true,
             ShowImage = true,
-            Image = icone,
-            LargeImage = icone,
             Size = RibbonItemSize.Standard,
             Orientation = System.Windows.Controls.Orientation.Horizontal,
             CommandHandler = new ComandoDaRibbon(b.Command),
             ToolTip = b.Tooltip,
-        };
-    }
+        }, b.Icon);
 
     /// <summary>
     /// O menu (a Edição compacta, 8.16: "edição tá grande demais para poucos
@@ -262,15 +263,11 @@ internal static class RibbonClivus
     /// </summary>
     private static RibbonSplitButton Menu(RibbonMenuSpec menu)
     {
-        var icone = Icone(menu.Icon);
-
-        var botao = new RibbonSplitButton
+        var botao = ComImagens(new RibbonSplitButton
         {
             Text = menu.Text,
             ShowText = true,
             ShowImage = true,
-            LargeImage = icone,
-            Image = icone,
             Size = RibbonItemSize.Large,
             Orientation = System.Windows.Controls.Orientation.Vertical,
             IsSplit = false,
@@ -279,7 +276,7 @@ internal static class RibbonClivus
             // ("Recalcular") no lugar de "Edição".
             IsSynchronizedWithCurrentItem = false,
             ToolTip = menu.Tooltip,
-        };
+        }, menu.Icon);
 
         foreach (var item in menu.Items) botao.Items.Add(BotaoPequeno(item));
 

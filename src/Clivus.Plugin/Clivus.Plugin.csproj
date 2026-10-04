@@ -28,6 +28,18 @@
   </ItemGroup>
 
   <!--
+    A identidade visual (04/10/2026): os ícones da ribbon nos dois temas e a
+    marca, gerados por tools/build_icons.py. Recurso WPF dentro da DLL,
+    carregado por pack URI (IconesClivus). Os SVG-fonte ficam fora da DLL.
+  -->
+  <ItemGroup>
+    <Resource Include="Resources\Icons\Light\*.png" />
+    <Resource Include="Resources\Icons\Dark\*.png" />
+    <Resource Include="Resources\Branding\*.png" />
+    <Resource Include="Resources\Branding\clivus.ico" />
+  </ItemGroup>
+
+  <!--
     DLLs gerenciadas do AutoCAD / Civil 3D 2026.
     Private = false: o AutoCAD ja tem essas assemblies carregadas. Copiar
     para a pasta de saida faz o plugin carregar uma segunda copia e quebrar.

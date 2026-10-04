@@ -54,6 +54,7 @@ public sealed class ClivusExtension : IExtensionApplication
         try
         {
             RegistroDeDiagnostico.Registrar($"Initialize: host com interface, versão {ClivusCommands.VersaoDoPlugin()}.");
+            AparenciaDasJanelas.Instalar();
             RibbonClivus.Instalar();
             MenuDeContexto.Instalar();
             AutoSelecao.Instalar();

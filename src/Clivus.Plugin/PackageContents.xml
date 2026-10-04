@@ -16,7 +16,8 @@
     Name="Clivus Solar"
     Description="Layout de usinas fotovoltaicas em terreno inclinado"
     AppVersion="0.1.0"
-    Author="Clivus Solar">
+    Author="Clivus Solar"
+    Icon="./Contents/Resources/clivus.ico">
 
   <CompanyDetails Name="Clivus Solar" />
 

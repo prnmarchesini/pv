@@ -117,6 +117,12 @@ foreach ($nome in 'Clivus.Plugin.dll', 'Clivus.Core.dll', 'Clivus.Geo.dll') {
     Copy-Item $origem $conteudo
 }
 
+# O icone do pacote (atributo Icon do PackageContents.xml), gerado por
+# tools\build_icons.py: aparece no App Manager e no instalador.
+$recursos = Join-Path $conteudo 'Resources'
+New-Item -ItemType Directory -Path $recursos -Force | Out-Null
+Copy-Item (Join-Path $raiz 'src\Clivus.Plugin\Resources\Branding\clivus.ico') $recursos
+
 # Os .pdb ajudam a ler a pilha de uma excecao durante o desenvolvimento.
 if ($Configuracao -eq 'Debug') {
     Get-ChildItem $saidaDoBuild -Filter 'Clivus.*.pdb' -File |
