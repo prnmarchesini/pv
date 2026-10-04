@@ -27,8 +27,6 @@ namespace Clivus.Plugin;
 /// </summary>
 public static class ExportCommands
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>CLIVUS_EXPORTAR: seleção, formato, arquivo.</summary>
     [CommandMethod(PluginInfo.ComandoExportar, CommandFlags.UsePickSet)]
     public static void Exportar()
@@ -46,13 +44,13 @@ public static class ExportCommands
             var (faces, ignoradas, repetidas) = Recolher(documento.Database, selecao);
 
             if (ignoradas > 0)
-                editor.WriteMessage($"\n  {ignoradas} face(s) da seleção não tem identidade de módulo e foi ignorada.\n");
+                editor.WriteMessage(Tr.F("\n  {0} face(s) da seleção não tem identidade de módulo e foi ignorada.\n", ignoradas));
 
             if (!AvisarRepetidas(editor, repetidas)) return;
 
             if (faces.Count == 0)
             {
-                editor.WriteMessage("\nEXPORTAR Nenhum módulo na seleção. Selecione as faces desenhadas pelo plugin.\n");
+                editor.WriteMessage(Tr.T("\nEXPORTAR Nenhum módulo na seleção. Selecione as faces desenhadas pelo plugin.\n"));
                 return;
             }
 
@@ -66,7 +64,7 @@ public static class ExportCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao exportar para o PVsyst.", erro);
-            editor.WriteMessage($"\nNão consegui exportar: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui exportar: {0}\n", erro.Message));
         }
     }
 
@@ -84,19 +82,19 @@ public static class ExportCommands
 
         try
         {
-            var resposta = editor.GetString(new PromptStringOptions("\nArquivo DAE: ") { AllowSpaces = true });
+            var resposta = editor.GetString(new PromptStringOptions(Tr.T("\nArquivo DAE: ")) { AllowSpaces = true });
             if (resposta.Status != PromptStatus.OK || string.IsNullOrWhiteSpace(resposta.StringResult)) return;
 
             var (faces, ignoradas, repetidas) = Recolher(documento.Database, TodasAsFaces(documento.Database));
 
             if (ignoradas > 0)
-                editor.WriteMessage($"\n  {ignoradas} face(s) sem identidade de módulo foi ignorada.\n");
+                editor.WriteMessage(Tr.F("\n  {0} face(s) sem identidade de módulo foi ignorada.\n", ignoradas));
 
             if (!AvisarRepetidas(editor, repetidas)) return;
 
             if (faces.Count == 0)
             {
-                editor.WriteMessage("\nEXPORTAR Nenhum módulo no desenho.\n");
+                editor.WriteMessage(Tr.T("\nEXPORTAR Nenhum módulo no desenho.\n"));
                 return;
             }
 
@@ -105,7 +103,7 @@ public static class ExportCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao exportar automaticamente para o PVsyst.", erro);
-            editor.WriteMessage($"\nNão consegui exportar: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui exportar: {0}\n", erro.Message));
         }
     }
 
@@ -123,15 +121,15 @@ public static class ExportCommands
 
         var opcoes = new PromptSelectionOptions
         {
-            MessageForAdding = "\nSelecione os módulos a exportar (janela sobre a área): ",
-            MessageForRemoval = "\nRetire da seleção: ",
+            MessageForAdding = Tr.T("\nSelecione os módulos a exportar (janela sobre a área): "),
+            MessageForRemoval = Tr.T("\nRetire da seleção: "),
         };
 
         var resultado = editor.GetSelection(opcoes, filtro);
 
         if (resultado.Status != PromptStatus.OK)
         {
-            editor.WriteMessage("\nEXPORTAR Nada selecionado.\n");
+            editor.WriteMessage(Tr.T("\nEXPORTAR Nada selecionado.\n"));
             return null;
         }
 
@@ -212,8 +210,7 @@ public static class ExportCommands
         if (repetidas == 0) return true;
 
         editor.WriteMessage(
-            $"\nEXPORTAR {repetidas} face(s) com identidade repetida (mesa copiada e colada?). "
-            + "A exportação não sai com GUID duplicado: apague as cópias ou reprocesse a fileira.\n");
+            Tr.F("\nEXPORTAR {0} face(s) com identidade repetida (mesa copiada e colada?). A exportação não sai com GUID duplicado: apague as cópias ou reprocesse a fileira.\n", repetidas));
 
         return false;
     }
@@ -233,12 +230,12 @@ public static class ExportCommands
         // Sempre a janela do Windows (regra de 02/10/2026: "toda interação de
         // salvar e abrir é via janela do Windows").
         var caminho = DialogoDeArquivo.Salvar(
-            "Exportar para o PVsyst", "Cena 3D Collada (*.dae)|*.dae", nome + ".dae",
+            Tr.T("Exportar para o PVsyst"), Tr.T("Cena 3D Collada (*.dae)") + "|*.dae", nome + ".dae",
             documento.IsNamedDrawing ? Path.GetDirectoryName(documento.Name) : null);
 
         if (caminho is null)
         {
-            editor.WriteMessage("\nEXPORTAR Cancelado.\n");
+            editor.WriteMessage(Tr.T("\nEXPORTAR Cancelado.\n"));
             return null;
         }
 
@@ -269,10 +266,8 @@ public static class ExportCommands
         var tamanho = new FileInfo(caminho).Length;
 
         editor.WriteMessage(
-            $"\nEXPORTAR {faces.Count} face(s) de módulo gravada(s) em {caminho} ({(tamanho / 1024.0).ToString("0.#", Brasil)} KB)\n"
-            + $"  material: {LayoutLayers.Face} (é o que se escolhe no PVsyst ao importar)\n"
-            + $"  origem local: E={origem.X.ToString("0.###", Brasil)} N={origem.Y.ToString("0.###", Brasil)} Z={origem.Z.ToString("0.###", Brasil)} m "
-            + "(as coordenadas do arquivo são relativas a ela)\n");
+            Tr.F("\nEXPORTAR {0} face(s) de módulo gravada(s) em {1} ({2:0.#} KB)\n  material: {3} (é o que se escolhe no PVsyst ao importar)\n  origem local: E={4:0.###} N={5:0.###} Z={6:0.###} m (as coordenadas do arquivo são relativas a ela)\n",
+                faces.Count, caminho, tamanho / 1024.0, LayoutLayers.Face, origem.X, origem.Y, origem.Z));
 
         if (linhaParaTeste)
             editor.WriteMessage($"  ORIGEM E={origem.X.ToString("R", CultureInfo.InvariantCulture)} N={origem.Y.ToString("R", CultureInfo.InvariantCulture)} Z={origem.Z.ToString("R", CultureInfo.InvariantCulture)}\n");

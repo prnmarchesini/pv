@@ -25,7 +25,7 @@ public static class EstilosCommands
         {
             if (!ClivusExtension.TemInterface())
             {
-                editor.WriteMessage($"\nA janela dos estilos precisa da interface; use {PluginInfo.ComandoEstilosAutomatico}.\n");
+                editor.WriteMessage(Tr.F("\nA janela dos estilos precisa da interface; use {0}.\n", PluginInfo.ComandoEstilosAutomatico));
                 return;
             }
 
@@ -38,7 +38,7 @@ public static class EstilosCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha nos estilos do projeto.", erro);
-            editor.WriteMessage($"\nNão consegui gravar os estilos: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui gravar os estilos: {0}\n", erro.Message));
         }
     }
 
@@ -55,17 +55,17 @@ public static class EstilosCommands
         {
             string? Perguntar(string rotulo)
             {
-                var r = editor.GetString(new PromptStringOptions($"\n{rotulo} (- para o corrente): ") { AllowSpaces = true });
+                var r = editor.GetString(new PromptStringOptions(Tr.F("\n{0} (- para o corrente): ", rotulo)) { AllowSpaces = true });
                 return r.Status != PromptStatus.OK || r.StringResult.Trim() is "" or "-" ? null : r.StringResult.Trim();
             }
 
-            var estilos = new ProjectStyles(Perguntar("Estilo de texto"), Perguntar("Estilo de cota"), Perguntar("Estilo de chamada"));
+            var estilos = new ProjectStyles(Perguntar(Tr.T("Estilo de texto")), Perguntar(Tr.T("Estilo de cota")), Perguntar(Tr.T("Estilo de chamada")));
             Gravar(editor, documento.Database, estilos);
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha no CLIVUS_ESTILOS_AUTO.", erro);
-            editor.WriteMessage($"\nNão consegui gravar os estilos: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui gravar os estilos: {0}\n", erro.Message));
         }
     }
 
@@ -97,13 +97,19 @@ public static class EstilosCommands
         EstiloDoProjeto.Gravar(database, achados);
 
         editor.WriteMessage(
-            $"\nESTILOS texto: {achados.TextStyle ?? "corrente"}; cota: {achados.DimensionStyle ?? "corrente"}; "
-            + $"chamada: {achados.LeaderStyle ?? "corrente"}.\n");
+            Tr.F("\nESTILOS texto: {0}; cota: {1}; chamada: {2}.\n",
+                achados.TextStyle ?? Tr.T("corrente"), achados.DimensionStyle ?? Tr.T("corrente"), achados.LeaderStyle ?? Tr.T("corrente")));
 
-        foreach (var (pedido, lista, tipo) in new[] { (achados.TextStyle, textos, "texto"), (achados.DimensionStyle, cotas, "cota"), (achados.LeaderStyle, chamadas, "chamada") })
+        // A frase inteira de cada tipo, para o tradutor ver a frase toda.
+        foreach (var (pedido, lista, aviso) in new[]
+        {
+            (achados.TextStyle, textos, Tr.N("  ATENÇÃO: o estilo de texto \"{0}\" não existe neste desenho; até existir, vale o corrente.\n")),
+            (achados.DimensionStyle, cotas, Tr.N("  ATENÇÃO: o estilo de cota \"{0}\" não existe neste desenho; até existir, vale o corrente.\n")),
+            (achados.LeaderStyle, chamadas, Tr.N("  ATENÇÃO: o estilo de chamada \"{0}\" não existe neste desenho; até existir, vale o corrente.\n")),
+        })
         {
             if (pedido is not null && ProjectStyles.Match(pedido, lista) is null)
-                editor.WriteMessage($"  ATENÇÃO: o estilo de {tipo} \"{pedido}\" não existe neste desenho; até existir, vale o corrente.\n");
+                editor.WriteMessage(Tr.F(aviso, pedido));
         }
     }
 

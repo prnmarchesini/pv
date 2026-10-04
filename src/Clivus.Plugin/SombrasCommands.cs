@@ -16,8 +16,6 @@ namespace Clivus.Plugin;
 /// <summary>O período das sombras: dias (de quantos em quantos), janela de horário, passo e fuso.</summary>
 internal sealed record PeriodoDeSombra(DateOnly De, DateOnly Ate, TimeOnly HoraDe, TimeOnly HoraAte, int PassoMinutos, double Fuso, int PassoDias = 1)
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
     /// <summary>Um instante só: mesmo dia, mesma hora.</summary>
     internal bool Instante => De == Ate && HoraDe == HoraAte;
 
@@ -25,9 +23,9 @@ internal sealed record PeriodoDeSombra(DateOnly De, DateOnly Ate, TimeOnly HoraD
 
     internal string Descrever() =>
         Instante
-            ? $"{De.ToString("dd/MM/yyyy", Brasil)} às {HoraDe.ToString("HH:mm", Brasil)}"
-            : $"{De.ToString("dd/MM/yyyy", Brasil)} a {Ate.ToString("dd/MM/yyyy", Brasil)}{(PassoDias > 1 ? $" (a cada {PassoDias} dias)" : string.Empty)}, "
-              + $"das {HoraDe.ToString("HH:mm", Brasil)} às {HoraAte.ToString("HH:mm", Brasil)}, de {PassoMinutos} em {PassoMinutos} min";
+            ? Tr.F("{0:dd/MM/yyyy} às {1:HH:mm}", De, HoraDe)
+            : Tr.F("{0:dd/MM/yyyy} a {1:dd/MM/yyyy}{2}, das {3:HH:mm} às {4:HH:mm}, de {5} em {5} min",
+                De, Ate, PassoDias > 1 ? Tr.F(" (a cada {0} dias)", PassoDias) : string.Empty, HoraDe, HoraAte, PassoMinutos);
 }
 
 /// <summary>
@@ -61,13 +59,13 @@ public static class SombrasCommands
     internal static RgbColor CorDaFracao(double f) =>
         f <= 0.25 ? new RgbColor(215, 180, 255) : f <= 0.5 ? new RgbColor(160, 90, 230) : new RgbColor(95, 20, 160);
 
-    private const string Legenda = "lilás até 25% da face, violeta até 50%, roxo-escuro acima";
+    private static string Legenda => Tr.T("lilás até 25% da face, violeta até 50%, roxo-escuro acima");
 
     private static string NomeDaCausa(ShadowCause c) => c switch
     {
-        ShadowCause.Object => "árvore",
-        ShadowCause.Table => "mesa",
-        ShadowCause.Terrain => "terreno",
+        ShadowCause.Object => Tr.T("árvore"),
+        ShadowCause.Table => Tr.T("mesa"),
+        ShadowCause.Terrain => Tr.T("terreno"),
         _ => "-",
     };
 
@@ -79,7 +77,7 @@ public static class SombrasCommands
 
         if (!ClivusExtension.TemInterface())
         {
-            documento.Editor.WriteMessage("\nA janela de sombras precisa da interface do Civil 3D; use CLIVUS_SOMBRAS_AUTO.\n");
+            documento.Editor.WriteMessage(Tr.T("\nA janela de sombras precisa da interface do Civil 3D; use CLIVUS_SOMBRAS_AUTO.\n"));
             return;
         }
 
@@ -90,7 +88,7 @@ public static class SombrasCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha na janela de sombras.", erro);
-            documento.Editor.WriteMessage($"\nNão consegui abrir as sombras: {erro.Message}\n");
+            documento.Editor.WriteMessage(Tr.F("\nNão consegui abrir as sombras: {0}\n", erro.Message));
         }
     }
 
@@ -111,20 +109,20 @@ public static class SombrasCommands
                 return r.Status == PromptStatus.OK ? r.StringResult : null;
             }
 
-            var de = Texto("Primeiro dia (dd/mm/aaaa)");
-            var ate = Texto("Último dia (dd/mm/aaaa)");
-            var horaDe = Texto("Hora inicial (hh:mm)");
-            var horaAte = Texto("Hora final (hh:mm)");
-            var passo = Texto("Passo (min)");
-            var fuso = Texto("Fuso (horas, -3 em Brasília)");
-            var dias = Texto("A cada quantos dias");
+            var de = Texto(Tr.T("Primeiro dia (dd/mm/aaaa)"));
+            var ate = Texto(Tr.T("Último dia (dd/mm/aaaa)"));
+            var horaDe = Texto(Tr.T("Hora inicial (hh:mm)"));
+            var horaAte = Texto(Tr.T("Hora final (hh:mm)"));
+            var passo = Texto(Tr.T("Passo (min)"));
+            var fuso = Texto(Tr.T("Fuso (horas, -3 em Brasília)"));
+            var dias = Texto(Tr.T("A cada quantos dias"));
             if (de is null || ate is null || horaDe is null || horaAte is null || passo is null || fuso is null || dias is null) return;
 
             var periodo = Ler(de, ate, horaDe, horaAte, passo, fuso, out var porque, dias);
 
             if (periodo is null)
             {
-                editor.WriteMessage($"\nSOMBRAS {porque}\n");
+                editor.WriteMessage(Tr.F("\nSOMBRAS {0}\n", porque));
                 return;
             }
 
@@ -133,7 +131,7 @@ public static class SombrasCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha nas sombras (automático).", erro);
-            editor.WriteMessage($"\nNão consegui gerar as sombras: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui gerar as sombras: {0}\n", erro.Message));
         }
     }
 
@@ -150,7 +148,7 @@ public static class SombrasCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao apagar as sombras.", erro);
-            documento.Editor.WriteMessage($"\nNão consegui apagar as sombras: {erro.Message}\n");
+            documento.Editor.WriteMessage(Tr.F("\nNão consegui apagar as sombras: {0}\n", erro.Message));
         }
     }
 
@@ -159,20 +157,20 @@ public static class SombrasCommands
     {
         porque = string.Empty;
 
-        if (!int.TryParse(dias.Trim(), NumberStyles.Integer, Brasil, out var pd) || pd is < 1 or > 366) { porque = "O passo de dias precisa ser de 1 a 366."; return null; }
+        if (!int.TryParse(dias.Trim(), NumberStyles.Integer, Brasil, out var pd) || pd is < 1 or > 366) { porque = Tr.T("O passo de dias precisa ser de 1 a 366."); return null; }
 
-        if (!DateOnly.TryParseExact(de.Trim(), "d/M/yyyy", Brasil, DateTimeStyles.None, out var d0)) { porque = "O primeiro dia precisa ser dd/mm/aaaa."; return null; }
-        if (!DateOnly.TryParseExact(ate.Trim(), "d/M/yyyy", Brasil, DateTimeStyles.None, out var d1)) { porque = "O último dia precisa ser dd/mm/aaaa."; return null; }
-        if (!TimeOnly.TryParseExact(horaDe.Trim(), ["H:mm", "H"], Brasil, DateTimeStyles.None, out var h0)) { porque = "A hora inicial precisa ser hh:mm."; return null; }
-        if (!TimeOnly.TryParseExact(horaAte.Trim(), ["H:mm", "H"], Brasil, DateTimeStyles.None, out var h1)) { porque = "A hora final precisa ser hh:mm."; return null; }
-        if (!int.TryParse(passo.Trim(), NumberStyles.Integer, Brasil, out var p) || p is < 1 or > 1440) { porque = "O passo precisa ser de 1 a 1440 minutos."; return null; }
-        if (!double.TryParse(fuso.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var f) || f is < -14 or > 14) { porque = "O fuso precisa ser de -14 a 14 horas."; return null; }
-        if (d1 < d0) { porque = "O último dia vem antes do primeiro."; return null; }
-        if (h1 < h0) { porque = "A hora final vem antes da inicial."; return null; }
+        if (!DateOnly.TryParseExact(de.Trim(), "d/M/yyyy", Brasil, DateTimeStyles.None, out var d0)) { porque = Tr.T("O primeiro dia precisa ser dd/mm/aaaa."); return null; }
+        if (!DateOnly.TryParseExact(ate.Trim(), "d/M/yyyy", Brasil, DateTimeStyles.None, out var d1)) { porque = Tr.T("O último dia precisa ser dd/mm/aaaa."); return null; }
+        if (!TimeOnly.TryParseExact(horaDe.Trim(), ["H:mm", "H"], Brasil, DateTimeStyles.None, out var h0)) { porque = Tr.T("A hora inicial precisa ser hh:mm."); return null; }
+        if (!TimeOnly.TryParseExact(horaAte.Trim(), ["H:mm", "H"], Brasil, DateTimeStyles.None, out var h1)) { porque = Tr.T("A hora final precisa ser hh:mm."); return null; }
+        if (!int.TryParse(passo.Trim(), NumberStyles.Integer, Brasil, out var p) || p is < 1 or > 1440) { porque = Tr.T("O passo precisa ser de 1 a 1440 minutos."); return null; }
+        if (!double.TryParse(fuso.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var f) || f is < -14 or > 14) { porque = Tr.T("O fuso precisa ser de -14 a 14 horas."); return null; }
+        if (d1 < d0) { porque = Tr.T("O último dia vem antes do primeiro."); return null; }
+        if (h1 < h0) { porque = Tr.T("A hora final vem antes da inicial."); return null; }
         var instantes = Shading.CountInstants(d0, d1, h0, h1, TimeSpan.FromMinutes(p), pd);
         if (instantes > Shading.MaxInstants)
         {
-            porque = $"O período tem {instantes.ToString("N0", Brasil)} instantes; o máximo é {Shading.MaxInstants.ToString("N0", Brasil)}. Aumente o passo ou encurte o período.";
+            porque = Tr.F("O período tem {0:N0} instantes; o máximo é {1:N0}. Aumente o passo ou encurte o período.", instantes, Shading.MaxInstants);
             return null;
         }
 
@@ -206,13 +204,13 @@ public static class SombrasCommands
         var terreno = TerrainCache.Get(documento);
 
         if (terreno is null && FileiraCommands.ExigirTerreno(documento.Editor, documento) is null)
-            return "SOMBRAS Nenhum terreno processado neste desenho. Use o botão Terreno primeiro.";
+            return Tr.T("SOMBRAS Nenhum terreno processado neste desenho. Use o botão Terreno primeiro.");
 
         terreno ??= TerrainCache.Get(documento)!;
 
         var lugar = Lugar(documento);
         if (lugar is null || !lugar.IsValid)
-            return "SOMBRAS O desenho não tem localização (latitude e longitude). Corrija em Terreno > Resumo > Localização.";
+            return Tr.T("SOMBRAS O desenho não tem localização (latitude e longitude). Corrija em Terreno > Resumo > Localização.");
 
         var cilindros = new List<ShadowCylinder>();
         List<ShadowQuad> faces;
@@ -232,7 +230,7 @@ public static class SombrasCommands
 
         Apagar(database);
 
-        if (faces.Count == 0) return "SOMBRAS Não há módulo gerado pelo plugin no desenho.";
+        if (faces.Count == 0) return Tr.T("SOMBRAS Não há módulo gerado pelo plugin no desenho.");
 
         var relogio = System.Diagnostics.Stopwatch.StartNew();
 
@@ -280,32 +278,36 @@ public static class SombrasCommands
         var marcados = Marcar(database, modulos, fracoes);
 
         var texto = new System.Text.StringBuilder();
-        texto.Append($"SOMBRAS {periodo.Descrever()} (fuso {periodo.Fuso.ToString("+0.#;-0.#;0", Brasil)}), em {lugar.Latitude.ToString("0.0000", Brasil)}°, {lugar.Longitude.ToString("0.0000", Brasil)}°: ");
-        texto.Append($"{arvores} árvore(s), {faces.Count} módulo(s) (as mesas e o relevo também fazem sombra), {instantes} instante(s), {comSol} com sol. ");
+        texto.Append(Tr.F("SOMBRAS {0} (fuso {1:+0.#;-0.#;0}), em {2:0.0000}°, {3:0.0000}°: ", periodo.Descrever(), periodo.Fuso, lugar.Latitude, lugar.Longitude));
+        texto.Append(Tr.F("{0} árvore(s), {1} módulo(s) (as mesas e o relevo também fazem sombra), {2} instante(s), {3} com sol. ", arvores, faces.Count, instantes, comSol));
 
         if (comSol == 0)
         {
-            texto.Append("O sol não está acima do horizonte no período: nada a sombrear.");
+            texto.Append(Tr.T("O sol não está acima do horizonte no período: nada a sombrear."));
             return texto.ToString();
         }
 
         int Por(ShadowCause c) => Enumerable.Range(0, fracoes.Length).Count(k => fracoes[k] > 0 && causas[k] == c);
 
-        texto.Append($"{marcados} módulo(s) pegam sombra");
-        if (!periodo.Instante) texto.Append(" no pior caso");
-        texto.Append($": {Por(ShadowCause.Object)} por árvore, {Por(ShadowCause.Table)} por outra mesa, {Por(ShadowCause.Terrain)} pelo terreno ({Legenda}). ");
+        texto.Append(periodo.Instante
+            ? Tr.F("{0} módulo(s) pegam sombra: {1} por árvore, {2} por outra mesa, {3} pelo terreno ({4}). ",
+                marcados, Por(ShadowCause.Object), Por(ShadowCause.Table), Por(ShadowCause.Terrain), Legenda)
+            : Tr.F("{0} módulo(s) pegam sombra no pior caso: {1} por árvore, {2} por outra mesa, {3} pelo terreno ({4}). ",
+                marcados, Por(ShadowCause.Object), Por(ShadowCause.Table), Por(ShadowCause.Terrain), Legenda));
 
         if (desenhar is { } d && contornos > 0)
-            texto.Append($"Sombra das árvores desenhada {(periodo.Instante ? "às" : "no pior instante,")} {d.ToString("dd/MM/yyyy HH:mm", Brasil)}, no chão e sobre as mesas ({contornos} contorno(s)). ");
+            texto.Append(periodo.Instante
+                ? Tr.F("Sombra das árvores desenhada às {0:dd/MM/yyyy HH:mm}, no chão e sobre as mesas ({1} contorno(s)). ", d, contornos)
+                : Tr.F("Sombra das árvores desenhada no pior instante, {0:dd/MM/yyyy HH:mm}, no chão e sobre as mesas ({1} contorno(s)). ", d, contornos));
 
-        texto.Append($"Conta em {relogio.Elapsed.TotalSeconds.ToString("0.0", Brasil)} s.");
+        texto.Append(Tr.F("Conta em {0:0.0} s.", relogio.Elapsed.TotalSeconds));
 
         var piores = Enumerable.Range(0, fracoes.Length).Where(k => fracoes[k] > 0).OrderByDescending(k => fracoes[k]).Take(10).ToList();
         if (piores.Count > 0)
         {
-            texto.Append("\n  Os piores: ");
+            texto.Append(Tr.T("\n  Os piores: "));
             texto.Append(string.Join("; ", piores.Select(k =>
-                $"{Rotulo(database, modulos[k])} {(fracoes[k] * 100).ToString("0", Brasil)}% ({NomeDaCausa(causas[k])}) em {quando[k]!.Value.ToString("dd/MM HH:mm", Brasil)}")));
+                Tr.F("{0} {1:0}% ({2}) em {3:dd/MM HH:mm}", Rotulo(database, modulos[k]), fracoes[k] * 100, NomeDaCausa(causas[k]), quando[k]!.Value))));
         }
 
         return texto.ToString();
@@ -388,7 +390,7 @@ public static class SombrasCommands
                     TextHeight = 0.8,
                     Layer = camadaTexto,
                     Attachment = AttachmentPoint.MiddleCenter,
-                    Contents = $"Sombra {instante.ToString("dd/MM HH:mm", Brasil)}",
+                    Contents = Tr.F("Sombra {0:dd/MM HH:mm}", instante),
                 };
                 espaco.AppendEntity(texto);
                 transacao.AddNewlyCreatedDBObject(texto, true);
@@ -504,7 +506,7 @@ public static class SombrasCommands
 
         PluginDictionary.Save(database, ChaveDasPintadas, new ResultBuffer(new TypedValue((int)DxfCode.Text, "V1")));
 
-        return $"SOMBRAS {apagados} contorno(s) e etiqueta(s) de sombra apagado(s); {devolvidos} módulo(s) de volta à cor de antes.";
+        return Tr.F("SOMBRAS {0} contorno(s) e etiqueta(s) de sombra apagado(s); {1} módulo(s) de volta à cor de antes.", apagados, devolvidos);
     }
 
     /// <summary>Se a cor é uma das três da marca de sombra.</summary>
@@ -523,6 +525,6 @@ public static class SombrasCommands
 
         var mesas = LayoutScan.Tables(transacao, database);
         var letreiro = mesas.TryGetValue(m.Table, out var p) ? p.Identity?.Label ?? "?" : "?";
-        return $"{letreiro} col {m.Column + 1} fil {m.Row + 1}";
+        return Tr.F("{0} col {1} fil {2}", letreiro, m.Column + 1, m.Row + 1);
     }
 }

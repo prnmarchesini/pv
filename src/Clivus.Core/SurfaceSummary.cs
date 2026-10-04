@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Clivus.Core;
 
 /// <summary>
@@ -17,30 +15,22 @@ public sealed record SurfaceSummary(string Name, int PointCount)
     public const string SemNome = "(sem nome)";
 
     /// <summary>
-    /// A cultura do número na tela. Fixa, e não a da máquina, para a lista
-    /// sair igual em qualquer lugar — inclusive nos testes.
-    ///
-    /// Depende de InvariantGlobalization continuar falso em
-    /// Directory.Build.props: com ele ligado, esta busca devolve a cultura
-    /// invariante em silêncio e o separador de milhar vira vírgula.
-    /// </summary>
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
-
-    /// <summary>
     /// O nome como ele aparece na tela: sem espaço em volta, e com um texto
     /// próprio quando a superfície não tem nome.
     /// </summary>
     public string DisplayName =>
-        string.IsNullOrWhiteSpace(Name) ? SemNome : Name.Trim();
+        string.IsNullOrWhiteSpace(Name) ? Tr.T("(sem nome)") : Name.Trim();
 
-    /// <summary>A linha que aparece na lista de escolha.</summary>
+    /// <summary>
+    /// A linha que aparece na lista de escolha. O número sai na cultura do
+    /// idioma da tela (<see cref="Tr.Culture"/>), não na da máquina, para a
+    /// lista sair igual em qualquer lugar, inclusive nos testes.
+    /// </summary>
     public string Describe()
     {
-        var pontos = PointCount.ToString("N0", Brasil);
-
         return PointCount == 1
-            ? $"{DisplayName} — 1 ponto"
-            : $"{DisplayName} — {pontos} pontos";
+            ? Tr.F("{0} — 1 ponto", DisplayName)
+            : Tr.F("{0} — {1:N0} pontos", DisplayName, PointCount);
     }
 
     /// <summary>

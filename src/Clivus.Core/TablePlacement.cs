@@ -90,7 +90,7 @@ public static class TablePlacement
         if (Math.Abs(desnivel) >= length - 1e-9)
         {
             throw new ArgumentOutOfRangeException(nameof(endElevation), desnivel,
-                "O desnível entre as pontas é maior que o comprimento da mesa: não há giro que o produza.");
+                Tr.T("O desnível entre as pontas é maior que o comprimento da mesa: não há giro que o produza."));
         }
 
         longitudinalTilt = Math.Asin(desnivel / length);
@@ -103,7 +103,7 @@ public static class TablePlacement
         if (!double.IsFinite(tiltRadians) || tiltRadians < 0 || tiltRadians >= Math.PI / 2)
         {
             throw new ArgumentOutOfRangeException(nameof(tiltRadians), tiltRadians,
-                "A inclinação precisa ficar entre 0 e 90 graus.");
+                Tr.T("A inclinação precisa ficar entre 0 e 90 graus."));
         }
 
         if (!double.IsFinite(elevation))

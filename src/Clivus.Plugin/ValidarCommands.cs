@@ -25,12 +25,12 @@ public static class ValidarCommands
 
         try
         {
-            Relatar(documento, "VALIDAR");
+            Relatar(documento, Tr.T("VALIDAR"));
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao validar o desenho.", erro);
-            documento.Editor.WriteMessage($"\nNão consegui validar: {erro.Message}\n");
+            documento.Editor.WriteMessage(Tr.F("\nNão consegui validar: {0}\n", erro.Message));
         }
     }
 
@@ -42,7 +42,7 @@ public static class ValidarCommands
 
         editor.WriteMessage(validacao.IsClean
             ? $"\n{rotulo} {validacao.Lines()[0]}\n"
-            : $"\n{rotulo} {validacao.Count} achado(s):\n");
+            : Tr.F("\n{0} {1} achado(s):\n", rotulo, validacao.Count));
 
         if (!validacao.IsClean)
         {
@@ -87,7 +87,7 @@ public static class ValidarCommands
         var sujas = mesas.Where(m => m.Identity is { Dirty: true }).Select(m => m.Identity!.Label).OrderBy(l => l, StringComparer.Ordinal).ToList();
         var movidas = mesas.Where(m => m.Identity is { Dirty: false, Anchor: not null } && !m.IsDuplicated && Moveu(transacao, m))
             .Select(m => m.Identity!.Label).OrderBy(l => l, StringComparer.Ordinal).ToList();
-        var duplicadas = mesas.Where(m => m.IsDuplicated).Select(m => m.Identity?.Label ?? "(sem letreiro)").ToList();
+        var duplicadas = mesas.Where(m => m.IsDuplicated).Select(m => m.Identity?.Label ?? Tr.T("(sem letreiro)")).ToList();
         var orfas = mesas.Count(m => m.Identity is null);
 
         var pecasRepetidas = PecasRepetidas(transacao, mesas);
@@ -212,10 +212,10 @@ internal static class ValidacaoAoAbrir
 
             AcertarCores(documento);
 
-            var validacao = ValidarCommands.Relatar(documento, "AO ABRIR");
+            var validacao = ValidarCommands.Relatar(documento, Tr.T("AO ABRIR"));
 
             if (!validacao.IsClean)
-                documento.Editor.WriteMessage($"  ({PluginInfo.ComandoValidar} repete esta conferência a qualquer hora.)\n");
+                documento.Editor.WriteMessage(Tr.F("  ({0} repete esta conferência a qualquer hora.)\n", PluginInfo.ComandoValidar));
         }
         catch (System.Exception erro)
         {
@@ -242,7 +242,7 @@ internal static class ValidacaoAoAbrir
 
             if (mudaram > 0)
                 documento.Editor.WriteMessage(
-                    $"\nCLIVUS Camadas {LayoutLayers.Area} (laranja) e {LayoutLayers.Alinhamento} (amarela) acertadas.\n");
+                    Tr.F("\nCLIVUS Camadas {0} (laranja) e {1} (amarela) acertadas.\n", LayoutLayers.Area, LayoutLayers.Alinhamento));
         }
         catch (System.Exception erro)
         {

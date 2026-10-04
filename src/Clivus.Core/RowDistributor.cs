@@ -227,7 +227,7 @@ public static class RowDistributor
         ArgumentNullException.ThrowIfNull(tables);
         ArgumentNullException.ThrowIfNull(modules);
 
-        if (tables.Count == 0) throw new ArgumentException("A usina precisa de pelo menos um tipo de mesa.", nameof(tables));
+        if (tables.Count == 0) throw new ArgumentException(Tr.T("A usina precisa de pelo menos um tipo de mesa."), nameof(tables));
         if (modules.Count != tables.Count) throw new ArgumentException("Um número de módulos por tipo de mesa.", nameof(modules));
         if (modules.Any(m => m < 1)) throw new ArgumentOutOfRangeException(nameof(modules), "Todo tipo de mesa tem pelo menos um módulo.");
 
@@ -452,8 +452,7 @@ public static class RowDistributor
         if (Math.Abs(produto) < 1e-9)
         {
             throw new ArgumentException(
-                "A linha de alinhamento está paralela às fileiras (perpendicular ao azimute): não há como saber para que lado as fileiras vão. "
-                + "Trace a linha atravessando as fileiras.", nameof(side));
+                Tr.T("A linha de alinhamento está paralela às fileiras (perpendicular ao azimute): não há como saber para que lado as fileiras vão. Trace a linha atravessando as fileiras."), nameof(side));
         }
 
         return produto > 0 ? candidata : new Point3(-candidata.X, -candidata.Y, 0);
@@ -714,7 +713,7 @@ public static class RowDistributor
         if (trechos.Count == 0)
         {
             throw new ArgumentOutOfRangeException(nameof(alinhamento), alinhamento.Count,
-                "A linha de alinhamento não tem nenhum trecho com comprimento em planta.");
+                Tr.T("A linha de alinhamento não tem nenhum trecho com comprimento em planta."));
         }
 
         return trechos;
@@ -727,7 +726,7 @@ public static class RowDistributor
         if (area.Count < 3)
         {
             throw new ArgumentOutOfRangeException(nameof(area), area.Count,
-                "A área precisa de pelo menos três vértices.");
+                Tr.T("A área precisa de pelo menos três vértices."));
         }
 
         foreach (var v in area.Concat(alinhamento))
@@ -737,29 +736,28 @@ public static class RowDistributor
         }
 
         if (lado == LineSide.On)
-            throw new ArgumentException("\"Em cima da linha\" não é lado para as mesas.", nameof(lado));
+            throw new ArgumentException(Tr.T("\"Em cima da linha\" não é lado para as mesas."), nameof(lado));
 
         if (!double.IsFinite(azimute))
             throw new ArgumentOutOfRangeException(nameof(azimute), "O azimute não é um número.");
 
         if (!Medida(mesa.Length))
-            throw new ArgumentOutOfRangeException(nameof(mesa), mesa.Length, "O comprimento da mesa não é uma medida válida.");
+            throw new ArgumentOutOfRangeException(nameof(mesa), mesa.Length, Tr.T("O comprimento da mesa não é uma medida válida."));
 
         if (!Medida(mesa.PlanDepth))
-            throw new ArgumentOutOfRangeException(nameof(mesa), mesa.PlanDepth, "O fundo da mesa em planta não é uma medida válida.");
+            throw new ArgumentOutOfRangeException(nameof(mesa), mesa.PlanDepth, Tr.T("O fundo da mesa em planta não é uma medida válida."));
 
         if (!Medida(pitch))
-            throw new ArgumentOutOfRangeException(nameof(pitch), pitch, "O pitch não é uma medida válida.");
+            throw new ArgumentOutOfRangeException(nameof(pitch), pitch, Tr.T("O pitch não é uma medida válida."));
 
         if (pitch <= mesa.PlanDepth + Tolerancia)
         {
             throw new ArgumentOutOfRangeException(nameof(pitch), pitch,
-                $"O pitch ({pitch:0.###} m) precisa ser maior que o fundo da mesa em planta "
-                + $"({mesa.PlanDepth:0.###} m), senão as fileiras se sobrepõem.");
+                Tr.F("O pitch ({0:0.###} m) precisa ser maior que o fundo da mesa em planta ({1:0.###} m), senão as fileiras se sobrepõem.", pitch, mesa.PlanDepth));
         }
 
         if (!double.IsFinite(gap) || gap < 0 || gap > MaiorMedida)
-            throw new ArgumentOutOfRangeException(nameof(gap), gap, "O espaçamento entre mesas não é uma medida válida.");
+            throw new ArgumentOutOfRangeException(nameof(gap), gap, Tr.T("O espaçamento entre mesas não é uma medida válida."));
     }
 
     private static bool Medida(double valor) =>

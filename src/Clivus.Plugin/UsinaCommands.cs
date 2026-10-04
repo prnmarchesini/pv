@@ -1,4 +1,3 @@
-using System.Globalization;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
@@ -20,7 +19,6 @@ namespace Clivus.Plugin;
 /// </summary>
 public static class UsinaCommands
 {
-    private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
 
     /// <summary>CLIVUS_USINA: escolhe área e alinhamento, processa e desenha todas as fileiras.</summary>
     [CommandMethod(PluginInfo.ComandoUsina)]
@@ -47,7 +45,7 @@ public static class UsinaCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao processar a usina.", erro);
-            editor.WriteMessage($"\nNão consegui processar a usina: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui processar a usina: {0}\n", erro.Message));
         }
     }
 
@@ -70,7 +68,7 @@ public static class UsinaCommands
 
             if (areas.Count == 0 || alinhamentos.Count == 0)
             {
-                editor.WriteMessage("\nUSINA Sem área ou sem alinhamento registrado neste desenho.\n");
+                editor.WriteMessage(Tr.T("\nUSINA Sem área ou sem alinhamento registrado neste desenho.\n"));
                 return;
             }
 
@@ -79,7 +77,7 @@ public static class UsinaCommands
 
             if (area is null || alinhamento is null)
             {
-                editor.WriteMessage("\nUSINA A área ou o alinhamento registrado não está mais no desenho.\n");
+                editor.WriteMessage(Tr.T("\nUSINA A área ou o alinhamento registrado não está mais no desenho.\n"));
                 return;
             }
 
@@ -88,7 +86,7 @@ public static class UsinaCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao processar a usina automática.", erro);
-            editor.WriteMessage($"\nNão consegui processar a usina: {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nNão consegui processar a usina: {0}\n", erro.Message));
         }
     }
 
@@ -100,23 +98,22 @@ public static class UsinaCommands
     internal static IReadOnlyList<DrawingTable>? MesasEmUso(Editor editor, Autodesk.AutoCAD.DatabaseServices.Database database, string prefixo)
     {
         var lidas = MesasDoDesenho.Ler(database, out var problemas);
-        foreach (var problema in problemas) editor.WriteMessage($"\n  ATENÇÃO: {problema}.\n");
+        foreach (var problema in problemas) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", problema));
 
         // As do desenho, pela prioridade da lista; sem nenhuma marcada, todas.
         var emUso = DrawingTables.ForEngine(lidas);
 
         if (lidas.Count == 0 && TemNaBiblioteca())
-            editor.WriteMessage($"\n{prefixo} ATENÇÃO: este desenho não tem mesas cadastradas; vale a da janela de Mesa. As mesas salvas na biblioteca só valem depois de Configurações > Salvar no desenho.\n");
+            editor.WriteMessage(Tr.F("\n{0} ATENÇÃO: este desenho não tem mesas cadastradas; vale a da janela de Mesa. As mesas salvas na biblioteca só valem depois de Configurações > Salvar no desenho.\n", prefixo));
 
         if (emUso.Count > 0)
-            editor.WriteMessage($"\n{prefixo} Mesas, pela prioridade: {string.Join(", ", emUso.Select((m, i) => $"{i + 1}ª {m.Name}"))}.\n");
+            editor.WriteMessage(Tr.F("\n{0} Mesas, pela prioridade: {1}.\n", prefixo, string.Join(", ", emUso.Select((m, i) => Tr.F("{0}ª {1}", i + 1, m.Name)))));
 
         if (emUso.Select(m => Math.Round(m.Profile.TiltDegrees, 3)).Distinct().Count() > 1)
         {
             editor.WriteMessage(
-                $"\n{prefixo} As mesas marcadas para uso têm inclinações diferentes ("
-                + string.Join(", ", emUso.Select(m => $"{m.Name} a {m.Profile.TiltDegrees.ToString("0.#", Brasil)}°"))
-                + "): numa fileira elas precisam ter a mesma. Ajuste em Configurações > Escolha das estruturas.\n");
+                Tr.F("\n{0} As mesas marcadas para uso têm inclinações diferentes ({1}): numa fileira elas precisam ter a mesma. Ajuste em Configurações > Escolha das estruturas.\n",
+                    prefixo, string.Join(", ", emUso.Select(m => Tr.F("{0} a {1:0.#}°", m.Name, m.Profile.TiltDegrees)))));
             return null;
         }
 
@@ -187,15 +184,15 @@ public static class UsinaCommands
     {
         // As mesas do desenho marcadas para uso (8.5/8.6); sem nenhuma, o
         // perfil de sempre, e a usina sai como saía.
-        var doDesenho = MesasEmUso(editor, documento.Database, "USINA");
+        var doDesenho = MesasEmUso(editor, documento.Database, Tr.T("USINA"));
         if (doDesenho is null) return null;
 
         if (doDesenho.Count > 0) perfil = doDesenho[0].Profile;
 
         var doProjeto = ConfigCommands.Inicial(documento, out var avisoDaConfig);
-        if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage($"\n  ATENÇÃO: {notaDoT3}.\n");
+        if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", notaDoT3));
         var settings = doProjeto.ForTable(perfil.Frame);
-        if (avisoDaConfig is not null) editor.WriteMessage($"\n  ATENÇÃO: {avisoDaConfig}\n");
+        if (avisoDaConfig is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", avisoDaConfig));
 
         if (avisarSeJaHaMesas) FileiraCommands.AvisarSeJaHaMesas(editor, documento.Database);
 
@@ -212,13 +209,11 @@ public static class UsinaCommands
             (tipos, footprints, _) = Tipos(doDesenho);
 
             if (doDesenho.Count > 1)
-                editor.WriteMessage($"\nMesas em uso: {string.Join(", ", doDesenho.Select(m => $"{m.Name} ({m.Profile.Layout.ModuleCount} módulos)"))}\n");
+                editor.WriteMessage(Tr.F("\nMesas em uso: {0}\n", string.Join(", ", doDesenho.Select(m => Tr.F("{0} ({1} módulos)", m.Name, m.Profile.Layout.ModuleCount)))));
         }
 
         editor.WriteMessage(
-            $"\nMesa: {perfil.Describe()}\n"
-            + $"Configuração: {settings.Describe()}\n"
-            + $"Área: {area.Nome}; alinhamento: {alinhamento.Identidade.Describe()}\n");
+            Tr.F("\nMesa: {0}\nConfiguração: {1}\nÁrea: {2}; alinhamento: {3}\n", perfil.Describe(), settings.Describe(), area.Nome, alinhamento.Identidade.Describe()));
 
         PlanLayout layout;
 
@@ -235,21 +230,21 @@ public static class UsinaCommands
         }
         catch (ArgumentException erro)
         {
-            editor.WriteMessage($"\nUSINA {erro.Message}\n");
+            editor.WriteMessage(Tr.F("\nUSINA {0}\n", erro.Message));
             return null;
         }
 
         if (layout.Rows.Count == 0)
         {
-            editor.WriteMessage("\nUSINA Nenhuma fileira cabe: a área está do outro lado da linha, a linha não a atravessa, ou ela é pequena demais.\n");
+            editor.WriteMessage(Tr.T("\nUSINA Nenhuma fileira cabe: a área está do outro lado da linha, a linha não a atravessa, ou ela é pequena demais.\n"));
             return null;
         }
 
-        editor.WriteMessage($"\nProcessando {layout.Rows.Count} fileira(s), {layout.Tables.Count} mesa(s)...\n");
+        editor.WriteMessage(Tr.F("\nProcessando {0} fileira(s), {1} mesa(s)...\n", layout.Rows.Count, layout.Tables.Count));
 
         void Progresso(int feitas, int total)
         {
-            if (feitas % 10 == 0 || feitas == total) editor.WriteMessage($"  {feitas}/{total} fileira(s)\n");
+            if (feitas % 10 == 0 || feitas == total) editor.WriteMessage(Tr.F("  {0}/{1} fileira(s)\n", feitas, total));
         }
 
         var usina = tipos is null
@@ -265,7 +260,7 @@ public static class UsinaCommands
         if (tipos is not null && doDesenho.Count > 1)
         {
             var porTipo = usina.TablesByKind;
-            editor.WriteMessage($"  por mesa: {string.Join(", ", doDesenho.Select((m, k) => $"{porTipo[k]} × {m.Name}"))}\n");
+            editor.WriteMessage(Tr.F("  por mesa: {0}\n", string.Join(", ", doDesenho.Select((m, k) => $"{porTipo[k]} × {m.Name}"))));
         }
 
         return new PlanoDaUsina(settings, geometria, perfil, layout, usina, tipos);
@@ -298,20 +293,18 @@ public static class UsinaCommands
 
         relogio.Stop();
 
-        foreach (var aviso in usina.Warnings.Take(10)) editor.WriteMessage($"\n  ATENÇÃO: {aviso}\n");
-        if (usina.Warnings.Count > 10) editor.WriteMessage($"\n  ... e mais {usina.Warnings.Count - 10} aviso(s).\n");
+        foreach (var aviso in usina.Warnings.Take(10)) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
+        if (usina.Warnings.Count > 10) editor.WriteMessage(Tr.F("\n  ... e mais {0} aviso(s).\n", usina.Warnings.Count - 10));
 
         var cotas = usina.Tables.SelectMany(t => t.Pillars.Pillars).Where(p => p.Length is not null).Select(p => p.Length!.Value).ToList();
 
         editor.WriteMessage(
-            $"\nUSINA {usina.Describe()}\n"
-            + $"  desenhado: {desenhadas} mesa(s), {pilaresDesenhados} pilar(es), {modulosDesenhados} módulo(s) com face, "
-            + $"{pintadas} peça(s) pintada(s), {marcadas} marcada(s)\n"
+            Tr.F("\nUSINA {0}\n  desenhado: {1} mesa(s), {2} pilar(es), {3} módulo(s) com face, {4} peça(s) pintada(s), {5} marcada(s)\n",
+                usina.Describe(), desenhadas, pilaresDesenhados, modulosDesenhados, pintadas, marcadas)
             + (cotas.Count > 0
-                ? $"  comprimento de pilar: de {cotas.Min().ToString("0.00", Brasil)} a {cotas.Max().ToString("0.00", Brasil)} m, "
-                  + $"média {cotas.Average().ToString("0.00", Brasil)} m\n"
-                : "  nenhum pilar com comprimento\n")
-            + $"  tempo: motor {usina.Elapsed.TotalSeconds.ToString("0.0", Brasil)} s, desenho {relogio.Elapsed.TotalSeconds.ToString("0.0", Brasil)} s\n");
+                ? Tr.F("  comprimento de pilar: de {0:0.00} a {1:0.00} m, média {2:0.00} m\n", cotas.Min(), cotas.Max(), cotas.Average())
+                : Tr.T("  nenhum pilar com comprimento\n"))
+            + Tr.F("  tempo: motor {0:0.0} s, desenho {1:0.0} s\n", usina.Elapsed.TotalSeconds, relogio.Elapsed.TotalSeconds));
 
         foreach (var fileira in usina.Rows)
             editor.WriteMessage($"  {fileira.Describe()}\n");
@@ -322,12 +315,12 @@ public static class UsinaCommands
 
         if (naoCabem.Count > 0)
         {
-            editor.WriteMessage($"\n  NÃO CABE (magenta), {naoCabem.Count} mesa(s):\n");
+            editor.WriteMessage(Tr.F("\n  NÃO CABE (magenta), {0} mesa(s):\n", naoCabem.Count));
             foreach (var mesa in naoCabem.Take(30)) editor.WriteMessage($"    {mesa.Solved.Label}: {mesa.Solved.Reason}\n");
-            if (naoCabem.Count > 30) editor.WriteMessage($"    ... e mais {naoCabem.Count - 30}; o motivo de cada uma está no Estado.\n");
+            if (naoCabem.Count > 30) editor.WriteMessage(Tr.F("    ... e mais {0}; o motivo de cada uma está no Estado.\n", naoCabem.Count - 30));
         }
 
-        editor.WriteMessage("\n  Gerado sem análise: alturas, declividade e cores de análise saem pelo botão Análises.\n");
+        editor.WriteMessage(Tr.T("\n  Gerado sem análise: alturas, declividade e cores de análise saem pelo botão Análises.\n"));
         editor.WriteMessage(LayoutDrawer.TiposDeMesa.Legenda(tipos, marcadas) + "\n");
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
     }
