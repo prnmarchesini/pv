@@ -3772,7 +3772,7 @@ function Testar-Arvore {
 }
 
 <#
-    Sombras (9.7 e 9.8): uma fileira e uma arvore grande no meio da F1.3. As
+    Sombras (9.7 e 9.8): usina mista e uma arvore grande no meio da F1.3. As
     09:00 de 21/06/2026 a sombra e desenhada no terreno (cota na faixa dele,
     regra 5) e marca modulos; Apagar tira os contornos e devolve exatamente
     a cor de antes de cada modulo; o dia inteiro marca, pelo pior caso, pelo
@@ -3852,7 +3852,15 @@ function Testar-Sombras {
         return $false
     }
 
-    Write-Host "  (sombras: 09:00 com $contornos contornos e $marcados modulo(s); apagadas com a cor de volta; dia inteiro com $marcadosDia modulo(s) no pior caso)" -ForegroundColor DarkGray
+    # As mesas tambem fazem sombra: as 07:30 a fileira da frente pega a de tras.
+    if ($r.Texto -notmatch '07:30 \(fuso[^\r\n]*?(\d+) por .rvore, (\d+) por outra mesa, (\d+) pelo terreno' -or [int] $Matches[2] -lt 1) {
+        $problemas.Add("ufv-sombras: as 07:30 esperava modulos na sombra de outra mesa (fileira na fileira). Veja $($r.Saida)")
+        return $false
+    }
+
+    $porMesa = [int] $Matches[2]; $porTerreno = [int] $Matches[3]
+
+    Write-Host "  (sombras: 09:00 com $contornos contornos e $marcados modulo(s); apagadas com a cor de volta; dia inteiro com $marcadosDia modulo(s) no pior caso; 07:30 com $porMesa por outra mesa e $porTerreno pelo terreno)" -ForegroundColor DarkGray
     return $true
 }
 

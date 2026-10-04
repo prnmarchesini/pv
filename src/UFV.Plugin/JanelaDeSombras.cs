@@ -26,6 +26,7 @@ internal sealed class JanelaDeSombras : Window
     private readonly TextBox _horaDe = new() { Width = 60, ToolTip = "A hora (ou a primeira hora de cada dia), hh:mm, no relógio local." };
     private readonly TextBox _horaAte = new() { Width = 60, ToolTip = "A última hora de cada dia, hh:mm." };
     private readonly TextBox _passo = new() { Width = 50, Text = "30", ToolTip = "De quantos em quantos minutos a sombra é calculada no dia." };
+    private readonly TextBox _dias = new() { Width = 40, Text = "1", ToolTip = "De quantos em quantos dias, no período: 1 é todo dia, 7 é um dia por semana (o ano inteiro fica rápido)." };
     private readonly TextBox _fuso = new() { Width = 50, ToolTip = "O fuso do relógio, em horas: -3 em Brasília." };
     private readonly TextBlock _recado = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) };
 
@@ -78,25 +79,25 @@ internal sealed class JanelaDeSombras : Window
         }
 
         pilha.Children.Add(Linha(R("Modo", 70), _modo));
-        pilha.Children.Add(Linha(R("Dias", 70), _de, R("  a"), _ate));
+        pilha.Children.Add(Linha(R("Dias", 70), _de, R("  a"), _ate, R("   a cada"), _dias, R(" dia(s)")));
         pilha.Children.Add(Linha(R("Horário", 70), _horaDe, R("  às"), _horaAte, R("   passo"), _passo, R(" min    fuso"), _fuso, R(" h")));
         pilha.Children.Add(Linha(
             R("Atalhos", 70),
-            Atalho("Solstício de inverno", "21 de junho, das 7h às 17h: a sombra mais longa do ano no Brasil.", () => Preencher(1, new DateTime(hoje.Year, 6, 21), new DateTime(hoje.Year, 6, 21), "07:00", "17:00")),
-            Atalho("Este mês", "Todos os dias do mês do primeiro dia, das 7h às 17h, de hora em hora.", () =>
+            Atalho("Solstício de inverno", "21 de junho, das 9h às 15h de meia em meia hora: o critério usual (sem sombra das 9h às 15h no dia de sombra mais longa do ano no Brasil).", () => Preencher(1, new DateTime(hoje.Year, 6, 21), new DateTime(hoje.Year, 6, 21), "09:00", "15:00", "30", "1")),
+            Atalho("Este mês", "Todos os dias do mês do primeiro dia, das 9h às 15h, de hora em hora.", () =>
             {
                 var d = _de.SelectedDate ?? hoje;
-                Preencher(3, new DateTime(d.Year, d.Month, 1), new DateTime(d.Year, d.Month, DateTime.DaysInMonth(d.Year, d.Month)), "07:00", "17:00", "60");
+                Preencher(3, new DateTime(d.Year, d.Month, 1), new DateTime(d.Year, d.Month, DateTime.DaysInMonth(d.Year, d.Month)), "09:00", "15:00", "60", "1");
             }),
-            Atalho("Este ano", "Todos os dias do ano do primeiro dia, das 7h às 17h, de hora em hora.", () =>
+            Atalho("Este ano", "Um dia por semana do ano do primeiro dia, das 9h às 15h, de hora em hora.", () =>
             {
                 var d = _de.SelectedDate ?? hoje;
-                Preencher(3, new DateTime(d.Year, 1, 1), new DateTime(d.Year, 12, 31), "07:00", "17:00", "60");
+                Preencher(3, new DateTime(d.Year, 1, 1), new DateTime(d.Year, 12, 31), "09:00", "15:00", "60", "7");
             })));
 
         pilha.Children.Add(new TextBlock
         {
-            Text = "Faz sombra o que está em Sombreamento > Objetos (árvores). A sombra é desenhada no terreno e os módulos que ela pega ficam amarelos (até 25% da face), laranja (até 50%) ou vermelhos (acima). No período, vale o pior caso de cada módulo, e a sombra desenhada é a do pior instante.",
+            Text = "Fazem sombra as árvores (Sombreamento > Objetos), as outras mesas (a fileira da frente na de trás) e o relevo. Os módulos com sombra ficam lilás (até 25% da face), violeta (até 50%) ou roxo-escuro (acima); a linha de comando diz a causa de cada um. A sombra das árvores é desenhada no chão: no módulo, mais alto, ela cai um pouco ao lado. No período, vale o pior caso de cada módulo.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brushes.Gray,
             Margin = new Thickness(0, 8, 0, 0),
@@ -108,7 +109,7 @@ internal sealed class JanelaDeSombras : Window
         var gerar = new Button { Content = "Gerar sombras", Width = 120, Height = 26, IsDefault = true, ToolTip = "Apaga as sombras anteriores, calcula e desenha as novas, marcando os módulos." };
         gerar.Click += (_, _) => Fazer(() =>
         {
-            var periodo = SombrasCommands.Ler(Data(_de), Data(_ate), _horaDe.Text, _horaAte.Text, _passo.Text, _fuso.Text, out var porque)
+            var periodo = SombrasCommands.Ler(Data(_de), Data(_ate), _horaDe.Text, _horaAte.Text, _passo.Text, _fuso.Text, out var porque, _dias.Text)
                 ?? throw new ArgumentException(porque);
             return SombrasCommands.Gerar(_documento, periodo);
         });
@@ -154,7 +155,7 @@ internal sealed class JanelaDeSombras : Window
 
     private static string Data(DatePicker d) => (d.SelectedDate ?? DateTime.Today).ToString("dd/MM/yyyy", Brasil);
 
-    private void Preencher(int modo, DateTime de, DateTime ate, string horaDe, string horaAte, string? passo = null)
+    private void Preencher(int modo, DateTime de, DateTime ate, string horaDe, string horaAte, string? passo = null, string? dias = null)
     {
         _modo.SelectedIndex = modo;
         _de.SelectedDate = de;
@@ -162,6 +163,7 @@ internal sealed class JanelaDeSombras : Window
         _horaDe.Text = horaDe;
         _horaAte.Text = horaAte;
         if (passo is not null) _passo.Text = passo;
+        if (dias is not null) _dias.Text = dias;
         AplicarModo();
     }
 
@@ -176,25 +178,29 @@ internal sealed class JanelaDeSombras : Window
                 _ate.IsEnabled = false;
                 _horaAte.IsEnabled = false;
                 _passo.IsEnabled = false;
+                _dias.IsEnabled = false;
                 break;
             case 1:
                 _ate.SelectedDate = _de.SelectedDate;
-                if (_horaAte.Text == _horaDe.Text) (_horaDe.Text, _horaAte.Text) = ("06:00", "18:00");
+                if (_horaAte.Text == _horaDe.Text) (_horaDe.Text, _horaAte.Text) = ("09:00", "15:00");
                 _ate.IsEnabled = false;
                 _horaAte.IsEnabled = true;
                 _passo.IsEnabled = true;
+                _dias.IsEnabled = false;
                 break;
             case 2:
                 _horaAte.Text = _horaDe.Text;
                 _ate.IsEnabled = true;
                 _horaAte.IsEnabled = false;
                 _passo.IsEnabled = false;
+                _dias.IsEnabled = true;
                 break;
             default:
-                if (_horaAte.Text == _horaDe.Text) (_horaDe.Text, _horaAte.Text) = ("07:00", "17:00");
+                if (_horaAte.Text == _horaDe.Text) (_horaDe.Text, _horaAte.Text) = ("09:00", "15:00");
                 _ate.IsEnabled = true;
                 _horaAte.IsEnabled = true;
                 _passo.IsEnabled = true;
+                _dias.IsEnabled = true;
                 break;
         }
     }

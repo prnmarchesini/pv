@@ -11,8 +11,10 @@ namespace UFV.Core;
 /// <param name="WorstInstant">O instante com mais área sombreada somada, ou null se nada pegou sombra.</param>
 /// <param name="InstantsWithSun">Quantos instantes do período tinham sol acima do mínimo.</param>
 /// <param name="Instants">Quantos instantes o período tinha.</param>
+/// <param name="Causes">O que fez a sombra no pior instante de cada face (null nas contas só com árvores).</param>
 public sealed record ShadingWorstCase(
-    IReadOnlyList<double> Fractions, IReadOnlyList<DateTime?> When, DateTime? WorstInstant, int InstantsWithSun, int Instants)
+    IReadOnlyList<double> Fractions, IReadOnlyList<DateTime?> When, DateTime? WorstInstant, int InstantsWithSun, int Instants,
+    IReadOnlyList<ShadowCause>? Causes = null)
 {
     /// <summary>Quantas faces pegaram alguma sombra.</summary>
     public int ShadedCount => Fractions.Count(f => f > 0);
@@ -195,8 +197,9 @@ public static class Shading
     /// Um horário fixo num período: <paramref name="from"/> igual a
     /// <paramref name="to"/>.
     /// </summary>
-    public static IEnumerable<DateTime> Instants(DateOnly firstDay, DateOnly lastDay, TimeOnly from, TimeOnly to, TimeSpan step)
+    public static IEnumerable<DateTime> Instants(DateOnly firstDay, DateOnly lastDay, TimeOnly from, TimeOnly to, TimeSpan step, int dayStep = 1)
     {
+        if (dayStep < 1) throw new ArgumentOutOfRangeException(nameof(dayStep), "o passo de dias precisa ser pelo menos 1");
         if (lastDay < firstDay) throw new ArgumentException("o último dia vem antes do primeiro", nameof(lastDay));
         if (to < from) throw new ArgumentException("a hora final vem antes da inicial", nameof(to));
         if (step <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(step), "o passo precisa ser positivo");
@@ -205,7 +208,7 @@ public static class Shading
 
         IEnumerable<DateTime> Gerar()
         {
-            for (var dia = firstDay; dia <= lastDay; dia = dia.AddDays(1))
+            for (var dia = firstDay; dia <= lastDay; dia = dia.AddDays(dayStep))
             {
                 var inicio = dia.ToDateTime(from);
                 var fim = dia.ToDateTime(to);
@@ -219,11 +222,12 @@ public static class Shading
     /// Quantos instantes o período tem: (dias) × (passos por dia). Acima de
     /// <see cref="MaxInstants"/> a conta travaria o CAD por minutos.
     /// </summary>
-    public static long CountInstants(DateOnly firstDay, DateOnly lastDay, TimeOnly from, TimeOnly to, TimeSpan step)
+    public static long CountInstants(DateOnly firstDay, DateOnly lastDay, TimeOnly from, TimeOnly to, TimeSpan step, int dayStep = 1)
     {
-        if (lastDay < firstDay || to < from || step <= TimeSpan.Zero) return 0;
+        if (lastDay < firstDay || to < from || step <= TimeSpan.Zero || dayStep < 1) return 0;
         var porDia = (long)Math.Floor((to - from).TotalMinutes / step.TotalMinutes) + 1;
-        return (lastDay.DayNumber - firstDay.DayNumber + 1L) * porDia;
+        var dias = (lastDay.DayNumber - firstDay.DayNumber) / dayStep + 1L;
+        return dias * porDia;
     }
 
     /// <summary>O máximo de instantes de um período: um ano de hora em hora das 6h às 18h cabe com folga.</summary>

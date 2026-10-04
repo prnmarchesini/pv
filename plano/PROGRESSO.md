@@ -4753,3 +4753,39 @@ assentamento (árvore no lugar novo, fora do chão), o segundo U desfaz o MOVE.
 Conferir no roteiro 2: arrastar, U, ver onde a árvore fica. Escala e
 rotação fora do plano numa árvore não mudam as medidas do XData: a sombra usa
 as medidas da janela.
+
+### 03/10/2026: sombra em roxo e com todos os elementos do desenho
+
+Renan, com print (sombra das 07:30 cruzando mesas): "coloca outra cor no
+sombreamento, tipo roxo, e olha, cadê o sombreamento no módulo? ... E cadê o
+sombreamento das próprias mesas? A análise de sombreamento tem que pegar
+todos elementos do desenho".
+
+- **Cor:** a marca virou roxo em três tons: lilás (até 25% da face),
+  violeta (até 50%), roxo-escuro (acima). O vermelho-escuro de antes se
+  confundia com o laranja do tipo de mesa: os módulos salmão do print eram,
+  muito provavelmente, a marca. Apagar sombras ainda reconhece as cores
+  antigas.
+- **Por que a sombra no chão não bate com o módulo:** o contorno é a
+  sombra NO CHÃO; o módulo fica de 0,5 a 3 m acima, e com o sol rasante das
+  07:30 a sombra dele cai metros ao lado. A linha de comando e a janela dizem
+  isso.
+- **Todos os elementos** (`ShadingModel`): fazem sombra as árvores, as
+  OUTRAS mesas (a fileira da frente na de trás, raio a raio contra as faces
+  dos módulos, numa grade em planta) e o RELEVO (horizonte do terreno visto
+  de cada mesa, em 36 direções). A linha de comando diz quantos módulos por
+  árvore, por outra mesa e pelo terreno, e a causa de cada um dos piores. As
+  sombras rodam sem árvore nenhuma (só mesas e relevo).
+- **Horas:** os atalhos e o "Dia inteiro" passam a usar das 9h às 15h, o
+  critério usual (sem sombra das 9h às 15h no solstício de inverno). Com
+  o sol rasante das 7h e das 17h quase toda fileira cobre a de trás e o
+  pior caso marca a usina inteira. As horas continuam editáveis.
+- "Este ano" é um dia por semana (campo novo "a cada N dias").
+- Tempo: 0,5 s por conta na usina do teste (2.240 módulos); o horizonte é
+  um por mesa (por face levava 14 s).
+- Nível 2 `ufv-sombras` agora numa usina com várias fileiras: às 07:30 exige
+  módulos na sombra de outra mesa.
+
+Roteiro de tela: Sombreamento > Sombras, Solstício de inverno, Gerar: os
+módulos com sombra ficam roxos e a linha de comando diz a causa (árvore,
+mesa, terreno). Instante às 07:30: a fileira da frente sombreia a de trás.

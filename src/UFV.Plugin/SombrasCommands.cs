@@ -13,20 +13,21 @@ using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
 namespace UFV.Plugin;
 
-/// <summary>O período das sombras: dias, janela de horário, passo e fuso.</summary>
-internal sealed record PeriodoDeSombra(DateOnly De, DateOnly Ate, TimeOnly HoraDe, TimeOnly HoraAte, int PassoMinutos, double Fuso)
+/// <summary>O período das sombras: dias (de quantos em quantos), janela de horário, passo e fuso.</summary>
+internal sealed record PeriodoDeSombra(DateOnly De, DateOnly Ate, TimeOnly HoraDe, TimeOnly HoraAte, int PassoMinutos, double Fuso, int PassoDias = 1)
 {
     private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
 
     /// <summary>Um instante só: mesmo dia, mesma hora.</summary>
     internal bool Instante => De == Ate && HoraDe == HoraAte;
 
-    internal IEnumerable<DateTime> Instantes() => Shading.Instants(De, Ate, HoraDe, HoraAte, TimeSpan.FromMinutes(PassoMinutos));
+    internal IEnumerable<DateTime> Instantes() => Shading.Instants(De, Ate, HoraDe, HoraAte, TimeSpan.FromMinutes(PassoMinutos), PassoDias);
 
     internal string Descrever() =>
         Instante
             ? $"{De.ToString("dd/MM/yyyy", Brasil)} às {HoraDe.ToString("HH:mm", Brasil)}"
-            : $"{De.ToString("dd/MM/yyyy", Brasil)} a {Ate.ToString("dd/MM/yyyy", Brasil)}, das {HoraDe.ToString("HH:mm", Brasil)} às {HoraAte.ToString("HH:mm", Brasil)}, de {PassoMinutos} em {PassoMinutos} min";
+            : $"{De.ToString("dd/MM/yyyy", Brasil)} a {Ate.ToString("dd/MM/yyyy", Brasil)}{(PassoDias > 1 ? $" (a cada {PassoDias} dias)" : string.Empty)}, "
+              + $"das {HoraDe.ToString("HH:mm", Brasil)} às {HoraAte.ToString("HH:mm", Brasil)}, de {PassoMinutos} em {PassoMinutos} min";
 }
 
 /// <summary>
@@ -35,8 +36,13 @@ internal sealed record PeriodoDeSombra(DateOnly De, DateOnly Ate, TimeOnly HoraD
 /// de rodar por dia ou horário e vai marcar igual, mas aí sempre marca o
 /// pior caso, e a mesma coisa por período, mês, ano".
 ///
-/// Num instante: a sombra de cada objeto é desenhada no terreno e os módulos
-/// que ela pega ficam com a cor da fração sombreada. Num período: cada
+/// Fazem sombra TODOS os elementos do desenho (03/10/2026: "a análise de
+/// sombreamento tem que pegar todos elementos do desenho"): as árvores, as
+/// outras mesas (a fileira da frente na de trás) e o relevo
+/// (<see cref="ShadingModel"/>). Num instante: a sombra de cada objeto é
+/// desenhada no terreno e os módulos que pegam sombra (de qualquer causa)
+/// ficam roxos, mais escuro quanto maior a fração ("coloca outra cor no
+/// sombreamento, tipo roxo"). Num período: cada
 /// módulo fica com a cor do PIOR caso dele, e a sombra desenhada é a do
 /// instante em que mais área de módulo ficou na sombra. Apagar sombras tira
 /// os contornos e devolve a cor de antes de cada módulo.
@@ -47,9 +53,23 @@ public static class SombrasCommands
     private const string ChaveDasPintadas = "SOMBRA_PINTADAS";
     private const string TipoDaSombra = "Sombra";
 
-    /// <summary>As faixas da marca: até 25% amarelo, até 50% laranja, acima vermelho-escuro.</summary>
+    /// <summary>
+    /// As faixas da marca, em roxo (o laranja, o amarelo e o vermelho se
+    /// confundiam com as cores dos tipos de mesa): até 25% lilás, até 50%
+    /// violeta, acima roxo-escuro.
+    /// </summary>
     internal static RgbColor CorDaFracao(double f) =>
-        f <= 0.25 ? new RgbColor(255, 220, 0) : f <= 0.5 ? new RgbColor(255, 140, 0) : new RgbColor(190, 30, 0);
+        f <= 0.25 ? new RgbColor(215, 180, 255) : f <= 0.5 ? new RgbColor(160, 90, 230) : new RgbColor(95, 20, 160);
+
+    private const string Legenda = "lilás até 25% da face, violeta até 50%, roxo-escuro acima";
+
+    private static string NomeDaCausa(ShadowCause c) => c switch
+    {
+        ShadowCause.Object => "árvore",
+        ShadowCause.Table => "mesa",
+        ShadowCause.Terrain => "terreno",
+        _ => "-",
+    };
 
     [CommandMethod(PluginInfo.ComandoSombras)]
     public static void Sombras()
@@ -97,9 +117,10 @@ public static class SombrasCommands
             var horaAte = Texto("Hora final (hh:mm)");
             var passo = Texto("Passo (min)");
             var fuso = Texto("Fuso (horas, -3 em Brasília)");
-            if (de is null || ate is null || horaDe is null || horaAte is null || passo is null || fuso is null) return;
+            var dias = Texto("A cada quantos dias");
+            if (de is null || ate is null || horaDe is null || horaAte is null || passo is null || fuso is null || dias is null) return;
 
-            var periodo = Ler(de, ate, horaDe, horaAte, passo, fuso, out var porque);
+            var periodo = Ler(de, ate, horaDe, horaAte, passo, fuso, out var porque, dias);
 
             if (periodo is null)
             {
@@ -134,9 +155,11 @@ public static class SombrasCommands
     }
 
     /// <summary>Lê o período dos textos; null com o porquê.</summary>
-    internal static PeriodoDeSombra? Ler(string de, string ate, string horaDe, string horaAte, string passo, string fuso, out string porque)
+    internal static PeriodoDeSombra? Ler(string de, string ate, string horaDe, string horaAte, string passo, string fuso, out string porque, string dias = "1")
     {
         porque = string.Empty;
+
+        if (!int.TryParse(dias.Trim(), NumberStyles.Integer, Brasil, out var pd) || pd is < 1 or > 366) { porque = "O passo de dias precisa ser de 1 a 366."; return null; }
 
         if (!DateOnly.TryParseExact(de.Trim(), "d/M/yyyy", Brasil, DateTimeStyles.None, out var d0)) { porque = "O primeiro dia precisa ser dd/mm/aaaa."; return null; }
         if (!DateOnly.TryParseExact(ate.Trim(), "d/M/yyyy", Brasil, DateTimeStyles.None, out var d1)) { porque = "O último dia precisa ser dd/mm/aaaa."; return null; }
@@ -146,14 +169,14 @@ public static class SombrasCommands
         if (!double.TryParse(fuso.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var f) || f is < -14 or > 14) { porque = "O fuso precisa ser de -14 a 14 horas."; return null; }
         if (d1 < d0) { porque = "O último dia vem antes do primeiro."; return null; }
         if (h1 < h0) { porque = "A hora final vem antes da inicial."; return null; }
-        var instantes = Shading.CountInstants(d0, d1, h0, h1, TimeSpan.FromMinutes(p));
+        var instantes = Shading.CountInstants(d0, d1, h0, h1, TimeSpan.FromMinutes(p), pd);
         if (instantes > Shading.MaxInstants)
         {
             porque = $"O período tem {instantes.ToString("N0", Brasil)} instantes; o máximo é {Shading.MaxInstants.ToString("N0", Brasil)}. Aumente o passo ou encurte o período.";
             return null;
         }
 
-        return new PeriodoDeSombra(d0, d1, h0, h1, p, f);
+        return new PeriodoDeSombra(d0, d1, h0, h1, p, f, pd);
     }
 
     /// <summary>O fuso de partida pela longitude: −3 em quase todo o Brasil.</summary>
@@ -188,8 +211,8 @@ public static class SombrasCommands
             return "SOMBRAS O desenho não tem localização (latitude e longitude). Corrija em Terreno > Resumo > Localização.";
 
         var cilindros = new List<ShadowCylinder>();
-        var faces = new List<IReadOnlyList<Point3>>();
-        var modulos = new List<ObjectId>();
+        List<ShadowQuad> faces;
+        List<ObjectId> modulos;
         var arvores = 0;
 
         using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
@@ -205,11 +228,15 @@ public static class SombrasCommands
 
         Apagar(database);
 
-        if (arvores == 0) return "SOMBRAS Não há objeto de sombra no desenho: ponha árvores em Sombreamento > Objetos > Árvore.";
         if (faces.Count == 0) return "SOMBRAS Não há módulo gerado pelo plugin no desenho.";
 
         var relogio = System.Diagnostics.Stopwatch.StartNew();
+
+        // Árvores, as outras mesas e o relevo: todos os elementos do desenho.
+        var modelo = new ShadingModel(faces, cilindros, (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null, terreno.Mesh.MaxZ);
+
         double[] fracoes;
+        ShadowCause[] causas;
         DateTime?[] quando;
         DateTime? desenhar;
         int comSol, instantes;
@@ -218,16 +245,19 @@ public static class SombrasCommands
         {
             var t = periodo.De.ToDateTime(periodo.HoraDe);
             var sol = SolarCalculator.Compute(lugar.Latitude, lugar.Longitude, t, periodo.Fuso);
+            var r = modelo.At(sol);
             comSol = sol.ElevationDegrees >= Shading.MinimumElevationDegrees ? 1 : 0;
             instantes = 1;
-            fracoes = comSol == 1 ? Shading.Fractions(faces, cilindros, sol.Direction) : new double[faces.Count];
+            fracoes = r.Fractions.ToArray();
+            causas = r.Causes.ToArray();
             quando = fracoes.Select(f => f > 0 ? (DateTime?)t : null).ToArray();
             desenhar = comSol == 1 ? t : null;
         }
         else
         {
-            var pior = Shading.Worst(faces, cilindros, lugar.Latitude, lugar.Longitude, periodo.Fuso, periodo.Instantes());
+            var pior = modelo.Worst(lugar.Latitude, lugar.Longitude, periodo.Fuso, periodo.Instantes());
             fracoes = pior.Fractions.ToArray();
+            causas = pior.Causes!.ToArray();
             quando = pior.When.ToArray();
             desenhar = pior.WorstInstant;
             comSol = pior.InstantsWithSun;
@@ -237,7 +267,7 @@ public static class SombrasCommands
         relogio.Stop();
 
         var contornos = 0;
-        if (desenhar is { } instante)
+        if (desenhar is { } instante && cilindros.Count > 0)
         {
             var sol = SolarCalculator.Compute(lugar.Latitude, lugar.Longitude, instante, periodo.Fuso);
             contornos = Desenhar(database, terreno, cilindros, sol, instante);
@@ -247,7 +277,7 @@ public static class SombrasCommands
 
         var texto = new System.Text.StringBuilder();
         texto.Append($"SOMBRAS {periodo.Descrever()} (fuso {periodo.Fuso.ToString("+0.#;-0.#;0", Brasil)}), em {lugar.Latitude.ToString("0.0000", Brasil)}°, {lugar.Longitude.ToString("0.0000", Brasil)}°: ");
-        texto.Append($"{arvores} objeto(s), {faces.Count} módulo(s), {instantes} instante(s), {comSol} com sol. ");
+        texto.Append($"{arvores} árvore(s), {faces.Count} módulo(s) (as mesas e o relevo também fazem sombra), {instantes} instante(s), {comSol} com sol. ");
 
         if (comSol == 0)
         {
@@ -255,12 +285,14 @@ public static class SombrasCommands
             return texto.ToString();
         }
 
+        int Por(ShadowCause c) => Enumerable.Range(0, fracoes.Length).Count(k => fracoes[k] > 0 && causas[k] == c);
+
         texto.Append($"{marcados} módulo(s) pegam sombra");
         if (!periodo.Instante) texto.Append(" no pior caso");
-        texto.Append($" (amarelo até 25%, laranja até 50%, vermelho acima). ");
+        texto.Append($": {Por(ShadowCause.Object)} por árvore, {Por(ShadowCause.Table)} por outra mesa, {Por(ShadowCause.Terrain)} pelo terreno ({Legenda}). ");
 
         if (desenhar is { } d && contornos > 0)
-            texto.Append($"Sombra desenhada {(periodo.Instante ? "às" : "no pior instante,")} {d.ToString("dd/MM/yyyy HH:mm", Brasil)}. ");
+            texto.Append($"Sombra das árvores desenhada {(periodo.Instante ? "às" : "no pior instante,")} {d.ToString("dd/MM/yyyy HH:mm", Brasil)} (no chão; no módulo, que fica mais alto, ela cai um pouco ao lado). ");
 
         texto.Append($"Conta em {relogio.Elapsed.TotalSeconds.ToString("0.0", Brasil)} s.");
 
@@ -268,21 +300,22 @@ public static class SombrasCommands
         if (piores.Count > 0)
         {
             texto.Append("\n  Os piores: ");
-            texto.Append(string.Join("; ", piores.Select(k => $"{Rotulo(database, modulos[k])} {(fracoes[k] * 100).ToString("0", Brasil)}% em {quando[k]!.Value.ToString("dd/MM HH:mm", Brasil)}")));
+            texto.Append(string.Join("; ", piores.Select(k =>
+                $"{Rotulo(database, modulos[k])} {(fracoes[k] * 100).ToString("0", Brasil)}% ({NomeDaCausa(causas[k])}) em {quando[k]!.Value.ToString("dd/MM HH:mm", Brasil)}")));
         }
 
         return texto.ToString();
     }
 
-    /// <summary>As faces dos módulos (os quatro cantos) e o bloco do módulo de cada uma, na mesma ordem.</summary>
-    private static (List<IReadOnlyList<Point3>> Faces, List<ObjectId> Modulos) Faces(Transaction transacao, Database database)
+    /// <summary>As faces dos módulos (os quatro cantos e a mesa dona) e o bloco do módulo de cada uma, na mesma ordem.</summary>
+    private static (List<ShadowQuad> Faces, List<ObjectId> Modulos) Faces(Transaction transacao, Database database)
     {
         var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
         var classeFace = RXObject.GetClass(typeof(Face));
         var classeBloco = RXObject.GetClass(typeof(BlockReference));
 
         var modulos = new Dictionary<Guid, ObjectId>();
-        var faces = new List<(Guid Modulo, IReadOnlyList<Point3> Cantos)>();
+        var faces = new List<(Guid Modulo, Guid Mesa, IReadOnlyList<Point3> Cantos)>();
 
         foreach (ObjectId id in espaco)
         {
@@ -291,7 +324,7 @@ public static class SombrasCommands
                 if (transacao.GetObject(id, OpenMode.ForRead) is Face face && LayoutXData.LoadFace(face) is { } f)
                 {
                     var cantos = Enumerable.Range(0, 4).Select(i => face.GetVertexAt((short)i)).Select(p => new Point3(p.X, p.Y, p.Z)).ToList();
-                    faces.Add((f.Module, cantos));
+                    faces.Add((f.Module, f.Table, cantos));
                 }
             }
             else if (id.ObjectClass.IsDerivedFrom(classeBloco))
@@ -301,8 +334,12 @@ public static class SombrasCommands
             }
         }
 
+        // A mesa dona vira um número: a face não faz sombra na própria mesa.
+        var grupos = new Dictionary<Guid, int>();
+        int Grupo(Guid mesa) => grupos.TryGetValue(mesa, out var g) ? g : grupos[mesa] = grupos.Count;
+
         var comBloco = faces.Where(f => modulos.ContainsKey(f.Modulo)).ToList();
-        return (comBloco.Select(f => f.Cantos).ToList(), comBloco.Select(f => modulos[f.Modulo]).ToList());
+        return (comBloco.Select(f => new ShadowQuad(f.Cantos, Grupo(f.Mesa))).ToList(), comBloco.Select(f => modulos[f.Modulo]).ToList());
     }
 
     /// <summary>Desenha a sombra de cada cilindro no terreno. Quantos contornos.</summary>
@@ -437,7 +474,10 @@ public static class SombrasCommands
     /// <summary>Se a cor é uma das três da marca de sombra.</summary>
     private static bool EDaSombra(Color cor) =>
         cor.ColorMethod == ColorMethod.ByColor
-        && new[] { 0.1, 0.4, 0.9 }.Select(CorDaFracao).Any(c => c.R == cor.Red && c.G == cor.Green && c.B == cor.Blue);
+        && new[] { 0.1, 0.4, 0.9 }.Select(CorDaFracao).Concat(CoresAntigas).Any(c => c.R == cor.Red && c.G == cor.Green && c.B == cor.Blue);
+
+    /// <summary>As cores da marca até 03/10/2026 (amarelo, laranja, vermelho): desenhos com elas ainda voltam com Apagar.</summary>
+    private static readonly RgbColor[] CoresAntigas = [new(255, 220, 0), new(255, 140, 0), new(190, 30, 0)];
 
     private static string Rotulo(Database database, ObjectId modulo)
     {

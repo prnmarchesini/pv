@@ -1,9 +1,10 @@
-; Teste de nivel 2 das sombras (9.7 e 9.8): uma fileira, uma arvore grande
+; Teste de nivel 2 das sombras (9.7 e 9.8): usina com 28 e 14, uma arvore grande
 ; (tronco 4 m, copa 10 m de altura e 8 m de largura) no meio da F1.3; a sombra
 ; de 21/06/2026 as 09:00 (fuso -3) e desenhada no terreno e pega modulos, que
-; ficam amarelos, laranja ou vermelhos; Apagar tira os contornos e devolve a
-; cor de antes; o dia inteiro (06:00 as 18:00, de hora em hora) marca pelo
-; pior caso pelo menos os mesmos modulos.
+; ficam em tons de roxo; Apagar tira os contornos e devolve a cor de antes; o
+; dia inteiro (06:00 as 18:00, de hora em hora) marca pelo pior caso pelo
+; menos os mesmos modulos; as 07:30 (sol baixo) a fileira da frente faz sombra
+; na de tras (as mesas tambem fazem sombra).
 
 (setq ufv:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
@@ -13,7 +14,8 @@
 (setvar "OSMODE" 0)
 (command "UFV_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area sombras")
 (command "UFV_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento sombras")
-(command "UFV_FILEIRA_AUTO")
+(command "UFV_MESAS_EXEMPLO_AUTO")
+(command "UFV_USINA_AUTO")
 
 (defun ufv:conta (ss) (if ss (sslength ss) 0))
 (defun ufv:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("MARCHENG_UFV")))))))
@@ -40,7 +42,7 @@
   (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "MARCHENG_UFV_MOD*"))) i 0 n 0)
   (while (< i (ufv:conta ss))
     (setq c (cdr (assoc 420 (entget (ssname ss i)))))
-    (if (member c '(16768000 16747520 12459520)) (setq n (1+ n)))
+    (if (member c '(14136575 10509030 6231200)) (setq n (1+ n)))
     (setq i (1+ i)))
   n)
 (defun ufv:assinatura ( / ss i l)
@@ -59,12 +61,16 @@
   (list n zmin zmax))
 
 (setq ufv:antes (ufv:assinatura))
-(command "UFV_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "09:00" "09:00" "30" "-3")
+(command "UFV_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "09:00" "09:00" "30" "-3" "1")
 (setq ufv:s1 (ufv:sombras) ufv:c1 (ufv:cores))
 (command "UFV_SOMBRAS_APAGAR")
 (setq ufv:s2 (ufv:sombras) ufv:c2 (ufv:cores) ufv:volta (equal ufv:antes (ufv:assinatura)))
-(command "UFV_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "06:00" "18:00" "60" "-3")
+(command "UFV_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "06:00" "18:00" "60" "-3" "1")
 (setq ufv:s3 (ufv:sombras) ufv:c3 (ufv:cores))
+
+; Sol baixo (07:30): a fileira da frente faz sombra na de tras (a linha de
+; comando diz quantos modulos por outra mesa).
+(command "UFV_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "07:30" "07:30" "30" "-3" "1")
 
 (princ (strcat "\nUFV_SOMBRAS instante=" (itoa (car ufv:s1)) " zmin=" (rtos (cadr ufv:s1) 2 3) " zmax=" (rtos (caddr ufv:s1) 2 3)
                " marcados=" (itoa ufv:c1) " apagado=" (itoa (car ufv:s2)) " marcadosdepois=" (itoa ufv:c2)
