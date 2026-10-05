@@ -103,7 +103,7 @@ public static class ConfiguracaoEletricaAutoCommands
         {
             if (Trafo(s, apelido) is not { } t) return "trafo nao existe";
             double Num() => double.Parse(valor, Inv);
-            return s.EditTransformer(campo switch
+            return EquipamentoEmCampo.RedesenharSeDeuCerto(database, s, s.EditTransformer(campo switch
             {
                 "Nome" => t with { Name = valor },
                 "Apelido" => t with { Nickname = valor },
@@ -113,7 +113,7 @@ public static class ConfiguracaoEletricaAutoCommands
                 "K" => t with { KFactor = Num() },
                 "Z" => t with { ImpedancePercent = Num() },
                 _ => t with { Notes = valor },
-            });
+            }), EquipmentKind.Transformer, t.Id);
         });
 
         return porque is null ? $"trafo {apelido} editado" : $"recusado: {porque}";

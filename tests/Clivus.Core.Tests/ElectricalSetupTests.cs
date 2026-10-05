@@ -325,4 +325,26 @@ public class ElectricalSetupTests
         setup.EditUnit(c1.Id, "T1", c1.Size);
         Assert.Equal(2, setup.FindEquipment("T1").Count);
     }
+
+    // ------------------------------------------------------------ 13.2
+
+    [Fact]
+    [Trait("Etapa", "13")]
+    public void ATagDoTrafoEmCampoEOApelidoEditavel()
+    {
+        var setup = new ElectricalSetup();
+        var t1 = setup.AddTransformer(ElectricalDefaults.TransformerTemplates[2]);
+
+        var antes = setup.FindEquipment(EquipmentKind.Transformer, t1.Id)!;
+        Assert.Equal("T1", antes.Tag);
+        Assert.Equal(ElectricalDefaults.TransformerTemplates[2].Size, antes.Size);
+
+        Assert.Null(setup.EditTransformer(t1 with { Nickname = "TR-A", Size = new EquipmentSize(4, 3, 2.6) }));
+
+        var depois = setup.FindEquipment(EquipmentKind.Transformer, t1.Id)!;
+        Assert.Equal("TR-A", depois.Tag);
+        Assert.Equal(new EquipmentSize(4, 3, 2.6), depois.Size);
+        Assert.Equal(t1.Id, setup.FindEquipment("tr-a").Single().Id);
+        Assert.Empty(setup.FindEquipment("T1"));
+    }
 }

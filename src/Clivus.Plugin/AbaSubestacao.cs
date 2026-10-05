@@ -225,7 +225,7 @@ internal sealed class AbaSubestacao : AbaEletrica
         string? porque = null;
         Fazer(() =>
         {
-            porque = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => RedesenharSeDeuCerto(s, s.EditUnit(uc.Id, _nome.Text, tamanho), EquipmentKind.ConsumerUnit, uc.Id));
+            porque = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => EquipamentoEmCampo.RedesenharSeDeuCerto(Documento.Database, s, s.EditUnit(uc.Id, _nome.Text, tamanho), EquipmentKind.ConsumerUnit, uc.Id));
             return porque is null ? Tr.F("{0} salva.", uc.Code) : null;
         });
         if (porque is not null) Avisar(Tr.F("Não salvei: {0}.", porque), erro: true);

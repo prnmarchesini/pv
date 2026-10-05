@@ -20,8 +20,12 @@ internal sealed class AbaTransformador : AbaEletrica
         var botoes = new WrapPanel();
         Botao(botoes, Tr.T("Novo trafo"), Tr.T("Cria um trafo em branco (Trafo 1, apelido T1...)."), () => Novo(null));
         botoes.Children.Add(_padroes);
-        Botao(botoes, Tr.T("Novo do padrão"), Tr.T("Cria um trafo com os campos do padrão escolhido ao lado."), () => Novo(_padroes.SelectedItem as TransformerTemplate));
-        Botao(botoes, Tr.T("Apagar"), Tr.T("Tira o trafo do cadastro. Os inversores do skid dele ficam sem trafo; nada mais é apagado."), Apagar);
+        Botao(botoes, Tr.T("Novo do padrão"), Tr.T("Cria um trafo com os campos do padrão escolhido ao lado."), () =>
+        {
+            if ((_padroes.SelectedItem as ComboBoxItem)?.Tag is TransformerTemplate padrao) Novo(padrao);
+            else Avisar(Tr.T("Escolha um padrão na lista ao lado."), erro: true);
+        });
+        Botao(botoes, Tr.T("Apagar"), Tr.T("Tira o trafo do cadastro e o retângulo dele do campo. Os inversores do skid dele ficam sem trafo; nada mais é apagado."), Apagar);
 
         foreach (var p in ElectricalDefaults.TransformerTemplates) _padroes.Items.Add(new ComboBoxItem { Content = p.Describe(), Tag = p });
         _padroes.SelectedIndex = 1;
@@ -41,6 +45,11 @@ internal sealed class AbaTransformador : AbaEletrica
 
         var acoes = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
         Botao(acoes, Tr.T("Salvar alterações"), Tr.T("Grava o cadastro do trafo escolhido no desenho."), Salvar);
+        Botao(acoes, Tr.T("Alocar em campo"), Tr.T("A janela some: clique o centro do retângulo na planta. Se já está em campo, ele é movido; o vínculo não muda."), () =>
+        {
+            if (Escolhido is { } t) AlocarEmCampo(t.Id);
+            else Avisar(Tr.T("Escolha um trafo na lista."), erro: true);
+        });
 
         var formulario = new StackPanel();
         formulario.Children.Add(grade);
@@ -67,10 +76,14 @@ internal sealed class AbaTransformador : AbaEletrica
         var (setup, problema) = ConfiguracaoEletricaStore.Ler(Documento.Database);
         var anterior = Escolhido?.Id;
 
+        var emCampo = EquipamentoEmCampo.EmCampo(Documento.Database);
+
         _lista.Items.Clear();
         foreach (var t in setup.Transformers)
         {
-            var item = new ListBoxItem { Content = Descrever(t), Tag = t };
+            var linha = Descrever(t);
+            if (setup.FindUnit(t.ConsumerUnit) is { } uc) linha = Tr.F("{0} — em {1}", linha, uc.Code);
+            var item = new ListBoxItem { Content = ComCampo(linha, emCampo.Contains((EquipmentKind.Transformer, t.Id))), Tag = t };
             _lista.Items.Add(item);
             if (t.Id == anterior) _lista.SelectedItem = item;
         }
@@ -154,7 +167,7 @@ internal sealed class AbaTransformador : AbaEletrica
         string? porque = null;
         Fazer(() =>
         {
-            porque = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.EditTransformer(editado));
+            porque = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => EquipamentoEmCampo.RedesenharSeDeuCerto(Documento.Database, s, s.EditTransformer(editado), EquipmentKind.Transformer, t.Id));
             return porque is null ? Tr.F("{0} salvo.", editado.Nickname.Trim()) : null;
         });
         if (porque is not null) Avisar(Tr.F("Não salvei: {0}.", porque), erro: true);
@@ -171,6 +184,7 @@ internal sealed class AbaTransformador : AbaEletrica
         Fazer(() =>
         {
             var soltos = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.RemoveTransformer(t.Id)) ?? 0;
+            EquipamentoEmCampo.Apagar(Documento.Database, EquipmentKind.Transformer, t.Id);
             return Tr.F("{0} apagado do cadastro; {1} inversor(es) ficaram sem trafo.", t.Nickname, soltos);
         });
     }

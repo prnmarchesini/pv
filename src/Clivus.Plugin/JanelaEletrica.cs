@@ -187,17 +187,6 @@ internal abstract class AbaEletrica : DockPanel
     protected void AlocarEmCampo(Guid equipamento) =>
         JanelaEletrica.Campo(Documento, PluginInfo.ComandoEletricaPosicionar, equipamento.ToString("D"));
 
-    /// <summary>
-    /// Depois de editar o cadastro (dentro de <see cref="ConfiguracaoEletricaStore.Mudar"/>):
-    /// se deu certo e o equipamento está em campo, a tag e a dimensão do
-    /// retângulo acompanham. Devolve o porquê da edição, como veio.
-    /// </summary>
-    protected string? RedesenharSeDeuCerto(ElectricalSetup setup, string? porque, EquipmentKind tipo, Guid id)
-    {
-        if (porque is null && setup.FindEquipment(tipo, id) is { } equipamento) EquipamentoEmCampo.Redesenhar(Documento.Database, equipamento);
-        return porque;
-    }
-
     /// <summary>Clique de botão em try/catch: exceção num evento WPF derrubaria o Civil 3D.</summary>
     protected Button Botao(Panel onde, string texto, string dica, Action acao, double largura = 0)
     {

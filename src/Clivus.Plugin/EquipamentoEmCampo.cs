@@ -93,6 +93,17 @@ internal static class EquipamentoEmCampo
     }
 
     /// <summary>
+    /// Depois de editar o cadastro (dentro de <see cref="ConfiguracaoEletricaStore.Mudar"/>):
+    /// se deu certo e o equipamento está em campo, a tag e a dimensão do
+    /// retângulo acompanham. Devolve o porquê da edição, como veio.
+    /// </summary>
+    internal static string? RedesenharSeDeuCerto(Database database, ElectricalSetup setup, string? porque, EquipmentKind tipo, Guid id)
+    {
+        if (porque is null && setup.FindEquipment(tipo, id) is { } equipamento) Redesenhar(database, equipamento);
+        return porque;
+    }
+
+    /// <summary>
     /// Tira o equipamento do campo (o cadastro dele foi apagado): apaga a
     /// referência e a definição do bloco. Se estava em campo.
     /// </summary>
