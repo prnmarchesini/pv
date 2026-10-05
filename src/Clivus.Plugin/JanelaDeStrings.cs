@@ -19,6 +19,10 @@ internal sealed class JanelaDeStrings : Window
     private readonly ListBox _lista = new() { MinHeight = 220 };
     private readonly TextBlock _recado = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
     private readonly CartesianoDaString _cartesiano = new();
+    private readonly TabControl _abas = new() { Margin = new Thickness(10) };
+    private readonly StackPanel _tiposDaGeracao = new();
+    private readonly HashSet<Guid> _tiposConhecidos = [];
+    private readonly ListBox _relatorio = new() { BorderBrush = Brushes.LightGray };
     private readonly TextBlock _resumoDoTracado = new() { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
 
     private readonly ComboBox _tipoDoTrecho = new() { Height = 26, MinWidth = 110, Margin = new Thickness(0, 0, 6, 0), VerticalContentAlignment = VerticalAlignment.Center };
@@ -40,7 +44,7 @@ internal sealed class JanelaDeStrings : Window
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
-        var abas = new TabControl { Margin = new Thickness(10) };
+        var abas = _abas;
         abas.Items.Add(new TabItem { Header = Tr.T("Configuração"), Content = AbaConfiguracao(), ToolTip = Tr.T("Os tipos de string: quais mesas cada um cobre e o traçado.") });
         abas.Items.Add(new TabItem { Header = Tr.T("Gerar"), Content = AbaGerar(), ToolTip = Tr.T("Escolhe os tipos que valem e gera o traçado nas mesas selecionadas.") });
 
@@ -261,13 +265,114 @@ internal sealed class JanelaDeStrings : Window
         }, tipo.Id);
     }
 
-    private static UIElement AbaGerar() =>
-        new TextBlock
+    /// <summary>
+    /// A aba Gerar (11.6): os tipos que valem nesta porção da usina (os com
+    /// traçado vêm marcados), o botão que pede as mesas em campo e o
+    /// relatório: que tipo caiu em que grupo e os avisos (mesa sem tipo,
+    /// grupo com string ligada a inversor), em vermelho.
+    /// </summary>
+    private UIElement AbaGerar()
+    {
+        var explicacao = new TextBlock
         {
-            Margin = new Thickness(12),
+            Margin = new Thickness(0, 0, 0, 6),
             TextWrapping = TextWrapping.Wrap,
             Text = Tr.T("Escolha os tipos de string que valem e selecione as mesas: cada tipo só preenche grupos de mesas iguais aos dele."),
         };
+
+        var gerar = new Button { Content = Tr.T("Gerar nas mesas selecionadas"), Height = 28, Margin = new Thickness(0, 6, 0, 0), Padding = new Thickness(8, 0, 8, 0), ToolTip = Tr.T("Esconde a janela: selecione as mesas (só mesas entram) e tecle Enter. Mesa que já tem string livre é regerada; string ligada a inversor não é tocada.") };
+        gerar.Click += (_, _) => PedirGeracao();
+
+        var esquerda = new DockPanel { Width = 280, Margin = new Thickness(0, 0, 8, 0) };
+        DockPanel.SetDock(explicacao, Dock.Top);
+        esquerda.Children.Add(explicacao);
+        DockPanel.SetDock(gerar, Dock.Bottom);
+        esquerda.Children.Add(gerar);
+        esquerda.Children.Add(new ScrollViewer { Content = _tiposDaGeracao, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+
+        var painel = new DockPanel { Margin = new Thickness(8) };
+        DockPanel.SetDock(esquerda, Dock.Left);
+        painel.Children.Add(esquerda);
+        painel.Children.Add(_relatorio);
+        return painel;
+    }
+
+    /// <summary>Os tipos na aba Gerar: marcados os que podem gerar; os outros desligados, com o porquê.</summary>
+    private void AtualizarGeracao(IReadOnlyList<StringType> tipos)
+    {
+        var marcados = _tiposDaGeracao.Children.OfType<CheckBox>().Where(c => c.IsChecked == true).Select(c => (Guid)c.Tag).ToHashSet();
+        var primeiraVez = _tiposDaGeracao.Children.Count == 0;
+        _tiposDaGeracao.Children.Clear();
+
+        foreach (var tipo in tipos)
+        {
+            var caixa = new CheckBox { Content = Descrever(tipo), Tag = tipo.Id, Margin = new Thickness(0, 2, 0, 2), IsEnabled = tipo.CanGenerate };
+            caixa.IsChecked = tipo.CanGenerate && (primeiraVez || marcados.Contains(tipo.Id) || !_tiposConhecidos.Contains(tipo.Id));
+            if (!tipo.CanGenerate) caixa.ToolTip = Tr.T("Sem mesas ou sem traçado: monte o traçado na aba Configuração.");
+            _tiposDaGeracao.Children.Add(caixa);
+        }
+
+        _tiposConhecidos.Clear();
+        _tiposConhecidos.UnionWith(tipos.Select(t => t.Id));
+    }
+
+    private void PedirGeracao()
+    {
+        try
+        {
+            var tipos = _tiposDaGeracao.Children.OfType<CheckBox>().Where(c => c.IsChecked == true).Select(c => (Guid)c.Tag).ToList();
+            if (tipos.Count == 0)
+            {
+                MostrarRelatorio([Tr.T("Marque ao menos um tipo de string com traçado.")], erro: true);
+                return;
+            }
+
+            if (AcadApp.DocumentManager.MdiActiveDocument != _documento)
+            {
+                MostrarRelatorio([Tr.T("Ative o desenho desta janela antes de escolher as mesas.")], erro: true);
+                return;
+            }
+
+            StringCommands.PedirGeracao(_documento, tipos);
+            Hide();
+            _documento.SendStringToExecute("_" + PluginInfo.ComandoStringGerar + " ", true, false, false);
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao pedir a geração das strings.", erro);
+            Show();
+            MostrarRelatorio([Tr.F("Não consegui: {0}", erro.Message)], erro: true);
+        }
+    }
+
+    private void MostrarRelatorio(IReadOnlyList<string> linhas, bool erro)
+    {
+        _relatorio.Items.Clear();
+        for (var i = 0; i < linhas.Count; i++)
+        {
+            var aviso = erro || linhas[i].StartsWith(Tr.F("Aviso: {0}.", string.Empty).TrimEnd('.', ' '), StringComparison.Ordinal);
+            _relatorio.Items.Add(new TextBlock { Text = linhas[i], TextWrapping = TextWrapping.Wrap, Foreground = aviso ? Brushes.Firebrick : i == 0 ? Brushes.ForestGreen : Brushes.Black });
+        }
+    }
+
+    /// <summary>O CLIVUS_STRING_GERAR pedido pela janela terminou: ela volta, na aba Gerar, com o relatório.</summary>
+    internal static void RetomarGeracao(Document documento, IReadOnlyList<string> linhas, bool erro)
+    {
+        if (!Abertas.TryGetValue(documento, out var janela)) return;
+
+        try
+        {
+            if (!janela.IsVisible) janela.Show();
+            janela._abas.SelectedIndex = 1;
+            janela.Atualizar();
+            janela.MostrarRelatorio(linhas, erro);
+            janela.Activate();
+        }
+        catch (Exception falha)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao trazer de volta a janela de strings.", falha);
+        }
+    }
 
     private StringType? Escolhido => (_lista.SelectedItem as ListBoxItem)?.Tag as StringType;
 
@@ -286,6 +391,7 @@ internal sealed class JanelaDeStrings : Window
 
         if (_lista.SelectedItem is null && _lista.Items.Count > 0) _lista.SelectedIndex = 0;
         MostrarTipo();
+        AtualizarGeracao(lido.Items);
 
         if (_lista.Items.Count == 0) _recado.Text = Tr.T("Nenhum tipo de string ainda: use Adicionar tipo de string.");
         if (lido.Problem is { } problema) Avisar(problema, erro: true);

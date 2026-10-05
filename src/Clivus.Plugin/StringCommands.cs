@@ -197,6 +197,61 @@ public static class StringCommands
         }
     }
 
+    /// <summary>O pedido da janela para o próximo CLIVUS_STRING_GERAR deste desenho: os tipos que valem.</summary>
+    private static readonly Dictionary<Document, IReadOnlyCollection<Guid>> PedidosDeGeracao = [];
+
+    internal static void PedirGeracao(Document documento, IReadOnlyCollection<Guid> tipos) => PedidosDeGeracao[documento] = tipos;
+
+    /// <summary>
+    /// CLIVUS_STRING_GERAR (11.6 a 11.8): seleção em campo só de mesas,
+    /// Enter; cada tipo que vale (os escolhidos na aba Gerar; digitado, todos
+    /// os que têm traçado) cai nos grupos de mesas vizinhas de assinatura
+    /// igual. Mesa sem tipo que case não é preenchida e é avisada pelo nome.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoStringGerar)]
+    public static void Gerar()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+        var daJanela = PedidosDeGeracao.Remove(documento, out var tipos);
+        IReadOnlyList<string> linhas = [];
+        var erro = false;
+
+        try
+        {
+            var guids = MesasDaString.Selecionar(documento, Tr.T("\nSelecione as mesas onde gerar as strings (só mesas entram): "));
+            if (guids is null)
+            {
+                linhas = [Tr.T("Seleção cancelada.")];
+                return;
+            }
+
+            if (guids.Count == 0)
+            {
+                linhas = [Tr.F("Não gerei: {0}.", Tr.T("nenhuma mesa do plugin na seleção"))];
+                erro = true;
+                return;
+            }
+
+            linhas = GeracaoDeStrings.Gerar(documento, guids, tipos ?? []).Linhas;
+        }
+        catch (System.Exception falha)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no CLIVUS_STRING_GERAR.", falha);
+            linhas = [Tr.F("Não consegui: {0}", falha.Message)];
+            erro = true;
+        }
+        finally
+        {
+            foreach (var linha in linhas) editor.WriteMessage("\nSTRING_GERAR " + linha);
+            editor.WriteMessage("\n");
+
+            if (daJanela && ClivusExtension.TemInterface()) JanelaDeStrings.RetomarGeracao(documento, linhas, erro);
+        }
+    }
+
     /// <summary>
     /// CLIVUS_STRING_TRACADO_AUTO (nível 2, 11.3 e 11.4): o nome do tipo e
     /// os cliques, como no cartesiano. Strings separadas por ";", cliques
