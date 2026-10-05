@@ -20,6 +20,9 @@ public static class ElectricalDefaults
     /// <summary>Maior nome aceito (o mesmo limite das outras perguntas do plugin).</summary>
     public const int MaxNameLength = 100;
 
+    /// <summary>Quantos equipamentos (subestações unitárias, inversores) se cria de uma vez, no máximo.</summary>
+    public const int MaxAtOnce = 500;
+
     /// <summary>Altura em que o retângulo do equipamento flutua sobre o terreno, em metros (12.3, 13.2, 14.6).</summary>
     public const double FloatHeight = 0.80;
 
@@ -92,6 +95,28 @@ public sealed class ElectricalSetup
         return uc;
     }
 
+    /// <summary>
+    /// Cria <paramref name="count"/> subestações unitárias (12.2): bloquinhos
+    /// independentes U1, U2..., cada um com no máximo um trafo.
+    /// </summary>
+    public IReadOnlyList<ConsumerUnit> AddUnitaryUnits(int count)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(count, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(count, ElectricalDefaults.MaxAtOnce);
+
+        var primeiro = NextNumber(_ucs.Select(u => u.Code), "U");
+        var novas = new List<ConsumerUnit>(count);
+
+        for (var i = 0; i < count; i++)
+        {
+            var codigo = "U" + (primeiro + i).ToString(CultureInfo.InvariantCulture);
+            novas.Add(new ConsumerUnit(Guid.NewGuid(), codigo, Tr.F("Subestação {0}", codigo), ConsumerUnitMode.Unitary, ElectricalDefaults.ConsumerUnitSize));
+        }
+
+        _ucs.AddRange(novas);
+        return novas;
+    }
+
     /// <summary>Troca nome e tamanho do bloquinho (código e modo não mudam). Null se deu certo, o porquê se não.</summary>
     public string? EditUnit(Guid id, string? name, EquipmentSize size)
     {
@@ -150,6 +175,10 @@ public sealed class ElectricalSetup
         // Vínculo para uma UC que não existe mais (registro estragado) não trava.
         if (FindUnit(trafo.ConsumerUnit) is { } dona)
             return Tr.F("{0} já está ligado a {1}; solte antes de ligar a outra subestação", trafo.Nickname, dona.Code);
+
+        // A unitária é um bloquinho com o seu trafo: um só (12.2).
+        if (uc.Mode == ConsumerUnitMode.Unitary && TransformersOf(unit).FirstOrDefault() is { } outro)
+            return Tr.F("{0} é unitária e já tem o trafo {1}; solte-o antes", uc.Code, outro.Nickname);
 
         _trafos[posicao] = trafo with { ConsumerUnit = unit };
         return null;

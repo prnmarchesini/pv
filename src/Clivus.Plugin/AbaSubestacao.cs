@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Autodesk.AutoCAD.ApplicationServices;
 using Clivus.Core;
+using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
 namespace Clivus.Plugin;
 
@@ -21,7 +22,7 @@ internal sealed class AbaSubestacao : AbaEletrica
     internal AbaSubestacao(Document documento) : base(documento)
     {
         var botoes = new WrapPanel();
-        Botao(botoes, Tr.T("Adicionar subestação"), Tr.T("Cria uma subestação compartilhada (C1, C2...)."), Adicionar);
+        Botao(botoes, Tr.T("Adicionar subestação"), Tr.T("Pergunta se é uma subestação compartilhada (C1, C2...) ou várias unitárias (U1, U2...)."), Adicionar);
         Botao(botoes, Tr.T("Apagar"), Tr.T("Tira a subestação do cadastro. Os trafos dela ficam sem subestação; nada mais é apagado."), Apagar);
 
         var grade = Grade();
@@ -122,19 +123,24 @@ internal sealed class AbaSubestacao : AbaEletrica
         }
 
         // A tabela: um trafo por linha. Marcado = desta subestação; trafo de
-        // outra fica travado (solte lá antes).
+        // outra fica travado (solte lá antes). A unitária tem um trafo só.
+        var cheia = uc.Mode == ConsumerUnitMode.Unitary && _setup.TransformersOf(uc.Id).Count > 0;
+
         foreach (var t in _setup.Transformers)
         {
             var dona = t.ConsumerUnit == Guid.Empty ? null : _setup.FindUnit(t.ConsumerUnit);
             var deOutra = dona is not null && dona.Id != uc.Id;
+            var dela = dona?.Id == uc.Id;
 
             var caixa = new CheckBox
             {
                 Content = deOutra ? Tr.F("{0} — {1} (em {2})", t.Nickname, t.Name, dona!.Code) : Tr.F("{0} — {1}", t.Nickname, t.Name),
-                IsChecked = dona?.Id == uc.Id,
-                IsEnabled = !deOutra,
+                IsChecked = dela,
+                IsEnabled = !deOutra && (dela || !cheia),
                 Margin = new Thickness(0, 0, 0, 3),
-                ToolTip = deOutra ? Tr.F("Este trafo é de {0}: solte lá antes de ligar aqui.", dona!.Code) : Tr.T("Marque para ligar o trafo a esta subestação."),
+                ToolTip = deOutra ? Tr.F("Este trafo é de {0}: solte lá antes de ligar aqui.", dona!.Code)
+                    : !dela && cheia ? Tr.T("Subestação unitária: um trafo só. Solte o dela antes.")
+                    : Tr.T("Marque para ligar o trafo a esta subestação."),
             };
 
             var trafo = t;
@@ -176,13 +182,23 @@ internal sealed class AbaSubestacao : AbaEletrica
 
     private void Adicionar()
     {
-        ConsumerUnit? nova = null;
+        var pergunta = new JanelaDeNovaSubestacao();
+        if (AcadApp.ShowModalWindow(pergunta) != true) return;
+
+        ConsumerUnit? primeira = null;
         Fazer(() =>
         {
-            nova = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.AddSharedUnit());
-            return Tr.F("{0} criada.", nova.Code);
+            if (pergunta.Unitarias is not { } quantas)
+            {
+                primeira = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.AddSharedUnit());
+                return Tr.F("{0} criada.", primeira.Code);
+            }
+
+            var novas = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.AddUnitaryUnits(quantas));
+            primeira = novas[0];
+            return Tr.F("{0} subestação(ões) unitária(s) criada(s): {1} a {2}.", novas.Count, novas[0].Code, novas[^1].Code);
         });
-        Selecionar(nova?.Id);
+        Selecionar(primeira?.Id);
     }
 
     private void Selecionar(Guid? id)

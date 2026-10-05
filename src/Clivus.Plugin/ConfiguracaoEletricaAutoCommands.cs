@@ -47,7 +47,7 @@ public static class ConfiguracaoEletricaAutoCommands
             {
                 "Trafo" => NovoTrafo(editor, database),
                 "Editar" => EditarTrafo(editor, database),
-                "Uc" => "uc " + ConfiguracaoEletricaStore.Mudar(database, s => s.AddSharedUnit()).Code + " criada",
+                "Uc" => NovaUc(editor, database),
                 "Vincular" => Vincular(editor, database),
                 "Soltar" => SoltarTrafo(editor, database),
                 _ => string.Empty,
@@ -72,6 +72,24 @@ public static class ConfiguracaoEletricaAutoCommands
 
         var padrao = n > 0 ? ElectricalDefaults.TransformerTemplates[n - 1] : null;
         return "trafo " + ConfiguracaoEletricaStore.Mudar(database, s => s.AddTransformer(padrao)).Nickname + " criado";
+    }
+
+    /// <summary>Uc Compartilhada | Uc Unitarias &lt;quantas&gt;.</summary>
+    private static string? NovaUc(Editor editor, Database database)
+    {
+        var o = new PromptKeywordOptions("\nModo [Compartilhada/Unitarias]: ") { AllowNone = false };
+        o.Keywords.Add("Compartilhada");
+        o.Keywords.Add("Unitarias");
+        var modo = editor.GetKeywords(o);
+        if (modo.Status != PromptStatus.OK) return null;
+
+        if (modo.StringResult == "Compartilhada")
+            return "uc " + ConfiguracaoEletricaStore.Mudar(database, s => s.AddSharedUnit()).Code + " criada";
+
+        if (Inteiro(editor, "\nQuantas: ") is not { } n) return null;
+        if (n < 1 || n > ElectricalDefaults.MaxAtOnce) return $"ERRO quantas={n}";
+        var novas = ConfiguracaoEletricaStore.Mudar(database, s => s.AddUnitaryUnits(n));
+        return "uc " + string.Join(",", novas.Select(u => u.Code)) + " criada(s)";
     }
 
     /// <summary>Editar &lt;apelido&gt; &lt;campo&gt; &lt;valor&gt;: o mesmo caminho do Salvar da janela.</summary>

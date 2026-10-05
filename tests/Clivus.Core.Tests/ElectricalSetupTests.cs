@@ -237,4 +237,50 @@ public class ElectricalSetupTests
         Assert.Equal("C1", editada.Code);
         Assert.Equal(6, editada.Size.Width);
     }
+
+    // ------------------------------------------------------------ 12.2
+
+    [Fact]
+    [Trait("Etapa", "12")]
+    public void UnitariasSaoBloquinhosIndependentesEmSequencia()
+    {
+        var setup = new ElectricalSetup();
+        setup.AddSharedUnit();
+
+        var unitarias = setup.AddUnitaryUnits(3);
+        var mais = setup.AddUnitaryUnits(1);
+
+        Assert.Equal(["U1", "U2", "U3"], unitarias.Select(u => u.Code));
+        Assert.Equal("U4", mais.Single().Code);
+        Assert.All(unitarias, u => Assert.Equal(ConsumerUnitMode.Unitary, u.Mode));
+        Assert.Equal(3, unitarias.Select(u => u.Id).Distinct().Count());
+        Assert.Equal("C2", setup.AddSharedUnit().Code);   // a compartilhada tem a sequência dela
+        Assert.Equal(6, setup.Units.Count);
+        Assert.Throws<ArgumentOutOfRangeException>(() => setup.AddUnitaryUnits(0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => setup.AddUnitaryUnits(ElectricalDefaults.MaxAtOnce + 1));
+    }
+
+    [Fact]
+    [Trait("Etapa", "12")]
+    public void CadaUnitariaTemUmTrafoSo()
+    {
+        var setup = new ElectricalSetup();
+        var u = setup.AddUnitaryUnits(2);
+        var t1 = setup.AddTransformer();
+        var t2 = setup.AddTransformer();
+
+        Assert.Null(setup.LinkTransformer(u[0].Id, t1.Id));
+        var porque = setup.LinkTransformer(u[0].Id, t2.Id);
+        Assert.NotNull(porque);
+        Assert.Contains("T1", porque);
+        Assert.Null(setup.LinkTransformer(u[1].Id, t2.Id));
+        Assert.Null(setup.LinkTransformer(u[0].Id, t1.Id));   // o mesmo de novo não é segundo trafo
+
+        Assert.Equal(["T1"], setup.TransformersOf(u[0].Id).Select(t => t.Nickname));
+        Assert.Equal(["T2"], setup.TransformersOf(u[1].Id).Select(t => t.Nickname));
+
+        setup.UnlinkTransformer(t1.Id);
+        Assert.NotNull(setup.LinkTransformer(u[0].Id, t2.Id));   // T2 é da U2: travado
+        Assert.Null(setup.LinkTransformer(u[0].Id, setup.AddTransformer().Id));
+    }
 }
