@@ -9,6 +9,9 @@ public static partial class PluginInfo
     /// <summary>A numeração pela linha de comando: composição da tag, varredura, blocos, gerar e editar. Para o nível 2.</summary>
     public const string ComandoNumeracaoAutomatico = "CLIVUS_NUMERACAO_AUTO";
 
+    /// <summary>O resumo elétrico (16.1) na linha de comando, com as linhas de conferência. Para o nível 2.</summary>
+    public const string ComandoEletricaResumoAutomatico = "CLIVUS_ELETRICA_RESUMO_AUTO";
+
     /// <summary>Só no build de teste: grava uma cadeia elétrica de exemplo (UC, trafos, inversores) e aloca as strings. Para o nível 2.</summary>
     public const string ComandoNumeracaoExemploAutomatico = "CLIVUS_NUMERACAO_EXEMPLO_AUTO";
 

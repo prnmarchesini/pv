@@ -1,0 +1,65 @@
+; Teste de nivel 2 do 16.1 (eletrica): o resumo do sistema pela cadeia de
+; vinculo. Usina pelo motor, strings de teste e a cadeia de exemplo (C1 com
+; TA; TB sem UC; inversores 1 e 2 no TA, 3 no TB, 4 sem trafo; 5, 4, 3 e 2
+; strings). O resumo roda antes e depois de gerar as tags. O LISP refaz a
+; conta pelo XData (strings alocadas, modulos delas e watts pela mesa dona de
+; cada modulo), para conferir contra o plugin.
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area resumo")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento resumo")
+(command "CLIVUS_MESAS_EXEMPLO_AUTO")
+(command "CLIVUS_USINA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_STRINGS_TESTE_AUTO")
+(command "CLIVUS_NUMERACAO_EXEMPLO_AUTO")
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:tipo (xd) (cdr (nth 0 xd)))
+
+; Potencia de cada mesa (campo 9 do XData Mesa) e mesa de cada modulo.
+(setq clivus:ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) clivus:i 0 clivus:mesas nil clivus:strings nil)
+(while (< clivus:i (clivus:conta clivus:ss))
+  (setq clivus:xd (clivus:xdata (ssname clivus:ss clivus:i)))
+  (cond ((= (clivus:tipo clivus:xd) "Mesa") (setq clivus:mesas (cons (cons (clivus:campo clivus:xd 0) (atof (clivus:campo clivus:xd 9))) clivus:mesas)))
+        ((= (clivus:tipo clivus:xd) "String") (setq clivus:strings (cons clivus:xd clivus:strings))))
+  (setq clivus:i (1+ clivus:i)))
+(setq clivus:ss (ssget "_X" (list (cons 0 "INSERT") (list -3 (list "CLIVUS")))) clivus:i 0 clivus:modulos nil)
+(while (< clivus:i (clivus:conta clivus:ss))
+  (setq clivus:xd (clivus:xdata (ssname clivus:ss clivus:i)))
+  (if (= (clivus:tipo clivus:xd) "Modulo") (setq clivus:modulos (cons (cons (clivus:campo clivus:xd 0) (clivus:campo clivus:xd 1)) clivus:modulos)))
+  (setq clivus:i (1+ clivus:i)))
+
+; As strings alocadas: quantas, quantos modulos, quantos watts, e quantas por inversor.
+(setq clivus:alocadas 0 clivus:nmod 0 clivus:watts 0.0 clivus:porinv nil)
+(foreach xd clivus:strings
+  (if (/= (clivus:campo xd 2) "")
+    (progn
+      (setq clivus:alocadas (1+ clivus:alocadas) clivus:k 0 clivus:n (atoi (clivus:campo xd 4)))
+      (setq clivus:par (assoc (clivus:campo xd 2) clivus:porinv))
+      (setq clivus:porinv (if clivus:par (subst (cons (car clivus:par) (1+ (cdr clivus:par))) clivus:par clivus:porinv) (cons (cons (clivus:campo xd 2) 1) clivus:porinv)))
+      (while (< clivus:k clivus:n)
+        (setq clivus:m (clivus:campo xd (+ 5 clivus:k)) clivus:mesa (cdr (assoc clivus:m clivus:modulos)))
+        (setq clivus:nmod (1+ clivus:nmod))
+        (if clivus:mesa (setq clivus:watts (+ clivus:watts (cdr (assoc clivus:mesa clivus:mesas)))))
+        (setq clivus:k (1+ clivus:k))))))
+(setq clivus:cont (vl-sort (mapcar 'cdr clivus:porinv) '>))
+(princ (strcat "\nCLIVUS_RESUMO_LISP strings=" (itoa (length clivus:strings)) " alocadas=" (itoa clivus:alocadas)
+               " modulos=" (itoa clivus:nmod) " watts=" (rtos clivus:watts 2 1)
+               " porinversor=" (apply 'strcat (mapcar '(lambda (n) (strcat (itoa n) ",")) clivus:cont))))
+
+(princ "\nCLIVUS_FASE ANTES")
+(command "CLIVUS_ELETRICA_RESUMO_AUTO")
+(command "CLIVUS_NUMERACAO_AUTO" "Gerar")
+(princ "\nCLIVUS_FASE DEPOIS")
+(command "CLIVUS_ELETRICA_RESUMO_AUTO")
+(princ "\nCLIVUS_RESUMO_FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)
