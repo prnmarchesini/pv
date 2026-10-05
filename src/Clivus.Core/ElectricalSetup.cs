@@ -541,7 +541,8 @@ public sealed class ElectricalSetup
     }
 
     /// <summary>
-    /// Troca nome, MPPT, entradas por MPPT e dimensão (o total é derivado).
+    /// Troca nome, os MPPTs com as entradas de cada um e a dimensão (o total
+    /// é a soma).
     /// Null se deu certo, o porquê se não.
     /// </summary>
     public string? EditModel(InverterModel edited)
@@ -555,11 +556,11 @@ public sealed class ElectricalSetup
         if (nome.Length == 0) return Tr.T("o nome não pode ficar vazio");
         if (nome.Length > ElectricalDefaults.MaxNameLength) return Tr.F("o nome tem no máximo {0} caracteres", ElectricalDefaults.MaxNameLength);
         if (_modelos.Any(m => m.Id != edited.Id && SameName(m.Name, nome))) return Tr.F("já existe um modelo de inversor chamado \"{0}\"", nome);
-        if (edited.Mppts is < 1 or > ElectricalDefaults.MaxMppts || edited.InputsPerMppt is < 1 or > ElectricalDefaults.MaxInputsPerMppt)
-            return Tr.F("MPPT de 1 a {0} e entradas por MPPT de 1 a {1}", ElectricalDefaults.MaxMppts, ElectricalDefaults.MaxInputsPerMppt);
+        if (edited.InputsByMppt is null || edited.Mppts is < 1 or > ElectricalDefaults.MaxMppts || edited.InputsByMppt.Any(n => n is < 1 or > ElectricalDefaults.MaxInputsPerMppt))
+            return Tr.F("de 1 a {0} MPPTs, cada um com 1 a {1} entradas", ElectricalDefaults.MaxMppts, ElectricalDefaults.MaxInputsPerMppt);
         if (!edited.Size.IsValid) return Tr.T("largura, comprimento e altura têm que ser maiores que zero");
 
-        _modelos[posicao] = edited with { Name = nome };
+        _modelos[posicao] = edited with { Name = nome, InputsByMppt = [.. edited.InputsByMppt] };
         return null;
     }
 

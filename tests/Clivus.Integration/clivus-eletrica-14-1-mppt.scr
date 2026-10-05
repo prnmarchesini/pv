@@ -1,0 +1,19 @@
+; Nivel 2 do modelo de inversor com as entradas de cada MPPT (05/10/2026):
+; a lista 4;4;4;5;5 da 22 entradas; lista que nao bate com o numero de MPPTs
+; e recusada; o formato 1 (MPPT x entradas por MPPT) continua sendo lido e,
+; regravado, vira o 2 com a lista repetida.
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_ELETRICA_AUTO" "ModeloAntigo" "Antigo 5x4" "5" "4")
+(command "CLIVUS_ELETRICA_AUTO" "Listar")
+(princ "\nCLIVUS_MPPT_ANTES_DE_REGRAVAR")
+(command "CLIVUS_ELETRICA_AUTO" "Modelo" "Huawei 330" "5" "4;4;4;5;5")
+(command "CLIVUS_ELETRICA_AUTO" "Modelo" "Lista curta" "3" "4;4")
+(command "CLIVUS_ELETRICA_AUTO" "Modelo" "Com zero" "2" "4;0")
+(command "CLIVUS_ELETRICA_AUTO" "Modelo" "Igual" "3" "6")
+(command "CLIVUS_ELETRICA_AUTO" "Listar")
+(princ "\nCLIVUS_ELETRICA_FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

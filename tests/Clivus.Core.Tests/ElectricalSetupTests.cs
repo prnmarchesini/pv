@@ -363,7 +363,7 @@ public class ElectricalSetupTests
 
         var generico = setup.AddModel();
         var huawei = setup.AddModel();
-        Assert.Null(setup.EditModel(huawei with { Name = "Huawei 250", Mppts = 5, InputsPerMppt = 4 }));
+        Assert.Null(setup.EditModel(huawei with { Name = "Huawei 250", InputsByMppt = [4, 4, 4, 4, 4] }));
 
         Assert.Equal("Modelo de inversor 1", generico.Name);
         Assert.Equal(1, generico.TotalInputs);
@@ -386,9 +386,9 @@ public class ElectricalSetupTests
 
         Assert.NotNull(setup.EditModel(b with { Name = "huawei 250" }));
         Assert.NotNull(setup.EditModel(b with { Name = " " }));
-        Assert.NotNull(setup.EditModel(b with { Mppts = 0 }));
-        Assert.NotNull(setup.EditModel(b with { InputsPerMppt = -1 }));
-        Assert.NotNull(setup.EditModel(b with { Mppts = ElectricalDefaults.MaxMppts + 1 }));
+        Assert.NotNull(setup.EditModel(b with { InputsByMppt = [] }));
+        Assert.NotNull(setup.EditModel(b with { InputsByMppt = [4, -1] }));
+        Assert.NotNull(setup.EditModel(b with { InputsByMppt = Enumerable.Repeat(1, ElectricalDefaults.MaxMppts + 1).ToArray() }));
         Assert.NotNull(setup.EditModel(b with { Size = new EquipmentSize(1, 1, 0) }));
         Assert.NotNull(setup.EditModel(b with { Id = Guid.NewGuid() }));
         Assert.Equal(b, setup.FindModel(b.Id));

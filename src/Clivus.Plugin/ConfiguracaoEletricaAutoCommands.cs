@@ -22,7 +22,7 @@ public static class ConfiguracaoEletricaAutoCommands
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "SoltarInversor", "EditarInversor", "Skid", "Desagrupar", "Listar", "Formulario", "Bloco", "EditarUc", "ApagarBloco", "UcAntiga"];
+    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "SoltarInversor", "EditarInversor", "Skid", "Desagrupar", "Listar", "Formulario", "Bloco", "EditarUc", "ApagarBloco", "UcAntiga", "ModeloAntigo"];
 
 #if DEBUG
     [CommandMethod(PluginInfo.ComandoEletricaAutomatico)]
@@ -62,6 +62,7 @@ public static class ConfiguracaoEletricaAutoCommands
                 "EditarUc" => EditarUc(editor, database),
                 "ApagarBloco" => ApagarBloco(database),
                 "UcAntiga" => UcsDoFormatoAntigo(database),
+                "ModeloAntigo" => ModeloDoFormatoAntigo(editor, database),
                 _ => string.Empty,
             };
 
@@ -250,22 +251,50 @@ public static class ConfiguracaoEletricaAutoCommands
         return $"{apelido} solto={soltou}";
     }
 
-    /// <summary>Modelo &lt;nome&gt; &lt;MPPT&gt; &lt;entradas por MPPT&gt;: cria e grava como o Salvar da janela.</summary>
+    /// <summary>
+    /// Modelo &lt;nome&gt; &lt;MPPT&gt; &lt;entradas&gt;: cria e grava como o Salvar
+    /// da janela. As entradas são um número (o mesmo em todos os MPPTs) ou a
+    /// lista de cada MPPT ("4;4;4;5;5"), com um valor por MPPT.
+    /// </summary>
     private static string? NovoModelo(Editor editor, Database database)
     {
         if (Texto(editor, "\nNome do modelo: ") is not { } nome) return null;
         if (Inteiro(editor, "\nMPPT: ") is not { } mppt) return null;
-        if (Inteiro(editor, "\nEntradas por MPPT: ") is not { } entradas) return null;
+        if (Texto(editor, "\nEntradas (uma para todos ou a lista 4;4;5): ") is not { } texto) return null;
+
+        if (InverterModel.ParseInputs(texto) is not { Count: > 0 } lista) return "recusado: entradas ilegiveis";
+        IReadOnlyList<int> entradas = lista.Count == 1 ? Enumerable.Repeat(lista[0], Math.Max(0, mppt)).ToArray() : lista;
+        if (entradas.Count != mppt) return $"recusado: {mppt} MPPT e {lista.Count} valor(es) na lista";
 
         var porque = ConfiguracaoEletricaStore.Mudar(database, s =>
         {
             var m = s.AddModel();
-            var p = s.EditModel(m with { Name = nome, Mppts = mppt, InputsPerMppt = entradas });
+            var p = s.EditModel(m with { Name = nome, InputsByMppt = entradas });
             if (p is not null) s.RemoveModel(m.Id);
             return p;
         });
 
         return porque is null ? $"modelo {nome} criado" : $"recusado: {porque}";
+    }
+
+    /// <summary>
+    /// ModeloAntigo &lt;nome&gt; &lt;MPPT&gt; &lt;entradas por MPPT&gt;: grava os
+    /// modelos no formato 1 (antes de 05/10/2026: um número de entradas para
+    /// todos os MPPTs), somando este aos que já há. É o desenho antigo, para
+    /// provar que ele continua sendo lido.
+    /// </summary>
+    private static string? ModeloDoFormatoAntigo(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nNome do modelo: ") is not { } nome) return null;
+        if (Inteiro(editor, "\nMPPT: ") is not { } mppt) return null;
+        if (Inteiro(editor, "\nEntradas por MPPT: ") is not { } entradas) return null;
+
+        var modelos = ElectricalStore.InverterModels(database).Items.Append(new InverterModel(Guid.NewGuid(), nome, mppt, entradas, ElectricalDefaults.InverterSize)).ToList();
+        PluginRecords.Save(database, ElectricalStore.ChaveDosModelos, 1, InverterModel.FieldCount, modelos,
+            m => [m.Id.ToString("D"), m.Name, m.Mppts.ToString(Inv), m.InputsByMppt[0].ToString(Inv), R(m.Size.Width), R(m.Size.Length), R(m.Size.Height)]);
+        return $"modelos do formato 1 gravados ({modelos.Count})";
+
+        static string R(double v) => v.ToString("R", Inv);
     }
 
     /// <summary>Inversores &lt;nome do modelo&gt; &lt;quantos&gt;.</summary>
@@ -373,9 +402,10 @@ public static class ConfiguracaoEletricaAutoCommands
         foreach (var b in setup.Substations)
             editor.WriteMessage($"ELETRICA BLOCO nome=\"{b.Name}\" tamanho={Tam(b.Size)} ucs={string.Join(",", setup.UnitsOf(b.Id).Select(u => u.Code))} id={b.Id:D} fim\n");
 
-        editor.WriteMessage($"ELETRICA {setup.Models.Count} modelo(s)\n");
+        // entradas=: o número quando todos os MPPTs têm o mesmo, senão a lista (4;4;4;5;5).
+        editor.WriteMessage($"ELETRICA {setup.Models.Count} modelo(s) formato_modelos={PluginRecords.Version(database, ElectricalStore.ChaveDosModelos)}\n");
         foreach (var m in setup.Models)
-            editor.WriteMessage($"ELETRICA MODELO nome=\"{m.Name}\" mppt={m.Mppts} entradas={m.InputsPerMppt} total={m.TotalInputs} tamanho={Tam(m.Size)}\n");
+            editor.WriteMessage($"ELETRICA MODELO nome=\"{m.Name}\" mppt={m.Mppts} entradas={(m.IsUniform ? m.InputsByMppt[0].ToString(Inv) : InverterModel.FormatInputs(m.InputsByMppt))} total={m.TotalInputs} tamanho={Tam(m.Size)}\n");
 
         using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
         {

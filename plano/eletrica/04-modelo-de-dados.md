@@ -18,7 +18,7 @@ As entidades e como se amarram. Tudo em `Clivus.Core`, sem CAD. GUID próprio po
 - Operações: editar, apagar, clonar, espelhar (inverte positivo com negativo).
 
 ### Inversor (modelo + instância)
-- Modelo: nome (genérico do cliente ou cadastrado, ex. Huawei 250), nº de MPPT, nº de entradas por MPPT, total de entradas derivado. Sem balanceamento por ora, mas estrutura preparada para crescer.
+- Modelo: nome (genérico do cliente ou cadastrado, ex. Huawei 250), nº de MPPT e a lista das entradas de cada MPPT (ex.: 5 MPPTs com 4, 4, 4, 5 e 5; pedido do Renan em 05/10/2026: cada MPPT tem a sua quantidade), total de entradas = a soma. Sem balanceamento por ora, mas estrutura preparada para crescer.
 - Dimensão física (largura, comprimento, altura) para o retângulo 3D.
 - Instância: pertence a um modelo; lista de strings alocadas; posição em campo; tag; vínculo com o trafo (via agrupamento).
 

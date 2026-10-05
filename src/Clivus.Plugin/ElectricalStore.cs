@@ -58,11 +58,21 @@ internal static class ElectricalStore
     private static readonly string OQueSkids = Tr.N("de skids");
     private static readonly string OQueBlocos = Tr.N("de blocos de subestação");
 
+    /// <summary>
+    /// Os modelos de inversor. Formato 2 (05/10/2026) tem a lista das entradas
+    /// de cada MPPT; o 1 (MPPT x entradas por MPPT) continua sendo lido e vira
+    /// a lista com o valor repetido. Grava sempre o 2.
+    /// </summary>
     internal static RecordTableResult<InverterModel> InverterModels(Database db) =>
-        PluginRecords.Load<InverterModel>(db, "INVERSOR_MODELOS", 1, InverterModel.FieldCount, InverterModel.Parse, OQueModelos);
+        PluginRecords.Version(db, ChaveDosModelos) == 1
+            ? PluginRecords.Load<InverterModel>(db, ChaveDosModelos, 1, InverterModel.FieldCount, InverterModel.ParseLegacy, OQueModelos)
+            : PluginRecords.Load<InverterModel>(db, ChaveDosModelos, VersaoDosModelos, InverterModel.FieldCount, InverterModel.Parse, OQueModelos);
 
     internal static void SaveInverterModels(Database db, IReadOnlyList<InverterModel> itens) =>
-        PluginRecords.Save(db, "INVERSOR_MODELOS", 1, InverterModel.FieldCount, itens, i => i.ToFields());
+        PluginRecords.Save(db, ChaveDosModelos, VersaoDosModelos, InverterModel.FieldCount, itens, i => i.ToFields());
+
+    internal const string ChaveDosModelos = "INVERSOR_MODELOS";
+    private const int VersaoDosModelos = 2;
 
     internal static RecordTableResult<Inverter> Inverters(Database db) =>
         PluginRecords.Load<Inverter>(db, "INVERSORES", 1, Inverter.FieldCount, Inverter.Parse, OQueInversores);

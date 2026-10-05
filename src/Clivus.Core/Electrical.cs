@@ -87,29 +87,108 @@ public sealed record EquipmentSize(double Width, double Length, double Height)
 
 /// <summary>
 /// Um modelo de inversor (elétrica, 14.1): genérico do cliente ou cadastrado
-/// (ex. Huawei 250). Por ora só MPPT e entradas por MPPT; o total é derivado.
+/// (ex. Huawei 250). Os MPPTs com as entradas de cada um (5 MPPTs com 4, 4,
+/// 4, 5 e 5 entradas: cada MPPT tem a sua quantidade); o total é a soma.
 /// </summary>
-public sealed record InverterModel(Guid Id, string Name, int Mppts, int InputsPerMppt, EquipmentSize Size)
+/// <remarks>
+/// Formato 2 (05/10/2026): o terceiro campo é quantos MPPTs e o quarto a
+/// lista das entradas de cada um, separada por ";" ("4;4;4;5;5"). O formato
+/// 1 (MPPT e entradas por MPPT, o mesmo número para todos) continua sendo
+/// lido por <see cref="ParseLegacy"/>: vira a lista com o valor repetido.
+/// A estrutura por MPPT é para crescer (balanceamento por MPPT); por ora só
+/// o total vale para a capacidade.
+/// </remarks>
+public sealed record InverterModel(Guid Id, string Name, IReadOnlyList<int> InputsByMppt, EquipmentSize Size)
 {
     public const int FieldCount = 7;
 
-    public int TotalInputs => Mppts * InputsPerMppt;
+    /// <summary>O separador da lista de entradas no campo gravado.</summary>
+    public const char ListSeparator = ';';
 
-    public bool IsValid => Id != Guid.Empty && !string.IsNullOrWhiteSpace(Name) && Mppts > 0 && InputsPerMppt > 0 && Size.IsValid;
+    /// <summary>Todos os MPPTs com o mesmo número de entradas (o formato 1, e o atalho dos testes).</summary>
+    public InverterModel(Guid id, string name, int mppts, int inputsPerMppt, EquipmentSize size)
+        : this(id, name, Uniform(mppts, inputsPerMppt), size)
+    {
+    }
+
+    public int Mppts => InputsByMppt.Count;
+
+    /// <summary>A soma das entradas de todos os MPPTs: a capacidade do inversor em strings.</summary>
+    public int TotalInputs => InputsByMppt.Sum();
+
+    /// <summary>Todos os MPPTs com o mesmo número de entradas.</summary>
+    public bool IsUniform => InputsByMppt.Distinct().Count() <= 1;
+
+    public bool IsValid => Id != Guid.Empty && !string.IsNullOrWhiteSpace(Name) && Mppts > 0 && InputsByMppt.All(n => n > 0) && Size.IsValid;
 
     public IReadOnlyList<string> ToFields() =>
-        [Id.ToString("D"), Name, Mppts.ToString(CultureInfo.InvariantCulture), InputsPerMppt.ToString(CultureInfo.InvariantCulture), .. Size.Fields()];
+        [Id.ToString("D"), Name, Mppts.ToString(CultureInfo.InvariantCulture), FormatInputs(InputsByMppt), .. Size.Fields()];
 
+    /// <summary>"4;4;4;5;5": a lista como vai para o campo gravado.</summary>
+    public static string FormatInputs(IEnumerable<int> inputs) =>
+        string.Join(ListSeparator, inputs.Select(n => n.ToString(CultureInfo.InvariantCulture)));
+
+    /// <summary>
+    /// Lê a lista de entradas ("4;4;4;5;5", também com vírgula ou espaço).
+    /// Null se algum pedaço não é número inteiro sem sinal.
+    /// </summary>
+    public static IReadOnlyList<int>? ParseInputs(string? text)
+    {
+        var pedacos = (text ?? string.Empty).Split([ListSeparator, ',', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var lista = new List<int>(pedacos.Length);
+
+        foreach (var p in pedacos)
+        {
+            if (!int.TryParse(p, NumberStyles.None, CultureInfo.InvariantCulture, out var n)) return null;
+            lista.Add(n);
+        }
+
+        return lista;
+    }
+
+    /// <summary>
+    /// A lista com <paramref name="count"/> MPPTs: encolhe tirando do fim;
+    /// cresce repetindo o último valor (1 se a lista estava vazia).
+    /// </summary>
+    public static IReadOnlyList<int> Resize(IReadOnlyList<int> inputs, int count)
+    {
+        ArgumentNullException.ThrowIfNull(inputs);
+        if (count <= 0) return [];
+
+        var ultimo = inputs.Count > 0 ? inputs[^1] : 1;
+        return [.. inputs.Take(count), .. Enumerable.Repeat(ultimo, Math.Max(0, count - inputs.Count))];
+    }
+
+    /// <summary>Formato 2: GUID, nome, quantos MPPTs, a lista ("4;4;4;5;5") e a dimensão.</summary>
     public static InverterModel? Parse(IReadOnlyList<string> c)
     {
         if (c.Count < FieldCount || !Guid.TryParse(c[0], out var id)) return null;
         if (!int.TryParse(c[2], NumberStyles.None, CultureInfo.InvariantCulture, out var mppt)) return null;
-        if (!int.TryParse(c[3], NumberStyles.None, CultureInfo.InvariantCulture, out var entradas)) return null;
+        if (ParseInputs(c[3]) is not { } entradas || entradas.Count != mppt) return null;
         if (EquipmentSize.Parse(c, 4) is not { } tamanho) return null;
+
+        var m = new InverterModel(id, c[1], entradas, tamanho);
+        return m.IsValid ? m : null;
+    }
+
+    /// <summary>Formato 1 (antes de 05/10/2026): MPPT e entradas por MPPT; vira a lista com o mesmo valor repetido.</summary>
+    public static InverterModel? ParseLegacy(IReadOnlyList<string> c)
+    {
+        if (c.Count < FieldCount || !Guid.TryParse(c[0], out var id)) return null;
+        if (!int.TryParse(c[2], NumberStyles.None, CultureInfo.InvariantCulture, out var mppt)) return null;
+        if (!int.TryParse(c[3], NumberStyles.None, CultureInfo.InvariantCulture, out var entradas)) return null;
+        if (mppt > ElectricalDefaults.MaxMppts || EquipmentSize.Parse(c, 4) is not { } tamanho) return null;
 
         var m = new InverterModel(id, c[1], mppt, entradas, tamanho);
         return m.IsValid ? m : null;
     }
+
+    public bool Equals(InverterModel? other) =>
+        other is not null && Id == other.Id && Name == other.Name && Size == other.Size && InputsByMppt.SequenceEqual(other.InputsByMppt);
+
+    public override int GetHashCode() => HashCode.Combine(Id, Name, Size, TotalInputs);
+
+    private static int[] Uniform(int mppts, int inputsPerMppt) => mppts > 0 ? Enumerable.Repeat(inputsPerMppt, mppts).ToArray() : [];
 }
 
 /// <summary>

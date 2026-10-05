@@ -10,7 +10,7 @@ usos no mesmo commit.
 |---|---|---|
 | tipo de string (biblioteca) | dicionário, chave `STRING_TIPOS` | `StringType`, `StringLibrary` (Core), `StringTypeStore` (Plugin) |
 | string desenhada | XData (tipo `String`) da `Polyline3d` do traçado, camada `CLIVUS_STRING` | `ElectricalString` (Core), `ElectricalStore.SaveString/LoadString/Strings` |
-| modelo de inversor | dicionário, `INVERSOR_MODELOS` | `InverterModel`, `ElectricalStore.InverterModels/Save...` |
+| modelo de inversor | dicionário, `INVERSOR_MODELOS` (formato 2 desde 05/10/2026, a lista das entradas de cada MPPT; o 1 continua sendo lido) | `InverterModel`, `ElectricalStore.InverterModels/Save...` |
 | inversor | dicionário, `INVERSORES` | `Inverter` |
 | transformador | dicionário, `TRAFOS` | `Transformer` |
 | subestação (UC) | dicionário, `SUBESTACOES` (formato 2 desde 05/10/2026; o 1 continua sendo lido) | `ConsumerUnit` |
@@ -63,6 +63,16 @@ Nenhum vínculo é derivado de posição no desenho.
 - Resumo: `ElectricalSummary.Build(..., substations)` põe o bloco
   (`SummaryRowKind.Substation`) com as UCs dele um nível para dentro; a
   unitária fica como antes.
+
+## O modelo de inversor por MPPT (05/10/2026)
+
+- `INVERSOR_MODELOS` formato 2: 7 campos (GUID, nome, quantos MPPTs, a lista
+  das entradas de cada MPPT separada por ";", ex. "4;4;4;5;5", e a
+  dimensão). `InverterModel.InputsByMppt` é a lista; `TotalInputs` a soma
+  (a capacidade do inversor em strings).
+- O formato 1 (MPPT e entradas por MPPT, o mesmo número para todos) é lido
+  pela versão do cabeçalho (`InverterModel.ParseLegacy`): vira a lista com o
+  valor repetido. Grava-se sempre o 2.
 
 ## Para testar sem o traçado de verdade
 

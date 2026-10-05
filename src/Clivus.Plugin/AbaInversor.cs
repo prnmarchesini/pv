@@ -6,14 +6,18 @@ using Clivus.Core;
 namespace Clivus.Plugin;
 
 /// <summary>
-/// A aba Inversor (etapa 14): à esquerda os modelos de inversor (MPPT,
-/// entradas por MPPT, total derivado, dimensão); à direita os inversores da
-/// usina.
+/// A aba Inversor (etapa 14): à esquerda os modelos de inversor (os MPPTs
+/// com as entradas de cada um, o total somado, a dimensão); à direita os
+/// inversores da usina.
 /// </summary>
 internal sealed class AbaInversor : AbaEletrica
 {
     private readonly ListBox _modelos = new() { MinHeight = 110 };
-    private readonly TextBox _nomeDoModelo, _mppt, _entradas, _largura, _comprimento, _altura;
+    private readonly TextBox _nomeDoModelo, _mppt, _largura, _comprimento, _altura;
+
+    /// <summary>As entradas de cada MPPT: uma caixa por MPPT, na ordem (cresce e encolhe com o número de MPPTs).</summary>
+    private readonly WrapPanel _entradas = new() { Margin = new Thickness(0, 0, 0, 2) };
+    private readonly List<TextBox> _caixasDasEntradas = [];
     private readonly TextBlock _total = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 4), FontWeight = FontWeights.SemiBold };
 
     private readonly ComboBox _modeloParaCriar = new() { Height = 26, MinWidth = 160, Margin = new Thickness(0, 0, 6, 6) };
@@ -32,8 +36,17 @@ internal sealed class AbaInversor : AbaEletrica
         // ------------------------------------------------- modelos (14.1)
         var grade = Grade(140);
         _nomeDoModelo = Campo(grade, Tr.T("Nome do modelo"), Tr.T("Genérico do cliente ou cadastrado (ex. Huawei 250)."));
-        _mppt = Campo(grade, Tr.T("MPPT"), Tr.T("Quantos MPPT o inversor tem."));
-        _entradas = Campo(grade, Tr.T("Entradas por MPPT"), Tr.T("Quantas strings entram em cada MPPT."));
+        _mppt = Campo(grade, Tr.T("Número de MPPTs"), Tr.T("Quantos MPPTs o inversor tem. Ao mudar, a lista de entradas cresce (repetindo o último valor) ou encolhe."));
+
+        // A lista das entradas de cada MPPT (5 MPPTs com 4, 4, 4, 5 e 5 entradas).
+        var linhaDasEntradas = grade.RowDefinitions.Count;
+        grade.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var rotuloDasEntradas = new TextBlock { Text = Tr.T("Entradas de cada MPPT"), Margin = new Thickness(0, 4, 8, 4), ToolTip = Tr.T("Quantas strings entram em cada MPPT; cada um pode ter a sua quantidade.") };
+        Grid.SetRow(rotuloDasEntradas, linhaDasEntradas);
+        Grid.SetRow(_entradas, linhaDasEntradas);
+        Grid.SetColumn(_entradas, 1);
+        grade.Children.Add(rotuloDasEntradas);
+        grade.Children.Add(_entradas);
 
         var linha = grade.RowDefinitions.Count;
         grade.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -48,8 +61,11 @@ internal sealed class AbaInversor : AbaEletrica
         _comprimento = Campo(grade, Tr.T("Comprimento (m)"), Tr.T("Medida em Y do retângulo em campo."));
         _altura = Campo(grade, Tr.T("Altura (m)"), Tr.F("Altura do retângulo 3D (a base flutua {0:0.00} m acima do terreno).", Clivus.Geo.EquipmentFootprint.FloatHeight));
 
-        _mppt.TextChanged += (_, _) => MostrarTotal();
-        _entradas.TextChanged += (_, _) => MostrarTotal();
+        _mppt.TextChanged += (_, _) =>
+        {
+            try { AjustarEntradas(); }
+            catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao ajustar a lista de entradas do modelo de inversor.", erro); }
+        };
 
         var botoesDoModelo = new WrapPanel();
         Botao(botoesDoModelo, Tr.T("Novo modelo"), Tr.T("Cria um modelo genérico (1 MPPT, 1 entrada) para ajustar."), NovoModelo);
@@ -191,39 +207,101 @@ internal sealed class AbaInversor : AbaEletrica
         else if (_modelos.Items.Count == 0) Avisar(Tr.T("Nenhum modelo de inversor ainda: use Novo modelo."));
     }
 
+    /// <summary>"Huawei 250 — 5 MPPT × 4 entradas = 20 entradas", ou com a lista quando os MPPTs diferem.</summary>
     internal static string DescreverModelo(InverterModel m) =>
-        Tr.F("{0} — {1} MPPT × {2} entradas = {3} entradas", m.Name, m.Mppts, m.InputsPerMppt, m.TotalInputs);
+        m.IsUniform && m.Mppts > 0
+            ? Tr.F("{0} — {1} MPPT × {2} entradas = {3} entradas", m.Name, m.Mppts, m.InputsByMppt[0], m.TotalInputs)
+            : Tr.F("{0} — {1} MPPT ({2}) = {3} entradas", m.Name, m.Mppts, string.Join(", ", m.InputsByMppt), m.TotalInputs);
 
     private void PreencherModelo()
     {
         var m = ModeloEscolhido;
-        var caixas = new[] { _nomeDoModelo, _mppt, _entradas, _largura, _comprimento, _altura };
+        var caixas = new[] { _nomeDoModelo, _mppt, _largura, _comprimento, _altura };
         foreach (var caixa in caixas) caixa.IsEnabled = m is not null;
 
         if (m is null)
         {
             foreach (var caixa in caixas) caixa.Text = string.Empty;
-            _total.Text = string.Empty;
+            MontarEntradas([]);
             return;
         }
 
         _nomeDoModelo.Text = m.Name;
-        _mppt.Text = m.Mppts.ToString(Tr.Culture);
-        _entradas.Text = m.InputsPerMppt.ToString(Tr.Culture);
         _largura.Text = Numero(m.Size.Width);
         _comprimento.Text = Numero(m.Size.Length);
         _altura.Text = Numero(m.Size.Height);
+
+        // Primeiro a lista, depois o número (o TextChanged do número acha a lista já do tamanho certo).
+        MontarEntradas(m.InputsByMppt.Select(n => n.ToString(Tr.Culture)).ToList());
+        _mppt.Text = m.Mppts.ToString(Tr.Culture);
+    }
+
+    /// <summary>Uma caixa por MPPT, com o texto dado; a lista vazia apaga as caixas.</summary>
+    private void MontarEntradas(IReadOnlyList<string> textos)
+    {
+        _entradas.Children.Clear();
+        _caixasDasEntradas.Clear();
+        foreach (var texto in textos) NovaEntrada(texto);
         MostrarTotal();
     }
 
-    /// <summary>O total derivado, ao vivo enquanto o usuário digita.</summary>
+    private void NovaEntrada(string texto)
+    {
+        var n = _caixasDasEntradas.Count + 1;
+        var caixa = new TextBox { Text = texto, Width = 38, Height = 24, VerticalContentAlignment = VerticalAlignment.Center, ToolTip = Tr.F("Entradas do MPPT {0}", n) };
+        caixa.TextChanged += (_, _) => MostrarTotal();
+
+        var par = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 8, 4) };
+        par.Children.Add(new TextBlock { Text = n.ToString(Tr.Culture) + ":", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 3, 0), Foreground = System.Windows.SystemColors.GrayTextBrush });
+        par.Children.Add(caixa);
+
+        _caixasDasEntradas.Add(caixa);
+        _entradas.Children.Add(par);
+    }
+
+    /// <summary>
+    /// O número de MPPTs mudou: a lista cresce repetindo o último valor, ou
+    /// encolhe tirando do fim (o que foi digitado nas caixas que ficam não muda).
+    /// Número que não se lê (ou fora do limite) deixa a lista como está.
+    /// </summary>
+    private void AjustarEntradas()
+    {
+        if (!NumberInput.TryParseCount(_mppt.Text, out var quantos) || quantos < 1 || quantos > ElectricalDefaults.MaxMppts)
+        {
+            MostrarTotal();
+            return;
+        }
+
+        if (quantos == _caixasDasEntradas.Count)
+        {
+            MostrarTotal();
+            return;
+        }
+
+        var textos = _caixasDasEntradas.Select(c => c.Text).ToList();
+        var ultimo = textos.Count > 0 ? textos[^1] : "1";
+        MontarEntradas([.. textos.Take(quantos), .. Enumerable.Repeat(ultimo, Math.Max(0, quantos - textos.Count))]);
+    }
+
+    /// <summary>As entradas lidas das caixas, ou null se alguma não é número inteiro.</summary>
+    private List<int>? LerEntradas()
+    {
+        var lidas = new List<int>(_caixasDasEntradas.Count);
+        foreach (var caixa in _caixasDasEntradas)
+        {
+            if (!NumberInput.TryParseCount(caixa.Text, out var n)) return null;
+            lidas.Add(n);
+        }
+
+        return lidas;
+    }
+
+    /// <summary>O total somado, ao vivo enquanto o usuário digita.</summary>
     private void MostrarTotal()
     {
         try
         {
-            _total.Text = NumberInput.TryParseCount(_mppt.Text, out var a) && NumberInput.TryParseCount(_entradas.Text, out var b) && a > 0 && b > 0
-                ? (a * b).ToString(Tr.Culture)
-                : "—";
+            _total.Text = LerEntradas() is { Count: > 0 } lidas && lidas.All(n => n > 0) ? lidas.Sum().ToString(Tr.Culture) : "—";
         }
         catch (Exception erro)
         {
@@ -418,15 +496,21 @@ internal sealed class AbaInversor : AbaEletrica
             return;
         }
 
-        if (!NumberInput.TryParseCount(_mppt.Text, out var mppt) || !NumberInput.TryParseCount(_entradas.Text, out var entradas))
+        if (!NumberInput.TryParseCount(_mppt.Text, out var mppt) || LerEntradas() is not { } entradas)
         {
-            Avisar(Tr.T("MPPT e entradas por MPPT são números inteiros."), erro: true);
+            Avisar(Tr.T("O número de MPPTs e as entradas de cada MPPT são números inteiros."), erro: true);
+            return;
+        }
+
+        if (entradas.Count != mppt)
+        {
+            Avisar(Tr.F("O número de MPPTs tem que ser de 1 a {0}.", ElectricalDefaults.MaxMppts), erro: true);
             return;
         }
 
         if (LerTamanho(_largura, _comprimento, _altura) is not { } tamanho) return;
 
-        var editado = m with { Name = _nomeDoModelo.Text, Mppts = mppt, InputsPerMppt = entradas, Size = tamanho };
+        var editado = m with { Name = _nomeDoModelo.Text, InputsByMppt = entradas, Size = tamanho };
         string? porque = null;
         Fazer(() =>
         {
