@@ -19,6 +19,7 @@ function Testar-NumeracaoTag {
         'T1.I1.S1 T1.I1.S2 T1.I2.S1 I3.S1',
         'Trafo1-Inv1-S1 Trafo1-Inv1-S2 Trafo1-Inv2-S1 Inv3-S1',
         '1S1 1S2 2S1 3S1',
+        '1S1 1S2 2S1 3S1',
         '1S1 1S2 2S1 3S1'
     )
 

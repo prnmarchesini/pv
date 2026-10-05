@@ -92,3 +92,266 @@ public sealed record TagScheme(bool IncludeTransformer, string TransformerPrefix
         return esquema.Problem() is null ? esquema : null;
     }
 }
+
+/// <summary>
+/// O sentido da varredura das strings (15.2). O sentido nomeado é o que
+/// avança; strings na mesma faixa (mesma coluna, nos horizontais; mesma
+/// linha, nos verticais) vão de cima para baixo ou da esquerda para a direita.
+/// </summary>
+public enum ScanDirection
+{
+    LeftToRight,
+    RightToLeft,
+    TopToBottom,
+    BottomToTop,
+}
+
+/// <summary>Uma string a varrer: o GUID e a posição em planta do primeiro módulo dela.</summary>
+public sealed record ScanItem(Guid Id, double X, double Y);
+
+/// <summary>A ordem da varredura (15.2).</summary>
+public static class ScanOrder
+{
+    /// <summary>
+    /// A tolerância da faixa, em metro: strings cujo primeiro módulo difere
+    /// menos que isto no eixo do sentido contam como lado a lado (a mesma
+    /// coluna ou linha), e aí vale o outro eixo. Menor que um módulo, maior
+    /// que o desalinho de uma mesa no terreno.
+    /// </summary>
+    public const double Band = 0.5;
+
+    /// <summary>O sentido para o usuário: "da esquerda para a direita".</summary>
+    public static string Describe(ScanDirection direction) => direction switch
+    {
+        ScanDirection.LeftToRight => Tr.T("da esquerda para a direita"),
+        ScanDirection.RightToLeft => Tr.T("da direita para a esquerda"),
+        ScanDirection.TopToBottom => Tr.T("de cima para baixo"),
+        _ => Tr.T("de baixo para cima"),
+    };
+
+    /// <summary>
+    /// Os GUIDs na ordem da varredura. Faixas pelo eixo do sentido (uma faixa
+    /// nova quando o salto passa de <paramref name="band"/>); dentro da faixa,
+    /// pelo outro eixo; empate total, pelo GUID (sempre a mesma ordem).
+    /// Posição que não é número fica de fora.
+    /// </summary>
+    public static IReadOnlyList<Guid> Order(IReadOnlyList<ScanItem> items, ScanDirection direction, double band = Band)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+
+        // P: o eixo que avança; S: o da faixa (de cima para baixo ou da esquerda para a direita).
+        (double P, double S) Eixos(ScanItem i) => direction switch
+        {
+            ScanDirection.LeftToRight => (i.X, -i.Y),
+            ScanDirection.RightToLeft => (-i.X, -i.Y),
+            ScanDirection.TopToBottom => (-i.Y, i.X),
+            _ => (i.Y, i.X),
+        };
+
+        var porEixo = items
+            .Where(i => double.IsFinite(i.X) && double.IsFinite(i.Y))
+            .Select(i => (Item: i, Eixo: Eixos(i)))
+            .OrderBy(x => x.Eixo.P)
+            .ThenBy(x => x.Item.Id)
+            .ToList();
+
+        var faixas = new List<List<(ScanItem Item, (double P, double S) Eixo)>>();
+        double? anterior = null;
+
+        foreach (var x in porEixo)
+        {
+            if (anterior is null || x.Eixo.P - anterior.Value > band) faixas.Add([]);
+            faixas[^1].Add(x);
+            anterior = x.Eixo.P;
+        }
+
+        return faixas
+            .SelectMany(f => f.OrderBy(x => x.Eixo.S).ThenBy(x => x.Eixo.P).ThenBy(x => x.Item.Id))
+            .Select(x => x.Item.Id)
+            .ToList();
+    }
+}
+
+/// <summary>
+/// Um bloco da varredura (15.2): as mesas dele e o sentido próprio. A ordem
+/// dos blocos na lista é a ordem da numeração (15.3).
+/// </summary>
+public sealed record NumberingBlock(Guid Id, string Name, ScanDirection Direction, IReadOnlyList<Guid> Tables);
+
+/// <summary>
+/// Uma linha do registro da varredura (chave "NUMERACAO_VARREDURA"): a usina
+/// inteira (o sentido padrão), um bloco (nome e sentido, na ordem da lista)
+/// ou uma mesa de um bloco.
+/// </summary>
+public sealed record ScanRow(string Kind, Guid Owner, string Value, ScanDirection Direction)
+{
+    public const int FieldCount = 4;
+    public const string Plant = "USINA";
+    public const string Block = "BLOCO";
+    public const string Table = "MESA";
+
+    public IReadOnlyList<string> ToFields() =>
+        [Kind, Owner == Guid.Empty ? string.Empty : Owner.ToString("D"), Value ?? string.Empty, Direction.ToString()];
+
+    public static ScanRow? Parse(IReadOnlyList<string> c)
+    {
+        ArgumentNullException.ThrowIfNull(c);
+        if (c.Count < FieldCount || c[0] is not (Plant or Block or Table)) return null;
+        if (!ElectricalString.OptionalGuid(c[1], out var dono)) return null;
+        if (int.TryParse(c[3], out _) || !Enum.TryParse<ScanDirection>(c[3], out var sentido) || !Enum.IsDefined(sentido)) return null;
+
+        return c[0] switch
+        {
+            Plant => new ScanRow(Plant, Guid.Empty, string.Empty, sentido),
+            Block when dono != Guid.Empty && !string.IsNullOrWhiteSpace(c[2]) => new ScanRow(Block, dono, c[2], sentido),
+            Table when dono != Guid.Empty && Guid.TryParse(c[2], out var m) && m != Guid.Empty => new ScanRow(Table, dono, m.ToString("D"), sentido),
+            _ => null,
+        };
+    }
+}
+
+/// <summary>
+/// A configuração da varredura (15.2, 15.3): o sentido da usina inteira (o
+/// padrão) e os blocos, na ordem da lista. Uma mesa pertence a no máximo um
+/// bloco; a que não está em bloco nenhum é numerada no sentido da usina,
+/// depois de todos os blocos.
+/// </summary>
+public sealed class ScanSetup
+{
+    private readonly List<NumberingBlock> _blocos;
+
+    public ScanSetup(ScanDirection defaultDirection, IEnumerable<NumberingBlock> blocks)
+    {
+        ArgumentNullException.ThrowIfNull(blocks);
+        DefaultDirection = defaultDirection;
+        _blocos = blocks.ToList();
+    }
+
+    public ScanDirection DefaultDirection { get; set; }
+
+    public IReadOnlyList<NumberingBlock> Blocks => _blocos;
+
+    public NumberingBlock? Find(Guid id) => _blocos.FirstOrDefault(b => b.Id == id);
+
+    /// <summary>O bloco da mesa, ou null (a mesa vai no sentido da usina).</summary>
+    public NumberingBlock? BlockOf(Guid table) => _blocos.FirstOrDefault(b => b.Tables.Contains(table));
+
+    /// <summary>Um bloco novo no fim da lista, sem mesas, no sentido da usina, com o próximo nome livre ("Bloco 3").</summary>
+    public NumberingBlock AddBlock()
+    {
+        var prefixo = Tr.F("Bloco {0}", string.Empty);
+        var maior = 0;
+
+        foreach (var b in _blocos)
+        {
+            if (!b.Name.StartsWith(prefixo, StringComparison.CurrentCultureIgnoreCase)) continue;
+            if (int.TryParse(b.Name.AsSpan(prefixo.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var n)) maior = Math.Max(maior, n);
+        }
+
+        var bloco = new NumberingBlock(Guid.NewGuid(), Tr.F("Bloco {0}", maior + 1), DefaultDirection, []);
+        _blocos.Add(bloco);
+        return bloco;
+    }
+
+    /// <summary>Tira o bloco da lista; as mesas dele voltam ao sentido da usina.</summary>
+    public bool Remove(Guid id) => _blocos.RemoveAll(b => b.Id == id) > 0;
+
+    public bool SetDirection(Guid id, ScanDirection direction) => Trocar(id, b => b with { Direction = direction });
+
+    /// <summary>Renomeia; null se deu certo, o porquê se não.</summary>
+    public string? Rename(Guid id, string? name)
+    {
+        if (Find(id) is null) return Tr.T("esse bloco não está mais na lista");
+
+        var limpo = name?.Trim() ?? string.Empty;
+        if (limpo.Length == 0) return Tr.T("o nome não pode ficar vazio");
+        if (_blocos.Any(b => b.Id != id && string.Equals(b.Name, limpo, StringComparison.CurrentCultureIgnoreCase)))
+            return Tr.F("já existe um bloco chamado \"{0}\"", limpo);
+
+        Trocar(id, b => b with { Name = limpo });
+        return null;
+    }
+
+    /// <summary>
+    /// As mesas do bloco passam a ser estas (substitui as de antes). Mesa que
+    /// estava em outro bloco sai dele; volta quantas vieram de outro bloco,
+    /// para quem chamou avisar.
+    /// </summary>
+    public int SetTables(Guid id, IEnumerable<Guid> tables)
+    {
+        ArgumentNullException.ThrowIfNull(tables);
+        if (Find(id) is null) throw new ArgumentException("Bloco que não está na lista.", nameof(id));
+
+        var novas = tables.Where(t => t != Guid.Empty).Distinct().ToList();
+        var conjunto = novas.ToHashSet();
+        var tiradas = 0;
+
+        for (var i = 0; i < _blocos.Count; i++)
+        {
+            if (_blocos[i].Id == id) continue;
+
+            var ficam = _blocos[i].Tables.Where(t => !conjunto.Contains(t)).ToList();
+            tiradas += _blocos[i].Tables.Count - ficam.Count;
+            if (ficam.Count != _blocos[i].Tables.Count) _blocos[i] = _blocos[i] with { Tables = ficam };
+        }
+
+        Trocar(id, b => b with { Tables = novas });
+        return tiradas;
+    }
+
+    private bool Trocar(Guid id, Func<NumberingBlock, NumberingBlock> mudanca)
+    {
+        var i = _blocos.FindIndex(b => b.Id == id);
+        if (i < 0) return false;
+
+        _blocos[i] = mudanca(_blocos[i]);
+        return true;
+    }
+
+    /// <summary>As linhas do registro: a usina, e cada bloco seguido das mesas dele, na ordem da lista.</summary>
+    public IReadOnlyList<ScanRow> ToRows()
+    {
+        var linhas = new List<ScanRow> { new(ScanRow.Plant, Guid.Empty, string.Empty, DefaultDirection) };
+
+        foreach (var b in _blocos)
+        {
+            linhas.Add(new ScanRow(ScanRow.Block, b.Id, b.Name, b.Direction));
+            linhas.AddRange(b.Tables.Select(t => new ScanRow(ScanRow.Table, b.Id, t.ToString("D"), b.Direction)));
+        }
+
+        return linhas;
+    }
+
+    /// <summary>
+    /// A configuração das linhas lidas. Bloco repetido, mesa de bloco que não
+    /// existe e mesa que já está em outro bloco são perdidos e contados (quem
+    /// chamou avisa).
+    /// </summary>
+    public static (ScanSetup Setup, int Lost) FromRows(IReadOnlyList<ScanRow> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+
+        var padrao = rows.FirstOrDefault(r => r.Kind == ScanRow.Plant)?.Direction ?? ScanDirection.LeftToRight;
+        var blocos = new List<(Guid Id, string Nome, ScanDirection Sentido, List<Guid> Mesas)>();
+        var usadas = new HashSet<Guid>();
+        var perdidas = 0;
+
+        foreach (var r in rows)
+        {
+            if (r.Kind == ScanRow.Block)
+            {
+                if (blocos.Any(b => b.Id == r.Owner)) perdidas++;
+                else blocos.Add((r.Owner, r.Value, r.Direction, []));
+            }
+            else if (r.Kind == ScanRow.Table)
+            {
+                var dono = blocos.FindIndex(b => b.Id == r.Owner);
+
+                if (dono < 0 || !Guid.TryParse(r.Value, out var mesa) || !usadas.Add(mesa)) perdidas++;
+                else blocos[dono].Mesas.Add(mesa);
+            }
+        }
+
+        return (new ScanSetup(padrao, blocos.Select(b => new NumberingBlock(b.Id, b.Nome, b.Sentido, b.Mesas))), perdidas);
+    }
+}

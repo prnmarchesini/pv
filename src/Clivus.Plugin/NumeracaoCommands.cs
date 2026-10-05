@@ -41,9 +41,13 @@ public static class NumeracaoCommands
     }
 
     /// <summary>
-    /// [Tag/Listar]: Listar só mostra o que está gravado; Tag pede a composição em uma linha, "trafo|inversor|string|separador"
-    /// (trafo "-" tira o pedaço do trafo; ex. "T|I|S|." ou "-||S|"), grava e
-    /// mostra o exemplo.
+    /// [Tag/Usina/Bloco/Listar], para o nível 2. Tag pede a composição em uma
+    /// linha, "trafo|inversor|string|separador" (trafo "-" tira o pedaço do
+    /// trafo; ex. "T|I|S|." ou "-||S|"). Usina pede o sentido da usina
+    /// inteira. Bloco pede [Novo/Mesas/Sentido/Renomear/Apagar] e o nome do
+    /// bloco (Mesas pede a seleção; Sentido, o sentido; Renomear, o nome
+    /// novo). Listar só mostra. Toda opção termina mostrando o que está
+    /// gravado.
     /// </summary>
     [CommandMethod(PluginInfo.ComandoNumeracaoAutomatico)]
     public static void NumeracaoAutomatica()
@@ -55,15 +59,12 @@ public static class NumeracaoCommands
 
         try
         {
-            var pergunta = new PromptKeywordOptions(Tr.T("\nNumeração [Tag/Listar]: ")) { AllowNone = false };
-            foreach (var palavra in new[] { "Tag", "Listar" }) pergunta.Keywords.Add(palavra);
-
-            var resposta = editor.GetKeywords(pergunta);
-            if (resposta.Status != PromptStatus.OK) return;
+            var opcao = Palavra(editor, Tr.T("\nNumeração [Tag/Usina/Bloco/Listar]: "), "Tag", "Usina", "Bloco", "Listar");
+            if (opcao is null) return;
 
             var database = documento.Database;
 
-            switch (resposta.StringResult)
+            switch (opcao)
             {
                 case "Tag":
                     var texto = editor.GetString(new PromptStringOptions(Tr.T("\nComposição (trafo|inversor|string|separador): ")) { AllowSpaces = true });
@@ -73,29 +74,126 @@ public static class NumeracaoCommands
                     if (partes.Length != 4)
                     {
                         editor.WriteMessage(Tr.T("\nNUMERACAO A composição tem quatro partes separadas por |.\n"));
-                        return;
+                        break;
                     }
 
                     var esquema = new TagScheme(partes[0] != "-", partes[0] == "-" ? string.Empty : partes[0], partes[1], partes[2], partes[3]);
-                    if (esquema.Problem() is { } problema)
-                    {
-                        editor.WriteMessage(Tr.F("\nNUMERACAO Não salvei: {0}.\n", problema));
-                        return;
-                    }
+                    if (esquema.Problem() is { } problema) editor.WriteMessage(Tr.F("\nNUMERACAO Não salvei: {0}.\n", problema));
+                    else NumeracaoStore.GravarEsquema(database, esquema);
+                    break;
 
-                    NumeracaoStore.GravarEsquema(database, esquema);
+                case "Usina":
+                    if (PerguntarSentido(editor) is not { } daUsina) return;
+                    NumeracaoStore.MudarVarredura(database, v => v.DefaultDirection = daUsina);
+                    break;
+
+                case "Bloco":
+                    if (!Bloco(documento)) return;
                     break;
             }
 
-            var (gravado, problemaDoRegistro) = NumeracaoStore.Esquema(database);
-            editor.WriteMessage(Tr.F("\nNUMERACAO tag {0}\n", PainelDeNumeracao.Exemplo(gravado)));
-            if (problemaDoRegistro is not null) editor.WriteMessage(Tr.F("  ATENÇÃO: {0}.\n", problemaDoRegistro));
+            Listar(editor, database);
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha no CLIVUS_NUMERACAO_AUTO.", erro);
             editor.WriteMessage(Tr.F("\nNão consegui mexer na numeração: {0}\n", erro.Message));
         }
+    }
+
+    /// <summary>A composição, o sentido da usina e os blocos gravados, na linha de comando.</summary>
+    private static void Listar(Editor editor, Autodesk.AutoCAD.DatabaseServices.Database database)
+    {
+        var (esquema, problemaDoEsquema) = NumeracaoStore.Esquema(database);
+        editor.WriteMessage(Tr.F("\nNUMERACAO tag {0}\n", PainelDeNumeracao.Exemplo(esquema)));
+        if (problemaDoEsquema is not null) editor.WriteMessage(Tr.F("  ATENÇÃO: {0}.\n", problemaDoEsquema));
+
+        var (varredura, problemaDaVarredura) = NumeracaoStore.Varredura(database);
+        editor.WriteMessage(Tr.F("NUMERACAO usina {0}; {1} bloco(s)\n", ScanOrder.Describe(varredura.DefaultDirection), varredura.Blocks.Count));
+        for (var i = 0; i < varredura.Blocks.Count; i++)
+            editor.WriteMessage(Tr.F("NUMERACAO bloco {0}\n", PainelDeNumeracao.Descrever(varredura.Blocks[i], i + 1)));
+        if (problemaDaVarredura is not null) editor.WriteMessage(Tr.F("  ATENÇÃO: {0}.\n", problemaDaVarredura));
+    }
+
+    private static bool Bloco(Document documento)
+    {
+        var editor = documento.Editor;
+        var database = documento.Database;
+
+        var acao = Palavra(editor, Tr.T("\nBloco [Novo/Mesas/Sentido/Renomear/Apagar]: "), "Novo", "Mesas", "Sentido", "Renomear", "Apagar");
+        if (acao is null) return false;
+
+        if (acao == "Novo")
+        {
+            NumberingBlock? novo = null;
+            NumeracaoStore.MudarVarredura(database, v => novo = v.AddBlock());
+            editor.WriteMessage(Tr.F("\nNUMERACAO {0} criado.\n", novo!.Name));
+            return true;
+        }
+
+        var nome = editor.GetString(new PromptStringOptions(Tr.T("\nNome do bloco: ")) { AllowSpaces = true });
+        if (nome.Status != PromptStatus.OK) return false;
+
+        var bloco = NumeracaoStore.Varredura(database).Varredura.Blocks
+            .FirstOrDefault(b => string.Equals(b.Name, nome.StringResult.Trim(), StringComparison.CurrentCultureIgnoreCase));
+
+        if (bloco is null)
+        {
+            editor.WriteMessage(Tr.F("\nNUMERACAO Não há bloco chamado \"{0}\".\n", nome.StringResult.Trim()));
+            return true;
+        }
+
+        switch (acao)
+        {
+            case "Mesas":
+                var selecao = editor.GetSelection(new PromptSelectionOptions { MessageForAdding = Tr.F("\nSelecione as mesas do {0} (só mesas entram): ", bloco.Name) }, PainelDeNumeracao.FiltroDeMesas);
+                if (selecao.Status != PromptStatus.OK) return false;
+                editor.WriteMessage(Tr.F("\nNUMERACAO {0}\n", PainelDeNumeracao.GravarMesas(documento, bloco, selecao.Value.GetObjectIds())));
+                break;
+
+            case "Sentido":
+                if (PerguntarSentido(editor) is not { } sentido) return false;
+                NumeracaoStore.MudarVarredura(database, v => v.SetDirection(bloco.Id, sentido));
+                break;
+
+            case "Renomear":
+                var novoNome = editor.GetString(new PromptStringOptions(Tr.T("\nNome novo: ")) { AllowSpaces = true });
+                if (novoNome.Status != PromptStatus.OK) return false;
+                string? porque = null;
+                NumeracaoStore.MudarVarredura(database, v => porque = v.Rename(bloco.Id, novoNome.StringResult));
+                if (porque is not null) editor.WriteMessage(Tr.F("\nNUMERACAO Não renomeei: {0}.\n", porque));
+                break;
+
+            case "Apagar":
+                NumeracaoStore.MudarVarredura(database, v => v.Remove(bloco.Id));
+                editor.WriteMessage(Tr.F("\nNUMERACAO {0} apagado.\n", bloco.Name));
+                break;
+        }
+
+        return true;
+    }
+
+    private static readonly (string Palavra, ScanDirection Sentido)[] PalavrasDoSentido =
+    [
+        ("EsquerdaDireita", ScanDirection.LeftToRight),
+        ("DireitaEsquerda", ScanDirection.RightToLeft),
+        ("CimaBaixo", ScanDirection.TopToBottom),
+        ("BaixoCima", ScanDirection.BottomToTop),
+    ];
+
+    private static ScanDirection? PerguntarSentido(Editor editor)
+    {
+        var palavra = Palavra(editor, Tr.T("\nSentido [EsquerdaDireita/DireitaEsquerda/CimaBaixo/BaixoCima]: "), PalavrasDoSentido.Select(p => p.Palavra).ToArray());
+        return palavra is null ? null : PalavrasDoSentido.First(p => p.Palavra == palavra).Sentido;
+    }
+
+    private static string? Palavra(Editor editor, string pergunta, params string[] palavras)
+    {
+        var opcoes = new PromptKeywordOptions(pergunta) { AllowNone = false };
+        foreach (var palavra in palavras) opcoes.Keywords.Add(palavra);
+
+        var resposta = editor.GetKeywords(opcoes);
+        return resposta.Status == PromptStatus.OK ? resposta.StringResult : null;
     }
 }
 
