@@ -45,6 +45,9 @@
 ; A cadeia, a cor de um inversor, as tags e os equipamentos em campo.
 (command "CLIVUS_NUMERACAO_EXEMPLO_AUTO")
 (command "CLIVUS_ELETRICA_AUTO" "Cor" "Inversor 1" "#123456")
+; As tags com fundo e moldura (05/10/2026): o Apagar tem que acha-las do mesmo jeito.
+(command "CLIVUS_NUMERACAO_AUTO" "Fundo" "Sim")
+(command "CLIVUS_NUMERACAO_AUTO" "Moldura" "Sim")
 (command "CLIVUS_NUMERACAO_AUTO" "Gerar")
 (command "CLIVUS_ELETRICA_POSICIONAR" "C1" "{{P1}}")
 (command "CLIVUS_ELETRICA_POSICIONAR" "Inversor 1" "{{P2}}")

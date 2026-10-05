@@ -9,25 +9,25 @@ public class StringNumberingTests
     [Trait("Etapa", "15")]
     public void ATagPadraoEhTrafoInversorStringComPonto()
     {
-        Assert.Equal("T1.I1.S1", TagScheme.Default.Compose(1, 1, 1));
-        Assert.Equal("T2.I13.S7", TagScheme.Default.Compose(2, 13, 7));
-        Assert.Null(TagScheme.Default.Problem());
+        Assert.Equal("T1.I1.S1", LegacyTagScheme.Default.Compose(1, 1, 1));
+        Assert.Equal("T2.I13.S7", LegacyTagScheme.Default.Compose(2, 13, 7));
+        Assert.Null(LegacyTagScheme.Default.Problem());
     }
 
     [Fact]
     [Trait("Etapa", "15")]
     public void CadaPedacoTemOSeuPrefixoEOSeparadorEhOMesmo()
     {
-        var risco = new TagScheme(true, "Trafo", "Inv", "S", "-");
+        var risco = new LegacyTagScheme(true, "Trafo", "Inv", "S", "-");
         Assert.Equal("Trafo3-Inv2-S10", risco.Compose(3, 2, 10));
 
         // 1S1: sem o pedaço do trafo, inversor sem prefixo, colado.
-        var colado = new TagScheme(false, "T", "", "S", "");
+        var colado = new LegacyTagScheme(false, "T", "", "S", "");
         Assert.Null(colado.Problem());
         Assert.Equal("1S1", colado.Compose(4, 1, 1));
         Assert.Equal("12S3", colado.Compose(null, 12, 3));
 
-        var coladoComTrafo = new TagScheme(true, "T", "I", "S", "");
+        var coladoComTrafo = new LegacyTagScheme(true, "T", "I", "S", "");
         Assert.Equal("T1I2S3", coladoComTrafo.Compose(1, 2, 3));
     }
 
@@ -37,7 +37,7 @@ public class StringNumberingTests
     {
         // Decisão de 04/10/2026: o pedaço do trafo some (com o separador),
         // em vez de um "T0" que parece um trafo de verdade.
-        Assert.Equal("I4.S2", TagScheme.Default.Compose(null, 4, 2));
+        Assert.Equal("I4.S2", LegacyTagScheme.Default.Compose(null, 4, 2));
     }
 
     [Theory]
@@ -52,7 +52,7 @@ public class StringNumberingTests
     [InlineData(true, "T", "I", "Stringcomprida", ".")] // mais de 12 caracteres
     public void ComposicaoAmbiguaOuInvalidaEhRecusada(bool trafo, string t, string i, string s, string separador)
     {
-        var esquema = new TagScheme(trafo, t, i, s, separador);
+        var esquema = new LegacyTagScheme(trafo, t, i, s, separador);
         Assert.NotNull(esquema.Problem());
     }
 
@@ -60,24 +60,24 @@ public class StringNumberingTests
     [Trait("Etapa", "15")]
     public void NumeroForaDaFaixaNaoViraTag()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => TagScheme.Default.Compose(0, 1, 1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => TagScheme.Default.Compose(1, 0, 1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => TagScheme.Default.Compose(1, 1, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => LegacyTagScheme.Default.Compose(0, 1, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => LegacyTagScheme.Default.Compose(1, 0, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => LegacyTagScheme.Default.Compose(1, 1, 0));
     }
 
     [Fact]
     [Trait("Etapa", "15")]
     public void OEsquemaVaiEVoltaDosCampos()
     {
-        var esquema = new TagScheme(false, "Trafo", "", "S", "");
-        Assert.Equal(TagScheme.FieldCount, esquema.ToFields().Count);
-        Assert.Equal(esquema, TagScheme.Parse(esquema.ToFields()));
-        Assert.Equal(TagScheme.Default, TagScheme.Parse(TagScheme.Default.ToFields()));
+        var esquema = new LegacyTagScheme(false, "Trafo", "", "S", "");
+        Assert.Equal(LegacyTagScheme.FieldCount, esquema.ToFields().Count);
+        Assert.Equal(esquema, LegacyTagScheme.Parse(esquema.ToFields()));
+        Assert.Equal(LegacyTagScheme.Default, LegacyTagScheme.Parse(LegacyTagScheme.Default.ToFields()));
 
         // Gravado estragado (separador que não existe) não volta.
-        var estragado = TagScheme.Default.ToFields().ToArray();
+        var estragado = LegacyTagScheme.Default.ToFields().ToArray();
         estragado[4] = "#";
-        Assert.Null(TagScheme.Parse(estragado));
+        Assert.Null(LegacyTagScheme.Parse(estragado));
     }
 
     // ------------------------------------------------ 15.2 varredura e blocos

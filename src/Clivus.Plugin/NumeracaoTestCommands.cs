@@ -161,4 +161,90 @@ public static class NumeracaoTestCommands
             documento.Editor.WriteMessage($"\nNUMERACAO falhou: {erro.Message}\n");
         }
     }
+
+    /// <summary>
+    /// CLIVUS_NUMERACAO_TELA_AUTO [Composicao/Gerar/Apagar] (05/10/2026): o
+    /// MESMO caminho dos botões da aba, no contexto da aplicação (Session),
+    /// fora de comando do documento. Composicao pede o modelo, o fundo e a
+    /// moldura ([Sim/Nao]) e chama o Salvar da aba
+    /// (<see cref="PainelDeNumeracao.SalvarComposicao"/>). Gerar e Apagar
+    /// pedem [Usina/Bloco/Inversor] (e o nome) e chamam os da seção Gerar
+    /// (<see cref="PainelDeNumeracao.GerarNaTela"/>, <see cref="PainelDeNumeracao.ApagarNaTela"/>).
+    /// As linhas começam por "NUMERACAO tela" e saem sem tradução.
+    /// </summary>
+#if DEBUG
+    [CommandMethod(PluginInfo.ComandoNumeracaoTelaAutomatico, CommandFlags.Session)]
+#endif
+    public static void PelaTela()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+
+        try
+        {
+            string? Palavra(string pergunta, params string[] palavras)
+            {
+                var opcoes = new Autodesk.AutoCAD.EditorInput.PromptKeywordOptions(pergunta) { AllowNone = false };
+                foreach (var p in palavras) opcoes.Keywords.Add(p);
+                using (documento.LockDocument())
+                {
+                    var r = editor.GetKeywords(opcoes);
+                    return r.Status == Autodesk.AutoCAD.EditorInput.PromptStatus.OK ? r.StringResult : null;
+                }
+            }
+
+            string? Texto(string pergunta)
+            {
+                using (documento.LockDocument())
+                {
+                    var r = editor.GetString(new Autodesk.AutoCAD.EditorInput.PromptStringOptions(pergunta) { AllowSpaces = true });
+                    return r.Status == Autodesk.AutoCAD.EditorInput.PromptStatus.OK ? r.StringResult : null;
+                }
+            }
+
+            var acao = Palavra("\nTela [Composicao/Gerar/Apagar]: ", "Composicao", "Gerar", "Apagar");
+            if (acao is null) return;
+
+            if (acao == "Composicao")
+            {
+                if (Texto("\nModelo: ") is not { } modelo) return;
+                if (Palavra("\nFundo [Sim/Nao]: ", "Sim", "Nao") is not { } fundo) return;
+                if (Palavra("\nMoldura [Sim/Nao]: ", "Sim", "Nao") is not { } moldura) return;
+
+                var (frase, gravou) = PainelDeNumeracao.SalvarComposicao(documento, new TagScheme(modelo.Trim(), fundo == "Sim", moldura == "Sim"));
+                editor.WriteMessage($"\nNUMERACAO tela composicao {(gravou ? "salva" : "recusada")}: {frase}\n");
+                return;
+            }
+
+            if (Palavra("\nAlcance [Usina/Bloco/Inversor]: ", "Usina", "Bloco", "Inversor") is not { } qual) return;
+
+            NumberingScope? alcance = NumberingScope.All;
+            if (qual != "Usina")
+            {
+                if (Texto("\nNome: ") is not { } nome) return;
+                nome = nome.Trim();
+                var database = documento.Database;
+
+                alcance = qual == "Bloco"
+                    ? NumeracaoStore.Varredura(database).Varredura.Blocks.FirstOrDefault(b => string.Equals(b.Name, nome, StringComparison.CurrentCultureIgnoreCase)) is { } bloco ? NumberingScope.OfBlock(bloco.Id) : null
+                    : ElectricalStore.Inverters(database).Items.FirstOrDefault(i => string.Equals(i.Name, nome, StringComparison.CurrentCultureIgnoreCase)) is { } inversor ? NumberingScope.OfInverter(inversor.Id) : null;
+
+                if (alcance is null)
+                {
+                    editor.WriteMessage($"\nNUMERACAO tela recusado: nao ha {qual} chamado {nome}\n");
+                    return;
+                }
+            }
+
+            var resultado = acao == "Gerar" ? PainelDeNumeracao.GerarNaTela(documento, alcance) : PainelDeNumeracao.ApagarNaTela(documento, alcance);
+            editor.WriteMessage($"\nNUMERACAO tela {acao.ToLowerInvariant()} {qual.ToLowerInvariant()}: {resultado}\n");
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no CLIVUS_NUMERACAO_TELA_AUTO.", erro);
+            editor.WriteMessage($"\nNUMERACAO tela falhou: {erro.Message}\n");
+        }
+    }
 }

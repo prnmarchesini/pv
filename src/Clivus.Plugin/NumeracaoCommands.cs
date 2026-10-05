@@ -163,12 +163,15 @@ public static class NumeracaoCommands
     }
 
     /// <summary>
-    /// [Tag/Usina/Faixa/Bloco/Gerar/RegerarBloco/RefazerInversor/ApagarTags/Strings/Listar],
+    /// [Tag/TagAntiga/Fundo/Moldura/Usina/Faixa/Bloco/Gerar/RegerarBloco/RefazerInversor/ApagarTags/Strings/Listar],
     /// para o nível 2. Gerar numera a usina (15.4); RegerarBloco e
     /// RefazerInversor pedem o nome e numeram só aquele pedaço; ApagarTags
-    /// pede [Tudo/Inversor] (15.5); Strings lista cada string. Tag pede a composição em uma
-    /// linha, "trafo|inversor|string|separador" (trafo "-" tira o pedaço do
-    /// trafo; ex. "T|I|S|." ou "-||S|"). Usina pede o sentido da usina
+    /// pede [Tudo/Inversor/Bloco] (15.5); Strings lista cada string. Tag pede
+    /// o modelo livre (ex. "T{T}-INV{I}S{S}", 05/10/2026) ou, com "|", a
+    /// composição de antes em uma linha, "trafo|inversor|string|separador"
+    /// (trafo "-" tira o pedaço do trafo; ex. "T|I|S|." ou "-||S|"), que vira
+    /// o modelo equivalente. TagAntiga grava a de antes no formato 1 do
+    /// registro (um desenho antigo). Fundo e Moldura pedem [Sim/Nao]. Usina pede o sentido da usina
     /// inteira; Faixa, o sentido na faixa dela. Bloco pede
     /// [Novo/Mesas/Sentido/Faixa/Subir/Descer/Renomear/Apagar] e o nome do
     /// bloco (Mesas pede a seleção; Sentido e Faixa, o sentido; Renomear, o
@@ -185,8 +188,8 @@ public static class NumeracaoCommands
 
         try
         {
-            var opcao = Palavra(editor, Tr.T("\nNumeração [Tag/Usina/Faixa/Bloco/Gerar/RegerarBloco/RefazerInversor/ApagarTags/Strings/Listar]: "),
-                "Tag", "Usina", "Faixa", "Bloco", "Gerar", "RegerarBloco", "RefazerInversor", "ApagarTags", "Strings", "Listar");
+            var opcao = Palavra(editor, Tr.T("\nNumeração [Tag/TagAntiga/Fundo/Moldura/Usina/Faixa/Bloco/Gerar/RegerarBloco/RefazerInversor/ApagarTags/Strings/Listar]: "),
+                "Tag", "TagAntiga", "Fundo", "Moldura", "Usina", "Faixa", "Bloco", "Gerar", "RegerarBloco", "RefazerInversor", "ApagarTags", "Strings", "Listar");
             if (opcao is null) return;
 
             var database = documento.Database;
@@ -208,11 +211,12 @@ public static class NumeracaoCommands
                     return;
 
                 case "ApagarTags":
-                    var quais = Palavra(editor, Tr.T("\nApagar as tags [Tudo/Inversor]: "), "Tudo", "Inversor");
+                    var quais = Palavra(editor, Tr.T("\nApagar as tags [Tudo/Inversor/Bloco]: "), "Tudo", "Inversor", "Bloco");
                     if (quais is null) return;
 
                     NumberingScope? alcance = NumberingScope.All;
                     if (quais == "Inversor") alcance = AcharInversor(editor, database) is { } doInversor ? NumberingScope.OfInverter(doInversor.Id) : null;
+                    if (quais == "Bloco") alcance = AcharBloco(editor, database) is { } doBloco ? NumberingScope.OfBlock(doBloco.Id) : null;
                     if (alcance is null) return;
 
                     editor.WriteMessage(Tr.F("\nNUMERACAO {0}\n", NumeracaoDesenho.Apagar(database, alcance)));
@@ -223,19 +227,42 @@ public static class NumeracaoCommands
                     return;
 
                 case "Tag":
-                    var texto = editor.GetString(new PromptStringOptions(Tr.T("\nComposição (trafo|inversor|string|separador): ")) { AllowSpaces = true });
+                    var texto = editor.GetString(new PromptStringOptions(Tr.T("\nModelo da tag (ex. T{T}-INV{I}S{S}; ou trafo|inversor|string|separador): ")) { AllowSpaces = true });
                     if (texto.Status != PromptStatus.OK) return;
 
-                    var partes = texto.StringResult.Split('|');
-                    if (partes.Length != 4)
+                    var atual = NumeracaoStore.Esquema(database).Esquema;
+                    TagScheme? esquema;
+
+                    if (texto.StringResult.Contains('|'))
                     {
-                        editor.WriteMessage(Tr.T("\nNUMERACAO A composição tem quatro partes separadas por |.\n"));
-                        break;
+                        if (Antiga(editor, texto.StringResult) is not { } antiga) break;
+                        esquema = atual with { Template = antiga.ToTemplate() };
+                    }
+                    else
+                    {
+                        esquema = atual with { Template = texto.StringResult.Trim() };
                     }
 
-                    var esquema = new TagScheme(partes[0] != "-", partes[0] == "-" ? string.Empty : partes[0], partes[1], partes[2], partes[3]);
-                    if (esquema.Problem() is { } problema) editor.WriteMessage(Tr.F("\nNUMERACAO Não salvei: {0}.\n", problema));
+                    var quantos = StringNumbering.CountInverters(ElectricalStore.Inverters(database).Items);
+                    if (esquema.Problem(quantos) is { } problema) editor.WriteMessage(Tr.F("\nNUMERACAO Não salvei: {0}.\n", problema));
                     else NumeracaoStore.GravarEsquema(database, esquema);
+                    break;
+
+                case "TagAntiga":
+                    var velha = editor.GetString(new PromptStringOptions(Tr.T("\nComposição (trafo|inversor|string|separador): ")) { AllowSpaces = true });
+                    if (velha.Status != PromptStatus.OK) return;
+                    if (Antiga(editor, velha.StringResult) is { } formato1) NumeracaoStore.GravarEsquemaAntigo(database, formato1);
+                    break;
+
+                case "Fundo":
+                case "Moldura":
+                    var liga = Palavra(editor, Tr.F("\n{0} [Sim/Nao]: ", opcao), "Sim", "Nao");
+                    if (liga is null) return;
+
+                    var corrente = NumeracaoStore.Esquema(database).Esquema;
+                    var novo = opcao == "Fundo" ? corrente with { Background = liga == "Sim" } : corrente with { Border = liga == "Sim" };
+                    NumeracaoStore.GravarEsquema(database, novo);
+                    editor.WriteMessage(Tr.F("\nNUMERACAO {0} tag(s) desenhada(s) atualizada(s).\n", NumeracaoDesenho.Reemoldurar(database, novo)));
                     break;
 
                 case "Usina":
@@ -262,6 +289,23 @@ public static class NumeracaoCommands
             RegistroDeDiagnostico.Registrar("Falha no CLIVUS_NUMERACAO_AUTO.", erro);
             editor.WriteMessage(Tr.F("\nNão consegui mexer na numeração: {0}\n", erro.Message));
         }
+    }
+
+    /// <summary>A composição de antes, "trafo|inversor|string|separador" (trafo "-" tira o pedaço do trafo); null e aviso se não vale.</summary>
+    private static LegacyTagScheme? Antiga(Editor editor, string texto)
+    {
+        var partes = texto.Split('|');
+        if (partes.Length != 4)
+        {
+            editor.WriteMessage(Tr.T("\nNUMERACAO A composição tem quatro partes separadas por |.\n"));
+            return null;
+        }
+
+        var antiga = new LegacyTagScheme(partes[0] != "-", partes[0] == "-" ? string.Empty : partes[0], partes[1], partes[2], partes[3]);
+        if (antiga.Problem() is not { } problema) return antiga;
+
+        editor.WriteMessage(Tr.F("\nNUMERACAO Não salvei: {0}.\n", problema));
+        return null;
     }
 
     /// <summary>O relatório na linha de comando: a primeira linha com o prefixo NUMERACAO.</summary>
@@ -306,6 +350,7 @@ public static class NumeracaoCommands
     {
         var (esquema, problemaDoEsquema) = NumeracaoStore.Esquema(database);
         editor.WriteMessage(Tr.F("\nNUMERACAO tag {0}\n", PainelDeNumeracao.Exemplo(esquema)));
+        editor.WriteMessage($"NUMERACAO modelo={esquema.Template} fundo={(esquema.Background ? 1 : 0)} moldura={(esquema.Border ? 1 : 0)} formato={NumeracaoStore.VersaoDoEsquema(database)?.ToString() ?? "-"}\n");
         if (problemaDoEsquema is not null) editor.WriteMessage(Tr.F("  ATENÇÃO: {0}.\n", problemaDoEsquema));
 
         var (varredura, problemaDaVarredura) = NumeracaoStore.Varredura(database);

@@ -5,32 +5,50 @@ namespace Clivus.Plugin;
 
 /// <summary>
 /// A configuração da numeração das strings gravada no desenho (elétrica,
-/// etapa 15), no dicionário do plugin: a composição da tag na chave
-/// "NUMERACAO"; o sentido da usina e os blocos (na ordem da lista) na chave
+/// etapa 15), no dicionário do plugin: a composição da tag (modelo livre,
+/// fundo e moldura) na chave "NUMERACAO"; o sentido da usina e os blocos (na ordem da lista) na chave
 /// "NUMERACAO_VARREDURA".
 /// </summary>
 internal static class NumeracaoStore
 {
     private const string ChaveDoEsquema = "NUMERACAO";
-    private const int VersaoDoEsquema = 1;
     private static readonly string OQueEsquema = Tr.N("da composição da tag");
 
     private const string ChaveDaVarredura = "NUMERACAO_VARREDURA";
     private const int VersaoDaVarredura = ScanRow.Version;
     private static readonly string OQueVarredura = Tr.N("da varredura das strings");
 
-    /// <summary>A composição gravada, ou a padrão (T1.I1.S1) se não há nenhuma; o problema do registro, se havia.</summary>
+    /// <summary>
+    /// A composição gravada, ou a padrão (T{T}.I{I}.S{S}) se não há nenhuma; o
+    /// problema do registro, se havia. Formato 2 (05/10/2026): o modelo livre,
+    /// o fundo e a moldura. O 1 (trafo sim/não, três prefixos e o separador)
+    /// continua sendo lido e vira o modelo que dá as mesmas tags, sem fundo
+    /// nem moldura. Grava sempre o 2.
+    /// </summary>
     internal static (TagScheme Esquema, string? Problema) Esquema(Database database)
     {
-        var lido = PluginRecords.Load<TagScheme>(database, ChaveDoEsquema, VersaoDoEsquema, TagScheme.FieldCount, TagScheme.Parse, OQueEsquema);
+        var lido = PluginRecords.Version(database, ChaveDoEsquema) == TagScheme.LegacyVersion
+            ? PluginRecords.Load<TagScheme>(database, ChaveDoEsquema, TagScheme.LegacyVersion, TagScheme.LegacyFieldCount, TagScheme.ParseLegacy, OQueEsquema)
+            : PluginRecords.Load<TagScheme>(database, ChaveDoEsquema, TagScheme.Version, TagScheme.FieldCount, TagScheme.Parse, OQueEsquema);
         return (lido.Items.Count > 0 ? lido.Items[0] : TagScheme.Default, lido.Problem);
     }
 
+    /// <summary>Grava a composição (formato 2). Recusa o modelo que não vale nem para um inversor só.</summary>
     internal static void GravarEsquema(Database database, TagScheme esquema)
     {
         if (esquema.Problem() is { } problema) throw new ArgumentException(problema, nameof(esquema));
-        PluginRecords.Save(database, ChaveDoEsquema, VersaoDoEsquema, TagScheme.FieldCount, [esquema], e => e.ToFields());
+        PluginRecords.Save(database, ChaveDoEsquema, TagScheme.Version, TagScheme.FieldCount, [esquema], e => e.ToFields());
     }
+
+    /// <summary>Só para o nível 2: grava a composição no formato 1 (o de antes de 05/10/2026), como um desenho antigo.</summary>
+    internal static void GravarEsquemaAntigo(Database database, LegacyTagScheme antiga)
+    {
+        if (antiga.Problem() is { } problema) throw new ArgumentException(problema, nameof(antiga));
+        PluginRecords.Save(database, ChaveDoEsquema, TagScheme.LegacyVersion, TagScheme.LegacyFieldCount, [antiga], e => e.ToFields());
+    }
+
+    /// <summary>A versão gravada do registro da composição (null: não há).</summary>
+    internal static int? VersaoDoEsquema(Database database) => PluginRecords.Version(database, ChaveDoEsquema);
 
     /// <summary>
     /// A varredura gravada (sentidos da usina e blocos), ou a da esquerda para

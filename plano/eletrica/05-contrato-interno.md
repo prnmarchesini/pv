@@ -16,6 +16,7 @@ usos no mesmo commit.
 | subestação (UC) | dicionário, `SUBESTACOES` (formato 2 desde 05/10/2026; o 1 continua sendo lido) | `ConsumerUnit` |
 | bloco físico da subestação compartilhada (o cubículo) | dicionário, `SUBESTACOES_BLOCOS` | `Substation` (Core, `Electrical.cs`), `ElectricalStore.Substations/SaveSubstations` |
 | nome do skid (14.7), um por trafo | dicionário, `SKIDS` | `Skid` (Core, `ElectricalSetup.cs`), `ElectricalStore.Skids/SaveSkids` |
+| composição da tag | dicionário, `NUMERACAO` (formato 2 desde 05/10/2026: o modelo livre, o fundo e a moldura; o 1, os prefixos e o separador, continua sendo lido e vira o modelo equivalente) | `TagScheme`, `LegacyTagScheme` (Core, `TagScheme.cs`), `NumeracaoStore` (Plugin) |
 | varredura da numeração (tag) e os blocos | dicionário, `NUMERACAO_VARREDURA` (formato 2 desde 05/10/2026, com o sentido na faixa da usina e de cada bloco; o 1 continua sendo lido com o sentido na faixa de antes) | `ScanSetup`, `ScanRow`, `NumberingBlock` (Core), `NumeracaoStore` (Plugin) |
 | varredura da atribuição automática das strings | dicionário, `ALOCACAO_VARREDURA` (separada da `NUMERACAO_VARREDURA`) | `AllocationScan` (Core), `AtribuicaoAutomatica.Varredura/GravarVarredura` (Plugin) |
 | retângulo de equipamento em campo | XData (tipo `Equipamento`) da entidade, camada `CLIVUS_EQUIPAMENTO` | `EquipmentPlacement`, `ElectricalStore.SavePlacement/LoadPlacement` |
@@ -112,6 +113,34 @@ Nenhum vínculo é derivado de posição no desenho.
   quem chama solta as strings e tira os retângulos). No Plugin,
   `AbaInversor.RenomearNaLinha/TrocarModeloNaLinha/ApagarInversores`, o
   mesmo caminho da tela e do nível 2 (`CLIVUS_ELETRICA_JANELA_LINHA_AUTO`).
+## A composição da tag (05/10/2026)
+
+- `NUMERACAO` formato 2: 3 campos (o modelo, fundo "0/1", moldura "0/1").
+  O modelo é texto livre com os campos {T}, {I} e {S} (o número do trafo, do
+  inversor e da string), com zeros à esquerda opcionais ({I:00} dá 01); o
+  resto é texto fixo. Ex.: `T{T}-INV{I}S{S}`.
+- Inversor sem trafo: o pedaço do trafo some. Pedaço = o campo e o texto
+  fixo logo antes dele, desde o campo anterior; se o pedaço que some é o
+  primeiro, a pontuação que começava o seguinte some junto
+  (`T{T}.I{I}.S{S}` → `I3.S1`, o que a composição antiga dava).
+- Validação (`TagScheme.Problem(inversores)`): {S} obrigatório; {I}
+  obrigatório com mais de um inversor no cadastro; chave desconhecida, chave
+  repetida, chaves sem par, dois campos colados sem letra entre eles (a não
+  ser que o primeiro tenha zeros), `\`, `%`, `|`, espaço nas pontas, `{I:0}` (zeros
+  são de 2 a 6) e mais de 60 caracteres são recusados. `StringNumbering.Number` recusa o modelo que
+  não vale para o cadastro de agora; o Gerar avisa sem mexer em nada.
+- O formato 1 (5 campos: trafo sim/não, os três prefixos, o separador) é lido
+  pela versão do cabeçalho e vira `LegacyTagScheme.ToTemplate()` (Trafo T,
+  Inversor I, String S, ponto → `T{T}.I{I}.S{S}`; sem trafo → `I{I}.S{S}`),
+  sem fundo nem moldura: as mesmas tags (limite: prefixo antigo que começa
+  com pontuação, ex. "-I", perde essa pontuação quando o trafo some). Grava-se sempre o 2.
+- Fundo e moldura são do próprio MText da tag (`BackgroundFill` com a cor
+  da tela, `ShowBorders`, folga 1,2): nenhuma entidade a mais, e o texto
+  continua achado pelo XData `StringTag` (gerar, apagar, Edição › Apagar).
+  Salvar a composição já liga/desliga os dois nas tags desenhadas; o texto
+  delas só muda ao gerar de novo.
+- Gerar e Apagar têm três alcances iguais na aba: usina inteira, bloco
+  (`NumberingScope.OfBlock`) e inversor (`OfInverter`).
 
 ## A cor do inversor (05/10/2026)
 
