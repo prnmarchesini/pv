@@ -472,4 +472,31 @@ public class ElectricalSetupTests
         Assert.Null(setup.FindInverter(""));
         Assert.Null(setup.FindInverter(Guid.NewGuid().ToString()));
     }
+
+    // ------------------------------------------------------------ 14.5
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void EditarInversorTrocaNomeEModeloComNomeUnico()
+    {
+        var setup = new ElectricalSetup();
+        var a = setup.AddModel();
+        var b = setup.AddModel();
+        var inversores = setup.AddInverters(a.Id, 2);
+
+        Assert.Null(setup.EditInverter(inversores[0].Id, " INV-NORTE ", b.Id));
+        Assert.Equal("INV-NORTE", setup.FindInverter(inversores[0].Id)!.Name);
+        Assert.Equal(b.Id, setup.FindInverter(inversores[0].Id)!.Model);
+
+        Assert.NotNull(setup.EditInverter(inversores[1].Id, "inv-norte", a.Id));
+        Assert.NotNull(setup.EditInverter(inversores[1].Id, " ", a.Id));
+        Assert.NotNull(setup.EditInverter(inversores[1].Id, Guid.NewGuid().ToString(), a.Id));
+        Assert.NotNull(setup.EditInverter(inversores[1].Id, "Outro", Guid.NewGuid()));
+        Assert.NotNull(setup.EditInverter(Guid.NewGuid(), "Outro", a.Id));
+        Assert.Equal(inversores[1], setup.FindInverter(inversores[1].Id));
+
+        Assert.True(setup.RemoveInverter(inversores[1].Id));
+        Assert.False(setup.RemoveInverter(inversores[1].Id));
+        Assert.Single(setup.Inverters);
+    }
 }

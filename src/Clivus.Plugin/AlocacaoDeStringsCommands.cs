@@ -62,6 +62,36 @@ public static class AlocacaoDeStringsCommands
         }
     }
 
+    /// <summary>
+    /// CLIVUS_ELETRICA_SELECIONAR (14.5, "selecionar todas"): as strings do
+    /// inversor ficam selecionadas no CAD (seleção implícita), para ver onde
+    /// estão ou agir sobre elas. Nada é gravado.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoEletricaSelecionar, CommandFlags.Modal | CommandFlags.Redraw | CommandFlags.NoUndoMarker)]
+    public static void SelecionarTodas()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+
+        try
+        {
+            if (PerguntarInversor(editor, documento.Database) is not { } escolha) return;
+
+            var ids = StringsDoDesenho.Ler(documento.Database).Where(x => x.Value.Inverter == escolha.Inversor.Id).Select(x => x.Key).ToArray();
+            editor.SetImpliedSelection(ids);
+            editor.WriteMessage(ids.Length == 0
+                ? Tr.F("\nINVERSOR {0} não tem string alocada.\n", escolha.Inversor.Name)
+                : Tr.F("\nINVERSOR {0}: {1} string(s) selecionada(s).\n", escolha.Inversor.Name, ids.Length));
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao selecionar as strings do inversor.", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui selecionar as strings: {0}\n", erro.Message));
+        }
+    }
+
     /// <summary>Pergunta o inversor (nome ou GUID); null e o recado se não há um só que responda.</summary>
     internal static (ElectricalSetup Setup, Inverter Inversor)? PerguntarInversor(Editor editor, Database database)
     {
@@ -236,6 +266,13 @@ internal static class StringsDoDesenho
         using var transacao = database.TransactionManager.StartOpenCloseTransaction();
         return ElectricalStore.Strings(transacao, database).ToDictionary(x => x.Id, x => x.String);
     }
+
+    /// <summary>
+    /// Solta todas as strings do inversor (14.5, "apagar todas"): só o
+    /// vínculo no XData; as strings continuam no desenho, livres. Quantas.
+    /// </summary>
+    internal static int Soltar(Database database, Guid inversor) =>
+        Gravar(database, StringAllocation.Release(inversor, Ler(database).Values));
 
     /// <summary>
     /// Regrava o XData das strings mudadas (o vínculo com o inversor), numa

@@ -85,4 +85,41 @@ public class StringAllocationTests
         Assert.Equal(4, final.Count(s => s.Inverter == a));
         Assert.Equal(2, final.Count(s => s.Inverter == b));
     }
+
+    // ------------------------------------------------------------ 14.5
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void SoltarTodasLiberaSoAsDoInversorSemMexerNaGeometria()
+    {
+        var meu = Guid.NewGuid();
+        var outro = Guid.NewGuid();
+        var minhas = new[] { S(meu, "T1.I1.S1"), S(meu, "T1.I1.S2") };
+        var dele = S(outro);
+        var livre = S(Guid.Empty);
+
+        var soltas = StringAllocation.Release(meu, [.. minhas, dele, livre]);
+
+        Assert.Equal(2, soltas.Count);
+        Assert.All(soltas, s => Assert.False(s.IsAllocated));
+        Assert.Equal(minhas.Select(m => m.Id), soltas.Select(s => s.Id));
+        Assert.Equal(minhas.Select(m => m.Modules), soltas.Select(s => s.Modules));   // geometria: os mesmos módulos
+        Assert.Equal(minhas.Select(m => m.Tag), soltas.Select(s => s.Tag));
+        Assert.Empty(StringAllocation.Release(Guid.Empty, [livre]));
+        Assert.Empty(StringAllocation.Release(meu, []));
+    }
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void DepoisDeSoltarOutroInversorPodePegar()
+    {
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var s = S(a);
+
+        Assert.Single(StringAllocation.Allocate(b, [s]).Refused);
+
+        var solta = Assert.Single(StringAllocation.Release(a, [s]));
+        Assert.Equal(b, Assert.Single(StringAllocation.Allocate(b, [solta]).Changed).Inverter);
+    }
 }

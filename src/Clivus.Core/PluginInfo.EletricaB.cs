@@ -9,6 +9,9 @@ public static partial class PluginInfo
     /// <summary>Aloca strings num inversor pela seleção em campo, só strings (14.3).</summary>
     public const string ComandoEletricaAlocar = "CLIVUS_ELETRICA_ALOCAR";
 
+    /// <summary>Seleciona no CAD as strings de um inversor (seleção implícita, 14.5).</summary>
+    public const string ComandoEletricaSelecionar = "CLIVUS_ELETRICA_SELECIONAR";
+
     /// <summary>A configuração elétrica pela linha de comando: cadastrar, vincular, listar (só no build de teste; nível 2).</summary>
     public const string ComandoEletricaAutomatico = "CLIVUS_ELETRICA_AUTO";
 }

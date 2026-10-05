@@ -121,6 +121,13 @@ internal sealed class JanelaEletrica : Window
     }
 
     /// <summary>
+    /// Manda o comando para a linha de comando SEM esconder a janela (o
+    /// "selecionar todas": a seleção aparece no CAD com a janela aberta).
+    /// </summary>
+    internal static void Comando(Document documento, string comando, string argumento) =>
+        documento.SendStringToExecute($"\x03\x03_{comando} {argumento}\n", true, false, false);
+
+    /// <summary>
     /// Esconde a janela e manda o comando de campo para a linha de comando
     /// (corre no contexto do documento como qualquer comando). O argumento é
     /// a resposta à primeira pergunta do comando (o GUID do cadastro).

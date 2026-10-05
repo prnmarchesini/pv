@@ -401,6 +401,32 @@ public sealed class ElectricalSetup
         return novos;
     }
 
+    /// <summary>
+    /// Troca o nome e o modelo do inversor (14.5). O nome é único na usina
+    /// (é por ele que o inversor é achado). Null se deu certo, o porquê se não.
+    /// </summary>
+    public string? EditInverter(Guid id, string? name, Guid model)
+    {
+        var posicao = _inversores.FindIndex(i => i.Id == id);
+        if (posicao < 0) return Tr.T("esse inversor não está mais no cadastro");
+
+        var nome = name?.Trim() ?? string.Empty;
+        if (nome.Length == 0) return Tr.T("o nome não pode ficar vazio");
+        if (nome.Length > ElectricalDefaults.MaxNameLength) return Tr.F("o nome tem no máximo {0} caracteres", ElectricalDefaults.MaxNameLength);
+        if (Guid.TryParse(nome, out _)) return Tr.T("o nome não pode ser um GUID");
+        if (_inversores.Any(i => i.Id != id && SameName(i.Name, nome))) return Tr.F("já existe um inversor chamado \"{0}\"", nome);
+        if (FindModel(model) is null) return Tr.T("esse modelo de inversor não está mais no cadastro");
+
+        _inversores[posicao] = _inversores[posicao] with { Name = nome, Model = model };
+        return null;
+    }
+
+    /// <summary>
+    /// Tira o inversor do cadastro; se existia. As strings dele têm que ser
+    /// soltas por quem chama (o vínculo mora na string, no desenho).
+    /// </summary>
+    public bool RemoveInverter(Guid id) => _inversores.RemoveAll(i => i.Id == id) > 0;
+
     // ----------------------------------------------------------- comuns
 
     public static bool SameName(string? a, string? b) =>

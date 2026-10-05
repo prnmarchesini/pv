@@ -44,6 +44,19 @@ public static class StringAllocation
         return excesso == 0 ? null : Tr.F("EXCESSO no {0}: {1} strings para {2} entradas do modelo {3} ({4} a mais)", inverter.Name, strings, model!.TotalInputs, model.Name, excesso);
     }
 
+    /// <summary>
+    /// Solta todas as strings do inversor (14.5, "apagar todas"): as que
+    /// apontam para ele voltam a ficar livres. Só o campo Inverter muda; a
+    /// string continua no desenho (regra elétrica 3). Devolve as mudadas.
+    /// </summary>
+    public static IReadOnlyList<ElectricalString> Release(Guid inverter, IEnumerable<ElectricalString> strings)
+    {
+        ArgumentNullException.ThrowIfNull(strings);
+        if (inverter == Guid.Empty) return [];
+
+        return strings.Where(s => s.Inverter == inverter).DistinctBy(s => s.Id).Select(s => s with { Inverter = Guid.Empty }).ToList();
+    }
+
     /// <summary>A string está travada para este inversor: é de outro (regra elétrica 2).</summary>
     public static bool IsLockedFor(ElectricalString s, Guid inverter)
     {

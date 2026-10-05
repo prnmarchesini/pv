@@ -22,7 +22,7 @@ public static class ConfiguracaoEletricaAutoCommands
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "Listar"];
+    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "SoltarInversor", "EditarInversor", "Listar"];
 
 #if DEBUG
     [CommandMethod(PluginInfo.ComandoEletricaAutomatico)]
@@ -53,6 +53,8 @@ public static class ConfiguracaoEletricaAutoCommands
                 "Modelo" => NovoModelo(editor, database),
                 "Inversores" => NovosInversores(editor, database),
                 "Alocar" => AlocarLivres(editor, database),
+                "SoltarInversor" => SoltarInversor(editor, database),
+                "EditarInversor" => EditarInversor(editor, database),
                 _ => string.Empty,
             };
 
@@ -193,6 +195,28 @@ public static class ConfiguracaoEletricaAutoCommands
         var plano = StringAllocation.Allocate(inversor.Id, livres);
         StringsDoDesenho.Gravar(database, plano.Changed);
         return $"alocadas {plano.Changed.Count} em {inversor.Name}";
+    }
+
+    /// <summary>SoltarInversor &lt;inversor&gt;: o "soltar todas" da janela.</summary>
+    private static string? SoltarInversor(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nInversor (nome): ") is not { } nome) return null;
+        if (ConfiguracaoEletricaStore.Ler(database).Setup.FindInverter(nome) is not { } inversor) return "recusado: inversor nao existe";
+        return $"soltas {StringsDoDesenho.Soltar(database, inversor.Id)} de {inversor.Name}";
+    }
+
+    /// <summary>EditarInversor &lt;inversor&gt; &lt;nome novo&gt; &lt;modelo&gt;.</summary>
+    private static string? EditarInversor(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nInversor (nome): ") is not { } nome) return null;
+        if (Texto(editor, "\nNome novo: ") is not { } novo) return null;
+        if (Texto(editor, "\nModelo (nome): ") is not { } doModelo) return null;
+
+        var porque = ConfiguracaoEletricaStore.Mudar(database, s =>
+            s.FindInverter(nome) is not { } i ? "inversor nao existe"
+            : s.Models.FirstOrDefault(m => ElectricalSetup.SameName(m.Name, doModelo)) is not { } m ? "modelo nao existe"
+            : s.EditInverter(i.Id, novo, m.Id));
+        return porque is null ? $"inversor {nome} editado" : $"recusado: {porque}";
     }
 
     private static Transformer? Trafo(ElectricalSetup s, string apelido) => s.Transformers.FirstOrDefault(t => ElectricalSetup.SameName(t.Nickname, apelido));

@@ -19,6 +19,8 @@ internal sealed class AbaInversor : AbaEletrica
     private readonly ComboBox _modeloParaCriar = new() { Height = 26, MinWidth = 160, Margin = new Thickness(0, 0, 6, 6) };
     private readonly TextBox _quantos = new() { Text = "1", Width = 50, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
     private readonly ListBox _inversores = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly TextBox _nomeDoInversor = new() { Width = 150, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
+    private readonly ComboBox _modeloDoInversor = new() { Height = 26, MinWidth = 140, Margin = new Thickness(0, 0, 6, 6) };
 
     private ElectricalSetup _setup = new();
     private IReadOnlyDictionary<Guid, int> _contagem = new Dictionary<Guid, int>();
@@ -66,13 +68,29 @@ internal sealed class AbaInversor : AbaEletrica
         criar.Children.Add(_quantos);
         Botao(criar, Tr.T("Criar inversores"), Tr.T("Cria os inversores do modelo escolhido (Inversor 1, 2..., continuando a numeração)."), CriarInversores);
 
+        // O inversor escolhido na lista: editar e apagar (14.5).
+        var editar = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+        editar.Children.Add(new TextBlock { Text = Tr.T("Escolhido:"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
+        editar.Children.Add(_nomeDoInversor);
+        editar.Children.Add(_modeloDoInversor);
+        Botao(editar, Tr.T("Salvar inversor"), Tr.T("Grava o nome e o modelo do inversor escolhido."), SalvarInversor);
+        Botao(editar, Tr.T("Apagar inversor"), Tr.T("Tira o inversor do cadastro: as strings dele ficam livres (continuam no desenho) e o retângulo dele sai do campo."), ApagarInversor);
+
         var inversores = new DockPanel();
         var topo = new StackPanel();
         topo.Children.Add(Titulo(Tr.T("Inversores da usina")));
         topo.Children.Add(criar);
         DockPanel.SetDock(topo, Dock.Top);
+        DockPanel.SetDock(editar, Dock.Bottom);
         inversores.Children.Add(topo);
+        inversores.Children.Add(editar);
         inversores.Children.Add(_inversores);
+
+        _inversores.SelectionChanged += (_, _) =>
+        {
+            try { PreencherInversor(); }
+            catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao mostrar o inversor escolhido.", erro); }
+        };
 
         var colunas = new Grid();
         colunas.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.8, GridUnitType.Star) });
@@ -195,6 +213,10 @@ internal sealed class AbaInversor : AbaEletrica
             var este = inversor;
             Botao(acoes, "+", Tr.T("Alocar strings: a janela some; selecione só strings em campo (Shift+clique tira), Enter volta."),
                 () => JanelaEletrica.Campo(Documento, PluginInfo.ComandoEletricaAlocar, este.Id.ToString("D")), largura: 30);
+            Botao(acoes, Tr.T("Selecionar"), Tr.T("Seleciona no CAD todas as strings deste inversor."),
+                () => JanelaEletrica.Comando(Documento, PluginInfo.ComandoEletricaSelecionar, este.Id.ToString("D")));
+            Botao(acoes, Tr.T("Soltar todas"), Tr.T("Solta todas as strings deste inversor: elas ficam livres e continuam no desenho (nada é apagado)."),
+                () => SoltarTodas(este));
 
             var strings = _contagem.GetValueOrDefault(inversor.Id);
             var aviso = StringAllocation.ExcessWarning(inversor, _setup.FindModel(inversor.Model), strings);
@@ -213,6 +235,66 @@ internal sealed class AbaInversor : AbaEletrica
             if (inversor.Id == anterior) _inversores.SelectedItem = item;
         }
     }
+
+    private void PreencherInversor()
+    {
+        var inversor = InversorEscolhido;
+        _nomeDoInversor.IsEnabled = _modeloDoInversor.IsEnabled = inversor is not null;
+        _nomeDoInversor.Text = inversor?.Name ?? string.Empty;
+
+        _modeloDoInversor.Items.Clear();
+        foreach (var m in _setup.Models)
+        {
+            var item = new ComboBoxItem { Content = m.Name, Tag = m.Id };
+            _modeloDoInversor.Items.Add(item);
+            if (m.Id == inversor?.Model) _modeloDoInversor.SelectedItem = item;
+        }
+    }
+
+    private void SalvarInversor()
+    {
+        if (InversorEscolhido is not { } inversor || (_modeloDoInversor.SelectedItem as ComboBoxItem)?.Tag is not Guid modelo)
+        {
+            Avisar(Tr.T("Escolha um inversor na lista e o modelo dele."), erro: true);
+            return;
+        }
+
+        string? porque = null;
+        var nome = _nomeDoInversor.Text;
+        Fazer(() =>
+        {
+            porque = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.EditInverter(inversor.Id, nome, modelo));
+            if (porque is not null) return null;
+            EquipamentoEmCampo.Redesenhar(Documento.Database, EquipmentKind.Inverter, inversor.Id);
+            return Tr.F("{0} salvo.", nome.Trim());
+        });
+        if (porque is not null) Avisar(Tr.F("Não salvei: {0}.", porque), erro: true);
+    }
+
+    private void ApagarInversor()
+    {
+        if (InversorEscolhido is not { } inversor)
+        {
+            Avisar(Tr.T("Escolha um inversor na lista."), erro: true);
+            return;
+        }
+
+        Fazer(() =>
+        {
+            // Primeiro o vínculo das strings (no desenho), depois o cadastro.
+            var soltas = StringsDoDesenho.Soltar(Documento.Database, inversor.Id);
+            ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.RemoveInverter(inversor.Id));
+            EquipamentoEmCampo.Apagar(Documento.Database, EquipmentKind.Inverter, inversor.Id);
+            return Tr.F("{0} apagado do cadastro; {1} string(s) ficaram livres no desenho.", inversor.Name, soltas);
+        });
+    }
+
+    private void SoltarTodas(Inverter inversor) =>
+        Fazer(() =>
+        {
+            var soltas = StringsDoDesenho.Soltar(Documento.Database, inversor.Id);
+            return Tr.F("{0}: {1} string(s) soltas; continuam no desenho, livres.", inversor.Name, soltas);
+        });
 
     internal static string DescreverInversor(ElectricalSetup setup, Inverter inversor, int strings)
     {

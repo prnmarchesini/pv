@@ -264,6 +264,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_ELECTRICA_RESUMEN")]
     public static void CLIVUS_ELECTRICA_RESUMEN() => ResumoEletricoCommands.Resumo();
 
+    [CommandMethod("CLIVUS_ELECTRICAL_SELECT", CommandFlags.Modal | CommandFlags.Redraw | CommandFlags.NoUndoMarker)]
+    public static void CLIVUS_ELECTRICAL_SELECT() => AlocacaoDeStringsCommands.SelecionarTodas();
+
+    [CommandMethod("CLIVUS_ELECTRICA_SELECCIONAR", CommandFlags.Modal | CommandFlags.Redraw | CommandFlags.NoUndoMarker)]
+    public static void CLIVUS_ELECTRICA_SELECCIONAR() => AlocacaoDeStringsCommands.SelecionarTodas();
+
     [CommandMethod("CLIVUS_STATUS", CommandFlags.Modal | CommandFlags.NoUndoMarker)]
     public static void CLIVUS_STATUS() => EstadoCommands.Estado();
 
