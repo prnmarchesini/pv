@@ -84,4 +84,13 @@
            Text="AeccDbMgd.dll nao encontrada em '$(Civil3DPath)C3D\'. Isso indica AutoCAD sem Civil 3D instalado." />
   </Target>
 
+  <!--
+    Clipper2Lib (a união das sombras do período, 05/10/2026) vem por pacote do
+    Clivus.Core. Com CopyLocalLockFileAssemblies desligado (para não copiar as
+    libs do AutoCAD), ela é copiada aqui, só ela, para a saída do plugin.
+  -->
+  <Target Name="CopiarClipper2" AfterTargets="Build">
+    <Copy SourceFiles="$(NuGetPackageRoot)clipper2/2.0.0/lib/netstandard2.0/Clipper2Lib.dll" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

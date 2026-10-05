@@ -3815,8 +3815,9 @@ function Testar-SombrasPorQue {
     $limpo = $t.Substring($t.IndexOf('CLIVUS_PORQUE_LIMPO')); $limpo = $limpo.Substring(0, $limpo.IndexOf('CLIVUS_PORQUE_FIM'))
 
     $erros = @()
-    if ($t -notmatch 'CLIVUS_PORQUE contornos=(\d+) marcado=(\S+)' -or [int]$Matches[1] -le 4 -or $Matches[2] -eq '-') { $erros += 'o periodo nao desenhou contornos de varias horas, ou nenhum modulo ficou marcado' }
-    if ($t -notmatch 'no pior dia, 21/06/2026, em (\d+) hor') { $erros += 'a mensagem nao diz os horarios do pior dia' }
+    if ($t -notmatch 'CLIVUS_PORQUE contornos=(\d+) marcado=(\S+)' -or [int]$Matches[1] -lt 1 -or $Matches[2] -eq '-') { $erros += 'o periodo nao desenhou a mancha, ou nenhum modulo ficou marcado' }
+    if ($t -notmatch 'a uni\S+o das sombras de (\d+) passo' -or [int]$Matches[1] -lt 10) { $erros += 'a mancha nao e a uniao dos passos do dia' }
+    if ($t -notmatch 'CLIVUS_PORQUE_VERTICES maior=(\d+)' -or [int]$Matches[1] -lt 40) { $erros += 'a mancha do chao nao tem a borda densificada com os dentes dos passos' }
     if ($marcado -notmatch 'SOMBRA F\S+ col \d+ fil \d+: \d+% da face na sombra, por \S+, em 21/06/2026 \d\d:\d\d') { $erros += 'o por que do modulo marcado nao diz quanto, o que e quando' }
     if ($limpo -notmatch 'sem sombra no' ) { $erros += 'o por que do modulo sem marca nao diz que esta sem sombra' }
 
@@ -3825,7 +3826,7 @@ function Testar-SombrasPorQue {
         return $false
     }
 
-    Write-Host '  (sombras no periodo: contornos hora a hora do pior dia; por que essa sombra responde)' -ForegroundColor DarkGray
+    Write-Host '  (sombras no periodo: a mancha do dia, uniao dos passos; por que essa sombra responde)' -ForegroundColor DarkGray
     return $true
 }
 
@@ -3877,7 +3878,7 @@ function Testar-SombrasJanela {
     if ($sombra -le 0) { $erros += 'nenhum modulo com cor de sombra' }
     if ($vermelhos -gt 0) { $erros += "$vermelhos modulo(s) vermelhos de pendente (o vigia tomou a sombra por edicao)" }
     if ($depois -match 'pendente') { $erros += 'o vigia escreveu "pendente" depois da sombra' }
-    if ($contornos -le 2) { $erros += "so $contornos contorno(s): a sombra nao foi desenhada sobre as mesas" }
+    if ($contornos -lt 2) { $erros += "so $contornos contorno(s): a sombra nao foi desenhada no chao e sobre as mesas" }
 
     if ($erros.Count -gt 0) {
         $problemas.Add("clivus-sombras-janela: $($erros -join '; '). Veja $($r.Saida)")
@@ -4048,7 +4049,8 @@ function Testar-Ver3D {
     if (@($cena.faces).Count -ne $faces -or $faces -lt 1) { $erros += "$(@($cena.faces).Count) faces na pagina e $faces no desenho" }
     if (@($cena.pilares).Count -ne $pilares) { $erros += "$(@($cena.pilares).Count) pilares na pagina e $pilares no desenho" }
     if (@($cena.arvores).Count -ne 1) { $erros += "$(@($cena.arvores).Count) arvores (esperava 1)" }
-    if (@($cena.sombras).Count -lt 2) { $erros += "$(@($cena.sombras).Count) sombras (esperava tronco e copa)" }
+    # Desde 05/10/2026 tronco e copa viram uma mancha so no chao (a uniao).
+    if (@($cena.sombras).Count -lt 1 -or @($cena.sombras | Where-Object { @($_).Count -lt 9 }).Count -gt 0) { $erros += "$(@($cena.sombras).Count) sombras (esperava a mancha da arvore, cada uma com 3 pontos ou mais)" }
     if ($null -eq $cena.terreno -or @($cena.terreno.z | Where-Object { $null -ne $_ }).Count -lt 100) { $erros += 'terreno vazio' }
 
     if ($erros.Count -gt 0) {

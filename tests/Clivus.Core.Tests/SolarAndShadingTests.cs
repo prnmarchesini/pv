@@ -319,27 +319,4 @@ public class SolarAndShadingTests
             Assert.InRange(p.Y, -1e-6, 8 + 1e-6);
         });
     }
-
-    /// <summary>
-    /// No período, os contornos são os do pior dia, hora a hora, com o pior
-    /// instante sempre entre eles (05/10/2026).
-    /// </summary>
-    [Fact]
-    [Trait("Etapa", "9")]
-    public void NoPeriodoOsContornosSaoOsDoPiorDiaHoraAHora()
-    {
-        var instantes = Shading.Instants(new DateOnly(2026, 6, 20), new DateOnly(2026, 6, 22), new TimeOnly(6, 0), new TimeOnly(18, 0), TimeSpan.FromMinutes(15)).ToList();
-        var pior = new DateTime(2026, 6, 21, 9, 15, 0);
-
-        var horarios = Shading.OutlineInstants(instantes, pior, TimeSpan.FromHours(1));
-
-        Assert.Contains(pior, horarios);
-        Assert.All(horarios, t => Assert.Equal(pior.Date, t.Date));
-        Assert.All(horarios.Zip(horarios.Skip(1)), par => Assert.True(par.Second - par.First >= TimeSpan.FromHours(1)));
-        Assert.Equal(new DateTime(2026, 6, 21, 6, 0, 0), horarios[0]);
-        Assert.InRange(horarios.Count, 11, 13);
-
-        // Instante único: só ele.
-        Assert.Equal([pior], Shading.OutlineInstants([pior], pior, TimeSpan.FromHours(1)));
-    }
 }

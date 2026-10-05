@@ -108,7 +108,8 @@ New-Item -ItemType Directory -Path $conteudo -Force | Out-Null
 Copy-Item (Join-Path $raiz 'src\Clivus.Plugin\PackageContents.xml') $bundle
 
 # So o que e nosso. O resto o AutoCAD ja tem.
-foreach ($nome in 'Clivus.Plugin.dll', 'Clivus.Core.dll', 'Clivus.Geo.dll') {
+# Clipper2Lib (Boost, THIRD-PARTY-NOTICES.md): a uniao das sombras do periodo (05/10/2026).
+foreach ($nome in 'Clivus.Plugin.dll', 'Clivus.Core.dll', 'Clivus.Geo.dll', 'Clipper2Lib.dll') {
     $origem = Join-Path $saidaDoBuild $nome
     if (-not (Test-Path $origem)) {
         Write-Host "Faltando na saida do build: $nome" -ForegroundColor Red

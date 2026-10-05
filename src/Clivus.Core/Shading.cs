@@ -234,41 +234,6 @@ public static class Shading
     public const int MaxInstants = 20_000;
 
     /// <summary>
-    /// Os horários cujo contorno é desenhado num período (05/10/2026, Renan:
-    /// "tem lugar que não faz sentido estar marcado"): a cor é o pior caso do
-    /// período inteiro, então desenhar só o pior instante deixava marca sem
-    /// sombra que a explicasse. São os instantes do pior dia, com pelo menos
-    /// <paramref name="minimumGap"/> entre eles, sempre com o pior instante.
-    /// </summary>
-    public static IReadOnlyList<DateTime> OutlineInstants(IEnumerable<DateTime> instants, DateTime worst, TimeSpan minimumGap)
-    {
-        ArgumentNullException.ThrowIfNull(instants);
-
-        var doDia = instants.Where(t => t.Date == worst.Date).Append(worst).Distinct().OrderBy(t => t).ToList();
-        var escolhidos = new List<DateTime>();
-
-        foreach (var t in doDia)
-        {
-            if (t == worst)
-            {
-                // O pior entra sempre; o vizinho perto demais dele sai.
-                if (escolhidos.Count > 0 && t - escolhidos[^1] < minimumGap) escolhidos.RemoveAt(escolhidos.Count - 1);
-                escolhidos.Add(t);
-            }
-            else if (escolhidos.Count == 0 || t - escolhidos[^1] >= minimumGap)
-            {
-                escolhidos.Add(t);
-            }
-        }
-
-        // Depois do pior, o primeiro precisa da distância também.
-        for (var i = escolhidos.IndexOf(worst) + 1; i < escolhidos.Count && escolhidos[i] - worst < minimumGap;)
-            escolhidos.RemoveAt(i);
-
-        return escolhidos;
-    }
-
-    /// <summary>
     /// O contorno da sombra de um cilindro no chão: a envoltória (em planta)
     /// dos círculos da base e do topo projetados na direção do sol até o
     /// terreno, cada vértice com a cota do terreno. Vazio com o sol baixo.
@@ -362,6 +327,24 @@ public static class Shading
 
         var recorte = Recortar(Envoltoria(pontos), table.Select(p => (p.X, p.Y)).ToList());
         return recorte.Count < 3 ? [] : recorte.Select(p => new Point3(p.X, p.Y, CotaDoPlano(p.X, p.Y))).ToList();
+    }
+
+    /// <summary>
+    /// A cota do plano da mesa (o contorno, plano) no ponto (x, y); null se o
+    /// contorno não define um plano que se lê em planta.
+    /// </summary>
+    public static double? PlaneHeight(IReadOnlyList<Point3> table, double x, double y)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        if (table.Count < 3) return null;
+
+        var p0 = table[0];
+        var (ux, uy, uz) = (table[1].X - p0.X, table[1].Y - p0.Y, table[1].Z - p0.Z);
+        var (vx, vy, vz) = (table[2].X - p0.X, table[2].Y - p0.Y, table[2].Z - p0.Z);
+        var (nx, ny, nz) = (uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
+        if (Math.Abs(nz) < 1e-9) return null;
+
+        return p0.Z - (nx * (x - p0.X) + ny * (y - p0.Y)) / nz;
     }
 
     /// <summary>Sutherland–Hodgman: o polígono recortado por um contorno convexo (os dois em planta).</summary>

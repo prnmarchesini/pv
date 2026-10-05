@@ -338,22 +338,30 @@ public static class SombrasCommands
 
         relogio.Stop();
 
-        // No período, os contornos do pior dia hora a hora: a cor é o pior
-        // caso do período inteiro, e cada marca tem que ter a sombra que a
-        // explica desenhada (05/10/2026).
+        // A mancha do período: a união das sombras de todos os passos do
+        // cálculo com sol (05/10/2026); num instante, a sombra dele.
         var contornos = 0;
-        var horarios = new List<DateTime>();
-        if (desenhar is { } instante && cilindros.Count > 0)
+        var passos = new List<DateTime>();
+        if (desenhar is not null && cilindros.Count > 0)
         {
-            var candidatos = periodo.Instante ? [instante] : Shading.OutlineInstants(periodo.Instantes(), instante, TimeSpan.FromHours(1));
-
-            foreach (var t in candidatos)
+            var sois = new List<SunPosition>();
+            foreach (var t in periodo.Instante ? [desenhar.Value] : periodo.Instantes())
             {
                 var sol = SolarCalculator.Compute(lugar.Latitude, lugar.Longitude, t, periodo.Fuso);
                 if (sol.ElevationDegrees < Shading.MinimumElevationDegrees) continue;
+                sois.Add(sol);
+                passos.Add(t);
+            }
 
-                contornos += Desenhar(database, terreno, cilindros, sol, t);
-                horarios.Add(t);
+            if (passos.Count > 0)
+            {
+                var rotulo = periodo.Instante
+                    ? Tr.F("Sombra {0:dd/MM HH:mm}", passos[0])
+                    : passos[0].Date == passos[^1].Date
+                        ? Tr.F("Sombra {0:dd/MM} {1:HH:mm}–{2:HH:mm}", passos[0], passos[0].Date + passos.Min(t => t.TimeOfDay), passos[0].Date + passos.Max(t => t.TimeOfDay))
+                        : Tr.F("Sombra {0:dd/MM}–{1:dd/MM} {2:HH:mm}–{3:HH:mm}", passos[0], passos[^1], passos[0].Date + passos.Min(t => t.TimeOfDay), passos[0].Date + passos.Max(t => t.TimeOfDay));
+
+                contornos = Desenhar(database, terreno, cilindros, sois, rotulo, passos[0]);
             }
         }
 
@@ -380,8 +388,8 @@ public static class SombrasCommands
         if (desenhar is { } d && contornos > 0)
             texto.Append(periodo.Instante
                 ? Tr.F("Sombra das árvores desenhada às {0:dd/MM/yyyy HH:mm}, no chão e sobre as mesas ({1} contorno(s)). ", d, contornos)
-                : Tr.F("Sombra das árvores desenhada no pior dia, {0:dd/MM/yyyy}, em {1} horário(s) de {2:HH:mm} a {3:HH:mm} (o pior às {4:HH:mm}), no chão e sobre as mesas ({5} contorno(s)); cada módulo tem a cor do pior caso do período inteiro, e Por que essa sombra? diz quando e o quê. ",
-                    d, horarios.Count, horarios[0], horarios[^1], d, contornos));
+                : Tr.F("Mancha da sombra das árvores no período desenhada: a união das sombras de {0} passo(s) do cálculo, só a borda, no chão e sobre as mesas ({1} contorno(s)); cada módulo tem a cor do pior caso, e Por que essa sombra? diz quando e o quê. ",
+                    passos.Count, contornos));
 
         texto.Append(Tr.F("Conta em {0:0.0} s.", relogio.Elapsed.TotalSeconds));
 
@@ -431,8 +439,15 @@ public static class SombrasCommands
         return (comBloco.Select(f => new ShadowQuad(f.Cantos, Grupo(f.Mesa))).ToList(), comBloco.Select(f => modulos[f.Modulo]).ToList());
     }
 
-    /// <summary>Desenha a sombra de cada cilindro no terreno e sobre as mesas. Quantos contornos.</summary>
-    private static int Desenhar(Database database, ProcessedTerrain terreno, IReadOnlyList<ShadowCylinder> cilindros, SunPosition sol, DateTime instante)
+    /// <summary>
+    /// A mancha da sombra dos objetos no período (05/10/2026, Renan: "eu
+    /// quero o desenho da sombra no chão ao longo do dia, na passada que o
+    /// sistema calcula ... deixa somente as bordas"): a união, em planta, dos
+    /// contornos de cada passo do cálculo, no chão (cota do terreno a cada
+    /// 0,5 m da borda) e sobre cada mesa (no plano dela). Num instante só, é a
+    /// sombra daquele instante. Quantos contornos.
+    /// </summary>
+    private static int Desenhar(Database database, ProcessedTerrain terreno, IReadOnlyList<ShadowCylinder> cilindros, IReadOnlyList<SunPosition> sois, string rotulo, DateTime primeiro)
     {
         double? Chao(double x, double y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null;
 
@@ -442,75 +457,98 @@ public static class SombrasCommands
         var camada = LayoutLayers.Garantir(transacao, database, LayoutLayers.Sombra, new RgbColor(90, 90, 90));
         var camadaTexto = LayoutLayers.Garantir(transacao, database, LayoutLayers.SombraTexto, new RgbColor(90, 90, 90));
         var estilo = EstiloDoProjeto.PrepararTexto(transacao, database);
+        var marca = primeiro.ToString("s", CultureInfo.InvariantCulture);
         var feitos = 0;
 
-        // Uma etiqueta por objeto (a cada par tronco-copa), na ponta da sombra da copa.
-        for (var i = 0; i < cilindros.Count; i++)
-        {
-            var contorno = Shading.ShadowOutline(cilindros[i], sol.Direction, Chao);
-            if (contorno.Count < 3) continue;
-
-            var polilinha = new Polyline3d { Closed = true, Layer = camada };
-            espaco.AppendEntity(polilinha);
-            transacao.AddNewlyCreatedDBObject(polilinha, true);
-
-            foreach (var p in contorno)
-            {
-                var v = new PolylineVertex3d(new Point3d(p.X, p.Y, p.Z + 0.01));
-                polilinha.AppendVertex(v);
-                transacao.AddNewlyCreatedDBObject(v, true);
-            }
-
-            PluginXData.Save(transacao, polilinha, TipoDaSombra, 1, instante.ToString("s", CultureInfo.InvariantCulture));
-            feitos++;
-
-            if (i % 2 == 1)
-            {
-                var longe = contorno.MaxBy(p => (p.X - cilindros[i].X) * (p.X - cilindros[i].X) + (p.Y - cilindros[i].Y) * (p.Y - cilindros[i].Y));
-                var texto = new MText
-                {
-                    Location = new Point3d(longe.X, longe.Y, longe.Z + 0.1),
-                    TextHeight = 0.8,
-                    Layer = camadaTexto,
-                    Attachment = AttachmentPoint.MiddleCenter,
-                    Contents = Tr.F("Sombra {0:dd/MM HH:mm}", instante),
-                };
-                espaco.AppendEntity(texto);
-                transacao.AddNewlyCreatedDBObject(texto, true);
-                estilo(texto);
-                PluginXData.Save(transacao, texto, TipoDaSombra, 1, instante.ToString("s", CultureInfo.InvariantCulture));
-            }
-        }
-
-        // Sobre as mesas (04/10/2026: "a sombra é projetada somente na
-        // superfície TIN e não considera que os módulos irão receber as
-        // sombras"): a sombra de cada cilindro no plano de cada mesa,
-        // recortada pelo contorno dela, um pouco acima dos módulos.
         var mesas = new List<IReadOnlyList<Point3>>();
         foreach (var mesa in LayoutScan.Tables(transacao, database).Values)
             if (mesa.Contour is { } id && transacao.GetObject(id, OpenMode.ForRead) is Polyline3d linha)
                 mesas.Add(FileiraCommands.Vertices(linha, transacao));
 
-        foreach (var cilindro in cilindros)
+        // Os contornos de cada passo, em planta: no chão (todos os objetos
+        // juntos) e por mesa.
+        var noChao = new List<IReadOnlyList<(double X, double Y)>>();
+        var porMesa = mesas.Select(_ => new List<IReadOnlyList<(double X, double Y)>>()).ToList();
+
+        foreach (var sol in sois)
         {
-            foreach (var mesa in mesas)
+            foreach (var cilindro in cilindros)
             {
-                var naMesa = Shading.ShadowOnPlane(cilindro, sol.Direction, mesa);
-                if (naMesa.Count < 3) continue;
+                var contorno = Shading.ShadowOutline(cilindro, sol.Direction, Chao);
+                if (contorno.Count >= 3) noChao.Add(contorno.Select(p => (p.X, p.Y)).ToList());
 
-                var polilinha = new Polyline3d { Closed = true, Layer = camada };
-                espaco.AppendEntity(polilinha);
-                transacao.AddNewlyCreatedDBObject(polilinha, true);
-
-                foreach (var p in naMesa)
+                for (var m = 0; m < mesas.Count; m++)
                 {
-                    var v = new PolylineVertex3d(new Point3d(p.X, p.Y, p.Z + 0.03));
-                    polilinha.AppendVertex(v);
-                    transacao.AddNewlyCreatedDBObject(v, true);
+                    var naMesa = Shading.ShadowOnPlane(cilindro, sol.Direction, mesas[m]);
+                    if (naMesa.Count >= 3) porMesa[m].Add(naMesa.Select(p => (p.X, p.Y)).ToList());
                 }
+            }
+        }
 
-                PluginXData.Save(transacao, polilinha, TipoDaSombra, 1, instante.ToString("s", CultureInfo.InvariantCulture));
-                feitos++;
+        Polyline3d Contorno(IEnumerable<Point3d> pontos)
+        {
+            var polilinha = new Polyline3d { Closed = true, Layer = camada };
+            espaco.AppendEntity(polilinha);
+            transacao.AddNewlyCreatedDBObject(polilinha, true);
+
+            foreach (var p in pontos)
+            {
+                var v = new PolylineVertex3d(p);
+                polilinha.AppendVertex(v);
+                transacao.AddNewlyCreatedDBObject(v, true);
+            }
+
+            PluginXData.Save(transacao, polilinha, TipoDaSombra, 1, marca);
+            feitos++;
+            return polilinha;
+        }
+
+        // No chão: a borda densificada, cada ponto na cota do terreno (fora
+        // dele, a cota do último ponto que tinha terreno).
+        foreach (var anel in ShadowUnion.Union(noChao))
+        {
+            var pontos = new List<Point3d>();
+            double? ultima = null;
+
+            foreach (var (x, y) in ShadowUnion.Densify(anel, 0.5))
+            {
+                var z = Chao(x, y) ?? ultima;
+                if (z is null) continue;
+                ultima = z;
+                pontos.Add(new Point3d(x, y, z.Value + 0.01));
+            }
+
+            if (pontos.Count < 3) continue;
+            Contorno(pontos);
+
+            // A etiqueta na ponta mais ao norte da mancha.
+            var topo = pontos.MaxBy(p => p.Y);
+            var texto = new MText
+            {
+                Location = new Point3d(topo.X, topo.Y, topo.Z + 0.1),
+                TextHeight = 0.8,
+                Layer = camadaTexto,
+                Attachment = AttachmentPoint.BottomCenter,
+                Contents = rotulo,
+            };
+            espaco.AppendEntity(texto);
+            transacao.AddNewlyCreatedDBObject(texto, true);
+            estilo(texto);
+            PluginXData.Save(transacao, texto, TipoDaSombra, 1, marca);
+        }
+
+        // Sobre cada mesa: a união no plano dela, um pouco acima dos módulos.
+        for (var m = 0; m < mesas.Count; m++)
+        {
+            foreach (var anel in ShadowUnion.Union(porMesa[m]))
+            {
+                var pontos = anel
+                    .Select(p => (p, z: Shading.PlaneHeight(mesas[m], p.X, p.Y)))
+                    .Where(x => x.z is not null)
+                    .Select(x => new Point3d(x.p.X, x.p.Y, x.z!.Value + 0.03))
+                    .ToList();
+
+                if (pontos.Count >= 3) Contorno(pontos);
             }
         }
 
