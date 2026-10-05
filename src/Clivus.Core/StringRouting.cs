@@ -397,6 +397,84 @@ public sealed class RouteBuilder
         return true;
     }
 
+    /// <summary>
+    /// O − marcado com Ctrl + clique (05/10/2026): fecha a string nesta célula.
+    /// Convencional: estende até ela e conclui. Leapfrog: se a montagem já
+    /// termina nela (ponto de virada clicado antes), conclui; se só há o +, o
+    /// − é o vizinho dele e a fileira inteira, no sentido do −, vira o
+    /// alternado que termina no −. Null e o porquê se não fecha; a montagem
+    /// fica como estava.
+    /// </summary>
+    public StringRoute? FinishAt(RoutingCell negativo, RoutingKind tipo, out string? problema)
+    {
+        problema = null;
+
+        if (_celulas.Count == 0)
+        {
+            problema = Tr.T("marque primeiro o + (Ctrl + clique no módulo onde a string começa)");
+            return null;
+        }
+
+        if (negativo == _celulas[0])
+        {
+            problema = Tr.T("o − não pode ficar no mesmo módulo do +");
+            return null;
+        }
+
+        if (_celulas[^1] == negativo) return Finish(out problema);
+
+        if (tipo == RoutingKind.Leapfrog)
+        {
+            if (_celulas.Count > 1)
+            {
+                problema = Tr.T("no leapfrog o − fica no fim do trecho alternado: desfaça o trecho ou marque o − no último módulo dele");
+                return null;
+            }
+
+            var mais = _celulas[0];
+            var g = StringRouting.GlobalColumn(_arranjo, mais);
+            var gn = StringRouting.GlobalColumn(_arranjo, negativo);
+            if (negativo.Row != mais.Row || Math.Abs(gn - g) != 1)
+            {
+                problema = Tr.T("no leapfrog o − fica no módulo vizinho do +, na mesma fileira");
+                return null;
+            }
+
+            var fim = gn > g ? _arranjo.Tables.Sum(t => t.Columns) - 1 : 0;
+            if (StringRouting.AtGlobal(_arranjo, fim, mais.Row) is not { } ponta
+                || StringRouting.Run(_arranjo, mais, ponta, out problema) is not { } corrida)
+            {
+                problema ??= Tr.T("o trecho passa por uma mesa sem essa fileira");
+                return null;
+            }
+
+            var novas = StringRouting.Leapfrog(corrida);
+            if (novas.Count == 0 || novas[^1] != negativo)
+            {
+                problema = Tr.T("no leapfrog o − fica no módulo vizinho do +, na mesma fileira");
+                return null;
+            }
+
+            if (novas.Any(c => _ocupadas.Contains(c)))
+            {
+                problema = Tr.T("o trecho passa por um módulo que já tem string");
+                return null;
+            }
+
+            _celulas.AddRange(novas);
+            _trechos.Add(new RoutingSegment(_celulas.Count - 1, tipo));
+            return Finish(out problema);
+        }
+
+        if (Click(negativo, tipo) is { } recusa)
+        {
+            problema = recusa;
+            return null;
+        }
+
+        return Finish(out problema);
+    }
+
     /// <summary>A string montada, ou null e o porquê (menos de dois módulos).</summary>
     public StringRoute? Finish(out string? problema)
     {

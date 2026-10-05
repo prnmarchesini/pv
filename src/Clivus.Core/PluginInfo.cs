@@ -279,6 +279,12 @@ public static partial class PluginInfo
     /// <summary>Apaga as sombras desenhadas e tira as marcas dos módulos.</summary>
     public const string ComandoSombrasApagar = "CLIVUS_SOMBRAS_APAGAR";
 
+    /// <summary>Clica num módulo e diz por que ele está marcado de sombra: quanto, o quê e quando (05/10/2026).</summary>
+    public const string ComandoSombraPorQue = "CLIVUS_SOMBRA_PORQUE";
+
+    /// <summary>O porquê da sombra pelo handle do bloco do módulo. Para o nível 2.</summary>
+    public const string ComandoSombraPorQueAutomatico = "CLIVUS_SOMBRA_PORQUE_AUTO";
+
     /// <summary>Grava a página 3D (terreno, mesas, árvores) e abre no navegador (9.9).</summary>
     public const string ComandoVer3D = "CLIVUS_3D";
 

@@ -116,10 +116,25 @@ internal sealed class JanelaDeSombras : Window
         });
         var apagar = new Button { Content = Tr.T("Apagar sombras"), Width = 120, Height = 26, Margin = new Thickness(8, 0, 0, 0), ToolTip = Tr.T("Apaga os contornos de sombra e devolve a cor de antes dos módulos marcados.") };
         apagar.Click += (_, _) => Fazer(() => SombrasCommands.Apagar(_documento.Database));
+
+        // O porquê pede um clique no desenho: vai como comando (a janela fica aberta).
+        var porQue = new Button { Content = Tr.T("Por que essa sombra?"), Height = 26, Padding = new Thickness(8, 0, 8, 0), Margin = new Thickness(8, 0, 0, 0), ToolTip = Tr.T("Clique num módulo marcado: diz quanto da face pega sombra, de quê e em que dia e hora.") };
+        porQue.Click += (_, _) =>
+        {
+            try
+            {
+                _documento.SendStringToExecute($"_{PluginInfo.ComandoSombraPorQue} ", true, false, false);
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao pedir o porquê da sombra.", erro);
+            }
+        };
         var fechar = new Button { Content = Tr.T("Fechar"), Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true, ToolTip = Tr.T("Fecha a janela; as sombras desenhadas ficam.") };
         fechar.Click += (_, _) => Close();
         botoes.Children.Add(gerar);
         botoes.Children.Add(apagar);
+        botoes.Children.Add(porQue);
         botoes.Children.Add(fechar);
         pilha.Children.Add(botoes);
 

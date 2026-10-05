@@ -49,6 +49,9 @@ public static class SombrasCommands
 {
     private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
     private const string ChaveDasPintadas = "SOMBRA_PINTADAS";
+
+    /// <summary>O porquê de cada módulo pintado (05/10/2026): fração, causa e quando, para o "Por que essa sombra?".</summary>
+    private const string ChaveDosMotivos = "SOMBRA_MOTIVOS";
     private const string TipoDaSombra = "Sombra";
 
     /// <summary>
@@ -133,6 +136,73 @@ public static class SombrasCommands
             RegistroDeDiagnostico.Registrar("Falha nas sombras (automático).", erro);
             editor.WriteMessage(Tr.F("\nNão consegui gerar as sombras: {0}\n", erro.Message));
         }
+    }
+
+    [CommandMethod(PluginInfo.ComandoSombraPorQue)]
+    public static void SombraPorQue()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+
+        try
+        {
+            var opcoes = new PromptEntityOptions(Tr.T("\nClique num módulo (ou na face dele): "));
+            var escolha = editor.GetEntity(opcoes);
+            if (escolha.Status != PromptStatus.OK) return;
+
+            editor.WriteMessage($"\n{PorQueDaPeca(documento.Database, escolha.ObjectId)}\n");
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no por que da sombra.", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui ver a sombra desse módulo: {0}\n", erro.Message));
+        }
+    }
+
+    [CommandMethod(PluginInfo.ComandoSombraPorQueAutomatico)]
+    public static void SombraPorQueAutomatico()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+        var texto = editor.GetString(new PromptStringOptions(Tr.T("\nHandle do bloco do módulo: ")));
+        if (texto.Status != PromptStatus.OK) return;
+
+        if (!long.TryParse(texto.StringResult, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var numero)
+            || !documento.Database.TryGetObjectId(new Handle(numero), out var id))
+        {
+            editor.WriteMessage(Tr.F("\nSOMBRA Não há entidade com o handle {0}.\n", texto.StringResult));
+            return;
+        }
+
+        editor.WriteMessage($"\n{PorQueDaPeca(documento.Database, id)}\n");
+    }
+
+    /// <summary>O porquê da peça clicada: o bloco do módulo, ou a face (que aponta o módulo).</summary>
+    private static string PorQueDaPeca(Database database, ObjectId peca)
+    {
+        using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
+        {
+            var entidade = transacao.GetObject(peca, OpenMode.ForRead) as Entity;
+
+            if (entidade is BlockReference br && LayoutXData.LoadModule(br) is not null) return PorQue(database, peca);
+
+            if (entidade is Face face && LayoutXData.LoadFace(face) is { } f)
+            {
+                var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
+                foreach (ObjectId id in espaco)
+                {
+                    if (id.IsErased || id.ObjectClass.DxfName != "INSERT") continue;
+                    if (transacao.GetObject(id, OpenMode.ForRead) is BlockReference b && LayoutXData.LoadModule(b) is { } m && m.Id == f.Module)
+                        return PorQue(database, id);
+                }
+            }
+        }
+
+        return Tr.T("SOMBRA Isso não é um módulo do plugin: clique no módulo ou na face dele.");
     }
 
     [CommandMethod(PluginInfo.ComandoSombrasApagar)]
@@ -268,14 +338,26 @@ public static class SombrasCommands
 
         relogio.Stop();
 
+        // No período, os contornos do pior dia hora a hora: a cor é o pior
+        // caso do período inteiro, e cada marca tem que ter a sombra que a
+        // explica desenhada (05/10/2026).
         var contornos = 0;
+        var horarios = new List<DateTime>();
         if (desenhar is { } instante && cilindros.Count > 0)
         {
-            var sol = SolarCalculator.Compute(lugar.Latitude, lugar.Longitude, instante, periodo.Fuso);
-            contornos = Desenhar(database, terreno, cilindros, sol, instante);
+            var candidatos = periodo.Instante ? [instante] : Shading.OutlineInstants(periodo.Instantes(), instante, TimeSpan.FromHours(1));
+
+            foreach (var t in candidatos)
+            {
+                var sol = SolarCalculator.Compute(lugar.Latitude, lugar.Longitude, t, periodo.Fuso);
+                if (sol.ElevationDegrees < Shading.MinimumElevationDegrees) continue;
+
+                contornos += Desenhar(database, terreno, cilindros, sol, t);
+                horarios.Add(t);
+            }
         }
 
-        var marcados = Marcar(database, modulos, fracoes);
+        var marcados = Marcar(database, modulos, fracoes, causas, quando, periodo.Descrever());
 
         var texto = new System.Text.StringBuilder();
         texto.Append(Tr.F("SOMBRAS {0} (fuso {1:+0.#;-0.#;0}), em {2:0.0000}°, {3:0.0000}°: ", periodo.Descrever(), periodo.Fuso, lugar.Latitude, lugar.Longitude));
@@ -298,7 +380,8 @@ public static class SombrasCommands
         if (desenhar is { } d && contornos > 0)
             texto.Append(periodo.Instante
                 ? Tr.F("Sombra das árvores desenhada às {0:dd/MM/yyyy HH:mm}, no chão e sobre as mesas ({1} contorno(s)). ", d, contornos)
-                : Tr.F("Sombra das árvores desenhada no pior instante, {0:dd/MM/yyyy HH:mm}, no chão e sobre as mesas ({1} contorno(s)). ", d, contornos));
+                : Tr.F("Sombra das árvores desenhada no pior dia, {0:dd/MM/yyyy}, em {1} horário(s) de {2:HH:mm} a {3:HH:mm} (o pior às {4:HH:mm}), no chão e sobre as mesas ({5} contorno(s)); cada módulo tem a cor do pior caso do período inteiro, e Por que essa sombra? diz quando e o quê. ",
+                    d, horarios.Count, horarios[0], horarios[^1], d, contornos));
 
         texto.Append(Tr.F("Conta em {0:0.0} s.", relogio.Elapsed.TotalSeconds));
 
@@ -436,10 +519,11 @@ public static class SombrasCommands
     }
 
     /// <summary>Pinta cada módulo com sombra pela fração dele, guardando a cor de antes. Quantos.</summary>
-    private static int Marcar(Database database, IReadOnlyList<ObjectId> modulos, IReadOnlyList<double> fracoes)
+    private static int Marcar(Database database, IReadOnlyList<ObjectId> modulos, IReadOnlyList<double> fracoes, IReadOnlyList<ShadowCause> causas, IReadOnlyList<DateTime?> quando, string periodo)
     {
         using var transacao = database.TransactionManager.StartTransaction();
         var pintadas = new List<string>();
+        var motivos = new List<string> { "V1", periodo };
 
         for (var k = 0; k < modulos.Count; k++)
         {
@@ -449,6 +533,8 @@ public static class SombrasCommands
 
             var cor = CorDaFracao(fracoes[k]);
             pintadas.Add(modulo.Handle + "=" + PecasPintadas.Texto(modulo.Color));
+            motivos.Add(string.Join('|', modulo.Handle.ToString(), fracoes[k].ToString("R", CultureInfo.InvariantCulture), causas[k].ToString(),
+                quando[k]?.ToString("s", CultureInfo.InvariantCulture) ?? string.Empty));
             modulo.Color = Color.FromRgb(cor.R, cor.G, cor.B);
         }
 
@@ -456,6 +542,7 @@ public static class SombrasCommands
 
         PluginDictionary.Save(database, ChaveDasPintadas, new ResultBuffer(
             pintadas.Select(p => new TypedValue((int)DxfCode.Text, p)).Prepend(new TypedValue((int)DxfCode.Text, "V1")).ToArray()));
+        PluginDictionary.Save(database, ChaveDosMotivos, new ResultBuffer(motivos.Select(m => new TypedValue((int)DxfCode.Text, m)).ToArray()));
 
         return pintadas.Count;
     }
@@ -505,6 +592,7 @@ public static class SombrasCommands
         }
 
         PluginDictionary.Save(database, ChaveDasPintadas, new ResultBuffer(new TypedValue((int)DxfCode.Text, "V1")));
+        PluginDictionary.Save(database, ChaveDosMotivos, new ResultBuffer(new TypedValue((int)DxfCode.Text, "V1")));
 
         return Tr.F("SOMBRAS {0} contorno(s) e etiqueta(s) de sombra apagado(s); {1} módulo(s) de volta à cor de antes.", apagados, devolvidos);
     }
@@ -516,6 +604,38 @@ public static class SombrasCommands
 
     /// <summary>As cores da marca até 03/10/2026 (amarelo, laranja, vermelho): desenhos com elas ainda voltam com Apagar.</summary>
     private static readonly RgbColor[] CoresAntigas = [new(255, 220, 0), new(255, 140, 0), new(190, 30, 0)];
+
+    /// <summary>
+    /// "Por que essa sombra?" (05/10/2026): o que o último cálculo guardou
+    /// para o módulo deste bloco — fração, causa e quando — ou que ele ficou
+    /// sem sombra. A frase pronta para a tela.
+    /// </summary>
+    internal static string PorQue(Database database, ObjectId modulo)
+    {
+        using var dados = PluginDictionary.Load(database, ChaveDosMotivos);
+        var linhas = dados?.AsArray().Select(v => v.Value as string ?? string.Empty).ToList() ?? [];
+
+        if (linhas.Count < 2 || linhas[0] != "V1")
+            return Tr.T("SOMBRA Não há cálculo de sombra guardado neste desenho: rode Sombras primeiro.");
+
+        var rotulo = Rotulo(database, modulo);
+        var handle = modulo.Handle.ToString();
+
+        foreach (var linha in linhas.Skip(2))
+        {
+            var c = linha.Split('|');
+            if (c.Length < 4 || c[0] != handle) continue;
+
+            var fracao = double.TryParse(c[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var f) ? f : 0;
+            var causa = Enum.TryParse<ShadowCause>(c[2], out var k) ? NomeDaCausa(k) : "?";
+
+            return DateTime.TryParse(c[3], CultureInfo.InvariantCulture, DateTimeStyles.None, out var t)
+                ? Tr.F("SOMBRA {0}: {1:0}% da face na sombra, por {2}, em {3:dd/MM/yyyy HH:mm} (o pior momento dele em {4}).", rotulo, fracao * 100, causa, t, linhas[1])
+                : Tr.F("SOMBRA {0}: {1:0}% da face na sombra, por {2} ({3}).", rotulo, fracao * 100, causa, linhas[1]);
+        }
+
+        return Tr.F("SOMBRA {0}: sem sombra no último cálculo ({1}).", rotulo, linhas[1]);
+    }
 
     private static string Rotulo(Database database, ObjectId modulo)
     {

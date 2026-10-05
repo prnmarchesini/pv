@@ -3787,6 +3787,48 @@ function Testar-Arvore {
     depois. Exige modulos com cor de sombra, nenhum vermelho de pendente,
     nenhum "pendente" escrito e contornos de sombra sobre as mesas.
 #>
+function Testar-SombrasPorQue {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-porque--sonda' -Script (Join-Path $PSScriptRoot 'clivus-terreno.scr')
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("clivus-sombras-porque: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $cx = [double]::Parse($Matches[1], $invariante)
+    $cy = [double]::Parse($Matches[2], $invariante)
+    function Ponto3([double] $dx, [double] $dy) { [string]::Format($invariante, '{0:0.###},{1:0.###},0', $cx + $dx, $cy + $dy) }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-porque' -Script (Join-Path $PSScriptRoot 'clivus-sombras-porque.scr') -Substituicoes @{
+        '{{A1}}' = (Ponto3 -50 -50); '{{A2}}' = (Ponto3 50 -50); '{{A3}}' = (Ponto3 50 50); '{{A4}}' = (Ponto3 -50 50)
+        '{{L1}}' = (Ponto3 -50 -50); '{{L2}}' = (Ponto3 -50 50); '{{LADO}}' = (Ponto3 0 0) }
+
+    if ($r.Estourou -or $r.Codigo -ne 0 -or $r.Texto.IndexOf('CLIVUS_PORQUE_FIM') -lt 0) {
+        $problemas.Add("clivus-sombras-porque terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    $t = $r.Texto
+    $marcado = $t.Substring($t.IndexOf('CLIVUS_PORQUE_MARCADO')); $marcado = $marcado.Substring(0, $marcado.IndexOf('CLIVUS_PORQUE_LIMPO'))
+    $limpo = $t.Substring($t.IndexOf('CLIVUS_PORQUE_LIMPO')); $limpo = $limpo.Substring(0, $limpo.IndexOf('CLIVUS_PORQUE_FIM'))
+
+    $erros = @()
+    if ($t -notmatch 'CLIVUS_PORQUE contornos=(\d+) marcado=(\S+)' -or [int]$Matches[1] -le 4 -or $Matches[2] -eq '-') { $erros += 'o periodo nao desenhou contornos de varias horas, ou nenhum modulo ficou marcado' }
+    if ($t -notmatch 'no pior dia, 21/06/2026, em (\d+) hor') { $erros += 'a mensagem nao diz os horarios do pior dia' }
+    if ($marcado -notmatch 'SOMBRA F\S+ col \d+ fil \d+: \d+% da face na sombra, por \S+, em 21/06/2026 \d\d:\d\d') { $erros += 'o por que do modulo marcado nao diz quanto, o que e quando' }
+    if ($limpo -notmatch 'sem sombra no' ) { $erros += 'o por que do modulo sem marca nao diz que esta sem sombra' }
+
+    if ($erros.Count -gt 0) {
+        $problemas.Add("clivus-sombras-porque: $($erros -join '; '). Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host '  (sombras no periodo: contornos hora a hora do pior dia; por que essa sombra responde)' -ForegroundColor DarkGray
+    return $true
+}
+
 function Testar-SombrasJanela {
     param([string] $Desenho)
 
@@ -4490,6 +4532,10 @@ else {
     # As sombras pelo botao da janela (fora de comando), arvore fora da fileira.
     $total++
     if (Testar-SombrasJanela -Desenho $desenhos[0]) { $passaram++ }
+
+    # O periodo: contornos hora a hora do pior dia e o "Por que essa sombra?".
+    $total++
+    if (Testar-SombrasPorQue -Desenho $desenhos[0]) { $passaram++ }
 
     # 3D no navegador (9.9).
     $total++

@@ -63,7 +63,7 @@ internal sealed class JanelaDeStrings : Window
         Button Botao(string texto, string dica, Action acao)
         {
             var b = new Button { Content = texto, Height = 26, MinWidth = 108, Margin = new Thickness(0, 0, 6, 6), Padding = new Thickness(8, 0, 8, 0), ToolTip = dica };
-            b.Click += (_, _) => acao();
+            b.Click += (_, _) => Protegido(acao);
             botoes.Children.Add(b);
             return b;
         }
@@ -109,7 +109,7 @@ internal sealed class JanelaDeStrings : Window
         void Botao(string texto, string dica, Action acao)
         {
             var b = new Button { Content = texto, Height = 26, Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(8, 0, 8, 0), ToolTip = dica };
-            b.Click += (_, _) => acao();
+            b.Click += (_, _) => Protegido(acao);
             barra.Children.Add(b);
         }
 
@@ -121,7 +121,7 @@ internal sealed class JanelaDeStrings : Window
 
         barra.Children.Add(_tipoDoTrecho);
         barra.Children.Add(_fileiraInteira);
-        Botao(Tr.T("Concluir string"), Tr.T("Grava a string montada: o + no primeiro módulo clicado, o − no último."), ConcluirString);
+        Botao(Tr.T("Concluir string"), Tr.T("Grava a string montada com o − no último módulo clicado (o mesmo que Ctrl + clique nele)."), ConcluirString);
         Botao(Tr.T("Desfazer trecho"), Tr.T("Tira o último trecho da string em montagem."), DesfazerTrecho);
         Botao(Tr.T("Apagar última string"), Tr.T("Tira a última string gravada do tipo escolhido."), ApagarUltimaString);
         Botao(Tr.T("Limpar traçado"), Tr.T("Tira todas as strings do tipo escolhido (as já desenhadas em campo não mudam)."), LimparTracado);
@@ -155,11 +155,33 @@ internal sealed class JanelaDeStrings : Window
         var texto = Tr.F("{0} string(s), {1} de {2} módulo(s) ligados.", tipo.Routes.Count, ligados, tipo.Arrangement.ModuleCount);
         texto += _montagem is { IsEmpty: false } m
             ? " " + Tr.F("Em montagem: {0} módulo(s).", m.Cells.Count)
-            : " " + Tr.T("Clique no módulo do + para começar uma string.");
+            : " " + Tr.T("Ctrl + clique no módulo do + para começar; Ctrl + clique no do − fecha a string (no leapfrog, o − é o vizinho do +). Clique simples marca pontos de virada.");
         _resumoDoTracado.Text = texto;
     }
 
-    private void Clicou(RoutingCell celula)
+    /// <summary>
+    /// O clique de um botão: erro vira aviso na janela, nunca exceção solta
+    /// (num clique de WPF ela derruba o Civil 3D, 05/10/2026).
+    /// </summary>
+    private void Protegido(Action acao)
+    {
+        try
+        {
+            acao();
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha num botão da janela de strings.", erro);
+            Avisar(Tr.F("Não consegui: {0}", erro.Message), erro: true);
+        }
+    }
+
+    /// <summary>
+    /// O clique no cartesiano (05/10/2026): Ctrl + clique marca o + (o
+    /// primeiro) e o − (fecha e grava a string); clique simples, com o + já
+    /// marcado, é um ponto de virada do traçado livre.
+    /// </summary>
+    private void Clicou(RoutingCell celula, bool comCtrl)
     {
         try
         {
@@ -175,6 +197,21 @@ internal sealed class JanelaDeStrings : Window
             {
                 _montagem = new RouteBuilder(tipo.Arrangement, tipo.Routes.SelectMany(r => r.Cells));
                 _tipoDaMontagem = tipo.Id;
+            }
+
+            if (_montagem.IsEmpty && !comCtrl)
+            {
+                Avisar(Tr.T("Ctrl + clique no módulo do + para começar a string."), erro: true);
+                return;
+            }
+
+            if (!_montagem.IsEmpty && comCtrl)
+            {
+                if (_montagem.FinishAt(celula, TipoDoTrecho, out var problema) is { } nova) Gravar(tipo, nova);
+                else Avisar(Tr.F("Não fechei a string: {0}.", problema ?? string.Empty), erro: true);
+
+                MostrarTipo();
+                return;
             }
 
             if (_montagem.Click(celula, TipoDoTrecho) is { } porque) Avisar(Tr.F("Não liguei: {0}.", porque), erro: true);
@@ -234,6 +271,12 @@ internal sealed class JanelaDeStrings : Window
             return;
         }
 
+        Gravar(tipo, nova);
+    }
+
+    /// <summary>Grava a string montada no tipo; a montagem recomeça se gravou.</summary>
+    private void Gravar(StringType tipo, StringRoute nova)
+    {
         string? recusa = null;
         Fazer(() =>
         {
@@ -281,7 +324,7 @@ internal sealed class JanelaDeStrings : Window
         };
 
         var gerar = new Button { Content = Tr.T("Gerar nas mesas selecionadas"), Height = 28, Margin = new Thickness(0, 6, 0, 0), Padding = new Thickness(8, 0, 8, 0), ToolTip = Tr.T("Esconde a janela: selecione as mesas (só mesas entram) e tecle Enter. Mesa que já tem string livre é regerada; string ligada a inversor não é tocada.") };
-        gerar.Click += (_, _) => PedirGeracao();
+        gerar.Click += (_, _) => Protegido(PedirGeracao);
 
         var esquerda = new DockPanel { Width = 280, Margin = new Thickness(0, 0, 8, 0) };
         DockPanel.SetDock(explicacao, Dock.Top);

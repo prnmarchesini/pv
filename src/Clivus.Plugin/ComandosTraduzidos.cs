@@ -426,6 +426,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_SOMBRAS_BORRAR")]
     public static void CLIVUS_SOMBRAS_BORRAR() => SombrasCommands.SombrasApagar();
 
+    [CommandMethod("CLIVUS_SHADOW_WHY")]
+    public static void CLIVUS_SHADOW_WHY() => SombrasCommands.SombraPorQue();
+
+    [CommandMethod("CLIVUS_SOMBRA_POR_QUE")]
+    public static void CLIVUS_SOMBRA_POR_QUE() => SombrasCommands.SombraPorQue();
+
     [CommandMethod("CLIVUS_STRING_GENERATE")]
     public static void CLIVUS_STRING_GENERATE() => StringCommands.Gerar();
 

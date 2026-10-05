@@ -234,6 +234,41 @@ public static class Shading
     public const int MaxInstants = 20_000;
 
     /// <summary>
+    /// Os horários cujo contorno é desenhado num período (05/10/2026, Renan:
+    /// "tem lugar que não faz sentido estar marcado"): a cor é o pior caso do
+    /// período inteiro, então desenhar só o pior instante deixava marca sem
+    /// sombra que a explicasse. São os instantes do pior dia, com pelo menos
+    /// <paramref name="minimumGap"/> entre eles, sempre com o pior instante.
+    /// </summary>
+    public static IReadOnlyList<DateTime> OutlineInstants(IEnumerable<DateTime> instants, DateTime worst, TimeSpan minimumGap)
+    {
+        ArgumentNullException.ThrowIfNull(instants);
+
+        var doDia = instants.Where(t => t.Date == worst.Date).Append(worst).Distinct().OrderBy(t => t).ToList();
+        var escolhidos = new List<DateTime>();
+
+        foreach (var t in doDia)
+        {
+            if (t == worst)
+            {
+                // O pior entra sempre; o vizinho perto demais dele sai.
+                if (escolhidos.Count > 0 && t - escolhidos[^1] < minimumGap) escolhidos.RemoveAt(escolhidos.Count - 1);
+                escolhidos.Add(t);
+            }
+            else if (escolhidos.Count == 0 || t - escolhidos[^1] >= minimumGap)
+            {
+                escolhidos.Add(t);
+            }
+        }
+
+        // Depois do pior, o primeiro precisa da distância também.
+        for (var i = escolhidos.IndexOf(worst) + 1; i < escolhidos.Count && escolhidos[i] - worst < minimumGap;)
+            escolhidos.RemoveAt(i);
+
+        return escolhidos;
+    }
+
+    /// <summary>
     /// O contorno da sombra de um cilindro no chão: a envoltória (em planta)
     /// dos círculos da base e do topo projetados na direção do sol até o
     /// terreno, cada vértice com a cota do terreno. Vazio com o sol baixo.

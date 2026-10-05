@@ -29,6 +29,11 @@ internal sealed class CartesianoDaString : Border
     ];
 
     private readonly Canvas _tela = new();
+
+    // A moldura é uma só: criar uma nova a cada redesenho punha a mesma tela
+    // em duas molduras ("o elemento já é o filho lógico de outro elemento",
+    // 05/10/2026), e o erro num clique derrubava o Civil 3D.
+    private readonly Viewbox _moldura = new() { Stretch = Stretch.Uniform };
     private readonly TextBlock _vazio = new()
     {
         Text = Tr.T("Escolha um tipo na lista. Tipo sem mesas: use Trocar mesas."),
@@ -49,7 +54,8 @@ internal sealed class CartesianoDaString : Border
     }
 
     /// <summary>O clique num módulo do cartesiano.</summary>
-    internal event Action<RoutingCell>? CelulaClicada;
+    /// <summary>O clique num módulo; o segundo valor diz se o Ctrl estava apertado (+ e −).</summary>
+    internal event Action<RoutingCell, bool>? CelulaClicada;
 
     /// <summary>O tipo mostrado, ou null.</summary>
     internal StringType? Tipo { get; private set; }
@@ -116,7 +122,7 @@ internal sealed class CartesianoDaString : Border
                     retangulo.MouseLeftButtonDown += (_, e) =>
                     {
                         e.Handled = true;
-                        CelulaClicada?.Invoke(celula);
+                        CelulaClicada?.Invoke(celula, (Keyboard.Modifiers & ModifierKeys.Control) != 0);
                     };
 
                     // Y do cartesiano para cima: a fileira 0 (ponta baixa) embaixo.
@@ -132,7 +138,8 @@ internal sealed class CartesianoDaString : Border
 
         if (montagem.Count > 0) Tracar(tipo, altura, montagem, Colors.DarkOrange, tracejado: true);
 
-        Child = new Viewbox { Stretch = Stretch.Uniform, Child = _tela };
+        if (_moldura.Child != _tela) _moldura.Child = _tela;
+        if (Child != _moldura) Child = _moldura;
     }
 
     /// <summary>A linha pelo centro dos módulos, o número de ordem em cada um e o + e o − nas pontas.</summary>
