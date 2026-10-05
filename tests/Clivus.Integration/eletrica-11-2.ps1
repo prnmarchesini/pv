@@ -27,7 +27,7 @@ function Testar-StringMesas {
     if ($t -notmatch 'STRING Modelo 2 criado\. Modelo 2: mesas (F1\.[12]), (F1\.[12]) \((\d+)x2;(\d+)x2\)' -or $Matches[1] -eq $Matches[2]) { $erros += 'duas vizinhas nao viraram o Modelo 2 com duas mesas 2V' }
 
     $inv = [Globalization.CultureInfo]::InvariantCulture
-    if ($t -notmatch 'STRING_DESENHO Modelo 2 \d+x2;\d+x2 ([\d.]+);([\d.]+);([\d.]+)\s') { $erros += 'o Modelo 2 nao gravou o desenho do cartesiano com um vao' }
+    if ($t -notmatch 'STRING_DESENHO Modelo 2 \d+x2;\d+x2 ([\d.]+);([\d.]+);([\d.]+);v[0-3]\s') { $erros += 'o Modelo 2 nao gravou o desenho do cartesiano com um vao e a vista de planta (05/10/2026)' }
     else {
         $largura = [double]::Parse($Matches[1], $inv); $altura = [double]::Parse($Matches[2], $inv); $vao = [double]::Parse($Matches[3], $inv)
         if ($largura -lt 0.5 -or $largura -gt 2.5 -or $altura -lt 0.5 -or $altura -gt 3 -or $vao -gt 5) { $erros += "desenho do cartesiano estranho: celula $largura x $altura, vao $vao" }

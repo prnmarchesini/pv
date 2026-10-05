@@ -71,6 +71,24 @@ internal static class MesasDaString
     }
 
     /// <summary>
+    /// Como as mesas do desenho aparecem em planta, pela maioria (05/10/2026):
+    /// para o cartesiano de tipo gravado antes de o tipo guardar a vista.
+    /// </summary>
+    internal static PlanView VistaDoDesenho(Database database)
+    {
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        var votos = new int[4];
+        foreach (var pecas in LayoutScan.Tables(transacao, database).Values)
+        {
+            if (pecas.Contour is not { } contorno || transacao.GetObject(contorno, OpenMode.ForRead) is not Polyline3d polilinha) continue;
+            var cantos = FileiraCommands.Vertices(polilinha, transacao).Take(4).ToList();
+            if (cantos.Count == 4) votos[PlanView.Of(cantos).Code]++;
+        }
+
+        return PlanView.FromCode(Array.IndexOf(votos, votos.Max())) ?? default;
+    }
+
+    /// <summary>
     /// As mesas dadas, lidas do desenho: letreiro e cantos do contorno, e os
     /// módulos com a face superior (os cantos 3D, para o traçado do 11.7).
     /// Mesa sem contorno ou com contorno duplicado vai para os problemas.

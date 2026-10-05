@@ -138,12 +138,40 @@ internal sealed class JanelaDeStrings : Window
     /// <summary>O tipo de trecho do próximo clique.</summary>
     private RoutingKind TipoDoTrecho => _tipoDoTrecho.SelectedIndex == 1 ? RoutingKind.Leapfrog : RoutingKind.Conventional;
 
+    private PlanView? _vistaDoDesenho;
+
+    /// <summary>
+    /// O tipo como aparece em planta: o tipo gravado antes de 05/10/2026 não
+    /// guarda a vista, e aí vale a da maioria das mesas do desenho (só para
+    /// mostrar; o tipo gravado não muda).
+    /// </summary>
+    private StringType? ComVista(StringType? tipo)
+    {
+        if (tipo is null || tipo.Sketch?.View is not null) return tipo;
+
+        try
+        {
+            if (_vistaDoDesenho is null)
+            {
+                using var trava = _documento.LockDocument();
+                _vistaDoDesenho = MesasDaString.VistaDoDesenho(_documento.Database);
+            }
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao ler a vista das mesas para o cartesiano.", erro);
+            _vistaDoDesenho = default(PlanView);
+        }
+
+        return tipo with { Sketch = tipo.SketchOrDefault with { View = _vistaDoDesenho } };
+    }
+
     private void MostrarTipo()
     {
         var tipo = Escolhido;
         if (tipo is null || tipo.Id != _tipoDaMontagem) _montagem = null;
 
-        _cartesiano.Mostrar(tipo, _montagem?.Cells);
+        _cartesiano.Mostrar(ComVista(tipo), _montagem?.Cells);
 
         if (tipo is null || tipo.Arrangement.IsEmpty)
         {

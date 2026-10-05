@@ -190,4 +190,62 @@ public class StringArrangementSelectionTests
         Assert.Null(mesa.ModuleAt(3, 0));
         Assert.Equal(new Point3(1, 0, 0), mesa.Direction);
     }
+
+    /// <summary>
+    /// 05/10/2026 (Renan: "no configurador da string as pontas estão do lado
+    /// esquerdo, mas na planta elas ficam do lado direito"): em qualquer giro
+    /// da mesa, o cartesiano põe cada módulo do mesmo lado em que ele fica na
+    /// planta (x para leste, y para norte).
+    /// </summary>
+    [Theory]
+    [Trait("Etapa", "11")]
+    [InlineData(0)]
+    [InlineData(180)]
+    [InlineData(20)]
+    [InlineData(200)]
+    [InlineData(160)]
+    [InlineData(-20)]
+    public void OCartesianoMostraAMesaComoNaPlanta(double graus)
+    {
+        var mesa = MesasDeString.Mesa("F1.1", 50, 50, 14, 2, angulo: graus * Math.PI / 180);
+        var (arranjo, desenho) = StringFieldTables.Describe(StringFieldTables.Order([mesa], out _)!);
+
+        double NoCartesiano(int c, int r, bool x) { var (cx, cy, w, h) = desenho.CellRect(arranjo, 0, c, r); return x ? cx + w / 2 : cy + h / 2; }
+        double NaPlanta(int c, int r, bool x) { var f = mesa.ModuleAt(c, r)!.Face; return x ? f.Average(p => p.X) : f.Average(p => p.Y); }
+
+        // Da primeira à última coluna, e da fileira de baixo à de cima: o mesmo sentido.
+        Assert.Equal(Math.Sign(NaPlanta(13, 0, true) - NaPlanta(0, 0, true)), Math.Sign(NoCartesiano(13, 0, true) - NoCartesiano(0, 0, true)));
+        Assert.Equal(Math.Sign(NaPlanta(0, 1, false) - NaPlanta(0, 0, false)), Math.Sign(NoCartesiano(0, 1, false) - NoCartesiano(0, 0, false)));
+        Assert.Equal(desenho, ArrangementSketch.Parse(desenho.ToText()));
+    }
+
+    [Fact]
+    [Trait("Etapa", "11")]
+    public void DuasMesasViradasParaOOesteTrocamDeLadoComOVao()
+    {
+        var a = MesasDeString.Mesa("F1.1", 0, 0, 7, 2, angulo: Math.PI);
+        var b = MesasDeString.Mesa("F1.2", -8.2, 0, 7, 2, angulo: Math.PI);
+        var (arranjo, desenho) = StringFieldTables.Describe(StringFieldTables.Order([a, b], out _)!);
+
+        Assert.Equal(new PlanView(true, true), desenho.View);
+        var largura = desenho.Size(arranjo).Width;
+        // A mesa 1 (a de leste) à direita; a coluna 0 dela na ponta direita.
+        Assert.Equal(largura - desenho.CellWidth, desenho.CellRect(arranjo, 0, 0, 0).X, 6);
+        Assert.Equal(0, desenho.CellRect(arranjo, 1, 6, 0).X, 6);
+        Assert.Equal(desenho.Gaps.Single(), desenho.CellRect(arranjo, 0, 6, 0).X - (desenho.CellRect(arranjo, 1, 0, 0).X + desenho.CellWidth), 6);
+        Assert.Equal(desenho.CellHeight, desenho.CellRect(arranjo, 0, 0, 0).Y, 6);
+    }
+
+    [Fact]
+    [Trait("Etapa", "11")]
+    public void AVistaVaiEVoltaDoTextoEOTextoAntigoAindaLe()
+    {
+        var desenho = new ArrangementSketch(1.1, 2.3, [0.5], new PlanView(true, false));
+
+        Assert.Equal("1.1;2.3;0.5;v1", desenho.ToText());
+        Assert.Equal(desenho, ArrangementSketch.Parse("1.1;2.3;0.5;v1"));
+        Assert.Null(ArrangementSketch.Parse("1.1;2.3;0.5")!.View);
+        Assert.Null(ArrangementSketch.Parse("1.1;2.3;v7"));
+        Assert.Null(ArrangementSketch.Parse("1.1;2.3;vx"));
+    }
 }

@@ -98,8 +98,11 @@ public sealed record OrderedTable(FieldTable Table, bool Reversed, double Start,
 /// cada célula de módulo (largura ao longo da fileira, altura no fundo da
 /// mesa) e o vão entre uma mesa e a seguinte, em metro, como estão em campo.
 /// É só para mostrar: a assinatura de arranjo é que casa com as mesas.
+/// <see cref="View"/> é como a mesa de referência aparece em planta, para o
+/// cartesiano mostrar o + e o − do mesmo lado que ficam em campo (05/10/2026);
+/// null em tipo gravado antes disso.
 /// </summary>
-public sealed record ArrangementSketch(double CellWidth, double CellHeight, IReadOnlyList<double> Gaps)
+public sealed record ArrangementSketch(double CellWidth, double CellHeight, IReadOnlyList<double> Gaps, PlanView? View = null)
 {
     /// <summary>O desenho padrão de quem ainda não tem um (módulo 1,1 × 2,3 m, mesas a 0,5 m).</summary>
     public static ArrangementSketch Default(StringArrangement arranjo) =>
@@ -108,39 +111,67 @@ public sealed record ArrangementSketch(double CellWidth, double CellHeight, IRea
     public bool IsValid => double.IsFinite(CellWidth) && CellWidth > 0 && double.IsFinite(CellHeight) && CellHeight > 0
         && Gaps.All(g => double.IsFinite(g) && g >= 0);
 
-    /// <summary>"1.1;2.3;0.5": largura, altura e os vãos, invariante.</summary>
-    public string ToText() => string.Join(';', new[] { CellWidth, CellHeight }.Concat(Gaps).Select(v => v.ToString("0.###", CultureInfo.InvariantCulture)));
+    /// <summary>"1.1;2.3;0.5": largura, altura e os vãos, invariante; com a vista de planta, ";v0" a ";v3" no fim.</summary>
+    public string ToText() =>
+        string.Join(';', new[] { CellWidth, CellHeight }.Concat(Gaps).Select(v => v.ToString("0.###", CultureInfo.InvariantCulture)))
+        + (View is { } vista ? ";v" + vista.Code.ToString(CultureInfo.InvariantCulture) : "");
 
     /// <summary>O inverso de <see cref="ToText"/>; null se o texto não é um desenho.</summary>
     public static ArrangementSketch? Parse(string? texto)
     {
         if (string.IsNullOrWhiteSpace(texto)) return null;
 
+        var partes = texto.Split(';').ToList();
+        PlanView? vista = null;
+        if (partes.Count > 0 && partes[^1].StartsWith('v'))
+        {
+            if (!int.TryParse(partes[^1][1..], NumberStyles.None, CultureInfo.InvariantCulture, out var codigo) || PlanView.FromCode(codigo) is not { } lida) return null;
+            vista = lida;
+            partes.RemoveAt(partes.Count - 1);
+        }
+
         var numeros = new List<double>();
-        foreach (var parte in texto.Split(';'))
+        foreach (var parte in partes)
         {
             if (!double.TryParse(parte, NumberStyles.Float, CultureInfo.InvariantCulture, out var v)) return null;
             numeros.Add(v);
         }
 
         if (numeros.Count < 2) return null;
-        var desenho = new ArrangementSketch(numeros[0], numeros[1], numeros.Skip(2).ToList());
+        var desenho = new ArrangementSketch(numeros[0], numeros[1], numeros.Skip(2).ToList(), vista);
         return desenho.IsValid ? desenho : null;
     }
 
     public bool Equals(ArrangementSketch? other) =>
-        other is not null && CellWidth.Equals(other.CellWidth) && CellHeight.Equals(other.CellHeight) && Gaps.SequenceEqual(other.Gaps);
+        other is not null && CellWidth.Equals(other.CellWidth) && CellHeight.Equals(other.CellHeight) && Gaps.SequenceEqual(other.Gaps) && View == other.View;
 
-    public override int GetHashCode() => HashCode.Combine(CellWidth, CellHeight, Gaps.Count);
+    public override int GetHashCode() => HashCode.Combine(CellWidth, CellHeight, Gaps.Count, View);
 
-    /// <summary>O retângulo (x, y, largura, altura) da célula no plano cartesiano, em metro, para o arranjo dado.</summary>
+    /// <summary>
+    /// O retângulo (x, y, largura, altura) da célula no plano cartesiano, em
+    /// metro, para o arranjo dado; espelhado como a <see cref="View"/> manda
+    /// (x para a direita e y para cima, como a planta na tela).
+    /// </summary>
     public (double X, double Y, double Width, double Height) CellRect(StringArrangement arranjo, int table, int column, int row)
+    {
+        var (x, y) = SemEspelho(arranjo, table, column, row);
+        if (View is { } vista && (vista.MirrorX || vista.MirrorY))
+        {
+            var (largura, altura) = Size(arranjo);
+            if (vista.MirrorX) x = largura - x - CellWidth;
+            if (vista.MirrorY) y = altura - y - CellHeight;
+        }
+
+        return (x, y, CellWidth, CellHeight);
+    }
+
+    private (double X, double Y) SemEspelho(StringArrangement arranjo, int table, int column, int row)
     {
         var x = 0.0;
         for (var t = 0; t < table; t++)
             x += arranjo.Tables[t].Columns * CellWidth + (t < Gaps.Count ? Gaps[t] : 0);
 
-        return (x + column * CellWidth, row * CellHeight, CellWidth, CellHeight);
+        return (x + column * CellWidth, row * CellHeight);
     }
 
     /// <summary>A largura e a altura do arranjo inteiro no cartesiano.</summary>
@@ -148,8 +179,49 @@ public sealed record ArrangementSketch(double CellWidth, double CellHeight, IRea
     {
         if (arranjo.IsEmpty) return (0, 0);
 
-        var ultimo = CellRect(arranjo, arranjo.Tables.Count - 1, 0, 0);
+        var ultimo = SemEspelho(arranjo, arranjo.Tables.Count - 1, 0, 0);
         return (ultimo.X + arranjo.Tables[^1].Columns * CellWidth, arranjo.Tables.Max(t => t.Rows) * CellHeight);
+    }
+}
+
+/// <summary>
+/// Como uma mesa aparece em planta, com o norte para cima (05/10/2026, Renan:
+/// "no configurador da string as pontas estão do lado esquerdo, mas na planta
+/// elas ficam do lado direito"). No cartesiano a coluna 0 fica à esquerda e a
+/// fileira 0 (borda baixa) embaixo; <see cref="MirrorX"/> quando, em planta,
+/// as colunas correm para a esquerda (oeste), e <see cref="MirrorY"/> quando
+/// a borda alta fica ao sul da baixa.
+/// </summary>
+public readonly record struct PlanView(bool MirrorX, bool MirrorY)
+{
+    private const double Quase = 1e-9;
+
+    /// <summary>0 a 3: 1 espelha o x, 2 espelha o y.</summary>
+    public int Code => (MirrorX ? 1 : 0) + (MirrorY ? 2 : 0);
+
+    public static PlanView? FromCode(int code) => code is >= 0 and <= 3 ? new PlanView((code & 1) != 0, (code & 2) != 0) : null;
+
+    /// <summary>
+    /// A vista de uma mesa pelos cantos do contorno (borda baixa do início ao
+    /// fim, depois a alta de volta). Mesa em fileira norte-sul (colunas
+    /// correndo no y) espelha o x quando as colunas correm para o sul.
+    /// </summary>
+    public static PlanView Of(IReadOnlyList<Point3> corners)
+    {
+        ArgumentNullException.ThrowIfNull(corners);
+        if (corners.Count < 4) return default;
+
+        var dx = corners[1].X - corners[0].X;
+        var dy = corners[1].Y - corners[0].Y;
+        // Para a borda alta: a normal da borda baixa do lado do 4º canto.
+        var lado = -dy * (corners[3].X - corners[0].X) + dx * (corners[3].Y - corners[0].Y);
+        var hx = lado >= 0 ? -dy : dy;
+        var hy = lado >= 0 ? dx : -dx;
+        var escala = Math.Max(Math.Sqrt(dx * dx + dy * dy), Quase);
+
+        var espelhaX = dx / escala < -Quase || (Math.Abs(dx / escala) <= Quase && dy < 0);
+        var espelhaY = hy / escala < -Quase || (Math.Abs(hy / escala) <= Quase && hx < 0);
+        return new PlanView(espelhaX, espelhaY);
     }
 }
 
@@ -235,9 +307,11 @@ public static class StringFieldTables
         var arranjo = new StringArrangement(ordem.Select(o => o.Table.Shape).ToList());
         var primeira = ordem[0].Table;
         var vaos = ordem.Zip(ordem.Skip(1), (a, b) => Math.Round(Math.Max(0, b.Start - a.End), 3)).ToList();
+        // A vista da mesa de referência (a não virada): é a ela que o cartesiano segue.
+        var referencia = (ordem.FirstOrDefault(o => !o.Reversed) ?? ordem[0]).Table;
 
         // Ao milímetro: é o que vai gravado no desenho.
-        return (arranjo, new ArrangementSketch(Math.Round(primeira.PlanLength / primeira.Columns, 3), Math.Round(primeira.PlanDepth / primeira.Rows, 3), vaos));
+        return (arranjo, new ArrangementSketch(Math.Round(primeira.PlanLength / primeira.Columns, 3), Math.Round(primeira.PlanDepth / primeira.Rows, 3), vaos, PlanView.Of(referencia.Corners)));
     }
 
     /// <summary>(fileira, número) do letreiro, para ordenar; letreiro ilegível vai para o fim.</summary>
