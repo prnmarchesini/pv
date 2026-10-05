@@ -94,7 +94,11 @@ internal static class MesasDaString
                 continue;
             }
 
-            if (transacao.GetObject(contorno, OpenMode.ForRead) is not Polyline3d polilinha) continue;
+            if (transacao.GetObject(contorno, OpenMode.ForRead) is not Polyline3d polilinha)
+            {
+                problemas.Add(Tr.F("{0}: o contorno da mesa não tem quatro cantos", identidade.Label));
+                continue;
+            }
             var cantos = FileiraCommands.Vertices(polilinha, transacao).Take(4).ToList();
 
             var faces = new Dictionary<Guid, IReadOnlyList<Point3>>();

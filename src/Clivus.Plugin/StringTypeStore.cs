@@ -20,11 +20,12 @@ internal static class StringTypeStore
         try
         {
             var texto = Texto(database, Chave);
-            var lido = StringTypeRecords.Read(texto, Texto(database, ChaveDosTracados), OQueE);
+            var tracados = Texto(database, ChaveDosTracados);
+            var lido = StringTypeRecords.Read(texto, tracados, OQueE);
 
             if (lido.Problem is { } problema)
             {
-                var cru = texto is null ? "(vazio)" : string.Join(" | ", texto);
+                var cru = (texto is null ? "(vazio)" : string.Join(" | ", texto)) + " || " + (tracados is null ? "(vazio)" : string.Join(" | ", tracados));
                 RegistroDeDiagnostico.Registrar($"Registro com problema: {problema}. Conteúdo: {(cru.Length > 4000 ? cru[..4000] + "..." : cru)}");
             }
 

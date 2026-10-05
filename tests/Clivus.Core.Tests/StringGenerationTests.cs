@@ -88,6 +88,22 @@ public class StringGenerationTests
 
     [Fact]
     [Trait("Etapa", "11")]
+    public void FileiraQueNaoFechaNumaRetaAvisaACausa()
+    {
+        // F1.2 com o mesmo número de fileira, mas a 10 m de lado: letreiro repetido de outra área.
+        var duas = Tipo("Modelo 1", (7, 2), (7, 2));
+        var a = MesasDeString.Mesa("F1.1", 0, 0, 7, 2);
+        var b = MesasDeString.Mesa("F1.2", 8.2, 10, 7, 2);
+
+        var plano = StringGeneration.Plan([duas], [a, b], []);
+
+        Assert.Empty(plano.Groups);
+        Assert.Contains(plano.Notes, n => n.Contains("F1") && n.Contains("não estão na mesma fileira"));
+        Assert.Equal(2, plano.Unmatched.Count);
+    }
+
+    [Fact]
+    [Trait("Etapa", "11")]
     public void TipoDe1VNaoCasaComMesa2V()
     {
         var umaV = Tipo("Modelo 1", (14, 1));

@@ -69,6 +69,7 @@ public static class StringCommands
             var (arranjo, desenho) = StringFieldTables.Describe(ordem);
             StringType? tipo = null;
             string? recusa = null;
+            var descartadas = 0;
 
             var problema = StringTypeStore.Mudar(database, b =>
             {
@@ -78,8 +79,10 @@ public static class StringCommands
                 }
                 else
                 {
+                    var antes = b.Find(alvo);
                     recusa = b.SetArrangement(alvo, arranjo, desenho);
                     tipo = b.Find(alvo);
+                    if (recusa is null && antes is not null && tipo is not null) descartadas = antes.Routes.Count - tipo.Routes.Count;
                 }
             });
 
@@ -93,6 +96,7 @@ public static class StringCommands
             mostrar = tipo.Id;
             frase = Tr.F("{0}: mesas {1} ({2}), {3} módulo(s).", tipo.Name, string.Join(", ", ordem.Select(o => o.Table.Label)), arranjo.ToText(), arranjo.ModuleCount);
             if (alvo == Guid.Empty) frase = Tr.F("{0} criado.", tipo.Name) + " " + frase;
+            if (descartadas > 0) frase += " " + Tr.F("O traçado antigo ({0} string(s)) foi descartado: as mesas novas têm outra grade.", descartadas);
             if (problema is not null) editor.WriteMessage(Tr.F("  ATENÇÃO: {0}.\n", problema));
         }
         catch (System.Exception falha)

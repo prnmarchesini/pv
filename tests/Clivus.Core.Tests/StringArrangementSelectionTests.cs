@@ -86,6 +86,18 @@ public class StringArrangementSelectionTests
 
     [Fact]
     [Trait("Etapa", "11")]
+    public void Mesa1VAoLadoDe2VComAsBordasBaixasAlinhadasEDaMesmaFileira()
+    {
+        var fileira = MesasDeString.Fileira(4, 0, 0.5, (14, 2), (14, 1));
+
+        var ordem = StringFieldTables.Order(fileira, out var problema);
+
+        Assert.Null(problema);
+        Assert.Equal("14x2;14x1", StringFieldTables.Describe(ordem!).Arrangement.ToText());
+    }
+
+    [Fact]
+    [Trait("Etapa", "11")]
     public void MesasDeFileirasDiferentesSaoRecusadas()
     {
         var a = MesasDeString.Mesa("F1.1", 0, 0, 14, 2);

@@ -207,7 +207,7 @@ internal sealed class JanelaDeStrings : Window
         string? recusa = null;
         Fazer(() =>
         {
-            StringTypeStore.Mudar(_documento.Database, b => recusa = b.SetStrings(tipo.Id, [.. tipo.Routes, nova]));
+            MudarBiblioteca(b => recusa = b.SetStrings(tipo.Id, [.. tipo.Routes, nova]));
             return recusa is null ? Tr.F("String {0} gravada: {1}.", tipo.Routes.Count + 1, RouteBuilder.Describe(nova)) : null;
         }, tipo.Id);
 
@@ -237,7 +237,7 @@ internal sealed class JanelaDeStrings : Window
         string? recusa = null;
         Fazer(() =>
         {
-            StringTypeStore.Mudar(_documento.Database, b => recusa = b.SetStrings(tipo.Id, [.. tipo.Routes, nova]));
+            MudarBiblioteca(b => recusa = b.SetStrings(tipo.Id, [.. tipo.Routes, nova]));
             return recusa is null ? Tr.F("String {0} gravada: {1}.", tipo.Routes.Count + 1, RouteBuilder.Describe(nova)) : null;
         }, tipo.Id);
 
@@ -260,7 +260,7 @@ internal sealed class JanelaDeStrings : Window
         _montagem = null;
         Fazer(() =>
         {
-            StringTypeStore.Mudar(_documento.Database, b => b.SetStrings(tipo.Id, []));
+            MudarBiblioteca(b => b.SetStrings(tipo.Id, []));
             return Tr.F("Traçado de {0} limpo.", tipo.Name);
         }, tipo.Id);
     }
@@ -333,6 +333,12 @@ internal sealed class JanelaDeStrings : Window
                 return;
             }
 
+            if (ComandoEmCurso())
+            {
+                MostrarRelatorio([Tr.T("Termine (ou cancele com Esc) o comando em curso no desenho antes.")], erro: true);
+                return;
+            }
+
             StringCommands.PedirGeracao(_documento, tipos);
             Hide();
             _documento.SendStringToExecute("_" + PluginInfo.ComandoStringGerar + " ", true, false, false);
@@ -350,7 +356,9 @@ internal sealed class JanelaDeStrings : Window
         _relatorio.Items.Clear();
         for (var i = 0; i < linhas.Count; i++)
         {
-            var aviso = erro || linhas[i].StartsWith(Tr.F("Aviso: {0}.", string.Empty).TrimEnd('.', ' '), StringComparison.Ordinal);
+            var aviso = erro
+                || linhas[i].StartsWith(Tr.F("Aviso: {0}.", string.Empty).TrimEnd('.', ' '), StringComparison.Ordinal)
+                || linhas[i].StartsWith(Tr.F("ATENÇÃO: {0}.", string.Empty).TrimEnd('.', ' '), StringComparison.Ordinal);
             _relatorio.Items.Add(new TextBlock { Text = linhas[i], TextWrapping = TextWrapping.Wrap, Foreground = aviso ? Brushes.Firebrick : i == 0 ? Brushes.ForestGreen : Brushes.Black });
         }
     }
@@ -381,6 +389,10 @@ internal sealed class JanelaDeStrings : Window
         var lido = StringTypeStore.Ler(_documento.Database);
         var anterior = manter ?? Escolhido?.Id;
 
+        // O traçado pode ter mudado (outra string gravada, mesas trocadas): a
+        // montagem em curso começa de novo sobre o que está gravado.
+        _montagem = null;
+
         _lista.Items.Clear();
         foreach (var tipo in lido.Items)
         {
@@ -408,14 +420,26 @@ internal sealed class JanelaDeStrings : Window
         _recado.Text = texto;
     }
 
+    /// <summary>O problema de leitura do registro achado na última mudança (mostrado depois do Fazer).</summary>
+    private string? _problemaDoRegistro;
+
+    /// <summary>
+    /// Muda a biblioteca guardando o problema de leitura, se houve: a
+    /// mudança regrava o registro limpo, e sem isto o aviso se perderia.
+    /// </summary>
+    private void MudarBiblioteca(Action<StringLibrary> mudanca) =>
+        _problemaDoRegistro = StringTypeStore.Mudar(_documento.Database, mudanca) ?? _problemaDoRegistro;
+
     /// <summary>Escreve no desenho fora de comando (trava e vigia calado), sem derrubar o Civil 3D num clique.</summary>
     private void Fazer(Func<string?> operacao, Guid? manter = null)
     {
         try
         {
+            _problemaDoRegistro = null;
             var frase = EscritaForaDeComando.Fazer(_documento, operacao);
             Atualizar(manter);
-            if (frase is not null) Avisar(frase);
+            if (_problemaDoRegistro is { } problema) Avisar(Tr.F("ATENÇÃO: {0}.", problema), erro: true);
+            else if (frase is not null) Avisar(frase);
         }
         catch (Exception erro)
         {
@@ -453,6 +477,16 @@ internal sealed class JanelaDeStrings : Window
                 return;
             }
 
+            if (ComandoEmCurso())
+            {
+                Avisar(Tr.T("Termine (ou cancele com Esc) o comando em curso no desenho antes."), erro: true);
+                return;
+            }
+
+            if (alvo != Guid.Empty && Escolhido is { Routes.Count: > 0 } comTracado
+                && MessageBox.Show(this, Tr.F("Trocar as mesas de {0} por mesas de outra grade descarta o traçado dele ({1} string(s)). Continuar?", comTracado.Name, comTracado.Routes.Count), Title, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+
             StringCommands.PedirMesas(_documento, alvo);
             Hide();
             _documento.SendStringToExecute("_" + PluginInfo.ComandoStringMesas + " ", true, false, false);
@@ -464,6 +498,13 @@ internal sealed class JanelaDeStrings : Window
             Avisar(Tr.F("Não consegui: {0}", erro.Message), erro: true);
         }
     }
+
+    /// <summary>
+    /// Se há comando em curso no desenho: o texto do SendStringToExecute
+    /// iria como resposta a ele, e o pedido ficaria pendurado para o próximo
+    /// comando digitado (revisão da etapa 11).
+    /// </summary>
+    private bool ComandoEmCurso() => !string.IsNullOrEmpty(_documento.CommandInProgress);
 
     /// <summary>O comando terminou: a janela volta, com o tipo escolhido e a frase do resultado.</summary>
     internal static void Retomar(Document documento, Guid? mostrar, string? frase, bool erro)
@@ -497,7 +538,7 @@ internal sealed class JanelaDeStrings : Window
         string? problema = null;
         Fazer(() =>
         {
-            StringTypeStore.Mudar(_documento.Database, b => problema = b.Rename(tipo.Id, nome));
+            MudarBiblioteca(b => problema = b.Rename(tipo.Id, nome));
             return problema is null ? Tr.F("Renomeado para {0}.", nome.Trim()) : null;
         }, tipo.Id);
         if (problema is not null) Avisar(Tr.F("Não renomeei: {0}.", problema), erro: true);
@@ -514,7 +555,7 @@ internal sealed class JanelaDeStrings : Window
         StringType? copia = null;
         Fazer(() =>
         {
-            StringTypeStore.Mudar(_documento.Database, b => copia = b.Clone(tipo.Id));
+            MudarBiblioteca(b => copia = b.Clone(tipo.Id));
             return copia is null ? null : Tr.F("{0} criado como cópia de {1}.", copia.Name, tipo.Name);
         });
         if (copia is not null) Atualizar(copia.Id);
@@ -531,7 +572,7 @@ internal sealed class JanelaDeStrings : Window
         string? porque = null;
         Fazer(() =>
         {
-            StringTypeStore.Mudar(_documento.Database, b => porque = b.Mirror(tipo.Id));
+            MudarBiblioteca(b => porque = b.Mirror(tipo.Id));
             return porque is null ? Tr.F("{0} espelhado: o + e o − de cada string trocaram de ponta.", tipo.Name) : null;
         }, tipo.Id);
         if (porque is not null) Avisar(Tr.F("Não gravei: {0}.", porque), erro: true);
@@ -547,7 +588,7 @@ internal sealed class JanelaDeStrings : Window
 
         Fazer(() =>
         {
-            StringTypeStore.Mudar(_documento.Database, b => b.RemoveString(tipo.Id, tipo.Routes.Count - 1));
+            MudarBiblioteca(b => b.RemoveString(tipo.Id, tipo.Routes.Count - 1));
             return Tr.F("String {0} tirada de {1}.", tipo.Routes.Count, tipo.Name);
         }, tipo.Id);
     }
@@ -562,7 +603,7 @@ internal sealed class JanelaDeStrings : Window
 
         Fazer(() =>
         {
-            StringTypeStore.Mudar(_documento.Database, b => b.Remove(tipo.Id));
+            MudarBiblioteca(b => b.Remove(tipo.Id));
             return Tr.F("{0} apagado da biblioteca.", tipo.Name);
         });
     }

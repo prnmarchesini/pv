@@ -40,7 +40,7 @@ public sealed record FieldTable(Guid Id, string Label, IReadOnlyList<Point3> Cor
         if (celulas != Modules.Count || Modules.Count != Columns * Rows || Modules.Any(m => m.Column < 0 || m.Row < 0))
             return Tr.F("{0}: a mesa tem {1} módulo(s), e a grade {2}x{3} pede {4}", Label, Modules.Count, Columns, Rows, Columns * Rows);
 
-        return PlanLength < RowDistributor.MenorMedida ? Tr.F("{0}: o contorno da mesa não tem quatro cantos", Label) : null;
+        return PlanLength < RowDistributor.MenorMedida ? Tr.F("{0}: a borda baixa do contorno não tem comprimento", Label) : null;
     }
 
     /// <summary>A direção da borda baixa em planta (do início ao fim da mesa), unitária.</summary>
@@ -194,7 +194,10 @@ public static class StringFieldTables
         var d = referencia.Direction;
         var n = new Point3(-d.Y, d.X, 0);
         var c0 = referencia.Center;
-        var tolerancia = 0.5 * mesas.Min(m => m.PlanDepth);
+        // Meio fundo da MAIOR mesa: uma 1V ao lado de uma 2V, bordas baixas
+        // alinhadas, tem o centro a meio fundo da 1V de distância (revisão
+        // da etapa 11); a fileira vizinha fica a um passo inteiro.
+        var tolerancia = 0.5 * mesas.Max(m => m.PlanDepth) + 1e-6;
 
         var postas = new List<OrderedTable>();
         foreach (var mesa in mesas)

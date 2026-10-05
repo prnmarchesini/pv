@@ -40,6 +40,7 @@ internal static class GeracaoDeStrings
 
         GenerationPlan plano;
         var desenhadas = 0;
+        var substituidas = 0;
         using (var transacao = database.TransactionManager.StartTransaction())
         {
             var problemas = new List<string>();
@@ -48,30 +49,37 @@ internal static class GeracaoDeStrings
 
             plano = StringGeneration.Plan(tipos, mesas, Existentes(transacao, database, mesas));
 
-            Apagar(transacao, database, plano.Groups.SelectMany(g => g.Replaces).ToHashSet());
+            // Grupo com módulo sem face de cima (ou face que não dá traçado)
+            // não é tocado: as strings livres dele ficam como estavam
+            // (revisão da etapa 11: antes, a antiga era apagada e a nova não vinha).
+            var tracos = new Dictionary<GroupPlan, List<IReadOnlyList<Point3>>>();
+            foreach (var g in plano.Groups)
+            {
+                try
+                {
+                    if (g.Strings.SelectMany(x => x.Modules).Any(m => m.Face.Count != 4)) throw new ArgumentException("Módulo sem face.");
+                    var faces = g.Tables.SelectMany(o => o.Table.Modules).Select(m => m.Face).Where(f => f.Count == 4).ToList();
+                    tracos[g] = g.Strings.Select(x => StringPath.Build(x.Modules.Select(m => m.Face).ToList(), faces)).ToList();
+                }
+                catch (ArgumentException erro)
+                {
+                    RegistroDeDiagnostico.Registrar($"Traçado impossível no grupo {g.Labels}.", erro);
+                    linhas.Add(Tr.F("Aviso: {0}.", Tr.F("{0}: módulo sem a face de cima; a string não foi desenhada", g.Labels)));
+                }
+            }
+
+            Apagar(transacao, database, plano.Groups.Where(tracos.ContainsKey).SelectMany(g => g.Replaces).ToHashSet());
 
             var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForWrite);
             var camada = LayoutLayers.Garantir(transacao, database, LayoutLayers.String, new RgbColor(230, 60, 60));
 
-            foreach (var g in plano.Groups)
+            foreach (var g in plano.Groups.Where(tracos.ContainsKey))
             {
-                var faces = g.Tables.SelectMany(o => o.Table.Modules).Select(m => m.Face).Where(f => f.Count == 4).ToList();
-                var feitas = 0;
+                for (var i = 0; i < g.Strings.Count; i++) Desenhar(transacao, espaco, camada, g.Strings[i], tracos[g][i]);
 
-                foreach (var s in g.Strings)
-                {
-                    if (s.Modules.Any(m => m.Face.Count != 4))
-                    {
-                        linhas.Add(Tr.F("Aviso: {0}.", Tr.F("{0}: módulo sem a face de cima; a string não foi desenhada", g.Labels)));
-                        continue;
-                    }
-
-                    Desenhar(transacao, espaco, camada, s, StringPath.Build(s.Modules.Select(m => m.Face).ToList(), faces));
-                    feitas++;
-                }
-
-                desenhadas += feitas;
-                linhas.Add(Tr.F("{0} → {1}: {2} string(s).", g.Type.Name, g.Labels, feitas));
+                desenhadas += g.Strings.Count;
+                substituidas += g.Replaces.Count;
+                linhas.Add(Tr.F("{0} → {1}: {2} string(s).", g.Type.Name, g.Labels, g.Strings.Count));
             }
 
             transacao.Commit();
@@ -83,9 +91,9 @@ internal static class GeracaoDeStrings
 
         linhas.Insert(0, Tr.F("{0} string(s) em {1} grupo(s) de mesas; {2} mesa(s) sem tipo; {3} grupo(s) não regerado(s).",
             desenhadas, plano.Groups.Count, plano.Unmatched.Count, plano.Skipped.Count));
-        if (plano.ReplacedCount > 0) linhas.Insert(1, Tr.F("{0} string(s) livre(s) que já estavam nessas mesas foram substituídas.", plano.ReplacedCount));
+        if (substituidas > 0) linhas.Insert(1, Tr.F("{0} string(s) livre(s) que já estavam nessas mesas foram substituídas.", substituidas));
 
-        return new Relatorio(linhas, desenhadas, plano.Groups.Count, plano.Unmatched.Count, plano.Skipped.Count, plano.ReplacedCount, plano.UnmatchedTables);
+        return new Relatorio(linhas, desenhadas, plano.Groups.Count, plano.Unmatched.Count, plano.Skipped.Count, substituidas, plano.UnmatchedTables);
     }
 
     /// <summary>

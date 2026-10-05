@@ -95,7 +95,7 @@ public static class StringGeneration
             }
         }
 
-        foreach (var corrida in Corridas(boas))
+        foreach (var corrida in Corridas(boas, recados))
         {
             var i = 0;
             while (i < corrida.Count)
@@ -143,7 +143,7 @@ public static class StringGeneration
     /// fileira que não fecha numa reta (letreiros repetidos), vira corrida de
     /// uma mesa só.
     /// </summary>
-    internal static List<List<OrderedTable>> Corridas(IReadOnlyList<FieldTable> mesas)
+    internal static List<List<OrderedTable>> Corridas(IReadOnlyList<FieldTable> mesas, List<string> recados)
     {
         var corridas = new List<List<OrderedTable>>();
 
@@ -154,10 +154,15 @@ public static class StringGeneration
         foreach (var fileira in porFileira)
         {
             var lista = fileira.OrderBy(m => StringFieldTables.ChaveDoLetreiro(m.Label)).ThenBy(m => m.Label, StringComparer.Ordinal).ThenBy(m => m.Id).ToList();
-            var ordem = fileira.Key > 0 ? StringFieldTables.Order(lista, out _) : null;
+            string? porque = null;
+            var ordem = fileira.Key > 0 ? StringFieldTables.Order(lista, out porque) : null;
 
             if (ordem is null)
             {
+                // Nunca calado: a causa vai junto (cada mesa fica sozinha).
+                recados.Add(fileira.Key > 0
+                    ? Tr.F("as mesas da fileira F{0} não fecham numa reta ({1}); cada uma foi tratada sozinha", fileira.Key, porque ?? string.Empty)
+                    : Tr.F("letreiro ilegível em {0}; cada mesa foi tratada sozinha", string.Join(", ", lista.Select(m => m.Label))));
                 foreach (var m in lista)
                     corridas.Add([.. StringFieldTables.Order([m], out _)!]);
                 continue;
