@@ -44,9 +44,9 @@ public static class NumeracaoCommands
     /// [Tag/Usina/Bloco/Listar], para o nível 2. Tag pede a composição em uma
     /// linha, "trafo|inversor|string|separador" (trafo "-" tira o pedaço do
     /// trafo; ex. "T|I|S|." ou "-||S|"). Usina pede o sentido da usina
-    /// inteira. Bloco pede [Novo/Mesas/Sentido/Renomear/Apagar] e o nome do
-    /// bloco (Mesas pede a seleção; Sentido, o sentido; Renomear, o nome
-    /// novo). Listar só mostra. Toda opção termina mostrando o que está
+    /// inteira. Bloco pede [Novo/Mesas/Sentido/Subir/Descer/Renomear/Apagar]
+    /// e o nome do bloco (Mesas pede a seleção; Sentido, o sentido; Renomear,
+    /// o nome novo). Listar só mostra. Toda opção termina mostrando o que está
     /// gravado.
     /// </summary>
     [CommandMethod(PluginInfo.ComandoNumeracaoAutomatico)]
@@ -120,7 +120,7 @@ public static class NumeracaoCommands
         var editor = documento.Editor;
         var database = documento.Database;
 
-        var acao = Palavra(editor, Tr.T("\nBloco [Novo/Mesas/Sentido/Renomear/Apagar]: "), "Novo", "Mesas", "Sentido", "Renomear", "Apagar");
+        var acao = Palavra(editor, Tr.T("\nBloco [Novo/Mesas/Sentido/Subir/Descer/Renomear/Apagar]: "), "Novo", "Mesas", "Sentido", "Subir", "Descer", "Renomear", "Apagar");
         if (acao is null) return false;
 
         if (acao == "Novo")
@@ -154,6 +154,13 @@ public static class NumeracaoCommands
             case "Sentido":
                 if (PerguntarSentido(editor) is not { } sentido) return false;
                 NumeracaoStore.MudarVarredura(database, v => v.SetDirection(bloco.Id, sentido));
+                break;
+
+            case "Subir":
+            case "Descer":
+                var andou = false;
+                NumeracaoStore.MudarVarredura(database, v => andou = v.Move(bloco.Id, acao == "Subir" ? -1 : +1));
+                if (!andou) editor.WriteMessage(Tr.F("\nNUMERACAO {0} não andou: já está na ponta da lista.\n", bloco.Name));
                 break;
 
             case "Renomear":

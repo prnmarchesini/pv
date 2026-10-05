@@ -231,4 +231,61 @@ public class StringNumberingTests
         Assert.Null(ScanRow.Parse(["BLOCO", Guid.NewGuid().ToString("D"), "x", "Diagonal"]));
         Assert.Null(ScanRow.Parse(["OUTRO", "", "", "LeftToRight"]));
     }
+
+    // ------------------------------------------------ 15.3 ordem dos blocos
+
+    [Fact]
+    [Trait("Etapa", "15")]
+    public void SubirEDescerTrocaAOrdemDaLista()
+    {
+        var setup = new ScanSetup(ScanDirection.LeftToRight, []);
+        var a = setup.AddBlock();
+        var b = setup.AddBlock();
+        var c = setup.AddBlock();
+
+        Assert.True(setup.Move(c.Id, -1));
+        Assert.Equal([a.Id, c.Id, b.Id], setup.Blocks.Select(x => x.Id));
+        Assert.True(setup.Move(a.Id, +2));
+        Assert.Equal([c.Id, b.Id, a.Id], setup.Blocks.Select(x => x.Id));
+
+        // Na ponta não anda, e bloco que não existe também não.
+        Assert.False(setup.Move(c.Id, -1));
+        Assert.False(setup.Move(a.Id, +1));
+        Assert.False(setup.Move(Guid.NewGuid(), +1));
+        Assert.Equal([c.Id, b.Id, a.Id], setup.Blocks.Select(x => x.Id));
+    }
+
+    [Fact]
+    [Trait("Etapa", "15")]
+    public void ASequenciaNumeraUmBlocoInteiroDepoisOOutroEOResto()
+    {
+        var oeste = Guid.NewGuid();
+        var leste = Guid.NewGuid();
+        var solta = Guid.NewGuid();
+
+        // Oeste: 1 (0,10) e 2 (0,0); leste: 3 (20,10) e 4 (20,0); solta: 5 (40,5).
+        var itens = new[]
+        {
+            Em(1, 0, 10) with { Table = oeste }, Em(2, 0, 0) with { Table = oeste },
+            Em(3, 20, 10) with { Table = leste }, Em(4, 20, 0) with { Table = leste },
+            Em(5, 40, 5) with { Table = solta },
+        };
+
+        var setup = new ScanSetup(ScanDirection.LeftToRight, []);
+        var a = setup.AddBlock();
+        var b = setup.AddBlock();
+        setup.SetTables(a.Id, [oeste]);
+        setup.SetTables(b.Id, [leste]);
+        setup.SetDirection(a.Id, ScanDirection.BottomToTop);
+        setup.SetDirection(b.Id, ScanDirection.TopToBottom);
+
+        Assert.Equal([2, 1, 3, 4, 5], Numeros(setup.Sequence(itens)));
+
+        // Reordenar a lista muda a sequência: o leste inteiro antes do oeste.
+        setup.Move(b.Id, -1);
+        Assert.Equal([3, 4, 2, 1, 5], Numeros(setup.Sequence(itens)));
+
+        // Sem blocos, a usina inteira no sentido padrão.
+        Assert.Equal([1, 2, 3, 4, 5], Numeros(new ScanSetup(ScanDirection.LeftToRight, []).Sequence(itens)));
+    }
 }

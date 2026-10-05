@@ -190,6 +190,8 @@ internal sealed class PainelDeNumeracao : DockPanel
         var botoes = Linha(6);
         Botao(botoes, Tr.T("Novo bloco"), Tr.T("Acrescenta um bloco no fim da lista, sem mesas, no sentido da usina."), NovoBloco);
         Botao(botoes, Tr.T("Selecionar mesas"), Tr.T("Seleciona no desenho as mesas do bloco escolhido (só mesas entram). Mesa que estava em outro bloco passa para este."), SelecionarMesas);
+        Botao(botoes, Tr.T("Subir"), Tr.T("Sobe o bloco escolhido na lista: ele passa a ser numerado antes do de cima."), () => MoverBloco(-1));
+        Botao(botoes, Tr.T("Descer"), Tr.T("Desce o bloco escolhido na lista: ele passa a ser numerado depois do de baixo."), () => MoverBloco(+1));
         Botao(botoes, Tr.T("Renomear"), Tr.T("Troca o nome do bloco escolhido."), RenomearBloco);
         Botao(botoes, Tr.T("Apagar bloco"), Tr.T("Tira o bloco da lista; as mesas dele voltam ao sentido da usina. As tags já desenhadas não mudam."), ApagarBloco);
         botoes.Children.Add(Rotulo(Tr.T("Sentido do bloco")));
@@ -272,6 +274,16 @@ internal sealed class PainelDeNumeracao : DockPanel
 
         Avisar(Tr.T("Escolha um bloco na lista."), erro: true);
         return null;
+    }
+
+    /// <summary>15.3: a ordem da lista é a ordem da numeração.</summary>
+    private void MoverBloco(int delta)
+    {
+        if (BlocoOuAviso() is not { } bloco) return;
+
+        var andou = false;
+        MudarVarredura(v => andou = v.Move(bloco.Id, delta), Tr.F("{0} agora é numerado nesta posição da lista; gere de novo para as tags seguirem.", bloco.Name), bloco.Id);
+        if (!andou) Avisar(delta < 0 ? Tr.F("{0} já é o primeiro da lista.", bloco.Name) : Tr.F("{0} já é o último da lista.", bloco.Name));
     }
 
     private void RenomearBloco()

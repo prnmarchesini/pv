@@ -106,8 +106,8 @@ public enum ScanDirection
     BottomToTop,
 }
 
-/// <summary>Uma string a varrer: o GUID e a posição em planta do primeiro módulo dela.</summary>
-public sealed record ScanItem(Guid Id, double X, double Y);
+/// <summary>Uma string a varrer: o GUID, a posição em planta do primeiro módulo dela e a mesa dele (que diz o bloco).</summary>
+public sealed record ScanItem(Guid Id, double X, double Y, Guid Table = default);
 
 /// <summary>A ordem da varredura (15.2).</summary>
 public static class ScanOrder
@@ -236,6 +236,15 @@ public sealed class ScanSetup
     /// <summary>O bloco da mesa, ou null (a mesa vai no sentido da usina).</summary>
     public NumberingBlock? BlockOf(Guid table) => _blocos.FirstOrDefault(b => b.Tables.Contains(table));
 
+    /// <summary>O bloco de cada mesa que está em bloco (a primeira ocorrência vale).</summary>
+    public IReadOnlyDictionary<Guid, Guid> BlockByTable()
+    {
+        var dono = new Dictionary<Guid, Guid>();
+        foreach (var b in _blocos)
+            foreach (var t in b.Tables) dono.TryAdd(t, b.Id);
+        return dono;
+    }
+
     /// <summary>Um bloco novo no fim da lista, sem mesas, no sentido da usina, com o próximo nome livre ("Bloco 3").</summary>
     public NumberingBlock AddBlock()
     {
@@ -251,6 +260,40 @@ public sealed class ScanSetup
         var bloco = new NumberingBlock(Guid.NewGuid(), Tr.F("Bloco {0}", maior + 1), DefaultDirection, []);
         _blocos.Add(bloco);
         return bloco;
+    }
+
+    /// <summary>
+    /// Anda o bloco na lista (15.3): -1 sobe, +1 desce. A ordem da lista é a
+    /// da numeração. Falso se o bloco não existe ou sairia da lista.
+    /// </summary>
+    public bool Move(Guid id, int delta)
+    {
+        var i = _blocos.FindIndex(b => b.Id == id);
+        var destino = i + delta;
+        if (i < 0 || delta == 0 || destino < 0 || destino >= _blocos.Count) return false;
+
+        var bloco = _blocos[i];
+        _blocos.RemoveAt(i);
+        _blocos.Insert(destino, bloco);
+        return true;
+    }
+
+    /// <summary>
+    /// A sequência da usina (15.2, 15.3): o bloco 1 inteiro no sentido dele,
+    /// depois o 2, e segue na ordem da lista; por último as strings de mesa
+    /// fora de bloco, no sentido da usina.
+    /// </summary>
+    public IReadOnlyList<Guid> Sequence(IReadOnlyList<ScanItem> items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+
+        var dono = BlockByTable();
+        var porBloco = items.ToLookup(i => dono.GetValueOrDefault(i.Table));
+        var sequencia = new List<Guid>(items.Count);
+
+        foreach (var b in _blocos) sequencia.AddRange(ScanOrder.Order(porBloco[b.Id].ToList(), b.Direction));
+        sequencia.AddRange(ScanOrder.Order(porBloco[Guid.Empty].ToList(), DefaultDirection));
+        return sequencia;
     }
 
     /// <summary>Tira o bloco da lista; as mesas dele voltam ao sentido da usina.</summary>
