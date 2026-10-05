@@ -202,11 +202,35 @@ internal sealed class CartesianoDaString : Border
 
     private void Sinal(StringType tipo, double altura, RoutingCell celula, string sinal, Brush pincel)
     {
+        // O sinal num selo branco por cima de todas as linhas (05/10/2026:
+        // "não dá para ver o símbolo de menos" — o arco do leapfrog passava
+        // por cima do −).
         var (cx, cy) = Centro(tipo, altura, celula);
-        var texto = new TextBlock { Text = sinal, FontSize = 0.7 * Escala, FontWeight = FontWeights.Bold, Foreground = pincel, IsHitTestVisible = false };
-        Canvas.SetLeft(texto, cx - 0.45 * Escala);
-        Canvas.SetTop(texto, cy - 0.95 * Escala);
-        _tela.Children.Add(texto);
+        var lado = 0.62 * Escala;
+        var selo = new Border
+        {
+            Width = lado,
+            Height = lado,
+            CornerRadius = new CornerRadius(lado / 2),
+            Background = Brushes.White,
+            BorderBrush = pincel,
+            BorderThickness = new Thickness(2),
+            IsHitTestVisible = false,
+            Child = new TextBlock
+            {
+                Text = sinal,
+                FontSize = 0.5 * Escala,
+                FontWeight = FontWeights.Bold,
+                Foreground = pincel,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, -0.08 * Escala, 0, 0),
+            },
+        };
+        Canvas.SetLeft(selo, cx - lado / 2);
+        Canvas.SetTop(selo, cy - 0.95 * Escala);
+        Panel.SetZIndex(selo, 10);
+        _tela.Children.Add(selo);
     }
 
     private static Point Fim(PathSegment segmento) => segmento switch
