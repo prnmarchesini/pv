@@ -1,0 +1,13 @@
+; Teste de nivel 2 do 15.1 (eletrica): a composicao da tag em tres pedacos.
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_NUMERACAO_AUTO" "Listar")
+(command "CLIVUS_NUMERACAO_AUTO" "Tag" "Trafo|Inv|S|-")
+(command "CLIVUS_NUMERACAO_AUTO" "Tag" "-||S|")
+(command "CLIVUS_NUMERACAO_AUTO" "Tag" "T||S|")
+(command "CLIVUS_NUMERACAO_AUTO" "Listar")
+(princ "\nCLIVUS_NUMERACAO_FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

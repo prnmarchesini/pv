@@ -318,6 +318,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_MIGRATE")]
     public static void CLIVUS_MIGRATE() => MigracaoDoNome.Migrar();
 
+    [CommandMethod("CLIVUS_STRING_NUMBERING")]
+    public static void CLIVUS_STRING_NUMBERING() => NumeracaoCommands.Numeracao();
+
+    [CommandMethod("CLIVUS_NUMERACION_STRINGS")]
+    public static void CLIVUS_NUMERACION_STRINGS() => NumeracaoCommands.Numeracao();
+
     [CommandMethod("CLIVUS_NUMBER")]
     public static void CLIVUS_NUMBER() => NumerarCommands.Numerar();
 
