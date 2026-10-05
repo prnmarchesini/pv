@@ -76,6 +76,12 @@ public sealed record Skid(Guid Transformer, string Name)
 public sealed record SkidResult(int Added, int AlreadyHere, IReadOnlyList<Inverter> Refused, int Missing, string? Problem);
 
 /// <summary>
+/// Uma opção da UC no formulário do trafo (13.1): a UC e se o trafo pode ir
+/// para ela agora (a mesma trava da aba Subestação), com o porquê se não.
+/// </summary>
+public sealed record UnitChoice(ConsumerUnit Unit, bool Allowed, string? Reason);
+
+/// <summary>
 /// Um equipamento que vai para o campo como retângulo (12.3, 13.2, 14.6): o
 /// tipo, o GUID do cadastro, a tag escrita no topo e a dimensão.
 /// </summary>
@@ -251,25 +257,48 @@ public sealed class ElectricalSetup
     /// </summary>
     public string? LinkTransformer(Guid unit, Guid transformer)
     {
-        var uc = FindUnit(unit);
-        if (uc is null) return Tr.T("essa subestação não está mais no cadastro");
-
         var posicao = _trafos.FindIndex(t => t.Id == transformer);
+        if (FindUnit(unit) is null) return Tr.T("essa subestação não está mais no cadastro");
         if (posicao < 0) return Tr.T("esse transformador não está mais no cadastro");
 
-        var trafo = _trafos[posicao];
-        if (trafo.ConsumerUnit == unit) return null;
+        if (LinkProblem(_trafos[posicao], unit) is { } porque) return porque;
+
+        _trafos[posicao] = _trafos[posicao] with { ConsumerUnit = unit };
+        return null;
+    }
+
+    /// <summary>
+    /// Por que o trafo não pode ir para a UC agora (null: pode, ou já é
+    /// dela; vazio = soltar, sempre pode). A trava é a mesma em todo lugar:
+    /// trafo de outra UC fica travado até ser solto; a unitária tem um trafo só.
+    /// </summary>
+    private string? LinkProblem(Transformer trafo, Guid unit)
+    {
+        if (unit == Guid.Empty || trafo.ConsumerUnit == unit) return null;
+        if (FindUnit(unit) is not { } uc) return Tr.T("essa subestação não está mais no cadastro");
 
         // Vínculo para uma UC que não existe mais (registro estragado) não trava.
         if (FindUnit(trafo.ConsumerUnit) is { } dona)
             return Tr.F("{0} já está ligado a {1}; solte antes de ligar a outra subestação", trafo.Nickname, dona.Code);
 
         // A unitária é um bloquinho com o seu trafo: um só (12.2).
-        if (uc.Mode == ConsumerUnitMode.Unitary && TransformersOf(unit).FirstOrDefault() is { } outro)
+        if (uc.Mode == ConsumerUnitMode.Unitary && TransformersOf(unit).FirstOrDefault(t => t.Id != trafo.Id) is { } outro)
             return Tr.F("{0} é unitária e já tem o trafo {1}; solte-o antes", uc.Code, outro.Nickname);
 
-        _trafos[posicao] = trafo with { ConsumerUnit = unit };
         return null;
+    }
+
+    /// <summary>
+    /// As UCs que o formulário do trafo oferece (13.1), cada uma com se o
+    /// trafo pode ir para ela agora. A UC dele mesmo é sempre permitida.
+    /// </summary>
+    public IReadOnlyList<UnitChoice> UnitChoices(Guid transformer)
+    {
+        var trafo = FindTransformer(transformer);
+        return _ucs.Select(u => trafo is null
+                ? new UnitChoice(u, false, Tr.T("esse transformador não está mais no cadastro"))
+                : LinkProblem(trafo, u.Id) is { } porque ? new UnitChoice(u, false, porque) : new UnitChoice(u, true, null))
+            .ToList();
     }
 
     /// <summary>Solta o trafo da subestação dele; se havia o que soltar.</summary>
@@ -314,6 +343,37 @@ public sealed class ElectricalSetup
         var posicao = _trafos.FindIndex(t => t.Id == edited.Id);
         if (posicao < 0) return Tr.T("esse transformador não está mais no cadastro");
 
+        if (ValidTransformer(edited, out var valido) is { } porque) return porque;
+
+        _trafos[posicao] = valido! with { ConsumerUnit = _trafos[posicao].ConsumerUnit };
+        return null;
+    }
+
+    /// <summary>
+    /// O Salvar do formulário do trafo (13.1): os campos do cadastro e a UC
+    /// escolhida (vazio = nenhuma), tudo ou nada. A UC segue a mesma trava da
+    /// aba Subestação (<see cref="LinkTransformer"/>). Null se deu certo, o
+    /// porquê se não (e nada muda).
+    /// </summary>
+    public string? SaveTransformer(Transformer edited, Guid unit)
+    {
+        ArgumentNullException.ThrowIfNull(edited);
+
+        var posicao = _trafos.FindIndex(t => t.Id == edited.Id);
+        if (posicao < 0) return Tr.T("esse transformador não está mais no cadastro");
+
+        if (ValidTransformer(edited, out var valido) is { } porque) return porque;
+        if (LinkProblem(_trafos[posicao], unit) is { } trava) return trava;
+
+        _trafos[posicao] = valido! with { ConsumerUnit = unit };
+        return null;
+    }
+
+    /// <summary>Confere os campos do cadastro do trafo: o trafo com nome, apelido e observações aparados, ou o porquê.</summary>
+    private string? ValidTransformer(Transformer edited, out Transformer? valido)
+    {
+        valido = null;
+
         var apelido = edited.Nickname?.Trim() ?? string.Empty;
         var nome = edited.Name?.Trim() ?? string.Empty;
 
@@ -328,7 +388,7 @@ public sealed class ElectricalSetup
             return Tr.T("tensões, potência, fator K e impedância não podem ser negativos");
         if (!edited.Size.IsValid) return Tr.T("largura, comprimento e altura têm que ser maiores que zero");
 
-        _trafos[posicao] = edited with { Name = nome, Nickname = apelido, Notes = edited.Notes?.Trim() ?? string.Empty, ConsumerUnit = _trafos[posicao].ConsumerUnit };
+        valido = edited with { Name = nome, Nickname = apelido, Notes = edited.Notes?.Trim() ?? string.Empty };
         return null;
     }
 

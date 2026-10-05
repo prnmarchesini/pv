@@ -22,7 +22,7 @@ public static class ConfiguracaoEletricaAutoCommands
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "SoltarInversor", "EditarInversor", "Skid", "Desagrupar", "Listar"];
+    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "SoltarInversor", "EditarInversor", "Skid", "Desagrupar", "Listar", "Formulario"];
 
 #if DEBUG
     [CommandMethod(PluginInfo.ComandoEletricaAutomatico)]
@@ -57,6 +57,7 @@ public static class ConfiguracaoEletricaAutoCommands
                 "EditarInversor" => EditarInversor(editor, database),
                 "Skid" => Agrupar(editor, database),
                 "Desagrupar" => Desagrupar(editor, database),
+                "Formulario" => Formulario(editor, database),
                 _ => string.Empty,
             };
 
@@ -127,6 +128,45 @@ public static class ConfiguracaoEletricaAutoCommands
 
         if (porque is null) EquipamentoEmCampo.Redesenhar(database, EquipmentKind.Transformer, id);
         return porque is null ? $"trafo {apelido} editado" : $"recusado: {porque}";
+    }
+
+    /// <summary>
+    /// Formulario &lt;apelido&gt; e os textos das caixas do trafo, na ordem da
+    /// tela (nome, apelido, entrada, saída, kVA, K, Z, observações, largura,
+    /// comprimento, altura) e a UC (código): o MESMO caminho do Salvar da
+    /// janela (TransformerForm.Read e SaveTransformer). "-" é caixa vazia / nenhuma UC.
+    /// </summary>
+    private static string? Formulario(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nTrafo (apelido): ") is not { } apelido) return null;
+
+        var textos = new string[12];
+        string[] perguntas = ["Nome", "Apelido", "Entrada", "Saida", "Kva", "K", "Z", "Notas", "Largura", "Comprimento", "Altura", "Uc"];
+        for (var i = 0; i < textos.Length; i++)
+        {
+            if (Texto(editor, $"\n{perguntas[i]}: ") is not { } t) return null;
+            textos[i] = t == "-" ? string.Empty : t;
+        }
+
+        var lidos = new TransformerFormTexts(textos[0], textos[1], textos[2], textos[3], textos[4], textos[5], textos[6], textos[7], textos[8], textos[9], textos[10]);
+        var id = Guid.Empty;
+        var porque = ConfiguracaoEletricaStore.Mudar(database, s =>
+        {
+            if (Trafo(s, apelido) is not { } t) return "trafo nao existe";
+            id = t.Id;
+
+            var uc = Guid.Empty;
+            if (textos[11].Length > 0)
+            {
+                if (Uc(s, textos[11]) is not { } u) return "subestacao nao existe";
+                uc = u.Id;
+            }
+
+            return TransformerForm.Read(t, lidos, out var naoLeu) is { } editado ? s.SaveTransformer(editado, uc) : naoLeu;
+        });
+
+        if (porque is null) EquipamentoEmCampo.Redesenhar(database, EquipmentKind.Transformer, id);
+        return porque is null ? $"trafo {apelido} salvo pelo formulario" : $"recusado: {porque}";
     }
 
     /// <summary>Vincular &lt;código da UC&gt; &lt;apelido do trafo&gt;.</summary>

@@ -7,13 +7,27 @@ namespace Clivus.Plugin;
 
 /// <summary>
 /// A aba Transformador (etapa 13): a lista dos trafos, o cadastro do
-/// escolhido (livre ou a partir de um padrão) e a posição em campo.
+/// escolhido (livre ou a partir de um padrão), a UC a que ele pertence e a
+/// posição em campo.
+/// <para>
+/// O texto das caixas vira número em <see cref="TransformerForm"/> (o mesmo
+/// caminho do nível 2). O que foi digitado e não salvo sobrevive à releitura
+/// da janela (troca de aba, volta do Alocar em campo, Salvar recusado)
+/// enquanto o trafo no desenho não mudar (reprovação de 05/10/2026: "não
+/// mostra a potência depois de salvo").
+/// </para>
 /// </summary>
 internal sealed class AbaTransformador : AbaEletrica
 {
     private readonly ListBox _lista = new() { MinWidth = 380 };
     private readonly ComboBox _padroes = new() { Height = 26, MinWidth = 250, Margin = new Thickness(0, 0, 6, 6) };
     private readonly TextBox _nome, _apelido, _entrada, _saida, _potencia, _fatorK, _impedancia, _notas, _largura, _comprimento, _altura;
+    private readonly ComboBox _uc;
+
+    private ElectricalSetup _setup = new();
+
+    /// <summary>O trafo como estava no desenho quando o formulário foi preenchido.</summary>
+    private Transformer? _preenchido;
 
     internal AbaTransformador(Document documento) : base(documento)
     {
@@ -33,6 +47,7 @@ internal sealed class AbaTransformador : AbaEletrica
         var grade = Grade();
         _nome = Campo(grade, Tr.T("Transformador"), Tr.T("O nome do trafo (descrição livre)."));
         _apelido = Campo(grade, Tr.T("Apelido (tag)"), Tr.T("A tag que aparece em campo e na numeração (T1, T2...)."));
+        _uc = Escolha(grade, Tr.T("Subestação (UC)"), Tr.T("A unidade consumidora a que o trafo pertence. Trafo de outra UC: escolha (nenhuma) e salve antes; a unitária tem um trafo só."));
         _entrada = Campo(grade, Tr.T("Tensão de entrada (V)"), Tr.T("Lado dos inversores (baixa tensão)."));
         _saida = Campo(grade, Tr.T("Tensão de saída (V)"), Tr.T("Lado da rede (média tensão), ex. 13800."));
         _potencia = Campo(grade, Tr.T("Potência (kVA)"));
@@ -44,11 +59,18 @@ internal sealed class AbaTransformador : AbaEletrica
         _altura = Campo(grade, Tr.T("Altura (m)"), Tr.F("Altura do retângulo 3D (a base flutua {0:0.00} m acima do terreno).", Clivus.Geo.EquipmentFootprint.FloatHeight));
 
         var acoes = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-        Botao(acoes, Tr.T("Salvar alterações"), Tr.T("Grava o cadastro do trafo escolhido no desenho."), Salvar);
-        Botao(acoes, Tr.T("Alocar em campo"), Tr.T("A janela some: clique o centro do retângulo na planta. Se já está em campo, ele é movido; o vínculo não muda."), () =>
+        Botao(acoes, Tr.T("Salvar alterações"), Tr.T("Grava o cadastro do trafo escolhido no desenho."), () => Salvar());
+        Botao(acoes, Tr.T("Alocar em campo"), Tr.T("A janela some: clique o centro do retângulo na planta. Se já está em campo, ele é movido; o vínculo não muda. O que não foi salvo é salvo antes."), () =>
         {
-            if (Escolhido is { } t) AlocarEmCampo(t.Id);
-            else Avisar(Tr.T("Escolha um trafo na lista."), erro: true);
+            if (Escolhido is not { } t)
+            {
+                Avisar(Tr.T("Escolha um trafo na lista."), erro: true);
+                return;
+            }
+
+            // O retângulo nasce com a dimensão gravada: salva antes o que foi digitado.
+            if (Sujo() && !Salvar()) return;
+            AlocarEmCampo(t.Id);
         });
 
         var formulario = new StackPanel();
@@ -71,11 +93,18 @@ internal sealed class AbaTransformador : AbaEletrica
 
     private Transformer? Escolhido => (_lista.SelectedItem as ListBoxItem)?.Tag as Transformer;
 
+    private TextBox[] Caixas => [_nome, _apelido, _entrada, _saida, _potencia, _fatorK, _impedancia, _notas, _largura, _comprimento, _altura];
+
     internal override void Atualizar()
     {
         var (setup, problema) = ConfiguracaoEletricaStore.Ler(Documento.Database);
         var anterior = Escolhido?.Id;
 
+        // O que foi digitado e não salvo volta para a tela se o trafo não mudou no desenho.
+        var antes = _preenchido;
+        var digitado = antes is not null && Sujo() ? (Textos: TextosDaTela(), Uc: UcDaTela()) : default((TransformerFormTexts Textos, Guid Uc)?);
+
+        _setup = setup;
         var emCampo = EquipamentoEmCampo.EmCampo(Documento.Database);
 
         _lista.Items.Clear();
@@ -91,6 +120,12 @@ internal sealed class AbaTransformador : AbaEletrica
         if (_lista.SelectedItem is null && _lista.Items.Count > 0) _lista.SelectedIndex = 0;
         Preencher();
 
+        if (digitado is { } d && Escolhido is { } agora && agora == antes)
+        {
+            Mostrar(d.Textos);
+            EscolherUc(d.Uc);
+        }
+
         if (problema is not null) Avisar(problema, erro: true);
         else if (_lista.Items.Count == 0) Avisar(Tr.T("Nenhum trafo ainda: use Novo trafo ou Novo do padrão."));
     }
@@ -101,27 +136,64 @@ internal sealed class AbaTransformador : AbaEletrica
     private void Preencher()
     {
         var t = Escolhido;
-        foreach (var caixa in new[] { _nome, _apelido, _entrada, _saida, _potencia, _fatorK, _impedancia, _notas, _largura, _comprimento, _altura })
-            caixa.IsEnabled = t is not null;
+        _preenchido = t;
+        foreach (var caixa in Caixas) caixa.IsEnabled = t is not null;
+        _uc.IsEnabled = t is not null;
+        _uc.Items.Clear();
 
         if (t is null)
         {
-            foreach (var caixa in new[] { _nome, _apelido, _entrada, _saida, _potencia, _fatorK, _impedancia, _notas, _largura, _comprimento, _altura }) caixa.Text = string.Empty;
+            foreach (var caixa in Caixas) caixa.Text = string.Empty;
             return;
         }
 
-        _nome.Text = t.Name;
-        _apelido.Text = t.Nickname;
-        _entrada.Text = Numero(t.InputVoltage);
-        _saida.Text = Numero(t.OutputVoltage);
-        _potencia.Text = Numero(t.PowerKva);
-        _fatorK.Text = Numero(t.KFactor);
-        _impedancia.Text = Numero(t.ImpedancePercent);
-        _notas.Text = t.Notes;
-        _largura.Text = Numero(t.Size.Width);
-        _comprimento.Text = Numero(t.Size.Length);
-        _altura.Text = Numero(t.Size.Height);
+        Mostrar(TransformerForm.Texts(t));
+
+        // A UC: (nenhuma), as do cadastro (a que não pode receber o trafo agora
+        // fica cinza, com o porquê) e, se o vínculo aponta para UC que sumiu, ela.
+        _uc.Items.Add(new ComboBoxItem { Content = Tr.T("(nenhuma)"), Tag = Guid.Empty });
+        foreach (var o in _setup.UnitChoices(t.Id))
+        {
+            var texto = o.Unit.Mode == ConsumerUnitMode.Unitary ? Tr.F("{0} — {1} (unitária)", o.Unit.Code, o.Unit.Name) : Tr.F("{0} — {1}", o.Unit.Code, o.Unit.Name);
+            _uc.Items.Add(new ComboBoxItem { Content = texto, Tag = o.Unit.Id, IsEnabled = o.Allowed, ToolTip = o.Reason });
+        }
+
+        if (t.ConsumerUnit != Guid.Empty && _setup.FindUnit(t.ConsumerUnit) is null)
+            _uc.Items.Add(new ComboBoxItem { Content = Tr.T("(subestação que não está mais no cadastro)"), Tag = t.ConsumerUnit });
+
+        EscolherUc(t.ConsumerUnit);
     }
+
+    private void Mostrar(TransformerFormTexts x)
+    {
+        _nome.Text = x.Name;
+        _apelido.Text = x.Nickname;
+        _entrada.Text = x.InputVoltage;
+        _saida.Text = x.OutputVoltage;
+        _potencia.Text = x.PowerKva;
+        _fatorK.Text = x.KFactor;
+        _impedancia.Text = x.ImpedancePercent;
+        _notas.Text = x.Notes;
+        _largura.Text = x.Width;
+        _comprimento.Text = x.Length;
+        _altura.Text = x.Height;
+    }
+
+    private TransformerFormTexts TextosDaTela() =>
+        new(_nome.Text, _apelido.Text, _entrada.Text, _saida.Text, _potencia.Text, _fatorK.Text, _impedancia.Text, _notas.Text, _largura.Text, _comprimento.Text, _altura.Text);
+
+    private Guid UcDaTela() => (_uc.SelectedItem as ComboBoxItem)?.Tag is Guid g ? g : Guid.Empty;
+
+    private void EscolherUc(Guid uc)
+    {
+        foreach (ComboBoxItem item in _uc.Items)
+            if (item.Tag is Guid g && g == uc) _uc.SelectedItem = item;
+        if (_uc.SelectedItem is null && _uc.Items.Count > 0) _uc.SelectedIndex = 0;
+    }
+
+    /// <summary>O formulário tem o que não foi salvo.</summary>
+    private bool Sujo() =>
+        _preenchido is { } t && (TextosDaTela() != TransformerForm.Texts(t) || UcDaTela() != t.ConsumerUnit);
 
     private void Novo(TransformerTemplate? padrao)
     {
@@ -140,38 +212,34 @@ internal sealed class AbaTransformador : AbaEletrica
             if (item.Tag is Transformer t && t.Id == id) _lista.SelectedItem = item;
     }
 
-    private void Salvar()
+    /// <summary>Grava o formulário (campos e UC, tudo ou nada). Se gravou.</summary>
+    private bool Salvar()
     {
         if (Escolhido is not { } t)
         {
             Avisar(Tr.T("Escolha um trafo na lista."), erro: true);
-            return;
+            return false;
         }
 
-        if (!NumberInput.TryParseLarge(_entrada.Text, out var entrada) || !NumberInput.TryParseLarge(_saida.Text, out var saida)
-            || !NumberInput.TryParseLarge(_potencia.Text, out var potencia) || !NumberInput.TryParseMeasure(_fatorK.Text, out var k)
-            || !NumberInput.TryParseMeasure(_impedancia.Text, out var z))
+        if (TransformerForm.Read(t, TextosDaTela(), out var naoLeu) is not { } editado)
         {
-            Avisar(Tr.T("Não consigo ler um dos números (tensões, potência, fator K, impedância)."), erro: true);
-            return;
+            Avisar(Tr.F("Não salvei: {0}.", naoLeu), erro: true);
+            return false;
         }
 
-        if (LerTamanho(_largura, _comprimento, _altura) is not { } tamanho) return;
-
-        var editado = t with
-        {
-            Name = _nome.Text, Nickname = _apelido.Text, InputVoltage = entrada, OutputVoltage = saida, PowerKva = potencia,
-            KFactor = k, ImpedancePercent = z, Notes = _notas.Text, Size = tamanho,
-        };
-
+        var uc = UcDaTela();
         string? porque = null;
-        Fazer(() =>
+        var gravou = Gravar(() =>
         {
-            porque = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.EditTransformer(editado));
-            if (porque is null) EquipamentoEmCampo.Redesenhar(Documento.Database, EquipmentKind.Transformer, t.Id);
-            return porque is null ? Tr.F("{0} salvo.", editado.Nickname.Trim()) : null;
+            porque = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.SaveTransformer(editado, uc));
+            if (porque is not null) return null;
+
+            EquipamentoEmCampo.Redesenhar(Documento.Database, EquipmentKind.Transformer, t.Id);
+            return Tr.F("{0} salvo.", editado.Nickname.Trim());
         });
+
         if (porque is not null) Avisar(Tr.F("Não salvei: {0}.", porque), erro: true);
+        return gravou;
     }
 
     private void Apagar()
