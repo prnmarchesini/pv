@@ -28,7 +28,10 @@ internal sealed class JanelaDeSombras : Window
     private readonly TextBox _horaAte = new() { Width = 60, ToolTip = Tr.T("A última hora de cada dia, hh:mm.") };
     private readonly TextBox _passo = new() { Width = 50, Text = "30", ToolTip = Tr.T("De quantos em quantos minutos a sombra é calculada no dia.") };
     private readonly TextBox _dias = new() { Width = 40, Text = "1", ToolTip = Tr.T("De quantos em quantos dias, no período: 1 é todo dia, 7 é um dia por semana (o ano inteiro fica rápido).") };
-    private readonly TextBox _fuso = new() { Width = 50, ToolTip = Tr.T("O fuso do relógio, em horas: -3 em Brasília.") };
+    private readonly ComboBox _criterio = new() { Width = 170, ToolTip = Tr.T("Que instantes contam no período: os de uma janela de horário, ou os com o sol acima de uma altura (os horários se ajustam dia a dia).") };
+    private readonly TextBox _altura = new() { Width = 40, Text = "20", ToolTip = Tr.T("A altura solar mínima, em graus: só contam sombras com o sol acima dela.") };
+    private readonly TextBlock _fuso = new() { VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Gray };
+    private double _fusoDoLugar;
     private readonly TextBlock _recado = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) };
 
     private JanelaDeSombras(Document documento)
@@ -49,8 +52,14 @@ internal sealed class JanelaDeSombras : Window
         _horaDe.Text = "09:00";
         _horaAte.Text = "09:00";
 
-        var lugar = SombrasCommands.Lugar(documento);
-        _fuso.Text = (lugar is { IsValid: true } l ? SombrasCommands.FusoPelaLongitude(l.Longitude) : -3).ToString("0.#", Brasil);
+        // O fuso vem do lugar do desenho (Terreno > Resumo > Localização), não desta janela.
+        _fusoDoLugar = SombrasCommands.FusoDoLugar(documento);
+        _fuso.Text = Tr.F("Fuso {0:+0.#;-0.#;0} h, do lugar do desenho (Terreno > Resumo).", _fusoDoLugar);
+
+        _criterio.Items.Add(Tr.T("Janela de horário"));
+        _criterio.Items.Add(Tr.T("Sol acima de"));
+        _criterio.SelectedIndex = 0;
+        _criterio.SelectionChanged += (_, _) => AplicarModo();
 
         _modo.SelectionChanged += (_, _) => AplicarModo();
         _modo.SelectedIndex = 0;
@@ -81,7 +90,9 @@ internal sealed class JanelaDeSombras : Window
 
         pilha.Children.Add(Linha(R(Tr.T("Modo"), 70), _modo));
         pilha.Children.Add(Linha(R(Tr.T("Dias"), 70), _de, R(Tr.T("  a")), _ate, R(Tr.T("   a cada")), _dias, R(Tr.T(" dia(s)"))));
-        pilha.Children.Add(Linha(R(Tr.T("Horário"), 70), _horaDe, R(Tr.T("  às")), _horaAte, R(Tr.T("   passo")), _passo, R(Tr.T(" min    fuso")), _fuso, R(" h")));
+        pilha.Children.Add(Linha(R(Tr.T("Considerar"), 70), _criterio, R(" "), _altura, R("°")));
+        pilha.Children.Add(Linha(R(Tr.T("Horário"), 70), _horaDe, R(Tr.T("  às")), _horaAte, R(Tr.T("   passo")), _passo, R(Tr.T(" min"))));
+        pilha.Children.Add(Linha(R(string.Empty, 70), _fuso));
         pilha.Children.Add(Linha(
             R(Tr.T("Atalhos"), 70),
             Atalho(Tr.T("Solstício de inverno"), Tr.T("21 de junho, das 9h às 15h de meia em meia hora: o critério usual (sem sombra das 9h às 15h no dia de sombra mais longa do ano no Brasil)."), () => Preencher(1, new DateTime(hoje.Year, 6, 21), new DateTime(hoje.Year, 6, 21), "09:00", "15:00", "30", "1")),
@@ -94,11 +105,18 @@ internal sealed class JanelaDeSombras : Window
             {
                 var d = _de.SelectedDate ?? hoje;
                 Preencher(3, new DateTime(d.Year, 1, 1), new DateTime(d.Year, 12, 31), "09:00", "15:00", "60", "7");
+            }),
+            Atalho(Tr.T("Ano, sol acima de 20°"), Tr.T("Um dia por semana do ano, de 30 em 30 minutos, contando só o sol acima de 20°: os horários se ajustam ao dia."), () =>
+            {
+                var d = _de.SelectedDate ?? hoje;
+                Preencher(3, new DateTime(d.Year, 1, 1), new DateTime(d.Year, 12, 31), "09:00", "15:00", "30", "7");
+                _criterio.SelectedIndex = 1;
+                _altura.Text = "20";
             })));
 
         pilha.Children.Add(new TextBlock
         {
-            Text = Tr.T("Fazem sombra as árvores (Sombreamento > Objetos), as outras mesas (a fileira da frente na de trás) e o relevo. Os módulos com sombra ficam lilás (até 25% da face), violeta (até 50%) ou roxo-escuro (acima); a linha de comando diz a causa de cada um. A sombra das árvores é desenhada no chão: no módulo, mais alto, ela cai um pouco ao lado. No período, vale o pior caso de cada módulo."),
+            Text = Tr.T("Fazem sombra as árvores (Sombreamento > Objetos), as outras mesas (a fileira da frente na de trás) e o relevo. Os módulos com sombra ficam lilás (até 25% da face), violeta (até 50%) ou roxo-escuro (acima); Por que essa sombra? diz a causa e a hora de cada um. A sombra das árvores é desenhada no chão e sobre as mesas; no período, é a mancha de todos os passos juntos (só a borda), e cada módulo fica com o pior caso dele."),
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brushes.Gray,
             Margin = new Thickness(0, 8, 0, 0),
@@ -110,7 +128,10 @@ internal sealed class JanelaDeSombras : Window
         var gerar = new Button { Content = Tr.T("Gerar sombras"), Width = 120, Height = 26, IsDefault = true, ToolTip = Tr.T("Apaga as sombras anteriores, calcula e desenha as novas, marcando os módulos.") };
         gerar.Click += (_, _) => Fazer(() =>
         {
-            var periodo = SombrasCommands.Ler(Data(_de), Data(_ate), _horaDe.Text, _horaAte.Text, _passo.Text, _fuso.Text, out var porque, _dias.Text)
+            // Altura solar: a hora inicial vai como ">20" (SombrasCommands.Ler).
+            var porAltura = _criterio.SelectedIndex == 1 && _modo.SelectedIndex != 0;
+            var horaDe = porAltura ? ">" + _altura.Text.Trim() : _horaDe.Text;
+            var periodo = SombrasCommands.Ler(Data(_de), Data(_ate), horaDe, _horaAte.Text, _passo.Text, _fusoDoLugar.ToString(CultureInfo.InvariantCulture), out var porque, _dias.Text)
                 ?? throw new ArgumentException(porque);
             return SombrasCommands.Gerar(_documento, periodo);
         });
@@ -218,6 +239,24 @@ internal sealed class JanelaDeSombras : Window
                 _passo.IsEnabled = true;
                 _dias.IsEnabled = true;
                 break;
+        }
+
+        // A altura solar vale no dia inteiro e no período inteiro; com ela,
+        // o horário não conta (os horários saem do sol, dia a dia).
+        var podeAltura = _modo.SelectedIndex is 1 or 3;
+        _criterio.IsEnabled = podeAltura;
+        if (!podeAltura && _criterio.SelectedIndex == 1) _criterio.SelectedIndex = 0;
+
+        var porAltura = podeAltura && _criterio.SelectedIndex == 1;
+        _altura.IsEnabled = porAltura;
+        if (porAltura)
+        {
+            _horaDe.IsEnabled = false;
+            _horaAte.IsEnabled = false;
+        }
+        else
+        {
+            _horaDe.IsEnabled = true;
         }
     }
 

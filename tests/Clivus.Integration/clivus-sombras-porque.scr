@@ -70,6 +70,8 @@
 (command "CLIVUS_SOMBRA_PORQUE_AUTO" clivus:marcado)
 (princ "\nCLIVUS_PORQUE_LIMPO")
 (command "CLIVUS_SOMBRA_PORQUE_AUTO" clivus:limpo)
+(princ "\nCLIVUS_PORQUE_ALTURA")
+(command "CLIVUS_SOMBRAS_AUTO" "01/01/2026" "31/12/2026" ">20" "23:59" "60" "-3" "30")
 (princ "\nCLIVUS_PORQUE_FIM")
 (setvar "SECURELOAD" clivus:secureload)
 (princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))

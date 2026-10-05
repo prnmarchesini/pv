@@ -13,19 +13,39 @@ using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
 namespace Clivus.Plugin;
 
-/// <summary>O período das sombras: dias (de quantos em quantos), janela de horário, passo e fuso.</summary>
-internal sealed record PeriodoDeSombra(DateOnly De, DateOnly Ate, TimeOnly HoraDe, TimeOnly HoraAte, int PassoMinutos, double Fuso, int PassoDias = 1)
+/// <summary>
+/// O período das sombras: dias (de quantos em quantos), janela de horário ou
+/// altura solar mínima, passo e fuso. Com <see cref="AlturaMinima"/>, o dia
+/// inteiro é percorrido e só contam os instantes com o sol acima dela
+/// (05/10/2026, Renan: "se eu rodar o ano inteiro com horário fixo vai dar
+/// ruim ... só vou considerar sombras com altura solar maior que 20 graus;
+/// os horários vão se ajustando dia a dia").
+/// </summary>
+internal sealed record PeriodoDeSombra(DateOnly De, DateOnly Ate, TimeOnly HoraDe, TimeOnly HoraAte, int PassoMinutos, double Fuso, int PassoDias = 1, double? AlturaMinima = null)
 {
-    /// <summary>Um instante só: mesmo dia, mesma hora.</summary>
-    internal bool Instante => De == Ate && HoraDe == HoraAte;
+    /// <summary>Um instante só: mesmo dia, mesma hora (sem altura solar).</summary>
+    internal bool Instante => AlturaMinima is null && De == Ate && HoraDe == HoraAte;
 
-    internal IEnumerable<DateTime> Instantes() => Shading.Instants(De, Ate, HoraDe, HoraAte, TimeSpan.FromMinutes(PassoMinutos), PassoDias);
+    /// <summary>Os instantes do período (na altura solar, o dia inteiro; o filtro do sol vem em <see cref="InstantesComSol"/>).</summary>
+    internal IEnumerable<DateTime> Instantes() => AlturaMinima is null
+        ? Shading.Instants(De, Ate, HoraDe, HoraAte, TimeSpan.FromMinutes(PassoMinutos), PassoDias)
+        : Shading.Instants(De, Ate, TimeOnly.MinValue, new TimeOnly(23, 59), TimeSpan.FromMinutes(PassoMinutos), PassoDias);
+
+    /// <summary>Os instantes que contam: o sol acima da altura mínima (ou do mínimo do cálculo, 2°).</summary>
+    internal IEnumerable<DateTime> InstantesComSol(double latitude, double longitude)
+    {
+        var minimo = Math.Max(AlturaMinima ?? 0, Shading.MinimumElevationDegrees);
+        return Instantes().Where(t => SolarCalculator.Compute(latitude, longitude, t, Fuso).ElevationDegrees >= minimo);
+    }
 
     internal string Descrever() =>
         Instante
             ? Tr.F("{0:dd/MM/yyyy} às {1:HH:mm}", De, HoraDe)
-            : Tr.F("{0:dd/MM/yyyy} a {1:dd/MM/yyyy}{2}, das {3:HH:mm} às {4:HH:mm}, de {5} em {5} min",
-                De, Ate, PassoDias > 1 ? Tr.F(" (a cada {0} dias)", PassoDias) : string.Empty, HoraDe, HoraAte, PassoMinutos);
+            : AlturaMinima is { } altura
+                ? Tr.F("{0:dd/MM/yyyy} a {1:dd/MM/yyyy}{2}, com o sol acima de {3:0.#}°, de {4} em {4} min",
+                    De, Ate, PassoDias > 1 ? Tr.F(" (a cada {0} dias)", PassoDias) : string.Empty, altura, PassoMinutos)
+                : Tr.F("{0:dd/MM/yyyy} a {1:dd/MM/yyyy}{2}, das {3:HH:mm} às {4:HH:mm}, de {5} em {5} min",
+                    De, Ate, PassoDias > 1 ? Tr.F(" (a cada {0} dias)", PassoDias) : string.Empty, HoraDe, HoraAte, PassoMinutos);
 }
 
 /// <summary>
@@ -231,6 +251,21 @@ public static class SombrasCommands
 
         if (!DateOnly.TryParseExact(de.Trim(), "d/M/yyyy", Brasil, DateTimeStyles.None, out var d0)) { porque = Tr.T("O primeiro dia precisa ser dd/mm/aaaa."); return null; }
         if (!DateOnly.TryParseExact(ate.Trim(), "d/M/yyyy", Brasil, DateTimeStyles.None, out var d1)) { porque = Tr.T("O último dia precisa ser dd/mm/aaaa."); return null; }
+        // Altura solar em vez do horário: a hora inicial vem como ">20".
+        double? altura = null;
+        if (horaDe.Trim().StartsWith('>'))
+        {
+            if (!double.TryParse(horaDe.Trim()[1..].Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var a) || a is < 0 or >= 90)
+            {
+                porque = Tr.T("A altura solar mínima precisa ser de 0 a 89 graus.");
+                return null;
+            }
+
+            altura = a;
+            horaDe = "00:00";
+            horaAte = "23:59";
+        }
+
         if (!TimeOnly.TryParseExact(horaDe.Trim(), ["H:mm", "H"], Brasil, DateTimeStyles.None, out var h0)) { porque = Tr.T("A hora inicial precisa ser hh:mm."); return null; }
         if (!TimeOnly.TryParseExact(horaAte.Trim(), ["H:mm", "H"], Brasil, DateTimeStyles.None, out var h1)) { porque = Tr.T("A hora final precisa ser hh:mm."); return null; }
         if (!int.TryParse(passo.Trim(), NumberStyles.Integer, Brasil, out var p) || p is < 1 or > 1440) { porque = Tr.T("O passo precisa ser de 1 a 1440 minutos."); return null; }
@@ -244,11 +279,15 @@ public static class SombrasCommands
             return null;
         }
 
-        return new PeriodoDeSombra(d0, d1, h0, h1, p, f, pd);
+        return new PeriodoDeSombra(d0, d1, h0, h1, p, f, pd, altura);
     }
 
-    /// <summary>O fuso de partida pela longitude: −3 em quase todo o Brasil.</summary>
-    internal static double FusoPelaLongitude(double longitude) => Math.Clamp(Math.Round(longitude / 15), -12, 14);
+    /// <summary>
+    /// O fuso do relógio do lugar do desenho (05/10/2026: saiu da janela de
+    /// sombras): pelo estado no Brasil, pela longitude fora; −3 sem lugar.
+    /// </summary>
+    internal static double FusoDoLugar(Document documento) =>
+        Lugar(documento) is { IsValid: true } l ? TerrainPlace.ClockOffsetHours(l.Latitude, l.Longitude) : -3;
 
     /// <summary>A localização do terreno (a mesma do resumo do terreno), ou null.</summary>
     internal static GeoLocation? Lugar(Document documento)
@@ -327,7 +366,7 @@ public static class SombrasCommands
         }
         else
         {
-            var pior = modelo.Worst(lugar.Latitude, lugar.Longitude, periodo.Fuso, periodo.Instantes());
+            var pior = modelo.Worst(lugar.Latitude, lugar.Longitude, periodo.Fuso, periodo.InstantesComSol(lugar.Latitude, lugar.Longitude));
             fracoes = pior.Fractions.ToArray();
             causas = pior.Causes!.ToArray();
             quando = pior.When.ToArray();
@@ -345,7 +384,7 @@ public static class SombrasCommands
         if (desenhar is not null && cilindros.Count > 0)
         {
             var sois = new List<SunPosition>();
-            foreach (var t in periodo.Instante ? [desenhar.Value] : periodo.Instantes())
+            foreach (var t in periodo.Instante ? [desenhar.Value] : periodo.InstantesComSol(lugar.Latitude, lugar.Longitude))
             {
                 var sol = SolarCalculator.Compute(lugar.Latitude, lugar.Longitude, t, periodo.Fuso);
                 if (sol.ElevationDegrees < Shading.MinimumElevationDegrees) continue;

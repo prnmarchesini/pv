@@ -3821,6 +3821,11 @@ function Testar-SombrasPorQue {
     if ($marcado -notmatch 'SOMBRA F\S+ col \d+ fil \d+: \d+% da face na sombra, por \S+, em 21/06/2026 \d\d:\d\d') { $erros += 'o por que do modulo marcado nao diz quanto, o que e quando' }
     if ($limpo -notmatch 'sem sombra no' ) { $erros += 'o por que do modulo sem marca nao diz que esta sem sombra' }
 
+    # 05/10/2026: o ano com o sol acima de 20 graus (os horarios saem do sol).
+    $altura = $t.Substring($t.IndexOf('CLIVUS_PORQUE_ALTURA'))
+    if ($altura -notmatch 'com o sol acima de 20\S*, de 60 em 60 min' -or $altura -notmatch '(\d+) instante\(s\), (\d+) com sol') { $erros += 'o periodo pela altura solar nao foi calculado' }
+    elseif ([int]$Matches[1] -lt 50 -or [int]$Matches[1] -gt 13 * 13) { $erros += "o periodo pela altura solar teve $($Matches[1]) instante(s), fora do esperado para 13 dias com o sol acima de 20 graus" }
+
     if ($erros.Count -gt 0) {
         $problemas.Add("clivus-sombras-porque: $($erros -join '; '). Veja $($r.Saida)")
         return $false

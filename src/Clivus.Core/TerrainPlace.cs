@@ -72,6 +72,30 @@ public static class TerrainPlace
     public static string? Country(NearestCity cidade) =>
         cidade.DistanceKm <= BrazilRadiusKm ? Tr.N("Brasil") : null;
 
+    /// <summary>
+    /// O fuso do relógio no lugar, em horas (05/10/2026, Renan: "o fuso não
+    /// deve ficar na tela de sombras, o fuso é da configuração do sistema"):
+    /// no Brasil, pelo estado da sede mais perto (sem horário de verão desde
+    /// 2019): −5 no AC; −4 no AM, MT, MS, RO e RR; −2 em Fernando de Noronha;
+    /// −3 no resto. Fora do Brasil, pela longitude (15° por hora).
+    /// </summary>
+    public static double ClockOffsetHours(double latitude, double longitude)
+    {
+        Conferir(latitude, longitude);
+
+        var cidade = Nearest(latitude, longitude);
+        if (cidade.DistanceKm > BrazilRadiusKm) return Math.Clamp(Math.Round(longitude / 15), -12, 14);
+
+        if (cidade.City.Name == "Fernando de Noronha") return -2;
+
+        return cidade.City.State switch
+        {
+            "AC" => -5,
+            "AM" or "MT" or "MS" or "RO" or "RR" => -4,
+            _ => -3,
+        };
+    }
+
     /// <summary>O fuso UTM do ponto, com o EPSG do SIRGAS 2000 na América do Sul.</summary>
     public static UtmZone Utm(double latitude, double longitude)
     {
