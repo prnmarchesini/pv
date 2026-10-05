@@ -16,6 +16,7 @@ usos no mesmo commit.
 | subestação (UC) | dicionário, `SUBESTACOES` (formato 2 desde 05/10/2026; o 1 continua sendo lido) | `ConsumerUnit` |
 | bloco físico da subestação compartilhada (o cubículo) | dicionário, `SUBESTACOES_BLOCOS` | `Substation` (Core, `Electrical.cs`), `ElectricalStore.Substations/SaveSubstations` |
 | nome do skid (14.7), um por trafo | dicionário, `SKIDS` | `Skid` (Core, `ElectricalSetup.cs`), `ElectricalStore.Skids/SaveSkids` |
+| varredura da atribuição automática das strings | dicionário, `ALOCACAO_VARREDURA` (separada da `NUMERACAO_VARREDURA`) | `AllocationScan` (Core), `AtribuicaoAutomatica.Varredura/GravarVarredura` (Plugin) |
 | retângulo de equipamento em campo | XData (tipo `Equipamento`) da entidade, camada `CLIVUS_EQUIPAMENTO` | `EquipmentPlacement`, `ElectricalStore.SavePlacement/LoadPlacement` |
 
 ## A cadeia (cada elo guarda o GUID do elo de cima)
@@ -89,6 +90,20 @@ Nenhum vínculo é derivado de posição no desenho.
   inversor que não está no cadastro), ByLayer. Quem grava o vínculo
   (`StringsDoDesenho.Gravar`) pinta junto; trocar a cor repinta
   (`CorDasStrings.Repintar`). Nenhum vínculo é lido da cor.
+
+## A atribuição automática (05/10/2026)
+
+- A varredura dela é própria (`AllocationScan`: o sentido que avança e o
+  sentido dentro da faixa, perpendicular), gravada em `ALOCACAO_VARREDURA`;
+  a da numeração (`NUMERACAO_VARREDURA`, a tag) não muda por ela. A ordem é a
+  mesma regra (`ScanOrder.Order`, que ganhou o sentido na faixa; sem ele, o
+  de antes).
+- `StringAutoAllocation.Allocate`: as strings livres (sem GUID repetido, com
+  o primeiro módulo no desenho), na ordem da varredura, enchem os inversores
+  na ordem da lista do cadastro até `TotalInputs`; as já alocadas não mudam e
+  contam; inversor cheio ou sem modelo é pulado; a sobra é contada. Só o
+  campo `Inverter` das livres muda (gravado por `StringsDoDesenho.Gravar`, que
+  pinta com a cor do inversor).
 
 ## Para testar sem o traçado de verdade
 

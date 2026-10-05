@@ -130,25 +130,57 @@ public static class ScanOrder
     };
 
     /// <summary>
+    /// O sentido dentro da faixa quando ninguém escolhe: de cima para baixo
+    /// nos sentidos horizontais, da esquerda para a direita nos verticais
+    /// (o da numeração).
+    /// </summary>
+    public static ScanDirection DefaultCross(ScanDirection direction) =>
+        IsHorizontal(direction) ? ScanDirection.TopToBottom : ScanDirection.LeftToRight;
+
+    /// <summary>Os dois sentidos possíveis dentro da faixa: os perpendiculares ao que avança.</summary>
+    public static IReadOnlyList<ScanDirection> CrossOptions(ScanDirection direction) =>
+        IsHorizontal(direction) ? [ScanDirection.TopToBottom, ScanDirection.BottomToTop] : [ScanDirection.LeftToRight, ScanDirection.RightToLeft];
+
+    /// <summary>Se os dois sentidos são perpendiculares (um horizontal, o outro vertical).</summary>
+    public static bool IsPerpendicular(ScanDirection a, ScanDirection b) => IsHorizontal(a) != IsHorizontal(b);
+
+    private static bool IsHorizontal(ScanDirection d) => d is ScanDirection.LeftToRight or ScanDirection.RightToLeft;
+
+    /// <summary>
     /// Os GUIDs na ordem da varredura. Faixas pelo eixo do sentido (uma faixa
     /// nova quando o item passa de <paramref name="band"/> do começo da
     /// faixa: medido do começo, e não do vizinho, para mesas deslocadas aos
     /// poucos não fundirem colunas inteiras numa faixa só); dentro da faixa,
-    /// pelo outro eixo; empate total, pelo GUID (sempre a mesma ordem).
-    /// Posição que não é número fica de fora.
+    /// pelo outro eixo, no sentido <paramref name="cross"/> (null: o
+    /// <see cref="DefaultCross"/>, o da numeração); empate total, pelo GUID
+    /// (sempre a mesma ordem). Posição que não é número fica de fora.
     /// </summary>
-    public static IReadOnlyList<Guid> Order(IReadOnlyList<ScanItem> items, ScanDirection direction, double band = Band)
+    /// <remarks>
+    /// É a mesma ordem para a numeração (15.2, tag) e para a atribuição
+    /// automática das strings nos inversores (que escolhe também o sentido
+    /// dentro da faixa): uma regra só, cada uma com a sua configuração.
+    /// </remarks>
+    public static IReadOnlyList<Guid> Order(IReadOnlyList<ScanItem> items, ScanDirection direction, double band = Band, ScanDirection? cross = null)
     {
         ArgumentNullException.ThrowIfNull(items);
 
-        // P: o eixo que avança; S: o da faixa (de cima para baixo ou da esquerda para a direita).
-        (double P, double S) Eixos(ScanItem i) => direction switch
+        var faixa = cross ?? DefaultCross(direction);
+        if (!IsPerpendicular(direction, faixa)) throw new ArgumentException("O sentido dentro da faixa tem que ser perpendicular ao que avança.", nameof(cross));
+
+        // P: o eixo que avança; S: o da faixa, no sentido escolhido.
+        (double P, double S) Eixos(ScanItem i) => (direction switch
         {
-            ScanDirection.LeftToRight => (i.X, -i.Y),
-            ScanDirection.RightToLeft => (-i.X, -i.Y),
-            ScanDirection.TopToBottom => (-i.Y, i.X),
-            _ => (i.Y, i.X),
-        };
+            ScanDirection.LeftToRight => i.X,
+            ScanDirection.RightToLeft => -i.X,
+            ScanDirection.TopToBottom => -i.Y,
+            _ => i.Y,
+        }, faixa switch
+        {
+            ScanDirection.LeftToRight => i.X,
+            ScanDirection.RightToLeft => -i.X,
+            ScanDirection.TopToBottom => -i.Y,
+            _ => i.Y,
+        });
 
         var porEixo = items
             .Where(i => double.IsFinite(i.X) && double.IsFinite(i.Y))

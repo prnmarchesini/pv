@@ -22,7 +22,7 @@ public static class ConfiguracaoEletricaAutoCommands
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "SoltarInversor", "EditarInversor", "Skid", "Desagrupar", "Listar", "Formulario", "Bloco", "EditarUc", "ApagarBloco", "UcAntiga", "ModeloAntigo", "InversoresAntigos", "Cor"];
+    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "SoltarInversor", "EditarInversor", "Skid", "Desagrupar", "Listar", "Formulario", "Bloco", "EditarUc", "ApagarBloco", "UcAntiga", "ModeloAntigo", "InversoresAntigos", "Cor", "Varredura", "Atribuir"];
 
 #if DEBUG
     [CommandMethod(PluginInfo.ComandoEletricaAutomatico)]
@@ -65,6 +65,8 @@ public static class ConfiguracaoEletricaAutoCommands
                 "ModeloAntigo" => ModeloDoFormatoAntigo(editor, database),
                 "InversoresAntigos" => InversoresDoFormatoAntigo(database),
                 "Cor" => TrocarCor(editor, database),
+                "Varredura" => VarreduraDaAtribuicao(editor, database),
+                "Atribuir" => Atribuir(editor, database),
                 _ => string.Empty,
             };
 
@@ -393,6 +395,35 @@ public static class ConfiguracaoEletricaAutoCommands
             return s.SetInverterColor(i.Id, cor);
         });
         return trocou ? $"cor de {nome} trocada; {CorDasStrings.Repintar(database, id)} string(s) repintada(s)" : "recusado: inversor nao existe";
+    }
+
+    /// <summary>
+    /// Varredura &lt;sentido&gt; &lt;na faixa&gt; (nomes do ScanDirection): grava a
+    /// varredura da atribuição, como as caixas da aba Inversor. Diz também a
+    /// da numeração, que não pode mudar por aqui.
+    /// </summary>
+    private static string? VarreduraDaAtribuicao(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nSentido: ") is not { } sentido) return null;
+        if (Texto(editor, "\nNa faixa: ") is not { } faixa) return null;
+
+        if (AllocationScan.Parse([sentido, faixa]) is not { } varredura) return $"recusado: varredura {sentido} {faixa}";
+        AtribuicaoAutomatica.GravarVarredura(database, varredura);
+        var (lida, _) = AtribuicaoAutomatica.Varredura(database);
+        return $"varredura da atribuicao {lida.Direction} {lida.Cross}; numeracao {NumeracaoStore.Varredura(database).Varredura.DefaultDirection}";
+    }
+
+    /// <summary>Atribuir: o botão "Atribuir strings" da aba Inversor (o mesmo caminho), com os números para o teste.</summary>
+    private static string Atribuir(Editor editor, Database database)
+    {
+        var (r, linhas) = AtribuicaoAutomatica.Atribuir(database);
+        foreach (var linha in linhas) editor.WriteMessage($"\n{linha}");
+
+        var setup = ConfiguracaoEletricaStore.Ler(database).Setup;
+        foreach (var i in setup.Inverters.Where(i => r.Added.ContainsKey(i.Id)))
+            editor.WriteMessage($"\nELETRICA ATRIBUIDO nome=\"{i.Name}\" mais={r.Added[i.Id]} fim");
+
+        return $"atribuidas={r.Changed.Count} sobra={r.Leftover} sem_posicao={r.Unplaced} copias={r.Duplicates} cheios={r.Full.Count} sem_modelo={r.WithoutModel.Count} fim";
     }
 
     /// <summary>EditarInversor &lt;inversor&gt; &lt;nome novo&gt; &lt;modelo&gt;.</summary>

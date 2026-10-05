@@ -31,6 +31,11 @@ internal sealed class AbaInversor : AbaEletrica
     private readonly ComboBox _trafoDoSkid = new() { Height = 26, MinWidth = 90, Margin = new Thickness(0, 0, 6, 6) };
     private readonly TextBox _nomeDoSkid = new() { Width = 140, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
 
+    // A atribuição automática: o sentido que avança e o sentido na faixa (a varredura própria dela).
+    private readonly ComboBox _sentidoDaAtribuicao = new() { Height = 26, MinWidth = 150, Margin = new Thickness(0, 0, 6, 6) };
+    private readonly ComboBox _faixaDaAtribuicao = new() { Height = 26, MinWidth = 150, Margin = new Thickness(0, 0, 6, 6) };
+    private bool _mostrandoVarredura;
+
     private ElectricalSetup _setup = new();
     private IReadOnlyDictionary<Guid, int> _contagem = new Dictionary<Guid, int>();
 
@@ -89,6 +94,27 @@ internal sealed class AbaInversor : AbaEletrica
         criar.Children.Add(_quantos);
         Botao(criar, Tr.T("Criar inversores"), Tr.T("Cria os inversores do modelo escolhido (Inversor 1, 2..., continuando a numeração)."), CriarInversores);
 
+        // A atribuição automática das strings livres nos inversores, pela varredura dela.
+        var atribuir = new WrapPanel();
+        atribuir.Children.Add(new TextBlock { Text = Tr.T("Atribuir:"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
+        atribuir.Children.Add(_sentidoDaAtribuicao);
+        atribuir.Children.Add(new TextBlock { Text = Tr.T("na faixa:"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
+        atribuir.Children.Add(_faixaDaAtribuicao);
+        Botao(atribuir, Tr.T("Atribuir strings"), Tr.T("As strings livres, na ordem desta varredura, enchem os inversores na ordem da lista, cada um até o total de entradas. As já alocadas não mudam (e contam); inversor cheio é pulado; as que sobrarem são avisadas."), AtribuirStrings);
+        _sentidoDaAtribuicao.ToolTip = Tr.T("O sentido em que a varredura da atribuição avança (é desta atribuição; a numeração tem a sua).");
+        _faixaDaAtribuicao.ToolTip = Tr.T("Na mesma faixa (linha ou coluna), em que sentido as strings são tomadas.");
+        foreach (var sentido in Enum.GetValues<ScanDirection>()) _sentidoDaAtribuicao.Items.Add(new ComboBoxItem { Content = ScanOrder.Describe(sentido), Tag = sentido });
+        _sentidoDaAtribuicao.SelectionChanged += (_, _) =>
+        {
+            try { MudouAVarredura(trocouOSentido: true); }
+            catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao mudar o sentido da atribuição.", erro); }
+        };
+        _faixaDaAtribuicao.SelectionChanged += (_, _) =>
+        {
+            try { MudouAVarredura(trocouOSentido: false); }
+            catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao mudar o sentido na faixa da atribuição.", erro); }
+        };
+
         // O inversor escolhido na lista: editar e apagar (14.5).
         var editar = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
         editar.Children.Add(new TextBlock { Text = Tr.T("Escolhido:"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
@@ -125,6 +151,7 @@ internal sealed class AbaInversor : AbaEletrica
         var topo = new StackPanel();
         topo.Children.Add(Titulo(Tr.T("Inversores da usina")));
         topo.Children.Add(criar);
+        topo.Children.Add(atribuir);
         DockPanel.SetDock(topo, Dock.Top);
         DockPanel.SetDock(rodape, Dock.Bottom);
         inversores.Children.Add(topo);
@@ -189,6 +216,7 @@ internal sealed class AbaInversor : AbaEletrica
             _contagem = StringAllocation.CountByInverter(ElectricalStore.Strings(transacao, Documento.Database).Select(x => x.String));
 
         MontarInversores();
+        MostrarVarredura(AtribuicaoAutomatica.Varredura(Documento.Database).Varredura);
 
         var trafoDoSkid = (_trafoDoSkid.SelectedItem as ComboBoxItem)?.Tag as Guid?;
         _trafoDoSkid.Items.Clear();
@@ -433,6 +461,57 @@ internal sealed class AbaInversor : AbaEletrica
             var n = CorDasStrings.Repintar(Documento.Database, id);
             return Tr.F("{0}: cor trocada para {1}; {2} string(s) repintada(s).", inversor.Name, cor.ToHex(), n);
         });
+    }
+
+    /// <summary>Põe nas caixas a varredura gravada (sem gravar de novo).</summary>
+    private void MostrarVarredura(AllocationScan varredura)
+    {
+        _mostrandoVarredura = true;
+        try
+        {
+            _sentidoDaAtribuicao.SelectedItem = _sentidoDaAtribuicao.Items.OfType<ComboBoxItem>().First(i => (ScanDirection)i.Tag == varredura.Direction);
+            MontarFaixa(varredura.Direction, varredura.Cross);
+        }
+        finally
+        {
+            _mostrandoVarredura = false;
+        }
+    }
+
+    /// <summary>As duas opções da faixa (as perpendiculares ao sentido), com a dada escolhida (ou a primeira).</summary>
+    private void MontarFaixa(ScanDirection sentido, ScanDirection faixa)
+    {
+        _faixaDaAtribuicao.Items.Clear();
+        foreach (var f in ScanOrder.CrossOptions(sentido)) _faixaDaAtribuicao.Items.Add(new ComboBoxItem { Content = ScanOrder.Describe(f), Tag = f });
+        _faixaDaAtribuicao.SelectedItem = _faixaDaAtribuicao.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (ScanDirection)i.Tag == faixa) ?? _faixaDaAtribuicao.Items[0];
+    }
+
+    /// <summary>O usuário mudou o sentido ou a faixa: grava a varredura da atribuição (a da numeração não muda).</summary>
+    private void MudouAVarredura(bool trocouOSentido)
+    {
+        if (_mostrandoVarredura || (_sentidoDaAtribuicao.SelectedItem as ComboBoxItem)?.Tag is not ScanDirection sentido) return;
+
+        if (trocouOSentido)
+        {
+            var antes = (_faixaDaAtribuicao.SelectedItem as ComboBoxItem)?.Tag as ScanDirection?;
+            _mostrandoVarredura = true;
+            try { MontarFaixa(sentido, antes ?? ScanOrder.DefaultCross(sentido)); }
+            finally { _mostrandoVarredura = false; }
+        }
+
+        if ((_faixaDaAtribuicao.SelectedItem as ComboBoxItem)?.Tag is not ScanDirection faixa) return;
+
+        var varredura = new AllocationScan(sentido, faixa);
+        EscritaForaDeComando.Fazer(Documento, () => AtribuicaoAutomatica.GravarVarredura(Documento.Database, varredura));
+        Avisar(Tr.F("Varredura da atribuição: {0}.", varredura.Describe()));
+    }
+
+    /// <summary>"Atribuir strings": as livres enchem os inversores na ordem da varredura; o relatório no rodapé.</summary>
+    private void AtribuirStrings()
+    {
+        var (r, linhas) = EscritaForaDeComando.Fazer(Documento, () => AtribuicaoAutomatica.Atribuir(Documento.Database));
+        (AoMudar ?? Atualizar)();
+        Avisar(string.Join("\n", linhas), erro: r.Changed.Count == 0 || r.Leftover > 0 || r.WithoutModel.Count > 0 || r.Unplaced > 0 || r.Duplicates > 0);
     }
 
     private void SalvarInversor()
