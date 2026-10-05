@@ -11,4 +11,7 @@ public static partial class PluginInfo
 
     /// <summary>Só no build de teste: grava uma cadeia elétrica de exemplo (UC, trafos, inversores) e aloca as strings. Para o nível 2.</summary>
     public const string ComandoNumeracaoExemploAutomatico = "CLIVUS_NUMERACAO_EXEMPLO_AUTO";
+
+    /// <summary>Só no build de teste: depois do exemplo, dois blocos pelas mesas das strings dos inversores (1 e 2; 3 e 4). Para o nível 2.</summary>
+    public const string ComandoNumeracaoExemploBlocosAutomatico = "CLIVUS_NUMERACAO_EXEMPLO_BLOCOS_AUTO";
 }

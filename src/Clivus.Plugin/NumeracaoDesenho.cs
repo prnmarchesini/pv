@@ -79,11 +79,12 @@ internal static class NumeracaoDesenho
         PluginXData.Load(entidade, StringTagText.Tipo, VersaoDaTag, StringTagText.FieldCount) is { } c ? StringTagText.Parse(c) : null;
 
     /// <summary>
-    /// Gera as tags da usina inteira (15.4): varre na ordem dos blocos,
-    /// grava a tag em cada string e redesenha os textos. Devolve as linhas
-    /// do relatório (a primeira é o resumo).
+    /// Gera as tags (15.4) do alcance (15.5: tudo, um inversor ou um bloco):
+    /// varre a usina inteira na ordem dos blocos, grava a tag em cada string
+    /// do alcance e redesenha os textos delas; o resto não é tocado. Devolve
+    /// as linhas do relatório (a primeira é o resumo).
     /// </summary>
-    internal static IReadOnlyList<string> Gerar(Database database)
+    internal static IReadOnlyList<string> Gerar(Database database, NumberingScope? alcance = null)
     {
         var (esquema, problemaDoEsquema) = NumeracaoStore.Esquema(database);
         var (varredura, problemaDaVarredura) = NumeracaoStore.Varredura(database);
@@ -96,7 +97,7 @@ internal static class NumeracaoDesenho
         var modulos = Modulos(transacao, database);
         var spots = modulos.ToDictionary(m => m.Key, m => new ModuleSpot(m.Value.Mesa, m.Value.Centro.X, m.Value.Centro.Y));
 
-        var resultado = StringNumbering.Number(esquema, varredura, trafos.Items, inversores.Items, strings.Select(s => s.String).ToList(), spots);
+        var resultado = StringNumbering.Number(esquema, varredura, trafos.Items, inversores.Items, strings.Select(s => s.String).ToList(), spots, alcance);
         Aplicar(transacao, database, strings, resultado.Tags, modulos);
         transacao.Commit();
 
@@ -105,6 +106,28 @@ internal static class NumeracaoDesenho
             if (problema is not null) linhas.Add(Tr.F("  ATENÇÃO: {0}.", problema));
 
         return linhas;
+    }
+
+    /// <summary>
+    /// Apaga as tags do alcance (15.5): esvazia o campo Tag das strings e
+    /// apaga os textos delas. Vínculo e geometria não mudam. Devolve a frase.
+    /// </summary>
+    internal static string Apagar(Database database, NumberingScope alcance)
+    {
+        var (varredura, _) = NumeracaoStore.Varredura(database);
+
+        using var transacao = database.TransactionManager.StartTransaction();
+
+        var strings = ElectricalStore.Strings(transacao, database);
+        var modulos = Modulos(transacao, database);
+        var spots = modulos.ToDictionary(m => m.Key, m => new ModuleSpot(m.Value.Mesa, m.Value.Centro.X, m.Value.Centro.Y));
+        var vazias = StringNumbering.Clear(strings.Select(s => s.String).ToList(), alcance, varredura, spots);
+        var tinham = strings.Count(s => vazias.ContainsKey(s.String.Id) && s.String.Tag.Length > 0);
+
+        Aplicar(transacao, database, strings, vazias, modulos);
+        transacao.Commit();
+
+        return Tr.F("{0} tag(s) apagada(s) de {1} string(s).", tinham, vazias.Count);
     }
 
     /// <summary>
@@ -175,12 +198,16 @@ internal static class NumeracaoDesenho
     internal static List<string> Relatorio(StringNumberingResult r, int strings, IReadOnlyList<Inverter> inversores)
     {
         if (strings == 0) return [Tr.T("O desenho não tem string: gere as strings antes de numerar.")];
+        if (r.Tags.Count == 0) return [Tr.T("Nenhuma string neste pedaço: nada mudou.")];
 
         var linhas = new List<string> { Tr.F("{0} string(s) com tag; {1} sem tag.", r.Tagged, r.Tags.Count - r.Tagged) };
 
         if (r.Free > 0) linhas.Add(Tr.F("  {0} string(s) sem inversor ficaram sem tag: aloque num inversor e gere de novo.", r.Free));
         if (r.UnknownInverter > 0) linhas.Add(Tr.F("  ATENÇÃO: {0} string(s) apontam para inversor que não está no cadastro; ficaram sem tag.", r.UnknownInverter));
         if (r.Unplaced > 0) linhas.Add(Tr.F("  ATENÇÃO: {0} string(s) com o primeiro módulo fora do desenho; ficaram sem tag.", r.Unplaced));
+
+        if (r.DuplicateTags.Count > 0)
+            linhas.Add(Tr.F("  ATENÇÃO: {0} tag(s) repetida(s) com strings fora deste pedaço ({1}): a ordem dos blocos ou a alocação mudou; gere tudo de novo.", r.DuplicateTags.Count, string.Join(", ", r.DuplicateTags.Take(10))));
 
         if (r.InvertersWithoutTransformer.Count > 0)
         {

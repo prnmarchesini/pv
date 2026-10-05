@@ -1,0 +1,64 @@
+; Teste de nivel 2 do 15.5 (eletrica): edicao granular. Usina, strings de
+; teste, cadeia de exemplo e dois blocos (CLIVUS_NUMERACAO_EXEMPLO_BLOCOS_AUTO:
+; as mesas dos inversores 1 e 2 no Bloco 1, as do 3 e 4 no Bloco 2, os dois
+; da direita para a esquerda). A: gera tudo. B: o Bloco 2 passa a ir de
+; baixo para cima e so ele e regerado. C: apaga as tags do Inversor 2. D:
+; refaz o Inversor 2. E: apaga todas. Cada fase lista as strings e conta os
+; textos (LISP).
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area numeracao")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento numeracao")
+(command "CLIVUS_MESAS_EXEMPLO_AUTO")
+(command "CLIVUS_USINA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_STRINGS_TESTE_AUTO")
+(command "CLIVUS_NUMERACAO_EXEMPLO_AUTO")
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:tipo (xd) (cdr (nth 0 xd)))
+(defun clivus:textos (fase / ss i n)
+  (setq ss (ssget "_X" (list (cons 0 "MTEXT") (list -3 (list "CLIVUS")))) i 0 n 0)
+  (while (< i (clivus:conta ss))
+    (if (= (clivus:tipo (clivus:xdata (ssname ss i))) "StringTag") (setq n (1+ n)))
+    (setq i (1+ i)))
+  (princ (strcat "\nCLIVUS_NUMERACAO_TEXTOS fase=" fase " textos=" (itoa n))))
+
+(command "CLIVUS_NUMERACAO_EXEMPLO_BLOCOS_AUTO")
+
+(princ "\nCLIVUS_FASE A")
+(command "CLIVUS_NUMERACAO_AUTO" "Gerar")
+(command "CLIVUS_NUMERACAO_AUTO" "Strings")
+(clivus:textos "A")
+
+(princ "\nCLIVUS_FASE B")
+(command "CLIVUS_NUMERACAO_AUTO" "Bloco" "Sentido" "Bloco 2" "BaixoCima")
+(command "CLIVUS_NUMERACAO_AUTO" "RegerarBloco" "Bloco 2")
+(command "CLIVUS_NUMERACAO_AUTO" "Strings")
+(clivus:textos "B")
+
+(princ "\nCLIVUS_FASE C")
+(command "CLIVUS_NUMERACAO_AUTO" "ApagarTags" "Inversor" "Inversor 2")
+(command "CLIVUS_NUMERACAO_AUTO" "Strings")
+(clivus:textos "C")
+
+(princ "\nCLIVUS_FASE D")
+(command "CLIVUS_NUMERACAO_AUTO" "RefazerInversor" "Inversor 2")
+(command "CLIVUS_NUMERACAO_AUTO" "Strings")
+(clivus:textos "D")
+
+(princ "\nCLIVUS_FASE E")
+(command "CLIVUS_NUMERACAO_AUTO" "ApagarTags" "Tudo")
+(command "CLIVUS_NUMERACAO_AUTO" "Strings")
+(clivus:textos "E")
+
+(princ "\nCLIVUS_NUMERACAO_FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

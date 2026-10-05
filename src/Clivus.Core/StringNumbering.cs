@@ -402,28 +402,79 @@ public sealed class ScanSetup
 /// <summary>Onde está um módulo, para a varredura: a mesa dele e a posição em planta (o centro).</summary>
 public sealed record ModuleSpot(Guid Table, double X, double Y);
 
+/// <summary>Até onde vai uma operação de numeração (15.5).</summary>
+public enum NumberingScopeKind
+{
+    /// <summary>A usina inteira.</summary>
+    All,
+
+    /// <summary>As strings de um inversor (pelo vínculo).</summary>
+    Inverter,
+
+    /// <summary>As strings cujo primeiro módulo está numa mesa do bloco (alvo vazio: as mesas fora de bloco).</summary>
+    Block,
+}
+
 /// <summary>
-/// O resultado da numeração (15.4).
+/// O alcance de gerar ou apagar (15.5): tudo, um inversor ou um bloco. Cada
+/// operação é independente: o que fica fora do alcance não muda.
 /// </summary>
-/// <param name="Tags">A tag nova de cada string (vazia: a string fica sem tag).</param>
+public sealed record NumberingScope(NumberingScopeKind Kind, Guid Target)
+{
+    public static NumberingScope All { get; } = new(NumberingScopeKind.All, Guid.Empty);
+
+    public static NumberingScope OfInverter(Guid inverter) => new(NumberingScopeKind.Inverter, inverter);
+
+    /// <summary>Um bloco; <see cref="Guid.Empty"/> são as mesas fora de bloco.</summary>
+    public static NumberingScope OfBlock(Guid block) => new(NumberingScopeKind.Block, block);
+
+    /// <summary>Se a string entra: pelo vínculo (inversor) ou pela mesa do primeiro módulo (bloco). String sem posição não entra em bloco nenhum.</summary>
+    public bool Contains(ElectricalString s, IReadOnlyDictionary<Guid, Guid> blockByTable, IReadOnlyDictionary<Guid, ModuleSpot> modules)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        ArgumentNullException.ThrowIfNull(blockByTable);
+        ArgumentNullException.ThrowIfNull(modules);
+
+        return Kind switch
+        {
+            NumberingScopeKind.All => true,
+            NumberingScopeKind.Inverter => s.Inverter != Guid.Empty && s.Inverter == Target,
+            _ => s.Modules.Count > 0 && modules.TryGetValue(s.Modules[0], out var lugar) && blockByTable.GetValueOrDefault(lugar.Table) == Target,
+        };
+    }
+}
+
+/// <summary>
+/// O resultado da numeração (15.4, 15.5), só das strings do alcance.
+/// </summary>
+/// <param name="Tags">A tag nova de cada string do alcance (vazia: a string fica sem tag). String fora do alcance não aparece: não muda.</param>
 /// <param name="Tagged">Quantas strings ganharam tag.</param>
 /// <param name="Free">Strings sem inversor: ficam sem tag (avisar quantas).</param>
 /// <param name="UnknownInverter">Strings cujo inversor não está no cadastro: ficam sem tag.</param>
 /// <param name="Unplaced">Strings alocadas cujo primeiro módulo não está no desenho: sem posição, ficam sem tag.</param>
 /// <param name="InvertersWithoutTransformer">Inversores com string numerada e sem trafo (ou com trafo que sumiu do cadastro): a tag sai sem o pedaço do trafo.</param>
+/// <param name="DuplicateTags">
+/// Tags que ficam repetidas no desenho depois de juntar as novas com as que
+/// ficaram (regerar um pedaço depois de mudar blocos ou alocação): o aviso
+/// para gerar tudo de novo. Vazia na usina inteira.
+/// </param>
 public sealed record StringNumberingResult(
     IReadOnlyDictionary<Guid, string> Tags,
     int Tagged,
     int Free,
     int UnknownInverter,
     int Unplaced,
-    IReadOnlyList<Guid> InvertersWithoutTransformer);
+    IReadOnlyList<Guid> InvertersWithoutTransformer,
+    IReadOnlyList<string> DuplicateTags);
 
 /// <summary>
-/// A numeração das strings (15.4): varre a usina na ordem dos blocos (cada
-/// um no seu sentido, depois o resto no sentido da usina) e, dentro de cada
-/// inversor, numera 1, 2, 3 nessa ordem (regra elétrica 8). O inversor é o do
-/// vínculo (<see cref="ElectricalString.Inverter"/>), nunca o mais perto.
+/// A numeração das strings (15.4, 15.5): varre a usina na ordem dos blocos
+/// (cada um no seu sentido, depois o resto no sentido da usina) e, dentro de
+/// cada inversor, numera 1, 2, 3 nessa ordem (regra elétrica 8). O inversor
+/// é o do vínculo (<see cref="ElectricalString.Inverter"/>), nunca o mais
+/// perto. A conta é sempre da usina inteira; o alcance só escolhe quais
+/// strings recebem a tag nova. Assim regerar um bloco ou um inversor dá o
+/// mesmo número que gerar tudo, e o resto não é tocado.
 /// </summary>
 public static class StringNumbering
 {
@@ -433,7 +484,8 @@ public static class StringNumbering
         IReadOnlyList<Transformer> transformers,
         IReadOnlyList<Inverter> inverters,
         IReadOnlyList<ElectricalString> strings,
-        IReadOnlyDictionary<Guid, ModuleSpot> modules)
+        IReadOnlyDictionary<Guid, ModuleSpot> modules,
+        NumberingScope? scope = null)
     {
         ArgumentNullException.ThrowIfNull(scheme);
         ArgumentNullException.ThrowIfNull(setup);
@@ -442,6 +494,9 @@ public static class StringNumbering
         ArgumentNullException.ThrowIfNull(strings);
         ArgumentNullException.ThrowIfNull(modules);
         if (scheme.Problem() is { } problema) throw new ArgumentException(problema, nameof(scheme));
+
+        scope ??= NumberingScope.All;
+        var donoDaMesa = setup.BlockByTable();
 
         // O número do trafo e o do inversor: a posição na lista do cadastro.
         var numeroDoTrafo = new Dictionary<Guid, int>();
@@ -460,20 +515,28 @@ public static class StringNumbering
         var semPosicao = 0;
         var aVarrer = new List<ScanItem>();
         var porId = new Dictionary<Guid, ElectricalString>();
+        var noAlcance = new HashSet<Guid>();
 
         foreach (var s in strings)
         {
             if (!porId.TryAdd(s.Id, s)) continue;
-            tags[s.Id] = string.Empty;
 
-            if (!s.IsAllocated) livres++;
-            else if (!inversorPorId.ContainsKey(s.Inverter)) semInversor++;
-            else if (s.Modules.Count == 0 || !modules.TryGetValue(s.Modules[0], out var lugar)) semPosicao++;
+            var dentro = scope.Contains(s, donoDaMesa, modules);
+            if (dentro)
+            {
+                noAlcance.Add(s.Id);
+                tags[s.Id] = string.Empty;
+            }
+
+            if (!s.IsAllocated) livres += dentro ? 1 : 0;
+            else if (!inversorPorId.ContainsKey(s.Inverter)) semInversor += dentro ? 1 : 0;
+            else if (s.Modules.Count == 0 || !modules.TryGetValue(s.Modules[0], out var lugar)) semPosicao += dentro ? 1 : 0;
             else aVarrer.Add(new ScanItem(s.Id, lugar.X, lugar.Y, lugar.Table));
         }
 
         var sequencial = new Dictionary<Guid, int>();
         var semTrafo = new List<Guid>();
+        var numeradas = 0;
 
         foreach (var id in setup.Sequence(aVarrer))
         {
@@ -481,13 +544,45 @@ public static class StringNumbering
             var n = sequencial.GetValueOrDefault(inversor.Id) + 1;
             sequencial[inversor.Id] = n;
 
+            if (!noAlcance.Contains(id)) continue;
+
             int? trafo = numeroDoTrafo.TryGetValue(inversor.Transformer, out var t) ? t : null;
-            if (trafo is null && n == 1) semTrafo.Add(inversor.Id);
+            if (trafo is null && !semTrafo.Contains(inversor.Id)) semTrafo.Add(inversor.Id);
 
             tags[id] = scheme.Compose(trafo, numeroDoInversor[inversor.Id], n);
+            numeradas++;
         }
 
-        return new StringNumberingResult(tags, aVarrer.Count, livres, semInversor, semPosicao, semTrafo);
+        // A tag de cada string depois de aplicar: a nova no alcance, a de antes fora.
+        var repetidas = porId.Values
+            .Select(s => tags.TryGetValue(s.Id, out var nova) ? nova : s.Tag ?? string.Empty)
+            .Where(tag => tag.Length > 0)
+            .GroupBy(tag => tag, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .OrderBy(tag => tag, StringComparer.Ordinal)
+            .ToList();
+
+        return new StringNumberingResult(tags, numeradas, livres, semInversor, semPosicao, semTrafo, repetidas);
+    }
+
+    /// <summary>Apagar as tags (15.5): a tag vazia para cada string do alcance. Só a tag; a geometria e o vínculo não mudam.</summary>
+    public static IReadOnlyDictionary<Guid, string> Clear(
+        IReadOnlyList<ElectricalString> strings,
+        NumberingScope scope,
+        ScanSetup setup,
+        IReadOnlyDictionary<Guid, ModuleSpot> modules)
+    {
+        ArgumentNullException.ThrowIfNull(strings);
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(setup);
+
+        var donoDaMesa = setup.BlockByTable();
+        var apagadas = new Dictionary<Guid, string>();
+        foreach (var s in strings)
+            if (scope.Contains(s, donoDaMesa, modules)) apagadas[s.Id] = string.Empty;
+
+        return apagadas;
     }
 }
 

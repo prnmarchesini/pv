@@ -81,4 +81,54 @@ public static class NumeracaoTestCommands
 
         documento.Editor.WriteMessage($"\nNUMERACAO_EXEMPLO ucs=1 trafos=2 inversores={inversores.Length} alocadas={alocadas} livres={total - alocadas}\n");
     }
+
+    /// <summary>
+    /// Depois do exemplo: dois blocos, os dois da direita para a esquerda. O
+    /// Bloco 1 com as mesas das strings dos inversores 1 e 2; o Bloco 2 com as
+    /// mesas das strings dos inversores 3 e 4 que não ficaram no 1. O resto
+    /// fica fora de bloco. Assim o Bloco 2 tem, com certeza, as duas fileiras
+    /// de uma mesa no mesmo inversor (o 4), e mudar o sentido dele muda tag.
+    /// </summary>
+#if DEBUG
+    [CommandMethod(PluginInfo.ComandoNumeracaoExemploBlocosAutomatico)]
+#endif
+    public static void ExemploBlocos()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var database = documento.Database;
+        var inversores = ElectricalStore.Inverters(database).Items;
+        var mesasDe = new Dictionary<Guid, List<Guid>>();
+
+        using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
+        {
+            var modulos = NumeracaoDesenho.Modulos(transacao, database);
+            foreach (var (_, s) in ElectricalStore.Strings(transacao, database).OrderBy(x => x.Id.Handle.Value))
+            {
+                if (!s.IsAllocated || !modulos.TryGetValue(s.Modules[0], out var lugar)) continue;
+                if (!mesasDe.TryGetValue(s.Inverter, out var lista)) mesasDe[s.Inverter] = lista = [];
+                lista.Add(lugar.Mesa);
+            }
+        }
+
+        IEnumerable<Guid> Mesas(params int[] quais) =>
+            quais.Where(i => i < inversores.Count).SelectMany(i => mesasDe.GetValueOrDefault(inversores[i].Id) ?? []);
+
+        var um = Mesas(0, 1).Distinct().ToList();
+        var dois = Mesas(2, 3).Distinct().Except(um).ToList();
+
+        NumeracaoStore.MudarVarredura(database, v =>
+        {
+            foreach (var b in v.Blocks.ToList()) v.Remove(b.Id);
+            var b1 = v.AddBlock();
+            var b2 = v.AddBlock();
+            v.SetTables(b1.Id, um);
+            v.SetTables(b2.Id, dois);
+            v.SetDirection(b1.Id, ScanDirection.RightToLeft);
+            v.SetDirection(b2.Id, ScanDirection.RightToLeft);
+        });
+
+        documento.Editor.WriteMessage($"\nNUMERACAO_EXEMPLO_BLOCOS bloco1={um.Count} bloco2={dois.Count}\n");
+    }
 }

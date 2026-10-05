@@ -41,8 +41,10 @@ public static class NumeracaoCommands
     }
 
     /// <summary>
-    /// [Tag/Usina/Bloco/Gerar/Strings/Listar], para o nível 2. Gerar numera
-    /// a usina (15.4); Strings lista cada string. Tag pede a composição em uma
+    /// [Tag/Usina/Bloco/Gerar/RegerarBloco/RefazerInversor/ApagarTags/Strings/Listar],
+    /// para o nível 2. Gerar numera a usina (15.4); RegerarBloco e
+    /// RefazerInversor pedem o nome e numeram só aquele pedaço; ApagarTags
+    /// pede [Tudo/Inversor] (15.5); Strings lista cada string. Tag pede a composição em uma
     /// linha, "trafo|inversor|string|separador" (trafo "-" tira o pedaço do
     /// trafo; ex. "T|I|S|." ou "-||S|"). Usina pede o sentido da usina
     /// inteira. Bloco pede [Novo/Mesas/Sentido/Subir/Descer/Renomear/Apagar]
@@ -60,7 +62,8 @@ public static class NumeracaoCommands
 
         try
         {
-            var opcao = Palavra(editor, Tr.T("\nNumeração [Tag/Usina/Bloco/Gerar/Strings/Listar]: "), "Tag", "Usina", "Bloco", "Gerar", "Strings", "Listar");
+            var opcao = Palavra(editor, Tr.T("\nNumeração [Tag/Usina/Bloco/Gerar/RegerarBloco/RefazerInversor/ApagarTags/Strings/Listar]: "),
+                "Tag", "Usina", "Bloco", "Gerar", "RegerarBloco", "RefazerInversor", "ApagarTags", "Strings", "Listar");
             if (opcao is null) return;
 
             var database = documento.Database;
@@ -69,6 +72,27 @@ public static class NumeracaoCommands
             {
                 case "Gerar":
                     Escrever(editor, NumeracaoDesenho.Gerar(database));
+                    return;
+
+                case "RegerarBloco":
+                    if (AcharBloco(editor, database) is not { } bloco) return;
+                    Escrever(editor, NumeracaoDesenho.Gerar(database, NumberingScope.OfBlock(bloco.Id)));
+                    return;
+
+                case "RefazerInversor":
+                    if (AcharInversor(editor, database) is not { } inversor) return;
+                    Escrever(editor, NumeracaoDesenho.Gerar(database, NumberingScope.OfInverter(inversor.Id)));
+                    return;
+
+                case "ApagarTags":
+                    var quais = Palavra(editor, Tr.T("\nApagar as tags [Tudo/Inversor]: "), "Tudo", "Inversor");
+                    if (quais is null) return;
+
+                    NumberingScope? alcance = NumberingScope.All;
+                    if (quais == "Inversor") alcance = AcharInversor(editor, database) is { } doInversor ? NumberingScope.OfInverter(doInversor.Id) : null;
+                    if (alcance is null) return;
+
+                    editor.WriteMessage(Tr.F("\nNUMERACAO {0}\n", NumeracaoDesenho.Apagar(database, alcance)));
                     return;
 
                 case "Strings":
@@ -177,17 +201,8 @@ public static class NumeracaoCommands
             return true;
         }
 
-        var nome = editor.GetString(new PromptStringOptions(Tr.T("\nNome do bloco: ")) { AllowSpaces = true });
-        if (nome.Status != PromptStatus.OK) return false;
-
-        var bloco = NumeracaoStore.Varredura(database).Varredura.Blocks
-            .FirstOrDefault(b => string.Equals(b.Name, nome.StringResult.Trim(), StringComparison.CurrentCultureIgnoreCase));
-
-        if (bloco is null)
-        {
-            editor.WriteMessage(Tr.F("\nNUMERACAO Não há bloco chamado \"{0}\".\n", nome.StringResult.Trim()));
-            return true;
-        }
+        var bloco = AcharBloco(editor, database);
+        if (bloco is null) return true;
 
         switch (acao)
         {
@@ -224,6 +239,32 @@ public static class NumeracaoCommands
         }
 
         return true;
+    }
+
+    /// <summary>O bloco pelo nome (pergunta); null e aviso se não há.</summary>
+    private static NumberingBlock? AcharBloco(Editor editor, Autodesk.AutoCAD.DatabaseServices.Database database)
+    {
+        var nome = editor.GetString(new PromptStringOptions(Tr.T("\nNome do bloco: ")) { AllowSpaces = true });
+        if (nome.Status != PromptStatus.OK) return null;
+
+        var bloco = NumeracaoStore.Varredura(database).Varredura.Blocks
+            .FirstOrDefault(b => string.Equals(b.Name, nome.StringResult.Trim(), StringComparison.CurrentCultureIgnoreCase));
+
+        if (bloco is null) editor.WriteMessage(Tr.F("\nNUMERACAO Não há bloco chamado \"{0}\".\n", nome.StringResult.Trim()));
+        return bloco;
+    }
+
+    /// <summary>O inversor pelo nome (pergunta); null e aviso se não há.</summary>
+    private static Inverter? AcharInversor(Editor editor, Autodesk.AutoCAD.DatabaseServices.Database database)
+    {
+        var nome = editor.GetString(new PromptStringOptions(Tr.T("\nNome do inversor: ")) { AllowSpaces = true });
+        if (nome.Status != PromptStatus.OK) return null;
+
+        var inversor = ElectricalStore.Inverters(database).Items
+            .FirstOrDefault(i => string.Equals(i.Name, nome.StringResult.Trim(), StringComparison.CurrentCultureIgnoreCase));
+
+        if (inversor is null) editor.WriteMessage(Tr.F("\nNUMERACAO Não há inversor chamado \"{0}\".\n", nome.StringResult.Trim()));
+        return inversor;
     }
 
     private static readonly (string Palavra, ScanDirection Sentido)[] PalavrasDoSentido =

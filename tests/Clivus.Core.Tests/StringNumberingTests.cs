@@ -448,4 +448,120 @@ public class StringNumberingTests
         Assert.Null(StringTagText.Parse(["nao-e-guid", "T1"]));
         Assert.Null(StringTagText.Parse([Guid.Empty.ToString("D"), "T1"]));
     }
+
+    // ------------------------------------------------ 15.5 edição granular
+
+    /// <summary>As strings com as tags aplicadas (como ficariam gravadas no desenho).</summary>
+    private static List<ElectricalString> Aplicar(IEnumerable<ElectricalString> strings, IReadOnlyDictionary<Guid, string> tags) =>
+        strings.Select(s => tags.TryGetValue(s.Id, out var t) ? s with { Tag = t } : s).ToList();
+
+    [Fact]
+    [Trait("Etapa", "15")]
+    public void RegerarUmBlocoNaoMexeNosOutrosEDaOMesmoNumeroQueGerarTudo()
+    {
+        var u = new Usina();
+        var a1 = u.Str(u.I1.Id, u.Oeste, 0, 0);
+        var a2 = u.Str(u.I1.Id, u.Oeste, 0, 10);
+        var b1 = u.Str(u.I1.Id, u.Leste, 20, 0);
+        var b2 = u.Str(u.I1.Id, u.Leste, 20, 10);
+        var b3 = u.Str(u.I2.Id, u.Leste, 25, 5);
+
+        var setup = new ScanSetup(ScanDirection.LeftToRight, []);
+        var oeste = setup.AddBlock();
+        var leste = setup.AddBlock();
+        setup.SetTables(oeste.Id, [u.Oeste]);
+        setup.SetTables(leste.Id, [u.Leste]);
+
+        var tudo = StringNumbering.Number(TagScheme.Default, setup, u.Trafos, u.Inversores, u.Strings, u.Modulos);
+        var gravadas = Aplicar(u.Strings, tudo.Tags);
+        Assert.Equal(["T1.I1.S3", "T1.I1.S4"], new[] { b2, b1 }.Select(x => tudo.Tags[x.Id]));
+
+        // Muda o sentido do leste e regera só ele.
+        setup.SetDirection(leste.Id, ScanDirection.BottomToTop);
+        var bloco = StringNumbering.Number(TagScheme.Default, setup, u.Trafos, u.Inversores, gravadas, u.Modulos, NumberingScope.OfBlock(leste.Id));
+
+        Assert.Equal([b1.Id, b2.Id, b3.Id], bloco.Tags.Keys.OrderBy(k => u.Strings.FindIndex(x => x.Id == k)));
+        Assert.Equal(["T1.I1.S3", "T1.I1.S4", "T2.I2.S1"], new[] { b1, b2, b3 }.Select(x => bloco.Tags[x.Id]));
+        Assert.False(bloco.Tags.ContainsKey(a1.Id));
+        Assert.Empty(bloco.DuplicateTags);
+
+        // O mesmo que gerar tudo com o sentido novo.
+        var deNovo = StringNumbering.Number(TagScheme.Default, setup, u.Trafos, u.Inversores, gravadas, u.Modulos);
+        foreach (var (id, tag) in bloco.Tags) Assert.Equal(deNovo.Tags[id], tag);
+        Assert.Equal(tudo.Tags[a1.Id], deNovo.Tags[a1.Id]);
+        Assert.Equal(tudo.Tags[a2.Id], deNovo.Tags[a2.Id]);
+
+        // As mesas fora de bloco são um alcance também (aqui, nenhuma string).
+        Assert.Empty(StringNumbering.Number(TagScheme.Default, setup, u.Trafos, u.Inversores, gravadas, u.Modulos, NumberingScope.OfBlock(Guid.Empty)).Tags);
+    }
+
+    [Fact]
+    [Trait("Etapa", "15")]
+    public void RefazerUmInversorSoTocaAsStringsDele()
+    {
+        var u = new Usina();
+        var a = u.Str(u.I1.Id, u.Oeste, 0, 0);
+        var b = u.Str(u.I2.Id, u.Oeste, 0, 10);
+        var setup = new ScanSetup(ScanDirection.LeftToRight, []);
+        var gravadas = Aplicar(u.Strings, StringNumbering.Number(TagScheme.Default, setup, u.Trafos, u.Inversores, u.Strings, u.Modulos).Tags);
+
+        // Uma string nova alocada ao inversor 1, acima da a: refazer o 1 a numera.
+        var nova = u.Str(u.I1.Id, u.Leste, 0, 20);
+        gravadas.Add(nova with { Tag = string.Empty });
+        var r = StringNumbering.Number(TagScheme.Default, setup, u.Trafos, u.Inversores, gravadas, u.Modulos, NumberingScope.OfInverter(u.I1.Id));
+
+        Assert.Equal(["T1.I1.S1", "T1.I1.S2"], new[] { nova, a }.Select(x => r.Tags[x.Id]));
+        Assert.False(r.Tags.ContainsKey(b.Id));
+        Assert.Equal(2, r.Tagged);
+        Assert.Equal(0, r.Free);
+    }
+
+    [Fact]
+    [Trait("Etapa", "15")]
+    public void ApagarPorInversorOuTudoSoEsvaziaATag()
+    {
+        var u = new Usina();
+        var a = u.Str(u.I1.Id, u.Oeste, 0, 0);
+        var b = u.Str(u.I2.Id, u.Oeste, 0, 10);
+        var livre = u.Str(Guid.Empty, u.Leste, 20, 0);
+        var setup = new ScanSetup(ScanDirection.LeftToRight, []);
+
+        var doInversor = StringNumbering.Clear(u.Strings, NumberingScope.OfInverter(u.I1.Id), setup, u.Modulos);
+        Assert.Equal([a.Id], doInversor.Keys);
+        Assert.Equal(string.Empty, doInversor[a.Id]);
+
+        var tudo = StringNumbering.Clear(u.Strings, NumberingScope.All, setup, u.Modulos);
+        Assert.Equal(new[] { a.Id, b.Id, livre.Id }.OrderBy(x => x), tudo.Keys.OrderBy(x => x));
+
+        // Inversor vazio (Guid.Empty) não pega as strings livres.
+        Assert.Empty(StringNumbering.Clear(u.Strings, NumberingScope.OfInverter(Guid.Empty), setup, u.Modulos));
+    }
+
+    [Fact]
+    [Trait("Etapa", "15")]
+    public void RegerarUmPedacoDepoisDeMudarAOrdemAvisaATagRepetida()
+    {
+        var u = new Usina();
+        var a = u.Str(u.I1.Id, u.Oeste, 0, 0);
+        var b = u.Str(u.I1.Id, u.Leste, 20, 0);
+        var c = u.Str(u.I1.Id, u.Leste, 20, 10);
+
+        var setup = new ScanSetup(ScanDirection.LeftToRight, []);
+        var oeste = setup.AddBlock();
+        var leste = setup.AddBlock();
+        setup.SetTables(oeste.Id, [u.Oeste]);
+        setup.SetTables(leste.Id, [u.Leste]);
+        var gravadas = Aplicar(u.Strings, StringNumbering.Number(TagScheme.Default, setup, u.Trafos, u.Inversores, u.Strings, u.Modulos).Tags);
+
+        // O leste sobe na lista e só o oeste é regerado: a vira S3, e o c ainda é S3.
+        setup.Move(leste.Id, -1);
+        var r = StringNumbering.Number(TagScheme.Default, setup, u.Trafos, u.Inversores, gravadas, u.Modulos, NumberingScope.OfBlock(oeste.Id));
+
+        Assert.Equal("T1.I1.S3", r.Tags[a.Id]);
+        Assert.Equal(["T1.I1.S3"], r.DuplicateTags);
+
+        // Gerar tudo resolve.
+        Assert.Empty(StringNumbering.Number(TagScheme.Default, setup, u.Trafos, u.Inversores, gravadas, u.Modulos).DuplicateTags);
+        _ = (b, c);
+    }
 }

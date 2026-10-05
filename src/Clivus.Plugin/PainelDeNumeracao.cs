@@ -34,6 +34,9 @@ internal sealed class PainelDeNumeracao : DockPanel
     private readonly ComboBox _sentidoDoBloco = Sentidos(Tr.T("O sentido do sequencial das strings nas mesas do bloco escolhido."));
     private readonly ListBox _blocos = new() { Height = 150, ToolTip = Tr.T("Os blocos, na ordem da numeração: o bloco 1 inteiro, depois o 2, e segue; as mesas fora de bloco vêm por último.") };
 
+    // 15.5: o inversor das operações por inversor.
+    private readonly ComboBox _inversor = new() { Width = 200, Height = 24, VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 12, 4), ToolTip = Tr.T("O inversor de Refazer inversor e Apagar do inversor (na ordem do cadastro).") };
+
     /// <summary>Verdadeiro enquanto a tela é preenchida pelo código: troca de combo aí não é pedido do usuário.</summary>
     private bool _mostrando;
 
@@ -365,17 +368,72 @@ internal sealed class PainelDeNumeracao : DockPanel
     private UIElement SecaoGerar()
     {
         var botoes = Linha();
-        Botao(botoes, Tr.T("Gerar tags"), Tr.T("Varre a usina na ordem dos blocos e grava a tag em cada string alocada, com o texto no desenho. String sem inversor fica sem tag."), Gerar);
+        Botao(botoes, Tr.T("Gerar tags"), Tr.T("Varre a usina na ordem dos blocos e grava a tag em cada string alocada, com o texto no desenho. String sem inversor fica sem tag."), () => Gerar(NumberingScope.All));
+        Botao(botoes, Tr.T("Regerar bloco escolhido"), Tr.T("Numera de novo só as strings das mesas do bloco escolhido na lista (depois de mudar o sentido dele). As outras não mudam."), RegerarBloco);
+        Botao(botoes, Tr.T("Apagar todas"), Tr.T("Apaga as tags de todas as strings. Strings, alocação e traçado não mudam."), () => Apagar(NumberingScope.All));
+
+        var porInversor = Linha(4);
+        porInversor.Children.Add(Rotulo(Tr.T("Inversor")));
+        porInversor.Children.Add(_inversor);
+        Botao(porInversor, Tr.T("Refazer inversor"), Tr.T("Numera de novo só as strings do inversor escolhido. Como o sequencial recomeça em cada inversor, os outros não mudam."), RefazerInversor);
+        Botao(porInversor, Tr.T("Apagar do inversor"), Tr.T("Apaga só as tags das strings do inversor escolhido. O vínculo não muda."), ApagarDoInversor);
 
         var corpo = new StackPanel { Margin = new Thickness(6) };
         corpo.Children.Add(botoes);
+        corpo.Children.Add(porInversor);
         return new GroupBox { Header = Tr.T("Gerar"), Content = corpo, Margin = new Thickness(0, 0, 0, 8) };
     }
 
-    private void Gerar()
+    private void Gerar(NumberingScope alcance)
     {
-        Fazer(() => string.Join("\n", NumeracaoDesenho.Gerar(_documento.Database)));
+        Fazer(() => string.Join("\n", NumeracaoDesenho.Gerar(_documento.Database, alcance)));
         AtualizarTela();
+    }
+
+    private void Apagar(NumberingScope alcance)
+    {
+        Fazer(() => NumeracaoDesenho.Apagar(_documento.Database, alcance));
+        AtualizarTela();
+    }
+
+    private void RegerarBloco()
+    {
+        if (BlocoOuAviso() is { } bloco) Gerar(NumberingScope.OfBlock(bloco.Id));
+    }
+
+    private Inverter? InversorOuAviso()
+    {
+        if ((_inversor.SelectedItem as ComboBoxItem)?.Tag is Inverter inversor) return inversor;
+
+        Avisar(Tr.T("Escolha um inversor (os inversores vêm do cadastro da aba Inversor)."), erro: true);
+        return null;
+    }
+
+    private void RefazerInversor()
+    {
+        if (InversorOuAviso() is { } inversor) Gerar(NumberingScope.OfInverter(inversor.Id));
+    }
+
+    private void ApagarDoInversor()
+    {
+        if (InversorOuAviso() is { } inversor) Apagar(NumberingScope.OfInverter(inversor.Id));
+    }
+
+    private void MostrarInversores()
+    {
+        var anterior = ((_inversor.SelectedItem as ComboBoxItem)?.Tag as Inverter)?.Id;
+        var lido = ElectricalStore.Inverters(_documento.Database);
+
+        _inversor.Items.Clear();
+        foreach (var inversor in lido.Items)
+        {
+            var item = new ComboBoxItem { Content = inversor.Name, Tag = inversor };
+            _inversor.Items.Add(item);
+            if (inversor.Id == anterior) _inversor.SelectedItem = item;
+        }
+
+        if (_inversor.SelectedItem is null && _inversor.Items.Count > 0) _inversor.SelectedIndex = 0;
+        if (lido.Problem is not null) Avisar(lido.Problem, erro: true);
     }
 
     private static void AtualizarTela()
@@ -413,6 +471,7 @@ internal sealed class PainelDeNumeracao : DockPanel
     {
         var (varredura, problema) = NumeracaoStore.Varredura(_documento.Database);
         MostrarVarredura(varredura, manter);
+        MostrarInversores();
         if (problema is not null) Avisar(problema, erro: true);
     }
 
