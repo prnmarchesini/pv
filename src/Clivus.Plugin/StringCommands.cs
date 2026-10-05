@@ -378,6 +378,43 @@ public static class StringCommands
         }
     }
 
+#if DEBUG
+    /// <summary>
+    /// CLIVUS_STRING_PRENDER_TESTE_AUTO (só no build de teste): o letreiro de
+    /// uma mesa; a primeira string dela (pelo GUID) passa a apontar para um
+    /// inversor de mentira, como a alocação da etapa 14 fará. Imprime o GUID.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoStringPrenderTesteAutomatico)]
+    public static void PrenderTeste()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+        var rotulo = editor.GetString(new PromptStringOptions("\nMesa: "));
+        if (rotulo.Status != PromptStatus.OK) return;
+
+        using var transacao = documento.Database.TransactionManager.StartTransaction();
+        var mesa = LayoutScan.Tables(transacao, documento.Database).Values.FirstOrDefault(m => m.Identity?.Label == rotulo.StringResult);
+        var modulos = mesa is null ? [] : mesa.Modules
+            .Select(id => transacao.GetObject(id, Autodesk.AutoCAD.DatabaseServices.OpenMode.ForRead) as Autodesk.AutoCAD.DatabaseServices.Entity)
+            .Select(e => e is null ? null : LayoutXData.LoadModule(e)?.Id)
+            .OfType<Guid>().ToHashSet();
+
+        var alvo = ElectricalStore.Strings(transacao, documento.Database).Where(x => x.String.Modules.Any(modulos.Contains)).OrderBy(x => x.String.Id).FirstOrDefault();
+        if (alvo.String is null)
+        {
+            editor.WriteMessage($"\nSTRING_PRESA nenhuma string em {rotulo.StringResult}\n");
+            return;
+        }
+
+        var entidade = (Autodesk.AutoCAD.DatabaseServices.Entity)transacao.GetObject(alvo.Id, Autodesk.AutoCAD.DatabaseServices.OpenMode.ForWrite);
+        ElectricalStore.SaveString(transacao, entidade, alvo.String with { Inverter = Guid.NewGuid() });
+        transacao.Commit();
+        editor.WriteMessage($"\nSTRING_PRESA {rotulo.StringResult} {alvo.String.Id:D}\n");
+    }
+#endif
+
     /// <summary>Para o nível 2: cada string do tipo, com o + e o − e o texto do traçado.</summary>
     private static void ImprimirTracado(Editor editor, StringType tipo)
     {

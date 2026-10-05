@@ -208,3 +208,18 @@ public static class StringGeneration
         return lista;
     }
 }
+
+/// <summary>
+/// O sinal (+ ou −) desenhado na ponta de uma string (11.7): o GUID da
+/// string e qual ponta. Regerar a string leva os sinais dela junto.
+/// </summary>
+public sealed record StringSign(Guid String, bool Positive)
+{
+    public const string Tipo = "SinalString";
+    public const int FieldCount = 2;
+
+    public IReadOnlyList<string> ToFields() => [String.ToString("D"), Positive ? "+" : "-"];
+
+    public static StringSign? Parse(IReadOnlyList<string> c) =>
+        c.Count >= FieldCount && Guid.TryParse(c[0], out var s) && s != Guid.Empty && (c[1] == "+" || c[1] == "-") ? new StringSign(s, c[1] == "+") : null;
+}
