@@ -13,7 +13,8 @@ usos no mesmo commit.
 | modelo de inversor | dicionário, `INVERSOR_MODELOS` | `InverterModel`, `ElectricalStore.InverterModels/Save...` |
 | inversor | dicionário, `INVERSORES` | `Inverter` |
 | transformador | dicionário, `TRAFOS` | `Transformer` |
-| subestação (UC) | dicionário, `SUBESTACOES` | `ConsumerUnit` |
+| subestação (UC) | dicionário, `SUBESTACOES` (formato 2 desde 05/10/2026; o 1 continua sendo lido) | `ConsumerUnit` |
+| bloco físico da subestação compartilhada (o cubículo) | dicionário, `SUBESTACOES_BLOCOS` | `Substation` (Core, `Electrical.cs`), `ElectricalStore.Substations/SaveSubstations` |
 | nome do skid (14.7), um por trafo | dicionário, `SKIDS` | `Skid` (Core, `ElectricalSetup.cs`), `ElectricalStore.Skids/SaveSkids` |
 | retângulo de equipamento em campo | XData (tipo `Equipamento`) da entidade, camada `CLIVUS_EQUIPAMENTO` | `EquipmentPlacement`, `ElectricalStore.SavePlacement/LoadPlacement` |
 
@@ -26,12 +27,42 @@ usos no mesmo commit.
 - inversor → trafo: `Inverter.Transformer` (o skid, 14.7; vazio = sem skid).
   O registro `Skid` guarda só o nome do grupo; quem diz que inversores
   são do skid é este campo.
-- trafo → subestação: `Transformer.ConsumerUnit` (vazio = sem UC).
+- trafo → subestação: `Transformer.ConsumerUnit` (vazio = sem UC). Muda pela
+  aba Subestação (`LinkTransformer`/`UnlinkTransformer`) ou pelo formulário do
+  trafo (`SaveTransformer`, campos e UC tudo ou nada); a trava é a mesma nos
+  dois (trafo de outra UC fica travado até ser solto; a unitária tem um trafo só).
+- UC compartilhada → bloco: `ConsumerUnit.Substation` (o GUID do `Substation`).
+  A usina tem um bloco compartilhado (`EnsureSharedSubstation`), com as UCs
+  C1, C2... dentro, cada uma com nome e um ou mais trafos. A unitária é UC e
+  bloco ao mesmo tempo: `Substation` vazio, a dimensão é dela.
 - o tipo da string: `ElectricalString.Type` (o `StringType.Id` que a gerou;
   vazio nas strings de teste).
 - a tag da string: `ElectricalString.Tag` (vazia até a numeração, etapa 15).
 
 Nenhum vínculo é derivado de posição no desenho.
+
+## A subestação física (05/10/2026)
+
+- O que vai para o campo é a subestação física: a unitária (o GUID da UC) ou o
+  bloco compartilhado (o GUID do `Substation`). Os dois usam
+  `EquipmentKind.ConsumerUnit` no `EquipmentPlacement`; o GUID diz qual é. A UC
+  compartilhada não vai para o campo. `CLIVUS_ELETRICA_POSICIONAR C1` põe o
+  bloco onde a C1 está (código ou nome da UC achando o bloco).
+- `SUBESTACOES` formato 2: 8 campos por UC (os 7 de antes e o GUID do bloco,
+  vazio na unitária). O formato 1 (7 campos) é lido pela versão do cabeçalho
+  (`RecordTable.VersionOf`); grava-se sempre o 2.
+- Desenho antigo: a compartilhada sem bloco (ou com bloco que sumiu) cai, na
+  leitura (`ElectricalSetup`), no bloco que existe ou num "Subestação
+  compartilhada" criado com o tamanho da primeira delas e GUID derivado dela
+  (ler de novo antes de gravar dá o mesmo GUID). `MigratedUnits` conta quantas;
+  a próxima gravação leva o bloco para o desenho. Retângulo antigo de UC
+  compartilhada fica no desenho como sobra: a aba Subestação avisa, e "Apagar
+  UC" o leva junto.
+- Apagar o bloco (`RemoveSubstation`) leva as UCs dele e solta os trafos delas;
+  os trafos ficam.
+- Resumo: `ElectricalSummary.Build(..., substations)` põe o bloco
+  (`SummaryRowKind.Substation`) com as UCs dele um nível para dentro; a
+  unitária fica como antes.
 
 ## Para testar sem o traçado de verdade
 

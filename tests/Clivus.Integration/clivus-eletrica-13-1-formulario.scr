@@ -1,0 +1,23 @@
+; Nivel 2 da reprovacao de 05/10/2026 (trafo "voltava a 0"): o formulario do
+; trafo pelo MESMO caminho de conversao da janela (TransformerForm.Read e
+; SaveTransformer), com os numeros como o Renan digita, e a UC do trafo.
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_ELETRICA_AUTO" "Trafo" "0")
+(command "CLIVUS_ELETRICA_AUTO" "Trafo" "2")
+(command "CLIVUS_ELETRICA_AUTO" "Uc" "Unitarias" "1")
+(command "CLIVUS_ELETRICA_AUTO" "Uc" "Compartilhada")
+(princ "\nCLIVUS_FORM_PADRAO")
+(command "CLIVUS_ELETRICA_AUTO" "Listar")
+(command "CLIVUS_ELETRICA_AUTO" "Formulario" "T1" "Trafo seco" "T1" "800" "13.800" "2500" "4" "6,5" "-" "3" "2,5" "2,5" "U1")
+(command "CLIVUS_ELETRICA_AUTO" "Formulario" "T2" "Trafo 2" "T2" "0,8 kV" "13800" "2.500" "1" "6" "-" "3" "2,5" "2,5" "U1")
+(command "CLIVUS_ELETRICA_AUTO" "Formulario" "T2" "Trafo 2" "T2" "800" "13800" "3.150" "1" "7,5 %" "-" "3,2" "2,6" "2,6" "C1")
+(command "CLIVUS_ELETRICA_AUTO" "Formulario" "T1" "Trafo seco" "T1" "800" "abc" "2500" "4" "6,5" "-" "3" "2,5" "2,5" "U1")
+(command "CLIVUS_ELETRICA_AUTO" "Formulario" "T1" "Trafo seco" "T1" "800" "13800" "2500" "4" "6,5" "-" "3" "2,5" "2,5" "C1")
+(princ "\nCLIVUS_FORM_FINAL")
+(command "CLIVUS_ELETRICA_AUTO" "Listar")
+(princ "\nCLIVUS_ELETRICA_FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

@@ -188,6 +188,32 @@ internal abstract class AbaEletrica : DockPanel
         }
     }
 
+    /// <summary>
+    /// O Salvar de um formulário: como <see cref="Fazer"/>, mas só relê a
+    /// janela se a operação devolveu a frase (gravou). Recusado (null), nada é
+    /// relido e o que foi digitado fica na tela para corrigir; antes a releitura
+    /// trocava o digitado pelo gravado (reprovação de 05/10/2026: o trafo
+    /// "voltava a 0"). Se gravou.
+    /// </summary>
+    protected bool Gravar(Func<string?> operacao)
+    {
+        try
+        {
+            var frase = EscritaForaDeComando.Fazer(Documento, operacao);
+            if (frase is null) return false;
+
+            (AoMudar ?? Atualizar)();
+            Avisar(frase);
+            return true;
+        }
+        catch (Exception falha)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao gravar na janela da configuração elétrica.", falha);
+            Avisar(Tr.F("Não consegui: {0}", falha.Message), erro: true);
+            return false;
+        }
+    }
+
     /// <summary>A linha da lista com " — em campo" quando o retângulo do equipamento já está no desenho.</summary>
     protected static string ComCampo(string linha, bool emCampo) => emCampo ? Tr.F("{0} — em campo", linha) : linha;
 
@@ -226,6 +252,23 @@ internal abstract class AbaEletrica : DockPanel
 
         var texto = new TextBlock { Text = rotulo, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 4), ToolTip = dica };
         var caixa = new TextBox { Height = 24, Margin = new Thickness(0, 0, 0, 4), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = dica };
+
+        Grid.SetRow(texto, linha);
+        Grid.SetRow(caixa, linha);
+        Grid.SetColumn(caixa, 1);
+        grade.Children.Add(texto);
+        grade.Children.Add(caixa);
+        return caixa;
+    }
+
+    /// <summary>Uma linha "rótulo | lista de escolha" na grade do formulário.</summary>
+    protected static ComboBox Escolha(Grid grade, string rotulo, string? dica = null)
+    {
+        var linha = grade.RowDefinitions.Count;
+        grade.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var texto = new TextBlock { Text = rotulo, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 4), ToolTip = dica };
+        var caixa = new ComboBox { Height = 24, Margin = new Thickness(0, 0, 0, 4), VerticalContentAlignment = VerticalAlignment.Center, ToolTip = dica };
 
         Grid.SetRow(texto, linha);
         Grid.SetRow(caixa, linha);

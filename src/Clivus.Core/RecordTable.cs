@@ -180,6 +180,18 @@ public static class RecordTable
         return new RecordTableResult<T>(itens, null);
     }
 
+    /// <summary>
+    /// A versão gravada no cabeçalho, ou null se não há tabela ou o cabeçalho
+    /// não é o nosso. Serve a quem lê mais de um formato (a subestação, que
+    /// ganhou o bloco físico em 05/10/2026): escolhe o leitor antes de ler.
+    /// </summary>
+    public static int? VersionOf(IReadOnlyList<string>? texto) =>
+        texto is { Count: >= CamposDoCabecalho }
+        && Campo(texto, 0) == CampoVersao
+        && int.TryParse(Campo(texto, 1), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var v)
+            ? v
+            : null;
+
     private static RecordTableResult<T> Perdido<T>(string motivo, IReadOnlyList<T>? itens = null) =>
         new(itens ?? [], motivo);
 

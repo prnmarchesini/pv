@@ -195,34 +195,76 @@ public enum ConsumerUnitMode
 }
 
 /// <summary>
-/// Uma unidade consumidora / subestação (elétrica, 12.1–12.3): código (C1),
-/// nome, modo e dimensão do bloquinho em campo. Os trafos dela são os que
-/// apontam para ela (<see cref="Transformer.ConsumerUnit"/>).
+/// Uma unidade consumidora (elétrica, 12.1–12.3): código (C1, U1), nome e
+/// modo. A unitária é ao mesmo tempo a UC e o bloquinho físico (tem a
+/// dimensão e vai para o campo). A compartilhada é uma medição dentro do
+/// bloco físico <see cref="Substation"/> (o GUID do <see cref="Clivus.Core.Substation"/>);
+/// a dimensão dela fica gravada mas não vale nada (quem vai para o campo é o
+/// bloco). Os trafos dela são os que apontam para ela
+/// (<see cref="Transformer.ConsumerUnit"/>).
 /// </summary>
-public sealed record ConsumerUnit(Guid Id, string Code, string Name, ConsumerUnitMode Mode, EquipmentSize Size)
+/// <remarks>
+/// Formato 2 (05/10/2026): 8 campos, o último é o bloco. O formato 1 (7
+/// campos, sem bloco) continua sendo lido: a compartilhada sem bloco é posta
+/// num bloco na leitura (<see cref="ElectricalSetup"/>).
+/// </remarks>
+public sealed record ConsumerUnit(Guid Id, string Code, string Name, ConsumerUnitMode Mode, EquipmentSize Size, Guid Substation = default)
 {
-    public const int FieldCount = 7;
+    public const int FieldCount = 8;
+
+    /// <summary>Os campos do formato 1 (antes do bloco físico).</summary>
+    public const int LegacyFieldCount = 7;
 
     public bool IsValid => Id != Guid.Empty && !string.IsNullOrWhiteSpace(Code) && Size.IsValid;
 
     public IReadOnlyList<string> ToFields() =>
-        [Id.ToString("D"), Code, Name ?? string.Empty, Mode == ConsumerUnitMode.Shared ? "C" : "U", .. Size.Fields()];
+    [
+        Id.ToString("D"), Code, Name ?? string.Empty, Mode == ConsumerUnitMode.Shared ? "C" : "U", .. Size.Fields(),
+        Mode == ConsumerUnitMode.Shared && Substation != Guid.Empty ? Substation.ToString("D") : string.Empty,
+    ];
 
+    /// <summary>Lê o formato 2 (8 campos) ou o 1 (7 campos, sem bloco). A unitária nunca tem bloco.</summary>
     public static ConsumerUnit? Parse(IReadOnlyList<string> c)
     {
-        if (c.Count < FieldCount || !Guid.TryParse(c[0], out var id)) return null;
+        if (c.Count < LegacyFieldCount || !Guid.TryParse(c[0], out var id)) return null;
 
         ConsumerUnitMode? modo = c[3] switch { "C" => ConsumerUnitMode.Shared, "U" => ConsumerUnitMode.Unitary, _ => null };
         if (modo is null || EquipmentSize.Parse(c, 4) is not { } tamanho) return null;
 
-        var u = new ConsumerUnit(id, c[1], c[2], modo.Value, tamanho);
+        var bloco = Guid.Empty;
+        if (c.Count >= FieldCount && !ElectricalString.OptionalGuid(c[7], out bloco)) return null;
+        if (modo == ConsumerUnitMode.Unitary) bloco = Guid.Empty;
+
+        var u = new ConsumerUnit(id, c[1], c[2], modo.Value, tamanho, bloco);
         return u.IsValid ? u : null;
     }
+}
+
+/// <summary>
+/// O bloco físico da subestação compartilhada (elétrica, 12.1 e 12.3): um
+/// cubículo só em campo, com nome e dimensão, que abriga várias UCs (C1,
+/// C2...; cada uma aponta para ele em <see cref="ConsumerUnit.Substation"/>).
+/// A unitária não usa este registro: ela é o próprio bloco.
+/// </summary>
+public sealed record Substation(Guid Id, string Name, EquipmentSize Size)
+{
+    public const int FieldCount = 5;
+
+    public bool IsValid => Id != Guid.Empty && !string.IsNullOrWhiteSpace(Name) && Size.IsValid;
+
+    public IReadOnlyList<string> ToFields() => [Id.ToString("D"), Name, .. Size.Fields()];
+
+    public static Substation? Parse(IReadOnlyList<string> c) =>
+        c.Count >= FieldCount && Guid.TryParse(c[0], out var id) && EquipmentSize.Parse(c, 2) is { } tamanho
+            && new Substation(id, c[1], tamanho) is { IsValid: true } s
+            ? s
+            : null;
 }
 
 /// <summary>O tipo de equipamento desenhado em campo (o retângulo com a tag).</summary>
 public enum EquipmentKind
 {
+    /// <summary>A subestação física: a unitária (o GUID da UC) ou o bloco compartilhado (o GUID do <see cref="Substation"/>).</summary>
     ConsumerUnit,
     Transformer,
     Inverter,

@@ -148,7 +148,8 @@
   (write-line (strcat "INV " (nth 0 i) " " (clivus:sem-espaco (nth 3 i)) " " (clivus:sem-espaco (nth 2 i))) clivus:arq))
 (foreach clivus:tr (clivus:itens "TRAFOS" 13)
   (write-line (strcat "TRAFO " (nth 0 clivus:tr) " " (clivus:sem-espaco (nth 12 clivus:tr)) " " (clivus:sem-espaco (nth 2 clivus:tr))) clivus:arq))
-(foreach u (clivus:itens "SUBESTACOES" 7)
+; SUBESTACOES: 7 campos por UC no formato 1, 8 no 2 (o bloco fisico, 05/10/2026).
+(foreach u (clivus:itens "SUBESTACOES" (if (= (nth 1 (clivus:registro "SUBESTACOES")) "1") 7 8))
   (write-line (strcat "UC " (nth 0 u) " " (clivus:sem-espaco (nth 1 u))) clivus:arq))
 ; Mesas (GUID, letreiro, perfil, watts) e a mesa dona de cada modulo.
 (setq clivus:ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) clivus:i 0 clivus:mesas nil clivus:xds nil)
