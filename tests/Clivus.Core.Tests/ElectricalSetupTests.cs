@@ -347,4 +347,60 @@ public class ElectricalSetupTests
         Assert.Equal(t1.Id, setup.FindEquipment("tr-a").Single().Id);
         Assert.Empty(setup.FindEquipment("T1"));
     }
+
+    // ------------------------------------------------------------ 14.1
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void ModeloNovoEGenericoEOTotalDeEntradasEDerivado()
+    {
+        var setup = new ElectricalSetup();
+
+        var generico = setup.AddModel();
+        var huawei = setup.AddModel();
+        Assert.Null(setup.EditModel(huawei with { Name = "Huawei 250", Mppts = 5, InputsPerMppt = 4 }));
+
+        Assert.Equal("Modelo de inversor 1", generico.Name);
+        Assert.Equal(1, generico.TotalInputs);
+        Assert.True(generico.IsValid);
+        var lido = setup.FindModel(huawei.Id)!;
+        Assert.Equal("Huawei 250", lido.Name);
+        Assert.Equal(20, lido.TotalInputs);
+        Assert.Equal(lido, InverterModel.Parse(lido.ToFields()));
+        Assert.Equal("Modelo de inversor 2", setup.AddModel().Name);   // "Huawei 250" não entra na sequência
+    }
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void ModeloRecusaNomeRepetidoZeroEntradaEMedidaZero()
+    {
+        var setup = new ElectricalSetup();
+        var a = setup.AddModel();
+        var b = setup.AddModel();
+        setup.EditModel(a with { Name = "Huawei 250" });
+
+        Assert.NotNull(setup.EditModel(b with { Name = "huawei 250" }));
+        Assert.NotNull(setup.EditModel(b with { Name = " " }));
+        Assert.NotNull(setup.EditModel(b with { Mppts = 0 }));
+        Assert.NotNull(setup.EditModel(b with { InputsPerMppt = -1 }));
+        Assert.NotNull(setup.EditModel(b with { Mppts = ElectricalDefaults.MaxMppts + 1 }));
+        Assert.NotNull(setup.EditModel(b with { Size = new EquipmentSize(1, 1, 0) }));
+        Assert.NotNull(setup.EditModel(b with { Id = Guid.NewGuid() }));
+        Assert.Equal(b, setup.FindModel(b.Id));
+    }
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void ModeloComInversorNaoSaiDoCadastro()
+    {
+        var modelo = new InverterModel(Guid.NewGuid(), "Huawei 250", 5, 4, ElectricalDefaults.InverterSize);
+        var livre = new InverterModel(Guid.NewGuid(), "Sungrow", 6, 2, ElectricalDefaults.InverterSize);
+        var inversor = new Inverter(Guid.NewGuid(), modelo.Id, "Inversor 1", Guid.Empty);
+        var setup = new ElectricalSetup(inverters: [inversor], models: [modelo, livre]);
+
+        Assert.NotNull(setup.RemoveModel(modelo.Id));
+        Assert.Null(setup.RemoveModel(livre.Id));
+        Assert.NotNull(setup.RemoveModel(livre.Id));
+        Assert.Equal(["Huawei 250"], setup.Models.Select(m => m.Name));
+    }
 }

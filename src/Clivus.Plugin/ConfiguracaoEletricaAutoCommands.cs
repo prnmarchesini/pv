@@ -22,7 +22,7 @@ public static class ConfiguracaoEletricaAutoCommands
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Listar"];
+    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Listar"];
 
 #if DEBUG
     [CommandMethod(PluginInfo.ComandoEletricaAutomatico)]
@@ -50,6 +50,7 @@ public static class ConfiguracaoEletricaAutoCommands
                 "Uc" => NovaUc(editor, database),
                 "Vincular" => Vincular(editor, database),
                 "Soltar" => SoltarTrafo(editor, database),
+                "Modelo" => NovoModelo(editor, database),
                 _ => string.Empty,
             };
 
@@ -143,6 +144,24 @@ public static class ConfiguracaoEletricaAutoCommands
         return $"{apelido} solto={soltou}";
     }
 
+    /// <summary>Modelo &lt;nome&gt; &lt;MPPT&gt; &lt;entradas por MPPT&gt;: cria e grava como o Salvar da janela.</summary>
+    private static string? NovoModelo(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nNome do modelo: ") is not { } nome) return null;
+        if (Inteiro(editor, "\nMPPT: ") is not { } mppt) return null;
+        if (Inteiro(editor, "\nEntradas por MPPT: ") is not { } entradas) return null;
+
+        var porque = ConfiguracaoEletricaStore.Mudar(database, s =>
+        {
+            var m = s.AddModel();
+            var p = s.EditModel(m with { Name = nome, Mppts = mppt, InputsPerMppt = entradas });
+            if (p is not null) s.RemoveModel(m.Id);
+            return p;
+        });
+
+        return porque is null ? $"modelo {nome} criado" : $"recusado: {porque}";
+    }
+
     private static Transformer? Trafo(ElectricalSetup s, string apelido) => s.Transformers.FirstOrDefault(t => ElectricalSetup.SameName(t.Nickname, apelido));
 
     private static ConsumerUnit? Uc(ElectricalSetup s, string codigo) => s.Units.FirstOrDefault(u => ElectricalSetup.SameName(u.Code, codigo));
@@ -159,6 +178,10 @@ public static class ConfiguracaoEletricaAutoCommands
         editor.WriteMessage($"\nELETRICA {setup.Units.Count} subestacao(oes)\n");
         foreach (var u in setup.Units)
             editor.WriteMessage($"ELETRICA UC {u.Code} modo={u.Mode} nome=\"{u.Name}\" tamanho={Tam(u.Size)} trafos={string.Join(",", setup.TransformersOf(u.Id).Select(t => t.Nickname))}\n");
+
+        editor.WriteMessage($"ELETRICA {setup.Models.Count} modelo(s)\n");
+        foreach (var m in setup.Models)
+            editor.WriteMessage($"ELETRICA MODELO nome=\"{m.Name}\" mppt={m.Mppts} entradas={m.InputsPerMppt} total={m.TotalInputs} tamanho={Tam(m.Size)}\n");
 
         editor.WriteMessage($"ELETRICA {setup.Transformers.Count} trafo(s)\n");
         foreach (var t in setup.Transformers)

@@ -16,16 +16,18 @@ internal static class ConfiguracaoEletricaStore
         var ucs = ElectricalStore.ConsumerUnits(database);
         var trafos = ElectricalStore.Transformers(database);
         var inversores = ElectricalStore.Inverters(database);
+        var modelos = ElectricalStore.InverterModels(database);
 
-        var problemas = new[] { ucs.Problem, trafos.Problem, inversores.Problem }.Where(p => p is not null).ToList();
+        var problemas = new[] { ucs.Problem, trafos.Problem, modelos.Problem, inversores.Problem }.Where(p => p is not null).ToList();
 
-        return (new ElectricalSetup(trafos.Items, inversores.Items, ucs.Items), problemas.Count == 0 ? null : string.Join("; ", problemas));
+        return (new ElectricalSetup(trafos.Items, inversores.Items, ucs.Items, modelos.Items), problemas.Count == 0 ? null : string.Join("; ", problemas));
     }
 
     internal static void Gravar(Database database, ElectricalSetup setup)
     {
         ElectricalStore.SaveConsumerUnits(database, setup.Units);
         ElectricalStore.SaveTransformers(database, setup.Transformers);
+        ElectricalStore.SaveInverterModels(database, setup.Models);
         ElectricalStore.SaveInverters(database, setup.Inverters);
     }
 

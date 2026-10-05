@@ -23,6 +23,11 @@ public static class ElectricalDefaults
     /// <summary>Quantos equipamentos (subestações unitárias, inversores) se cria de uma vez, no máximo.</summary>
     public const int MaxAtOnce = 500;
 
+    /// <summary>Limites do modelo de inversor (14.1): folgados, só barram número sem sentido.</summary>
+    public const int MaxMppts = 100;
+
+    public const int MaxInputsPerMppt = 100;
+
     public static EquipmentSize TransformerSize { get; } = new(3.0, 2.5, 2.5);
 
     public static EquipmentSize ConsumerUnitSize { get; } = new(4.0, 3.0, 3.0);
@@ -63,16 +68,23 @@ public sealed class ElectricalSetup
     private readonly List<ConsumerUnit> _ucs;
     private readonly List<Transformer> _trafos;
     private readonly List<Inverter> _inversores;
+    private readonly List<InverterModel> _modelos;
 
     public ElectricalSetup(
         IEnumerable<Transformer>? transformers = null,
         IEnumerable<Inverter>? inverters = null,
-        IEnumerable<ConsumerUnit>? units = null)
+        IEnumerable<ConsumerUnit>? units = null,
+        IEnumerable<InverterModel>? models = null)
     {
         _trafos = transformers?.ToList() ?? [];
         _inversores = inverters?.ToList() ?? [];
         _ucs = units?.ToList() ?? [];
+        _modelos = models?.ToList() ?? [];
     }
+
+    public IReadOnlyList<InverterModel> Models => _modelos;
+
+    public InverterModel? FindModel(Guid id) => _modelos.FirstOrDefault(m => m.Id == id);
 
     public IReadOnlyList<ConsumerUnit> Units => _ucs;
 
@@ -116,7 +128,7 @@ public sealed class ElectricalSetup
             || (e.Kind == EquipmentKind.ConsumerUnit && SameName(FindUnit(e.Id)!.Code, texto))).ToList();
     }
 
-    /// <summary>Todos os equipamentos do cadastro, subestações, trafos e inversores, nessa ordem.</summary>
+    /// <summary>Todos os equipamentos do cadastro que vão para o campo, subestações e trafos, nessa ordem.</summary>
     public IEnumerable<EquipmentInfo> Equipment() =>
         _ucs.Select(u => FindEquipment(EquipmentKind.ConsumerUnit, u.Id)!)
             .Concat(_trafos.Select(t => FindEquipment(EquipmentKind.Transformer, t.Id)!));
@@ -302,6 +314,58 @@ public sealed class ElectricalSetup
         }
 
         return soltos;
+    }
+
+    // ------------------------------------------------- modelos de inversor
+
+    /// <summary>
+    /// Cria o próximo modelo ("Modelo de inversor 1, 2..."), genérico: 1 MPPT
+    /// com 1 entrada e o tamanho padrão, para o projetista ajustar (14.1).
+    /// </summary>
+    public InverterModel AddModel()
+    {
+        var n = NextNumber(_modelos.Select(m => m.Name), Tr.F("Modelo de inversor {0}", string.Empty));
+        var modelo = new InverterModel(Guid.NewGuid(), Tr.F("Modelo de inversor {0}", n), 1, 1, ElectricalDefaults.InverterSize);
+        _modelos.Add(modelo);
+        return modelo;
+    }
+
+    /// <summary>
+    /// Troca nome, MPPT, entradas por MPPT e dimensão (o total é derivado).
+    /// Null se deu certo, o porquê se não.
+    /// </summary>
+    public string? EditModel(InverterModel edited)
+    {
+        ArgumentNullException.ThrowIfNull(edited);
+
+        var posicao = _modelos.FindIndex(m => m.Id == edited.Id);
+        if (posicao < 0) return Tr.T("esse modelo de inversor não está mais no cadastro");
+
+        var nome = edited.Name?.Trim() ?? string.Empty;
+        if (nome.Length == 0) return Tr.T("o nome não pode ficar vazio");
+        if (nome.Length > ElectricalDefaults.MaxNameLength) return Tr.F("o nome tem no máximo {0} caracteres", ElectricalDefaults.MaxNameLength);
+        if (_modelos.Any(m => m.Id != edited.Id && SameName(m.Name, nome))) return Tr.F("já existe um modelo de inversor chamado \"{0}\"", nome);
+        if (edited.Mppts is < 1 or > ElectricalDefaults.MaxMppts || edited.InputsPerMppt is < 1 or > ElectricalDefaults.MaxInputsPerMppt)
+            return Tr.F("MPPT de 1 a {0} e entradas por MPPT de 1 a {1}", ElectricalDefaults.MaxMppts, ElectricalDefaults.MaxInputsPerMppt);
+        if (!edited.Size.IsValid) return Tr.T("largura, comprimento e altura têm que ser maiores que zero");
+
+        _modelos[posicao] = edited with { Name = nome };
+        return null;
+    }
+
+    /// <summary>
+    /// Tira o modelo do cadastro, se nenhum inversor é dele (o inversor
+    /// precisa do modelo). Null se tirou, o porquê se não.
+    /// </summary>
+    public string? RemoveModel(Guid id)
+    {
+        if (FindModel(id) is null) return Tr.T("esse modelo de inversor não está mais no cadastro");
+
+        var usam = _inversores.Count(i => i.Model == id);
+        if (usam > 0) return Tr.F("{0} inversor(es) são deste modelo; apague-os antes", usam);
+
+        _modelos.RemoveAll(m => m.Id == id);
+        return null;
     }
 
     // ----------------------------------------------------------- comuns

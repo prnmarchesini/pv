@@ -42,6 +42,7 @@ internal sealed class JanelaEletrica : Window
 
         Aba(Tr.T("Subestação"), Tr.T("As subestações (unidades consumidoras), os trafos de cada uma e a posição em campo."), new AbaSubestacao(documento));
         Aba(Tr.T("Transformador"), Tr.T("Os trafos: cadastro livre ou a partir de um padrão, apelido (tag) e posição em campo."), new AbaTransformador(documento));
+        Aba(Tr.T("Inversor"), Tr.T("Os modelos de inversor, os inversores da usina, as strings de cada um, a posição em campo e o skid."), new AbaInversor(documento));
         Aba(Tr.T("Numeração"), Tr.T("A numeração das strings (tags)."), PainelDeNumeracao.Criar(documento));
 
         // Trocar de aba relê o desenho (o usuário pode ter mexido no CAD).
