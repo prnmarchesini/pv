@@ -37,6 +37,16 @@ public sealed record UnitSummary(ConsumerUnit Unit, IReadOnlyList<TransformerSum
     public double PowerKwp => Transformers.Sum(t => t.PowerKwp);
 }
 
+/// <summary>O bloco da subestação compartilhada no resumo, com as UCs dele.</summary>
+public sealed record SubstationSummary(Substation Substation, IReadOnlyList<UnitSummary> Units)
+{
+    public int Strings => Units.Sum(u => u.Strings);
+
+    public int Modules => Units.Sum(u => u.Modules);
+
+    public double PowerKwp => Units.Sum(u => u.PowerKwp);
+}
+
 /// <summary>O tipo de uma linha da tabela do resumo.</summary>
 public enum SummaryRowKind
 {
@@ -51,10 +61,13 @@ public enum SummaryRowKind
     Free,
 
     Total,
+
+    /// <summary>O bloco da subestação compartilhada (as UCs dele vêm logo abaixo, um nível para dentro).</summary>
+    Substation,
 }
 
 /// <summary>Uma linha da tabela do resumo (a mesma na janela e na linha de comando).</summary>
-/// <param name="Level">A indentação: 0 subestação ou grupo, 1 trafo, 2 inversor.</param>
+/// <param name="Level">A indentação: 0 subestação ou grupo, 1 trafo, 2 inversor (um a mais dentro do bloco compartilhado).</param>
 /// <param name="Warning">Linha que precisa de atenção (excesso de capacidade, elo quebrado).</param>
 public sealed record SummaryRow(SummaryRowKind Kind, int Level, string Name, string Detail, int Strings, int Modules, double PowerKwp, string Note, bool Warning);
 
@@ -88,7 +101,8 @@ public sealed record SystemSummary(
     int AllocatedWithoutTag,
     int DuplicateStrings = 0,
     int ModulesInMoreThanOneString = 0,
-    int ModulesWithoutTable = 0)
+    int ModulesWithoutTable = 0,
+    IReadOnlyList<SubstationSummary>? Substations = null)
 {
     /// <summary>Todos os inversores, na ordem da árvore.</summary>
     public IEnumerable<InverterSummary> AllInverters =>
@@ -121,11 +135,22 @@ public sealed record SystemSummary(
             foreach (var i in t.Inverters) Inversor(i, nivel + 1);
         }
 
-        foreach (var u in Units)
+        void Uc(UnitSummary u, int nivel)
         {
-            linhas.Add(new SummaryRow(SummaryRowKind.Unit, 0, u.Unit.Code, u.Unit.Name, u.Strings, u.Modules, u.PowerKwp, Tr.F("{0} trafo(s)", u.Transformers.Count), false));
-            foreach (var t in u.Transformers) Trafo(t, 1);
+            linhas.Add(new SummaryRow(SummaryRowKind.Unit, nivel, u.Unit.Code, u.Unit.Name, u.Strings, u.Modules, u.PowerKwp, Tr.F("{0} trafo(s)", u.Transformers.Count), false));
+            foreach (var t in u.Transformers) Trafo(t, nivel + 1);
         }
+
+        // O bloco compartilhado com as UCs dele; depois as UCs fora de bloco (as unitárias).
+        var blocos = Substations ?? [];
+        foreach (var b in blocos)
+        {
+            linhas.Add(new SummaryRow(SummaryRowKind.Substation, 0, b.Substation.Name, Tr.T("subestação compartilhada"), b.Strings, b.Modules, b.PowerKwp, Tr.F("{0} UC(s)", b.Units.Count), false));
+            foreach (var u in b.Units) Uc(u, 1);
+        }
+
+        var dentro = blocos.SelectMany(b => b.Units).Select(u => u.Unit.Id).ToHashSet();
+        foreach (var u in Units.Where(u => !dentro.Contains(u.Unit.Id))) Uc(u, 0);
 
         if (TransformersWithoutUnit.Count > 0)
         {
@@ -210,6 +235,7 @@ public static class ElectricalSummary
     /// <param name="fallbackWatts">A potência do perfil atual para as mesas sem potência gravada, ou null (esses módulos ficam fora do kWp, contados).</param>
     /// <param name="modulesWithoutTable">Módulos que estão no desenho mas cuja mesa dona não foi achada (sem potência; contados à parte).</param>
     /// <remarks>Os contadores de módulo (fora do desenho, reserva, sem potência) são só das strings alocadas, as dos totais.</remarks>
+    /// <param name="substations">Os blocos da subestação compartilhada: as UCs de cada um (<see cref="ConsumerUnit.Substation"/>) aparecem dentro dele.</param>
     public static SystemSummary Build(
         IReadOnlyList<ConsumerUnit> units,
         IReadOnlyList<Transformer> transformers,
@@ -218,7 +244,8 @@ public static class ElectricalSummary
         IReadOnlyList<ElectricalString> strings,
         IReadOnlyDictionary<Guid, double?> modulePowerWatts,
         double? fallbackWatts,
-        IReadOnlySet<Guid>? modulesWithoutTable = null)
+        IReadOnlySet<Guid>? modulesWithoutTable = null,
+        IReadOnlyList<Substation>? substations = null)
     {
         ArgumentNullException.ThrowIfNull(units);
         ArgumentNullException.ThrowIfNull(transformers);
@@ -332,6 +359,11 @@ public static class ElectricalSummary
             .Select(u => new UnitSummary(u, trafosDaUc[u.Id].ToList()))
             .ToList();
 
+        var resumoDosBlocos = (substations ?? [])
+            .GroupBy(b => b.Id).Select(g => g.First())
+            .Select(b => new SubstationSummary(b, resumoDasUcs.Where(u => u.Unit.Mode == ConsumerUnitMode.Shared && u.Unit.Substation == b.Id).ToList()))
+            .ToList();
+
         var alocadas = porInversor.Values.Sum(v => v.Strings);
 
         return new SystemSummary(
@@ -358,6 +390,7 @@ public static class ElectricalSummary
             semTag,
             duplicadas,
             emDuas.Count,
-            semMesa);
+            semMesa,
+            resumoDosBlocos);
     }
 }

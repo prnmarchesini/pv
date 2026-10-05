@@ -67,6 +67,10 @@ public static class ResumoEletricoCommands
 
             string Nome(string texto) => texto.Replace(' ', '_');
 
+            foreach (var b in r.Substations ?? [])
+                editor.WriteMessage(string.Format(inv, "RESUMO_BLOCO nome={0} ucs={1} strings={2} kwp={3:0.###}\n",
+                    Nome(b.Substation.Name), string.Join(",", b.Units.Select(u => u.Unit.Code)), b.Strings, b.PowerKwp));
+
             foreach (var u in r.Units)
                 foreach (var t in u.Transformers)
                     foreach (var i in t.Inverters) Inversor(i, t.Transformer.Nickname, u.Unit.Code);
@@ -146,8 +150,13 @@ public static class ResumoEletricoCommands
             }
         }
 
-        var resumo = ElectricalSummary.Build(ucs.Items, trafos.Items, modelos.Items, inversores.Items, strings, potencia, reserva, semMesa);
-        var problemas = new[] { ucs.Problem, trafos.Problem, modelos.Problem, inversores.Problem }.OfType<string>().ToList();
+        // O bloco compartilhado com as UCs dele; desenho antigo (UC compartilhada
+        // sem bloco) passa pela mesma leitura do cadastro, que põe a UC num bloco.
+        var blocos = ElectricalStore.Substations(database);
+        var cadastro = new ElectricalSetup(units: ucs.Items, substations: blocos.Items);
+
+        var resumo = ElectricalSummary.Build(cadastro.Units, trafos.Items, modelos.Items, inversores.Items, strings, potencia, reserva, semMesa, cadastro.Substations);
+        var problemas = new[] { ucs.Problem, blocos.Problem, trafos.Problem, modelos.Problem, inversores.Problem }.OfType<string>().ToList();
         return new Lido(resumo, problemas);
     }
 }
@@ -238,7 +247,7 @@ internal sealed class JanelaDeResumoEletrico : Window
                     l.PowerKwp.ToString("0.00", Tr.Culture),
                     l.Note,
                     l.Warning,
-                    l.Kind is SummaryRowKind.Unit or SummaryRowKind.Total))
+                    l.Kind is SummaryRowKind.Substation or SummaryRowKind.Unit or SummaryRowKind.Total))
                 .ToList();
 
             _texto = r.Lines();

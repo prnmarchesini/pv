@@ -38,6 +38,23 @@ internal static class PluginRecords
         PluginDictionary.Save(database, chave, buffer);
     }
 
+    /// <summary>A versão gravada no cabeçalho do registro (null: não há registro, ou não é nosso).</summary>
+    internal static int? Version(Database database, string chave)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+
+        try
+        {
+            using var dados = PluginDictionary.Load(database, chave);
+            return RecordTable.VersionOf(dados?.AsArray().Select(campo => campo.Value as string ?? string.Empty).ToList());
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar($"Não consegui ler a versão do registro '{chave}'.", erro);
+            return null;
+        }
+    }
+
     /// <summary>Lê a lista gravada sob a chave, e diz o que encontrou de errado.</summary>
     internal static RecordTableResult<T> Load<T>(
         Database database,

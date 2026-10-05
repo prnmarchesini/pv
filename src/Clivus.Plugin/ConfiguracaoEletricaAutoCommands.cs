@@ -22,7 +22,7 @@ public static class ConfiguracaoEletricaAutoCommands
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "SoltarInversor", "EditarInversor", "Skid", "Desagrupar", "Listar", "Formulario"];
+    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "SoltarInversor", "EditarInversor", "Skid", "Desagrupar", "Listar", "Formulario", "Bloco", "EditarUc", "ApagarBloco", "UcAntiga"];
 
 #if DEBUG
     [CommandMethod(PluginInfo.ComandoEletricaAutomatico)]
@@ -58,6 +58,10 @@ public static class ConfiguracaoEletricaAutoCommands
                 "Skid" => Agrupar(editor, database),
                 "Desagrupar" => Desagrupar(editor, database),
                 "Formulario" => Formulario(editor, database),
+                "Bloco" => EditarBloco(editor, database),
+                "EditarUc" => EditarUc(editor, database),
+                "ApagarBloco" => ApagarBloco(database),
+                "UcAntiga" => UcsDoFormatoAntigo(database),
                 _ => string.Empty,
             };
 
@@ -167,6 +171,62 @@ public static class ConfiguracaoEletricaAutoCommands
 
         if (porque is null) EquipamentoEmCampo.Redesenhar(database, EquipmentKind.Transformer, id);
         return porque is null ? $"trafo {apelido} salvo pelo formulario" : $"recusado: {porque}";
+    }
+
+    /// <summary>Bloco &lt;nome&gt; &lt;largura&gt; &lt;comprimento&gt; &lt;altura&gt;: o Salvar do bloco compartilhado na janela.</summary>
+    private static string? EditarBloco(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nNome do bloco: ") is not { } nome) return null;
+        if (Texto(editor, "\nLargura: ") is not { } w || Texto(editor, "\nComprimento: ") is not { } l || Texto(editor, "\nAltura: ") is not { } h) return null;
+
+        if (!NumberInput.TryParseMeasure(w, out var largura) || !NumberInput.TryParseMeasure(l, out var comprimento) || !NumberInput.TryParseMeasure(h, out var altura))
+            return "recusado: medida";
+
+        var id = Guid.Empty;
+        var porque = ConfiguracaoEletricaStore.Mudar(database, s =>
+        {
+            if (s.Substations.FirstOrDefault() is not { } b) return "sem bloco";
+            id = b.Id;
+            return s.EditSubstation(b.Id, nome, new EquipmentSize(largura, comprimento, altura));
+        });
+
+        if (porque is null) EquipamentoEmCampo.Redesenhar(database, EquipmentKind.ConsumerUnit, id);
+        return porque is null ? "bloco editado" : $"recusado: {porque}";
+    }
+
+    /// <summary>EditarUc &lt;código&gt; &lt;nome&gt;: o "Salvar nome" da UC do bloco.</summary>
+    private static string? EditarUc(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nSubestacao (codigo): ") is not { } codigo) return null;
+        if (Texto(editor, "\nNome: ") is not { } nome) return null;
+
+        var porque = ConfiguracaoEletricaStore.Mudar(database, s => Uc(s, codigo) is not { } u ? "subestacao nao existe" : s.EditUnit(u.Id, nome, u.Size));
+        return porque is null ? $"uc {codigo} editada" : $"recusado: {porque}";
+    }
+
+    private static string? ApagarBloco(Database database)
+    {
+        var r = ConfiguracaoEletricaStore.Mudar(database, s => s.Substations.FirstOrDefault() is { } b ? s.RemoveSubstation(b.Id) : null);
+        return r is { } x ? $"bloco apagado ucs={x.Units} trafos={x.Transformers}" : "recusado: sem bloco";
+    }
+
+    /// <summary>
+    /// UcAntiga: grava as UCs no formato 1 (antes do bloco físico, 7 campos):
+    /// C1 e C2 compartilhadas e U1 unitária, sem bloco. É o desenho de antes
+    /// de 05/10/2026, para provar que ele continua sendo lido.
+    /// </summary>
+    private static string UcsDoFormatoAntigo(Database database)
+    {
+        var caixa = new EquipmentSize(5, 4, 3);
+        ConsumerUnit[] ucs =
+        [
+            new(Guid.NewGuid(), "C1", "Medicao 1", ConsumerUnitMode.Shared, caixa),
+            new(Guid.NewGuid(), "C2", "Medicao 2", ConsumerUnitMode.Shared, ElectricalDefaults.ConsumerUnitSize),
+            new(Guid.NewGuid(), "U1", "Posto", ConsumerUnitMode.Unitary, ElectricalDefaults.ConsumerUnitSize),
+        ];
+
+        PluginRecords.Save(database, "SUBESTACOES", 1, ConsumerUnit.LegacyFieldCount, ucs, u => u.ToFields().Take(ConsumerUnit.LegacyFieldCount).ToList());
+        return "ucs do formato 1 gravadas";
     }
 
     /// <summary>Vincular &lt;código da UC&gt; &lt;apelido do trafo&gt;.</summary>
@@ -308,6 +368,10 @@ public static class ConfiguracaoEletricaAutoCommands
         editor.WriteMessage($"\nELETRICA {setup.Units.Count} subestacao(oes)\n");
         foreach (var u in setup.Units)
             editor.WriteMessage($"ELETRICA UC {u.Code} modo={u.Mode} nome=\"{u.Name}\" tamanho={Tam(u.Size)} trafos={string.Join(",", setup.TransformersOf(u.Id).Select(t => t.Nickname))}\n");
+
+        editor.WriteMessage($"ELETRICA {setup.Substations.Count} bloco(s) migradas={setup.MigratedUnits} formato_ucs={PluginRecords.Version(database, "SUBESTACOES")}\n");
+        foreach (var b in setup.Substations)
+            editor.WriteMessage($"ELETRICA BLOCO nome=\"{b.Name}\" tamanho={Tam(b.Size)} ucs={string.Join(",", setup.UnitsOf(b.Id).Select(u => u.Code))} id={b.Id:D} fim\n");
 
         editor.WriteMessage($"ELETRICA {setup.Models.Count} modelo(s)\n");
         foreach (var m in setup.Models)

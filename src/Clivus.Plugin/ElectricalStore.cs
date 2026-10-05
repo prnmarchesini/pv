@@ -56,6 +56,7 @@ internal static class ElectricalStore
     private static readonly string OQueTrafos = Tr.N("de transformadores");
     private static readonly string OQueSubestacoes = Tr.N("de subestações");
     private static readonly string OQueSkids = Tr.N("de skids");
+    private static readonly string OQueBlocos = Tr.N("de blocos de subestação");
 
     internal static RecordTableResult<InverterModel> InverterModels(Database db) =>
         PluginRecords.Load<InverterModel>(db, "INVERSOR_MODELOS", 1, InverterModel.FieldCount, InverterModel.Parse, OQueModelos);
@@ -75,11 +76,28 @@ internal static class ElectricalStore
     internal static void SaveTransformers(Database db, IReadOnlyList<Transformer> itens) =>
         PluginRecords.Save(db, "TRAFOS", 1, Transformer.FieldCount, itens, i => i.ToFields());
 
+    /// <summary>
+    /// As UCs. Formato 2 (05/10/2026) tem o bloco físico da compartilhada; o
+    /// formato 1 (sem bloco) continua sendo lido, e a compartilhada dele cai
+    /// num bloco na leitura (<see cref="ElectricalSetup"/>). Grava sempre o 2.
+    /// </summary>
     internal static RecordTableResult<ConsumerUnit> ConsumerUnits(Database db) =>
-        PluginRecords.Load<ConsumerUnit>(db, "SUBESTACOES", 1, ConsumerUnit.FieldCount, ConsumerUnit.Parse, OQueSubestacoes);
+        PluginRecords.Version(db, ChaveDasUcs) == 1
+            ? PluginRecords.Load<ConsumerUnit>(db, ChaveDasUcs, 1, ConsumerUnit.LegacyFieldCount, ConsumerUnit.Parse, OQueSubestacoes)
+            : PluginRecords.Load<ConsumerUnit>(db, ChaveDasUcs, VersaoDasUcs, ConsumerUnit.FieldCount, ConsumerUnit.Parse, OQueSubestacoes);
 
     internal static void SaveConsumerUnits(Database db, IReadOnlyList<ConsumerUnit> itens) =>
-        PluginRecords.Save(db, "SUBESTACOES", 1, ConsumerUnit.FieldCount, itens, i => i.ToFields());
+        PluginRecords.Save(db, ChaveDasUcs, VersaoDasUcs, ConsumerUnit.FieldCount, itens, i => i.ToFields());
+
+    /// <summary>O bloco físico da subestação compartilhada (o cubículo com as UCs C1, C2... dentro).</summary>
+    internal static RecordTableResult<Substation> Substations(Database db) =>
+        PluginRecords.Load<Substation>(db, "SUBESTACOES_BLOCOS", 1, Substation.FieldCount, Substation.Parse, OQueBlocos);
+
+    internal static void SaveSubstations(Database db, IReadOnlyList<Substation> itens) =>
+        PluginRecords.Save(db, "SUBESTACOES_BLOCOS", 1, Substation.FieldCount, itens, i => i.ToFields());
+
+    private const string ChaveDasUcs = "SUBESTACOES";
+    private const int VersaoDasUcs = 2;
 
     /// <summary>O nome de cada skid (14.7), um por trafo; o vínculo inversor → trafo continua em <see cref="Inverter.Transformer"/>.</summary>
     internal static RecordTableResult<Skid> Skids(Database db) =>

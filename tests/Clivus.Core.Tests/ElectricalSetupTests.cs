@@ -294,11 +294,14 @@ public class ElectricalSetupTests
         var c1 = setup.AddSharedUnit();
         var u1 = setup.AddUnitaryUnits(1)[0];
         var t1 = setup.AddTransformer();
-        setup.EditUnit(c1.Id, "Medição Norte", new EquipmentSize(6, 3, 2.8));
+        var bloco = setup.Substations.Single();
+        setup.EditSubstation(bloco.Id, "Medição Norte", new EquipmentSize(6, 3, 2.8));
 
-        var uc = setup.FindEquipment(EquipmentKind.ConsumerUnit, c1.Id)!;
+        // Desde 05/10/2026 quem vai para o campo é o bloco da compartilhada, não a UC.
+        var uc = setup.FindEquipment(EquipmentKind.ConsumerUnit, bloco.Id)!;
         Assert.Equal("Medição Norte", uc.Tag);
         Assert.Equal(new EquipmentSize(6, 3, 2.8), uc.Size);
+        Assert.Null(setup.FindEquipment(EquipmentKind.ConsumerUnit, c1.Id));
         Assert.Equal("Subestação U1", setup.FindEquipment(EquipmentKind.ConsumerUnit, u1.Id)!.Tag);
         Assert.Equal("T1", setup.FindEquipment(EquipmentKind.Transformer, t1.Id)!.Tag);
         Assert.Null(setup.FindEquipment(EquipmentKind.Transformer, c1.Id));
@@ -313,9 +316,11 @@ public class ElectricalSetupTests
         var setup = new ElectricalSetup();
         var c1 = setup.AddSharedUnit();
         var t1 = setup.AddTransformer();
+        var bloco = setup.Substations.Single();
 
-        Assert.Equal(c1.Id, setup.FindEquipment("c1").Single().Id);
-        Assert.Equal(c1.Id, setup.FindEquipment(" subestação C1 ").Single().Id);
+        // O código e o nome da UC compartilhada acham o bloco físico dela.
+        Assert.Equal(bloco.Id, setup.FindEquipment("c1").Single().Id);
+        Assert.Equal(bloco.Id, setup.FindEquipment(" subestação C1 ").Single().Id);
         Assert.Equal(t1.Id, setup.FindEquipment("t1").Single().Id);
         Assert.Equal(t1.Id, setup.FindEquipment(t1.Id.ToString()).Single().Id);
         Assert.Empty(setup.FindEquipment("T9"));

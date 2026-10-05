@@ -120,7 +120,10 @@ internal sealed class AbaTransformador : AbaEletrica
         if (_lista.SelectedItem is null && _lista.Items.Count > 0) _lista.SelectedIndex = 0;
         Preencher();
 
-        if (digitado is { } d && Escolhido is { } agora && agora == antes)
+        // Só volta o que ainda difere do gravado: "13800,0" salvo como 13800 não
+        // deixa o formulário "sujo" para sempre.
+        if (digitado is { } d && Escolhido is { } agora && agora == antes
+            && (d.Uc != agora.ConsumerUnit || TransformerForm.Read(agora, d.Textos, out _) != agora))
         {
             Mostrar(d.Textos);
             EscolherUc(d.Uc);
@@ -154,7 +157,10 @@ internal sealed class AbaTransformador : AbaEletrica
         _uc.Items.Add(new ComboBoxItem { Content = Tr.T("(nenhuma)"), Tag = Guid.Empty });
         foreach (var o in _setup.UnitChoices(t.Id))
         {
-            var texto = o.Unit.Mode == ConsumerUnitMode.Unitary ? Tr.F("{0} — {1} (unitária)", o.Unit.Code, o.Unit.Name) : Tr.F("{0} — {1}", o.Unit.Code, o.Unit.Name);
+            var bloco = _setup.FindSubstation(o.Unit.Substation);
+            var texto = o.Unit.Mode == ConsumerUnitMode.Unitary ? Tr.F("{0} — {1} (unitária)", o.Unit.Code, o.Unit.Name)
+                : bloco is not null ? Tr.F("{0} — {1} (em {2})", o.Unit.Code, o.Unit.Name, bloco.Name)
+                : Tr.F("{0} — {1}", o.Unit.Code, o.Unit.Name);
             _uc.Items.Add(new ComboBoxItem { Content = texto, Tag = o.Unit.Id, IsEnabled = o.Allowed, ToolTip = o.Reason });
         }
 

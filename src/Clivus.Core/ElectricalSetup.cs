@@ -101,20 +101,69 @@ public sealed class ElectricalSetup
     private readonly List<Inverter> _inversores;
     private readonly List<InverterModel> _modelos;
     private readonly List<Skid> _skids;
+    private readonly List<Substation> _blocos;
 
+    /// <summary>
+    /// O cadastro lido. A compartilhada sem bloco (formato 1, antes de
+    /// 05/10/2026) ou com bloco que sumiu cai no bloco que existe, ou num
+    /// "Subestação compartilhada" criado aqui com GUID derivado da primeira
+    /// delas (ler de novo antes de gravar dá o mesmo bloco). Quantas foram
+    /// postas assim fica em <see cref="MigratedUnits"/>; a próxima gravação
+    /// leva o bloco para o desenho.
+    /// </summary>
     public ElectricalSetup(
         IEnumerable<Transformer>? transformers = null,
         IEnumerable<Inverter>? inverters = null,
         IEnumerable<ConsumerUnit>? units = null,
         IEnumerable<InverterModel>? models = null,
-        IEnumerable<Skid>? skids = null)
+        IEnumerable<Skid>? skids = null,
+        IEnumerable<Substation>? substations = null)
     {
         _trafos = transformers?.ToList() ?? [];
         _inversores = inverters?.ToList() ?? [];
         _ucs = units?.ToList() ?? [];
         _modelos = models?.ToList() ?? [];
         _skids = skids?.ToList() ?? [];
+        _blocos = substations?.ToList() ?? [];
+
+        for (var i = 0; i < _ucs.Count; i++)
+        {
+            var u = _ucs[i];
+            if (u.Mode == ConsumerUnitMode.Unitary && u.Substation != Guid.Empty) _ucs[i] = u with { Substation = Guid.Empty };
+            if (u.Mode != ConsumerUnitMode.Shared || FindSubstation(u.Substation) is not null) continue;
+
+            var bloco = _blocos.FirstOrDefault();
+            if (bloco is null)
+            {
+                bloco = new Substation(LegacySubstationId(u.Id), Tr.T("Subestação compartilhada"), u.Size);
+                _blocos.Add(bloco);
+            }
+
+            _ucs[i] = u with { Substation = bloco.Id };
+            MigratedUnits++;
+        }
     }
+
+    /// <summary>Quantas UCs compartilhadas sem bloco (desenho antigo) foram postas num bloco na leitura.</summary>
+    public int MigratedUnits { get; }
+
+    /// <summary>O GUID do bloco criado na leitura de um desenho antigo: o mesmo a cada leitura.</summary>
+    private static Guid LegacySubstationId(Guid primeiraUc)
+    {
+        var bytes = primeiraUc.ToByteArray();
+        var marca = "CLIVUS-SUBESTACAO"u8;
+        for (var i = 0; i < bytes.Length; i++) bytes[i] ^= marca[i % marca.Length];
+        return new Guid(bytes);
+    }
+
+    /// <summary>Os blocos físicos da subestação compartilhada (na prática, um por usina).</summary>
+    public IReadOnlyList<Substation> Substations => _blocos;
+
+    public Substation? FindSubstation(Guid id) => id == Guid.Empty ? null : _blocos.FirstOrDefault(b => b.Id == id);
+
+    /// <summary>As UCs compartilhadas dentro do bloco (o vínculo mora na UC).</summary>
+    public IReadOnlyList<ConsumerUnit> UnitsOf(Guid substation) =>
+        _ucs.Where(u => u.Mode == ConsumerUnitMode.Shared && u.Substation == substation).ToList();
 
     public IReadOnlyList<Skid> Skids => _skids;
 
@@ -144,8 +193,11 @@ public sealed class ElectricalSetup
     /// </summary>
     public EquipmentInfo? FindEquipment(EquipmentKind kind, Guid id) => kind switch
     {
-        EquipmentKind.ConsumerUnit when FindUnit(id) is { } u =>
+        // A subestação física: a unitária (UC e bloco ao mesmo tempo) ou o
+        // bloco da compartilhada. A UC compartilhada não vai para o campo.
+        EquipmentKind.ConsumerUnit when FindUnit(id) is { Mode: ConsumerUnitMode.Unitary } u =>
             new EquipmentInfo(kind, id, string.IsNullOrWhiteSpace(u.Name) ? u.Code : u.Name, u.Size),
+        EquipmentKind.ConsumerUnit when FindSubstation(id) is { } b => new EquipmentInfo(kind, id, b.Name, b.Size),
         EquipmentKind.Transformer when FindTransformer(id) is { } t => new EquipmentInfo(kind, id, t.Nickname, t.Size),
         EquipmentKind.Inverter when FindInverter(id) is { } i && FindModel(i.Model) is { } m => new EquipmentInfo(kind, id, i.Name, m.Size),
         _ => null,
@@ -164,13 +216,23 @@ public sealed class ElectricalSetup
         var todos = Equipment().ToList();
         if (Guid.TryParse(texto, out var id)) return todos.Where(e => e.Id == id).ToList();
 
-        return todos.Where(e => SameName(e.Tag, texto)
-            || (e.Kind == EquipmentKind.ConsumerUnit && SameName(FindUnit(e.Id)!.Code, texto))).ToList();
+        // A UC compartilhada responde pelo bloco dela (código ou nome): "C1" põe o cubículo em campo.
+        bool DaSubestacao(EquipmentInfo e) =>
+            e.Kind == EquipmentKind.ConsumerUnit
+            && (FindUnit(e.Id) is { } u ? SameName(u.Code, texto)
+                : UnitsOf(e.Id).Any(u => SameName(u.Code, texto) || SameName(u.Name, texto)));
+
+        return todos.Where(e => SameName(e.Tag, texto) || DaSubestacao(e)).ToList();
     }
 
-    /// <summary>Todos os equipamentos do cadastro que vão para o campo: subestações, trafos e inversores (com modelo), nessa ordem.</summary>
+    /// <summary>
+    /// Todos os equipamentos do cadastro que vão para o campo: subestações
+    /// unitárias, blocos compartilhados, trafos e inversores (com modelo),
+    /// nessa ordem.
+    /// </summary>
     public IEnumerable<EquipmentInfo> Equipment() =>
         _ucs.Select(u => FindEquipment(EquipmentKind.ConsumerUnit, u.Id))
+            .Concat(_blocos.Select(b => FindEquipment(EquipmentKind.ConsumerUnit, b.Id)))
             .Concat(_trafos.Select(t => FindEquipment(EquipmentKind.Transformer, t.Id)))
             .Concat(_inversores.Select(i => FindEquipment(EquipmentKind.Inverter, i.Id)))
             .OfType<EquipmentInfo>();
@@ -178,15 +240,66 @@ public sealed class ElectricalSetup
     // -------------------------------------------------------- subestações
 
     /// <summary>
-    /// Cria a próxima subestação compartilhada (C1, C2...; o número segue o
-    /// maior código, sem reaproveitar), com nome padrão e o tamanho padrão.
+    /// O bloco da subestação compartilhada: o que existe, ou um novo
+    /// ("Subestação compartilhada", tamanho padrão). A usina tem um só
+    /// (12.1): pedir de novo devolve o mesmo.
     /// </summary>
-    public ConsumerUnit AddSharedUnit()
+    public (Substation Block, bool Created) EnsureSharedSubstation()
     {
+        if (_blocos.FirstOrDefault() is { } existe) return (existe, false);
+
+        var bloco = new Substation(Guid.NewGuid(), Tr.T("Subestação compartilhada"), ElectricalDefaults.ConsumerUnitSize);
+        _blocos.Add(bloco);
+        return (bloco, true);
+    }
+
+    /// <summary>
+    /// Cria a próxima UC compartilhada (C1, C2...; o número segue o maior
+    /// código, sem reaproveitar) dentro do bloco da usina (criado se não
+    /// existe), com nome padrão.
+    /// </summary>
+    public ConsumerUnit AddSharedUnit() => AddSharedUnit(EnsureSharedSubstation().Block.Id);
+
+    /// <summary>Cria a próxima UC compartilhada dentro do bloco dado.</summary>
+    public ConsumerUnit AddSharedUnit(Guid substation)
+    {
+        if (FindSubstation(substation) is null) throw new InvalidOperationException(Tr.T("essa subestação não está mais no cadastro"));
+
         var codigo = "C" + NextNumber(_ucs.Select(u => u.Code), "C").ToString(CultureInfo.InvariantCulture);
-        var uc = new ConsumerUnit(Guid.NewGuid(), codigo, Tr.F("Subestação {0}", codigo), ConsumerUnitMode.Shared, ElectricalDefaults.ConsumerUnitSize);
+        var uc = new ConsumerUnit(Guid.NewGuid(), codigo, Tr.F("Subestação {0}", codigo), ConsumerUnitMode.Shared, ElectricalDefaults.ConsumerUnitSize, substation);
         _ucs.Add(uc);
         return uc;
+    }
+
+    /// <summary>Troca nome e tamanho do bloco compartilhado. Null se deu certo, o porquê se não.</summary>
+    public string? EditSubstation(Guid id, string? name, EquipmentSize size)
+    {
+        ArgumentNullException.ThrowIfNull(size);
+
+        var posicao = _blocos.FindIndex(b => b.Id == id);
+        if (posicao < 0) return Tr.T("essa subestação não está mais no cadastro");
+
+        var nome = name?.Trim() ?? string.Empty;
+        if (nome.Length == 0) return Tr.T("o nome não pode ficar vazio");
+        if (nome.Length > ElectricalDefaults.MaxNameLength) return Tr.F("o nome tem no máximo {0} caracteres", ElectricalDefaults.MaxNameLength);
+        if (!size.IsValid) return Tr.T("largura, comprimento e altura têm que ser maiores que zero");
+
+        _blocos[posicao] = _blocos[posicao] with { Name = nome, Size = size };
+        return null;
+    }
+
+    /// <summary>
+    /// Tira o bloco compartilhado e as UCs dele do cadastro. Os trafos delas
+    /// ficam sem UC (o vínculo some, o trafo fica). Quantas UCs saíram e
+    /// quantos trafos foram soltos, ou null se o bloco não existia.
+    /// </summary>
+    public (int Units, int Transformers)? RemoveSubstation(Guid id)
+    {
+        if (_blocos.RemoveAll(b => b.Id == id) == 0) return null;
+
+        var ucs = _ucs.Where(u => u.Mode == ConsumerUnitMode.Shared && u.Substation == id).Select(u => u.Id).ToList();
+        var soltos = ucs.Sum(u => RemoveUnit(u) ?? 0);
+        return (ucs.Count, soltos);
     }
 
     /// <summary>
