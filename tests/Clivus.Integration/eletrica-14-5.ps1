@@ -35,6 +35,7 @@ function Testar-Eletrica145 {
     if ($antes.Count -eq 0 -or $depois.Count -eq 0 -or $antes[-1].Groups[1].Value -ne $depois[-1].Groups[1].Value) { $erros += 'a geometria das strings mudou ao soltar' }
     if ($t -notmatch 'INVERSOR Inversor 2: 4 string\(s\) alocada\(s\), 0 j\S+ eram dele, 0 recusada') { $erros += 'o Inversor 2 nao pegou as 4 soltas' }
     if ($t -notmatch 'INVERSOR Inversor 1: 0 string\(s\) alocada\(s\), 0 j\S+ eram dele, 4 recusada') { $erros += 'as strings do Inversor 2 nao ficaram travadas para o Inversor 1' }
+    if ($t -notmatch 'ELETRICA ERRO h\S+ string copiada') { $erros += 'string copiada (mesmo GUID) nao foi recusada' }
     $final = $t.Substring($t.LastIndexOf('ELETRICA 2 inversor(es)'))
     if ($final -notmatch 'ELETRICA INVERSOR nome="Inversor 1" modelo="Huawei 250" strings=0 ') { $erros += 'o Inversor 1 nao ficou com 0' }
     if ($final -notmatch 'ELETRICA INVERSOR nome="INV-NORTE" modelo="Huawei 250" strings=4 ') { $erros += 'o Inversor 2 nao virou INV-NORTE com 4' }

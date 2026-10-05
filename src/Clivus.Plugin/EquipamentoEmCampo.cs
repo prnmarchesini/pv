@@ -94,19 +94,31 @@ internal static class EquipamentoEmCampo
     /// Depois de GRAVAR o cadastro (tag, dimensão): refaz o desenho do bloco
     /// do equipamento, se ele está em campo. A posição não muda. Se estava.
     /// </summary>
-    internal static bool Redesenhar(Database database, EquipmentKind tipo, Guid id)
+    internal static bool Redesenhar(Database database, EquipmentKind tipo, Guid id) => Redesenhar(database, tipo, [id]) > 0;
+
+    /// <summary>O mesmo para vários do mesmo tipo, numa leitura do cadastro e numa transação. Quantos estavam em campo.</summary>
+    internal static int Redesenhar(Database database, EquipmentKind tipo, IReadOnlyCollection<Guid> ids)
     {
-        if (ConfiguracaoEletricaStore.Ler(database).Setup.FindEquipment(tipo, id) is not { } equipamento) return false;
+        if (ids.Count == 0) return 0;
+
+        var setup = ConfiguracaoEletricaStore.Ler(database).Setup;
 
         using var transacao = database.TransactionManager.StartTransaction();
 
-        if (!Posicionados(transacao, database).TryGetValue((tipo, id), out var ids)) return false;
+        var posicionados = Posicionados(transacao, database);
+        var feitos = 0;
 
-        GarantirBloco(transacao, database, equipamento);
-        foreach (var referencia in ids) ((BlockReference)transacao.GetObject(referencia, OpenMode.ForWrite)).RecordGraphicsModified(true);
+        foreach (var id in ids)
+        {
+            if (setup.FindEquipment(tipo, id) is not { } equipamento || !posicionados.TryGetValue((tipo, id), out var referencias)) continue;
+
+            GarantirBloco(transacao, database, equipamento);
+            foreach (var referencia in referencias) ((BlockReference)transacao.GetObject(referencia, OpenMode.ForWrite)).RecordGraphicsModified(true);
+            feitos++;
+        }
 
         transacao.Commit();
-        return true;
+        return feitos;
     }
 
     /// <summary>

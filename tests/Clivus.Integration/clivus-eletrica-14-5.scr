@@ -42,6 +42,10 @@
 (command "CLIVUS_ELETRICA_ALOCAR" "Inversor 2" clivus:dele "")
 (command "CLIVUS_ELETRICA_ALOCAR" "Inversor 1" clivus:dele "")
 (command "CLIVUS_ELETRICA_AUTO" "EditarInversor" "Inversor 2" "INV-NORTE" "Huawei 250")
+;; Um COPY de string livre (o XData vai junto): alocar com as duas e recusado.
+(setq clivus:livre (car (vl-remove-if '(lambda (e) (/= (clivus:inv e) "")) (mapcar 'cadr (ssnamex (clivus:strings))))))
+(command "_.COPY" clivus:livre "" "0,0" "0,0.5")
+(command "CLIVUS_ELETRICA_AUTO" "Alocar" "Inversor 1" "1000")
 (command "CLIVUS_ELETRICA_AUTO" "Listar")
 (princ "\nCLIVUS_ELETRICA_FIM")
 (setvar "SECURELOAD" clivus:secureload)

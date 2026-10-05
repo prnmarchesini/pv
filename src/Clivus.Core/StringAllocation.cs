@@ -57,20 +57,26 @@ public static class StringAllocation
         return strings.Where(s => s.Inverter == inverter).DistinctBy(s => s.Id).Select(s => s with { Inverter = Guid.Empty }).ToList();
     }
 
-    /// <summary>A string está travada para este inversor: é de outro (regra elétrica 2).</summary>
-    public static bool IsLockedFor(ElectricalString s, Guid inverter)
+    /// <summary>
+    /// A string está travada para este inversor: é de outro (regra elétrica
+    /// 2). Com <paramref name="existing"/> (os inversores do cadastro), a
+    /// string que aponta para inversor que não existe mais (colada de outro
+    /// desenho, cadastro desfeito) não trava: não há de quem soltá-la.
+    /// </summary>
+    public static bool IsLockedFor(ElectricalString s, Guid inverter, IReadOnlySet<Guid>? existing = null)
     {
         ArgumentNullException.ThrowIfNull(s);
-        return s.IsAllocated && s.Inverter != inverter;
+        return s.IsAllocated && s.Inverter != inverter && (existing is null || existing.Contains(s.Inverter));
     }
 
     /// <summary>
     /// Aloca as strings escolhidas no inversor: as livres passam a ser dele,
     /// as dele ficam como estão, as de outro inversor são recusadas (nunca
     /// trocam de dono por aqui: soltar antes é um ato explícito). A mesma
-    /// string escolhida duas vezes conta uma vez.
+    /// string escolhida duas vezes conta uma vez. <paramref name="existing"/>:
+    /// ver <see cref="IsLockedFor"/>.
     /// </summary>
-    public static AllocationPlan Allocate(Guid inverter, IEnumerable<ElectricalString> selected)
+    public static AllocationPlan Allocate(Guid inverter, IEnumerable<ElectricalString> selected, IReadOnlySet<Guid>? existing = null)
     {
         ArgumentNullException.ThrowIfNull(selected);
         if (inverter == Guid.Empty) throw new ArgumentException("inversor vazio", nameof(inverter));
@@ -82,7 +88,7 @@ public static class StringAllocation
         foreach (var s in selected.DistinctBy(s => s.Id))
         {
             if (s.Inverter == inverter) jaEram++;
-            else if (IsLockedFor(s, inverter)) recusadas.Add(s);
+            else if (IsLockedFor(s, inverter, existing)) recusadas.Add(s);
             else mudam.Add(s with { Inverter = inverter });
         }
 

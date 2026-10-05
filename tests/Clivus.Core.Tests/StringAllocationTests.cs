@@ -122,4 +122,25 @@ public class StringAllocationTests
         var solta = Assert.Single(StringAllocation.Release(a, [s]));
         Assert.Equal(b, Assert.Single(StringAllocation.Allocate(b, [solta]).Changed).Inverter);
     }
+
+    // ------------------------------------------- revisão da etapa 14
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void StringDeInversorQueNaoExisteMaisNaoTrava()
+    {
+        var meu = Guid.NewGuid();
+        var outro = Guid.NewGuid();
+        var sumido = Guid.NewGuid();
+        var orfa = S(sumido);
+        var deOutro = S(outro);
+        var cadastro = new HashSet<Guid> { meu, outro };
+
+        var plano = StringAllocation.Allocate(meu, [orfa, deOutro], cadastro);
+
+        Assert.Equal(orfa.Id, Assert.Single(plano.Changed).Id);
+        Assert.Equal(deOutro.Id, Assert.Single(plano.Refused).Id);
+        Assert.False(StringAllocation.IsLockedFor(orfa, meu, cadastro));
+        Assert.True(StringAllocation.IsLockedFor(orfa, meu));   // sem o cadastro, na dúvida, trava
+    }
 }

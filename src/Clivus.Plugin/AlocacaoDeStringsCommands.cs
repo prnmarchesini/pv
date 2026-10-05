@@ -40,16 +40,17 @@ public static class AlocacaoDeStringsCommands
                 return;
             }
 
-            if (Selecionar(documento, inversor, modelo, strings) is not { } selecao) return;
+            if (Selecionar(documento, inversor, modelo, strings, Cadastrados(setup)) is not { } selecao) return;
 
             var escolhidas = selecao.Ids.Select(id => strings[id]).ToList();
-            var plano = StringAllocation.Allocate(inversor.Id, escolhidas);
+            var plano = StringAllocation.Allocate(inversor.Id, escolhidas, Cadastrados(setup));
             StringsDoDesenho.Gravar(documento.Database, plano.Changed);
 
             var total = StringsDoDesenho.Ler(documento.Database).Values.Count(s => s.Inverter == inversor.Id);
             editor.WriteMessage(Tr.F("\nINVERSOR {0}: {1} string(s) alocada(s), {2} já eram dele, {3} recusada(s) por serem de outro inversor. Agora {4} de {5} entradas.\n",
                 inversor.Name, plano.Changed.Count, plano.AlreadyHere, plano.Refused.Count + selecao.RecusadasAoVivo, total, modelo?.TotalInputs ?? 0));
             if (StringAllocation.ExcessWarning(inversor, modelo, total) is { } excesso) editor.WriteMessage($"  {excesso}\n");
+            if (modelo is null) editor.WriteMessage(Tr.F("  ATENÇÃO: {0} está sem modelo; não dá para saber o excesso de capacidade.\n", inversor.Name));
         }
         catch (System.Exception erro)
         {
@@ -92,6 +93,9 @@ public static class AlocacaoDeStringsCommands
         }
     }
 
+    /// <summary>Os inversores do cadastro (a string que aponta para outro, que sumiu, não trava).</summary>
+    internal static IReadOnlySet<Guid> Cadastrados(ElectricalSetup setup) => setup.Inverters.Select(i => i.Id).ToHashSet();
+
     /// <summary>Pergunta o inversor (nome ou GUID); null e o recado se não há um só que responda.</summary>
     internal static (ElectricalSetup Setup, Inverter Inversor)? PerguntarInversor(Editor editor, Database database)
     {
@@ -116,7 +120,7 @@ public static class AlocacaoDeStringsCommands
     /// destacadas durante a seleção. Null se o usuário desistiu; senão as
     /// strings escolhidas e quantas foram recusadas ao vivo (já fora da seleção).
     /// </summary>
-    private static (List<ObjectId> Ids, int RecusadasAoVivo)? Selecionar(Document documento, Inverter inversor, InverterModel? modelo, IReadOnlyDictionary<ObjectId, ElectricalString> strings)
+    private static (List<ObjectId> Ids, int RecusadasAoVivo)? Selecionar(Document documento, Inverter inversor, InverterModel? modelo, IReadOnlyDictionary<ObjectId, ElectricalString> strings, IReadOnlySet<Guid> cadastrados)
     {
         var editor = documento.Editor;
         var escolhidas = new HashSet<ObjectId>();
@@ -137,7 +141,8 @@ public static class AlocacaoDeStringsCommands
                 placar ??= NovoPlacar(620);
                 placar.TextoLivre = Tr.F("{0}: {1} de {2} entradas ({3} já dele, {4} nova(s) na seleção)", inversor.Name, total, entradas, jaDele.Count, novas)
                     + (recusadas.Count > 0 ? "\n" + Tr.F("{0} recusada(s): de outro inversor", recusadas.Count) : string.Empty)
-                    + (StringAllocation.Excess(total, modelo) is > 0 and var excesso ? "\n" + Tr.F("EXCESSO: {0} string(s) a mais que as entradas do modelo", excesso) : string.Empty);
+                    + (StringAllocation.Excess(total, modelo) is > 0 and var excesso ? "\n" + Tr.F("EXCESSO: {0} string(s) a mais que as entradas do modelo", excesso) : string.Empty)
+                    + (modelo is null ? "\n" + Tr.T("Inversor sem modelo: sem como saber o excesso") : string.Empty);
                 if (!placar.IsVisible) placar.Show();
             }
             catch (System.Exception erro)
@@ -158,7 +163,7 @@ public static class AlocacaoDeStringsCommands
                     {
                         e.Remove(i);
                     }
-                    else if (StringAllocation.IsLockedFor(s, inversor.Id))
+                    else if (StringAllocation.IsLockedFor(s, inversor.Id, cadastrados))
                     {
                         recusadas.Add(ids[i]);
                         e.Remove(i);
@@ -179,7 +184,15 @@ public static class AlocacaoDeStringsCommands
 
         void Tirou(object? _, SelectionRemovedEventArgs e)
         {
-            foreach (ObjectId id in e.RemovedObjects.GetObjectIds()) escolhidas.Remove(id);
+            try
+            {
+                foreach (ObjectId id in e.RemovedObjects.GetObjectIds()) escolhidas.Remove(id);
+            }
+            catch (System.Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao tirar strings da seleção.", erro);
+            }
+
             Atualizar();
         }
 
@@ -286,16 +299,18 @@ internal static class StringsDoDesenho
         using var transacao = database.TransactionManager.StartTransaction();
 
         var porGuid = mudadas.ToDictionary(s => s.Id);
-        var gravadas = 0;
+        var alvos = ElectricalStore.Strings(transacao, database).Where(x => porGuid.ContainsKey(x.String.Id)).ToList();
 
-        foreach (var (id, s) in ElectricalStore.Strings(transacao, database))
-        {
-            if (!porGuid.TryGetValue(s.Id, out var nova)) continue;
-            ElectricalStore.SaveString(transacao, (Entity)transacao.GetObject(id, OpenMode.ForWrite), nova);
-            gravadas++;
-        }
+        // Um COPY da polilinha leva o XData junto: duas entidades com o mesmo
+        // GUID. Gravar numa regravaria a outra (que pode ser de outro
+        // inversor). Nada é gravado; o usuário apaga as cópias.
+        if (alvos.GroupBy(x => x.String.Id).Any(g => g.Count() > 1))
+            throw new InvalidOperationException(Tr.T("há string copiada no desenho (duas polilinhas com o mesmo GUID); apague as cópias e tente de novo"));
+
+        foreach (var (id, atual) in alvos)
+            ElectricalStore.SaveString(transacao, (Entity)transacao.GetObject(id, OpenMode.ForWrite), porGuid[atual.Id]);
 
         transacao.Commit();
-        return gravadas;
+        return alvos.Count;
     }
 }

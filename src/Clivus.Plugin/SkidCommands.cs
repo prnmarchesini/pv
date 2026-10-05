@@ -137,7 +137,15 @@ public static class SkidCommands
 
         void Tirou(object? _, SelectionRemovedEventArgs e)
         {
-            foreach (ObjectId id in e.RemovedObjects.GetObjectIds()) escolhidos.Remove(id);
+            try
+            {
+                foreach (ObjectId id in e.RemovedObjects.GetObjectIds()) escolhidos.Remove(id);
+            }
+            catch (System.Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao tirar inversores da seleção.", erro);
+            }
+
             Atualizar();
         }
 

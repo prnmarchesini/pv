@@ -316,14 +316,20 @@ internal sealed class AbaInversor : AbaEletrica
             return;
         }
 
+        var tirou = true;
         Fazer(() =>
         {
-            // Primeiro o vínculo das strings (no desenho), depois o cadastro.
+            // Primeiro o cadastro: se o registro não pode ser gravado, nada
+            // muda. Depois o vínculo das strings no desenho (se falhar, a
+            // string fica apontando para um inversor que não existe, e essa
+            // não trava: pode ser alocada de novo).
+            tirou = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.RemoveInverter(inversor.Id));
+            if (!tirou) return null;
             var soltas = StringsDoDesenho.Soltar(Documento.Database, inversor.Id);
-            ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.RemoveInverter(inversor.Id));
             EquipamentoEmCampo.Apagar(Documento.Database, EquipmentKind.Inverter, inversor.Id);
             return Tr.F("{0} apagado do cadastro; {1} string(s) ficaram livres no desenho.", inversor.Name, soltas);
         });
+        if (!tirou) Avisar(Tr.T("Esse inversor não está mais no cadastro."), erro: true);
     }
 
     private void SoltarTodas(Inverter inversor) =>
@@ -428,8 +434,8 @@ internal sealed class AbaInversor : AbaEletrica
             if (porque is not null) return null;
 
             // A dimensão do modelo é a dos retângulos dos inversores dele em campo.
-            foreach (var i in ConfiguracaoEletricaStore.Ler(Documento.Database).Setup.Inverters.Where(i => i.Model == m.Id))
-                EquipamentoEmCampo.Redesenhar(Documento.Database, EquipmentKind.Inverter, i.Id);
+            EquipamentoEmCampo.Redesenhar(Documento.Database, EquipmentKind.Inverter,
+                ConfiguracaoEletricaStore.Ler(Documento.Database).Setup.Inverters.Where(i => i.Model == m.Id).Select(i => i.Id).ToList());
             return Tr.F("{0} salvo.", editado.Name.Trim());
         });
         if (porque is not null) Avisar(Tr.F("Não salvei: {0}.", porque), erro: true);

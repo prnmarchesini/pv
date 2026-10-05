@@ -191,10 +191,11 @@ public static class ConfiguracaoEletricaAutoCommands
         if (Texto(editor, "\nInversor (nome): ") is not { } nome) return null;
         if (Inteiro(editor, "\nQuantas livres: ") is not { } n) return null;
 
-        if (ConfiguracaoEletricaStore.Ler(database).Setup.FindInverter(nome) is not { } inversor) return "recusado: inversor nao existe";
+        var setup = ConfiguracaoEletricaStore.Ler(database).Setup;
+        if (setup.FindInverter(nome) is not { } inversor) return "recusado: inversor nao existe";
 
         var livres = StringsDoDesenho.Ler(database).OrderBy(x => x.Key.Handle.Value).Select(x => x.Value).Where(s => !s.IsAllocated).Take(n).ToList();
-        var plano = StringAllocation.Allocate(inversor.Id, livres);
+        var plano = StringAllocation.Allocate(inversor.Id, livres, AlocacaoDeStringsCommands.Cadastrados(setup));
         StringsDoDesenho.Gravar(database, plano.Changed);
         return $"alocadas {plano.Changed.Count} em {inversor.Name}";
     }
