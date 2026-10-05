@@ -22,7 +22,7 @@ public static class ConfiguracaoEletricaAutoCommands
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Listar"];
+    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "Listar"];
 
 #if DEBUG
     [CommandMethod(PluginInfo.ComandoEletricaAutomatico)]
@@ -52,6 +52,7 @@ public static class ConfiguracaoEletricaAutoCommands
                 "Soltar" => SoltarTrafo(editor, database),
                 "Modelo" => NovoModelo(editor, database),
                 "Inversores" => NovosInversores(editor, database),
+                "Alocar" => AlocarLivres(editor, database),
                 _ => string.Empty,
             };
 
@@ -175,6 +176,23 @@ public static class ConfiguracaoEletricaAutoCommands
 
         var novos = ConfiguracaoEletricaStore.Mudar(database, s => s.AddInverters(modelo.Id, n));
         return "inversores " + string.Join(",", novos.Select(i => i.Name)) + " criados";
+    }
+
+    /// <summary>
+    /// Alocar &lt;inversor&gt; &lt;quantas&gt;: as N primeiras strings livres (na
+    /// ordem do handle) vão para o inversor, pelo mesmo Core da seleção.
+    /// </summary>
+    private static string? AlocarLivres(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nInversor (nome): ") is not { } nome) return null;
+        if (Inteiro(editor, "\nQuantas livres: ") is not { } n) return null;
+
+        if (ConfiguracaoEletricaStore.Ler(database).Setup.FindInverter(nome) is not { } inversor) return "recusado: inversor nao existe";
+
+        var livres = StringsDoDesenho.Ler(database).OrderBy(x => x.Key.Handle.Value).Select(x => x.Value).Where(s => !s.IsAllocated).Take(n).ToList();
+        var plano = StringAllocation.Allocate(inversor.Id, livres);
+        StringsDoDesenho.Gravar(database, plano.Changed);
+        return $"alocadas {plano.Changed.Count} em {inversor.Name}";
     }
 
     private static Transformer? Trafo(ElectricalSetup s, string apelido) => s.Transformers.FirstOrDefault(t => ElectricalSetup.SameName(t.Nickname, apelido));

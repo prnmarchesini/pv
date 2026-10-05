@@ -455,4 +455,21 @@ public class ElectricalSetupTests
         Assert.False(contagem.ContainsKey(Guid.Empty));
         Assert.Empty(StringAllocation.CountByInverter([]));
     }
+
+    // ------------------------------------------------------------ 14.3
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void OInversorEAchadoPeloNomeOuPeloGuid()
+    {
+        var setup = new ElectricalSetup();
+        var m = setup.AddModel();
+        var inversores = setup.AddInverters(m.Id, 2);
+
+        Assert.Equal(inversores[1].Id, setup.FindInverter(" inversor 2 ")!.Id);
+        Assert.Equal(inversores[0].Id, setup.FindInverter(inversores[0].Id.ToString())!.Id);
+        Assert.Null(setup.FindInverter("Inversor 9"));
+        Assert.Null(setup.FindInverter(""));
+        Assert.Null(setup.FindInverter(Guid.NewGuid().ToString()));
+    }
 }

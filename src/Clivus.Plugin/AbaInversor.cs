@@ -182,6 +182,14 @@ internal sealed class AbaInversor : AbaEletrica
         foreach (var inversor in _setup.Inverters)
         {
             var linha = new DockPanel();
+            var acoes = new StackPanel { Orientation = Orientation.Horizontal };
+            DockPanel.SetDock(acoes, Dock.Right);
+            linha.Children.Add(acoes);
+
+            var este = inversor;
+            Botao(acoes, "+", Tr.T("Alocar strings: a janela some; selecione só strings em campo (Shift+clique tira), Enter volta."),
+                () => JanelaEletrica.Campo(Documento, PluginInfo.ComandoEletricaAlocar, este.Id.ToString("D")), largura: 30);
+
             linha.Children.Add(new TextBlock { Text = DescreverInversor(_setup, inversor, _contagem.GetValueOrDefault(inversor.Id)), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
 
             var item = new ListBoxItem { Content = linha, Tag = inversor };

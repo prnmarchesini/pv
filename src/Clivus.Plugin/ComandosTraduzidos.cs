@@ -246,6 +246,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_ELECTRICA")]
     public static void CLIVUS_ELECTRICA() => ConfiguracaoEletricaCommands.Eletrica();
 
+    [CommandMethod("CLIVUS_ELECTRICAL_ALLOCATE")]
+    public static void CLIVUS_ELECTRICAL_ALLOCATE() => AlocacaoDeStringsCommands.Alocar();
+
+    [CommandMethod("CLIVUS_ELECTRICA_ASIGNAR")]
+    public static void CLIVUS_ELECTRICA_ASIGNAR() => AlocacaoDeStringsCommands.Alocar();
+
     [CommandMethod("CLIVUS_ELECTRICAL_PLACE")]
     public static void CLIVUS_ELECTRICAL_PLACE() => ConfiguracaoEletricaCommands.Posicionar();
 

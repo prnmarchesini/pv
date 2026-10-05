@@ -372,6 +372,17 @@ public sealed class ElectricalSetup
 
     public Inverter? FindInverter(Guid id) => _inversores.FirstOrDefault(i => i.Id == id);
 
+    /// <summary>O inversor pelo GUID ou pelo nome (sem olhar maiúscula); null se nenhum ou mais de um responde.</summary>
+    public Inverter? FindInverter(string? nameOrId)
+    {
+        var texto = nameOrId?.Trim() ?? string.Empty;
+        if (texto.Length == 0) return null;
+        if (Guid.TryParse(texto, out var id)) return FindInverter(id);
+
+        var achados = _inversores.Where(i => SameName(i.Name, texto)).Take(2).ToList();
+        return achados.Count == 1 ? achados[0] : null;
+    }
+
     /// <summary>
     /// Cria <paramref name="count"/> inversores do modelo (14.2), "Inversor N"
     /// continuando do maior número da usina (qualquer modelo), sem skid.
