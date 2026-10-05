@@ -10,7 +10,7 @@ usos no mesmo commit.
 |---|---|---|
 | tipo de string (biblioteca) | dicionário, chave `STRING_TIPOS` | `StringType`, `StringLibrary` (Core), `StringTypeStore` (Plugin) |
 | string desenhada | XData (tipo `String`) da `Polyline3d` do traçado, camada `CLIVUS_STRING` | `ElectricalString` (Core), `ElectricalStore.SaveString/LoadString/Strings` |
-| modelo de inversor | dicionário, `INVERSOR_MODELOS` (formato 2 desde 05/10/2026, a lista das entradas de cada MPPT; o 1 continua sendo lido) | `InverterModel`, `ElectricalStore.InverterModels/Save...` |
+| modelo de inversor | dicionário, `INVERSOR_MODELOS` (formato 3 desde 05/10/2026, com a potência CA em kW; o 2, a lista das entradas de cada MPPT, e o 1 continuam sendo lidos) | `InverterModel`, `ElectricalStore.InverterModels/Save...` |
 | inversor | dicionário, `INVERSORES` (formato 2 desde 05/10/2026, com a cor; o 1 continua sendo lido) | `Inverter` |
 | transformador | dicionário, `TRAFOS` | `Transformer` |
 | subestação (UC) | dicionário, `SUBESTACOES` (formato 2 desde 05/10/2026; o 1 continua sendo lido) | `ConsumerUnit` |
@@ -28,7 +28,18 @@ usos no mesmo commit.
   regravam só o XData da polilinha; a geometria não muda.
 - inversor → trafo: `Inverter.Transformer` (o skid, 14.7; vazio = sem skid).
   O registro `Skid` guarda só o nome do grupo; quem diz que inversores
-  são do skid é este campo.
+  são do skid é este campo. "Trafo do inversor" e "skid do trafo" são a
+  mesma coisa: não há outro vínculo inversor → trafo. Muda por dois
+  caminhos (05/10/2026):
+  - a tabela da aba Inversor (`ElectricalSetup.SetTransformer`): a caixa
+    Trafo da linha ou o "Pôr no trafo" das linhas escolhidas. Escolha
+    explícita: o inversor de outro trafo MUDA (sem trava); "sem trafo" solta.
+  - a seleção em campo, `CLIVUS_ELETRICA_SKID` (`Group`, no quadro fechado
+    "Agrupar em campo (skid)"): dá nome ao grupo; inversor de outro skid fica
+    travado.
+  Nos dois, o trafo que fica sem inversor perde o registro `Skid` (o nome);
+  o nome do skid do trafo de destino fica. Sem registro, o nome mostrado é
+  "Skid T1".
 - trafo → subestação: `Transformer.ConsumerUnit` (vazio = sem UC). Muda pela
   aba Subestação (`LinkTransformer`/`UnlinkTransformer`) ou pelo formulário do
   trafo (`SaveTransformer`, campos e UC tudo ou nada); a trava é a mesma nos
@@ -66,6 +77,19 @@ Nenhum vínculo é derivado de posição no desenho.
   (`SummaryRowKind.Substation`) com as UCs dele um nível para dentro; a
   unitária fica como antes.
 
+## A potência do modelo de inversor (05/10/2026)
+
+- `INVERSOR_MODELOS` formato 3: 8 campos (os 7 do formato 2 e a potência
+  nominal CA em kW, invariante, vazia = não informada). `InverterModel.PowerKw`
+  (0 = não informada; de 0 a `ElectricalDefaults.MaxInverterPowerKw`).
+- Os formatos 2 e 1 (7 campos) são lidos pela versão do cabeçalho com a
+  potência 0. Grava-se sempre o 3.
+- A tabela da aba Inversor (`InverterTable`, Core): strings pelo vínculo
+  (`StringAllocation.CountByInverter`), kWp de cada inversor do resumo
+  (`ElectricalSummary`, `SystemSummary.AllInverters`: a potência dos módulos
+  das strings dele pela mesa dona), kW do modelo e CC/CA = kWp / kW (só com
+  potência informada). Nada é gravado: é leitura.
+
 ## O modelo de inversor por MPPT (05/10/2026)
 
 - `INVERSOR_MODELOS` formato 2: 7 campos (GUID, nome, quantos MPPTs, a lista
@@ -74,7 +98,7 @@ Nenhum vínculo é derivado de posição no desenho.
   (a capacidade do inversor em strings).
 - O formato 1 (MPPT e entradas por MPPT, o mesmo número para todos) é lido
   pela versão do cabeçalho (`InverterModel.ParseLegacy`): vira a lista com o
-  valor repetido. Grava-se sempre o 2.
+  valor repetido. Grava-se hoje o 3 (acima).
 
 ## A cor do inversor (05/10/2026)
 

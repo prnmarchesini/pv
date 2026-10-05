@@ -59,20 +59,24 @@ internal static class ElectricalStore
     private static readonly string OQueBlocos = Tr.N("de blocos de subestação");
 
     /// <summary>
-    /// Os modelos de inversor. Formato 2 (05/10/2026) tem a lista das entradas
-    /// de cada MPPT; o 1 (MPPT x entradas por MPPT) continua sendo lido e vira
-    /// a lista com o valor repetido. Grava sempre o 2.
+    /// Os modelos de inversor. Formato 3 (05/10/2026) tem a potência nominal
+    /// CA (kW); o 2 (a lista das entradas de cada MPPT, sem potência) e o 1
+    /// (MPPT x entradas por MPPT, que vira a lista com o valor repetido)
+    /// continuam sendo lidos, com a potência 0. Grava sempre o 3.
     /// </summary>
     internal static RecordTableResult<InverterModel> InverterModels(Database db) =>
-        PluginRecords.Version(db, ChaveDosModelos) == 1
-            ? PluginRecords.Load<InverterModel>(db, ChaveDosModelos, 1, InverterModel.FieldCount, InverterModel.ParseLegacy, OQueModelos)
-            : PluginRecords.Load<InverterModel>(db, ChaveDosModelos, VersaoDosModelos, InverterModel.FieldCount, InverterModel.Parse, OQueModelos);
+        PluginRecords.Version(db, ChaveDosModelos) switch
+        {
+            1 => PluginRecords.Load<InverterModel>(db, ChaveDosModelos, 1, InverterModel.LegacyFieldCount, InverterModel.ParseLegacy, OQueModelos),
+            2 => PluginRecords.Load<InverterModel>(db, ChaveDosModelos, 2, InverterModel.LegacyFieldCount, InverterModel.Parse, OQueModelos),
+            _ => PluginRecords.Load<InverterModel>(db, ChaveDosModelos, VersaoDosModelos, InverterModel.FieldCount, InverterModel.Parse, OQueModelos),
+        };
 
     internal static void SaveInverterModels(Database db, IReadOnlyList<InverterModel> itens) =>
         PluginRecords.Save(db, ChaveDosModelos, VersaoDosModelos, InverterModel.FieldCount, itens, i => i.ToFields());
 
     internal const string ChaveDosModelos = "INVERSOR_MODELOS";
-    private const int VersaoDosModelos = 2;
+    private const int VersaoDosModelos = 3;
 
     /// <summary>
     /// Os inversores. Formato 2 (05/10/2026) tem a cor; o formato 1 (sem cor)

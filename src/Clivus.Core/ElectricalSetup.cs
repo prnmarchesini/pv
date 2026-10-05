@@ -28,6 +28,9 @@ public static class ElectricalDefaults
 
     public const int MaxInputsPerMppt = 100;
 
+    /// <summary>A maior potência nominal CA de um modelo de inversor, em kW (folgada: barra só número sem sentido).</summary>
+    public const double MaxInverterPowerKw = 100_000;
+
     public static EquipmentSize TransformerSize { get; } = new(3.0, 2.5, 2.5);
 
     public static EquipmentSize ConsumerUnitSize { get; } = new(4.0, 3.0, 3.0);
@@ -74,6 +77,13 @@ public sealed record Skid(Guid Transformer, string Name)
 /// foi feito.
 /// </summary>
 public sealed record SkidResult(int Added, int AlreadyHere, IReadOnlyList<Inverter> Refused, int Missing, string? Problem);
+
+/// <summary>
+/// O que pôr inversores num trafo pela tabela deu (05/10/2026): quantos
+/// mudaram, quantos já eram dele e quantos não estão mais no cadastro.
+/// <see cref="Problem"/> não nulo: nada foi feito.
+/// </summary>
+public sealed record TransformerAssignment(int Changed, int AlreadyThere, int Missing, string? Problem);
 
 /// <summary>
 /// Uma opção da UC no formulário do trafo (13.1): a UC e se o trafo pode ir
@@ -573,6 +583,7 @@ public sealed class ElectricalSetup
         if (edited.InputsByMppt is null || edited.Mppts is < 1 or > ElectricalDefaults.MaxMppts || edited.InputsByMppt.Any(n => n is < 1 or > ElectricalDefaults.MaxInputsPerMppt))
             return Tr.F("de 1 a {0} MPPTs, cada um com 1 a {1} entradas", ElectricalDefaults.MaxMppts, ElectricalDefaults.MaxInputsPerMppt);
         if (!edited.Size.IsValid) return Tr.T("largura, comprimento e altura têm que ser maiores que zero");
+        if (!InverterModel.IsValidPower(edited.PowerKw)) return Tr.F("a potência vai de 0 (não informada) a {0:#,0} kW", ElectricalDefaults.MaxInverterPowerKw);
 
         _modelos[posicao] = edited with { Name = nome, InputsByMppt = [.. edited.InputsByMppt] };
         return null;
@@ -740,6 +751,45 @@ public sealed class ElectricalSetup
         _inversores[posicao] = _inversores[posicao] with { Transformer = Guid.Empty };
         if (InvertersOf(trafo).Count == 0) _skids.RemoveAll(s => s.Transformer == trafo);
         return true;
+    }
+
+    /// <summary>
+    /// Põe os inversores no trafo (a coluna Trafo da aba Inversor e o "Pôr no
+    /// trafo" das linhas escolhidas, 05/10/2026). É o mesmo vínculo do skid
+    /// (<see cref="Inverter.Transformer"/>), mas por escolha explícita na
+    /// tabela: o inversor que era de outro trafo MUDA (não fica travado como
+    /// na seleção em campo de <see cref="Group"/>). <see cref="Guid.Empty"/>
+    /// = sem trafo. O nome do skid do trafo de destino fica; o skid de onde o
+    /// inversor saiu e que ficou sem inversor deixa de existir (como em
+    /// <see cref="Ungroup"/>).
+    /// </summary>
+    public TransformerAssignment SetTransformer(IEnumerable<Guid> inverters, Guid transformer)
+    {
+        ArgumentNullException.ThrowIfNull(inverters);
+
+        if (transformer != Guid.Empty && FindTransformer(transformer) is null)
+            return new TransformerAssignment(0, 0, 0, Tr.T("esse transformador não está mais no cadastro"));
+
+        int mudaram = 0, jaEram = 0, sumidos = 0;
+        var deixados = new HashSet<Guid>();
+
+        foreach (var id in inverters.Distinct())
+        {
+            var posicao = _inversores.FindIndex(i => i.Id == id);
+            if (posicao < 0) { sumidos++; continue; }
+
+            var antes = _inversores[posicao].Transformer;
+            if (antes == transformer) { jaEram++; continue; }
+
+            _inversores[posicao] = _inversores[posicao] with { Transformer = transformer };
+            if (antes != Guid.Empty) deixados.Add(antes);
+            mudaram++;
+        }
+
+        foreach (var trafo in deixados)
+            if (InvertersOf(trafo).Count == 0) _skids.RemoveAll(s => s.Transformer == trafo);
+
+        return new TransformerAssignment(mudaram, jaEram, sumidos, null);
     }
 
     // ----------------------------------------------------------- comuns

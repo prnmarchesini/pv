@@ -22,7 +22,7 @@ function Testar-Eletrica141Mppt {
     if ($antes -notmatch 'ELETRICA MODELO nome="Antigo 5x4" mppt=5 entradas=4 total=20 ') { $erros += 'o formato 1 nao foi lido como 5 MPPTs de 4' }
     if (([regex]::Matches($t, 'ELETRICA recusado:')).Count -ne 2) { $erros += 'lista curta e MPPT sem entrada nao foram os dois recusados' }
     $final = $t.Substring($t.LastIndexOf('ELETRICA 3 modelo(s)'))
-    if ($final -notmatch 'formato_modelos=2') { $erros += 'a gravacao nao passou ao formato 2' }
+    if ($final -notmatch 'formato_modelos=3') { $erros += 'a gravacao nao passou ao formato 3 (o atual, com a potencia, desde 05/10/2026)' }
     if ($final -notmatch 'ELETRICA MODELO nome="Antigo 5x4" mppt=5 entradas=4 total=20 ') { $erros += 'o modelo antigo mudou ao regravar' }
     if ($final -notmatch 'ELETRICA MODELO nome="Huawei 330" mppt=5 entradas=4;4;4;5;5 total=22 ') { $erros += 'o Huawei 330 nao tem a lista 4;4;4;5;5 = 22' }
     if ($final -notmatch 'ELETRICA MODELO nome="Igual" mppt=3 entradas=6 total=18 ') { $erros += 'um numero so nao valeu para os 3 MPPTs' }

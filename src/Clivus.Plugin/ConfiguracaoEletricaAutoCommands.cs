@@ -22,7 +22,7 @@ public static class ConfiguracaoEletricaAutoCommands
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "SoltarInversor", "EditarInversor", "Skid", "Desagrupar", "Listar", "Formulario", "Bloco", "EditarUc", "ApagarBloco", "UcAntiga", "ModeloAntigo", "InversoresAntigos", "Cor", "Varredura", "Atribuir"];
+    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "SoltarInversor", "EditarInversor", "Skid", "Desagrupar", "Listar", "Formulario", "Bloco", "EditarUc", "ApagarBloco", "UcAntiga", "ModeloAntigo", "ModeloFormato2", "InversoresAntigos", "Cor", "Varredura", "Atribuir"];
 
 #if DEBUG
     [CommandMethod(PluginInfo.ComandoEletricaAutomatico)]
@@ -63,6 +63,7 @@ public static class ConfiguracaoEletricaAutoCommands
                 "ApagarBloco" => ApagarBloco(database),
                 "UcAntiga" => UcsDoFormatoAntigo(database),
                 "ModeloAntigo" => ModeloDoFormatoAntigo(editor, database),
+                "ModeloFormato2" => ModeloDoFormato2(editor, database),
                 "InversoresAntigos" => InversoresDoFormatoAntigo(database),
                 "Cor" => TrocarCor(editor, database),
                 "Varredura" => VarreduraDaAtribuicao(editor, database),
@@ -321,11 +322,28 @@ public static class ConfiguracaoEletricaAutoCommands
         if (Inteiro(editor, "\nEntradas por MPPT: ") is not { } entradas) return null;
 
         var modelos = ElectricalStore.InverterModels(database).Items.Append(new InverterModel(Guid.NewGuid(), nome, mppt, entradas, ElectricalDefaults.InverterSize)).ToList();
-        PluginRecords.Save(database, ElectricalStore.ChaveDosModelos, 1, InverterModel.FieldCount, modelos,
+        PluginRecords.Save(database, ElectricalStore.ChaveDosModelos, 1, InverterModel.LegacyFieldCount, modelos,
             m => [m.Id.ToString("D"), m.Name, m.Mppts.ToString(Inv), m.InputsByMppt[0].ToString(Inv), R(m.Size.Width), R(m.Size.Length), R(m.Size.Height)]);
         return $"modelos do formato 1 gravados ({modelos.Count})";
 
         static string R(double v) => v.ToString("R", Inv);
+    }
+
+    /// <summary>
+    /// ModeloFormato2 &lt;nome&gt; &lt;MPPT&gt; &lt;lista&gt;: grava os modelos no formato 2
+    /// (7 campos, sem a potência, como antes de 05/10/2026), para o teste ver
+    /// a leitura do antigo com a potência 0 e a regravação no 3.
+    /// </summary>
+    private static string? ModeloDoFormato2(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nNome do modelo: ") is not { } nome) return null;
+        if (Inteiro(editor, "\nMPPT: ") is not { } mppt) return null;
+        if (Texto(editor, "\nEntradas (a lista 4;4;5): ") is not { } texto) return null;
+        if (InverterModel.ParseInputs(texto) is not { } lista || lista.Count != mppt) return "recusado: entradas ilegiveis";
+
+        var modelos = ElectricalStore.InverterModels(database).Items.Append(new InverterModel(Guid.NewGuid(), nome, lista, ElectricalDefaults.InverterSize)).ToList();
+        PluginRecords.Save(database, ElectricalStore.ChaveDosModelos, 2, InverterModel.LegacyFieldCount, modelos, m => m.ToFields().Take(InverterModel.LegacyFieldCount).ToList());
+        return $"modelos do formato 2 gravados ({modelos.Count})";
     }
 
     /// <summary>Inversores &lt;nome do modelo&gt; &lt;quantos&gt;.</summary>
@@ -494,7 +512,7 @@ public static class ConfiguracaoEletricaAutoCommands
         // entradas=: o número quando todos os MPPTs têm o mesmo, senão a lista (4;4;4;5;5).
         editor.WriteMessage($"ELETRICA {setup.Models.Count} modelo(s) formato_modelos={PluginRecords.Version(database, ElectricalStore.ChaveDosModelos)}\n");
         foreach (var m in setup.Models)
-            editor.WriteMessage($"ELETRICA MODELO nome=\"{m.Name}\" mppt={m.Mppts} entradas={(m.IsUniform ? m.InputsByMppt[0].ToString(Inv) : InverterModel.FormatInputs(m.InputsByMppt))} total={m.TotalInputs} tamanho={Tam(m.Size)}\n");
+            editor.WriteMessage($"ELETRICA MODELO nome=\"{m.Name}\" mppt={m.Mppts} entradas={(m.IsUniform ? m.InputsByMppt[0].ToString(Inv) : InverterModel.FormatInputs(m.InputsByMppt))} total={m.TotalInputs} tamanho={Tam(m.Size)} potencia={N(m.PowerKw)}\n");
 
         using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
         {

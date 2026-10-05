@@ -98,6 +98,44 @@ casos elétricos). Decisões tomadas sem perguntar estão em cada item.
 - Trafos padrão: 800 V → 13,8 kV (1250/2500/3150 kVA), 800 V → 34,5 kV
   (2500/3150 kVA), 380 V → 13,8 kV (500 kVA).
 
+## Aba Inversor em tabela (05/10/2026): AGUARDANDO VALIDAÇÃO
+
+Pedidos do Renan: "eu queria uma forma mais fácil de dizer 'esse inversor,
+esse e esse é deste trafo'"; "falta o campo para inserir a potência"; "falta
+uma coluna de kWp e quantidade de strings".
+
+- A lista de inversores virou tabela: cor, Inversor, Modelo, Trafo (caixa que
+  grava na hora), Strings (n/entradas), kWp (a mesma conta do Resumo
+  elétrico), kW (do modelo), CC/CA, e os botões +, Selecionar, Soltar strings;
+  total no rodapé. Várias linhas com Ctrl/Shift e "Pôr no trafo [T1]".
+- O skid é o próprio vínculo inversor → trafo (`Inverter.Transformer`); o
+  registro `SKIDS` guarda só o nome. A linha do skid saiu da vista: ficou num
+  quadro fechado "Agrupar em campo (skid)", com a explicação. "Tirar do
+  skid" saiu (é o "sem trafo" da linha).
+- Modelo com "Potência (kW)" (CA nominal), `INVERSOR_MODELOS` formato 3; o 2
+  e o 1 lidos com potência 0.
+- Assumido: na tabela, inversor de outro trafo muda sem trava (escolha
+  explícita); na seleção em campo a trava continua. Janela 1180 px de largura
+  (era 980) para caber a tabela sem rolagem horizontal.
+- Revisão por subagente: potência pequena gravada sem notação científica;
+  CC/CA do total só com os inversores que têm kW; a caixa Trafo grava ao
+  fechar a lista (a seta do teclado não grava sozinha) e volta ao gravado se
+  falhar; com várias linhas escolhidas, Salvar/Alocar/Apagar inversor
+  recusam e avisam.
+
+Roteiro de tela:
+1. Configuração elétrica > Inversor: escolha um modelo, digite 250 em
+   Potência (kW), Salvar modelo: a lista mostra "— 250 kW" e a coluna kW
+   dos inversores dele mostra 250.
+2. Na coluna Trafo de um inversor, escolha T1: grava sem botão (recado
+   verde no rodapé). Escolha "sem trafo": solta.
+3. Ctrl+clique em três linhas, escolha T2 ao lado de "Pôr no trafo" e
+   clique: as três mostram T2, inclusive a que estava em outro trafo.
+4. Aloque strings num inversor ("+"): Strings mostra n/20, kWp aparece e
+   bate com o Resumo elétrico; CC/CA = kWp ÷ kW; o total soma as linhas.
+5. Abra "Agrupar em campo (skid)": a explicação e o agrupar pelo desenho,
+   como antes.
+
 ## Observações
 - Mesa recalculada troca os GUIDs dos módulos: as strings dela ficam soltas e
   regerar não as reconhece (desenha as novas sem apagar as velhas). Precisa de
