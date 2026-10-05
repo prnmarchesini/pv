@@ -22,7 +22,8 @@ public sealed record GenerationPlan(
     IReadOnlyList<GroupPlan> Groups,
     IReadOnlyList<string> Unmatched,
     IReadOnlyList<string> Skipped,
-    IReadOnlyList<string> Notes)
+    IReadOnlyList<string> Notes,
+    IReadOnlyList<Guid> UnmatchedTables)
 {
     public int StringCount => Groups.Sum(g => g.Strings.Count);
 
@@ -55,6 +56,7 @@ public static class StringGeneration
 
         var recados = new List<string>();
         var semTipo = new List<string>();
+        var mesasSemTipo = new List<Guid>();
         var pulados = new List<string>();
         var grupos = new List<GroupPlan>();
 
@@ -82,8 +84,15 @@ public static class StringGeneration
         var boas = new List<FieldTable>();
         foreach (var mesa in mesas.DistinctBy(m => m.Id))
         {
-            if (mesa.WhyInvalid() is { } porque) semTipo.Add(Tr.F("{0}; não recebe string", porque));
-            else boas.Add(mesa);
+            if (mesa.WhyInvalid() is { } porque)
+            {
+                semTipo.Add(Tr.F("{0}; não recebe string", porque));
+                mesasSemTipo.Add(mesa.Id);
+            }
+            else
+            {
+                boas.Add(mesa);
+            }
         }
 
         foreach (var corrida in Corridas(boas))
@@ -96,6 +105,7 @@ public static class StringGeneration
                 {
                     var mesa = corrida[i].Table;
                     semTipo.Add(Tr.F("{0}: mesa de {1} módulos ({2}) sem tipo de string", mesa.Label, mesa.Modules.Count, mesa.Shape.Columns + "x" + mesa.Shape.Rows));
+                    mesasSemTipo.Add(mesa.Id);
                     i++;
                     continue;
                 }
@@ -123,7 +133,7 @@ public static class StringGeneration
             }
         }
 
-        return new GenerationPlan(grupos, semTipo, pulados, recados);
+        return new GenerationPlan(grupos, semTipo, pulados, recados, mesasSemTipo);
     }
 
     /// <summary>

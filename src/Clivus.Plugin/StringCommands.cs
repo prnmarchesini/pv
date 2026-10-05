@@ -235,7 +235,15 @@ public static class StringCommands
                 return;
             }
 
-            linhas = GeracaoDeStrings.Gerar(documento, guids, tipos ?? []).Linhas;
+            var relatorio = GeracaoDeStrings.Gerar(documento, guids, tipos ?? []);
+            linhas = relatorio.Linhas;
+
+            // 11.8: nunca calado; além do aviso nominal, as mesas sem tipo ficam selecionadas.
+            if (relatorio.MesasSemTipo.Count > 0)
+            {
+                GeracaoDeStrings.SelecionarSemTipo(documento, relatorio.MesasSemTipo);
+                linhas = [.. linhas, Tr.F("As {0} mesa(s) sem tipo de string ficaram selecionadas no desenho.", relatorio.MesasSemTipo.Count)];
+            }
         }
         catch (System.Exception falha)
         {

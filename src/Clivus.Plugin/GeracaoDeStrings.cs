@@ -19,7 +19,7 @@ namespace Clivus.Plugin;
 internal static class GeracaoDeStrings
 {
     /// <summary>O relatório de uma geração: linhas para a tela e os números para o nível 2.</summary>
-    internal sealed record Relatorio(IReadOnlyList<string> Linhas, int Strings, int Grupos, int SemTipo, int Pulados, int Substituidas);
+    internal sealed record Relatorio(IReadOnlyList<string> Linhas, int Strings, int Grupos, int SemTipo, int Pulados, int Substituidas, IReadOnlyList<Guid> MesasSemTipo);
 
     /// <summary>A altura do texto do + e do −, em metro.</summary>
     private const double AlturaDoSinal = 0.35;
@@ -85,7 +85,7 @@ internal static class GeracaoDeStrings
             desenhadas, plano.Groups.Count, plano.Unmatched.Count, plano.Skipped.Count));
         if (plano.ReplacedCount > 0) linhas.Insert(1, Tr.F("{0} string(s) livre(s) que já estavam nessas mesas foram substituídas.", plano.ReplacedCount));
 
-        return new Relatorio(linhas, desenhadas, plano.Groups.Count, plano.Unmatched.Count, plano.Skipped.Count, plano.ReplacedCount);
+        return new Relatorio(linhas, desenhadas, plano.Groups.Count, plano.Unmatched.Count, plano.Skipped.Count, plano.ReplacedCount, plano.UnmatchedTables);
     }
 
     /// <summary>
@@ -162,6 +162,25 @@ internal static class GeracaoDeStrings
                 e.Erase();
             }
         }
+    }
+
+    /// <summary>
+    /// 11.8: as mesas que não casaram ficam selecionadas no desenho (o
+    /// contorno), para o usuário ver quais são além de ler o aviso.
+    /// </summary>
+    internal static void SelecionarSemTipo(Document documento, IReadOnlyList<Guid> mesas)
+    {
+        if (mesas.Count == 0) return;
+
+        var ids = new List<ObjectId>();
+        using (var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction())
+        {
+            var todas = LayoutScan.Tables(transacao, documento.Database);
+            foreach (var guid in mesas)
+                if (todas.TryGetValue(guid, out var partes)) ids.AddRange(partes.Contours);
+        }
+
+        documento.Editor.SetImpliedSelection([.. ids]);
     }
 
     /// <summary>

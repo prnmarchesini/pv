@@ -42,6 +42,7 @@ public class StringGenerationTests
 
         Assert.Equal("F3.1, F3.2", plano.Groups.Single().Labels);
         Assert.Equal(["F3.3: mesa de 14 módulos (7x2) sem tipo de string"], plano.Unmatched);
+        Assert.Equal([fileira[2].Id], plano.UnmatchedTables);
     }
 
     [Fact]
@@ -199,8 +200,39 @@ public class StringGenerationTests
 
         Assert.Empty(plano.Groups);
         Assert.Contains("F1.1", plano.Unmatched.Single());
+        Assert.Equal([furada.Id], plano.UnmatchedTables);
     }
 
     private static ExistingString Existente(FieldTable mesa, Guid inversor) =>
         new(new ElectricalString(Guid.NewGuid(), Guid.Empty, mesa.Modules.Take(3).Select(m => m.Id).ToList(), inversor, string.Empty), new HashSet<Guid> { mesa.Id });
+
+    [Fact]
+    [Trait("Etapa", "11")]
+    public void MesaDe20NuncaConfiguradaEAvisadaPeloNomeENaoRecebeString()
+    {
+        // O exemplo do plano: uma mesa de 20 que ninguém configurou, no meio de mesas de 28.
+        var uma28 = Tipo("Modelo 1", (14, 2));
+        var fileira = MesasDeString.Fileira(3, 0, 0.5, (14, 2), (10, 2), (14, 2));
+
+        var plano = StringGeneration.Plan([uma28], fileira, []);
+
+        Assert.Equal(["F3.1", "F3.3"], plano.Groups.Select(g => g.Labels));
+        Assert.Equal(["F3.2: mesa de 20 módulos (10x2) sem tipo de string"], plano.Unmatched);
+        Assert.Equal([fileira[1].Id], plano.UnmatchedTables);
+        Assert.DoesNotContain(plano.Groups.SelectMany(g => g.Strings).SelectMany(s => s.Modules), m => fileira[1].Modules.Contains(m));
+    }
+
+    [Fact]
+    [Trait("Etapa", "11")]
+    public void OAvisoDaMesaSemTipoSaiNoIdiomaDaTela()
+    {
+        using var _ = Tr.Use(UiLanguage.English, new Dictionary<string, string>
+        {
+            ["{0}: mesa de {1} módulos ({2}) sem tipo de string"] = "{0}: table of {1} modules ({2}) without a string type",
+        });
+
+        var plano = StringGeneration.Plan([], MesasDeString.Fileira(3, 0, 0.5, (10, 2)), []);
+
+        Assert.Equal(["F3.1: table of 20 modules (10x2) without a string type"], plano.Unmatched);
+    }
 }
