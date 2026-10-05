@@ -222,7 +222,7 @@ public static class ConfiguracaoEletricaAutoCommands
             var contagem = StringAllocation.CountByInverter(strings.Select(x => x.String));
             editor.WriteMessage($"ELETRICA {setup.Inverters.Count} inversor(es) {strings.Count} string(s) {strings.Count(x => !x.String.IsAllocated)} livre(s)\n");
             foreach (var i in setup.Inverters)
-                editor.WriteMessage($"ELETRICA INVERSOR nome=\"{i.Name}\" modelo=\"{setup.FindModel(i.Model)?.Name}\" strings={contagem.GetValueOrDefault(i.Id)} entradas={setup.FindModel(i.Model)?.TotalInputs} trafo={setup.FindTransformer(i.Transformer)?.Nickname} fim\n");
+                editor.WriteMessage($"ELETRICA INVERSOR nome=\"{i.Name}\" modelo=\"{setup.FindModel(i.Model)?.Name}\" strings={contagem.GetValueOrDefault(i.Id)} entradas={setup.FindModel(i.Model)?.TotalInputs} trafo={setup.FindTransformer(i.Transformer)?.Nickname} excesso={StringAllocation.Excess(contagem.GetValueOrDefault(i.Id), setup.FindModel(i.Model))} fim\n");
         }
 
         editor.WriteMessage($"ELETRICA {setup.Transformers.Count} trafo(s)\n");

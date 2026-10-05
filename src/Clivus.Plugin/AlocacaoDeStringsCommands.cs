@@ -49,6 +49,7 @@ public static class AlocacaoDeStringsCommands
             var total = StringsDoDesenho.Ler(documento.Database).Values.Count(s => s.Inverter == inversor.Id);
             editor.WriteMessage(Tr.F("\nINVERSOR {0}: {1} string(s) alocada(s), {2} já eram dele, {3} recusada(s) por serem de outro inversor. Agora {4} de {5} entradas.\n",
                 inversor.Name, plano.Changed.Count, plano.AlreadyHere, plano.Refused.Count + selecao.RecusadasAoVivo, total, modelo?.TotalInputs ?? 0));
+            if (StringAllocation.ExcessWarning(inversor, modelo, total) is { } excesso) editor.WriteMessage($"  {excesso}\n");
         }
         catch (System.Exception erro)
         {
@@ -106,7 +107,7 @@ public static class AlocacaoDeStringsCommands
                 placar ??= NovoPlacar();
                 placar.TextoLivre = Tr.F("{0}: {1} de {2} entradas ({3} já dele, {4} nova(s) na seleção)", inversor.Name, total, entradas, jaDele.Count, novas)
                     + (recusadas.Count > 0 ? "\n" + Tr.F("{0} recusada(s): de outro inversor", recusadas.Count) : string.Empty)
-                    + (total > entradas ? "\n" + Tr.F("EXCESSO: {0} string(s) a mais que as entradas do modelo", total - entradas) : string.Empty);
+                    + (StringAllocation.Excess(total, modelo) is > 0 and var excesso ? "\n" + Tr.F("EXCESSO: {0} string(s) a mais que as entradas do modelo", excesso) : string.Empty);
                 if (!placar.IsVisible) placar.Show();
             }
             catch (System.Exception erro)

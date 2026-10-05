@@ -23,6 +23,27 @@ public static class StringAllocation
         return strings.Where(s => s.IsAllocated).GroupBy(s => s.Inverter).ToDictionary(g => g.Key, g => g.Count());
     }
 
+    /// <summary>
+    /// Quantas strings passam do que o modelo comporta (14.4): 28 strings num
+    /// modelo de 26 entradas dá 2; dentro da capacidade, 0. Sem modelo, não
+    /// há como saber: 0 (quem chama avisa que falta o modelo).
+    /// </summary>
+    public static int Excess(int strings, InverterModel? model) =>
+        model is null ? 0 : Math.Max(0, strings - model.TotalInputs);
+
+    /// <summary>
+    /// O aviso vermelho de excesso (14.4), ou null se cabe. Avisa, não
+    /// impede: a alocação fica feita (decisão conservadora, registrada no
+    /// relatório: nada é desfeito sozinho).
+    /// </summary>
+    public static string? ExcessWarning(Inverter inverter, InverterModel? model, int strings)
+    {
+        ArgumentNullException.ThrowIfNull(inverter);
+
+        var excesso = Excess(strings, model);
+        return excesso == 0 ? null : Tr.F("EXCESSO no {0}: {1} strings para {2} entradas do modelo {3} ({4} a mais)", inverter.Name, strings, model!.TotalInputs, model.Name, excesso);
+    }
+
     /// <summary>A string está travada para este inversor: é de outro (regra elétrica 2).</summary>
     public static bool IsLockedFor(ElectricalString s, Guid inverter)
     {

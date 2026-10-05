@@ -19,8 +19,8 @@ function Testar-Eletrica142 {
     if ($t -notmatch 'ELETRICA inversores Inversor 5,Inversor 6 criados') { $erros += 'os do segundo modelo nao continuaram em 5 e 6' }
     if ($t -notmatch 'ELETRICA recusado: modelo nao existe') { $erros += 'modelo inexistente nao foi recusado' }
     $final = $t.Substring($t.LastIndexOf('ELETRICA 6 inversor(es)'))
-    foreach ($n in 1..4) { if ($final -notmatch "ELETRICA INVERSOR nome=""Inversor $n"" modelo=""Huawei 250"" strings=0 entradas=20 trafo= fim") { $erros += "Inversor $n nao e Huawei com 0 strings" } }
-    foreach ($n in 5..6) { if ($final -notmatch "ELETRICA INVERSOR nome=""Inversor $n"" modelo=""Sungrow 110"" strings=0 entradas=18 trafo= fim") { $erros += "Inversor $n nao e Sungrow com 0 strings" } }
+    foreach ($n in 1..4) { if ($final -notmatch "ELETRICA INVERSOR nome=""Inversor $n"" modelo=""Huawei 250"" strings=0 entradas=20 trafo= excesso=0 fim") { $erros += "Inversor $n nao e Huawei com 0 strings" } }
+    foreach ($n in 5..6) { if ($final -notmatch "ELETRICA INVERSOR nome=""Inversor $n"" modelo=""Sungrow 110"" strings=0 entradas=18 trafo= excesso=0 fim") { $erros += "Inversor $n nao e Sungrow com 0 strings" } }
 
     if ($erros.Count -gt 0) {
         $problemas.Add("clivus-eletrica-14-2: $($erros -join '; '). Veja $($r.Saida)")

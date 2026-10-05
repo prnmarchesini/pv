@@ -127,6 +127,12 @@ internal sealed class AbaInversor : AbaEletrica
 
         MontarInversores();
 
+        // 14.4: o excesso aparece em vermelho na linha do inversor e no rodapé.
+        var excessos = _setup.Inverters
+            .Select(i => StringAllocation.ExcessWarning(i, _setup.FindModel(i.Model), _contagem.GetValueOrDefault(i.Id)))
+            .OfType<string>().ToList();
+        if (problema is null && excessos.Count > 0) Avisar(string.Join("\n", excessos), erro: true);
+
         if (problema is not null) Avisar(problema, erro: true);
         else if (_modelos.Items.Count == 0) Avisar(Tr.T("Nenhum modelo de inversor ainda: use Novo modelo."));
     }
@@ -190,7 +196,17 @@ internal sealed class AbaInversor : AbaEletrica
             Botao(acoes, "+", Tr.T("Alocar strings: a janela some; selecione só strings em campo (Shift+clique tira), Enter volta."),
                 () => JanelaEletrica.Campo(Documento, PluginInfo.ComandoEletricaAlocar, este.Id.ToString("D")), largura: 30);
 
-            linha.Children.Add(new TextBlock { Text = DescreverInversor(_setup, inversor, _contagem.GetValueOrDefault(inversor.Id)), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+            var strings = _contagem.GetValueOrDefault(inversor.Id);
+            var aviso = StringAllocation.ExcessWarning(inversor, _setup.FindModel(inversor.Model), strings);
+            linha.Children.Add(new TextBlock
+            {
+                Text = DescreverInversor(_setup, inversor, strings),
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Foreground = aviso is null ? System.Windows.SystemColors.ControlTextBrush : System.Windows.Media.Brushes.Firebrick,
+                FontWeight = aviso is null ? FontWeights.Normal : FontWeights.SemiBold,
+                ToolTip = aviso,
+            });
 
             var item = new ListBoxItem { Content = linha, Tag = inversor };
             _inversores.Items.Add(item);
