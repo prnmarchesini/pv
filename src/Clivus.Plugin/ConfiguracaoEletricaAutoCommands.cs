@@ -22,7 +22,7 @@ public static class ConfiguracaoEletricaAutoCommands
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Listar"];
+    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Listar"];
 
 #if DEBUG
     [CommandMethod(PluginInfo.ComandoEletricaAutomatico)]
@@ -51,6 +51,7 @@ public static class ConfiguracaoEletricaAutoCommands
                 "Vincular" => Vincular(editor, database),
                 "Soltar" => SoltarTrafo(editor, database),
                 "Modelo" => NovoModelo(editor, database),
+                "Inversores" => NovosInversores(editor, database),
                 _ => string.Empty,
             };
 
@@ -162,6 +163,20 @@ public static class ConfiguracaoEletricaAutoCommands
         return porque is null ? $"modelo {nome} criado" : $"recusado: {porque}";
     }
 
+    /// <summary>Inversores &lt;nome do modelo&gt; &lt;quantos&gt;.</summary>
+    private static string? NovosInversores(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nModelo (nome): ") is not { } nome) return null;
+        if (Inteiro(editor, "\nQuantos: ") is not { } n) return null;
+
+        var (lido, _) = ConfiguracaoEletricaStore.Ler(database);
+        if (lido.Models.FirstOrDefault(m => ElectricalSetup.SameName(m.Name, nome)) is not { } modelo) return "recusado: modelo nao existe";
+        if (n < 1 || n > ElectricalDefaults.MaxAtOnce) return $"recusado: quantos={n}";
+
+        var novos = ConfiguracaoEletricaStore.Mudar(database, s => s.AddInverters(modelo.Id, n));
+        return "inversores " + string.Join(",", novos.Select(i => i.Name)) + " criados";
+    }
+
     private static Transformer? Trafo(ElectricalSetup s, string apelido) => s.Transformers.FirstOrDefault(t => ElectricalSetup.SameName(t.Nickname, apelido));
 
     private static ConsumerUnit? Uc(ElectricalSetup s, string codigo) => s.Units.FirstOrDefault(u => ElectricalSetup.SameName(u.Code, codigo));
@@ -182,6 +197,15 @@ public static class ConfiguracaoEletricaAutoCommands
         editor.WriteMessage($"ELETRICA {setup.Models.Count} modelo(s)\n");
         foreach (var m in setup.Models)
             editor.WriteMessage($"ELETRICA MODELO nome=\"{m.Name}\" mppt={m.Mppts} entradas={m.InputsPerMppt} total={m.TotalInputs} tamanho={Tam(m.Size)}\n");
+
+        using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
+        {
+            var strings = ElectricalStore.Strings(transacao, database);
+            var contagem = StringAllocation.CountByInverter(strings.Select(x => x.String));
+            editor.WriteMessage($"ELETRICA {setup.Inverters.Count} inversor(es) {strings.Count} string(s) {strings.Count(x => !x.String.IsAllocated)} livre(s)\n");
+            foreach (var i in setup.Inverters)
+                editor.WriteMessage($"ELETRICA INVERSOR nome=\"{i.Name}\" modelo=\"{setup.FindModel(i.Model)?.Name}\" strings={contagem.GetValueOrDefault(i.Id)} entradas={setup.FindModel(i.Model)?.TotalInputs} trafo={setup.FindTransformer(i.Transformer)?.Nickname} fim\n");
+        }
 
         editor.WriteMessage($"ELETRICA {setup.Transformers.Count} trafo(s)\n");
         foreach (var t in setup.Transformers)

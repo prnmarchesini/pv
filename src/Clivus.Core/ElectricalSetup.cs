@@ -368,6 +368,28 @@ public sealed class ElectricalSetup
         return null;
     }
 
+    // ----------------------------------------------------------- inversores
+
+    public Inverter? FindInverter(Guid id) => _inversores.FirstOrDefault(i => i.Id == id);
+
+    /// <summary>
+    /// Cria <paramref name="count"/> inversores do modelo (14.2), "Inversor N"
+    /// continuando do maior número da usina (qualquer modelo), sem skid.
+    /// </summary>
+    public IReadOnlyList<Inverter> AddInverters(Guid model, int count)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(count, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(count, ElectricalDefaults.MaxAtOnce);
+        if (FindModel(model) is null) throw new InvalidOperationException(Tr.T("esse modelo de inversor não está mais no cadastro"));
+
+        var prefixo = Tr.F("Inversor {0}", string.Empty);
+        var primeiro = NextNumber(_inversores.Select(i => i.Name), prefixo);
+        var novos = Enumerable.Range(primeiro, count).Select(n => new Inverter(Guid.NewGuid(), model, Tr.F("Inversor {0}", n), Guid.Empty)).ToList();
+
+        _inversores.AddRange(novos);
+        return novos;
+    }
+
     // ----------------------------------------------------------- comuns
 
     public static bool SameName(string? a, string? b) =>

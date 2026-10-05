@@ -403,4 +403,56 @@ public class ElectricalSetupTests
         Assert.NotNull(setup.RemoveModel(livre.Id));
         Assert.Equal(["Huawei 250"], setup.Models.Select(m => m.Name));
     }
+
+    // ------------------------------------------------------------ 14.2
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void InversoresDeVariosModelosComNomesContinuando()
+    {
+        var setup = new ElectricalSetup();
+        var huawei = setup.AddModel();
+        var sungrow = setup.AddModel();
+
+        var quatro = setup.AddInverters(huawei.Id, 4);
+        var dois = setup.AddInverters(sungrow.Id, 2);
+
+        Assert.Equal(["Inversor 1", "Inversor 2", "Inversor 3", "Inversor 4"], quatro.Select(i => i.Name));
+        Assert.Equal(["Inversor 5", "Inversor 6"], dois.Select(i => i.Name));
+        Assert.All(quatro, i => Assert.Equal(huawei.Id, i.Model));
+        Assert.All(dois, i => Assert.Equal(sungrow.Id, i.Model));
+        Assert.All(setup.Inverters, i => Assert.True(i.IsValid));
+        Assert.All(setup.Inverters, i => Assert.Equal(Guid.Empty, i.Transformer));
+        Assert.Equal(6, setup.Inverters.Select(i => i.Id).Distinct().Count());
+        Assert.Equal(setup.Inverters[0], Inverter.Parse(setup.Inverters[0].ToFields()));
+    }
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void InversorPedeModeloQueExisteEQuantidadeValida()
+    {
+        var setup = new ElectricalSetup();
+        var m = setup.AddModel();
+
+        Assert.Throws<InvalidOperationException>(() => setup.AddInverters(Guid.NewGuid(), 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => setup.AddInverters(m.Id, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => setup.AddInverters(m.Id, ElectricalDefaults.MaxAtOnce + 1));
+        Assert.Empty(setup.Inverters);
+    }
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void CadaInversorContaAsStringsQueApontamParaEle()
+    {
+        var i1 = Guid.NewGuid();
+        var i2 = Guid.NewGuid();
+        ElectricalString S(Guid inversor) => new(Guid.NewGuid(), Guid.Empty, [Guid.NewGuid()], inversor, "");
+
+        var contagem = StringAllocation.CountByInverter([S(i1), S(i1), S(i2), S(Guid.Empty)]);
+
+        Assert.Equal(2, contagem[i1]);
+        Assert.Equal(1, contagem[i2]);
+        Assert.False(contagem.ContainsKey(Guid.Empty));
+        Assert.Empty(StringAllocation.CountByInverter([]));
+    }
 }

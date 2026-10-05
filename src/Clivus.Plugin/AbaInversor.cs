@@ -16,7 +16,12 @@ internal sealed class AbaInversor : AbaEletrica
     private readonly TextBox _nomeDoModelo, _mppt, _entradas, _largura, _comprimento, _altura;
     private readonly TextBlock _total = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 4), FontWeight = FontWeights.SemiBold };
 
+    private readonly ComboBox _modeloParaCriar = new() { Height = 26, MinWidth = 160, Margin = new Thickness(0, 0, 6, 6) };
+    private readonly TextBox _quantos = new() { Text = "1", Width = 50, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
+    private readonly ListBox _inversores = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch };
+
     private ElectricalSetup _setup = new();
+    private IReadOnlyDictionary<Guid, int> _contagem = new Dictionary<Guid, int>();
 
     internal AbaInversor(Document documento) : base(documento)
     {
@@ -53,7 +58,30 @@ internal sealed class AbaInversor : AbaEletrica
         modelos.Children.Add(botoesDoModelo);
         modelos.Children.Add(grade);
 
-        Children.Add(new ScrollViewer { Content = modelos, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        // ---------------------------------------------- inversores (14.2)
+        var criar = new WrapPanel();
+        criar.Children.Add(new TextBlock { Text = Tr.T("Modelo:"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
+        criar.Children.Add(_modeloParaCriar);
+        criar.Children.Add(new TextBlock { Text = Tr.T("Quantos:"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
+        criar.Children.Add(_quantos);
+        Botao(criar, Tr.T("Criar inversores"), Tr.T("Cria os inversores do modelo escolhido (Inversor 1, 2..., continuando a numeração)."), CriarInversores);
+
+        var inversores = new DockPanel();
+        var topo = new StackPanel();
+        topo.Children.Add(Titulo(Tr.T("Inversores da usina")));
+        topo.Children.Add(criar);
+        DockPanel.SetDock(topo, Dock.Top);
+        inversores.Children.Add(topo);
+        inversores.Children.Add(_inversores);
+
+        var colunas = new Grid();
+        colunas.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.8, GridUnitType.Star) });
+        colunas.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+        var esquerda = new ScrollViewer { Content = modelos, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new Thickness(0, 0, 10, 0) };
+        Grid.SetColumn(inversores, 1);
+        colunas.Children.Add(esquerda);
+        colunas.Children.Add(inversores);
+        Children.Add(colunas);
 
         _modelos.SelectionChanged += (_, _) =>
         {
@@ -82,6 +110,22 @@ internal sealed class AbaInversor : AbaEletrica
 
         if (_modelos.SelectedItem is null && _modelos.Items.Count > 0) _modelos.SelectedIndex = 0;
         PreencherModelo();
+
+        var paraCriar = (_modeloParaCriar.SelectedItem as ComboBoxItem)?.Tag as Guid?;
+        _modeloParaCriar.Items.Clear();
+        foreach (var m in setup.Models)
+        {
+            var item = new ComboBoxItem { Content = m.Name, Tag = m.Id };
+            _modeloParaCriar.Items.Add(item);
+            if (m.Id == paraCriar) _modeloParaCriar.SelectedItem = item;
+        }
+
+        if (_modeloParaCriar.SelectedItem is null && _modeloParaCriar.Items.Count > 0) _modeloParaCriar.SelectedIndex = 0;
+
+        using (var transacao = Documento.Database.TransactionManager.StartOpenCloseTransaction())
+            _contagem = StringAllocation.CountByInverter(ElectricalStore.Strings(transacao, Documento.Database).Select(x => x.String));
+
+        MontarInversores();
 
         if (problema is not null) Avisar(problema, erro: true);
         else if (_modelos.Items.Count == 0) Avisar(Tr.T("Nenhum modelo de inversor ainda: use Novo modelo."));
@@ -125,6 +169,54 @@ internal sealed class AbaInversor : AbaEletrica
         {
             RegistroDeDiagnostico.Registrar("Falha ao somar as entradas do modelo de inversor.", erro);
         }
+    }
+
+    private Inverter? InversorEscolhido => (_inversores.SelectedItem as ListBoxItem)?.Tag as Inverter;
+
+    /// <summary>A lista dos inversores: nome, modelo e quantas strings tem de quantas entradas.</summary>
+    private void MontarInversores()
+    {
+        var anterior = InversorEscolhido?.Id;
+        _inversores.Items.Clear();
+
+        foreach (var inversor in _setup.Inverters)
+        {
+            var linha = new DockPanel();
+            linha.Children.Add(new TextBlock { Text = DescreverInversor(_setup, inversor, _contagem.GetValueOrDefault(inversor.Id)), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+
+            var item = new ListBoxItem { Content = linha, Tag = inversor };
+            _inversores.Items.Add(item);
+            if (inversor.Id == anterior) _inversores.SelectedItem = item;
+        }
+    }
+
+    internal static string DescreverInversor(ElectricalSetup setup, Inverter inversor, int strings)
+    {
+        var modelo = setup.FindModel(inversor.Model);
+        return modelo is null
+            ? Tr.F("{0} — sem modelo — {1} string(s)", inversor.Name, strings)
+            : Tr.F("{0} — {1} — {2} de {3} string(s)", inversor.Name, modelo.Name, strings, modelo.TotalInputs);
+    }
+
+    private void CriarInversores()
+    {
+        if ((_modeloParaCriar.SelectedItem as ComboBoxItem)?.Tag is not Guid modelo)
+        {
+            Avisar(Tr.T("Escolha o modelo (cadastre um à esquerda, se não há)."), erro: true);
+            return;
+        }
+
+        if (!NumberInput.TryParseCount(_quantos.Text, out var quantos) || quantos < 1 || quantos > ElectricalDefaults.MaxAtOnce)
+        {
+            Avisar(Tr.F("Quantos: um número inteiro de 1 a {0}.", ElectricalDefaults.MaxAtOnce), erro: true);
+            return;
+        }
+
+        Fazer(() =>
+        {
+            var novos = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.AddInverters(modelo, quantos));
+            return novos.Count == 1 ? Tr.F("{0} criado.", novos[0].Name) : Tr.F("{0} inversores criados: {1} a {2}.", novos.Count, novos[0].Name, novos[^1].Name);
+        });
     }
 
     private void NovoModelo()
