@@ -38,6 +38,22 @@ Só o Renan marca VALIDADO.
 - 15.4 Botão Gerar: varre e cria tags no desenho: AGUARDANDO VALIDAÇÃO
 - 15.5 Edição granular (apagar tudo, por inversor, refazer inversor, regerar bloco): AGUARDANDO VALIDAÇÃO
 
+- Aba Numeração, 05/10/2026 (Renan: "o botão selecionar mesas não deixa
+  selecionar, e cada bloco precisa de dois sentidos..."): AGUARDANDO VALIDAÇÃO.
+  - O Selecionar pedia a seleção direto do clique da janela solta, fora de
+    comando: o AutoCAD devolvia a pergunta na hora, sem deixar selecionar, e
+    o código saía calado. Agora o botão esconde a janela e manda
+    CLIVUS_NUMERACAO_MESAS (seleção dentro de comando, mesas do bloco
+    destacadas); a janela volta com a frase do resultado.
+  - Dois sentidos (o que avança e o da faixa) na usina e em cada bloco, como a
+    atribuição da aba Inversor; `NUMERACAO_VARREDURA` formato 2 (o 1 é lido
+    com o sentido na faixa de antes: a ordem de desenho antigo não muda).
+  - Cada bloco numa linha: nome, "N mesa(s), M string(s)", os dois sentidos e
+    Selecionar, Mostrar, ↑, ↓, ✎ (renomear), Apagar; resumo embaixo (em
+    blocos, fora de bloco). Assumido: Selecionar substitui as mesas do bloco
+    (como antes); string conta no bloco da mesa do primeiro módulo (a mesma
+    regra do Regerar bloco); "Regerar bloco escolhido" usa a linha clicada.
+
 ## Etapa 16: Resumo do sistema
 - 16.1 Menu de resumo completo consolidado pela cadeia de vínculo: AGUARDANDO VALIDAÇÃO
 

@@ -141,6 +141,18 @@ public static class ScanOrder
     public static IReadOnlyList<ScanDirection> CrossOptions(ScanDirection direction) =>
         IsHorizontal(direction) ? [ScanDirection.TopToBottom, ScanDirection.BottomToTop] : [ScanDirection.LeftToRight, ScanDirection.RightToLeft];
 
+    /// <summary>
+    /// O sentido na faixa que vale: o escolhido, se é perpendicular ao que
+    /// avança; senão (nenhum escolhido, ou o que avança virou para o mesmo
+    /// eixo) o <see cref="DefaultCross"/>.
+    /// </summary>
+    public static ScanDirection ValidCross(ScanDirection direction, ScanDirection? cross) =>
+        cross is { } c && Enum.IsDefined(c) && IsPerpendicular(direction, c) ? c : DefaultCross(direction);
+
+    /// <summary>Os dois sentidos para o usuário: "de cima para baixo; na faixa, da esquerda para a direita".</summary>
+    public static string Describe(ScanDirection direction, ScanDirection cross) =>
+        Tr.F("{0}; na faixa, {1}", Describe(direction), Describe(cross));
+
     /// <summary>Se os dois sentidos são perpendiculares (um horizontal, o outro vertical).</summary>
     public static bool IsPerpendicular(ScanDirection a, ScanDirection b) => IsHorizontal(a) != IsHorizontal(b);
 
@@ -211,32 +223,64 @@ public static class ScanOrder
 }
 
 /// <summary>
-/// Um bloco da varredura (15.2): as mesas dele e o sentido próprio. A ordem
-/// dos blocos na lista é a ordem da numeração (15.3).
+/// Um bloco da varredura (15.2): as mesas dele e os dois sentidos próprios, o
+/// que avança (<see cref="Direction"/>) e o de dentro da faixa
+/// (<see cref="Cross"/>, 05/10/2026). A ordem dos blocos na lista é a ordem
+/// da numeração (15.3).
 /// </summary>
-public sealed record NumberingBlock(Guid Id, string Name, ScanDirection Direction, IReadOnlyList<Guid> Tables);
+/// <param name="ChosenCross">O sentido na faixa escolhido; null (ou paralelo ao que avança) vale o <see cref="ScanOrder.DefaultCross"/>.</param>
+public sealed record NumberingBlock(Guid Id, string Name, ScanDirection Direction, IReadOnlyList<Guid> Tables, ScanDirection? ChosenCross = null)
+{
+    /// <summary>O sentido dentro da faixa que vale (sempre perpendicular ao que avança).</summary>
+    public ScanDirection Cross => ScanOrder.ValidCross(Direction, ChosenCross);
+}
 
 /// <summary>
 /// Uma linha do registro da varredura (chave "NUMERACAO_VARREDURA"): a usina
-/// inteira (o sentido padrão), um bloco (nome e sentido, na ordem da lista)
-/// ou uma mesa de um bloco.
+/// inteira (os sentidos padrão), um bloco (nome e sentidos, na ordem da
+/// lista) ou uma mesa de um bloco.
+/// <para>
+/// Formato 2 (05/10/2026): 5 campos, com o sentido na faixa
+/// (<see cref="Cross"/>). O formato 1 (4 campos, sem ele) é lido por
+/// <see cref="ParseLegacy"/>: o sentido na faixa fica o
+/// <see cref="ScanOrder.DefaultCross"/>, o que a numeração usava antes (a
+/// ordem de um desenho antigo não muda). Grava-se sempre o 2.
+/// </para>
 /// </summary>
-public sealed record ScanRow(string Kind, Guid Owner, string Value, ScanDirection Direction)
+/// <param name="Cross">O sentido na faixa; null ou paralelo ao que avança vale o padrão.</param>
+public sealed record ScanRow(string Kind, Guid Owner, string Value, ScanDirection Direction, ScanDirection? Cross = null)
 {
-    public const int FieldCount = 4;
+    public const int Version = 2;
+    public const int FieldCount = 5;
+    public const int LegacyVersion = 1;
+    public const int LegacyFieldCount = 4;
     public const string Plant = "USINA";
     public const string Block = "BLOCO";
     public const string Table = "MESA";
 
-    public IReadOnlyList<string> ToFields() =>
-        [Kind, Owner == Guid.Empty ? string.Empty : Owner.ToString("D"), Value ?? string.Empty, Direction.ToString()];
+    /// <summary>O sentido na faixa que vale (sempre perpendicular ao que avança).</summary>
+    public ScanDirection ValidCross => ScanOrder.ValidCross(Direction, Cross);
 
+    public IReadOnlyList<string> ToFields() =>
+        [Kind, Owner == Guid.Empty ? string.Empty : Owner.ToString("D"), Value ?? string.Empty, Direction.ToString(), ValidCross.ToString()];
+
+    /// <summary>O formato 2: sentido na faixa que não é sentido, recusado; paralelo ao que avança, vira o padrão.</summary>
     public static ScanRow? Parse(IReadOnlyList<string> c)
     {
         ArgumentNullException.ThrowIfNull(c);
-        if (c.Count < FieldCount || c[0] is not (Plant or Block or Table)) return null;
+        if (c.Count < FieldCount || ParseLegacy(c) is not { } linha) return null;
+        if (Sentido(c[4]) is not { } faixa) return null;
+
+        return linha with { Cross = ScanOrder.IsPerpendicular(linha.Direction, faixa) ? faixa : null };
+    }
+
+    /// <summary>O formato 1 (4 campos, sem o sentido na faixa).</summary>
+    public static ScanRow? ParseLegacy(IReadOnlyList<string> c)
+    {
+        ArgumentNullException.ThrowIfNull(c);
+        if (c.Count < LegacyFieldCount || c[0] is not (Plant or Block or Table)) return null;
         if (!ElectricalString.OptionalGuid(c[1], out var dono)) return null;
-        if (int.TryParse(c[3], out _) || !Enum.TryParse<ScanDirection>(c[3], out var sentido) || !Enum.IsDefined(sentido)) return null;
+        if (Sentido(c[3]) is not { } sentido) return null;
 
         return c[0] switch
         {
@@ -246,26 +290,36 @@ public sealed record ScanRow(string Kind, Guid Owner, string Value, ScanDirectio
             _ => null,
         };
     }
+
+    private static ScanDirection? Sentido(string texto) =>
+        !int.TryParse(texto, out _) && Enum.TryParse<ScanDirection>(texto, out var sentido) && Enum.IsDefined(sentido) ? sentido : null;
 }
 
 /// <summary>
-/// A configuração da varredura (15.2, 15.3): o sentido da usina inteira (o
-/// padrão) e os blocos, na ordem da lista. Uma mesa pertence a no máximo um
-/// bloco; a que não está em bloco nenhum é numerada no sentido da usina,
-/// depois de todos os blocos.
+/// A configuração da varredura (15.2, 15.3): os sentidos da usina inteira (o
+/// padrão: o que avança e o de dentro da faixa) e os blocos, na ordem da
+/// lista. Uma mesa pertence a no máximo um bloco; a que não está em bloco
+/// nenhum é numerada nos sentidos da usina, depois de todos os blocos.
 /// </summary>
 public sealed class ScanSetup
 {
     private readonly List<NumberingBlock> _blocos;
 
-    public ScanSetup(ScanDirection defaultDirection, IEnumerable<NumberingBlock> blocks)
+    public ScanSetup(ScanDirection defaultDirection, IEnumerable<NumberingBlock> blocks, ScanDirection? defaultCross = null)
     {
         ArgumentNullException.ThrowIfNull(blocks);
         DefaultDirection = defaultDirection;
+        ChosenDefaultCross = defaultCross;
         _blocos = blocks.ToList();
     }
 
     public ScanDirection DefaultDirection { get; set; }
+
+    /// <summary>O sentido na faixa da usina escolhido (null: o padrão do sentido que avança).</summary>
+    public ScanDirection? ChosenDefaultCross { get; set; }
+
+    /// <summary>O sentido na faixa da usina que vale (sempre perpendicular ao que avança).</summary>
+    public ScanDirection DefaultCross => ScanOrder.ValidCross(DefaultDirection, ChosenDefaultCross);
 
     public IReadOnlyList<NumberingBlock> Blocks => _blocos;
 
@@ -283,7 +337,7 @@ public sealed class ScanSetup
         return dono;
     }
 
-    /// <summary>Um bloco novo no fim da lista, sem mesas, no sentido da usina, com o próximo nome livre ("Bloco 3").</summary>
+    /// <summary>Um bloco novo no fim da lista, sem mesas, nos sentidos da usina, com o próximo nome livre ("Bloco 3").</summary>
     public NumberingBlock AddBlock()
     {
         var prefixo = Tr.F("Bloco {0}", string.Empty);
@@ -295,7 +349,7 @@ public sealed class ScanSetup
             if (int.TryParse(b.Name.AsSpan(prefixo.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var n)) maior = Math.Max(maior, n);
         }
 
-        var bloco = new NumberingBlock(Guid.NewGuid(), Tr.F("Bloco {0}", maior + 1), DefaultDirection, []);
+        var bloco = new NumberingBlock(Guid.NewGuid(), Tr.F("Bloco {0}", maior + 1), DefaultDirection, [], DefaultCross);
         _blocos.Add(bloco);
         return bloco;
     }
@@ -317,9 +371,9 @@ public sealed class ScanSetup
     }
 
     /// <summary>
-    /// A sequência da usina (15.2, 15.3): o bloco 1 inteiro no sentido dele,
-    /// depois o 2, e segue na ordem da lista; por último as strings de mesa
-    /// fora de bloco, no sentido da usina.
+    /// A sequência da usina (15.2, 15.3): o bloco 1 inteiro nos sentidos dele
+    /// (o que avança e o de dentro da faixa), depois o 2, e segue na ordem da
+    /// lista; por último as strings de mesa fora de bloco, nos sentidos da usina.
     /// </summary>
     public IReadOnlyList<Guid> Sequence(IReadOnlyList<ScanItem> items)
     {
@@ -329,15 +383,65 @@ public sealed class ScanSetup
         var porBloco = items.ToLookup(i => dono.GetValueOrDefault(i.Table));
         var sequencia = new List<Guid>(items.Count);
 
-        foreach (var b in _blocos) sequencia.AddRange(ScanOrder.Order(porBloco[b.Id].ToList(), b.Direction));
-        sequencia.AddRange(ScanOrder.Order(porBloco[Guid.Empty].ToList(), DefaultDirection));
+        foreach (var b in _blocos) sequencia.AddRange(ScanOrder.Order(porBloco[b.Id].ToList(), b.Direction, cross: b.Cross));
+        sequencia.AddRange(ScanOrder.Order(porBloco[Guid.Empty].ToList(), DefaultDirection, cross: DefaultCross));
         return sequencia;
     }
 
     /// <summary>Tira o bloco da lista; as mesas dele voltam ao sentido da usina.</summary>
     public bool Remove(Guid id) => _blocos.RemoveAll(b => b.Id == id) > 0;
 
-    public bool SetDirection(Guid id, ScanDirection direction) => Trocar(id, b => b with { Direction = direction });
+    /// <summary>
+    /// O sentido que avança do bloco. O da faixa continua se ainda é
+    /// perpendicular (ex. da esquerda para a direita virou da direita para a
+    /// esquerda); se o que avança mudou de eixo, o da faixa vira o padrão do
+    /// eixo novo (é o que fica gravado: o registro só guarda o que vale).
+    /// </summary>
+    public bool SetDirection(Guid id, ScanDirection direction) =>
+        Trocar(id, b => b with { Direction = direction, ChosenCross = ScanOrder.ValidCross(direction, b.ChosenCross) });
+
+    /// <summary>O sentido na faixa do bloco; falso se o bloco não existe ou o sentido não é perpendicular ao que avança.</summary>
+    public bool SetCross(Guid id, ScanDirection cross) =>
+        Find(id) is { } b && Enum.IsDefined(cross) && ScanOrder.IsPerpendicular(b.Direction, cross) && Trocar(id, x => x with { ChosenCross = cross });
+
+    /// <summary>O sentido na faixa da usina; falso (e nada muda) se não é perpendicular ao que avança.</summary>
+    public bool SetDefaultCross(ScanDirection cross)
+    {
+        if (!Enum.IsDefined(cross) || !ScanOrder.IsPerpendicular(DefaultDirection, cross)) return false;
+        ChosenDefaultCross = cross;
+        return true;
+    }
+
+    /// <summary>
+    /// Quantas strings cada bloco tem (05/10/2026, o resumo da lista): a
+    /// string é do bloco da mesa do primeiro módulo dela, a mesma regra de
+    /// <see cref="NumberingScope.OfBlock"/>. GUID repetido (cópia) conta uma
+    /// vez. String sem posição (sem módulo, ou o primeiro não está no
+    /// desenho) não é de bloco nenhum: vai em <see cref="BlockStringCount.Unplaced"/>.
+    /// </summary>
+    public BlockStringCount CountStrings(IEnumerable<ElectricalString> strings, IReadOnlyDictionary<Guid, ModuleSpot> modules)
+    {
+        ArgumentNullException.ThrowIfNull(strings);
+        ArgumentNullException.ThrowIfNull(modules);
+
+        var dono = BlockByTable();
+        var porBloco = new Dictionary<Guid, int>();
+        foreach (var b in _blocos) porBloco.TryAdd(b.Id, 0);
+        var vistas = new HashSet<Guid>();
+        var fora = 0;
+        var semPosicao = 0;
+
+        foreach (var s in strings)
+        {
+            if (!vistas.Add(s.Id)) continue;
+
+            if (s.Modules.Count == 0 || !modules.TryGetValue(s.Modules[0], out var lugar)) semPosicao++;
+            else if (dono.TryGetValue(lugar.Table, out var bloco)) porBloco[bloco]++;
+            else fora++;
+        }
+
+        return new BlockStringCount(porBloco, fora, semPosicao);
+    }
 
     /// <summary>Renomeia; null se deu certo, o porquê se não.</summary>
     public string? Rename(Guid id, string? name)
@@ -392,12 +496,12 @@ public sealed class ScanSetup
     /// <summary>As linhas do registro: a usina, e cada bloco seguido das mesas dele, na ordem da lista.</summary>
     public IReadOnlyList<ScanRow> ToRows()
     {
-        var linhas = new List<ScanRow> { new(ScanRow.Plant, Guid.Empty, string.Empty, DefaultDirection) };
+        var linhas = new List<ScanRow> { new(ScanRow.Plant, Guid.Empty, string.Empty, DefaultDirection, DefaultCross) };
 
         foreach (var b in _blocos)
         {
-            linhas.Add(new ScanRow(ScanRow.Block, b.Id, b.Name, b.Direction));
-            linhas.AddRange(b.Tables.Select(t => new ScanRow(ScanRow.Table, b.Id, t.ToString("D"), b.Direction)));
+            linhas.Add(new ScanRow(ScanRow.Block, b.Id, b.Name, b.Direction, b.Cross));
+            linhas.AddRange(b.Tables.Select(t => new ScanRow(ScanRow.Table, b.Id, t.ToString("D"), b.Direction, b.Cross)));
         }
 
         return linhas;
@@ -412,8 +516,9 @@ public sealed class ScanSetup
     {
         ArgumentNullException.ThrowIfNull(rows);
 
-        var padrao = rows.FirstOrDefault(r => r.Kind == ScanRow.Plant)?.Direction ?? ScanDirection.LeftToRight;
-        var blocos = new List<(Guid Id, string Nome, ScanDirection Sentido, List<Guid> Mesas)>();
+        var usina = rows.FirstOrDefault(r => r.Kind == ScanRow.Plant);
+        var padrao = usina?.Direction ?? ScanDirection.LeftToRight;
+        var blocos = new List<(Guid Id, string Nome, ScanDirection Sentido, ScanDirection? Faixa, List<Guid> Mesas)>();
         var usadas = new HashSet<Guid>();
         var perdidas = 0;
 
@@ -422,7 +527,7 @@ public sealed class ScanSetup
             if (r.Kind == ScanRow.Block)
             {
                 if (blocos.Any(b => b.Id == r.Owner)) perdidas++;
-                else blocos.Add((r.Owner, r.Value, r.Direction, []));
+                else blocos.Add((r.Owner, r.Value, r.Direction, r.Cross, []));
             }
             else if (r.Kind == ScanRow.Table)
             {
@@ -433,8 +538,18 @@ public sealed class ScanSetup
             }
         }
 
-        return (new ScanSetup(padrao, blocos.Select(b => new NumberingBlock(b.Id, b.Nome, b.Sentido, b.Mesas))), perdidas);
+        return (new ScanSetup(padrao, blocos.Select(b => new NumberingBlock(b.Id, b.Nome, b.Sentido, b.Mesas, b.Faixa)), usina?.Cross), perdidas);
     }
+}
+
+/// <summary>
+/// Quantas strings há em cada bloco (pelo GUID do bloco), fora de bloco e sem
+/// posição (o primeiro módulo não está no desenho).
+/// </summary>
+public sealed record BlockStringCount(IReadOnlyDictionary<Guid, int> ByBlock, int Outside, int Unplaced)
+{
+    /// <summary>A soma das strings em bloco.</summary>
+    public int InBlocks => ByBlock.Values.Sum();
 }
 
 /// <summary>Onde está um módulo, para a varredura: a mesa dele e a posição em planta (o centro).</summary>

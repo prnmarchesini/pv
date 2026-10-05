@@ -1,0 +1,105 @@
+; Nivel 2 da aba Numeracao de 05/10/2026 (Renan: "o botao selecionar mesas
+; nao deixa selecionar, e cada bloco precisa de dois sentidos"). Usina pelo
+; motor, strings de teste e a cadeia de exemplo (14 strings alocadas).
+; 1) Um registro NUMERACAO_VARREDURA no formato 1 (sem o sentido na faixa),
+;    gravado a mao: e lido com o sentido na faixa de antes; a primeira mudanca
+;    regrava no formato 2.
+; 2) O "Selecionar" da linha do bloco: o comando CLIVUS_NUMERACAO_MESAS (o que
+;    o botao manda pela linha de comando), com o bloco e a selecao.
+; 3) Os dois sentidos da usina e de cada bloco; o paralelo e recusado. Gerar
+;    usa os dois: a lista das strings (NUMERACAO_STRING) e conferida no .ps1.
+; 4) O resumo da lista (mesas e strings por bloco, fora de bloco).
+; 5) O "Mostrar" da linha do bloco, pelo MESMO caminho do botao, fora de
+;    comando: a selecao implicita tem os contornos das mesas do bloco e so eles.
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area numeracao")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento numeracao")
+(command "CLIVUS_MESAS_EXEMPLO_AUTO")
+(command "CLIVUS_USINA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_STRINGS_TESTE_AUTO")
+(command "CLIVUS_NUMERACAO_EXEMPLO_AUTO")
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:tipo (xd) (cdr (nth 0 xd)))
+(defun clivus:x0 (e) (cadr (assoc 10 (entget (entnext e)))))
+(defun clivus:dic (/ d) (setq d (dictsearch (namedobjdict) "CLIVUS")) (if d (cdr (assoc -1 d))))
+(defun clivus:campos (chave / r) (setq r (dictsearch (clivus:dic) chave)) (if r (mapcar 'cdr (vl-remove-if-not '(lambda (p) (= (car p) 1)) r))))
+
+; 1) O formato 1, a mao.
+(dictremove (clivus:dic) "NUMERACAO_VARREDURA")
+(dictadd (clivus:dic) "NUMERACAO_VARREDURA"
+  (entmakex '((0 . "XRECORD") (100 . "AcDbXrecord")
+              (1 . "FORMATO") (1 . "1") (1 . "QUANTIDADE") (1 . "2")
+              (1 . "USINA") (1 . "") (1 . "") (1 . "TopToBottom")
+              (1 . "BLOCO") (1 . "11111111-2222-3333-4444-555555555555") (1 . "Antigo") (1 . "RightToLeft"))))
+(princ "\nCLIVUS_ANTIGO_LISTA")
+(command "CLIVUS_NUMERACAO_AUTO" "Listar")
+(princ "\nCLIVUS_ANTIGO_FIM")
+(command "CLIVUS_NUMERACAO_AUTO" "Bloco" "Apagar" "Antigo")
+(setq clivus:f (clivus:campos "NUMERACAO_VARREDURA"))
+(princ (strcat "\nCLIVUS_REGRAVADO formato=" (cadr clivus:f) " campos=" (itoa (length clivus:f)) " faixa=" (nth 8 clivus:f) " fim"))
+
+; As mesas a oeste e a leste da media do primeiro vertice do contorno.
+(setq clivus:ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) clivus:i 0 clivus:mesas nil)
+(while (< clivus:i (clivus:conta clivus:ss))
+  (setq clivus:e (ssname clivus:ss clivus:i))
+  (if (= (clivus:tipo (clivus:xdata clivus:e)) "Mesa") (setq clivus:mesas (cons clivus:e clivus:mesas)))
+  (setq clivus:i (1+ clivus:i)))
+(setq clivus:media (/ (apply '+ (mapcar 'clivus:x0 clivus:mesas)) (max 1 (length clivus:mesas))))
+(setq clivus:oeste (ssadd) clivus:leste (ssadd) clivus:no 0 clivus:nl 0)
+(foreach e clivus:mesas
+  (if (< (clivus:x0 e) clivus:media)
+    (setq clivus:oeste (ssadd e clivus:oeste) clivus:no (1+ clivus:no))
+    (setq clivus:leste (ssadd e clivus:leste) clivus:nl (1+ clivus:nl))))
+(setq clivus:nstrings (clivus:conta (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "CLIVUS_STRING") (list -3 (list "CLIVUS"))))))
+(princ (strcat "\nCLIVUS_NUMERACAO_MESAS total=" (itoa (length clivus:mesas)) " oeste=" (itoa clivus:no) " leste=" (itoa clivus:nl) " strings=" (itoa clivus:nstrings)))
+
+; 2) O Selecionar da linha: o comando que o botao manda.
+(command "CLIVUS_NUMERACAO_AUTO" "Bloco" "Novo")
+(command "CLIVUS_NUMERACAO_AUTO" "Bloco" "Novo")
+(command "CLIVUS_NUMERACAO_MESAS" "Bloco 1" clivus:oeste "")
+(command "CLIVUS_NUMERACAO_MESAS" "Bloco 2" clivus:leste "")
+
+; 3) Os dois sentidos.
+(command "CLIVUS_NUMERACAO_AUTO" "Usina" "CimaBaixo")
+(command "CLIVUS_NUMERACAO_AUTO" "Faixa" "DireitaEsquerda")
+(command "CLIVUS_NUMERACAO_AUTO" "Bloco" "Sentido" "Bloco 1" "EsquerdaDireita")
+(command "CLIVUS_NUMERACAO_AUTO" "Bloco" "Faixa" "Bloco 1" "BaixoCima")
+(command "CLIVUS_NUMERACAO_AUTO" "Bloco" "Sentido" "Bloco 2" "BaixoCima")
+(command "CLIVUS_NUMERACAO_AUTO" "Bloco" "Faixa" "Bloco 2" "DireitaEsquerda")
+(princ "\nCLIVUS_RECUSA")
+(command "CLIVUS_NUMERACAO_AUTO" "Bloco" "Faixa" "Bloco 2" "CimaBaixo")
+(princ "\nCLIVUS_RECUSA_FIM")
+
+(princ "\nCLIVUS_FASE_GERAR")
+(command "CLIVUS_NUMERACAO_AUTO" "Gerar")
+(command "CLIVUS_NUMERACAO_AUTO" "Strings")
+(princ "\nCLIVUS_LISTA_FINAL")
+(command "CLIVUS_NUMERACAO_AUTO" "Listar")
+(princ "\nCLIVUS_LISTA_FINAL_FIM")
+
+; 5) O Mostrar da linha, pelo caminho do botao (fora de comando).
+(defun clivus:sel (rotulo / ss i n mesas)
+  (setq ss (ssget "_I") i 0 n 0 mesas 0)
+  (while (< i (clivus:conta ss))
+    (if (= (clivus:tipo (clivus:xdata (ssname ss i))) "Mesa") (setq mesas (1+ mesas)))
+    (setq i (1+ i)))
+  (princ (strcat "\nCLIVUS_MOSTRAR " rotulo " n=" (itoa (clivus:conta ss)) " mesas=" (itoa mesas) " fim")))
+(sssetfirst nil nil)
+(command "CLIVUS_NUMERACAO_JANELA_AUTO" "Bloco 1")
+(clivus:sel "1")
+(sssetfirst nil nil)
+(command "CLIVUS_NUMERACAO_JANELA_AUTO" "Bloco 2")
+(clivus:sel "2")
+
+(princ "\nCLIVUS_NUMERACAO_FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

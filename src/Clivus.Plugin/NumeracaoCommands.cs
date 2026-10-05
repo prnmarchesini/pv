@@ -1,5 +1,6 @@
 using System.Windows;
 using Autodesk.AutoCAD.ApplicationServices;
+using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using Clivus.Core;
@@ -41,15 +42,137 @@ public static class NumeracaoCommands
     }
 
     /// <summary>
-    /// [Tag/Usina/Bloco/Gerar/RegerarBloco/RefazerInversor/ApagarTags/Strings/Listar],
+    /// CLIVUS_NUMERACAO_MESAS (05/10/2026), o "Selecionar" da linha do bloco:
+    /// pergunta o bloco (nome ou GUID) e a seleção das mesas dele, que
+    /// substituem as de antes (só mesa entra). A seleção é pedida aqui, dentro
+    /// de um comando: do clique da janela solta (fora de comando) o AutoCAD
+    /// não deixava selecionar. As mesas que já são do bloco ficam destacadas
+    /// enquanto o usuário seleciona. No fim a janela que pediu volta.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoNumeracaoMesas)]
+    public static void Mesas()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+        string? frase = null;
+        var erro = false;
+        var destacadas = Array.Empty<ObjectId>();
+
+        try
+        {
+            if (PerguntarBloco(editor, documento.Database) is not { } bloco)
+            {
+                frase = Tr.T("Nenhum bloco escolhido; nada mudou.");
+                return;
+            }
+
+            destacadas = PainelDeNumeracao.ContornosDoBloco(documento.Database, bloco.Id);
+            Destacar(documento.Database, destacadas, true);
+
+            var selecao = editor.GetSelection(new PromptSelectionOptions { MessageForAdding = Tr.F("\nSelecione as mesas do {0} (só mesas entram; Enter termina): ", bloco.Name) }, PainelDeNumeracao.FiltroDeMesas);
+            if (selecao.Status != PromptStatus.OK)
+            {
+                frase = Tr.F("Seleção cancelada; {0} ficou como estava.", bloco.Name);
+                return;
+            }
+
+            frase = PainelDeNumeracao.GravarMesas(documento, bloco, selecao.Value.GetObjectIds());
+            editor.WriteMessage(Tr.F("\nNUMERACAO {0}\n", frase));
+        }
+        catch (System.Exception falha)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao selecionar as mesas do bloco.", falha);
+            frase = Tr.F("Não consegui: {0}", falha.Message);
+            erro = true;
+            editor.WriteMessage(Tr.F("\nNão consegui selecionar as mesas: {0}\n", falha.Message));
+        }
+        finally
+        {
+            Destacar(documento.Database, destacadas, false);
+            PainelDeNumeracao.Retomar(documento, frase, erro);
+        }
+    }
+
+    /// <summary>
+    /// CLIVUS_NUMERACAO_MOSTRAR, o "Mostrar" da linha do bloco: as mesas do
+    /// bloco (nome ou GUID) ficam selecionadas no desenho (seleção implícita).
+    /// Nada é gravado.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoNumeracaoMostrar, CommandFlags.Modal | CommandFlags.Redraw | CommandFlags.NoUndoMarker)]
+    public static void Mostrar()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+
+        try
+        {
+            if (PerguntarBloco(editor, documento.Database) is not { } bloco) return;
+
+            var ids = PainelDeNumeracao.ContornosDoBloco(documento.Database, bloco.Id);
+            editor.SetImpliedSelection(ids);
+            editor.WriteMessage(ids.Length == 0
+                ? Tr.F("\nNUMERACAO {0} não tem mesa no desenho.\n", bloco.Name)
+                : Tr.F("\nNUMERACAO {0}: {1} mesa(s) selecionada(s).\n", bloco.Name, ids.Length));
+        }
+        catch (System.Exception falha)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao mostrar as mesas do bloco.", falha);
+            editor.WriteMessage(Tr.F("\nNão consegui mostrar as mesas: {0}\n", falha.Message));
+        }
+    }
+
+    /// <summary>O bloco pelo nome ou pelo GUID (o que o botão manda); null e aviso se não há.</summary>
+    internal static NumberingBlock? PerguntarBloco(Editor editor, Database database)
+    {
+        var qual = editor.GetString(new PromptStringOptions(Tr.T("\nBloco (nome): ")) { AllowSpaces = true });
+        if (qual.Status != PromptStatus.OK) return null;
+
+        var texto = qual.StringResult.Trim();
+        var blocos = NumeracaoStore.Varredura(database).Varredura.Blocks;
+        var bloco = Guid.TryParse(texto, out var id)
+            ? blocos.FirstOrDefault(b => b.Id == id)
+            : blocos.FirstOrDefault(b => string.Equals(b.Name, texto, StringComparison.CurrentCultureIgnoreCase));
+
+        if (bloco is null) editor.WriteMessage(Tr.F("\nNUMERACAO Não há bloco chamado \"{0}\".\n", texto));
+        return bloco;
+    }
+
+    /// <summary>Liga ou desliga o destaque do AutoCAD nas entidades (só tela; nada é gravado).</summary>
+    private static void Destacar(Database database, IReadOnlyList<ObjectId> ids, bool ligar)
+    {
+        if (ids.Count == 0 || !ClivusExtension.TemInterface()) return;
+
+        try
+        {
+            using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+            foreach (var id in ids)
+            {
+                if (id.IsErased || transacao.GetObject(id, OpenMode.ForRead) is not Entity e) continue;
+                if (ligar) e.Highlight();
+                else e.Unhighlight();
+            }
+        }
+        catch (System.Exception falha)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui destacar as mesas do bloco.", falha);
+        }
+    }
+
+    /// <summary>
+    /// [Tag/Usina/Faixa/Bloco/Gerar/RegerarBloco/RefazerInversor/ApagarTags/Strings/Listar],
     /// para o nível 2. Gerar numera a usina (15.4); RegerarBloco e
     /// RefazerInversor pedem o nome e numeram só aquele pedaço; ApagarTags
     /// pede [Tudo/Inversor] (15.5); Strings lista cada string. Tag pede a composição em uma
     /// linha, "trafo|inversor|string|separador" (trafo "-" tira o pedaço do
     /// trafo; ex. "T|I|S|." ou "-||S|"). Usina pede o sentido da usina
-    /// inteira. Bloco pede [Novo/Mesas/Sentido/Subir/Descer/Renomear/Apagar]
-    /// e o nome do bloco (Mesas pede a seleção; Sentido, o sentido; Renomear,
-    /// o nome novo). Listar só mostra. Toda opção termina mostrando o que está
+    /// inteira; Faixa, o sentido na faixa dela. Bloco pede
+    /// [Novo/Mesas/Sentido/Faixa/Subir/Descer/Renomear/Apagar] e o nome do
+    /// bloco (Mesas pede a seleção; Sentido e Faixa, o sentido; Renomear, o
+    /// nome novo). Listar só mostra. Toda opção termina mostrando o que está
     /// gravado.
     /// </summary>
     [CommandMethod(PluginInfo.ComandoNumeracaoAutomatico)]
@@ -62,8 +185,8 @@ public static class NumeracaoCommands
 
         try
         {
-            var opcao = Palavra(editor, Tr.T("\nNumeração [Tag/Usina/Bloco/Gerar/RegerarBloco/RefazerInversor/ApagarTags/Strings/Listar]: "),
-                "Tag", "Usina", "Bloco", "Gerar", "RegerarBloco", "RefazerInversor", "ApagarTags", "Strings", "Listar");
+            var opcao = Palavra(editor, Tr.T("\nNumeração [Tag/Usina/Faixa/Bloco/Gerar/RegerarBloco/RefazerInversor/ApagarTags/Strings/Listar]: "),
+                "Tag", "Usina", "Faixa", "Bloco", "Gerar", "RegerarBloco", "RefazerInversor", "ApagarTags", "Strings", "Listar");
             if (opcao is null) return;
 
             var database = documento.Database;
@@ -118,6 +241,13 @@ public static class NumeracaoCommands
                 case "Usina":
                     if (PerguntarSentido(editor) is not { } daUsina) return;
                     NumeracaoStore.MudarVarredura(database, v => v.DefaultDirection = daUsina);
+                    break;
+
+                case "Faixa":
+                    if (PerguntarSentido(editor) is not { } faixaDaUsina) return;
+                    var aceitou = false;
+                    NumeracaoStore.MudarVarredura(database, v => aceitou = v.SetDefaultCross(faixaDaUsina));
+                    if (!aceitou) editor.WriteMessage(Tr.T("\nNUMERACAO Recusado: o sentido na faixa tem que ser perpendicular ao que avança.\n"));
                     break;
 
                 case "Bloco":
@@ -179,9 +309,11 @@ public static class NumeracaoCommands
         if (problemaDoEsquema is not null) editor.WriteMessage(Tr.F("  ATENÇÃO: {0}.\n", problemaDoEsquema));
 
         var (varredura, problemaDaVarredura) = NumeracaoStore.Varredura(database);
-        editor.WriteMessage(Tr.F("NUMERACAO usina {0}; {1} bloco(s)\n", ScanOrder.Describe(varredura.DefaultDirection), varredura.Blocks.Count));
+        editor.WriteMessage(Tr.F("NUMERACAO usina {0}; {1} bloco(s); na faixa, {2}\n", ScanOrder.Describe(varredura.DefaultDirection), varredura.Blocks.Count, ScanOrder.Describe(varredura.DefaultCross)));
+        var contagem = PainelDeNumeracao.Contar(database, varredura);
         for (var i = 0; i < varredura.Blocks.Count; i++)
-            editor.WriteMessage(Tr.F("NUMERACAO bloco {0}\n", PainelDeNumeracao.Descrever(varredura.Blocks[i], i + 1)));
+            editor.WriteMessage(Tr.F("NUMERACAO bloco {0}; {1}\n", PainelDeNumeracao.Descrever(varredura.Blocks[i], i + 1), PainelDeNumeracao.ResumoDoBloco(varredura.Blocks[i], contagem)));
+        editor.WriteMessage(Tr.F("NUMERACAO resumo {0}\n", PainelDeNumeracao.ResumoGeral(varredura, contagem)));
         if (problemaDaVarredura is not null) editor.WriteMessage(Tr.F("  ATENÇÃO: {0}.\n", problemaDaVarredura));
     }
 
@@ -190,7 +322,7 @@ public static class NumeracaoCommands
         var editor = documento.Editor;
         var database = documento.Database;
 
-        var acao = Palavra(editor, Tr.T("\nBloco [Novo/Mesas/Sentido/Subir/Descer/Renomear/Apagar]: "), "Novo", "Mesas", "Sentido", "Subir", "Descer", "Renomear", "Apagar");
+        var acao = Palavra(editor, Tr.T("\nBloco [Novo/Mesas/Sentido/Faixa/Subir/Descer/Renomear/Apagar]: "), "Novo", "Mesas", "Sentido", "Faixa", "Subir", "Descer", "Renomear", "Apagar");
         if (acao is null) return false;
 
         if (acao == "Novo")
@@ -215,6 +347,13 @@ public static class NumeracaoCommands
             case "Sentido":
                 if (PerguntarSentido(editor) is not { } sentido) return false;
                 NumeracaoStore.MudarVarredura(database, v => v.SetDirection(bloco.Id, sentido));
+                break;
+
+            case "Faixa":
+                if (PerguntarSentido(editor) is not { } faixa) return false;
+                var aceitou = false;
+                NumeracaoStore.MudarVarredura(database, v => aceitou = v.SetCross(bloco.Id, faixa));
+                if (!aceitou) editor.WriteMessage(Tr.T("\nNUMERACAO Recusado: o sentido na faixa tem que ser perpendicular ao que avança.\n"));
                 break;
 
             case "Subir":
@@ -299,7 +438,7 @@ internal sealed class JanelaDeNumeracao : Window
     private JanelaDeNumeracao(Document documento)
     {
         Title = Tr.T("Numeração das strings — Clivus Solar");
-        Width = 760;
+        Width = 980;
         Height = 560;
         MinWidth = 600;
         MinHeight = 420;
@@ -314,6 +453,8 @@ internal sealed class JanelaDeNumeracao : Window
         if (Abertas.TryGetValue(documento, out var aberta))
         {
             if (aberta.WindowState == WindowState.Minimized) aberta.WindowState = WindowState.Normal;
+            // Escondida pelo Selecionar de um bloco cujo comando não chegou a rodar: volta.
+            if (!aberta.IsVisible) aberta.Show();
             aberta.Activate();
             return;
         }
