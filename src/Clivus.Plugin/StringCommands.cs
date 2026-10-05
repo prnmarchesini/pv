@@ -201,7 +201,8 @@ public static class StringCommands
     /// CLIVUS_STRING_TRACADO_AUTO (nível 2, 11.3 e 11.4): o nome do tipo e
     /// os cliques, como no cartesiano. Strings separadas por ";", cliques
     /// por espaço; cada clique é "mesa.coluna.fileira" (coluna "F" = a
-    /// última da mesa, "M" = a do meio), com "L" na frente para o trecho em
+    /// última da mesa, "M" = a última da primeira metade, "N" = a primeira
+    /// da segunda), com "L" na frente para o trecho em
     /// leapfrog. "FILEIRA:C:0.0.0" ou "FILEIRA:L:0.0.0" liga a fileira
     /// inteira do clique numa string. Grava o traçado e imprime cada string.
     /// </summary>
@@ -281,7 +282,7 @@ public static class StringCommands
         }
     }
 
-    /// <summary>"0.F.1": mesa, coluna (ou F, a última; M, a do meio), fileira.</summary>
+    /// <summary>"0.F.1": mesa, coluna (ou F, a última; M e N, as duas do meio), fileira.</summary>
     private static RoutingCell? Celula(StringArrangement arranjo, string texto)
     {
         var partes = texto.Split('.');
@@ -292,6 +293,7 @@ public static class StringCommands
         {
             "F" => colunas - 1,
             "M" => colunas / 2 - 1,
+            "N" => colunas / 2,
             _ => int.TryParse(partes[1], out var c) ? c : -1,
         };
 

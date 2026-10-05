@@ -21,6 +21,9 @@ internal sealed class JanelaDeStrings : Window
     private readonly CartesianoDaString _cartesiano = new();
     private readonly TextBlock _resumoDoTracado = new() { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
 
+    private readonly ComboBox _tipoDoTrecho = new() { Height = 26, MinWidth = 110, Margin = new Thickness(0, 0, 6, 0), VerticalContentAlignment = VerticalAlignment.Center };
+    private readonly CheckBox _fileiraInteira = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+
     /// <summary>A string sendo montada por cliques no cartesiano (do tipo escolhido), ou null.</summary>
     private RouteBuilder? _montagem;
     private Guid _tipoDaMontagem;
@@ -87,8 +90,11 @@ internal sealed class JanelaDeStrings : Window
     }
 
     /// <summary>
-    /// A barra do traçado (11.3): clique no módulo do + e depois em cada
-    /// ponto de virada; Concluir string grava. Desfazer tira o último trecho.
+    /// A barra do traçado (11.3, 11.4): clique no módulo do + e depois em
+    /// cada ponto de virada (traçado livre: um U na metade da mesa são quatro
+    /// cliques), cada trecho convencional ou leapfrog; Concluir string grava.
+    /// Fileira inteira: um clique liga a fileira toda do cartesiano numa
+    /// string, no tipo de trecho escolhido.
     /// </summary>
     private UIElement BarraDoTracado()
     {
@@ -101,15 +107,29 @@ internal sealed class JanelaDeStrings : Window
             barra.Children.Add(b);
         }
 
-        barra.Children.Add(_resumoDoTracado);
+        _tipoDoTrecho.Items.Add(new ComboBoxItem { Content = Tr.T("Convencional"), ToolTip = Tr.T("Módulo a módulo, em sequência: o + e o − ficam em pontas opostas do trecho.") });
+        _tipoDoTrecho.Items.Add(new ComboBoxItem { Content = Tr.T("Leapfrog"), ToolTip = Tr.T("Alternado: vai pulando um módulo e volta pelos pulados; o − fica ao lado do começo do trecho.") });
+        _tipoDoTrecho.SelectedIndex = 0;
+        _fileiraInteira.Content = Tr.T("Fileira inteira");
+        _fileiraInteira.ToolTip = Tr.T("Um clique liga a fileira toda do cartesiano numa string, começando (+) pela ponta mais perto do clique.");
+
+        barra.Children.Add(_tipoDoTrecho);
+        barra.Children.Add(_fileiraInteira);
         Botao(Tr.T("Concluir string"), Tr.T("Grava a string montada: o + no primeiro módulo clicado, o − no último."), ConcluirString);
         Botao(Tr.T("Desfazer trecho"), Tr.T("Tira o último trecho da string em montagem."), DesfazerTrecho);
         Botao(Tr.T("Limpar traçado"), Tr.T("Tira todas as strings do tipo escolhido (as já desenhadas em campo não mudam)."), LimparTracado);
-        return barra;
+
+        // O resumo numa linha só abaixo dos botões.
+        var painel = new DockPanel();
+        DockPanel.SetDock(barra, Dock.Top);
+        painel.Children.Add(barra);
+        _resumoDoTracado.Margin = new Thickness(0, 0, 0, 6);
+        painel.Children.Add(_resumoDoTracado);
+        return painel;
     }
 
     /// <summary>O tipo de trecho do próximo clique.</summary>
-    private static RoutingKind TipoDoTrecho => RoutingKind.Conventional;
+    private RoutingKind TipoDoTrecho => _tipoDoTrecho.SelectedIndex == 1 ? RoutingKind.Leapfrog : RoutingKind.Conventional;
 
     private void MostrarTipo()
     {
@@ -138,6 +158,12 @@ internal sealed class JanelaDeStrings : Window
         {
             if (Escolhido is not { } tipo) return;
 
+            if (_fileiraInteira.IsChecked == true)
+            {
+                FileiraInteira(tipo, celula);
+                return;
+            }
+
             if (_montagem is null || _tipoDaMontagem != tipo.Id)
             {
                 _montagem = new RouteBuilder(tipo.Arrangement, tipo.Routes.SelectMany(r => r.Cells));
@@ -154,6 +180,31 @@ internal sealed class JanelaDeStrings : Window
             RegistroDeDiagnostico.Registrar("Falha no clique do cartesiano das strings.", erro);
             Avisar(Tr.F("Não consegui: {0}", erro.Message), erro: true);
         }
+    }
+
+    /// <summary>A fileira inteira do clique numa string (11.4), gravada já.</summary>
+    private void FileiraInteira(StringType tipo, RoutingCell celula)
+    {
+        if (_montagem is { IsEmpty: false } && _tipoDaMontagem == tipo.Id)
+        {
+            Avisar(Tr.T("Conclua ou desfaça a string em montagem antes."), erro: true);
+            return;
+        }
+
+        if (StringRouting.WholeRow(tipo.Arrangement, celula, TipoDoTrecho, out var porque) is not { } nova)
+        {
+            Avisar(Tr.F("Não liguei: {0}.", porque ?? string.Empty), erro: true);
+            return;
+        }
+
+        string? recusa = null;
+        Fazer(() =>
+        {
+            StringTypeStore.Mudar(_documento.Database, b => recusa = b.SetStrings(tipo.Id, [.. tipo.Routes, nova]));
+            return recusa is null ? Tr.F("String {0} gravada: {1}.", tipo.Routes.Count + 1, RouteBuilder.Describe(nova)) : null;
+        }, tipo.Id);
+
+        if (recusa is not null) Avisar(Tr.F("Não gravei: {0}.", recusa), erro: true);
     }
 
     private void DesfazerTrecho()
