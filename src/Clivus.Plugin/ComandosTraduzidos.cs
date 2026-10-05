@@ -246,11 +246,35 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_ELECTRICA")]
     public static void CLIVUS_ELECTRICA() => ConfiguracaoEletricaCommands.Eletrica();
 
+    [CommandMethod("CLIVUS_ELECTRICAL_ALLOCATE")]
+    public static void CLIVUS_ELECTRICAL_ALLOCATE() => AlocacaoDeStringsCommands.Alocar();
+
+    [CommandMethod("CLIVUS_ELECTRICA_ASIGNAR")]
+    public static void CLIVUS_ELECTRICA_ASIGNAR() => AlocacaoDeStringsCommands.Alocar();
+
+    [CommandMethod("CLIVUS_ELECTRICAL_PLACE")]
+    public static void CLIVUS_ELECTRICAL_PLACE() => ConfiguracaoEletricaCommands.Posicionar();
+
+    [CommandMethod("CLIVUS_ELECTRICA_UBICAR")]
+    public static void CLIVUS_ELECTRICA_UBICAR() => ConfiguracaoEletricaCommands.Posicionar();
+
     [CommandMethod("CLIVUS_ELECTRICAL_SUMMARY")]
     public static void CLIVUS_ELECTRICAL_SUMMARY() => ResumoEletricoCommands.Resumo();
 
     [CommandMethod("CLIVUS_ELECTRICA_RESUMEN")]
     public static void CLIVUS_ELECTRICA_RESUMEN() => ResumoEletricoCommands.Resumo();
+
+    [CommandMethod("CLIVUS_ELECTRICAL_SELECT", CommandFlags.Modal | CommandFlags.Redraw | CommandFlags.NoUndoMarker)]
+    public static void CLIVUS_ELECTRICAL_SELECT() => AlocacaoDeStringsCommands.SelecionarTodas();
+
+    [CommandMethod("CLIVUS_ELECTRICA_SELECCIONAR", CommandFlags.Modal | CommandFlags.Redraw | CommandFlags.NoUndoMarker)]
+    public static void CLIVUS_ELECTRICA_SELECCIONAR() => AlocacaoDeStringsCommands.SelecionarTodas();
+
+    [CommandMethod("CLIVUS_ELECTRICAL_SKID")]
+    public static void CLIVUS_ELECTRICAL_SKID() => SkidCommands.Agrupar();
+
+    [CommandMethod("CLIVUS_ELECTRICA_SKID")]
+    public static void CLIVUS_ELECTRICA_SKID() => SkidCommands.Agrupar();
 
     [CommandMethod("CLIVUS_STATUS", CommandFlags.Modal | CommandFlags.NoUndoMarker)]
     public static void CLIVUS_STATUS() => EstadoCommands.Estado();

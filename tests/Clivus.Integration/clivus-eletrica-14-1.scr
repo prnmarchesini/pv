@@ -1,0 +1,13 @@
+; Nivel 2 do 14.1 (eletrica): modelos de inversor, total de entradas derivado.
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_ELETRICA_AUTO" "Modelo" "Generico cliente" "1" "2")
+(command "CLIVUS_ELETRICA_AUTO" "Modelo" "Huawei 250" "5" "4")
+(command "CLIVUS_ELETRICA_AUTO" "Modelo" "huawei 250" "6" "4")
+(command "CLIVUS_ELETRICA_AUTO" "Modelo" "Sem entrada" "3" "0")
+(command "CLIVUS_ELETRICA_AUTO" "Listar")
+(princ "\nCLIVUS_ELETRICA_FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)
