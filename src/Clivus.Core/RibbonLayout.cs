@@ -104,13 +104,13 @@ public static class RibbonLayout
                     B(Tr.N("Árvore"), PluginInfo.ComandoArvore, Tr.N("Árvore como um pirulito: tronco e copa cilíndricos, com altura e largura de cada um. Clique onde pôr; o pé fica no terreno e acompanha o terreno quando a árvore é arrastada."), "arvore"),
                 ]),
                 B(Tr.N("Sombras"), PluginInfo.ComandoSombras, Tr.N("Escolhe o dia e o horário (ou um dia, um mês, um ano inteiro) e desenha a sombra dos objetos no terreno e sobre as mesas, marcando os módulos que ela pega; no período, o pior caso."), "sombras", grande: true),
-                B(Tr.N("Por que essa sombra?"), PluginInfo.ComandoSombraPorQue, Tr.N("Clique num módulo marcado: diz quanto da face pega sombra, de quê (árvore, outra mesa, terreno) e em que dia e hora."), "sombra_porque"),
+                B(Tr.N("Por quê?"), PluginInfo.ComandoSombraPorQue, Tr.N("Clique num módulo marcado: diz quanto da face pega sombra, de quê (árvore, outra mesa, terreno) e em que dia e hora."), "sombra_porque", grande: true),
             ]),
             new(Tr.N("Elétrica"),
             [
                 B(Tr.N("String"), PluginInfo.ComandoString, Tr.N("Os tipos de string (a biblioteca) e a geração do traçado das strings sobre os módulos."), "string", grande: true),
                 B(Tr.N("Configuração elétrica"), PluginInfo.ComandoEletrica, Tr.N("Subestação, transformadores, inversores (com a alocação das strings) e a numeração das strings."), "eletrica", grande: true),
-                B(Tr.N("Resumo elétrico"), PluginInfo.ComandoEletricaResumo, Tr.N("O sistema inteiro pela cadeia de vínculo: subestações, trafos, inversores, strings, módulos e potência."), "resumo_eletrico"),
+                B(Tr.N("Resumo"), PluginInfo.ComandoEletricaResumo, Tr.N("O sistema inteiro pela cadeia de vínculo: subestações, trafos, inversores, strings, módulos e potência."), "resumo_eletrico", grande: true),
             ]),
             new(Tr.N("Saída"),
             [
