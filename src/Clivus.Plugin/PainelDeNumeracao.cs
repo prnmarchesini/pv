@@ -30,9 +30,10 @@ internal sealed class PainelDeNumeracao : DockPanel
     private readonly TextBlock _exemplo = new() { FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
 
     // 15.2: a varredura e os blocos.
-    private readonly ComboBox _sentidoDaUsina = Sentidos(Tr.T("O sentido do sequencial das strings nas mesas que não estão em bloco nenhum (a usina inteira, se não há blocos)."));
-    private readonly ComboBox _sentidoDoBloco = Sentidos(Tr.T("O sentido do sequencial das strings nas mesas do bloco escolhido."));
-    private readonly ListBox _blocos = new() { Height = 150, ToolTip = Tr.T("Os blocos, na ordem da numeração: o bloco 1 inteiro, depois o 2, e segue; as mesas fora de bloco vêm por último.") };
+    private readonly ComboBox _sentidoDaUsina = CaixaDeSentido(Tr.T("O sentido em que a numeração avança nas mesas que não estão em bloco nenhum (a usina inteira, se não há blocos)."));
+    private readonly ComboBox _faixaDaUsina = CaixaDeSentido(Tr.T("Na mesma faixa (linha ou coluna), em que sentido as strings fora de bloco são numeradas."));
+    private readonly ListBox _blocos = new() { MaxHeight = 260, Margin = new Thickness(0, 6, 0, 0), HorizontalContentAlignment = HorizontalAlignment.Stretch };
+    private readonly TextBlock _resumo = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
 
     // 15.5: o inversor das operações por inversor.
     private readonly ComboBox _inversor = new() { Width = 200, Height = 24, VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 12, 4), ToolTip = Tr.T("O inversor de Refazer inversor e Apagar do inversor (na ordem do cadastro).") };
@@ -56,6 +57,27 @@ internal sealed class PainelDeNumeracao : DockPanel
         Children.Add(new ScrollViewer { Content = pilha, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
 
         Carregar();
+
+        // Voltar à aba (ou a janela reaparecer) relê o desenho: o usuário pode ter mexido no CAD.
+        var primeira = true;
+        Loaded += (_, _) =>
+        {
+            try
+            {
+                if (primeira)
+                {
+                    primeira = false;
+                    return;
+                }
+
+                _desenho = null;
+                Recarregar();
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao reler a aba Numeração.", erro);
+            }
+        };
     }
 
     /// <summary>O painel do desenho (a aba Numeração).</summary>
@@ -180,88 +202,208 @@ internal sealed class PainelDeNumeracao : DockPanel
 
     // ------------------------------------------- 15.2 varredura e blocos
 
-    private static ComboBox Sentidos(string dica)
+    private static ComboBox CaixaDeSentido(string dica) =>
+        new() { Width = 150, Height = 24, VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0), ToolTip = dica };
+
+    /// <summary>Preenche a caixa do sentido que avança (os quatro) e a da faixa (os dois perpendiculares a ele), com a escolha.</summary>
+    private static void MontarSentidos(ComboBox sentido, ComboBox faixa, ScanDirection escolhido, ScanDirection naFaixa)
     {
-        var caixa = new ComboBox { Width = 210, Height = 24, VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 12, 0), ToolTip = dica };
-        foreach (var sentido in Enum.GetValues<ScanDirection>()) caixa.Items.Add(new ComboBoxItem { Content = ScanOrder.Describe(sentido), Tag = sentido });
-        return caixa;
+        sentido.Items.Clear();
+        foreach (var s in Enum.GetValues<ScanDirection>()) sentido.Items.Add(new ComboBoxItem { Content = ScanOrder.Describe(s), Tag = s });
+        sentido.SelectedItem = sentido.Items.OfType<ComboBoxItem>().First(i => (ScanDirection)i.Tag == escolhido);
+
+        faixa.Items.Clear();
+        foreach (var f in ScanOrder.CrossOptions(escolhido)) faixa.Items.Add(new ComboBoxItem { Content = ScanOrder.Describe(f), Tag = f });
+        faixa.SelectedItem = faixa.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (ScanDirection)i.Tag == naFaixa) ?? faixa.Items[0];
     }
 
-    private static void Escolher(ComboBox caixa, ScanDirection sentido) =>
-        caixa.SelectedItem = caixa.Items.OfType<ComboBoxItem>().First(i => (ScanDirection)i.Tag == sentido);
-
     private static ScanDirection? Sentido(ComboBox caixa) => (caixa.SelectedItem as ComboBoxItem)?.Tag as ScanDirection?;
+
+    private static TextBlock NaFaixa() => new() { Text = Tr.T("na faixa:"), VerticalAlignment = VerticalAlignment.Center };
+
+    /// <summary>
+    /// A troca de uma caixa de sentido grava depois que a escolha assenta: a
+    /// gravação refaz a lista inteira, inclusive a caixa que disparou. Nada
+    /// escapa para o WPF.
+    /// </summary>
+    private void AoEscolher(ComboBox caixa, Action<ScanDirection> gravar)
+    {
+        caixa.SelectionChanged += (_, _) =>
+        {
+            try
+            {
+                if (_mostrando || Sentido(caixa) is not { } escolhido) return;
+
+                Dispatcher.BeginInvoke(() =>
+                {
+                    try
+                    {
+                        gravar(escolhido);
+                    }
+                    catch (Exception erro)
+                    {
+                        RegistroDeDiagnostico.Registrar("Falha ao gravar o sentido da numeração.", erro);
+                        Avisar(Tr.F("Não consegui: {0}", erro.Message), erro: true);
+                    }
+                });
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao escolher o sentido da numeração.", erro);
+            }
+        };
+    }
 
     private UIElement SecaoDaVarredura()
     {
         var usina = Linha();
-        usina.Children.Add(Rotulo(Tr.T("Sentido da usina inteira")));
+        usina.Children.Add(Rotulo(Tr.T("Usina inteira:")));
         usina.Children.Add(_sentidoDaUsina);
-        _sentidoDaUsina.SelectionChanged += (_, _) =>
-        {
-            if (_mostrando || Sentido(_sentidoDaUsina) is not { } sentido) return;
-            MudarVarredura(v => v.DefaultDirection = sentido, Tr.F("Usina inteira: {0}.", ScanOrder.Describe(sentido)));
-        };
+        usina.Children.Add(NaFaixa());
+        usina.Children.Add(_faixaDaUsina);
+        usina.Children.Add(new Border { Width = 8 });
+        Botao(usina, Tr.T("Novo bloco"), Tr.T("Acrescenta um bloco no fim da lista, sem mesas, nos sentidos da usina."), NovoBloco);
 
-        var botoes = Linha(6);
-        Botao(botoes, Tr.T("Novo bloco"), Tr.T("Acrescenta um bloco no fim da lista, sem mesas, no sentido da usina."), NovoBloco);
-        Botao(botoes, Tr.T("Selecionar mesas"), Tr.T("Seleciona no desenho as mesas do bloco escolhido (só mesas entram). Mesa que estava em outro bloco passa para este."), SelecionarMesas);
-        Botao(botoes, Tr.T("Subir"), Tr.T("Sobe o bloco escolhido na lista: ele passa a ser numerado antes do de cima."), () => MoverBloco(-1));
-        Botao(botoes, Tr.T("Descer"), Tr.T("Desce o bloco escolhido na lista: ele passa a ser numerado depois do de baixo."), () => MoverBloco(+1));
-        Botao(botoes, Tr.T("Renomear"), Tr.T("Troca o nome do bloco escolhido."), RenomearBloco);
-        Botao(botoes, Tr.T("Apagar bloco"), Tr.T("Tira o bloco da lista; as mesas dele voltam ao sentido da usina. As tags já desenhadas não mudam."), ApagarBloco);
-        botoes.Children.Add(Rotulo(Tr.T("Sentido do bloco")));
-        botoes.Children.Add(_sentidoDoBloco);
-
-        _sentidoDoBloco.SelectionChanged += (_, _) =>
-        {
-            if (_mostrando || Sentido(_sentidoDoBloco) is not { } sentido || BlocoEscolhido is not { } bloco || bloco.Direction == sentido) return;
-            MudarVarredura(v => v.SetDirection(bloco.Id, sentido), Tr.F("{0}: {1}.", bloco.Name, ScanOrder.Describe(sentido)), bloco.Id);
-        };
-
-        _blocos.SelectionChanged += (_, _) =>
-        {
-            if (_mostrando || BlocoEscolhido is not { } bloco) return;
-
-            _mostrando = true;
-            Escolher(_sentidoDoBloco, bloco.Direction);
-            _mostrando = false;
-        };
+        AoEscolher(_sentidoDaUsina, sentido => MudarVarredura(v => v.DefaultDirection = sentido, Tr.F("Usina inteira: {0}.", ScanOrder.Describe(sentido))));
+        AoEscolher(_faixaDaUsina, faixa => MudarVarredura(v => v.SetDefaultCross(faixa), Tr.F("Usina inteira, na faixa: {0}.", ScanOrder.Describe(faixa))));
 
         var corpo = new StackPanel { Margin = new Thickness(6) };
         corpo.Children.Add(usina);
-        corpo.Children.Add(new Border { Height = 6 });
         corpo.Children.Add(_blocos);
-        corpo.Children.Add(botoes);
+        corpo.Children.Add(_resumo);
         return new GroupBox { Header = Tr.T("Varredura e blocos"), Content = corpo, Margin = new Thickness(0, 0, 0, 8) };
     }
 
     private NumberingBlock? BlocoEscolhido => (_blocos.SelectedItem as ListBoxItem)?.Tag as NumberingBlock;
 
+    /// <summary>A linha do bloco na linha de comando (CLIVUS_NUMERACAO_AUTO Listar): posição, nome, mesas e os dois sentidos.</summary>
     internal static string Descrever(NumberingBlock bloco, int posicao) =>
-        Tr.F("{0}. {1} — {2} mesa(s), {3}", posicao, bloco.Name, bloco.Tables.Count, ScanOrder.Describe(bloco.Direction));
+        Tr.F("{0}. {1} — {2} mesa(s), {3}", posicao, bloco.Name, bloco.Tables.Count, ScanOrder.Describe(bloco.Direction, bloco.Cross));
 
-    private void MostrarVarredura(ScanSetup varredura, Guid? manter)
+    /// <summary>O resumo da linha do bloco: "3 mesa(s), 12 string(s)".</summary>
+    internal static string ResumoDoBloco(NumberingBlock bloco, BlockStringCount contagem) =>
+        Tr.F("{0} mesa(s), {1} string(s)", bloco.Tables.Count, contagem.ByBlock.GetValueOrDefault(bloco.Id));
+
+    /// <summary>O resumo embaixo da lista: o total em blocos e o que ficou fora.</summary>
+    internal static string ResumoGeral(ScanSetup varredura, BlockStringCount contagem)
+    {
+        var frase = Tr.F("Em blocos: {0} mesa(s), {1} string(s). Fora de bloco: {2} string(s), nos sentidos da usina.",
+            varredura.Blocks.Sum(b => b.Tables.Count), contagem.InBlocks, contagem.Outside);
+        if (contagem.Unplaced > 0) frase += " " + Tr.F("{0} string(s) sem módulo no desenho ficam sem tag.", contagem.Unplaced);
+        return frase;
+    }
+
+    /// <summary>As strings do plugin e onde está cada módulo (a mesa), lidos do desenho.</summary>
+    private static (List<ElectricalString> Strings, Dictionary<Guid, ModuleSpot> Modulos) LerDesenho(Database database)
+    {
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        var strings = ElectricalStore.Strings(transacao, database).Select(s => s.String).ToList();
+        var modulos = NumeracaoDesenho.Modulos(transacao, database)
+            .ToDictionary(m => m.Key, m => new ModuleSpot(m.Value.Mesa, m.Value.Centro.X, m.Value.Centro.Y));
+        return (strings, modulos);
+    }
+
+    /// <summary>Quantas strings do plugin há em cada bloco (pela mesa do primeiro módulo), lidas do desenho.</summary>
+    internal static BlockStringCount Contar(Database database, ScanSetup varredura)
+    {
+        var (strings, modulos) = LerDesenho(database);
+        return varredura.CountStrings(strings, modulos);
+    }
+
+    /// <summary>
+    /// O desenho lido para o resumo, guardado: trocar sentido ou mover bloco
+    /// não muda strings nem módulos, e ler o espaço do modelo a cada clique
+    /// pesa numa usina grande. Relido ao mostrar a aba, ao gerar e depois da
+    /// seleção em campo.
+    /// </summary>
+    private (List<ElectricalString> Strings, Dictionary<Guid, ModuleSpot> Modulos)? _desenho;
+
+    /// <summary>Um botão pequeno da linha do bloco.</summary>
+    private void BotaoDaLinha(Panel onde, string texto, string dica, Action acao, double? largura = null)
+    {
+        Botao(onde, texto, dica, acao);
+        var b = (Button)onde.Children[^1];
+        b.Height = 24;
+        b.Margin = new Thickness(4, 0, 0, 0);
+        b.Padding = new Thickness(5, 0, 5, 0);
+        if (largura is { } l) b.Width = l;
+    }
+
+    /// <summary>A linha de um bloco: nome, resumo, os dois sentidos e os botões dele.</summary>
+    private ListBoxItem LinhaDoBloco(NumberingBlock bloco, int posicao, int total, BlockStringCount contagem)
+    {
+        var linha = new DockPanel();
+
+        var acoes = new StackPanel { Orientation = Orientation.Horizontal };
+        DockPanel.SetDock(acoes, Dock.Right);
+        linha.Children.Add(acoes);
+
+        var este = bloco;
+        BotaoDaLinha(acoes, Tr.T("Selecionar"), Tr.F("A janela some: selecione no desenho as mesas do {0} (só mesas entram; substituem as de antes) e Enter. Mesa de outro bloco passa para este.", bloco.Name), () => PedirMesas(este));
+        BotaoDaLinha(acoes, Tr.T("Mostrar"), Tr.F("Deixa selecionadas no desenho as mesas do {0}, com a janela aberta.", bloco.Name), () => Mostrar(este));
+        BotaoDaLinha(acoes, "↑", Tr.T("Sobe o bloco na lista: ele passa a ser numerado antes do de cima."), () => MoverBloco(este, -1), 26);
+        BotaoDaLinha(acoes, "↓", Tr.T("Desce o bloco na lista: ele passa a ser numerado depois do de baixo."), () => MoverBloco(este, +1), 26);
+        BotaoDaLinha(acoes, "✎", Tr.T("Renomear o bloco."), () => RenomearBloco(este), 26);
+        BotaoDaLinha(acoes, Tr.T("Apagar"), Tr.T("Tira o bloco da lista; as mesas dele voltam aos sentidos da usina. As tags já desenhadas não mudam."), () => ApagarBloco(este));
+        ((Button)acoes.Children[2]).IsEnabled = posicao > 1;
+        ((Button)acoes.Children[3]).IsEnabled = posicao < total;
+
+        var esquerda = new StackPanel { Orientation = Orientation.Horizontal };
+        esquerda.Children.Add(new TextBlock
+        {
+            Text = $"{posicao}. {bloco.Name}",
+            Width = 100,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            ToolTip = bloco.Name,
+        });
+        esquerda.Children.Add(new TextBlock { Text = ResumoDoBloco(bloco, contagem), Width = 125, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+
+        var sentido = CaixaDeSentido(Tr.T("O sentido em que a numeração avança nas mesas deste bloco."));
+        var faixa = CaixaDeSentido(Tr.T("Na mesma faixa (linha ou coluna), em que sentido as strings deste bloco são numeradas."));
+        MontarSentidos(sentido, faixa, bloco.Direction, bloco.Cross);
+        AoEscolher(sentido, s => MudarVarredura(v => v.SetDirection(este.Id, s), Tr.F("{0}: {1}.", este.Name, ScanOrder.Describe(s)), este.Id));
+        AoEscolher(faixa, f => MudarVarredura(v => v.SetCross(este.Id, f), Tr.F("{0}, na faixa: {1}.", este.Name, ScanOrder.Describe(f)), este.Id));
+        esquerda.Children.Add(sentido);
+        esquerda.Children.Add(NaFaixa());
+        esquerda.Children.Add(faixa);
+        linha.Children.Add(esquerda);
+
+        var item = new ListBoxItem { Content = linha, Tag = bloco, Padding = new Thickness(2, 1, 2, 1) };
+
+        // Clicar numa caixa ou botão da linha também escolhe o bloco (o de "Regerar bloco escolhido").
+        item.PreviewMouseLeftButtonDown += (_, _) =>
+        {
+            try { item.IsSelected = true; }
+            catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao escolher o bloco da numeração.", erro); }
+        };
+
+        return item;
+    }
+
+    private void MostrarVarredura(ScanSetup varredura, BlockStringCount contagem, Guid? manter)
     {
         _mostrando = true;
         try
         {
-            Escolher(_sentidoDaUsina, varredura.DefaultDirection);
+            MontarSentidos(_sentidoDaUsina, _faixaDaUsina, varredura.DefaultDirection, varredura.DefaultCross);
 
             var anterior = manter ?? BlocoEscolhido?.Id;
             _blocos.Items.Clear();
 
             for (var i = 0; i < varredura.Blocks.Count; i++)
             {
-                var bloco = varredura.Blocks[i];
-                var item = new ListBoxItem { Content = Descrever(bloco, i + 1), Tag = bloco };
+                var item = LinhaDoBloco(varredura.Blocks[i], i + 1, varredura.Blocks.Count, contagem);
                 _blocos.Items.Add(item);
-                if (bloco.Id == anterior) _blocos.SelectedItem = item;
+                if (varredura.Blocks[i].Id == anterior) _blocos.SelectedItem = item;
             }
 
             if (_blocos.SelectedItem is null && _blocos.Items.Count > 0) _blocos.SelectedIndex = 0;
-            Escolher(_sentidoDoBloco, BlocoEscolhido?.Direction ?? varredura.DefaultDirection);
-            _sentidoDoBloco.IsEnabled = BlocoEscolhido is not null;
+            _blocos.Visibility = _blocos.Items.Count > 0 ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+            _resumo.Text = varredura.Blocks.Count == 0
+                ? Tr.F("Sem blocos: as {0} string(s) são numeradas nos sentidos da usina. Novo bloco separa um pedaço com sentidos próprios.", contagem.Outside)
+                : ResumoGeral(varredura, contagem);
         }
         finally
         {
@@ -280,7 +422,7 @@ internal sealed class PainelDeNumeracao : DockPanel
     private void NovoBloco()
     {
         NumberingBlock? novo = null;
-        MudarVarredura(v => novo = v.AddBlock(), Tr.T("Bloco novo no fim da lista: escolha as mesas dele com Selecionar mesas."));
+        MudarVarredura(v => novo = v.AddBlock(), Tr.T("Bloco novo no fim da lista: escolha as mesas dele com Selecionar."));
         if (novo is not null) Recarregar(novo.Id);
     }
 
@@ -293,19 +435,15 @@ internal sealed class PainelDeNumeracao : DockPanel
     }
 
     /// <summary>15.3: a ordem da lista é a ordem da numeração.</summary>
-    private void MoverBloco(int delta)
+    private void MoverBloco(NumberingBlock bloco, int delta)
     {
-        if (BlocoOuAviso() is not { } bloco) return;
-
         var andou = false;
         MudarVarredura(v => andou = v.Move(bloco.Id, delta), Tr.F("{0} agora é numerado nesta posição da lista; gere de novo para as tags seguirem.", bloco.Name), bloco.Id);
         if (!andou) Avisar(delta < 0 ? Tr.F("{0} já é o primeiro da lista.", bloco.Name) : Tr.F("{0} já é o último da lista.", bloco.Name));
     }
 
-    private void RenomearBloco()
+    private void RenomearBloco(NumberingBlock bloco)
     {
-        if (BlocoOuAviso() is not { } bloco) return;
-
         var janela = new JanelaDeNome(Tr.T("Renomear bloco"), Tr.T("Como se chama este bloco?"));
         if (AcadApp.ShowModalWindow(janela) != true || janela.Nome is not { } nome) return;
 
@@ -314,48 +452,113 @@ internal sealed class PainelDeNumeracao : DockPanel
         if (problema is not null) Avisar(Tr.F("Não renomeei: {0}.", problema), erro: true);
     }
 
-    private void ApagarBloco()
+    private void ApagarBloco(NumberingBlock bloco) =>
+        MudarVarredura(v => v.Remove(bloco.Id), Tr.F("{0} apagado; as mesas dele voltam aos sentidos da usina.", bloco.Name));
+
+    /// <summary>Os painéis que pediram a seleção das mesas, por desenho: o comando os traz de volta (<see cref="Retomar"/>).</summary>
+    private static readonly Dictionary<Document, (PainelDeNumeracao Painel, Guid Bloco)> Pedidos = [];
+
+    /// <summary>
+    /// "Selecionar" do bloco: a seleção em campo roda no comando
+    /// CLIVUS_NUMERACAO_MESAS. Pedir a seleção direto do clique da janela
+    /// solta (fora de comando, no contexto da aplicação) não funciona: o
+    /// AutoCAD devolve a pergunta na hora, sem deixar selecionar (a causa do
+    /// "não deixa selecionar", Renan, 05/10/2026). A janela some e o comando a
+    /// traz de volta com a frase do resultado.
+    /// </summary>
+    private void PedirMesas(NumberingBlock bloco)
     {
-        if (BlocoOuAviso() is not { } bloco) return;
-        MudarVarredura(v => v.Remove(bloco.Id), Tr.F("{0} apagado; as mesas dele voltam ao sentido da usina.", bloco.Name));
+        if (AcadApp.DocumentManager.MdiActiveDocument != _documento)
+        {
+            Avisar(Tr.T("Ative o desenho desta janela para selecionar as mesas."), erro: true);
+            return;
+        }
+
+        if (!ClivusExtension.TemInterface()) return;
+
+        var janela = Window.GetWindow(this);
+
+        try
+        {
+            Pedidos[_documento] = (this, bloco.Id);
+            janela?.Hide();
+            JanelaEletrica.Comando(_documento, PluginInfo.ComandoNumeracaoMesas, bloco.Id.ToString("D"));
+        }
+        catch
+        {
+            Pedidos.Remove(_documento);
+            janela?.Show();
+            throw;
+        }
     }
 
     /// <summary>
-    /// A seleção em campo das mesas do bloco (regra elétrica 4: só mesa; o
-    /// que não é peça de mesa do plugin é ignorado). A janela some enquanto
-    /// o usuário seleciona.
+    /// Depois do CLIVUS_NUMERACAO_MESAS: a janela que pediu volta, relê o
+    /// desenho e mostra a frase. Sem pedido (comando digitado), nada.
     /// </summary>
-    private void SelecionarMesas()
+    internal static void Retomar(Document documento, string? frase, bool erro)
     {
+        if (!Pedidos.Remove(documento, out var pedido)) return;
+
         try
         {
-            if (BlocoOuAviso() is not { } bloco) return;
+            var janela = Window.GetWindow(pedido.Painel);
+            if (janela is not null && !janela.IsVisible) janela.Show();
+            pedido.Painel._desenho = null;
+            pedido.Painel.Recarregar(pedido.Bloco);
+            if (frase is not null) pedido.Painel.Avisar(frase, erro);
+            janela?.Activate();
+        }
+        catch (Exception falha)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao trazer de volta a aba Numeração.", falha);
+        }
+    }
 
-            if (AcadApp.DocumentManager.MdiActiveDocument != _documento)
-            {
-                Avisar(Tr.T("Ative o desenho desta janela para selecionar as mesas."), erro: true);
-                return;
-            }
+    /// <summary>"Mostrar" do bloco: as mesas dele ficam selecionadas no desenho, com a janela aberta.</summary>
+    private void Mostrar(NumberingBlock bloco)
+    {
+        var quantas = MostrarMesas(_documento, bloco.Id);
+        Avisar(quantas == 0
+            ? Tr.F("{0} não tem mesa no desenho: escolha as mesas com Selecionar.", bloco.Name)
+            : Tr.F("{0}: {1} mesa(s) selecionada(s) no desenho.", bloco.Name, quantas));
+    }
 
-            var editor = _documento.Editor;
-            PromptSelectionResult selecao;
+    /// <summary>Os contornos das mesas do bloco que estão no desenho (nada é gravado).</summary>
+    internal static ObjectId[] ContornosDoBloco(Database database, Guid bloco)
+    {
+        if (NumeracaoStore.Varredura(database).Varredura.Find(bloco) is not { } achado || achado.Tables.Count == 0) return [];
 
-            using (var interacao = editor.StartUserInteraction(Window.GetWindow(this)))
-            {
-                selecao = editor.GetSelection(new PromptSelectionOptions { MessageForAdding = Tr.F("\nSelecione as mesas do {0} (só mesas entram): ", bloco.Name) }, FiltroDeMesas);
-                interacao.End();
-            }
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        var mesas = LayoutScan.Tables(transacao, database);
+        return achado.Tables.Where(mesas.ContainsKey).SelectMany(t => mesas[t].Contours).ToArray();
+    }
 
-            if (selecao.Status != PromptStatus.OK) return;
+    /// <summary>
+    /// O caminho do botão Mostrar (o mesmo do Selecionar da aba Inversor):
+    /// primeiro a seleção implícita direto daqui, com o documento travado;
+    /// depois, com interface, o comando CLIVUS_NUMERACAO_MOSTRAR pela linha de
+    /// comando (foco no desenho), que a repõe pela marca Redraw. Quantas mesas.
+    /// </summary>
+    internal static int MostrarMesas(Document documento, Guid bloco)
+    {
+        ObjectId[] ids;
+        using (documento.LockDocument()) ids = ContornosDoBloco(documento.Database, bloco);
 
-            var ids = selecao.Value.GetObjectIds();
-            Fazer(() => GravarMesas(_documento, bloco, ids), bloco.Id);
+        try
+        {
+            using (documento.LockDocument()) documento.Editor.SetImpliedSelection(ids);
+            if (ClivusExtension.TemInterface()) documento.Editor.UpdateScreen();
         }
         catch (Exception erro)
         {
-            RegistroDeDiagnostico.Registrar("Falha ao selecionar as mesas do bloco.", erro);
-            Avisar(Tr.F("Não consegui: {0}", erro.Message), erro: true);
+            // Fora de comando o AutoCAD pode recusar; o comando abaixo faz o mesmo.
+            RegistroDeDiagnostico.Registrar("A seleção implícita direta das mesas do bloco foi recusada.", erro);
         }
+
+        // Sem interface (Core Console) o SendStringToExecute fora de comando derruba o processo.
+        if (ClivusExtension.TemInterface() && ids.Length > 0) JanelaEletrica.Comando(documento, PluginInfo.ComandoNumeracaoMostrar, bloco.ToString("D"));
+        return ids.Length;
     }
 
     /// <summary>As mesas tocadas pela seleção passam a ser as do bloco; a frase do que foi feito.</summary>
@@ -398,12 +601,14 @@ internal sealed class PainelDeNumeracao : DockPanel
 
     private void Gerar(NumberingScope alcance)
     {
+        _desenho = null;
         Fazer(() => string.Join("\n", NumeracaoDesenho.Gerar(_documento.Database, alcance)));
         AtualizarTela();
     }
 
     private void Apagar(NumberingScope alcance)
     {
+        _desenho = null;
         Fazer(() => NumeracaoDesenho.Apagar(_documento.Database, alcance));
         AtualizarTela();
     }
@@ -482,7 +687,8 @@ internal sealed class PainelDeNumeracao : DockPanel
     private void Recarregar(Guid? manter = null)
     {
         var (varredura, problema) = NumeracaoStore.Varredura(_documento.Database);
-        MostrarVarredura(varredura, manter);
+        _desenho ??= LerDesenho(_documento.Database);
+        MostrarVarredura(varredura, varredura.CountStrings(_desenho.Value.Strings, _desenho.Value.Modulos), manter);
         MostrarInversores();
         if (problema is not null) Avisar(problema, erro: true);
     }

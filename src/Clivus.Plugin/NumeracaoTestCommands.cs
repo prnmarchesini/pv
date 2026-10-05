@@ -131,4 +131,34 @@ public static class NumeracaoTestCommands
 
         documento.Editor.WriteMessage($"\nNUMERACAO_EXEMPLO_BLOCOS bloco1={um.Count} bloco2={dois.Count}\n");
     }
+
+    /// <summary>
+    /// CLIVUS_NUMERACAO_JANELA_AUTO &lt;bloco&gt;: o MESMO caminho do botão
+    /// Mostrar da linha do bloco (<see cref="PainelDeNumeracao.MostrarMesas"/>),
+    /// no contexto da aplicação (Session), como o clique de uma janela solta,
+    /// fora de comando do documento. O nível 2 lê depois a seleção implícita
+    /// com (ssget "_I").
+    /// </summary>
+#if DEBUG
+    [CommandMethod(PluginInfo.ComandoNumeracaoJanelaAutomatico, CommandFlags.Session)]
+#endif
+    public static void MostrarPelaJanela()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        try
+        {
+            NumberingBlock? bloco;
+            using (documento.LockDocument()) bloco = NumeracaoCommands.PerguntarBloco(documento.Editor, documento.Database);
+            if (bloco is null) return;
+
+            documento.Editor.WriteMessage($"\nNUMERACAO mostradas pela janela {PainelDeNumeracao.MostrarMesas(documento, bloco.Id)} de {bloco.Name}\n");
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no CLIVUS_NUMERACAO_JANELA_AUTO.", erro);
+            documento.Editor.WriteMessage($"\nNUMERACAO falhou: {erro.Message}\n");
+        }
+    }
 }

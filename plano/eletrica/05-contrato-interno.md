@@ -16,6 +16,7 @@ usos no mesmo commit.
 | subestação (UC) | dicionário, `SUBESTACOES` (formato 2 desde 05/10/2026; o 1 continua sendo lido) | `ConsumerUnit` |
 | bloco físico da subestação compartilhada (o cubículo) | dicionário, `SUBESTACOES_BLOCOS` | `Substation` (Core, `Electrical.cs`), `ElectricalStore.Substations/SaveSubstations` |
 | nome do skid (14.7), um por trafo | dicionário, `SKIDS` | `Skid` (Core, `ElectricalSetup.cs`), `ElectricalStore.Skids/SaveSkids` |
+| varredura da numeração (tag) e os blocos | dicionário, `NUMERACAO_VARREDURA` (formato 2 desde 05/10/2026, com o sentido na faixa da usina e de cada bloco; o 1 continua sendo lido com o sentido na faixa de antes) | `ScanSetup`, `ScanRow`, `NumberingBlock` (Core), `NumeracaoStore` (Plugin) |
 | varredura da atribuição automática das strings | dicionário, `ALOCACAO_VARREDURA` (separada da `NUMERACAO_VARREDURA`) | `AllocationScan` (Core), `AtribuicaoAutomatica.Varredura/GravarVarredura` (Plugin) |
 | retângulo de equipamento em campo | XData (tipo `Equipamento`) da entidade, camada `CLIVUS_EQUIPAMENTO` | `EquipmentPlacement`, `ElectricalStore.SavePlacement/LoadPlacement` |
 | hatch da área do trafo (05/10/2026) | XData (tipo `AreaDoTrafo`, o GUID do trafo) do `Hatch`, camada `CLIVUS_TRAFO_AREA` | `TransformerArea`, `TransformerAreaMark` (Core), `AreaDoTrafo` (Plugin) |

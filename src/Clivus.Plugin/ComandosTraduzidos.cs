@@ -354,6 +354,18 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_NUMERACION_STRINGS")]
     public static void CLIVUS_NUMERACION_STRINGS() => NumeracaoCommands.Numeracao();
 
+    [CommandMethod("CLIVUS_NUMBERING_TABLES")]
+    public static void CLIVUS_NUMBERING_TABLES() => NumeracaoCommands.Mesas();
+
+    [CommandMethod("CLIVUS_NUMERACION_MESAS")]
+    public static void CLIVUS_NUMERACION_MESAS() => NumeracaoCommands.Mesas();
+
+    [CommandMethod("CLIVUS_NUMBERING_SHOW", CommandFlags.Modal | CommandFlags.Redraw | CommandFlags.NoUndoMarker)]
+    public static void CLIVUS_NUMBERING_SHOW() => NumeracaoCommands.Mostrar();
+
+    [CommandMethod("CLIVUS_NUMERACION_MOSTRAR", CommandFlags.Modal | CommandFlags.Redraw | CommandFlags.NoUndoMarker)]
+    public static void CLIVUS_NUMERACION_MOSTRAR() => NumeracaoCommands.Mostrar();
+
     [CommandMethod("CLIVUS_NUMBER")]
     public static void CLIVUS_NUMBER() => NumerarCommands.Numerar();
 

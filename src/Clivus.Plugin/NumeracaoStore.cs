@@ -16,7 +16,7 @@ internal static class NumeracaoStore
     private static readonly string OQueEsquema = Tr.N("da composição da tag");
 
     private const string ChaveDaVarredura = "NUMERACAO_VARREDURA";
-    private const int VersaoDaVarredura = 1;
+    private const int VersaoDaVarredura = ScanRow.Version;
     private static readonly string OQueVarredura = Tr.N("da varredura das strings");
 
     /// <summary>A composição gravada, ou a padrão (T1.I1.S1) se não há nenhuma; o problema do registro, se havia.</summary>
@@ -32,10 +32,17 @@ internal static class NumeracaoStore
         PluginRecords.Save(database, ChaveDoEsquema, VersaoDoEsquema, TagScheme.FieldCount, [esquema], e => e.ToFields());
     }
 
-    /// <summary>A varredura gravada (sentido da usina e blocos), ou a da esquerda para a direita sem blocos; o problema do registro, se havia.</summary>
+    /// <summary>
+    /// A varredura gravada (sentidos da usina e blocos), ou a da esquerda para
+    /// a direita sem blocos; o problema do registro, se havia. Formato 2
+    /// (05/10/2026) tem o sentido na faixa; o 1 (sem ele) continua sendo lido,
+    /// com o sentido na faixa de antes. Grava sempre o 2.
+    /// </summary>
     internal static (ScanSetup Varredura, string? Problema) Varredura(Database database)
     {
-        var lido = PluginRecords.Load<ScanRow>(database, ChaveDaVarredura, VersaoDaVarredura, ScanRow.FieldCount, ScanRow.Parse, OQueVarredura);
+        var lido = PluginRecords.Version(database, ChaveDaVarredura) == ScanRow.LegacyVersion
+            ? PluginRecords.Load<ScanRow>(database, ChaveDaVarredura, ScanRow.LegacyVersion, ScanRow.LegacyFieldCount, ScanRow.ParseLegacy, OQueVarredura)
+            : PluginRecords.Load<ScanRow>(database, ChaveDaVarredura, VersaoDaVarredura, ScanRow.FieldCount, ScanRow.Parse, OQueVarredura);
         var (varredura, perdidas) = ScanSetup.FromRows(lido.Items);
 
         var problema = lido.Problem;

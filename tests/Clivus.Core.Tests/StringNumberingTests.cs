@@ -231,6 +231,10 @@ public class StringNumberingTests
 
         Assert.Null(ScanRow.Parse(["BLOCO", Guid.NewGuid().ToString("D"), "x", "Diagonal"]));
         Assert.Null(ScanRow.Parse(["OUTRO", "", "", "LeftToRight"]));
+
+        // Formato 2 (05/10/2026, 5 campos): a mesma recusa pelo motivo certo, e não por faltar campo.
+        Assert.Null(ScanRow.Parse(["BLOCO", Guid.NewGuid().ToString("D"), "x", "Diagonal", "TopToBottom"]));
+        Assert.Null(ScanRow.Parse(["OUTRO", "", "", "LeftToRight", "TopToBottom"]));
     }
 
     // ------------------------------------------------ 15.3 ordem dos blocos
