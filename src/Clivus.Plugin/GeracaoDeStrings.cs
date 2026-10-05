@@ -22,7 +22,12 @@ internal static class GeracaoDeStrings
     internal sealed record Relatorio(IReadOnlyList<string> Linhas, int Strings, int Grupos, int SemTipo, int Pulados, int Substituidas, IReadOnlyList<Guid> MesasSemTipo);
 
     /// <summary>A altura do texto do + e do −, em metro.</summary>
-    private const double AlturaDoSinal = 0.35;
+    // 05/10/2026, Renan: "os + e − estão minúsculos, coloca eles dentro de
+    // um círculo para destacar e dobra o tamanho".
+    private const double AlturaDoSinal = 0.70;
+
+    /// <summary>O raio do círculo em volta do sinal, em metro.</summary>
+    private const double RaioDoSinal = 0.45;
 
     /// <summary>
     /// Gera nas mesas dadas com os tipos dados (vazio = todos os que têm
@@ -132,18 +137,29 @@ internal static class GeracaoDeStrings
         var normal = u.CrossProduct(v).GetNormal();
         if (normal.Z < 0) normal = normal.Negate();
 
+        var centro = new Point3d(ponto.X, ponto.Y, ponto.Z);
         var texto = new DBText
         {
             Layer = camada,
             TextString = positivo ? "+" : "-",
             Height = AlturaDoSinal,
             Normal = normal,
-            Position = new Point3d(ponto.X, ponto.Y, ponto.Z),
+            Position = centro,
+            HorizontalMode = TextHorizontalMode.TextCenter,
+            VerticalMode = TextVerticalMode.TextVerticalMid,
+            AlignmentPoint = centro,
         };
 
         espaco.AppendEntity(texto);
         transacao.AddNewlyCreatedDBObject(texto, true);
+        texto.AdjustAlignment(espaco.Database);
         PluginXData.Save(transacao, texto, StringSign.Tipo, 1, [.. new StringSign(stringId, positivo).ToFields()]);
+
+        // O círculo em volta, no mesmo plano (a normal da face), na cota do traçado.
+        var circulo = new Circle(centro, normal, RaioDoSinal) { Layer = camada };
+        espaco.AppendEntity(circulo);
+        transacao.AddNewlyCreatedDBObject(circulo, true);
+        PluginXData.Save(transacao, circulo, StringSign.Tipo, 1, [.. new StringSign(stringId, positivo).ToFields()]);
     }
 
     /// <summary>Apaga as strings dadas (polilinha e sinais), pelo GUID no XData.</summary>
@@ -154,10 +170,11 @@ internal static class GeracaoDeStrings
         var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
         var classeDaLinha = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline3d));
         var classeDoTexto = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(DBText));
+        var classeDoCirculo = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Circle));
 
         foreach (ObjectId id in espaco)
         {
-            if (id.IsErased || (id.ObjectClass != classeDaLinha && id.ObjectClass != classeDoTexto)) continue;
+            if (id.IsErased || (id.ObjectClass != classeDaLinha && id.ObjectClass != classeDoTexto && id.ObjectClass != classeDoCirculo)) continue;
             if (transacao.GetObject(id, OpenMode.ForRead) is not Entity e) continue;
 
             var dela = e is Polyline3d

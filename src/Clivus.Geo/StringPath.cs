@@ -42,6 +42,7 @@ public static class StringPath
 
         var planos = caminho.Concat(faces).Select(f => new Plano(f)).DistinctBy(p => p.Chave).ToList();
         var centros = caminho.Select(f => new Plano(f)).Select(p => p.Centro(lift)).ToList();
+        var todosOsCentros = planos.Select(p => p.Centro(0)).ToList();
 
         // Cada vértice leva a marca de centro de módulo: esses ficam sempre.
         var pontos = new List<(Point3 P, bool Centro)> { (centros[0], true) };
@@ -50,6 +51,37 @@ public static class StringPath
         {
             var a = centros[i - 1];
             var b = centros[i];
+
+            // A ligação que pula módulo (leapfrog) é um arco no plano dos
+            // módulos, não uma reta sobre o pulado (05/10/2026, Renan: "a
+            // simbologia precisa ser de leapfrog também, igual no
+            // configurador"): o arco sai para a esquerda do sentido da
+            // ligação, então a ida e a volta ficam em lados opostos.
+            var lado = LadoCurto(caminho[i - 1]);
+            var dx = b.X - a.X;
+            var dy = b.Y - a.Y;
+            var distancia = Math.Sqrt(dx * dx + dy * dy);
+
+            // Pulo é quando a reta passaria por cima do centro de outro
+            // módulo (o pulado); vizinho, subida de fileira e vão entre
+            // mesas não são pulo.
+            if (distancia > 1e-9 && PassaPorCentro(a, b, todosOsCentros, 0.25 * lado))
+            {
+                var (nx, ny) = (-dy / distancia, dx / distancia);
+                var (cx, cy) = ((a.X + b.X) / 2 + nx * ArcoDoPulo * lado, (a.Y + b.Y) / 2 + ny * ArcoDoPulo * lado);
+
+                for (var k = 1; k < PontosDoArco; k++)
+                {
+                    var t = (double)k / PontosDoArco;
+                    var x = (1 - t) * (1 - t) * a.X + 2 * (1 - t) * t * cx + t * t * b.X;
+                    var y = (1 - t) * (1 - t) * a.Y + 2 * (1 - t) * t * cy + t * t * b.Y;
+                    var z = Cota(planos, x, y, lift) ?? a.Z + (b.Z - a.Z) * t;
+                    pontos.Add((new Point3(x, y, z), false));
+                }
+
+                pontos.Add((b, true));
+                continue;
+            }
 
             var ts = new SortedSet<double>();
             foreach (var plano in planos)
@@ -68,6 +100,39 @@ public static class StringPath
         }
 
         return Enxugar(pontos);
+    }
+
+    /// <summary>O quanto o arco do pulo se afasta da reta: a flecha é metade disto, em lados curtos do módulo.</summary>
+    private const double ArcoDoPulo = 0.5;
+
+    /// <summary>Quantos trechos retos fazem o arco do pulo.</summary>
+    private const int PontosDoArco = 10;
+
+    /// <summary>Se a reta de a até b (em planta) passa a menos de <paramref name="folga"/> do centro de algum módulo no meio do caminho.</summary>
+    private static bool PassaPorCentro(Point3 a, Point3 b, IReadOnlyList<Point3> centros, double folga)
+    {
+        var dx = b.X - a.X;
+        var dy = b.Y - a.Y;
+        var comprimento2 = dx * dx + dy * dy;
+
+        foreach (var c in centros)
+        {
+            var t = ((c.X - a.X) * dx + (c.Y - a.Y) * dy) / comprimento2;
+            if (t <= 0.1 || t >= 0.9) continue;
+
+            var px = a.X + dx * t - c.X;
+            var py = a.Y + dy * t - c.Y;
+            if (px * px + py * py < folga * folga) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>O lado curto do módulo, em planta (a largura ao longo da fileira).</summary>
+    private static double LadoCurto(IReadOnlyList<Point3> f)
+    {
+        double D(Point3 p, Point3 q) => Math.Sqrt((p.X - q.X) * (p.X - q.X) + (p.Y - q.Y) * (p.Y - q.Y));
+        return Math.Min(D(f[0], f[1]), D(f[1], f[2]));
     }
 
     /// <summary>A cota do traçado em (x, y): o plano mais alto entre as faces que contêm o ponto, mais a altura; null fora de toda face.</summary>

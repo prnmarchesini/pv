@@ -104,8 +104,21 @@ public class StringPathTests
 
         var traco = StringPath.Build([faces[0], faces[2], faces[4], faces[3], faces[1]], faces);
 
-        Assert.Equal(5, traco.Count);
+        // 05/10/2026: o pulo é um arco (ida de um lado, volta do outro), não
+        // uma reta por cima do módulo pulado; continua no plano a 5 cm.
+        Assert.True(traco.Count > 5, $"só {traco.Count} vértices: o pulo saiu reto");
         ConferirAltura(traco, faces, StringPath.DefaultLift);
+
+        // Ida (0 → 2 → 4, para leste): o arco de um lado da linha dos centros (y = 1).
+        // Volta (3 → 1, para oeste): do outro lado.
+        var lista = traco.ToList();
+        var fimDaIda = lista.FindIndex(q => Math.Abs(q.X - 4.5) < 1e-6);
+        var inicioDaVolta = lista.FindIndex(q => Math.Abs(q.X - 3.5) < 1e-6);
+        var ida = lista.Take(fimDaIda).Where(p => p.X > 0.6 && p.X < 4.4 && Math.Abs(p.X - 2.5) > 1e-6);
+        var volta = lista.Skip(inicioDaVolta + 1).Where(p => p.X > 1.6 && p.X < 3.4);
+        Assert.All(ida, p => Assert.True(p.Y > 1 + 1e-6, $"a ida passou em y = {p.Y:0.000}"));
+        Assert.All(volta, p => Assert.True(p.Y < 1 - 1e-6, $"a volta passou em y = {p.Y:0.000}"));
+        Assert.True(traco.Max(p => p.Y) < 2 && traco.Min(p => p.Y) > 0, "o arco saiu do módulo");
     }
 
     [Fact]
