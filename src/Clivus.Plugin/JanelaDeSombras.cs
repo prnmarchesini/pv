@@ -116,7 +116,7 @@ internal sealed class JanelaDeSombras : Window
 
         pilha.Children.Add(new TextBlock
         {
-            Text = Tr.T("Fazem sombra as árvores (Sombreamento > Objetos), as outras mesas (a fileira da frente na de trás) e o relevo. Os módulos com sombra ficam lilás (até 25% da face), violeta (até 50%) ou roxo-escuro (acima); Por que essa sombra? diz a causa e a hora de cada um. A sombra das árvores é desenhada no chão e sobre as mesas; no período, é a mancha de todos os passos juntos (só a borda), e cada módulo fica com o pior caso dele."),
+            Text = Tr.T("Fazem sombra as árvores (Sombreamento > Objetos), as outras mesas (a fileira da frente na de trás) e o relevo. Os módulos com sombra ficam lilás (até 25% da face), violeta (até 50%) ou roxo-escuro (acima); Por que essa sombra? diz a causa e a hora de cada um. A sombra das árvores e das mesas é desenhada no chão e sobre as mesas; no período, é a mancha de todos os passos juntos (só a borda), e cada módulo fica com o pior caso dele."),
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brushes.Gray,
             Margin = new Thickness(0, 8, 0, 0),
@@ -133,7 +133,8 @@ internal sealed class JanelaDeSombras : Window
             var horaDe = porAltura ? ">" + _altura.Text.Trim() : _horaDe.Text;
             var periodo = SombrasCommands.Ler(Data(_de), Data(_ate), horaDe, _horaAte.Text, _passo.Text, _fusoDoLugar.ToString(CultureInfo.InvariantCulture), out var porque, _dias.Text)
                 ?? throw new ArgumentException(porque);
-            return SombrasCommands.Gerar(_documento, periodo);
+            // Com o andamento e o Cancelar (05/10/2026); esta janela fica travada enquanto isso.
+            return SombrasCommands.GerarComAndamento(_documento, periodo, this);
         });
         var apagar = new Button { Content = Tr.T("Apagar sombras"), Width = 120, Height = 26, Margin = new Thickness(8, 0, 0, 0), ToolTip = Tr.T("Apaga os contornos de sombra e devolve a cor de antes dos módulos marcados.") };
         apagar.Click += (_, _) => Fazer(() => SombrasCommands.Apagar(_documento.Database));

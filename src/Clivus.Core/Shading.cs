@@ -330,6 +330,107 @@ public static class Shading
     }
 
     /// <summary>
+    /// A sombra de um polígono (o contorno de uma mesa) no chão (05/10/2026,
+    /// Renan: "o motor de sombras tem que gerar as sombras de todos objetos
+    /// do desenho"): cada vértice projetado na direção oposta ao sol até o
+    /// terreno, com a cota do terreno. Um ponto do chão está na sombra da
+    /// mesa se o raio dele para o sol atravessa a mesa, isto é, se cai neste
+    /// polígono. Vazio com o sol baixo.
+    /// </summary>
+    /// <param name="caster">O contorno que faz sombra, em ordem (já densificado, se for longo).</param>
+    /// <param name="sun">O vetor que aponta para o sol.</param>
+    /// <param name="ground">A cota do terreno em (x, y), ou null fora dele.</param>
+    public static IReadOnlyList<Point3> PolygonShadowOnGround(IReadOnlyList<Point3> caster, (double X, double Y, double Z) sun, Func<double, double, double?> ground)
+    {
+        ArgumentNullException.ThrowIfNull(caster);
+        ArgumentNullException.ThrowIfNull(ground);
+        if (caster.Count < 3) return [];
+
+        var elevacao = Math.Asin(Math.Clamp(sun.Z, -1, 1)) * 180 / Math.PI;
+        if (elevacao < MinimumElevationDegrees) return [];
+
+        // Fora do terreno, a cota de reserva é a do chão sob o meio (ou a mais baixa do contorno).
+        var cx = caster.Average(p => p.X);
+        var cy = caster.Average(p => p.Y);
+        var reserva = ground(cx, cy) ?? caster.Min(p => p.Z);
+
+        return caster.Select(p => NoChao(p, sun, ground, Math.Min(reserva, p.Z))).ToList();
+    }
+
+    /// <summary>
+    /// A sombra de um polígono plano (o contorno de uma mesa) sobre outra mesa
+    /// (05/10/2026): a parte do polígono acima do plano da mesa, projetada na
+    /// direção do sol até o plano, recortada pelo contorno da mesa. Cada
+    /// vértice fica no plano. Vazio se a sombra não cai na mesa ou o sol está
+    /// baixo (ou rasante ao plano).
+    /// </summary>
+    /// <param name="caster">O contorno que faz sombra, em ordem.</param>
+    /// <param name="sun">O vetor que aponta para o sol.</param>
+    /// <param name="table">O contorno da mesa que recebe (plano e convexo), em ordem.</param>
+    public static IReadOnlyList<Point3> PolygonShadowOnPlane(IReadOnlyList<Point3> caster, (double X, double Y, double Z) sun, IReadOnlyList<Point3> table)
+    {
+        ArgumentNullException.ThrowIfNull(caster);
+        ArgumentNullException.ThrowIfNull(table);
+        if (caster.Count < 3 || table.Count < 3) return [];
+
+        var elevacao = Math.Asin(Math.Clamp(sun.Z, -1, 1)) * 180 / Math.PI;
+        if (elevacao < MinimumElevationDegrees) return [];
+
+        // O plano da mesa, com a normal para cima.
+        var p0 = table[0];
+        var (ux, uy, uz) = (table[1].X - p0.X, table[1].Y - p0.Y, table[1].Z - p0.Z);
+        var (vx, vy, vz) = (table[2].X - p0.X, table[2].Y - p0.Y, table[2].Z - p0.Z);
+        var (nx, ny, nz) = (uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
+        if (Math.Abs(nz) < 1e-9) return [];
+        if (nz < 0) (nx, ny, nz) = (-nx, -ny, -nz);
+
+        // O sol precisa estar do lado de cima do plano.
+        var ns = nx * sun.X + ny * sun.Y + nz * sun.Z;
+        if (ns < 1e-9) return [];
+
+        double Acima(Point3 q) => nx * (q.X - p0.X) + ny * (q.Y - p0.Y) + nz * (q.Z - p0.Z);
+
+        // Só a parte do polígono acima do plano faz sombra nele (Sutherland–Hodgman contra o plano).
+        var acima = new List<Point3>(caster.Count + 2);
+        for (var j = 0; j < caster.Count; j++)
+        {
+            var atual = caster[j];
+            var anterior = caster[(j + caster.Count - 1) % caster.Count];
+            var (da, dp) = (Acima(atual), Acima(anterior));
+
+            if (da > 0)
+            {
+                if (dp <= 0) acima.Add(Entre(anterior, atual, dp, da));
+                acima.Add(atual);
+            }
+            else if (dp > 0)
+            {
+                acima.Add(Entre(anterior, atual, dp, da));
+            }
+        }
+
+        if (acima.Count < 3) return [];
+
+        // q − s·t no plano: t = n·(q − p0) / n·s (≥ 0, o ponto está acima).
+        var projetado = acima.Select(q =>
+        {
+            var t = Acima(q) / ns;
+            return (q.X - sun.X * t, q.Y - sun.Y * t);
+        }).ToList();
+
+        var recorte = Recortar(projetado, table.Select(p => (p.X, p.Y)).ToList());
+        if (recorte.Count < 3) return [];
+
+        return recorte.Select(p => new Point3(p.X, p.Y, p0.Z - (nx * (p.X - p0.X) + ny * (p.Y - p0.Y)) / nz)).ToList();
+
+        static Point3 Entre(Point3 a, Point3 b, double da, double db)
+        {
+            var t = da / (da - db);
+            return new Point3(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t, a.Z + (b.Z - a.Z) * t);
+        }
+    }
+
+    /// <summary>
     /// A cota do plano da mesa (o contorno, plano) no ponto (x, y); null se o
     /// contorno não define um plano que se lê em planta.
     /// </summary>
