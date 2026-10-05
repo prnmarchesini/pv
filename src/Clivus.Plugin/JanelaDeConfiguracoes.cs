@@ -28,6 +28,13 @@ internal sealed class JanelaDeConfiguracoes : Window
     private readonly StackPanel _escolha = new();
     private readonly TextBlock _recado = new() { Foreground = Brushes.Firebrick, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
 
+    /// <summary>
+    /// Se a lista de mesas mudou desde que a janela abriu. Fechar com ela
+    /// mudada pergunta antes (05/10/2026: a mesa editada sumia ao fechar sem
+    /// "Salvar no desenho", e para o Renan "não salva").
+    /// </summary>
+    private bool _mesasMudaram;
+
     /// <summary>O que o usuário mandou salvar, ou null se fechou sem salvar.</summary>
     internal (IReadOnlyList<DrawingTable> Mesas, ProjectSettings Parametros, ProjectStyles Estilos)? Salvo { get; private set; }
 
@@ -92,6 +99,7 @@ internal sealed class JanelaDeConfiguracoes : Window
         // A janela dos parâmetros nunca é mostrada; fechá-la junto evita que
         // ela fique pendurada na aplicação a cada abertura.
         Closed += (_, _) => _parametros.Close();
+        Closing += PerguntarAntesDePerder;
 
         Atualizar();
     }
@@ -180,6 +188,7 @@ internal sealed class JanelaDeConfiguracoes : Window
         if (destino < 0 || destino >= _mesas.Count) return;
 
         (_mesas[indice], _mesas[destino]) = (_mesas[destino], _mesas[indice]);
+        _mesasMudaram = true;
         Atualizar();
         _lista.SelectedIndex = destino;
     }
@@ -226,7 +235,11 @@ internal sealed class JanelaDeConfiguracoes : Window
 
             var cor = PaletaDeCores.Caixa(mesa.Color, Tr.T("A cor do contorno desta mesa no desenho, para saber qual é qual."));
             cor.Width = 140;
-            cor.SelectionChanged += (_, _) => _mesas[indice] = _mesas[indice] with { Color = PaletaDeCores.Cor(cor) };
+            cor.SelectionChanged += (_, _) =>
+            {
+                _mesas[indice] = _mesas[indice] with { Color = PaletaDeCores.Cor(cor) };
+                _mesasMudaram = true;
+            };
 
             Button Seta(string texto, int passo, string dica)
             {
@@ -279,6 +292,7 @@ internal sealed class JanelaDeConfiguracoes : Window
     private void Usar(int indice, bool usar)
     {
         _mesas[indice] = _mesas[indice] with { Use = usar };
+        _mesasMudaram = true;
 
         for (var i = 0; i < _mesas.Count && i < _lista.Items.Count; i++)
         {
@@ -304,6 +318,7 @@ internal sealed class JanelaDeConfiguracoes : Window
         if (perfil is null) return;
 
         _mesas.Add(new DrawingTable(perfil with { Name = NomeLivre(perfil.Name) }, DrawingTables.NextColor(_mesas), Use: true));
+        _mesasMudaram = true;
         Atualizar();
         _lista.SelectedIndex = _mesas.Count - 1;
     }
@@ -323,7 +338,12 @@ internal sealed class JanelaDeConfiguracoes : Window
         var nome = DrawingTables.Find(outras, perfil.Name) is null ? perfil.Name : NomeLivre(perfil.Name);
 
         _mesas[_lista.SelectedIndex] = mesa with { Profile = perfil with { Name = nome } };
+        _mesasMudaram = true;
         Atualizar();
+
+        // A mesa só vai para o desenho em "Salvar no desenho"; sem dizer, o
+        // Fechar das Configurações jogava a edição fora.
+        _recado.Text = Tr.F("Mesa \"{0}\" atualizada: {1} módulos. Para gravar no desenho, clique em \"Salvar no desenho\".", nome, perfil.Layout.ModuleCount);
     }
 
     private void Duplicar()
@@ -335,6 +355,7 @@ internal sealed class JanelaDeConfiguracoes : Window
         }
 
         _mesas.Add(new DrawingTable(mesa.Profile with { Name = NomeLivre(mesa.Name + " " + Tr.T("(cópia)")) }, DrawingTables.NextColor(_mesas), Use: false));
+        _mesasMudaram = true;
         Atualizar();
     }
 
@@ -347,6 +368,7 @@ internal sealed class JanelaDeConfiguracoes : Window
         }
 
         _mesas.RemoveAt(_lista.SelectedIndex);
+        _mesasMudaram = true;
         Atualizar();
     }
 
@@ -391,6 +413,38 @@ internal sealed class JanelaDeConfiguracoes : Window
             Salvo = (_mesas, parametros, _estilos.Ler());
             DialogResult = true;
         });
+    }
+
+    /// <summary>
+    /// Fechar com as mesas mudadas e não gravadas: Sim grava (o mesmo que
+    /// "Salvar no desenho"), Não fecha sem gravar, Cancelar volta à janela.
+    /// </summary>
+    private void PerguntarAntesDePerder(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (Salvo is not null || !_mesasMudaram) return;
+
+        try
+        {
+            var resposta = MessageBox.Show(
+                this,
+                Tr.T("As mesas mudaram e ainda não foram gravadas no desenho. Gravar agora?"),
+                Title,
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Question);
+
+            if (resposta == MessageBoxResult.No) return;
+
+            e.Cancel = true;
+
+            // Gravar fecha a janela (DialogResult); dentro do Closing isso
+            // não pode, então vai logo depois. Se não fechar (mesa inválida),
+            // o motivo fica no recado e a janela continua aberta.
+            if (resposta == MessageBoxResult.Yes) Dispatcher.BeginInvoke(new Action(Salvar));
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao perguntar antes de fechar as Configurações.", erro);
+        }
     }
 
     /// <summary>Manipulador de clique do WPF: exceção solta aqui fecha o Civil 3D.</summary>

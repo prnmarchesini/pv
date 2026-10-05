@@ -115,4 +115,78 @@ public class DrawingTablesTests
         Assert.Same(a, DrawingTables.Find([a], " mesa 2v28 "));
         Assert.Null(DrawingTables.Find([a], "outra"));
     }
+    /// <summary>
+    /// 05/10/2026, bug do Renan: abriu "Mesa 28 módulos" pelas Configurações,
+    /// trocou para 56, "Salvar perfil", confirmou a substituição e fechou. A
+    /// janela devolvia null (fechada sem "Usar esta mesa") e a mesa do
+    /// desenho ficava com 28. Gravado com o mesmo nome, o gravado volta.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void SalvarPerfilComOMesmoNomeAtualizaAMesaAberta()
+    {
+        var aberta = Perfil("Mesa 28 módulos", 28);
+        var salva = Perfil("Mesa 28 módulos", 56);
+
+        var volta = DrawingTables.AfterEdit(aberta.Name, confirmada: null, salva: salva);
+
+        Assert.Same(salva, volta);
+        Assert.Equal(56, volta!.Layout.ModuleCount);
+
+        // Na lista das Configurações, a mesa aberta passa a ter 56.
+        var mesas = new List<DrawingTable> { new(aberta, new RgbColor(0, 160, 0), true) };
+        mesas[0] = mesas[0] with { Profile = volta };
+        Assert.Equal(56, DrawingTables.Find(mesas, "Mesa 28 módulos")!.Profile.Layout.ModuleCount);
+
+        // Maiúscula e espaço nas pontas não fazem outro nome (mesma regra do Find).
+        Assert.Same(salva, DrawingTables.AfterEdit(" mesa 28 MÓDULOS ", null, salva));
+    }
+
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void UsarEstaMesaValeAntesDoPerfilSalvo()
+    {
+        var salva = Perfil("Mesa 28 módulos", 56);
+        var confirmada = Perfil("Mesa 28 módulos", 14);
+
+        Assert.Same(confirmada, DrawingTables.AfterEdit("Mesa 28 módulos", confirmada, salva));
+    }
+
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void SalvoComOutroNomeEUmaCopiaENaoMexeNaMesaAberta()
+    {
+        var copia = Perfil("Mesa 56 módulos", 56);
+
+        Assert.Null(DrawingTables.AfterEdit("Mesa 28 módulos", null, copia));
+        Assert.Null(DrawingTables.AfterEdit("Mesa 28 módulos", null, null));
+        Assert.Null(DrawingTables.AfterEdit(null, null, copia));
+    }
+
+    /// <summary>
+    /// A parte do disco do mesmo bug: gravar 56 por cima de 28 com o mesmo
+    /// nome deixa 56 no arquivo (a biblioteca nunca foi o problema).
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void SubstituirOPerfilDe28Por56GravaOs56()
+    {
+        var pasta = Path.Combine(Path.GetTempPath(), "clivus-perfis-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var store = new TableProfileStore(pasta);
+            store.Save(Perfil("Mesa 28 módulos", 28));
+            Assert.True(store.Exists("Mesa 28 módulos"));
+
+            store.Save(Perfil("Mesa 28 módulos", 56));
+
+            Assert.Equal(56, store.Load("Mesa 28 módulos").Layout.ModuleCount);
+            Assert.Equal(["Mesa 28 módulos"], store.List());
+        }
+        finally
+        {
+            if (Directory.Exists(pasta)) Directory.Delete(pasta, recursive: true);
+        }
+    }
 }
