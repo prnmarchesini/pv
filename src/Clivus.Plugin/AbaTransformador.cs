@@ -39,7 +39,7 @@ internal sealed class AbaTransformador : AbaEletrica
             if ((_padroes.SelectedItem as ComboBoxItem)?.Tag is TransformerTemplate padrao) Novo(padrao);
             else Avisar(Tr.T("Escolha um padrão na lista ao lado."), erro: true);
         });
-        Botao(botoes, Tr.T("Apagar"), Tr.T("Tira o trafo do cadastro e o retângulo dele do campo. Os inversores do skid dele ficam sem trafo; nada mais é apagado."), Apagar);
+        Botao(botoes, Tr.T("Apagar"), Tr.T("Tira o trafo do cadastro e o retângulo e o hatch da área dele do campo. Os inversores do skid dele ficam sem trafo; nada mais é apagado."), Apagar);
 
         foreach (var p in ElectricalDefaults.TransformerTemplates) _padroes.Items.Add(new ComboBoxItem { Content = p.Describe(), Tag = p });
         _padroes.SelectedIndex = 1;
@@ -72,6 +72,17 @@ internal sealed class AbaTransformador : AbaEletrica
             if (Sujo() && !Salvar()) return;
             AlocarEmCampo(t.Id);
         });
+        Botao(acoes, Tr.T("Hatch da área"), Tr.T("Desenha um hatch translúcido, na cor do trafo, em volta dos módulos das strings dos inversores do skid dele. Gerar de novo substitui o anterior."), () =>
+        {
+            if (Escolhido is not { } t)
+            {
+                Avisar(Tr.T("Escolha um trafo na lista."), erro: true);
+                return;
+            }
+
+            HatchDaArea(t.Id);
+        });
+        Botao(acoes, Tr.T("Hatch de todos"), Tr.T("O hatch da área de cada trafo do cadastro (cada um na sua cor), substituindo os anteriores."), () => HatchDaArea(null));
 
         var formulario = new StackPanel();
         formulario.Children.Add(grade);
@@ -248,6 +259,21 @@ internal sealed class AbaTransformador : AbaEletrica
         return gravou;
     }
 
+    /// <summary>O hatch da área de um trafo, ou de todos (null), pelo caminho fora de comando; a frase vai para o recado.</summary>
+    private void HatchDaArea(Guid? trafo)
+    {
+        try
+        {
+            var (frase, erro) = AreaDoTrafo.Resumir(AreaDoTrafo.PelaJanela(Documento, trafo));
+            Avisar(frase, erro);
+        }
+        catch (Exception falha)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao desenhar o hatch da área do trafo.", falha);
+            Avisar(Tr.F("Não consegui: {0}", falha.Message), erro: true);
+        }
+    }
+
     private void Apagar()
     {
         if (Escolhido is not { } t)
@@ -262,6 +288,7 @@ internal sealed class AbaTransformador : AbaEletrica
             soltos = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.RemoveTransformer(t.Id));
             if (soltos is null) return null;
             EquipamentoEmCampo.Apagar(Documento.Database, EquipmentKind.Transformer, t.Id);
+            AreaDoTrafo.Apagar(Documento.Database, t.Id);
             return Tr.F("{0} apagado do cadastro; {1} inversor(es) ficaram sem trafo.", t.Nickname, soltos);
         });
         if (soltos is null) Avisar(Tr.T("Esse trafo não está mais no cadastro."), erro: true);

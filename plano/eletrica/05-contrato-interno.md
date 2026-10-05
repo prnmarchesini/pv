@@ -18,6 +18,7 @@ usos no mesmo commit.
 | nome do skid (14.7), um por trafo | dicionário, `SKIDS` | `Skid` (Core, `ElectricalSetup.cs`), `ElectricalStore.Skids/SaveSkids` |
 | varredura da atribuição automática das strings | dicionário, `ALOCACAO_VARREDURA` (separada da `NUMERACAO_VARREDURA`) | `AllocationScan` (Core), `AtribuicaoAutomatica.Varredura/GravarVarredura` (Plugin) |
 | retângulo de equipamento em campo | XData (tipo `Equipamento`) da entidade, camada `CLIVUS_EQUIPAMENTO` | `EquipmentPlacement`, `ElectricalStore.SavePlacement/LoadPlacement` |
+| hatch da área do trafo (05/10/2026) | XData (tipo `AreaDoTrafo`, o GUID do trafo) do `Hatch`, camada `CLIVUS_TRAFO_AREA` | `TransformerArea`, `TransformerAreaMark` (Core), `AreaDoTrafo` (Plugin) |
 
 ## A cadeia (cada elo guarda o GUID do elo de cima)
 
@@ -104,6 +105,20 @@ Nenhum vínculo é derivado de posição no desenho.
   contam; inversor cheio ou sem modelo é pulado; a sobra é contada. Só o
   campo `Inverter` das livres muda (gravado por `StringsDoDesenho.Gravar`, que
   pinta com a cor do inversor).
+
+## O hatch da área do trafo (05/10/2026)
+
+- Botões "Hatch da área" e "Hatch de todos" da aba Transformador. A área
+  sai da cadeia (trafo → inversores pelo `Inverter.Transformer` → strings
+  pelo `ElectricalString.Inverter` → módulos), nunca da posição: as faces
+  dos módulos (sem face, a extensão do bloco) viram o contorno do Core
+  (`TransformerArea.Outline`: união, fechamento de 4 m, folga de 0,5 m,
+  menos os módulos de strings de outros inversores, sem buraco < 1 m²).
+- Um `Hatch` SOLID por ilha, 60 % transparente, com a cor do trafo (a
+  paleta dos inversores de trás para a frente, pela ordem do trafo) e o
+  XData `AreaDoTrafo`; gerar de novo apaga o antigo daquele trafo, e apagar
+  o trafo o leva. Cota: o canto mais alto dos módulos da ilha + 0,30 m (a
+  mesma escolha da marca do grupo). É representação: nada é lido dele.
 
 ## Para testar sem o traçado de verdade
 
