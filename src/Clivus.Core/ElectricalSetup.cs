@@ -23,9 +23,6 @@ public static class ElectricalDefaults
     /// <summary>Quantos equipamentos (subestações unitárias, inversores) se cria de uma vez, no máximo.</summary>
     public const int MaxAtOnce = 500;
 
-    /// <summary>Altura em que o retângulo do equipamento flutua sobre o terreno, em metros (12.3, 13.2, 14.6).</summary>
-    public const double FloatHeight = 0.80;
-
     public static EquipmentSize TransformerSize { get; } = new(3.0, 2.5, 2.5);
 
     public static EquipmentSize ConsumerUnitSize { get; } = new(4.0, 3.0, 3.0);
@@ -47,6 +44,12 @@ public static class ElectricalDefaults
         new(380, 13800, 500, 1, 4.5, new EquipmentSize(1.8, 1.4, 1.8)),
     ];
 }
+
+/// <summary>
+/// Um equipamento que vai para o campo como retângulo (12.3, 13.2, 14.6): o
+/// tipo, o GUID do cadastro, a tag escrita no topo e a dimensão.
+/// </summary>
+public sealed record EquipmentInfo(EquipmentKind Kind, Guid Id, string Tag, EquipmentSize Size);
 
 /// <summary>
 /// O cadastro da configuração elétrica de um desenho (etapas 12 a 14):
@@ -80,6 +83,43 @@ public sealed class ElectricalSetup
     public Transformer? FindTransformer(Guid id) => _trafos.FirstOrDefault(t => t.Id == id);
 
     public ConsumerUnit? FindUnit(Guid id) => _ucs.FirstOrDefault(u => u.Id == id);
+
+    // ------------------------------------------------- equipamento em campo
+
+    /// <summary>
+    /// O equipamento do cadastro com a tag e a dimensão do retângulo: a
+    /// subestação mostra o nome (o código se o nome está vazio), o trafo o
+    /// apelido. Null se não está no cadastro.
+    /// </summary>
+    public EquipmentInfo? FindEquipment(EquipmentKind kind, Guid id) => kind switch
+    {
+        EquipmentKind.ConsumerUnit when FindUnit(id) is { } u =>
+            new EquipmentInfo(kind, id, string.IsNullOrWhiteSpace(u.Name) ? u.Code : u.Name, u.Size),
+        EquipmentKind.Transformer when FindTransformer(id) is { } t => new EquipmentInfo(kind, id, t.Nickname, t.Size),
+        _ => null,
+    };
+
+    /// <summary>
+    /// Os equipamentos que respondem pelo texto: o GUID, ou a tag (código ou
+    /// nome da subestação, apelido do trafo), sem olhar maiúscula. Mais de um
+    /// = ambíguo, quem chama recusa.
+    /// </summary>
+    public IReadOnlyList<EquipmentInfo> FindEquipment(string? tagOrId)
+    {
+        var texto = tagOrId?.Trim() ?? string.Empty;
+        if (texto.Length == 0) return [];
+
+        var todos = Equipment().ToList();
+        if (Guid.TryParse(texto, out var id)) return todos.Where(e => e.Id == id).ToList();
+
+        return todos.Where(e => SameName(e.Tag, texto)
+            || (e.Kind == EquipmentKind.ConsumerUnit && SameName(FindUnit(e.Id)!.Code, texto))).ToList();
+    }
+
+    /// <summary>Todos os equipamentos do cadastro, subestações, trafos e inversores, nessa ordem.</summary>
+    public IEnumerable<EquipmentInfo> Equipment() =>
+        _ucs.Select(u => FindEquipment(EquipmentKind.ConsumerUnit, u.Id)!)
+            .Concat(_trafos.Select(t => FindEquipment(EquipmentKind.Transformer, t.Id)!));
 
     // -------------------------------------------------------- subestações
 

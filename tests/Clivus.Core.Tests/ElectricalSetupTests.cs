@@ -283,4 +283,46 @@ public class ElectricalSetupTests
         Assert.NotNull(setup.LinkTransformer(u[0].Id, t2.Id));   // T2 é da U2: travado
         Assert.Null(setup.LinkTransformer(u[0].Id, setup.AddTransformer().Id));
     }
+
+    // ------------------------------------------------------------ 12.3
+
+    [Fact]
+    [Trait("Etapa", "12")]
+    public void OEquipamentoTemATagEADimensaoDoCadastro()
+    {
+        var setup = new ElectricalSetup();
+        var c1 = setup.AddSharedUnit();
+        var u1 = setup.AddUnitaryUnits(1)[0];
+        var t1 = setup.AddTransformer();
+        setup.EditUnit(c1.Id, "Medição Norte", new EquipmentSize(6, 3, 2.8));
+
+        var uc = setup.FindEquipment(EquipmentKind.ConsumerUnit, c1.Id)!;
+        Assert.Equal("Medição Norte", uc.Tag);
+        Assert.Equal(new EquipmentSize(6, 3, 2.8), uc.Size);
+        Assert.Equal("Subestação U1", setup.FindEquipment(EquipmentKind.ConsumerUnit, u1.Id)!.Tag);
+        Assert.Equal("T1", setup.FindEquipment(EquipmentKind.Transformer, t1.Id)!.Tag);
+        Assert.Null(setup.FindEquipment(EquipmentKind.Transformer, c1.Id));
+        Assert.Null(setup.FindEquipment(EquipmentKind.ConsumerUnit, Guid.NewGuid()));
+        Assert.Equal(3, setup.Equipment().Count());
+    }
+
+    [Fact]
+    [Trait("Etapa", "12")]
+    public void OEquipamentoEAchadoPeloGuidPelaTagOuPeloCodigo()
+    {
+        var setup = new ElectricalSetup();
+        var c1 = setup.AddSharedUnit();
+        var t1 = setup.AddTransformer();
+
+        Assert.Equal(c1.Id, setup.FindEquipment("c1").Single().Id);
+        Assert.Equal(c1.Id, setup.FindEquipment(" subestação C1 ").Single().Id);
+        Assert.Equal(t1.Id, setup.FindEquipment("t1").Single().Id);
+        Assert.Equal(t1.Id, setup.FindEquipment(t1.Id.ToString()).Single().Id);
+        Assert.Empty(setup.FindEquipment("T9"));
+        Assert.Empty(setup.FindEquipment(""));
+
+        // Tag repetida entre tipos: os dois voltam, quem chama recusa.
+        setup.EditUnit(c1.Id, "T1", c1.Size);
+        Assert.Equal(2, setup.FindEquipment("T1").Count);
+    }
 }

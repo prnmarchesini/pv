@@ -28,7 +28,9 @@ def ler(caminho):
 
 
 def constantes():
-    texto = ler(os.path.join(RAIZ, 'src', 'Clivus.Core', 'PluginInfo.cs'))
+    # O PluginInfo é partial: PluginInfo.cs e os PluginInfo.*.cs da parte elétrica.
+    core = os.path.join(RAIZ, 'src', 'Clivus.Core')
+    texto = '\n'.join(ler(os.path.join(core, n)) for n in sorted(os.listdir(core)) if re.fullmatch(r'PluginInfo(\.\w+)?\.cs', n))
     return dict(re.findall(r'public const string (Comando\w+) = "(CLIVUS_[A-Z0-9_]+)"', texto))
 
 

@@ -23,7 +23,7 @@ internal sealed class AbaSubestacao : AbaEletrica
     {
         var botoes = new WrapPanel();
         Botao(botoes, Tr.T("Adicionar subestação"), Tr.T("Pergunta se é uma subestação compartilhada (C1, C2...) ou várias unitárias (U1, U2...)."), Adicionar);
-        Botao(botoes, Tr.T("Apagar"), Tr.T("Tira a subestação do cadastro. Os trafos dela ficam sem subestação; nada mais é apagado."), Apagar);
+        Botao(botoes, Tr.T("Apagar"), Tr.T("Tira a subestação do cadastro e o retângulo dela do campo. Os trafos dela ficam sem subestação; nada mais é apagado."), Apagar);
 
         var grade = Grade();
         var linha = grade.RowDefinitions.Count;
@@ -41,6 +41,10 @@ internal sealed class AbaSubestacao : AbaEletrica
         _altura = Campo(grade, Tr.T("Altura (m)"), Tr.T("Altura do retângulo 3D (a base flutua 0,80 m acima do terreno)."));
 
         Botao(_acoes, Tr.T("Salvar alterações"), Tr.T("Grava o nome e o tamanho da subestação escolhida."), Salvar);
+        Botao(_acoes, Tr.T("Alocar em campo"), Tr.T("A janela some: clique o centro do retângulo na planta. Se já está em campo, ele é movido; o vínculo não muda."), () =>
+        {
+            if (Escolhida is { } uc) AlocarEmCampo(uc.Id);
+        });
 
         var formulario = new StackPanel();
         formulario.Children.Add(grade);
@@ -71,11 +75,12 @@ internal sealed class AbaSubestacao : AbaEletrica
         var (setup, problema) = ConfiguracaoEletricaStore.Ler(Documento.Database);
         _setup = setup;
         var anterior = Escolhida?.Id;
+        var emCampo = EquipamentoEmCampo.EmCampo(Documento.Database);
 
         _lista.Items.Clear();
         foreach (var uc in setup.Units)
         {
-            var item = new ListBoxItem { Content = Descrever(setup, uc), Tag = uc };
+            var item = new ListBoxItem { Content = ComCampo(Descrever(setup, uc), emCampo.Contains((EquipmentKind.ConsumerUnit, uc.Id))), Tag = uc };
             _lista.Items.Add(item);
             if (uc.Id == anterior) _lista.SelectedItem = item;
         }
@@ -220,7 +225,7 @@ internal sealed class AbaSubestacao : AbaEletrica
         string? porque = null;
         Fazer(() =>
         {
-            porque = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.EditUnit(uc.Id, _nome.Text, tamanho));
+            porque = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => RedesenharSeDeuCerto(s, s.EditUnit(uc.Id, _nome.Text, tamanho), EquipmentKind.ConsumerUnit, uc.Id));
             return porque is null ? Tr.F("{0} salva.", uc.Code) : null;
         });
         if (porque is not null) Avisar(Tr.F("Não salvei: {0}.", porque), erro: true);
@@ -237,6 +242,7 @@ internal sealed class AbaSubestacao : AbaEletrica
         Fazer(() =>
         {
             var soltos = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.RemoveUnit(uc.Id)) ?? 0;
+            EquipamentoEmCampo.Apagar(Documento.Database, EquipmentKind.ConsumerUnit, uc.Id);
             return Tr.F("{0} apagada do cadastro; {1} trafo(s) ficaram sem subestação.", uc.Code, soltos);
         });
     }
