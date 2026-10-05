@@ -348,7 +348,7 @@ internal sealed class AbaInversor : AbaEletrica
             Botao(acoes, "+", Tr.T("Alocar strings: a janela some; selecione só strings em campo (Shift+clique tira), Enter volta."),
                 () => JanelaEletrica.Campo(Documento, PluginInfo.ComandoEletricaAlocar, este.Id.ToString("D")), largura: 30);
             Botao(acoes, Tr.T("Selecionar"), Tr.T("Seleciona no CAD todas as strings deste inversor."),
-                () => JanelaEletrica.Comando(Documento, PluginInfo.ComandoEletricaSelecionar, este.Id.ToString("D")));
+                () => JanelaEletrica.SelecionarStrings(Documento, este.Id));
             Botao(acoes, Tr.T("Soltar todas"), Tr.T("Solta todas as strings deste inversor: elas ficam livres e continuam no desenho (nada é apagado)."),
                 () => SoltarTodas(este));
 

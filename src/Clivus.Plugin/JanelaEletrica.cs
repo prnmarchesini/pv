@@ -124,8 +124,62 @@ internal sealed class JanelaEletrica : Window
     /// Manda o comando para a linha de comando SEM esconder a janela (o
     /// "selecionar todas": a seleção aparece no CAD com a janela aberta).
     /// </summary>
-    internal static void Comando(Document documento, string comando, string argumento) =>
+    /// <remarks>
+    /// O foco vai antes para a vista do desenho: com a janela solta ativa, o
+    /// texto mandado ficava parado na fila do AutoCAD até o mouse passar pelo
+    /// desenho, e o botão Selecionar "não fazia nada" (Renan, 05/10/2026). O
+    /// comando tem a marca Redraw, e a seleção implícita que ele põe fica no
+    /// desenho, com os grips, depois que ele termina; a janela continua aberta
+    /// por cima.
+    /// </remarks>
+    internal static void Comando(Document documento, string comando, string argumento)
+    {
+        FocarODesenho();
         documento.SendStringToExecute($"\x03\x03_{comando} {argumento}\n", true, false, false);
+    }
+
+    /// <summary>
+    /// O "Selecionar" do inversor (14.5): as strings dele ficam selecionadas
+    /// (destacadas, com os grips) no desenho, com a janela aberta. Primeiro a
+    /// seleção implícita direto daqui, com o documento travado (o caminho que
+    /// o nível 2 prova); depois, com interface, o comando CLIVUS_ELETRICA_SELECIONAR
+    /// pela linha de comando (com o foco no desenho), que a repõe pela marca
+    /// Redraw e escreve quantas foram. Quantas strings o inversor tem.
+    /// </summary>
+    internal static int SelecionarStrings(Document documento, Guid inversor)
+    {
+        var ids = StringsDoDesenho.Ler(documento.Database).Where(x => x.Value.Inverter == inversor).Select(x => x.Key).ToArray();
+
+        try
+        {
+            using (documento.LockDocument()) documento.Editor.SetImpliedSelection(ids);
+            if (ClivusExtension.TemInterface()) documento.Editor.UpdateScreen();
+        }
+        catch (Exception erro)
+        {
+            // Fora de comando o AutoCAD pode recusar; o comando abaixo faz o mesmo.
+            RegistroDeDiagnostico.Registrar("A seleção implícita direta das strings do inversor foi recusada.", erro);
+        }
+
+        // Sem interface (Core Console) o SendStringToExecute fora de comando derruba o processo.
+        if (ClivusExtension.TemInterface()) Comando(documento, PluginInfo.ComandoEletricaSelecionar, inversor.ToString("D"));
+        return ids.Length;
+    }
+
+    /// <summary>Põe o foco do teclado na vista do desenho (sem interface, no Core Console, nada).</summary>
+    private static void FocarODesenho()
+    {
+        if (!ClivusExtension.TemInterface()) return;
+
+        try
+        {
+            Autodesk.AutoCAD.Internal.Utils.SetFocusToDwgView();
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui pôr o foco no desenho antes do comando da janela elétrica.", erro);
+        }
+    }
 
     /// <summary>
     /// Esconde a janela e manda o comando de campo para a linha de comando

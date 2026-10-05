@@ -79,6 +79,33 @@ public static class ConfiguracaoEletricaAutoCommands
         }
     }
 
+#if DEBUG
+    /// <summary>
+    /// CLIVUS_ELETRICA_JANELA_SELECIONAR_AUTO &lt;inversor&gt;: o MESMO caminho do
+    /// botão Selecionar da aba Inversor (<see cref="JanelaEletrica.SelecionarStrings"/>),
+    /// no contexto da aplicação (Session), como o clique de uma janela solta,
+    /// fora de comando do documento. O nível 2 lê depois a seleção implícita
+    /// com (ssget "_I").
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoEletricaJanelaSelecionarAutomatico, CommandFlags.Session)]
+    public static void SelecionarPelaJanela()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var r = documento.Editor.GetString(new PromptStringOptions("\nInversor (nome): ") { AllowSpaces = true });
+        if (r.Status != PromptStatus.OK) return;
+
+        if (ConfiguracaoEletricaStore.Ler(documento.Database).Setup.FindInverter(r.StringResult) is not { } inversor)
+        {
+            documento.Editor.WriteMessage($"\nELETRICA recusado: inversor {r.StringResult} nao existe\n");
+            return;
+        }
+
+        documento.Editor.WriteMessage($"\nELETRICA selecionadas pela janela {JanelaEletrica.SelecionarStrings(documento, inversor.Id)} de {inversor.Name}\n");
+    }
+#endif
+
     /// <summary>Trafo &lt;0 = em branco | n = o n-ésimo padrão, a partir de 1&gt;.</summary>
     private static string? NovoTrafo(Editor editor, Database database)
     {
