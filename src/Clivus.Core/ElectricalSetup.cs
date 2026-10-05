@@ -547,7 +547,9 @@ public sealed class ElectricalSetup
     public InverterModel AddModel()
     {
         var n = NextNumber(_modelos.Select(m => m.Name), Tr.F("Modelo de inversor {0}", string.Empty));
-        var modelo = new InverterModel(Guid.NewGuid(), Tr.F("Modelo de inversor {0}", n), 1, 1, ElectricalDefaults.InverterSize);
+        // 6 MPPTs x 4 entradas (05/10/2026: com 1 x 1, o modelo salvo sem
+        // mexer deixava cada inversor com uma string só).
+        var modelo = new InverterModel(Guid.NewGuid(), Tr.F("Modelo de inversor {0}", n), 6, 4, ElectricalDefaults.InverterSize);
         _modelos.Add(modelo);
         return modelo;
     }

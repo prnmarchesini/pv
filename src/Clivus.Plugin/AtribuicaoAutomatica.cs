@@ -37,8 +37,9 @@ internal static class AtribuicaoAutomatica
     /// (e repinta as já alocadas, para um desenho de antes da cor ficar igual).
     /// Devolve o resultado e as linhas do relatório (a primeira é o resumo).
     /// </summary>
-    internal static (AutoAllocationResult Resultado, IReadOnlyList<string> Linhas) Atribuir(Database database)
+    internal static (AutoAllocationResult Resultado, IReadOnlyList<string> Linhas) Atribuir(Database database, Action<double, string>? progresso = null)
     {
+        progresso?.Invoke(5, Tr.T("Lendo o cadastro e as strings..."));
         var (setup, problema) = ConfiguracaoEletricaStore.Ler(database);
         var (varredura, problemaDaVarredura) = Varredura(database);
 
@@ -52,11 +53,15 @@ internal static class AtribuicaoAutomatica
         {
             var strings = ElectricalStore.Strings(transacao, database).Select(x => x.String).ToList();
             var modulos = NumeracaoDesenho.Modulos(transacao, database).ToDictionary(m => m.Key, m => new ModuleSpot(m.Value.Mesa, m.Value.Centro.X, m.Value.Centro.Y));
+            progresso?.Invoke(25, Tr.T("Distribuindo as strings pela varredura..."));
             r = StringAutoAllocation.Allocate(setup.Inverters, setup.Models, strings, modulos, varredura);
         }
 
+        progresso?.Invoke(40, Tr.T("Gravando o vínculo das strings..."));
         StringsDoDesenho.Gravar(database, r.Changed);
-        CorDasStrings.Repintar(database);
+        progresso?.Invoke(60, Tr.T("Pintando as strings com a cor de cada inversor..."));
+        CorDasStrings.Repintar(database, null, p => progresso?.Invoke(60 + 40 * p, Tr.T("Pintando as strings com a cor de cada inversor...")));
+        progresso?.Invoke(100, Tr.T("Pronto."));
 
         var linhas = new List<string>();
         if (r.Changed.Count == 0)

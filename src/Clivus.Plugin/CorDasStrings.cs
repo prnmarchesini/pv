@@ -34,11 +34,14 @@ internal static class CorDasStrings
     /// e os sinais. Só abre para escrita o que muda de cor. Quantas strings
     /// têm entidade no desenho.
     /// </summary>
-    internal static int Pintar(Transaction transacao, Database database, IReadOnlyDictionary<Guid, RgbColor?> cores)
+    internal static int Pintar(Transaction transacao, Database database, IReadOnlyDictionary<Guid, RgbColor?> cores, Action<double>? progresso = null)
     {
         if (cores.Count == 0) return 0;
 
         var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
+        var total = 0;
+        if (progresso is not null) foreach (ObjectId _ in espaco) total++;
+        var vistos = 0;
         var classeDaLinha = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Polyline3d));
         var classeDoTexto = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(DBText));
         var classeDoCirculo = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Circle));
@@ -46,6 +49,7 @@ internal static class CorDasStrings
 
         foreach (ObjectId id in espaco)
         {
+            if (progresso is not null && ++vistos % 500 == 0) progresso((double)vistos / Math.Max(1, total));
             if (id.IsErased || (id.ObjectClass != classeDaLinha && id.ObjectClass != classeDoTexto && id.ObjectClass != classeDoCirculo)) continue;
             if (transacao.GetObject(id, OpenMode.ForRead) is not Entity e) continue;
 
@@ -70,13 +74,13 @@ internal static class CorDasStrings
     /// Repinta pelo cadastro as strings do desenho (todas, ou só as do
     /// inversor dado), numa transação. Quantas strings foram conferidas.
     /// </summary>
-    internal static int Repintar(Database database, Guid? inversor = null)
+    internal static int Repintar(Database database, Guid? inversor = null, Action<double>? progresso = null)
     {
         var setup = ConfiguracaoEletricaStore.Ler(database).Setup;
 
         using var transacao = database.TransactionManager.StartTransaction();
         var strings = ElectricalStore.Strings(transacao, database).Select(x => x.String).Where(s => inversor is not { } i || s.Inverter == i);
-        var n = Pintar(transacao, database, PeloCadastro(setup, strings));
+        var n = Pintar(transacao, database, PeloCadastro(setup, strings), progresso);
         transacao.Commit();
         return n;
     }

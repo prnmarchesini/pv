@@ -366,7 +366,9 @@ public class ElectricalSetupTests
         Assert.Null(setup.EditModel(huawei with { Name = "Huawei 250", InputsByMppt = [4, 4, 4, 4, 4] }));
 
         Assert.Equal("Modelo de inversor 1", generico.Name);
-        Assert.Equal(1, generico.TotalInputs);
+        // 05/10/2026: o modelo novo nasce com 6 MPPTs x 4 entradas (com 1 x 1, salvo sem mexer, cada inversor pegava uma string só).
+        Assert.Equal(6, generico.Mppts);
+        Assert.Equal(24, generico.TotalInputs);
         Assert.True(generico.IsValid);
         var lido = setup.FindModel(huawei.Id)!;
         Assert.Equal("Huawei 250", lido.Name);

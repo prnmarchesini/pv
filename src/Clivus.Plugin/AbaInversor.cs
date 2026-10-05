@@ -100,7 +100,8 @@ internal sealed class AbaInversor : AbaEletrica
         atribuir.Children.Add(_sentidoDaAtribuicao);
         atribuir.Children.Add(new TextBlock { Text = Tr.T("na faixa:"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
         atribuir.Children.Add(_faixaDaAtribuicao);
-        Botao(atribuir, Tr.T("Atribuir strings"), Tr.T("As strings livres, na ordem desta varredura, enchem os inversores na ordem da lista, cada um até o total de entradas. As já alocadas não mudam (e contam); inversor cheio é pulado; as que sobrarem são avisadas."), AtribuirStrings);
+        Botao(atribuir, Tr.T("Distribuição automática"), Tr.T("As strings livres, na ordem desta varredura, enchem os inversores na ordem da lista, cada um até o total de entradas. As já alocadas não mudam (e contam); inversor cheio é pulado; as que sobrarem são avisadas. Para redistribuir do zero, use antes Soltar todas da usina."), AtribuirStrings);
+        Botao(atribuir, Tr.T("Soltar todas da usina"), Tr.T("Solta as strings de todos os inversores: ficam livres e continuam no desenho (nada é apagado). Depois, a Distribuição automática redistribui do zero."), SoltarTodasDaUsina);
         _sentidoDaAtribuicao.ToolTip = Tr.T("O sentido em que a varredura da atribuição avança (é desta atribuição; a numeração tem a sua).");
         _faixaDaAtribuicao.ToolTip = Tr.T("Na mesma faixa (linha ou coluna), em que sentido as strings são tomadas.");
         foreach (var sentido in Enum.GetValues<ScanDirection>()) _sentidoDaAtribuicao.Items.Add(new ComboBoxItem { Content = ScanOrder.Describe(sentido), Tag = sentido });
@@ -383,7 +384,7 @@ internal sealed class AbaInversor : AbaEletrica
                 () => JanelaEletrica.Campo(Documento, PluginInfo.ComandoEletricaAlocar, este.Id.ToString("D")), largura: 30);
             Botao(acoes, Tr.T("Selecionar"), Tr.T("Seleciona no CAD todas as strings deste inversor."),
                 () => JanelaEletrica.SelecionarStrings(Documento, este.Id));
-            Botao(acoes, Tr.T("Soltar todas"), Tr.T("Solta todas as strings deste inversor: elas ficam livres e continuam no desenho (nada é apagado)."),
+            Botao(acoes, Tr.T("Soltar strings"), Tr.T("Solta as strings deste inversor: elas ficam livres e continuam no desenho (nada é apagado)."),
                 () => SoltarTodas(este));
 
             var strings = _contagem.GetValueOrDefault(inversor.Id);
@@ -525,7 +526,19 @@ internal sealed class AbaInversor : AbaEletrica
     /// <summary>"Atribuir strings": as livres enchem os inversores na ordem da varredura; o relatório no rodapé.</summary>
     private void AtribuirStrings()
     {
-        var (r, linhas) = EscritaForaDeComando.Fazer(Documento, () => AtribuicaoAutomatica.Atribuir(Documento.Database));
+        // "Carregando..." com a porcentagem (05/10/2026), a janela travada enquanto isso.
+        var progresso = JanelaDeProgresso.Abrir(Window.GetWindow(this), Tr.T("Distribuição automática"));
+        (AutoAllocationResult r, IReadOnlyList<string> linhas) resultado;
+        try
+        {
+            resultado = EscritaForaDeComando.Fazer(Documento, () => AtribuicaoAutomatica.Atribuir(Documento.Database, (p, t) => progresso.Avancar(p, t)));
+        }
+        finally
+        {
+            progresso.Fechar();
+        }
+
+        var (r, linhas) = resultado;
         (AoMudar ?? Atualizar)();
         Avisar(string.Join("\n", linhas), erro: r.Changed.Count == 0 || r.Leftover > 0 || r.WithoutModel.Count > 0 || r.Unplaced > 0 || r.Duplicates > 0);
     }
@@ -573,6 +586,13 @@ internal sealed class AbaInversor : AbaEletrica
         });
         if (!tirou) Avisar(Tr.T("Esse inversor não está mais no cadastro."), erro: true);
     }
+
+    private void SoltarTodasDaUsina() =>
+        Fazer(() =>
+        {
+            var soltas = StringsDoDesenho.SoltarTodasDaUsina(Documento.Database);
+            return Tr.F("{0} string(s) soltas de todos os inversores; continuam no desenho, livres.", soltas);
+        });
 
     private void SoltarTodas(Inverter inversor) =>
         Fazer(() =>

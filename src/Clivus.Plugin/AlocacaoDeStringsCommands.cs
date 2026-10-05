@@ -288,6 +288,14 @@ internal static class StringsDoDesenho
         Gravar(database, StringAllocation.Release(inversor, Ler(database).Values));
 
     /// <summary>
+    /// Solta as strings de todos os inversores (05/10/2026: "apagar todas as
+    /// strings da usina"): só o vínculo; as strings continuam no desenho,
+    /// livres, na cor da camada. Quantas.
+    /// </summary>
+    internal static int SoltarTodasDaUsina(Database database) =>
+        Gravar(database, Ler(database).Values.Where(s => s.IsAllocated).Select(s => s with { Inverter = Guid.Empty }).ToList());
+
+    /// <summary>
     /// Regrava o XData das strings mudadas (o vínculo com o inversor), numa
     /// transação só. Acha a entidade pelo GUID da string. A geometria não é
     /// tocada; a cor da string (e dos sinais dela) passa a ser a do inversor,
