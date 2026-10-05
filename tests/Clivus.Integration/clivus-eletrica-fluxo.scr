@@ -144,7 +144,7 @@
     (setq r (cons (reverse g) r)))
   (reverse r))
 (setq clivus:arq (open "{{DUMP}}" "w"))
-(foreach i (clivus:itens "INVERSORES" 4)
+(foreach i (clivus:itens "INVERSORES" (if (= (nth 1 (clivus:registro "INVERSORES")) "1") 4 5))
   (write-line (strcat "INV " (nth 0 i) " " (clivus:sem-espaco (nth 3 i)) " " (clivus:sem-espaco (nth 2 i))) clivus:arq))
 (foreach clivus:tr (clivus:itens "TRAFOS" 13)
   (write-line (strcat "TRAFO " (nth 0 clivus:tr) " " (clivus:sem-espaco (nth 12 clivus:tr)) " " (clivus:sem-espaco (nth 2 clivus:tr))) clivus:arq))
