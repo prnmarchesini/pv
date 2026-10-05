@@ -85,7 +85,10 @@ public sealed record SystemSummary(
     int ModulesNotInDrawing,
     int ModulesWithFallbackPower,
     int ModulesWithoutPower,
-    int AllocatedWithoutTag)
+    int AllocatedWithoutTag,
+    int DuplicateStrings = 0,
+    int ModulesInMoreThanOneString = 0,
+    int ModulesWithoutTable = 0)
 {
     /// <summary>Todos os inversores, na ordem da árvore.</summary>
     public IEnumerable<InverterSummary> AllInverters =>
@@ -161,7 +164,10 @@ public sealed record SystemSummary(
         if (InvertersWithUnknownModel > 0) p.Add(Tr.F("{0} inversor(es) com modelo que não está no cadastro", InvertersWithUnknownModel));
         if (InvertersWithUnknownTransformer > 0) p.Add(Tr.F("{0} inversor(es) apontam para trafo que não está no cadastro", InvertersWithUnknownTransformer));
         if (TransformersWithUnknownUnit > 0) p.Add(Tr.F("{0} trafo(s) apontam para subestação que não está no cadastro", TransformersWithUnknownUnit));
+        if (DuplicateStrings > 0) p.Add(Tr.F("{0} string(s) com a identidade repetida (polilinha copiada?), fora dos totais", DuplicateStrings));
+        if (ModulesInMoreThanOneString > 0) p.Add(Tr.F("{0} módulo(s) em mais de uma string alocada (contados em cada uma)", ModulesInMoreThanOneString));
         if (ModulesNotInDrawing > 0) p.Add(Tr.F("{0} módulo(s) das strings não estão no desenho (sem potência)", ModulesNotInDrawing));
+        if (ModulesWithoutTable > 0) p.Add(Tr.F("{0} módulo(s) das strings sem a mesa dona no desenho (sem potência)", ModulesWithoutTable));
         if (ModulesWithFallbackPower > 0) p.Add(Tr.F("{0} módulo(s) de mesa sem potência gravada usaram a do perfil atual", ModulesWithFallbackPower));
         if (ModulesWithoutPower > 0) p.Add(Tr.F("{0} módulo(s) sem potência conhecida ficaram fora do kWp", ModulesWithoutPower));
         if (AllocatedWithoutTag > 0) p.Add(Tr.F("{0} string(s) alocada(s) ainda sem tag (gere a numeração)", AllocatedWithoutTag));
@@ -202,6 +208,8 @@ public static class ElectricalSummary
     /// potência gravada. Módulo ausente da lista não está no desenho.
     /// </param>
     /// <param name="fallbackWatts">A potência do perfil atual para as mesas sem potência gravada, ou null (esses módulos ficam fora do kWp, contados).</param>
+    /// <param name="modulesWithoutTable">Módulos que estão no desenho mas cuja mesa dona não foi achada (sem potência; contados à parte).</param>
+    /// <remarks>Os contadores de módulo (fora do desenho, reserva, sem potência) são só das strings alocadas, as dos totais.</remarks>
     public static SystemSummary Build(
         IReadOnlyList<ConsumerUnit> units,
         IReadOnlyList<Transformer> transformers,
@@ -209,7 +217,8 @@ public static class ElectricalSummary
         IReadOnlyList<Inverter> inverters,
         IReadOnlyList<ElectricalString> strings,
         IReadOnlyDictionary<Guid, double?> modulePowerWatts,
-        double? fallbackWatts)
+        double? fallbackWatts,
+        IReadOnlySet<Guid>? modulesWithoutTable = null)
     {
         ArgumentNullException.ThrowIfNull(units);
         ArgumentNullException.ThrowIfNull(transformers);
@@ -225,26 +234,39 @@ public static class ElectricalSummary
         var idsDeUc = units.Select(u => u.Id).ToHashSet();
 
         var foraDoDesenho = 0;
+        var semMesa = 0;
         var comReserva = 0;
         var semPotencia = 0;
 
-        // A potência de uma string, em kWp; conta o que faltou.
-        double Potencia(ElectricalString s)
+        // A potência de uma string, em kWp; conta o que faltou (só das que entram nos totais).
+        double Potencia(ElectricalString s, bool contar)
         {
             var watts = 0.0;
             foreach (var m in s.Modules)
             {
-                if (!modulePowerWatts.TryGetValue(m, out var p)) foraDoDesenho++;
+                if (!modulePowerWatts.TryGetValue(m, out var p))
+                {
+                    if (!contar) continue;
+                    if (modulesWithoutTable?.Contains(m) == true) semMesa++;
+                    else foraDoDesenho++;
+                }
                 else if (p is { } v && double.IsFinite(v) && v > 0) watts += v;
-                else if (reserva is { } r) { watts += r; comReserva++; }
-                else semPotencia++;
+                else if (reserva is { } r)
+                {
+                    watts += r;
+                    if (contar) comReserva++;
+                }
+                else if (contar) semPotencia++;
             }
 
             return watts / 1000.0;
         }
 
-        // Cada string uma vez (GUID repetido conta uma vez só).
-        var unicas = strings.GroupBy(s => s.Id).Select(g => g.First()).ToList();
+        // GUID repetido (polilinha copiada com o XData): nenhuma das cópias
+        // entra nos totais, e a pendência diz quantas são.
+        var porGuid = strings.GroupBy(s => s.Id).ToList();
+        var duplicadas = porGuid.Where(g => g.Count() > 1).Sum(g => g.Count());
+        var unicas = porGuid.Where(g => g.Count() == 1).Select(g => g.First()).ToList();
         var porInversor = new Dictionary<Guid, (int Strings, int Modulos, double Kwp)>();
         var livres = 0;
         var modulosLivres = 0;
@@ -252,9 +274,17 @@ public static class ElectricalSummary
         var inversorFantasma = 0;
         var semTag = 0;
 
+        var vistos = new HashSet<Guid>();
+        var emDuas = new HashSet<Guid>();
+
         foreach (var s in unicas)
         {
-            var kwp = Potencia(s);
+            var nosTotais = s.IsAllocated && idsDeInversor.Contains(s.Inverter);
+            var kwp = Potencia(s, nosTotais);
+
+            if (nosTotais)
+                foreach (var m in s.Modules)
+                    if (!vistos.Add(m)) emDuas.Add(m);
 
             if (!s.IsAllocated)
             {
@@ -311,7 +341,7 @@ public static class ElectricalSummary
             resumoDasUcs.Count,
             resumoDosTrafos.Count,
             resumoDosInversores.Count,
-            unicas.Count,
+            unicas.Count + duplicadas,
             alocadas,
             livres,
             porInversor.Values.Sum(v => v.Modulos),
@@ -325,6 +355,9 @@ public static class ElectricalSummary
             foraDoDesenho,
             comReserva,
             semPotencia,
-            semTag);
+            semTag,
+            duplicadas,
+            emDuas.Count,
+            semMesa);
     }
 }

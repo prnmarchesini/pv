@@ -131,6 +131,40 @@ public class ElectricalSummaryTests
 
     [Fact]
     [Trait("Etapa", "16")]
+    public void StringCopiadaComOMesmoGuidFicaForaDosTotaisEAvisada()
+    {
+        var c = new Cadeia();
+        var s = c.Str(c.I1.Id);
+        c.Strings.Add(s with { Inverter = c.I2.Id });   // a cópia aponta para outro inversor
+        c.Str(c.I2.Id);
+
+        var r = c.Resumo();
+        Assert.Equal(2, r.DuplicateStrings);
+        Assert.Equal((3, 1), (r.StringCount, r.AllocatedStrings));
+        Assert.Equal(0, r.Units[0].Transformers[0].Inverters[0].Strings);
+        Assert.Contains(r.Pending(), p => p.Contains("repetida"));
+    }
+
+    [Fact]
+    [Trait("Etapa", "16")]
+    public void ModuloEmDuasStringsEModuloSemMesaSaoPendencia()
+    {
+        var c = new Cadeia();
+        var a = c.Str(c.I1.Id);
+        c.Strings.Add(new ElectricalString(Guid.NewGuid(), Guid.Empty, [a.Modules[0], Guid.NewGuid()], c.I2.Id, ""));
+        var orfao = c.Strings[^1].Modules[1];
+        var livre = c.Str(Guid.Empty);
+        c.Potencia.Remove(livre.Modules[0]);   // módulo sumido numa string livre: não é pendência dos totais
+
+        var r = ElectricalSummary.Build([c.C1], [c.TA], [c.Modelo], [c.I1, c.I2], c.Strings, c.Potencia, null, new HashSet<Guid> { orfao });
+
+        Assert.Equal(1, r.ModulesInMoreThanOneString);
+        Assert.Equal(1, r.ModulesWithoutTable);
+        Assert.Equal(0, r.ModulesNotInDrawing);
+    }
+
+    [Fact]
+    [Trait("Etapa", "16")]
     public void SemReservaOModuloSemPotenciaNaoInventaNumero()
     {
         var c = new Cadeia();

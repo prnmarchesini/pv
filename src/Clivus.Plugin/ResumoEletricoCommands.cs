@@ -112,6 +112,7 @@ public static class ResumoEletricoCommands
 
         List<ElectricalString> strings;
         var potencia = new Dictionary<Guid, double?>();
+        var semMesa = new HashSet<Guid>();
 
         using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
         {
@@ -121,16 +122,22 @@ public static class ResumoEletricoCommands
             foreach (var (mesa, partes) in LayoutScan.Tables(transacao, database))
                 potenciaDaMesa[mesa] = partes.Identity?.ModulePowerWatts;
 
+            // Módulo cuja mesa dona não está no desenho: sem potência, contado à parte.
             foreach (var (modulo, lugar) in NumeracaoDesenho.Modulos(transacao, database))
-                potencia[modulo] = potenciaDaMesa.GetValueOrDefault(lugar.Mesa);
+            {
+                if (potenciaDaMesa.TryGetValue(lugar.Mesa, out var p)) potencia[modulo] = p;
+                else semMesa.Add(modulo);
+            }
         }
 
+        // Só um perfil SALVO dá a reserva: sem ele, a mesa de exemplo não é o
+        // "perfil atual", e esses módulos ficam fora do kWp, contados.
         double? reserva = null;
         if (potencia.Values.Any(p => p is null))
         {
             try
             {
-                reserva = FileiraCommands.PerfilDaMesa(documento.Editor, silencioso: true).Layout.Module.PowerWatts;
+                reserva = MesaCommands.PrimeiroPerfil(new TableProfileStore(MesaCommands.PastaDosPerfis))?.Layout.Module.PowerWatts;
             }
             catch (System.Exception erro)
             {
@@ -139,7 +146,7 @@ public static class ResumoEletricoCommands
             }
         }
 
-        var resumo = ElectricalSummary.Build(ucs.Items, trafos.Items, modelos.Items, inversores.Items, strings, potencia, reserva);
+        var resumo = ElectricalSummary.Build(ucs.Items, trafos.Items, modelos.Items, inversores.Items, strings, potencia, reserva, semMesa);
         var problemas = new[] { ucs.Problem, trafos.Problem, modelos.Problem, inversores.Problem }.OfType<string>().ToList();
         return new Lido(resumo, problemas);
     }
@@ -246,6 +253,7 @@ internal sealed class JanelaDeResumoEletrico : Window
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao atualizar o resumo elétrico.", erro);
+            _texto = [];
             _pendencias.Foreground = Brushes.Firebrick;
             _pendencias.Text = Tr.F("Não consegui ler o desenho: {0}", erro.Message);
         }
@@ -255,6 +263,12 @@ internal sealed class JanelaDeResumoEletrico : Window
     {
         try
         {
+            if (_texto.Count == 0)
+            {
+                _pendencias.Text = Tr.T("Não há resumo para copiar: use Atualizar.");
+                return;
+            }
+
             Clipboard.SetText(string.Join(Environment.NewLine, _texto));
         }
         catch (System.Exception erro)
@@ -283,13 +297,24 @@ internal sealed class JanelaDeResumoEletrico : Window
             if (e.Document == documento) janela.Close();
         }
 
-        AcadApp.DocumentManager.DocumentToBeDestroyed += AoFecharODesenho;
-        janela.Closed += (_, _) =>
+        void Soltar()
         {
             Abertas.Remove(documento);
             AcadApp.DocumentManager.DocumentToBeDestroyed -= AoFecharODesenho;
-        };
+        }
 
-        AcadApp.ShowModelessWindow(janela);
+        AcadApp.DocumentManager.DocumentToBeDestroyed += AoFecharODesenho;
+        janela.Closed += (_, _) => Soltar();
+
+        try
+        {
+            AcadApp.ShowModelessWindow(janela);
+        }
+        catch
+        {
+            // A janela nunca apareceu: sem isto, o próximo comando só ativaria uma janela invisível.
+            Soltar();
+            throw;
+        }
     }
 }
