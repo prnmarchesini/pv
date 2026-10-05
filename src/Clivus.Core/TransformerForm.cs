@@ -39,9 +39,9 @@ public static class TransformerForm
 
         return new TransformerFormTexts(
             t.Name, t.Nickname,
-            Numero(t.InputVoltage), Numero(t.OutputVoltage), Numero(t.PowerKva),
-            Numero(t.KFactor), Numero(t.ImpedancePercent), t.Notes,
-            Numero(t.Size.Width), Numero(t.Size.Length), Numero(t.Size.Height));
+            Grande(t.InputVoltage), Grande(t.OutputVoltage), Grande(t.PowerKva),
+            Medida(t.KFactor), Medida(t.ImpedancePercent), t.Notes,
+            Medida(t.Size.Width), Medida(t.Size.Length), Medida(t.Size.Height));
     }
 
     /// <summary>
@@ -86,25 +86,40 @@ public static class TransformerForm
     private static string Nao(string campo, string? texto) =>
         Tr.F("não consigo ler {0}: \"{1}\"", campo, texto?.Trim() ?? string.Empty);
 
-    private static string Numero(double v) => v.ToString("0.##", Tr.Culture);
+    /// <summary>
+    /// Tensão e potência na caixa: duas casas, que é o que a leitura de
+    /// milhar aceita como decimal em inglês ("2500.75"; com três casas seria
+    /// milhar).
+    /// </summary>
+    private static string Grande(double v) => v.ToString("0.##", Tr.Culture);
+
+    /// <summary>Fator K, impedância e medidas: quatro casas (5,875 % volta 5,875, não 5,88).</summary>
+    private static string Medida(double v) => v.ToString("0.####", Tr.Culture);
 
     private static bool Tensao(string? texto, out double volts)
     {
         var (numero, fator) = Unidade(texto, ("kV", 1000), ("V", 1));
-        return Grande(numero, fator, out volts);
+        return Ler(numero, fator, out volts);
     }
 
     private static bool Potencia(string? texto, out double kva)
     {
         var (numero, fator) = Unidade(texto, ("MVA", 1000), ("kVA", 1));
-        return Grande(numero, fator, out kva);
+        return Ler(numero, fator, out kva);
     }
 
-    private static bool Grande(string numero, double fator, out double valor)
+    /// <summary>
+    /// Na unidade base (V, kVA) o ponto é milhar ("13.800"); em kV e MVA o
+    /// número é pequeno e o ponto é decimal ("0.380 kV" são 380 V, "1.250 MVA"
+    /// são 1250 kVA; lido como milhar, seria mil vezes mais, calado).
+    /// </summary>
+    private static bool Ler(string numero, double fator, out double valor)
     {
         valor = 0;
         if (numero.Length == 0) return fator == 1;
-        if (!NumberInput.TryParseLarge(numero, out var v) || !double.IsFinite(v)) return false;
+
+        var leu = fator == 1 ? NumberInput.TryParseLarge(numero, out var v) : NumberInput.TryParseMeasure(numero, out v);
+        if (!leu || !double.IsFinite(v)) return false;
 
         valor = v * fator;
         return true;

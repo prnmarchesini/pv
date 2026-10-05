@@ -23,6 +23,8 @@ public class TransformerFormTests
     [InlineData("2.500,5", 2500.5)]
     [InlineData("2500 kVA", 2500)]
     [InlineData("2,5 MVA", 2500)]
+    [InlineData("1.250 MVA", 1250)]
+    [InlineData("1.25 MVA", 1250)]
     [InlineData("", 0)]
     public void APotenciaDigitadaEhLidaNaCulturaBrasileira(string texto, double esperado)
     {
@@ -40,6 +42,8 @@ public class TransformerFormTests
     [InlineData("13,8 kV", 13800)]
     [InlineData("34.5kV", 34500)]
     [InlineData("800 V", 800)]
+    [InlineData("0.380 kV", 380)]
+    [InlineData("13.8 kV", 13800)]
     public void ATensaoDigitadaEhLidaComPontoDeMilharEKv(string texto, double esperado)
     {
         var t = TransformerForm.Read(Branco(), Textos(saida: texto), out var problema);
@@ -94,7 +98,7 @@ public class TransformerFormTests
     [InlineData("es")]
     public void OQueAJanelaMostraVoltaIgualPelaLeitura(string idioma)
     {
-        var original = new Transformer(Guid.NewGuid(), "Seco", "T7", 800, 13800, 2500, 4, 6.5, "obs", new EquipmentSize(3.2, 2.6, 2.7), Guid.Empty);
+        var original = new Transformer(Guid.NewGuid(), "Seco", "T7", 800, 13800, 2500, 4.25, 5.875, "obs", new EquipmentSize(3.215, 2.6, 2.7), Guid.Empty);
 
         using (Tr.Use(Tr.Resolve(idioma, null)))
         {
