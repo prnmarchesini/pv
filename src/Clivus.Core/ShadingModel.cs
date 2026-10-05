@@ -174,7 +174,15 @@ public sealed class ShadingModel
     }
 
     /// <summary>O pior caso de cada face num período, com a causa nesse pior instante.</summary>
-    public ShadingWorstCase Worst(double latitude, double longitude, double utcOffsetHours, IEnumerable<DateTime> instants)
+    /// <param name="latitude">Graus.</param>
+    /// <param name="longitude">Graus.</param>
+    /// <param name="utcOffsetHours">O fuso.</param>
+    /// <param name="instants">Os instantes do período.</param>
+    /// <param name="onInstant">Chamado a cada instante, antes da conta dele, com o sol (o andamento; quem chama pode juntar mais coisa do mesmo passo).</param>
+    /// <param name="cancel">Conferido a cada instante, logo depois de <paramref name="onInstant"/>: cancelado, sai com <see cref="OperationCanceledException"/>.</param>
+    public ShadingWorstCase Worst(
+        double latitude, double longitude, double utcOffsetHours, IEnumerable<DateTime> instants,
+        Action<DateTime, SunPosition>? onInstant = null, CancellationToken cancel = default)
     {
         ArgumentNullException.ThrowIfNull(instants);
 
@@ -188,8 +196,11 @@ public sealed class ShadingModel
 
         foreach (var instante in instants)
         {
+            cancel.ThrowIfCancellationRequested();
             total++;
             var sol = SolarCalculator.Compute(latitude, longitude, instante, utcOffsetHours);
+            onInstant?.Invoke(instante, sol);
+            cancel.ThrowIfCancellationRequested();
             if (sol.ElevationDegrees < Shading.MinimumElevationDegrees) continue;
 
             comSol++;

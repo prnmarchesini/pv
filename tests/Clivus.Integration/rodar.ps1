@@ -3895,6 +3895,93 @@ function Testar-SombrasJanela {
 }
 
 <#
+    A sombra das MESAS e o Cancelar (05/10/2026, Renan: "o motor de sombras
+    tem que gerar as sombras de todos objetos do desenho"; "um botao de
+    cancelar a qualquer momento"). Usina sem arvore: as 07:30 de 21/06/2026
+    as mesas fazem sombra no chao (cota na faixa do terreno, regra 5) e na
+    fileira de tras (no plano da mesa); o ano cancelado no 5o passo do
+    andamento diz "Cancelado; nada foi desenhado." e nao muda nada; o dia
+    inteiro desenha a mancha das mesas no chao.
+#>
+function Testar-SombrasMesas {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-mesas--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'clivus-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("clivus-sombras-mesas: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+
+    if ($sonda.Texto -notmatch 'cotas:\s+(-?[\d.,]+) m a (-?[\d.,]+) m') {
+        $problemas.Add("clivus-sombras-mesas: nao achei a faixa de cotas do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $minima = [double]::Parse($Matches[1], $ptbr)
+    $maxima = [double]::Parse($Matches[2], $ptbr)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-mesas' `
+        -Script (Join-Path $PSScriptRoot 'clivus-sombras-mesas.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("clivus-sombras-mesas terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'CLIVUS_SOMBRAS_MESAS chao=(\d+) zmin=(-?[\d.]+) zmax=(-?[\d.]+) mesa=(\d+) mzmin=(-?[\d.E+]+) mzmax=(-?[\d.E+]+) iguais=(\d) dia=(\d+)') {
+        $problemas.Add("clivus-sombras-mesas: sem o resumo. Veja $($r.Saida)")
+        return $false
+    }
+
+    $m = $Matches
+    $chao = [int] $m[1]; $zmin = [double]::Parse($m[2], $invariante); $zmax = [double]::Parse($m[3], $invariante)
+    $mesa = [int] $m[4]; $iguais = $m[7]; $dia = [int] $m[8]
+
+    $erros = @()
+    if ($r.Texto -notmatch '0 .rvore\(s\)') { $erros += 'o desenho tinha arvore (o teste e sem arvore)' }
+    if ($chao -lt 1) { $erros += 'as 07:30, sem arvore, nenhuma sombra de mesa no chao' }
+    if ($mesa -lt 1) { $erros += 'as 07:30 nenhuma sombra de mesa sobre a fileira de tras' }
+    if ($chao -ge 1 -and ($zmin -lt ($minima - 0.01) -or $zmax -gt ($maxima + 0.1))) { $erros += "a sombra das mesas no chao vai da cota $zmin a $zmax, fora do terreno ($minima a $maxima)" }
+    if ($mesa -ge 1) {
+        $mzmin = [double]::Parse($m[5], $invariante); $mzmax = [double]::Parse($m[6], $invariante)
+        if ($mzmin -lt ($minima - 0.01) -or $mzmax -gt ($maxima + 6)) { $erros += "a sombra sobre as mesas vai da cota $mzmin a $mzmax, longe do terreno ($minima a $maxima)" }
+    }
+    if ($r.Texto -notmatch 'Sombra das .rvores e das mesas desenhada .s 21/06/2026 07:30') { $erros += 'a frase nao diz que a sombra das mesas foi desenhada' }
+    if ($r.Texto -notmatch 'SOMBRAS_ANDAMENTO Calculando \d\d/\d\d \(\d+ de 365\)') { $erros += 'o andamento nao mostra o dia sendo calculado (dd/mm, n de 365)' }
+    if ($r.Texto -notmatch 'SOMBRAS Cancelado; nada foi desenhado\.') { $erros += 'o cancelar nao disse "Cancelado; nada foi desenhado."' }
+    if ($iguais -ne '1') { $erros += 'o cancelar mudou o desenho (contornos ou cores)' }
+    if ($dia -lt 1) { $erros += 'o dia inteiro nao desenhou a mancha das mesas no chao' }
+
+    if ($erros.Count -gt 0) {
+        $problemas.Add("clivus-sombras-mesas: $($erros -join '; '). Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (sombras das mesas: 07:30 com $chao contorno(s) no chao e $mesa sobre as mesas, cota na faixa do terreno; ano cancelado sem mudar nada; dia com $dia no chao)" -ForegroundColor DarkGray
+    return $true
+}
+
+<#
     Sombras (9.7 e 9.8): usina mista e uma arvore grande no meio da F1.3. As
     09:00 de 21/06/2026 a sombra e desenhada no terreno (cota na faixa dele,
     regra 5) e marca modulos; Apagar tira os contornos e devolve exatamente
@@ -4543,6 +4630,10 @@ else {
     # O periodo: contornos hora a hora do pior dia e o "Por que essa sombra?".
     $total++
     if (Testar-SombrasPorQue -Desenho $desenhos[0]) { $passaram++ }
+
+    # A sombra das mesas (no chao e na fileira de tras) e o Cancelar do andamento.
+    $total++
+    if (Testar-SombrasMesas -Desenho $desenhos[0]) { $passaram++ }
 
     # 3D no navegador (9.9).
     $total++

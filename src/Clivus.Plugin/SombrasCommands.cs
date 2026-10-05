@@ -149,7 +149,7 @@ public static class SombrasCommands
                 return;
             }
 
-            editor.WriteMessage($"\n{Gerar(documento, periodo)}\n");
+            editor.WriteMessage($"\n{GerarComAndamento(documento, periodo, null)}\n");
         }
         catch (System.Exception erro)
         {
@@ -298,16 +298,69 @@ public static class SombrasCommands
         return GeoStore.Read(documento.Database, TerrenoResumoCommands.Centro(terreno));
     }
 
-    /// <summary>
-    /// Gera as sombras do período: apaga as anteriores, calcula, desenha a
-    /// sombra (do instante, ou do pior instante do período) e marca os
-    /// módulos pelo pior caso. Devolve o relato.
-    /// </summary>
     /// <summary>O botão da janela: o mesmo cálculo, fora de comando, com o vigia calado.</summary>
     internal static string GerarPelaJanela(Document documento, PeriodoDeSombra periodo) =>
-        EscritaForaDeComando.Fazer(documento, () => Gerar(documento, periodo));
+        EscritaForaDeComando.Fazer(documento, () => GerarComAndamento(documento, periodo, null));
 
-    internal static string Gerar(Document documento, PeriodoDeSombra periodo)
+    /// <summary>
+    /// Gera com a janela de andamento (05/10/2026, Renan: "quero um modal que
+    /// mostra o carregamento e % e vai passando os dias calculados com um
+    /// botão de cancelar a qualquer momento"): a porcentagem, o dia sendo
+    /// calculado e o Cancelar. Sem interface (Core Console), sem janela.
+    /// A janela fecha sempre, dê certo, dê erro ou seja cancelado.
+    /// </summary>
+    /// <param name="documento">O desenho (travado por quem chama, se fora de comando).</param>
+    /// <param name="periodo">O período.</param>
+    /// <param name="dono">A janela de sombras (travada enquanto isso), ou null no comando.</param>
+    internal static string GerarComAndamento(Document documento, PeriodoDeSombra periodo, System.Windows.Window? dono)
+    {
+        if (!ClivusExtension.TemInterface()) return Gerar(documento, periodo);
+
+        JanelaDeProgresso? janela = null;
+        try
+        {
+            try
+            {
+                janela = JanelaDeProgresso.Abrir(dono, Tr.T("Gerar sombras"), podeCancelar: true);
+            }
+            catch (System.Exception erro)
+            {
+                // Sem a janela, o cálculo segue sem andamento.
+                RegistroDeDiagnostico.Registrar("Falha ao abrir o andamento das sombras.", erro);
+                janela = null;
+            }
+
+            if (janela is null) return Gerar(documento, periodo);
+
+            return Gerar(documento, periodo, (p, texto) =>
+            {
+                janela.Avancar(p, texto);
+                return !janela.Cancelado;
+            }, () => janela.PodeCancelar(false));
+        }
+        finally
+        {
+            try
+            {
+                janela?.Fechar();
+            }
+            catch (System.Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao fechar o andamento das sombras.", erro);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gera as sombras do período: calcula (o pior caso de cada módulo e a
+    /// mancha da sombra de todos os objetos), e só então apaga as anteriores,
+    /// desenha a mancha e marca os módulos. Devolve o relato.
+    /// </summary>
+    /// <param name="documento">O desenho.</param>
+    /// <param name="periodo">O período.</param>
+    /// <param name="avancar">O andamento (porcentagem, o que está sendo feito); devolve false para cancelar. Cancelado, nada é desenhado.</param>
+    /// <param name="semVolta">Chamado antes de gravar no desenho: dali em diante não se cancela.</param>
+    internal static string Gerar(Document documento, PeriodoDeSombra periodo, Func<double, string, bool>? avancar = null, Action? semVolta = null)
     {
         var database = documento.Database;
         var terreno = TerrainCache.Get(documento);
@@ -324,6 +377,7 @@ public static class SombrasCommands
         var cilindros = new List<ShadowCylinder>();
         List<ShadowQuad> faces;
         List<ObjectId> modulos;
+        var mesas = new List<IReadOnlyList<Point3>>();
         var arvores = 0;
 
         using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
@@ -335,73 +389,136 @@ public static class SombrasCommands
             }
 
             (faces, modulos) = Faces(transacao, database);
+
+            // Os contornos das mesas: recebem a sombra e fazem sombra.
+            foreach (var mesa in LayoutScan.Tables(transacao, database).Values)
+                if (mesa.Contour is { } id && !id.IsErased && transacao.GetObject(id, OpenMode.ForRead) is Polyline3d linha)
+                    mesas.Add(FileiraCommands.Vertices(linha, transacao));
         }
 
-        Apagar(database);
+        if (faces.Count == 0)
+        {
+            Apagar(database);
+            return Tr.T("SOMBRAS Não há módulo gerado pelo plugin no desenho.");
+        }
 
-        if (faces.Count == 0) return Tr.T("SOMBRAS Não há módulo gerado pelo plugin no desenho.");
+        double? Chao(double x, double y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null;
 
         var relogio = System.Diagnostics.Stopwatch.StartNew();
+        using var cancelar = new CancellationTokenSource();
+
+        // O andamento: o dia sendo calculado e a porcentagem pelos instantes
+        // (até 90%; o resto é juntar a mancha e gravar).
+        var totalDeDias = periodo.Instante ? 1 : (periodo.Ate.DayNumber - periodo.De.DayNumber) / periodo.PassoDias + 1;
+        List<DateTime> lista = periodo.Instante ? [] : periodo.InstantesComSol(lugar.Latitude, lugar.Longitude).ToList();
+        var feitos = 0;
+        void Andar(double porcento, string texto)
+        {
+            if (avancar is not null && !avancar(porcento, texto)) cancelar.Cancel();
+            cancelar.Token.ThrowIfCancellationRequested();
+        }
+
+        void Dia(DateTime t)
+        {
+            var dia = Math.Clamp((DateOnly.FromDateTime(t).DayNumber - periodo.De.DayNumber) / periodo.PassoDias + 1, 1, totalDeDias);
+            Andar(90.0 * feitos++ / Math.Max(1, lista.Count), Tr.F("Calculando {0:dd/MM} ({1} de {2})...", t, dia, totalDeDias));
+        }
 
         // Árvores, as outras mesas e o relevo: todos os elementos do desenho.
-        var modelo = new ShadingModel(faces, cilindros, (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null, terreno.Mesh.MaxZ);
+        ShadingModel modelo;
+        ShadowFootprint mancha;
 
         double[] fracoes;
         ShadowCause[] causas;
         DateTime?[] quando;
         DateTime? desenhar;
         int comSol, instantes;
+        var passos = new List<DateTime>();
+        IReadOnlyList<IReadOnlyList<(double X, double Y)>> noChao;
+        var naMesa = new List<(int Mesa, IReadOnlyList<IReadOnlyList<(double X, double Y)>> Aneis)>();
 
-        if (periodo.Instante)
+        try
         {
-            var t = periodo.De.ToDateTime(periodo.HoraDe);
-            var sol = SolarCalculator.Compute(lugar.Latitude, lugar.Longitude, t, periodo.Fuso);
-            var r = modelo.At(sol);
-            comSol = sol.ElevationDegrees >= Shading.MinimumElevationDegrees ? 1 : 0;
-            instantes = 1;
-            fracoes = r.Fractions.ToArray();
-            causas = r.Causes.ToArray();
-            quando = fracoes.Select(f => f > 0 ? (DateTime?)t : null).ToArray();
-            desenhar = comSol == 1 ? t : null;
+            Andar(0, Tr.T("Preparando o terreno e as mesas..."));
+            modelo = new ShadingModel(faces, cilindros, Chao, terreno.Mesh.MaxZ);
+
+            // A mancha de TODOS os objetos (05/10/2026): árvores e mesas, no
+            // chão e sobre as mesas, juntada a cada passo do cálculo com sol.
+            mancha = new ShadowFootprint(cilindros, mesas, Chao);
+
+            if (periodo.Instante)
+            {
+                var t = periodo.De.ToDateTime(periodo.HoraDe);
+                Dia(t);
+                var sol = SolarCalculator.Compute(lugar.Latitude, lugar.Longitude, t, periodo.Fuso);
+                var r = modelo.At(sol);
+                comSol = sol.ElevationDegrees >= Shading.MinimumElevationDegrees ? 1 : 0;
+                instantes = 1;
+                fracoes = r.Fractions.ToArray();
+                causas = r.Causes.ToArray();
+                quando = fracoes.Select(f => f > 0 ? (DateTime?)t : null).ToArray();
+                desenhar = comSol == 1 ? t : null;
+
+                if (comSol == 1)
+                {
+                    mancha.Add(sol);
+                    passos.Add(t);
+                }
+            }
+            else
+            {
+                // Um passo só pelo período: o pior caso dos módulos e a mancha juntos.
+                var pior = modelo.Worst(lugar.Latitude, lugar.Longitude, periodo.Fuso, lista, (t, sol) =>
+                {
+                    Dia(t);
+                    if (sol.ElevationDegrees < Shading.MinimumElevationDegrees) return;
+                    mancha.Add(sol);
+                    passos.Add(t);
+                }, cancelar.Token);
+
+                fracoes = pior.Fractions.ToArray();
+                causas = pior.Causes!.ToArray();
+                quando = pior.When.ToArray();
+                desenhar = pior.WorstInstant;
+                comSol = pior.InstantsWithSun;
+                instantes = pior.Instants;
+            }
+
+            // A mancha do período: a união das sombras de todos os passos
+            // (05/10/2026); num instante, a sombra dele.
+            Andar(90, Tr.T("Juntando as sombras..."));
+            noChao = mancha.Ground();
+
+            foreach (var m in mancha.ShadedTables)
+            {
+                naMesa.Add((m, mancha.OnTable(m)));
+                Andar(90, Tr.T("Juntando as sombras..."));
+            }
+
+            Andar(95, Tr.T("Desenhando..."));
         }
-        else
+        catch (OperationCanceledException)
         {
-            var pior = modelo.Worst(lugar.Latitude, lugar.Longitude, periodo.Fuso, periodo.InstantesComSol(lugar.Latitude, lugar.Longitude));
-            fracoes = pior.Fractions.ToArray();
-            causas = pior.Causes!.ToArray();
-            quando = pior.When.ToArray();
-            desenhar = pior.WorstInstant;
-            comSol = pior.InstantsWithSun;
-            instantes = pior.Instants;
+            return Tr.T("SOMBRAS Cancelado; nada foi desenhado.");
         }
 
         relogio.Stop();
 
-        // A mancha do período: a união das sombras de todos os passos do
-        // cálculo com sol (05/10/2026); num instante, a sombra dele.
+        // Daqui em diante grava no desenho: não para pela metade.
+        semVolta?.Invoke();
+        Apagar(database);
+
         var contornos = 0;
-        var passos = new List<DateTime>();
-        if (desenhar is not null && cilindros.Count > 0)
+        if (desenhar is not null && passos.Count > 0 && (noChao.Count > 0 || naMesa.Count > 0))
         {
-            var sois = new List<SunPosition>();
-            foreach (var t in periodo.Instante ? [desenhar.Value] : periodo.InstantesComSol(lugar.Latitude, lugar.Longitude))
-            {
-                var sol = SolarCalculator.Compute(lugar.Latitude, lugar.Longitude, t, periodo.Fuso);
-                if (sol.ElevationDegrees < Shading.MinimumElevationDegrees) continue;
-                sois.Add(sol);
-                passos.Add(t);
-            }
+            var dias = passos.Select(t => t.Date).Distinct().Count();
+            var rotulo = periodo.Instante
+                ? Tr.F("Sombra {0:dd/MM HH:mm}", passos[0])
+                : dias == 1
+                    ? Tr.F("Sombra {0:dd/MM} {1:HH:mm}–{2:HH:mm}", passos[0], passos[0].Date + passos.Min(t => t.TimeOfDay), passos[0].Date + passos.Max(t => t.TimeOfDay))
+                    : Tr.F("Sombra {0:dd/MM}–{1:dd/MM} {2:HH:mm}–{3:HH:mm}", passos[0], passos[^1], passos[0].Date + passos.Min(t => t.TimeOfDay), passos[0].Date + passos.Max(t => t.TimeOfDay));
 
-            if (passos.Count > 0)
-            {
-                var rotulo = periodo.Instante
-                    ? Tr.F("Sombra {0:dd/MM HH:mm}", passos[0])
-                    : passos[0].Date == passos[^1].Date
-                        ? Tr.F("Sombra {0:dd/MM} {1:HH:mm}–{2:HH:mm}", passos[0], passos[0].Date + passos.Min(t => t.TimeOfDay), passos[0].Date + passos.Max(t => t.TimeOfDay))
-                        : Tr.F("Sombra {0:dd/MM}–{1:dd/MM} {2:HH:mm}–{3:HH:mm}", passos[0], passos[^1], passos[0].Date + passos.Min(t => t.TimeOfDay), passos[0].Date + passos.Max(t => t.TimeOfDay));
-
-                contornos = Desenhar(database, terreno, cilindros, sois, rotulo, passos[0]);
-            }
+            contornos = Desenhar(database, terreno, noChao, naMesa.Select(x => (mesas[x.Mesa], x.Aneis)).ToList(), rotulo, passos[0]);
         }
 
         var marcados = Marcar(database, modulos, fracoes, causas, quando, periodo.Descrever());
@@ -426,8 +543,8 @@ public static class SombrasCommands
 
         if (desenhar is { } d && contornos > 0)
             texto.Append(periodo.Instante
-                ? Tr.F("Sombra das árvores desenhada às {0:dd/MM/yyyy HH:mm}, no chão e sobre as mesas ({1} contorno(s)). ", d, contornos)
-                : Tr.F("Mancha da sombra das árvores no período desenhada: a união das sombras de {0} passo(s) do cálculo, só a borda, no chão e sobre as mesas ({1} contorno(s)); cada módulo tem a cor do pior caso, e Por que essa sombra? diz quando e o quê. ",
+                ? Tr.F("Sombra das árvores e das mesas desenhada às {0:dd/MM/yyyy HH:mm}, no chão e sobre as mesas ({1} contorno(s)). ", d, contornos)
+                : Tr.F("Mancha da sombra das árvores e das mesas no período desenhada: a união das sombras de {0} passo(s) do cálculo, só a borda, no chão e sobre as mesas ({1} contorno(s)); cada módulo tem a cor do pior caso, e Por que essa sombra? diz quando e o quê. ",
                     passos.Count, contornos));
 
         texto.Append(Tr.F("Conta em {0:0.0} s.", relogio.Elapsed.TotalSeconds));
@@ -479,14 +596,16 @@ public static class SombrasCommands
     }
 
     /// <summary>
-    /// A mancha da sombra dos objetos no período (05/10/2026, Renan: "eu
+    /// Desenha a mancha da sombra de todos os objetos (05/10/2026, Renan: "eu
     /// quero o desenho da sombra no chão ao longo do dia, na passada que o
-    /// sistema calcula ... deixa somente as bordas"): a união, em planta, dos
-    /// contornos de cada passo do cálculo, no chão (cota do terreno a cada
-    /// 0,5 m da borda) e sobre cada mesa (no plano dela). Num instante só, é a
-    /// sombra daquele instante. Quantos contornos.
+    /// sistema calcula ... deixa somente as bordas"; e "quero que gere as
+    /// sombras das mesas também"): os anéis já unidos, no chão (cota do
+    /// terreno ao longo da borda) e sobre cada mesa (no plano dela). Só a
+    /// borda, na camada das sombras. Quantos contornos.
     /// </summary>
-    private static int Desenhar(Database database, ProcessedTerrain terreno, IReadOnlyList<ShadowCylinder> cilindros, IReadOnlyList<SunPosition> sois, string rotulo, DateTime primeiro)
+    private static int Desenhar(
+        Database database, ProcessedTerrain terreno, IReadOnlyList<IReadOnlyList<(double X, double Y)>> noChao,
+        IReadOnlyList<(IReadOnlyList<Point3> Mesa, IReadOnlyList<IReadOnlyList<(double X, double Y)>> Aneis)> naMesa, string rotulo, DateTime primeiro)
     {
         double? Chao(double x, double y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null;
 
@@ -499,32 +618,7 @@ public static class SombrasCommands
         var marca = primeiro.ToString("s", CultureInfo.InvariantCulture);
         var feitos = 0;
 
-        var mesas = new List<IReadOnlyList<Point3>>();
-        foreach (var mesa in LayoutScan.Tables(transacao, database).Values)
-            if (mesa.Contour is { } id && transacao.GetObject(id, OpenMode.ForRead) is Polyline3d linha)
-                mesas.Add(FileiraCommands.Vertices(linha, transacao));
-
-        // Os contornos de cada passo, em planta: no chão (todos os objetos
-        // juntos) e por mesa.
-        var noChao = new List<IReadOnlyList<(double X, double Y)>>();
-        var porMesa = mesas.Select(_ => new List<IReadOnlyList<(double X, double Y)>>()).ToList();
-
-        foreach (var sol in sois)
-        {
-            foreach (var cilindro in cilindros)
-            {
-                var contorno = Shading.ShadowOutline(cilindro, sol.Direction, Chao);
-                if (contorno.Count >= 3) noChao.Add(contorno.Select(p => (p.X, p.Y)).ToList());
-
-                for (var m = 0; m < mesas.Count; m++)
-                {
-                    var naMesa = Shading.ShadowOnPlane(cilindro, sol.Direction, mesas[m]);
-                    if (naMesa.Count >= 3) porMesa[m].Add(naMesa.Select(p => (p.X, p.Y)).ToList());
-                }
-            }
-        }
-
-        Polyline3d Contorno(IEnumerable<Point3d> pontos)
+        void Contorno(IEnumerable<Point3d> pontos, string onde)
         {
             var polilinha = new Polyline3d { Closed = true, Layer = camada };
             espaco.AppendEntity(polilinha);
@@ -537,19 +631,25 @@ public static class SombrasCommands
                 transacao.AddNewlyCreatedDBObject(v, true);
             }
 
-            PluginXData.Save(transacao, polilinha, TipoDaSombra, 1, marca);
+            // O segundo campo diz onde a borda está: no chão ou sobre uma mesa.
+            PluginXData.Save(transacao, polilinha, TipoDaSombra, 1, marca, onde);
             feitos++;
-            return polilinha;
         }
 
         // No chão: a borda densificada, cada ponto na cota do terreno (fora
-        // dele, a cota do último ponto que tinha terreno).
-        foreach (var anel in ShadowUnion.Union(noChao))
+        // dele, a cota do último ponto que tinha terreno). Numa usina grande a
+        // borda de todas as fileiras passa de dezenas de quilômetros: o passo
+        // cresce para o desenho não ganhar milhões de vértices.
+        var perimetro = noChao.Sum(a => a.Select((p, i) => Math.Sqrt(Math.Pow(a[(i + 1) % a.Count].X - p.X, 2) + Math.Pow(a[(i + 1) % a.Count].Y - p.Y, 2))).Sum());
+        var passo = perimetro > 100_000 ? 2.0 : perimetro > 20_000 ? 1.0 : 0.5;
+        var etiquetas = new List<(double Area, Point3d Topo)>();
+
+        foreach (var anel in noChao)
         {
             var pontos = new List<Point3d>();
             double? ultima = null;
 
-            foreach (var (x, y) in ShadowUnion.Densify(anel, 0.5))
+            foreach (var (x, y) in ShadowUnion.Densify(anel, passo))
             {
                 var z = Chao(x, y) ?? ultima;
                 if (z is null) continue;
@@ -558,10 +658,14 @@ public static class SombrasCommands
             }
 
             if (pontos.Count < 3) continue;
-            Contorno(pontos);
+            Contorno(pontos, "Chao");
+            etiquetas.Add((ShadowUnion.Area(anel), pontos.MaxBy(p => p.Y)));
+        }
 
-            // A etiqueta na ponta mais ao norte da mancha.
-            var topo = pontos.MaxBy(p => p.Y);
+        // A etiqueta na ponta mais ao norte de cada mancha; com as mesas, as
+        // manchas são muitas (uma por fileira): só as 20 maiores.
+        foreach (var (_, topo) in etiquetas.OrderByDescending(e => e.Area).Take(20))
+        {
             var texto = new MText
             {
                 Location = new Point3d(topo.X, topo.Y, topo.Z + 0.1),
@@ -577,17 +681,17 @@ public static class SombrasCommands
         }
 
         // Sobre cada mesa: a união no plano dela, um pouco acima dos módulos.
-        for (var m = 0; m < mesas.Count; m++)
+        foreach (var (mesa, aneis) in naMesa)
         {
-            foreach (var anel in ShadowUnion.Union(porMesa[m]))
+            foreach (var anel in aneis)
             {
                 var pontos = anel
-                    .Select(p => (p, z: Shading.PlaneHeight(mesas[m], p.X, p.Y)))
+                    .Select(p => (p, z: Shading.PlaneHeight(mesa, p.X, p.Y)))
                     .Where(x => x.z is not null)
                     .Select(x => new Point3d(x.p.X, x.p.Y, x.z!.Value + 0.03))
                     .ToList();
 
-                if (pontos.Count >= 3) Contorno(pontos);
+                if (pontos.Count >= 3) Contorno(pontos, "Mesa");
             }
         }
 
