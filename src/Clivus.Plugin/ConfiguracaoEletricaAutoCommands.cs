@@ -22,7 +22,7 @@ public static class ConfiguracaoEletricaAutoCommands
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "SoltarInversor", "EditarInversor", "Skid", "Desagrupar", "Listar", "Formulario", "Bloco", "EditarUc", "ApagarBloco", "UcAntiga", "ModeloAntigo"];
+    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "SoltarInversor", "EditarInversor", "Skid", "Desagrupar", "Listar", "Formulario", "Bloco", "EditarUc", "ApagarBloco", "UcAntiga", "ModeloAntigo", "InversoresAntigos", "Cor"];
 
 #if DEBUG
     [CommandMethod(PluginInfo.ComandoEletricaAutomatico)]
@@ -63,6 +63,8 @@ public static class ConfiguracaoEletricaAutoCommands
                 "ApagarBloco" => ApagarBloco(database),
                 "UcAntiga" => UcsDoFormatoAntigo(database),
                 "ModeloAntigo" => ModeloDoFormatoAntigo(editor, database),
+                "InversoresAntigos" => InversoresDoFormatoAntigo(database),
+                "Cor" => TrocarCor(editor, database),
                 _ => string.Empty,
             };
 
@@ -337,6 +339,35 @@ public static class ConfiguracaoEletricaAutoCommands
         return $"soltas {StringsDoDesenho.Soltar(database, inversor.Id)} de {inversor.Name}";
     }
 
+    /// <summary>
+    /// InversoresAntigos: regrava os inversores do desenho no formato 1 (sem
+    /// cor, antes de 05/10/2026), para provar que ele continua sendo lido (a
+    /// cor automática vem na leitura).
+    /// </summary>
+    private static string InversoresDoFormatoAntigo(Database database)
+    {
+        var inversores = ElectricalStore.Inverters(database).Items;
+        PluginRecords.Save(database, ElectricalStore.ChaveDosInversores, 1, Inverter.LegacyFieldCount, inversores, i => i.ToFields().Take(Inverter.LegacyFieldCount).ToList());
+        return $"inversores do formato 1 gravados ({inversores.Count})";
+    }
+
+    /// <summary>Cor &lt;inversor&gt; &lt;#RRGGBB&gt;: o que a caixa de cor da janela faz (grava e repinta as strings dele).</summary>
+    private static string? TrocarCor(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nInversor (nome): ") is not { } nome) return null;
+        if (Texto(editor, "\nCor (#RRGGBB): ") is not { } texto) return null;
+        if (!RgbColor.TryParseHex(texto, out var cor)) return "recusado: cor ilegivel";
+
+        var id = Guid.Empty;
+        var trocou = ConfiguracaoEletricaStore.Mudar(database, s =>
+        {
+            if (s.FindInverter(nome) is not { } i) return false;
+            id = i.Id;
+            return s.SetInverterColor(i.Id, cor);
+        });
+        return trocou ? $"cor de {nome} trocada; {CorDasStrings.Repintar(database, id)} string(s) repintada(s)" : "recusado: inversor nao existe";
+    }
+
     /// <summary>EditarInversor &lt;inversor&gt; &lt;nome novo&gt; &lt;modelo&gt;.</summary>
     private static string? EditarInversor(Editor editor, Database database)
     {
@@ -414,6 +445,11 @@ public static class ConfiguracaoEletricaAutoCommands
             editor.WriteMessage($"ELETRICA {setup.Inverters.Count} inversor(es) {strings.Count} string(s) {strings.Count(x => !x.String.IsAllocated)} livre(s)\n");
             foreach (var i in setup.Inverters)
                 editor.WriteMessage($"ELETRICA INVERSOR nome=\"{i.Name}\" modelo=\"{setup.FindModel(i.Model)?.Name}\" strings={contagem.GetValueOrDefault(i.Id)} entradas={setup.FindModel(i.Model)?.TotalInputs} trafo={setup.FindTransformer(i.Transformer)?.Nickname} excesso={StringAllocation.Excess(contagem.GetValueOrDefault(i.Id), setup.FindModel(i.Model))} fim\n");
+
+            // A cor de cada inversor (e o RGB do DXF 420, para o teste comparar com a das strings).
+            editor.WriteMessage($"ELETRICA CORES formato_inversores={PluginRecords.Version(database, ElectricalStore.ChaveDosInversores)} automaticas={setup.ColoredInverters}\n");
+            foreach (var i in setup.Inverters)
+                editor.WriteMessage($"ELETRICA COR nome=\"{i.Name}\" cor={i.Color?.ToHex()} rgb={(i.Color is { } c ? (c.R << 16) | (c.G << 8) | c.B : -1)} fim\n");
         }
 
         editor.WriteMessage($"ELETRICA {setup.Skids.Count} skid(s)\n");

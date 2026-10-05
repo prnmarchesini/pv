@@ -74,11 +74,21 @@ internal static class ElectricalStore
     internal const string ChaveDosModelos = "INVERSOR_MODELOS";
     private const int VersaoDosModelos = 2;
 
+    /// <summary>
+    /// Os inversores. Formato 2 (05/10/2026) tem a cor; o formato 1 (sem cor)
+    /// continua sendo lido, e a cor automática vem do cadastro
+    /// (<see cref="ElectricalSetup"/>). Grava sempre o 2.
+    /// </summary>
     internal static RecordTableResult<Inverter> Inverters(Database db) =>
-        PluginRecords.Load<Inverter>(db, "INVERSORES", 1, Inverter.FieldCount, Inverter.Parse, OQueInversores);
+        PluginRecords.Version(db, ChaveDosInversores) == 1
+            ? PluginRecords.Load<Inverter>(db, ChaveDosInversores, 1, Inverter.LegacyFieldCount, Inverter.Parse, OQueInversores)
+            : PluginRecords.Load<Inverter>(db, ChaveDosInversores, VersaoDosInversores, Inverter.FieldCount, Inverter.Parse, OQueInversores);
 
     internal static void SaveInverters(Database db, IReadOnlyList<Inverter> itens) =>
-        PluginRecords.Save(db, "INVERSORES", 1, Inverter.FieldCount, itens, i => i.ToFields());
+        PluginRecords.Save(db, ChaveDosInversores, VersaoDosInversores, Inverter.FieldCount, itens, i => i.ToFields());
+
+    internal const string ChaveDosInversores = "INVERSORES";
+    private const int VersaoDosInversores = 2;
 
     internal static RecordTableResult<Transformer> Transformers(Database db) =>
         PluginRecords.Load<Transformer>(db, "TRAFOS", 1, Transformer.FieldCount, Transformer.Parse, OQueTrafos);

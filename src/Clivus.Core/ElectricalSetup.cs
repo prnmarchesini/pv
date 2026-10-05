@@ -142,7 +142,19 @@ public sealed class ElectricalSetup
             _ucs[i] = u with { Substation = bloco.Id };
             MigratedUnits++;
         }
+
+        // Inversor sem cor (formato 1, antes de 05/10/2026) ganha uma da
+        // paleta, na ordem da lista: ler de novo antes de gravar dá a mesma.
+        for (var i = 0; i < _inversores.Count; i++)
+        {
+            if (_inversores[i].Color is not null) continue;
+            _inversores[i] = _inversores[i] with { Color = InverterColors.Next(_inversores.Select(x => x.Color).OfType<RgbColor>()) };
+            ColoredInverters++;
+        }
     }
+
+    /// <summary>Quantos inversores sem cor (desenho antigo) ganharam a cor automática na leitura.</summary>
+    public int ColoredInverters { get; }
 
     /// <summary>Quantas UCs compartilhadas sem bloco (desenho antigo) foram postas num bloco na leitura.</summary>
     public int MigratedUnits { get; }
@@ -596,7 +608,8 @@ public sealed class ElectricalSetup
 
     /// <summary>
     /// Cria <paramref name="count"/> inversores do modelo (14.2), "Inversor N"
-    /// continuando do maior número da usina (qualquer modelo), sem skid.
+    /// continuando do maior número da usina (qualquer modelo), sem skid, cada
+    /// um com uma cor da paleta (<see cref="InverterColors"/>), as menos usadas primeiro.
     /// </summary>
     public IReadOnlyList<Inverter> AddInverters(Guid model, int count)
     {
@@ -606,7 +619,13 @@ public sealed class ElectricalSetup
 
         var prefixo = Tr.F("Inversor {0}", string.Empty);
         var primeiro = NextNumber(_inversores.Select(i => i.Name), prefixo);
-        var novos = Enumerable.Range(primeiro, count).Select(n => new Inverter(Guid.NewGuid(), model, Tr.F("Inversor {0}", n), Guid.Empty)).ToList();
+        var novos = new List<Inverter>(count);
+        foreach (var n in Enumerable.Range(primeiro, count))
+        {
+            // Cada um com a cor da paleta menos usada até aqui (os novos contam).
+            var cor = InverterColors.Next(_inversores.Concat(novos).Select(i => i.Color).OfType<RgbColor>());
+            novos.Add(new Inverter(Guid.NewGuid(), model, Tr.F("Inversor {0}", n), Guid.Empty, cor));
+        }
 
         _inversores.AddRange(novos);
         return novos;
@@ -630,6 +649,19 @@ public sealed class ElectricalSetup
 
         _inversores[posicao] = _inversores[posicao] with { Name = nome, Model = model };
         return null;
+    }
+
+    /// <summary>
+    /// Troca a cor do inversor (só representação: as strings dele são
+    /// repintadas por quem chama; o vínculo não muda). Se ele existia.
+    /// </summary>
+    public bool SetInverterColor(Guid id, RgbColor color)
+    {
+        var posicao = _inversores.FindIndex(i => i.Id == id);
+        if (posicao < 0) return false;
+
+        _inversores[posicao] = _inversores[posicao] with { Color = color };
+        return true;
     }
 
     /// <summary>

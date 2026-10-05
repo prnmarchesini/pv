@@ -11,7 +11,7 @@ usos no mesmo commit.
 | tipo de string (biblioteca) | dicionário, chave `STRING_TIPOS` | `StringType`, `StringLibrary` (Core), `StringTypeStore` (Plugin) |
 | string desenhada | XData (tipo `String`) da `Polyline3d` do traçado, camada `CLIVUS_STRING` | `ElectricalString` (Core), `ElectricalStore.SaveString/LoadString/Strings` |
 | modelo de inversor | dicionário, `INVERSOR_MODELOS` (formato 2 desde 05/10/2026, a lista das entradas de cada MPPT; o 1 continua sendo lido) | `InverterModel`, `ElectricalStore.InverterModels/Save...` |
-| inversor | dicionário, `INVERSORES` | `Inverter` |
+| inversor | dicionário, `INVERSORES` (formato 2 desde 05/10/2026, com a cor; o 1 continua sendo lido) | `Inverter` |
 | transformador | dicionário, `TRAFOS` | `Transformer` |
 | subestação (UC) | dicionário, `SUBESTACOES` (formato 2 desde 05/10/2026; o 1 continua sendo lido) | `ConsumerUnit` |
 | bloco físico da subestação compartilhada (o cubículo) | dicionário, `SUBESTACOES_BLOCOS` | `Substation` (Core, `Electrical.cs`), `ElectricalStore.Substations/SaveSubstations` |
@@ -73,6 +73,22 @@ Nenhum vínculo é derivado de posição no desenho.
 - O formato 1 (MPPT e entradas por MPPT, o mesmo número para todos) é lido
   pela versão do cabeçalho (`InverterModel.ParseLegacy`): vira a lista com o
   valor repetido. Grava-se sempre o 2.
+
+## A cor do inversor (05/10/2026)
+
+- `INVERSORES` formato 2: 5 campos (os 4 de antes e a cor, "#RRGGBB").
+  O formato 1 (4 campos) é lido pela versão do cabeçalho com a cor null, e o
+  `ElectricalSetup` dá a cor automática na leitura, na ordem da lista
+  (`InverterColors.Next`: a da paleta menos usada; ler de novo dá a mesma).
+  `ColoredInverters` conta quantas; a próxima gravação as leva ao desenho.
+- Inversor criado ganha a cor da paleta menos usada (`InverterColors.Palette`:
+  legível no fundo escuro e no claro, sem lilás/violeta/roxo da sombra nem
+  magenta/vermelho de aviso). `SetInverterColor` troca.
+- A cor é representação: a polilinha da string alocada e os sinais dela (+, −
+  e os círculos, pelo `StringSign`) ficam com a cor do inversor; livre (ou de
+  inversor que não está no cadastro), ByLayer. Quem grava o vínculo
+  (`StringsDoDesenho.Gravar`) pinta junto; trocar a cor repinta
+  (`CorDasStrings.Repintar`). Nenhum vínculo é lido da cor.
 
 ## Para testar sem o traçado de verdade
 

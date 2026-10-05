@@ -25,6 +25,9 @@ internal sealed class AbaInversor : AbaEletrica
     private readonly ListBox _inversores = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly TextBox _nomeDoInversor = new() { Width = 150, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
     private readonly ComboBox _modeloDoInversor = new() { Height = 26, MinWidth = 140, Margin = new Thickness(0, 0, 6, 6) };
+
+    /// <summary>Onde fica a caixa de cor do inversor escolhido (refeita a cada escolha, com a cor dele).</summary>
+    private readonly ContentControl _lugarDaCor = new() { Margin = new Thickness(0, 0, 6, 6), VerticalAlignment = VerticalAlignment.Center };
     private readonly ComboBox _trafoDoSkid = new() { Height = 26, MinWidth = 90, Margin = new Thickness(0, 0, 6, 6) };
     private readonly TextBox _nomeDoSkid = new() { Width = 140, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
 
@@ -91,6 +94,7 @@ internal sealed class AbaInversor : AbaEletrica
         editar.Children.Add(new TextBlock { Text = Tr.T("Escolhido:"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
         editar.Children.Add(_nomeDoInversor);
         editar.Children.Add(_modeloDoInversor);
+        editar.Children.Add(_lugarDaCor);
         Botao(editar, Tr.T("Salvar inversor"), Tr.T("Grava o nome e o modelo do inversor escolhido."), SalvarInversor);
         Botao(editar, Tr.T("Alocar em campo"), Tr.T("A janela some: clique o centro do retângulo na planta. Se já está em campo, ele é movido; o vínculo não muda."), () =>
         {
@@ -325,6 +329,21 @@ internal sealed class AbaInversor : AbaEletrica
             DockPanel.SetDock(acoes, Dock.Right);
             linha.Children.Add(acoes);
 
+            // A cor do inversor (a das strings dele no desenho).
+            var cor = inversor.Color ?? InverterColors.Palette[0].Color;
+            var quadrado = new System.Windows.Shapes.Rectangle
+            {
+                Width = 14,
+                Height = 14,
+                Margin = new Thickness(0, 0, 6, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Fill = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(cor.R, cor.G, cor.B)),
+                Stroke = System.Windows.Media.Brushes.Gray,
+                ToolTip = Tr.F("Cor das strings deste inversor: {0}", cor.ToHex()),
+            };
+            DockPanel.SetDock(quadrado, Dock.Left);
+            linha.Children.Add(quadrado);
+
             var este = inversor;
             Botao(acoes, "+", Tr.T("Alocar strings: a janela some; selecione só strings em campo (Shift+clique tira), Enter volta."),
                 () => JanelaEletrica.Campo(Documento, PluginInfo.ComandoEletricaAlocar, este.Id.ToString("D")), largura: 30);
@@ -356,6 +375,7 @@ internal sealed class AbaInversor : AbaEletrica
         var inversor = InversorEscolhido;
         _nomeDoInversor.IsEnabled = _modeloDoInversor.IsEnabled = inversor is not null;
         _nomeDoInversor.Text = inversor?.Name ?? string.Empty;
+        MontarCor(inversor);
 
         _modeloDoInversor.Items.Clear();
         foreach (var m in _setup.Models)
@@ -364,6 +384,55 @@ internal sealed class AbaInversor : AbaEletrica
             _modeloDoInversor.Items.Add(item);
             if (m.Id == inversor?.Model) _modeloDoInversor.SelectedItem = item;
         }
+    }
+
+    /// <summary>
+    /// A caixa de cor do inversor escolhido (a paleta dos inversores e "Mais
+    /// cores..."). Escolher uma cor grava na hora e repinta as strings dele.
+    /// </summary>
+    private void MontarCor(Inverter? inversor)
+    {
+        if (inversor is null)
+        {
+            _lugarDaCor.Content = null;
+            return;
+        }
+
+        var caixa = PaletaDeCores.Caixa(inversor.Color ?? InverterColors.Palette[0].Color, Tr.T("A cor do inversor: as strings dele ficam desta cor no desenho."), InverterColors.Palette);
+        var id = inversor.Id;
+        caixa.SelectionChanged += (_, e) =>
+        {
+            try
+            {
+                if (e.AddedItems.Count == 0 || (e.AddedItems[0] as ComboBoxItem)?.Tag is not RgbColor cor) return;
+
+                // Depois que a escolha assenta (o "Mais cores..." troca o item dentro do próprio evento).
+                Dispatcher.BeginInvoke(() =>
+                {
+                    try { TrocarCor(id, cor); }
+                    catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao trocar a cor do inversor.", erro); }
+                });
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao escolher a cor do inversor.", erro);
+            }
+        };
+
+        _lugarDaCor.Content = caixa;
+    }
+
+    /// <summary>Grava a cor nova do inversor e repinta as strings dele (só representação; o vínculo não muda).</summary>
+    private void TrocarCor(Guid id, RgbColor cor)
+    {
+        if (_setup.FindInverter(id) is not { } inversor || inversor.Color == cor) return;
+
+        Fazer(() =>
+        {
+            if (!ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.SetInverterColor(id, cor))) return Tr.T("Esse inversor não está mais no cadastro.");
+            var n = CorDasStrings.Repintar(Documento.Database, id);
+            return Tr.F("{0}: cor trocada para {1}; {2} string(s) repintada(s).", inversor.Name, cor.ToHex(), n);
+        });
     }
 
     private void SalvarInversor()

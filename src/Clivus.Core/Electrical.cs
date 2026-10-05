@@ -193,24 +193,42 @@ public sealed record InverterModel(Guid Id, string Name, IReadOnlyList<int> Inpu
 
 /// <summary>
 /// Um inversor da usina (elétrica, 14.2): instância de um modelo, com nome
-/// (a tag, ex. "Inversor 1") e o trafo do skid (14.7), vazio se não agrupado.
-/// As strings dele são as que apontam para ele (<see cref="ElectricalString.Inverter"/>).
+/// (a tag, ex. "Inversor 1"), o trafo do skid (14.7), vazio se não agrupado,
+/// e a cor dele (as strings alocadas são pintadas com ela; só representação,
+/// o vínculo continua na string). As strings dele são as que apontam para ele
+/// (<see cref="ElectricalString.Inverter"/>).
 /// </summary>
-public sealed record Inverter(Guid Id, Guid Model, string Name, Guid Transformer)
+/// <remarks>
+/// Formato 2 (05/10/2026): 5 campos, o último é a cor ("#RRGGBB"). O formato
+/// 1 (4 campos, sem cor) continua sendo lido: a cor fica null e o cadastro
+/// (<see cref="ElectricalSetup"/>) dá uma automática na leitura.
+/// </remarks>
+public sealed record Inverter(Guid Id, Guid Model, string Name, Guid Transformer, RgbColor? Color = null)
 {
-    public const int FieldCount = 4;
+    public const int FieldCount = 5;
+
+    /// <summary>Os campos do formato 1 (antes da cor).</summary>
+    public const int LegacyFieldCount = 4;
 
     public bool IsValid => Id != Guid.Empty && Model != Guid.Empty && !string.IsNullOrWhiteSpace(Name);
 
     public IReadOnlyList<string> ToFields() =>
-        [Id.ToString("D"), Model.ToString("D"), Name, Transformer == Guid.Empty ? string.Empty : Transformer.ToString("D")];
+        [Id.ToString("D"), Model.ToString("D"), Name, Transformer == Guid.Empty ? string.Empty : Transformer.ToString("D"), Color?.ToHex() ?? string.Empty];
 
+    /// <summary>Lê o formato 2 (5 campos, com a cor) ou o 1 (4 campos, cor null).</summary>
     public static Inverter? Parse(IReadOnlyList<string> c)
     {
-        if (c.Count < FieldCount || !Guid.TryParse(c[0], out var id) || !Guid.TryParse(c[1], out var modelo)) return null;
+        if (c.Count < LegacyFieldCount || !Guid.TryParse(c[0], out var id) || !Guid.TryParse(c[1], out var modelo)) return null;
         if (!ElectricalString.OptionalGuid(c[3], out var trafo)) return null;
 
-        var i = new Inverter(id, modelo, c[2], trafo);
+        RgbColor? cor = null;
+        if (c.Count >= FieldCount && c[4].Length > 0)
+        {
+            if (!RgbColor.TryParseHex(c[4], out var lida)) return null;
+            cor = lida;
+        }
+
+        var i = new Inverter(id, modelo, c[2], trafo, cor);
         return i.IsValid ? i : null;
     }
 }

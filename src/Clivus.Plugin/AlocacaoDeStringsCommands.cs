@@ -290,12 +290,14 @@ internal static class StringsDoDesenho
     /// <summary>
     /// Regrava o XData das strings mudadas (o vínculo com o inversor), numa
     /// transação só. Acha a entidade pelo GUID da string. A geometria não é
-    /// tocada. Quantas gravou.
+    /// tocada; a cor da string (e dos sinais dela) passa a ser a do inversor,
+    /// ou ByLayer se ficou livre (<see cref="CorDasStrings"/>). Quantas gravou.
     /// </summary>
     internal static int Gravar(Database database, IReadOnlyCollection<ElectricalString> mudadas)
     {
         if (mudadas.Count == 0) return 0;
 
+        var setup = ConfiguracaoEletricaStore.Ler(database).Setup;
         using var transacao = database.TransactionManager.StartTransaction();
 
         var porGuid = mudadas.ToDictionary(s => s.Id);
@@ -310,6 +312,7 @@ internal static class StringsDoDesenho
         foreach (var (id, atual) in alvos)
             ElectricalStore.SaveString(transacao, (Entity)transacao.GetObject(id, OpenMode.ForWrite), porGuid[atual.Id]);
 
+        CorDasStrings.Pintar(transacao, database, CorDasStrings.PeloCadastro(setup, mudadas));
         transacao.Commit();
         return alvos.Count;
     }

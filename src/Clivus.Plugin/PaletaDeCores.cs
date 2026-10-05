@@ -31,13 +31,17 @@ internal static class PaletaDeCores
     ];
 
     /// <summary>Uma caixa de escolha de cor, já com a cor dada escolhida.</summary>
-    internal static ComboBox Caixa(RgbColor escolhida, string dica)
+    internal static ComboBox Caixa(RgbColor escolhida, string dica) =>
+        Caixa(escolhida, dica, Cores);
+
+    /// <summary>Uma caixa de escolha de cor com a paleta dada (ex. a dos inversores), mais "Mais cores...".</summary>
+    internal static ComboBox Caixa(RgbColor escolhida, string dica, IReadOnlyList<(string Nome, RgbColor Cor)> cores)
     {
         var caixa = new ComboBox { Height = 24, MinWidth = 130, ToolTip = dica };
 
-        foreach (var (nome, cor) in Cores) caixa.Items.Add(Item(Tr.T(nome), cor));
+        foreach (var (nome, cor) in cores) caixa.Items.Add(Item(Tr.T(nome), cor));
 
-        var indice = Array.FindIndex(Cores, c => c.Cor == escolhida);
+        var indice = cores.ToList().FindIndex(c => c.Cor == escolhida);
 
         if (indice < 0)
         {
