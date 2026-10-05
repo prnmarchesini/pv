@@ -55,6 +55,7 @@ internal static class ElectricalStore
     private static readonly string OQueInversores = Tr.N("de inversores");
     private static readonly string OQueTrafos = Tr.N("de transformadores");
     private static readonly string OQueSubestacoes = Tr.N("de subestações");
+    private static readonly string OQueSkids = Tr.N("de skids");
 
     internal static RecordTableResult<InverterModel> InverterModels(Database db) =>
         PluginRecords.Load<InverterModel>(db, "INVERSOR_MODELOS", 1, InverterModel.FieldCount, InverterModel.Parse, OQueModelos);
@@ -79,4 +80,11 @@ internal static class ElectricalStore
 
     internal static void SaveConsumerUnits(Database db, IReadOnlyList<ConsumerUnit> itens) =>
         PluginRecords.Save(db, "SUBESTACOES", 1, ConsumerUnit.FieldCount, itens, i => i.ToFields());
+
+    /// <summary>O nome de cada skid (14.7), um por trafo; o vínculo inversor → trafo continua em <see cref="Inverter.Transformer"/>.</summary>
+    internal static RecordTableResult<Skid> Skids(Database db) =>
+        PluginRecords.Load<Skid>(db, "SKIDS", 1, Skid.FieldCount, Skid.Parse, OQueSkids);
+
+    internal static void SaveSkids(Database db, IReadOnlyList<Skid> itens) =>
+        PluginRecords.Save(db, "SKIDS", 1, Skid.FieldCount, itens, i => i.ToFields());
 }

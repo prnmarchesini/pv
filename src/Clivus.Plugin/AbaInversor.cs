@@ -21,6 +21,8 @@ internal sealed class AbaInversor : AbaEletrica
     private readonly ListBox _inversores = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly TextBox _nomeDoInversor = new() { Width = 150, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
     private readonly ComboBox _modeloDoInversor = new() { Height = 26, MinWidth = 140, Margin = new Thickness(0, 0, 6, 6) };
+    private readonly ComboBox _trafoDoSkid = new() { Height = 26, MinWidth = 90, Margin = new Thickness(0, 0, 6, 6) };
+    private readonly TextBox _nomeDoSkid = new() { Width = 140, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
 
     private ElectricalSetup _setup = new();
     private IReadOnlyDictionary<Guid, int> _contagem = new Dictionary<Guid, int>();
@@ -81,14 +83,32 @@ internal sealed class AbaInversor : AbaEletrica
         });
         Botao(editar, Tr.T("Apagar inversor"), Tr.T("Tira o inversor do cadastro: as strings dele ficam livres (continuam no desenho) e o retângulo dele sai do campo."), ApagarInversor);
 
+        // O skid (14.7): trafo + inversores escolhidos em campo.
+        var skid = new WrapPanel();
+        skid.Children.Add(new TextBlock { Text = Tr.T("Skid: trafo"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
+        skid.Children.Add(_trafoDoSkid);
+        skid.Children.Add(new TextBlock { Text = Tr.T("nome"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
+        skid.Children.Add(_nomeDoSkid);
+        Botao(skid, Tr.T("Agrupar em campo"), Tr.T("A janela some: selecione em campo só os retângulos dos inversores do skid (Shift+clique tira), Enter volta. Inversor de outro skid fica travado."), AgruparEmCampo);
+        Botao(skid, Tr.T("Tirar do skid"), Tr.T("Tira o inversor escolhido do skid dele (o inversor fica, sem trafo)."), TirarDoSkid);
+        _trafoDoSkid.SelectionChanged += (_, _) =>
+        {
+            try { _nomeDoSkid.Text = (_trafoDoSkid.SelectedItem as ComboBoxItem)?.Tag is Guid t ? _setup.FindSkid(t)?.Name ?? string.Empty : string.Empty; }
+            catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao mostrar o skid do trafo.", erro); }
+        };
+
+        var rodape = new StackPanel();
+        rodape.Children.Add(editar);
+        rodape.Children.Add(skid);
+
         var inversores = new DockPanel();
         var topo = new StackPanel();
         topo.Children.Add(Titulo(Tr.T("Inversores da usina")));
         topo.Children.Add(criar);
         DockPanel.SetDock(topo, Dock.Top);
-        DockPanel.SetDock(editar, Dock.Bottom);
+        DockPanel.SetDock(rodape, Dock.Bottom);
         inversores.Children.Add(topo);
-        inversores.Children.Add(editar);
+        inversores.Children.Add(rodape);
         inversores.Children.Add(_inversores);
 
         _inversores.SelectionChanged += (_, _) =>
@@ -149,6 +169,17 @@ internal sealed class AbaInversor : AbaEletrica
             _contagem = StringAllocation.CountByInverter(ElectricalStore.Strings(transacao, Documento.Database).Select(x => x.String));
 
         MontarInversores();
+
+        var trafoDoSkid = (_trafoDoSkid.SelectedItem as ComboBoxItem)?.Tag as Guid?;
+        _trafoDoSkid.Items.Clear();
+        foreach (var t in setup.Transformers)
+        {
+            var item = new ComboBoxItem { Content = t.Nickname, Tag = t.Id };
+            _trafoDoSkid.Items.Add(item);
+            if (t.Id == trafoDoSkid) _trafoDoSkid.SelectedItem = item;
+        }
+
+        if (_trafoDoSkid.SelectedItem is null && _trafoDoSkid.Items.Count > 0) _trafoDoSkid.SelectedIndex = 0;
 
         // 14.4: o excesso aparece em vermelho na linha do inversor e no rodapé.
         var excessos = _setup.Inverters
@@ -305,9 +336,38 @@ internal sealed class AbaInversor : AbaEletrica
     internal static string DescreverInversor(ElectricalSetup setup, Inverter inversor, int strings)
     {
         var modelo = setup.FindModel(inversor.Model);
-        return modelo is null
+        var linha = modelo is null
             ? Tr.F("{0} — sem modelo — {1} string(s)", inversor.Name, strings)
             : Tr.F("{0} — {1} — {2} de {3} string(s)", inversor.Name, modelo.Name, strings, modelo.TotalInputs);
+
+        return setup.FindTransformer(inversor.Transformer) is { } trafo
+            ? Tr.F("{0} — {1} ({2})", linha, setup.FindSkid(trafo.Id)?.Name ?? Tr.F("Skid {0}", trafo.Nickname), trafo.Nickname)
+            : linha;
+    }
+
+    private void AgruparEmCampo()
+    {
+        if ((_trafoDoSkid.SelectedItem as ComboBoxItem)?.Tag is not Guid trafo)
+        {
+            Avisar(Tr.T("Escolha o trafo do skid (cadastre na aba Transformador, se não há)."), erro: true);
+            return;
+        }
+
+        // O nome vai como resposta da segunda pergunta do comando (até o Enter).
+        JanelaEletrica.Campo(Documento, PluginInfo.ComandoEletricaSkid, trafo.ToString("D") + "\n" + _nomeDoSkid.Text.Trim());
+    }
+
+    private void TirarDoSkid()
+    {
+        if (InversorEscolhido is not { } inversor)
+        {
+            Avisar(Tr.T("Escolha um inversor na lista."), erro: true);
+            return;
+        }
+
+        Fazer(() => ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.Ungroup(inversor.Id))
+            ? Tr.F("{0} saiu do skid.", inversor.Name)
+            : Tr.F("{0} não está em skid nenhum.", inversor.Name));
     }
 
     private void CriarInversores()

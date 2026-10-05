@@ -22,7 +22,7 @@ public static class ConfiguracaoEletricaAutoCommands
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "SoltarInversor", "EditarInversor", "Listar"];
+    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Modelo", "Inversores", "Alocar", "SoltarInversor", "EditarInversor", "Skid", "Desagrupar", "Listar"];
 
 #if DEBUG
     [CommandMethod(PluginInfo.ComandoEletricaAutomatico)]
@@ -55,6 +55,8 @@ public static class ConfiguracaoEletricaAutoCommands
                 "Alocar" => AlocarLivres(editor, database),
                 "SoltarInversor" => SoltarInversor(editor, database),
                 "EditarInversor" => EditarInversor(editor, database),
+                "Skid" => Agrupar(editor, database),
+                "Desagrupar" => Desagrupar(editor, database),
                 _ => string.Empty,
             };
 
@@ -221,6 +223,34 @@ public static class ConfiguracaoEletricaAutoCommands
         return porque is null ? $"inversor {nome} editado" : $"recusado: {porque}";
     }
 
+    /// <summary>Skid &lt;trafo&gt; &lt;nome&gt; &lt;inversores separados por ;&gt;: as mesmas regras da seleção em campo.</summary>
+    private static string? Agrupar(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nTrafo (apelido): ") is not { } apelido) return null;
+        if (Texto(editor, "\nNome do skid: ") is not { } nome) return null;
+        if (Texto(editor, "\nInversores (separados por ;): ") is not { } lista) return null;
+
+        SkidResult? r = null;
+        ConfiguracaoEletricaStore.Mudar(database, s =>
+        {
+            if (Trafo(s, apelido) is not { } t) return false;
+            var ids = lista.Split(';').Select(n => s.FindInverter(n)?.Id ?? Guid.NewGuid()).ToList();
+            r = s.Group(t.Id, nome, ids);
+            return true;
+        });
+
+        return r is null ? "recusado: trafo nao existe"
+            : r.Problem is not null ? $"recusado: {r.Problem}"
+            : $"skid {apelido}: agrupados={r.Added} ja={r.AlreadyHere} recusados={r.Refused.Count} sumidos={r.Missing}";
+    }
+
+    private static string? Desagrupar(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nInversor (nome): ") is not { } nome) return null;
+        var tirou = ConfiguracaoEletricaStore.Mudar(database, s => s.FindInverter(nome) is { } i && s.Ungroup(i.Id));
+        return $"{nome} desagrupado={tirou}";
+    }
+
     private static Transformer? Trafo(ElectricalSetup s, string apelido) => s.Transformers.FirstOrDefault(t => ElectricalSetup.SameName(t.Nickname, apelido));
 
     private static ConsumerUnit? Uc(ElectricalSetup s, string codigo) => s.Units.FirstOrDefault(u => ElectricalSetup.SameName(u.Code, codigo));
@@ -250,6 +280,10 @@ public static class ConfiguracaoEletricaAutoCommands
             foreach (var i in setup.Inverters)
                 editor.WriteMessage($"ELETRICA INVERSOR nome=\"{i.Name}\" modelo=\"{setup.FindModel(i.Model)?.Name}\" strings={contagem.GetValueOrDefault(i.Id)} entradas={setup.FindModel(i.Model)?.TotalInputs} trafo={setup.FindTransformer(i.Transformer)?.Nickname} excesso={StringAllocation.Excess(contagem.GetValueOrDefault(i.Id), setup.FindModel(i.Model))} fim\n");
         }
+
+        editor.WriteMessage($"ELETRICA {setup.Skids.Count} skid(s)\n");
+        foreach (var k in setup.Skids)
+            editor.WriteMessage($"ELETRICA SKID nome=\"{k.Name}\" trafo={setup.FindTransformer(k.Transformer)?.Nickname} inversores={string.Join(",", setup.InvertersOf(k.Transformer).Select(i => i.Name))} fim\n");
 
         editor.WriteMessage($"ELETRICA {setup.Transformers.Count} trafo(s)\n");
         foreach (var t in setup.Transformers)

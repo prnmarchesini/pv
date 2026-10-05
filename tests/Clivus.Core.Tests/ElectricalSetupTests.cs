@@ -523,4 +523,110 @@ public class ElectricalSetupTests
         Assert.Null(outro.FindEquipment(EquipmentKind.Inverter, orfao.Id));
         Assert.Empty(outro.Equipment());
     }
+
+    // ------------------------------------------------------------ 14.7
+
+    private static (ElectricalSetup Setup, Transformer T1, Transformer T2, IReadOnlyList<Inverter> Inversores) Usina()
+    {
+        var setup = new ElectricalSetup();
+        var t1 = setup.AddTransformer();
+        var t2 = setup.AddTransformer();
+        var m = setup.AddModel();
+        return (setup, t1, t2, setup.AddInverters(m.Id, 6));
+    }
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void QuatroNoTrafo1EDoisNoTrafo2()
+    {
+        var (setup, t1, t2, inv) = Usina();
+
+        var a = setup.Group(t1.Id, "Skid Norte", inv.Take(4).Select(i => i.Id));
+        var b = setup.Group(t2.Id, "", inv.Skip(4).Select(i => i.Id));
+
+        Assert.Equal(4, a.Added);
+        Assert.Equal(2, b.Added);
+        Assert.Null(a.Problem);
+        Assert.Equal(4, setup.InvertersOf(t1.Id).Count);
+        Assert.Equal(2, setup.InvertersOf(t2.Id).Count);
+        Assert.Equal("Skid Norte", setup.FindSkid(t1.Id)!.Name);
+        Assert.Equal("Skid T2", setup.FindSkid(t2.Id)!.Name);   // sem nome: o do trafo
+        Assert.All(inv.Take(4), i => Assert.Equal(t1.Id, setup.FindInverter(i.Id)!.Transformer));
+    }
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void InversorDeOutroSkidFicaTravado()
+    {
+        var (setup, t1, t2, inv) = Usina();
+        setup.Group(t1.Id, "A", inv.Take(2).Select(i => i.Id));
+
+        var r = setup.Group(t2.Id, "B", inv.Take(3).Select(i => i.Id));
+
+        Assert.Equal(1, r.Added);
+        Assert.Equal(2, r.Refused.Count);
+        Assert.Equal(t1.Id, setup.FindInverter(inv[0].Id)!.Transformer);
+
+        // Agrupar de novo no mesmo trafo não duplica nem troca o nome à toa.
+        var denovo = setup.Group(t1.Id, "", inv.Take(2).Select(i => i.Id));
+        Assert.Equal(2, denovo.AlreadyHere);
+        Assert.Equal("A", setup.FindSkid(t1.Id)!.Name);
+
+        Assert.True(setup.Ungroup(inv[0].Id));
+        Assert.False(setup.Ungroup(inv[0].Id));
+        Assert.Equal(1, setup.Group(t2.Id, null, [inv[0].Id]).Added);
+    }
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void SkidSemInversorDeixaDeExistir()
+    {
+        var (setup, t1, _, inv) = Usina();
+        setup.Group(t1.Id, "A", [inv[0].Id, inv[1].Id]);
+
+        setup.Ungroup(inv[0].Id);
+        Assert.NotNull(setup.FindSkid(t1.Id));
+        setup.RemoveInverter(inv[1].Id);
+        Assert.Null(setup.FindSkid(t1.Id));
+
+        // Seleção vazia ou só de inversor sumido: nada de skid vazio.
+        var r = setup.Group(t1.Id, "Vazio", [Guid.NewGuid()]);
+        Assert.Equal(1, r.Missing);
+        Assert.Null(setup.FindSkid(t1.Id));
+        Assert.Null(setup.Group(t1.Id, "Vazio", []).Problem);
+        Assert.Empty(setup.Skids);
+    }
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void SkidPedeTrafoQueExisteEApagarOTrafoDesfazOSkid()
+    {
+        var (setup, t1, _, inv) = Usina();
+
+        Assert.NotNull(setup.Group(Guid.NewGuid(), "X", [inv[0].Id]).Problem);
+        Assert.Equal(Guid.Empty, setup.FindInverter(inv[0].Id)!.Transformer);
+        Assert.NotNull(setup.Group(t1.Id, new string('x', 101), [inv[0].Id]).Problem);
+
+        setup.Group(t1.Id, "A", [inv[0].Id]);
+        Assert.Equal(1, setup.RemoveTransformer(t1.Id));
+        Assert.Empty(setup.Skids);
+        Assert.Equal(Guid.Empty, setup.FindInverter(inv[0].Id)!.Transformer);
+
+        var skid = new Skid(Guid.NewGuid(), "Skid | com separador");
+        Assert.Equal(skid, Skid.Parse(skid.ToFields()));
+        Assert.Null(Skid.Parse(["nao-guid", "X"]));
+        Assert.Null(Skid.Parse([Guid.NewGuid().ToString(), " "]));
+    }
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void VinculoComTrafoQueSumiuNaoTrava()
+    {
+        var m = new InverterModel(Guid.NewGuid(), "M", 1, 1, ElectricalDefaults.InverterSize);
+        var orfao = new Inverter(Guid.NewGuid(), m.Id, "Inversor 1", Guid.NewGuid());
+        var setup = new ElectricalSetup(inverters: [orfao], models: [m]);
+        var t1 = setup.AddTransformer();
+
+        Assert.Equal(1, setup.Group(t1.Id, "A", [orfao.Id]).Added);
+    }
 }

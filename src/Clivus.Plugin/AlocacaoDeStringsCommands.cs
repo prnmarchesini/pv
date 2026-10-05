@@ -134,7 +134,7 @@ public static class AlocacaoDeStringsCommands
                 var total = jaDele.Count + novas;
                 var entradas = modelo?.TotalInputs ?? 0;
 
-                placar ??= NovoPlacar();
+                placar ??= NovoPlacar(620);
                 placar.TextoLivre = Tr.F("{0}: {1} de {2} entradas ({3} já dele, {4} nova(s) na seleção)", inversor.Name, total, entradas, jaDele.Count, novas)
                     + (recusadas.Count > 0 ? "\n" + Tr.F("{0} recusada(s): de outro inversor", recusadas.Count) : string.Empty)
                     + (StringAllocation.Excess(total, modelo) is > 0 and var excesso ? "\n" + Tr.F("EXCESSO: {0} string(s) a mais que as entradas do modelo", excesso) : string.Empty);
@@ -238,9 +238,9 @@ public static class AlocacaoDeStringsCommands
     }
 
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-    private static CaixaDeSelecao NovoPlacar()
+    internal static CaixaDeSelecao NovoPlacar(double largura)
     {
-        var caixa = new CaixaDeSelecao(tamanhoDaLetra: 22, largura: 620);
+        var caixa = new CaixaDeSelecao(tamanhoDaLetra: 22, largura: largura);
 
         try
         {
@@ -250,7 +250,7 @@ public static class AlocacaoDeStringsCommands
         }
         catch (System.Exception erro)
         {
-            RegistroDeDiagnostico.Registrar("Não consegui posicionar o placar da alocação de strings.", erro);
+            RegistroDeDiagnostico.Registrar("Não consegui posicionar o placar da seleção elétrica.", erro);
         }
 
         return caixa;

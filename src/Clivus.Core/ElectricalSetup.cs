@@ -51,6 +51,31 @@ public static class ElectricalDefaults
 }
 
 /// <summary>
+/// O skid (14.7): um trafo e os inversores agrupados nele, com nome. O
+/// vínculo de cada inversor mora no inversor (<see cref="Inverter.Transformer"/>);
+/// este registro guarda só o nome do grupo, um por trafo.
+/// </summary>
+public sealed record Skid(Guid Transformer, string Name)
+{
+    public const int FieldCount = 2;
+
+    public bool IsValid => Transformer != Guid.Empty && !string.IsNullOrWhiteSpace(Name);
+
+    public IReadOnlyList<string> ToFields() => [Transformer.ToString("D"), Name];
+
+    public static Skid? Parse(IReadOnlyList<string> c) =>
+        c.Count >= FieldCount && Guid.TryParse(c[0], out var t) && new Skid(t, c[1]) is { IsValid: true } s ? s : null;
+}
+
+/// <summary>
+/// O que agrupar inversores num trafo deu (14.7): quantos entraram, quantos
+/// já eram dele, os recusados (de outro skid: travados até serem tirados) e
+/// quantos não estão mais no cadastro. <see cref="Problem"/> não nulo: nada
+/// foi feito.
+/// </summary>
+public sealed record SkidResult(int Added, int AlreadyHere, IReadOnlyList<Inverter> Refused, int Missing, string? Problem);
+
+/// <summary>
 /// Um equipamento que vai para o campo como retângulo (12.3, 13.2, 14.6): o
 /// tipo, o GUID do cadastro, a tag escrita no topo e a dimensão.
 /// </summary>
@@ -69,18 +94,25 @@ public sealed class ElectricalSetup
     private readonly List<Transformer> _trafos;
     private readonly List<Inverter> _inversores;
     private readonly List<InverterModel> _modelos;
+    private readonly List<Skid> _skids;
 
     public ElectricalSetup(
         IEnumerable<Transformer>? transformers = null,
         IEnumerable<Inverter>? inverters = null,
         IEnumerable<ConsumerUnit>? units = null,
-        IEnumerable<InverterModel>? models = null)
+        IEnumerable<InverterModel>? models = null,
+        IEnumerable<Skid>? skids = null)
     {
         _trafos = transformers?.ToList() ?? [];
         _inversores = inverters?.ToList() ?? [];
         _ucs = units?.ToList() ?? [];
         _modelos = models?.ToList() ?? [];
+        _skids = skids?.ToList() ?? [];
     }
+
+    public IReadOnlyList<Skid> Skids => _skids;
+
+    public Skid? FindSkid(Guid transformer) => _skids.FirstOrDefault(s => s.Transformer == transformer);
 
     public IReadOnlyList<InverterModel> Models => _modelos;
 
@@ -309,6 +341,7 @@ public sealed class ElectricalSetup
     {
         if (_trafos.RemoveAll(t => t.Id == id) == 0) return null;
 
+        _skids.RemoveAll(s => s.Transformer == id);
         var soltos = 0;
         for (var i = 0; i < _inversores.Count; i++)
         {
@@ -429,7 +462,77 @@ public sealed class ElectricalSetup
     /// Tira o inversor do cadastro; se existia. As strings dele têm que ser
     /// soltas por quem chama (o vínculo mora na string, no desenho).
     /// </summary>
-    public bool RemoveInverter(Guid id) => _inversores.RemoveAll(i => i.Id == id) > 0;
+    public bool RemoveInverter(Guid id)
+    {
+        if (FindInverter(id) is not { } inversor) return false;
+
+        _inversores.RemoveAll(i => i.Id == id);
+        if (inversor.Transformer != Guid.Empty && InvertersOf(inversor.Transformer).Count == 0) _skids.RemoveAll(s => s.Transformer == inversor.Transformer);
+        return true;
+    }
+
+    // ----------------------------------------------------------------- skid
+
+    /// <summary>Os inversores do skid do trafo (o vínculo mora no inversor).</summary>
+    public IReadOnlyList<Inverter> InvertersOf(Guid transformer) => _inversores.Where(i => i.Transformer == transformer).ToList();
+
+    /// <summary>
+    /// Agrupa os inversores no skid do trafo (14.7), com nome (vazio = "Skid
+    /// T1"). Inversor de outro skid fica travado: tirar de lá antes é um ato
+    /// explícito, nada muda de dono sozinho. Vínculo para trafo que não existe
+    /// mais não trava. O nome do skid só é gravado se ele fica com inversor.
+    /// </summary>
+    public SkidResult Group(Guid transformer, string? name, IEnumerable<Guid> inverters)
+    {
+        ArgumentNullException.ThrowIfNull(inverters);
+
+        if (FindTransformer(transformer) is not { } trafo) return new SkidResult(0, 0, [], 0, Tr.T("esse transformador não está mais no cadastro"));
+
+        var nome = name?.Trim() ?? string.Empty;
+        if (nome.Length == 0) nome = FindSkid(transformer)?.Name ?? Tr.F("Skid {0}", trafo.Nickname);
+        if (nome.Length > ElectricalDefaults.MaxNameLength) return new SkidResult(0, 0, [], 0, Tr.F("o nome tem no máximo {0} caracteres", ElectricalDefaults.MaxNameLength));
+
+        int entraram = 0, jaEram = 0, sumidos = 0;
+        var recusados = new List<Inverter>();
+
+        foreach (var id in inverters.Distinct())
+        {
+            var posicao = _inversores.FindIndex(i => i.Id == id);
+            if (posicao < 0) { sumidos++; continue; }
+
+            var inversor = _inversores[posicao];
+            if (inversor.Transformer == transformer) jaEram++;
+            else if (FindTransformer(inversor.Transformer) is not null) recusados.Add(inversor);
+            else
+            {
+                _inversores[posicao] = inversor with { Transformer = transformer };
+                entraram++;
+            }
+        }
+
+        if (InvertersOf(transformer).Count > 0)
+        {
+            _skids.RemoveAll(s => s.Transformer == transformer);
+            _skids.Add(new Skid(transformer, nome));
+        }
+
+        return new SkidResult(entraram, jaEram, recusados, sumidos, null);
+    }
+
+    /// <summary>
+    /// Tira o inversor do skid (o inversor fica, sem trafo). O skid que fica
+    /// sem inversor deixa de existir. Se havia o que tirar.
+    /// </summary>
+    public bool Ungroup(Guid inverter)
+    {
+        var posicao = _inversores.FindIndex(i => i.Id == inverter);
+        if (posicao < 0 || _inversores[posicao].Transformer == Guid.Empty) return false;
+
+        var trafo = _inversores[posicao].Transformer;
+        _inversores[posicao] = _inversores[posicao] with { Transformer = Guid.Empty };
+        if (InvertersOf(trafo).Count == 0) _skids.RemoveAll(s => s.Transformer == trafo);
+        return true;
+    }
 
     // ----------------------------------------------------------- comuns
 

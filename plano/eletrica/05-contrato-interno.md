@@ -14,6 +14,7 @@ usos no mesmo commit.
 | inversor | dicionário, `INVERSORES` | `Inverter` |
 | transformador | dicionário, `TRAFOS` | `Transformer` |
 | subestação (UC) | dicionário, `SUBESTACOES` | `ConsumerUnit` |
+| nome do skid (14.7), um por trafo | dicionário, `SKIDS` | `Skid` (Core, `ElectricalSetup.cs`), `ElectricalStore.Skids/SaveSkids` |
 | retângulo de equipamento em campo | XData (tipo `Equipamento`) da entidade, camada `CLIVUS_EQUIPAMENTO` | `EquipmentPlacement`, `ElectricalStore.SavePlacement/LoadPlacement` |
 
 ## A cadeia (cada elo guarda o GUID do elo de cima)
@@ -23,6 +24,8 @@ usos no mesmo commit.
   Uma string tem no máximo um inversor por construção. Alocar e desalocar
   regravam só o XData da polilinha; a geometria não muda.
 - inversor → trafo: `Inverter.Transformer` (o skid, 14.7; vazio = sem skid).
+  O registro `Skid` guarda só o nome do grupo; quem diz que inversores
+  são do skid é este campo.
 - trafo → subestação: `Transformer.ConsumerUnit` (vazio = sem UC).
 - o tipo da string: `ElectricalString.Type` (o `StringType.Id` que a gerou;
   vazio nas strings de teste).
