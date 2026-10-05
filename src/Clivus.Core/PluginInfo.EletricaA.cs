@@ -8,4 +8,7 @@ public static partial class PluginInfo
 
     /// <summary>O traçado de um tipo pela linha de comando, clique a clique como no cartesiano (11.3, 11.4). Para o nível 2.</summary>
     public const string ComandoStringTracadoAutomatico = "CLIVUS_STRING_TRACADO_AUTO";
+
+    /// <summary>Clonar e espelhar um tipo pela linha de comando (11.5). Para o nível 2.</summary>
+    public const string ComandoStringModeloAutomatico = "CLIVUS_STRING_MODELO_AUTO";
 }

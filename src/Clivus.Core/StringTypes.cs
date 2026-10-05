@@ -203,6 +203,44 @@ public sealed class StringLibrary
         return null;
     }
 
+    /// <summary>
+    /// Clona o tipo (11.5): mesmas mesas, mesmo desenho e mesmo traçado, com
+    /// o próximo nome livre. Null se o tipo não está na biblioteca.
+    /// </summary>
+    public StringType? Clone(Guid id)
+    {
+        if (Find(id) is not { } original) return null;
+
+        var copia = original with { Id = Guid.NewGuid(), Name = Tr.F("Modelo {0}", ProximoNumero()) };
+        _tipos.Add(copia);
+        return copia;
+    }
+
+    /// <summary>
+    /// Espelha o tipo (11.5): a mesma configuração com o positivo do outro
+    /// lado; cada string troca o + com o − (a ordem elétrica se inverte). Null
+    /// se deu certo, o porquê se não.
+    /// </summary>
+    public string? Mirror(Guid id)
+    {
+        var posicao = _tipos.FindIndex(t => t.Id == id);
+        if (posicao < 0) return Tr.T("esse tipo de string não está mais na biblioteca");
+        if (_tipos[posicao].Routes.Count == 0) return Tr.T("o tipo ainda não tem traçado");
+
+        _tipos[posicao] = _tipos[posicao] with { Strings = _tipos[posicao].Routes.Select(r => r.Mirrored()).ToList() };
+        return null;
+    }
+
+    /// <summary>Tira uma string do traçado do tipo (editar, 11.5); se havia essa string.</summary>
+    public bool RemoveString(Guid id, int indice)
+    {
+        var posicao = _tipos.FindIndex(t => t.Id == id);
+        if (posicao < 0 || indice < 0 || indice >= _tipos[posicao].Routes.Count) return false;
+
+        _tipos[posicao] = _tipos[posicao] with { Strings = _tipos[posicao].Routes.Where((_, i) => i != indice).ToList() };
+        return true;
+    }
+
     /// <summary>Tira o tipo da biblioteca; se ele existia.</summary>
     public bool Remove(Guid id) => _tipos.RemoveAll(t => t.Id == id) > 0;
 

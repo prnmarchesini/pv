@@ -270,16 +270,65 @@ public static class StringCommands
                 return;
             }
 
-            var gravado = StringTypeStore.Ler(database).Items.First(t => t.Id == tipo.Id);
-            for (var i = 0; i < gravado.Routes.Count; i++)
-                editor.WriteMessage($"\nSTRING_TRACADO {gravado.Name} {i + 1}: {RouteBuilder.Describe(gravado.Routes[i])} [{gravado.Routes[i].ToText()}]");
-            editor.WriteMessage($"\nSTRING_TRACADO {gravado.Name} sem string: {StringRouting.Uncovered(gravado.Arrangement, gravado.Routes)}\n");
+            ImprimirTracado(editor, StringTypeStore.Ler(database).Items.First(t => t.Id == tipo.Id));
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha no CLIVUS_STRING_TRACADO_AUTO.", erro);
             editor.WriteMessage(Tr.F("\nNão consegui mexer na biblioteca de strings: {0}\n", erro.Message));
         }
+    }
+
+    /// <summary>
+    /// CLIVUS_STRING_MODELO_AUTO (nível 2, 11.5): [Clonar/Espelhar] e o
+    /// nome do tipo; imprime o traçado do tipo que resultou, lido do desenho.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoStringModeloAutomatico)]
+    public static void ModeloAutomatico()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+        var database = documento.Database;
+
+        try
+        {
+            var pergunta = new PromptKeywordOptions("\n[Clonar/Espelhar]: ") { AllowNone = false };
+            pergunta.Keywords.Add("Clonar");
+            pergunta.Keywords.Add("Espelhar");
+            var resposta = editor.GetKeywords(pergunta);
+            if (resposta.Status != PromptStatus.OK || Achar(editor, database) is not { } tipo) return;
+
+            var resultado = tipo.Id;
+            string? porque = null;
+            StringTypeStore.Mudar(database, b =>
+            {
+                if (resposta.StringResult == "Clonar") resultado = b.Clone(tipo.Id)?.Id ?? Guid.Empty;
+                else porque = b.Mirror(tipo.Id);
+            });
+
+            if (porque is not null)
+            {
+                editor.WriteMessage(Tr.F("\nSTRING Não gravei: {0}.\n", porque));
+                return;
+            }
+
+            ImprimirTracado(editor, StringTypeStore.Ler(database).Items.First(t => t.Id == resultado));
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no CLIVUS_STRING_MODELO_AUTO.", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui mexer na biblioteca de strings: {0}\n", erro.Message));
+        }
+    }
+
+    /// <summary>Para o nível 2: cada string do tipo, com o + e o − e o texto do traçado.</summary>
+    private static void ImprimirTracado(Editor editor, StringType tipo)
+    {
+        for (var i = 0; i < tipo.Routes.Count; i++)
+            editor.WriteMessage($"\nSTRING_TRACADO {tipo.Name} {i + 1}: {RouteBuilder.Describe(tipo.Routes[i])} [{tipo.Routes[i].ToText()}]");
+        editor.WriteMessage($"\nSTRING_TRACADO {tipo.Name} sem string: {StringRouting.Uncovered(tipo.Arrangement, tipo.Routes)}\n");
     }
 
     /// <summary>"0.F.1": mesa, coluna (ou F, a última; M e N, as duas do meio), fileira.</summary>

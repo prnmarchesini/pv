@@ -68,6 +68,8 @@ internal sealed class JanelaDeStrings : Window
         Botao(Tr.T("Trocar mesas"), Tr.T("Escolhe de novo em campo as mesas do tipo escolhido."), TrocarMesas);
         Botao(Tr.T("Renomear"), Tr.T("Troca o nome do tipo escolhido."), Renomear);
         Botao(Tr.T("Apagar"), Tr.T("Tira o tipo escolhido da biblioteca. Strings já desenhadas não mudam."), Apagar);
+        Botao(Tr.T("Clonar"), Tr.T("Cria um tipo igual ao escolhido (mesas e traçado), com o próximo nome."), Clonar);
+        Botao(Tr.T("Espelhar"), Tr.T("Troca o + com o − em todas as strings do tipo escolhido (mesma configuração, positivo do outro lado)."), Espelhar);
 
         var esquerda = new DockPanel { Width = 280, Margin = new Thickness(0, 0, 8, 0) };
         DockPanel.SetDock(botoes, Dock.Bottom);
@@ -117,6 +119,7 @@ internal sealed class JanelaDeStrings : Window
         barra.Children.Add(_fileiraInteira);
         Botao(Tr.T("Concluir string"), Tr.T("Grava a string montada: o + no primeiro módulo clicado, o − no último."), ConcluirString);
         Botao(Tr.T("Desfazer trecho"), Tr.T("Tira o último trecho da string em montagem."), DesfazerTrecho);
+        Botao(Tr.T("Apagar última string"), Tr.T("Tira a última string gravada do tipo escolhido."), ApagarUltimaString);
         Botao(Tr.T("Limpar traçado"), Tr.T("Tira todas as strings do tipo escolhido (as já desenhadas em campo não mudam)."), LimparTracado);
 
         // O resumo numa linha só abaixo dos botões.
@@ -392,6 +395,55 @@ internal sealed class JanelaDeStrings : Window
             return problema is null ? Tr.F("Renomeado para {0}.", nome.Trim()) : null;
         }, tipo.Id);
         if (problema is not null) Avisar(Tr.F("Não renomeei: {0}.", problema), erro: true);
+    }
+
+    private void Clonar()
+    {
+        if (Escolhido is not { } tipo)
+        {
+            Avisar(Tr.T("Escolha um tipo na lista."), erro: true);
+            return;
+        }
+
+        StringType? copia = null;
+        Fazer(() =>
+        {
+            StringTypeStore.Mudar(_documento.Database, b => copia = b.Clone(tipo.Id));
+            return copia is null ? null : Tr.F("{0} criado como cópia de {1}.", copia.Name, tipo.Name);
+        });
+        if (copia is not null) Atualizar(copia.Id);
+    }
+
+    private void Espelhar()
+    {
+        if (Escolhido is not { } tipo)
+        {
+            Avisar(Tr.T("Escolha um tipo na lista."), erro: true);
+            return;
+        }
+
+        string? porque = null;
+        Fazer(() =>
+        {
+            StringTypeStore.Mudar(_documento.Database, b => porque = b.Mirror(tipo.Id));
+            return porque is null ? Tr.F("{0} espelhado: o + e o − de cada string trocaram de ponta.", tipo.Name) : null;
+        }, tipo.Id);
+        if (porque is not null) Avisar(Tr.F("Não gravei: {0}.", porque), erro: true);
+    }
+
+    private void ApagarUltimaString()
+    {
+        if (Escolhido is not { Routes.Count: > 0 } tipo)
+        {
+            Avisar(Tr.T("O tipo escolhido não tem string gravada."), erro: true);
+            return;
+        }
+
+        Fazer(() =>
+        {
+            StringTypeStore.Mudar(_documento.Database, b => b.RemoveString(tipo.Id, tipo.Routes.Count - 1));
+            return Tr.F("String {0} tirada de {1}.", tipo.Routes.Count, tipo.Name);
+        }, tipo.Id);
     }
 
     private void Apagar()
