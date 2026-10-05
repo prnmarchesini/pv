@@ -1,3 +1,4 @@
+using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using Clivus.Core;
@@ -9,10 +10,107 @@ namespace Clivus.Plugin;
 
 /// <summary>
 /// As strings (elétrica, etapa 11): CLIVUS_STRING abre a janela;
+/// CLIVUS_STRING_MESAS escolhe em campo as mesas de um tipo (11.2);
 /// CLIVUS_STRING_TIPO_AUTO mexe na biblioteca pela linha de comando (nível 2).
 /// </summary>
 public static class StringCommands
 {
+    /// <summary>
+    /// O pedido da janela para o próximo CLIVUS_STRING_MESAS deste desenho:
+    /// o tipo cujas mesas trocar (Guid.Empty = criar um tipo novo). Sem
+    /// pedido (comando digitado), cria um tipo novo.
+    /// </summary>
+    private static readonly Dictionary<Document, Guid> PedidosDeMesas = [];
+
+    internal static void PedirMesas(Document documento, Guid alvo) => PedidosDeMesas[documento] = alvo;
+
+    /// <summary>
+    /// CLIVUS_STRING_MESAS (11.2): seleção em campo só de mesas, Enter; as
+    /// mesas em ordem ao longo da fileira viram a assinatura de arranjo e o
+    /// desenho do cartesiano do tipo. Cria o tipo, ou troca as mesas do tipo
+    /// que a janela pediu.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoStringMesas)]
+    public static void Mesas()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+        var database = documento.Database;
+        var daJanela = PedidosDeMesas.Remove(documento, out var alvo);
+        Guid? mostrar = alvo == Guid.Empty ? null : alvo;
+        string? frase = null;
+        var erro = false;
+
+        try
+        {
+            var guids = MesasDaString.Selecionar(documento, Tr.T("\nSelecione as mesas do tipo de string (só mesas entram): "));
+            if (guids is null)
+            {
+                frase = Tr.T("Seleção cancelada.");
+                return;
+            }
+
+            var problemas = new List<string>();
+            List<FieldTable> mesas;
+            using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
+                mesas = MesasDaString.Ler(transacao, database, guids, problemas);
+
+            foreach (var p in problemas) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.", p));
+
+            if (StringFieldTables.Order(mesas, out var porque) is not { } ordem)
+            {
+                frase = Tr.F("Não escolhi as mesas: {0}.", porque);
+                erro = true;
+                return;
+            }
+
+            var (arranjo, desenho) = StringFieldTables.Describe(ordem);
+            StringType? tipo = null;
+            string? recusa = null;
+
+            var problema = StringTypeStore.Mudar(database, b =>
+            {
+                if (alvo == Guid.Empty)
+                {
+                    tipo = b.Add(arranjo, desenho);
+                }
+                else
+                {
+                    recusa = b.SetArrangement(alvo, arranjo, desenho);
+                    tipo = b.Find(alvo);
+                }
+            });
+
+            if (recusa is not null || tipo is null)
+            {
+                frase = Tr.F("Não escolhi as mesas: {0}.", recusa ?? string.Empty);
+                erro = true;
+                return;
+            }
+
+            mostrar = tipo.Id;
+            frase = Tr.F("{0}: mesas {1} ({2}), {3} módulo(s).", tipo.Name, string.Join(", ", ordem.Select(o => o.Table.Label)), arranjo.ToText(), arranjo.ModuleCount);
+            if (alvo == Guid.Empty) frase = Tr.F("{0} criado.", tipo.Name) + " " + frase;
+            if (problema is not null) editor.WriteMessage(Tr.F("  ATENÇÃO: {0}.\n", problema));
+        }
+        catch (System.Exception falha)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no CLIVUS_STRING_MESAS.", falha);
+            frase = Tr.F("Não consegui: {0}", falha.Message);
+            erro = true;
+        }
+        finally
+        {
+            if (frase is not null) editor.WriteMessage("\nSTRING " + frase + "\n");
+
+            // Pedido da janela: ela volta (com ou sem mesas). Digitado: a
+            // janela aberta, se houver, mostra o tipo novo.
+            if (ClivusExtension.TemInterface() && (daJanela || (!erro && mostrar is not null)))
+                JanelaDeStrings.Retomar(documento, mostrar, frase, erro);
+        }
+    }
     [CommandMethod(PluginInfo.ComandoString)]
     public static void Strings()
     {
@@ -87,6 +185,10 @@ public static class StringCommands
 
             var lido = StringTypeStore.Ler(database);
             editor.WriteMessage(Tr.F("STRING {0} tipo(s): {1}\n", lido.Items.Count, string.Join("; ", lido.Items.Select(JanelaDeStrings.Descrever))));
+
+            // Para o nível 2: o desenho do cartesiano de cada tipo (células e vãos, em metro).
+            foreach (var tipo in lido.Items.Where(t => t.Sketch is not null))
+                editor.WriteMessage($"STRING_DESENHO {tipo.Name} {tipo.Arrangement.ToText()} {tipo.Sketch!.ToText()}\n");
         }
         catch (System.Exception erro)
         {

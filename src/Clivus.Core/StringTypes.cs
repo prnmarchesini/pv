@@ -74,27 +74,43 @@ public sealed class StringArrangement : IEquatable<StringArrangement>
 }
 
 /// <summary>
-/// Um tipo de string da biblioteca (elétrica, 11.1): nome e assinatura de
-/// arranjo. O traçado (polaridade, convencional, leapfrog) entra no 11.3.
+/// Um tipo de string da biblioteca (elétrica, 11.1): nome, assinatura de
+/// arranjo e o desenho do cartesiano das mesas escolhidas (11.2, null
+/// enquanto não há mesas).
 /// </summary>
-public sealed record StringType(Guid Id, string Name, StringArrangement Arrangement)
+public sealed record StringType(Guid Id, string Name, StringArrangement Arrangement, ArrangementSketch? Sketch = null)
 {
-    /// <summary>Os campos gravados no desenho: GUID, nome, assinatura.</summary>
-    public const int FieldCount = 3;
+    /// <summary>Os campos gravados no desenho: GUID, nome, assinatura, desenho do cartesiano.</summary>
+    public const int FieldCount = 4;
 
-    public IReadOnlyList<string> ToFields() => [Id.ToString("D"), Name, Arrangement.ToText()];
+    /// <summary>Os campos do formato 1 (11.1), sem o desenho do cartesiano.</summary>
+    public const int FieldCountV1 = 3;
 
-    /// <summary>O inverso de <see cref="ToFields"/>; null se não dá para ler.</summary>
+    /// <summary>O desenho do cartesiano, ou o padrão se o tipo não tem um.</summary>
+    public ArrangementSketch SketchOrDefault => Sketch is { } d && d.Gaps.Count == Math.Max(0, Arrangement.Tables.Count - 1) ? d : ArrangementSketch.Default(Arrangement);
+
+    public IReadOnlyList<string> ToFields() => [Id.ToString("D"), Name, Arrangement.ToText(), Sketch?.ToText() ?? string.Empty];
+
+    /// <summary>O inverso de <see cref="ToFields"/> (aceita também os 3 campos do formato 1); null se não dá para ler.</summary>
     public static StringType? Parse(IReadOnlyList<string> campos)
     {
         ArgumentNullException.ThrowIfNull(campos);
 
-        if (campos.Count < FieldCount) return null;
+        if (campos.Count < FieldCountV1) return null;
         if (!Guid.TryParse(campos[0], out var id) || id == Guid.Empty) return null;
         if (string.IsNullOrWhiteSpace(campos[1])) return null;
+        if (StringArrangement.Parse(campos[2]) is not { } arranjo) return null;
 
-        return StringArrangement.Parse(campos[2]) is { } arranjo ? new StringType(id, campos[1], arranjo) : null;
+        ArrangementSketch? desenho = null;
+        if (campos.Count > FieldCountV1 && campos[3].Length > 0 && (desenho = ArrangementSketch.Parse(campos[3])) is null) return null;
+
+        return new StringType(id, campos[1], arranjo, desenho);
     }
+
+    public bool Equals(StringType? other) =>
+        other is not null && Id == other.Id && Name == other.Name && Arrangement.Equals(other.Arrangement) && Equals(Sketch, other.Sketch);
+
+    public override int GetHashCode() => Id.GetHashCode();
 }
 
 /// <summary>
@@ -117,13 +133,30 @@ public sealed class StringLibrary
     public StringType? Find(Guid id) => _tipos.FirstOrDefault(t => t.Id == id);
 
     /// <summary>Acrescenta um tipo com o próximo nome livre.</summary>
-    public StringType Add(StringArrangement arranjo)
+    public StringType Add(StringArrangement arranjo, ArrangementSketch? desenho = null)
     {
         ArgumentNullException.ThrowIfNull(arranjo);
 
-        var tipo = new StringType(Guid.NewGuid(), Tr.F("Modelo {0}", ProximoNumero()), arranjo);
+        var tipo = new StringType(Guid.NewGuid(), Tr.F("Modelo {0}", ProximoNumero()), arranjo, desenho);
         _tipos.Add(tipo);
         return tipo;
+    }
+
+    /// <summary>
+    /// Troca as mesas do tipo (11.2: o usuário escolheu em campo). Null se
+    /// deu certo, o porquê se não.
+    /// </summary>
+    public string? SetArrangement(Guid id, StringArrangement arranjo, ArrangementSketch desenho)
+    {
+        ArgumentNullException.ThrowIfNull(arranjo);
+        ArgumentNullException.ThrowIfNull(desenho);
+
+        var posicao = _tipos.FindIndex(t => t.Id == id);
+        if (posicao < 0) return Tr.T("esse tipo de string não está mais na biblioteca");
+        if (arranjo.IsEmpty) return Tr.T("nenhuma mesa do plugin na seleção");
+
+        _tipos[posicao] = _tipos[posicao] with { Arrangement = arranjo, Sketch = desenho };
+        return null;
     }
 
     /// <summary>Renomeia; null se deu certo, o porquê se não.</summary>
@@ -164,5 +197,26 @@ public sealed class StringLibrary
         }
 
         return maior + 1;
+    }
+}
+
+/// <summary>
+/// A gravação da biblioteca no desenho (texto puro, pelo <see cref="RecordTable"/>).
+/// Formato 2 (11.2) tem o desenho do cartesiano; o formato 1 (11.1) ainda é
+/// lido, e é regravado no 2 na primeira mudança.
+/// </summary>
+public static class StringTypeRecords
+{
+    public const int Version = 2;
+
+    public static IReadOnlyList<string> Write(IReadOnlyList<StringType> tipos) =>
+        RecordTable.Write(Version, StringType.FieldCount, tipos, t => t.ToFields());
+
+    public static RecordTableResult<StringType> Read(IReadOnlyList<string>? texto, string oQueE)
+    {
+        var formato1 = texto is { Count: > 1 } && texto[1] == "1";
+        return formato1
+            ? RecordTable.Read(texto, 1, StringType.FieldCountV1, StringType.Parse, oQueE)
+            : RecordTable.Read(texto, Version, StringType.FieldCount, StringType.Parse, oQueE);
     }
 }

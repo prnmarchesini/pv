@@ -396,6 +396,9 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_SOMBRAS_BORRAR")]
     public static void CLIVUS_SOMBRAS_BORRAR() => SombrasCommands.SombrasApagar();
 
+    [CommandMethod("CLIVUS_STRING_TABLES")]
+    public static void CLIVUS_STRING_TABLES() => StringCommands.Mesas();
+
     [CommandMethod("CLIVUS_ETIQUETAS")]
     public static void CLIVUS_ETIQUETAS() => JanelasDeAnaliseCommands.Tags();
 
