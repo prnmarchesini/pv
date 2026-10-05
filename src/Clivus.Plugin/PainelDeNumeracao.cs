@@ -68,10 +68,22 @@ internal sealed class PainelDeNumeracao : DockPanel
 
     private static WrapPanel Linha(double acima = 0) => new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, acima, 0, 0) };
 
-    private static void Botao(Panel onde, string texto, string dica, Action acao)
+    /// <summary>Um botão cujo clique nunca derruba o Civil 3D: a falha vai para o registro e para o recado.</summary>
+    private void Botao(Panel onde, string texto, string dica, Action acao)
     {
         var b = new Button { Content = texto, Height = 26, Margin = new Thickness(0, 0, 8, 4), Padding = new Thickness(10, 0, 10, 0), ToolTip = dica };
-        b.Click += (_, _) => acao();
+        b.Click += (_, _) =>
+        {
+            try
+            {
+                acao();
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar($"Falha no botão {texto} da aba Numeração.", erro);
+                Avisar(Tr.F("Não consegui: {0}", erro.Message), erro: true);
+            }
+        };
         onde.Children.Add(b);
     }
 
@@ -94,8 +106,8 @@ internal sealed class PainelDeNumeracao : DockPanel
         linha.Children.Add(new Border { Width = 4 });
         linha.Children.Add(_separador);
 
-        var salvar = new Button { Content = Tr.T("Salvar composição"), Height = 26, Padding = new Thickness(10, 0, 10, 0), Margin = new Thickness(0, 0, 12, 0), ToolTip = Tr.T("Grava a composição no desenho. As tags já desenhadas só mudam ao gerar de novo.") };
-        salvar.Click += (_, _) => SalvarEsquema();
+        var salvar = new WrapPanel();
+        Botao(salvar, Tr.T("Salvar composição"), Tr.T("Grava a composição no desenho. As tags já desenhadas só mudam ao gerar de novo."), SalvarEsquema);
 
         var embaixo = new DockPanel { Margin = new Thickness(0, 8, 0, 0) };
         DockPanel.SetDock(salvar, Dock.Left);

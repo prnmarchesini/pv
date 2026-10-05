@@ -90,6 +90,7 @@ internal static class NumeracaoDesenho
         var (varredura, problemaDaVarredura) = NumeracaoStore.Varredura(database);
         var inversores = ElectricalStore.Inverters(database);
         var trafos = ElectricalStore.Transformers(database);
+        var modelos = ElectricalStore.InverterModels(database);
 
         using var transacao = database.TransactionManager.StartTransaction();
 
@@ -97,12 +98,13 @@ internal static class NumeracaoDesenho
         var modulos = Modulos(transacao, database);
         var spots = modulos.ToDictionary(m => m.Key, m => new ModuleSpot(m.Value.Mesa, m.Value.Centro.X, m.Value.Centro.Y));
 
-        var resultado = StringNumbering.Number(esquema, varredura, trafos.Items, inversores.Items, strings.Select(s => s.String).ToList(), spots, alcance);
-        Aplicar(transacao, database, strings, resultado.Tags, modulos);
+        var resultado = StringNumbering.Number(esquema, varredura, trafos.Items, inversores.Items, strings.Select(s => s.String).ToList(), spots, alcance, modelos.Items);
+        var orfaos = Aplicar(transacao, database, strings, resultado.Tags, modulos, apagarOrfaos: alcance is null || alcance.Kind == NumberingScopeKind.All);
         transacao.Commit();
 
         var linhas = Relatorio(resultado, strings.Count, inversores.Items);
-        foreach (var problema in new[] { problemaDoEsquema, problemaDaVarredura, inversores.Problem, trafos.Problem })
+        if (orfaos > 0) linhas.Add(Tr.F("  {0} texto(s) de tag de string que não existe mais foram apagados.", orfaos));
+        foreach (var problema in new[] { problemaDoEsquema, problemaDaVarredura, inversores.Problem, trafos.Problem, modelos.Problem })
             if (problema is not null) linhas.Add(Tr.F("  ATENÇÃO: {0}.", problema));
 
         return linhas;
@@ -114,7 +116,7 @@ internal static class NumeracaoDesenho
     /// </summary>
     internal static string Apagar(Database database, NumberingScope alcance)
     {
-        var (varredura, _) = NumeracaoStore.Varredura(database);
+        var (varredura, problema) = NumeracaoStore.Varredura(database);
 
         using var transacao = database.TransactionManager.StartTransaction();
 
@@ -124,25 +126,48 @@ internal static class NumeracaoDesenho
         var vazias = StringNumbering.Clear(strings.Select(s => s.String).ToList(), alcance, varredura, spots);
         var tinham = strings.Count(s => vazias.ContainsKey(s.String.Id) && s.String.Tag.Length > 0);
 
-        Aplicar(transacao, database, strings, vazias, modulos);
+        var orfaos = Aplicar(transacao, database, strings, vazias, modulos, apagarOrfaos: alcance.Kind == NumberingScopeKind.All);
         transacao.Commit();
 
-        return Tr.F("{0} tag(s) apagada(s) de {1} string(s).", tinham, vazias.Count);
+        var frase = Tr.F("{0} tag(s) apagada(s) de {1} string(s).", tinham, vazias.Count);
+        if (orfaos > 0) frase += " " + Tr.F("{0} texto(s) de tag de string que não existe mais foram apagados.", orfaos);
+        if (problema is not null) frase += " " + Tr.F("ATENÇÃO: {0}.", problema);
+        return frase;
     }
 
     /// <summary>
     /// Grava as tags novas nas strings dadas (só o campo Tag do XData; a
     /// geometria não muda) e troca os textos delas: apaga os de antes e
-    /// desenha um por string com tag.
+    /// desenha um por string com tag. Com <paramref name="apagarOrfaos"/>
+    /// (usina inteira), apaga também o texto de tag cuja string sumiu;
+    /// devolve quantos.
     /// </summary>
-    internal static void Aplicar(
+    internal static int Aplicar(
         Transaction transacao,
         Database database,
         IReadOnlyList<(ObjectId Id, ElectricalString String)> strings,
         IReadOnlyDictionary<Guid, string> tags,
-        IReadOnlyDictionary<Guid, Lugar> modulos)
+        IReadOnlyDictionary<Guid, Lugar> modulos,
+        bool apagarOrfaos)
     {
         var textos = Textos(transacao, database);
+        var orfaos = 0;
+
+        if (apagarOrfaos)
+        {
+            var existem = strings.Select(s => s.String.Id).ToHashSet();
+            foreach (var grupo in textos.Where(g => !existem.Contains(g.Key)))
+            {
+                foreach (var velho in grupo)
+                {
+                    if (transacao.GetObject(velho, OpenMode.ForWrite) is Entity texto)
+                    {
+                        texto.Erase();
+                        orfaos++;
+                    }
+                }
+            }
+        }
         var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForWrite);
         var camada = LayoutLayers.Garantir(transacao, database, CamadaDaTag, new RgbColor(255, 140, 0));
         var estilo = EstiloDoProjeto.PrepararTexto(transacao, database);
@@ -192,6 +217,8 @@ internal static class NumeracaoDesenho
             var ordem = (DrawOrderTable)transacao.GetObject(espaco.DrawOrderTableId, OpenMode.ForWrite);
             ordem.MoveToTop(new ObjectIdCollection(novos.ToArray()));
         }
+
+        return orfaos;
     }
 
     /// <summary>O relatório da numeração: o resumo e o que ficou sem tag ou sem trafo (nada falha calado, regra elétrica 6).</summary>
@@ -206,14 +233,23 @@ internal static class NumeracaoDesenho
         if (r.UnknownInverter > 0) linhas.Add(Tr.F("  ATENÇÃO: {0} string(s) apontam para inversor que não está no cadastro; ficaram sem tag.", r.UnknownInverter));
         if (r.Unplaced > 0) linhas.Add(Tr.F("  ATENÇÃO: {0} string(s) com o primeiro módulo fora do desenho; ficaram sem tag.", r.Unplaced));
 
+        if (r.DuplicateStrings > 0) linhas.Add(Tr.F("  ATENÇÃO: {0} string(s) com a identidade repetida (polilinha copiada?); ficaram sem tag.", r.DuplicateStrings));
+
         if (r.DuplicateTags.Count > 0)
             linhas.Add(Tr.F("  ATENÇÃO: {0} tag(s) repetida(s) com strings fora deste pedaço ({1}): a ordem dos blocos ou a alocação mudou; gere tudo de novo.", r.DuplicateTags.Count, string.Join(", ", r.DuplicateTags.Take(10))));
+        else if (r.StaleOutside > 0)
+            linhas.Add(Tr.F("  ATENÇÃO: {0} string(s) fora deste pedaço com a tag desatualizada (a ordem dos blocos ou a alocação mudou); gere tudo de novo.", r.StaleOutside));
+
+        string Nome(Guid id) => inversores.FirstOrDefault(i => i.Id == id)?.Name ?? id.ToString("D");
+
+        foreach (var carga in r.OverCapacity)
+            linhas.Add(Tr.F("  ATENÇÃO: {0} acima da capacidade: {1} strings em {2} entradas.", Nome(carga.Inverter), carga.Strings, carga.Capacity));
 
         if (r.InvertersWithoutTransformer.Count > 0)
-        {
-            var nomes = r.InvertersWithoutTransformer.Select(id => inversores.FirstOrDefault(i => i.Id == id)?.Name ?? id.ToString("D"));
-            linhas.Add(Tr.F("  {0} inversor(es) sem trafo ({1}): a tag sai sem o pedaço do trafo.", r.InvertersWithoutTransformer.Count, string.Join(", ", nomes)));
-        }
+            linhas.Add(Tr.F("  {0} inversor(es) sem trafo ({1}): a tag sai sem o pedaço do trafo.", r.InvertersWithoutTransformer.Count, string.Join(", ", r.InvertersWithoutTransformer.Select(Nome))));
+
+        if (r.InvertersWithMissingTransformer.Count > 0)
+            linhas.Add(Tr.F("  ATENÇÃO: {0} inversor(es) apontam para trafo que não está no cadastro ({1}): a tag sai sem o pedaço do trafo.", r.InvertersWithMissingTransformer.Count, string.Join(", ", r.InvertersWithMissingTransformer.Select(Nome))));
 
         return linhas;
     }

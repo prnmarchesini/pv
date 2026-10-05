@@ -131,7 +131,9 @@ public static class ScanOrder
 
     /// <summary>
     /// Os GUIDs na ordem da varredura. Faixas pelo eixo do sentido (uma faixa
-    /// nova quando o salto passa de <paramref name="band"/>); dentro da faixa,
+    /// nova quando o item passa de <paramref name="band"/> do começo da
+    /// faixa: medido do começo, e não do vizinho, para mesas deslocadas aos
+    /// poucos não fundirem colunas inteiras numa faixa só); dentro da faixa,
     /// pelo outro eixo; empate total, pelo GUID (sempre a mesma ordem).
     /// Posição que não é número fica de fora.
     /// </summary>
@@ -156,13 +158,17 @@ public static class ScanOrder
             .ToList();
 
         var faixas = new List<List<(ScanItem Item, (double P, double S) Eixo)>>();
-        double? anterior = null;
+        double? comeco = null;
 
         foreach (var x in porEixo)
         {
-            if (anterior is null || x.Eixo.P - anterior.Value > band) faixas.Add([]);
+            if (comeco is null || x.Eixo.P - comeco.Value > band)
+            {
+                faixas.Add([]);
+                comeco = x.Eixo.P;
+            }
+
             faixas[^1].Add(x);
-            anterior = x.Eixo.P;
         }
 
         return faixas
@@ -452,12 +458,16 @@ public sealed record NumberingScope(NumberingScopeKind Kind, Guid Target)
 /// <param name="Free">Strings sem inversor: ficam sem tag (avisar quantas).</param>
 /// <param name="UnknownInverter">Strings cujo inversor não está no cadastro: ficam sem tag.</param>
 /// <param name="Unplaced">Strings alocadas cujo primeiro módulo não está no desenho: sem posição, ficam sem tag.</param>
-/// <param name="InvertersWithoutTransformer">Inversores com string numerada e sem trafo (ou com trafo que sumiu do cadastro): a tag sai sem o pedaço do trafo.</param>
+/// <param name="InvertersWithoutTransformer">Inversores com string numerada e sem trafo (não agrupados em skid): a tag sai sem o pedaço do trafo.</param>
+/// <param name="InvertersWithMissingTransformer">Inversores com string numerada cujo trafo não está mais no cadastro (erro de cadastro): a tag também sai sem o pedaço do trafo.</param>
 /// <param name="DuplicateTags">
 /// Tags que ficam repetidas no desenho depois de juntar as novas com as que
 /// ficaram (regerar um pedaço depois de mudar blocos ou alocação): o aviso
 /// para gerar tudo de novo. Vazia na usina inteira.
 /// </param>
+/// <param name="StaleOutside">Strings fora do alcance com uma tag diferente da que a usina inteira daria hoje (a ordem ou a alocação mudou): o aviso para gerar tudo.</param>
+/// <param name="DuplicateStrings">Entidades de string com o mesmo GUID de outra (cópia da polilinha): ficam sem tag, para não sair a mesma tag duas vezes.</param>
+/// <param name="OverCapacity">Inversores do alcance com mais strings que entradas no modelo (a tag sai, mas avisada).</param>
 public sealed record StringNumberingResult(
     IReadOnlyDictionary<Guid, string> Tags,
     int Tagged,
@@ -465,7 +475,14 @@ public sealed record StringNumberingResult(
     int UnknownInverter,
     int Unplaced,
     IReadOnlyList<Guid> InvertersWithoutTransformer,
-    IReadOnlyList<string> DuplicateTags);
+    IReadOnlyList<Guid> InvertersWithMissingTransformer,
+    IReadOnlyList<string> DuplicateTags,
+    int StaleOutside,
+    int DuplicateStrings,
+    IReadOnlyList<InverterLoad> OverCapacity);
+
+/// <summary>Um inversor e a carga dele: quantas strings tem e quantas entradas o modelo dá.</summary>
+public sealed record InverterLoad(Guid Inverter, int Strings, int Capacity);
 
 /// <summary>
 /// A numeração das strings (15.4, 15.5): varre a usina na ordem dos blocos
@@ -485,7 +502,8 @@ public static class StringNumbering
         IReadOnlyList<Inverter> inverters,
         IReadOnlyList<ElectricalString> strings,
         IReadOnlyDictionary<Guid, ModuleSpot> modules,
-        NumberingScope? scope = null)
+        NumberingScope? scope = null,
+        IReadOnlyList<InverterModel>? models = null)
     {
         ArgumentNullException.ThrowIfNull(scheme);
         ArgumentNullException.ThrowIfNull(setup);
@@ -517,11 +535,28 @@ public static class StringNumbering
         var porId = new Dictionary<Guid, ElectricalString>();
         var noAlcance = new HashSet<Guid>();
 
+        // GUID repetido (a polilinha copiada leva o XData junto): as cópias
+        // ficam sem tag e contadas, senão a mesma tag sairia duas vezes.
+        var repetidos = strings.GroupBy(s => s.Id).Where(g => g.Count() > 1).ToDictionary(g => g.Key, g => g.Count());
+        var copias = 0;
+
         foreach (var s in strings)
         {
             if (!porId.TryAdd(s.Id, s)) continue;
 
             var dentro = scope.Contains(s, donoDaMesa, modules);
+
+            if (repetidos.TryGetValue(s.Id, out var vezes))
+            {
+                if (dentro)
+                {
+                    noAlcance.Add(s.Id);
+                    tags[s.Id] = string.Empty;
+                    copias += vezes;
+                }
+
+                continue;
+            }
             if (dentro)
             {
                 noAlcance.Add(s.Id);
@@ -536,7 +571,9 @@ public static class StringNumbering
 
         var sequencial = new Dictionary<Guid, int>();
         var semTrafo = new List<Guid>();
+        var trafoSumido = new List<Guid>();
         var numeradas = 0;
+        var desatualizadas = 0;
 
         foreach (var id in setup.Sequence(aVarrer))
         {
@@ -544,14 +581,30 @@ public static class StringNumbering
             var n = sequencial.GetValueOrDefault(inversor.Id) + 1;
             sequencial[inversor.Id] = n;
 
-            if (!noAlcance.Contains(id)) continue;
-
             int? trafo = numeroDoTrafo.TryGetValue(inversor.Transformer, out var t) ? t : null;
-            if (trafo is null && !semTrafo.Contains(inversor.Id)) semTrafo.Add(inversor.Id);
+            var tag = scheme.Compose(trafo, numeroDoInversor[inversor.Id], n);
 
-            tags[id] = scheme.Compose(trafo, numeroDoInversor[inversor.Id], n);
+            if (!noAlcance.Contains(id))
+            {
+                // Fora do alcance não muda; só se avisa a tag que a usina inteira não daria mais.
+                if (!string.IsNullOrEmpty(porId[id].Tag) && porId[id].Tag != tag) desatualizadas++;
+                continue;
+            }
+
+            var lista = inversor.Transformer == Guid.Empty ? semTrafo : trafoSumido;
+            if (trafo is null && !lista.Contains(inversor.Id)) lista.Add(inversor.Id);
+
+            tags[id] = tag;
             numeradas++;
         }
+
+        // Inversor do alcance acima da capacidade do modelo: a tag sai, avisada (regra elétrica 6).
+        var capacidade = (models ?? []).GroupBy(m => m.Id).ToDictionary(g => g.Key, g => g.First().TotalInputs);
+        var acima = inverters
+            .Where(i => noAlcance.Any(id => porId[id].Inverter == i.Id) && capacidade.TryGetValue(i.Model, out var c) && sequencial.GetValueOrDefault(i.Id) > c)
+            .GroupBy(i => i.Id).Select(g => g.First())
+            .Select(i => new InverterLoad(i.Id, sequencial[i.Id], capacidade[i.Model]))
+            .ToList();
 
         // A tag de cada string depois de aplicar: a nova no alcance, a de antes fora.
         var repetidas = porId.Values
@@ -563,7 +616,7 @@ public static class StringNumbering
             .OrderBy(tag => tag, StringComparer.Ordinal)
             .ToList();
 
-        return new StringNumberingResult(tags, numeradas, livres, semInversor, semPosicao, semTrafo, repetidas);
+        return new StringNumberingResult(tags, numeradas, livres, semInversor, semPosicao, semTrafo, trafoSumido, repetidas, desatualizadas, copias, acima);
     }
 
     /// <summary>Apagar as tags (15.5): a tag vazia para cada string do alcance. Só a tag; a geometria e o vínculo não mudam.</summary>

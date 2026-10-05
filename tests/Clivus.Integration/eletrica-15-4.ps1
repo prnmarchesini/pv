@@ -133,6 +133,7 @@ function Testar-NumeracaoGerar {
         if ($fase.T -notmatch "NUMERACAO 14 string\(s\) com tag; $livres sem tag") { $erros += "fase ${n}: o resumo nao diz 14 com tag e $livres sem" }
         if ($fase.T -notmatch "$livres string\(s\) sem inversor ficaram sem tag") { $erros += "fase ${n}: nao avisou as $livres sem inversor" }
         if ($fase.T -notmatch '1 inversor\(es\) sem trafo \(Inversor 4\)') { $erros += "fase ${n}: nao avisou o inversor 4 sem trafo" }
+        if ($fase.T -notmatch 'Inversor 1 acima da capacidade: 5 strings em 4 entradas') { $erros += "fase ${n}: nao avisou o inversor 1 acima da capacidade" }
         if ($comTag.Count -ne 14 -or @($strings | Where-Object { $_.Inversor -eq '-' -and $_.Tag -ne '-' }).Count -ne 0) { $erros += "fase ${n}: $($comTag.Count) string(s) com tag (esperava 14, so as alocadas)" }
         if ($fase.N -eq '2' -and @($strings | Where-Object { $_.Bloco -eq 0 }).Count -ne 0) { $erros += 'fase 2: string fora dos dois blocos' }
 

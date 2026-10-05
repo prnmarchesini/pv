@@ -54,6 +54,13 @@
 (clivus:textos "D")
 
 (princ "\nCLIVUS_FASE E")
+; Uma string com tag some do desenho: o texto dela fica orfao, e apagar
+; todas tem que leva-lo junto.
+(setq clivus:ss (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "CLIVUS_STRING") (list -3 (list "CLIVUS")))) clivus:i 0 clivus:sumiu nil)
+(while (and (null clivus:sumiu) (< clivus:i (clivus:conta clivus:ss)))
+  (setq clivus:e (ssname clivus:ss clivus:i))
+  (if (/= (clivus:campo (clivus:xdata clivus:e) 3) "") (progn (entdel clivus:e) (setq clivus:sumiu T)))
+  (setq clivus:i (1+ clivus:i)))
 (command "CLIVUS_NUMERACAO_AUTO" "ApagarTags" "Tudo")
 (command "CLIVUS_NUMERACAO_AUTO" "Strings")
 (clivus:textos "E")

@@ -56,8 +56,9 @@ function Testar-NumeracaoEditar {
     $diferentes = @($B.Keys | Where-Object { $B[$_].Tag -ne $D[$_].Tag })
     if ($diferentes.Count -gt 0) { $erros += "fase D: $($diferentes.Count) string(s) diferentes de B depois de refazer o Inversor 2" }
 
-    # E: todas sem tag.
+    # E: uma string com tag sumiu antes; todas sem tag, e o texto orfao dela apagado junto.
     if (@($E.Values | Where-Object { $_.Tag -ne '-' }).Count -gt 0) { $erros += 'fase E: sobrou tag depois de apagar todas' }
+    if ($fases['E'].Trecho -notmatch 'NUMERACAO 13 tag\(s\) apagada\(s\) de \d+ string\(s\)\. 1 texto\(s\) de tag de string que n.o existe mais foram apagados') { $erros += 'fase E: apagar todas nao levou o texto da string que sumiu' }
 
     $contagens = "$($fases['A'].Textos) $($fases['B'].Textos) $($fases['C'].Textos) $($fases['D'].Textos) $($fases['E'].Textos)"
     $esperadas = "14 14 $(14 - $doDois.Count) 14 0"

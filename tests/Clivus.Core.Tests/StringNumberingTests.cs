@@ -418,10 +418,80 @@ public class StringNumberingTests
         var r = StringNumbering.Number(TagScheme.Default, new ScanSetup(ScanDirection.LeftToRight, []), [u.T2, u.T1], [u.I2, u.I1, u.I3], u.Strings, u.Modulos);
         Assert.Equal("T1.I1.S1", r.Tags[s.Id]);
 
-        // Trafo que sumiu do cadastro: o inversor fica sem o pedaço do trafo, e avisado.
+        // Trafo que sumiu do cadastro: o inversor fica sem o pedaço do trafo,
+        // e avisado à parte (é erro de cadastro, não inversor fora de skid).
         r = StringNumbering.Number(TagScheme.Default, new ScanSetup(ScanDirection.LeftToRight, []), [u.T1], u.Inversores, u.Strings, u.Modulos);
         Assert.Equal("I2.S1", r.Tags[s.Id]);
-        Assert.Equal([u.I2.Id], r.InvertersWithoutTransformer);
+        Assert.Equal([u.I2.Id], r.InvertersWithMissingTransformer);
+        Assert.Empty(r.InvertersWithoutTransformer);
+    }
+
+    [Fact]
+    [Trait("Etapa", "15")]
+    public void StringCopiadaComOMesmoGuidFicaSemTagEContada()
+    {
+        var u = new Usina();
+        var s = u.Str(u.I1.Id, u.Oeste, 0, 0);
+        var outra = u.Str(u.I1.Id, u.Oeste, 0, 10);
+        u.Strings.Add(s);   // a cópia da polilinha leva o mesmo XData
+
+        var r = StringNumbering.Number(TagScheme.Default, new ScanSetup(ScanDirection.LeftToRight, []), u.Trafos, u.Inversores, u.Strings, u.Modulos);
+
+        Assert.Equal(string.Empty, r.Tags[s.Id]);
+        Assert.Equal("T1.I1.S1", r.Tags[outra.Id]);
+        Assert.Equal(2, r.DuplicateStrings);
+        Assert.Equal(1, r.Tagged);
+    }
+
+    [Fact]
+    [Trait("Etapa", "15")]
+    public void InversorAcimaDaCapacidadeEhNumeradoEAvisado()
+    {
+        var u = new Usina();
+        for (var i = 0; i < 5; i++) u.Str(u.I1.Id, u.Oeste, 0, i * 3);
+        u.Str(u.I2.Id, u.Oeste, 0, 30);
+
+        // O modelo dos inversores tem 2 x 2 = 4 entradas.
+        var modelo = new InverterModel(u.I1.Model, "Teste 2x2", 2, 2, Caixa);
+        var r = StringNumbering.Number(TagScheme.Default, new ScanSetup(ScanDirection.LeftToRight, []), u.Trafos, u.Inversores, u.Strings, u.Modulos, models: [modelo]);
+
+        Assert.Equal(6, r.Tagged);
+        Assert.Equal([new InverterLoad(u.I1.Id, 5, 4)], r.OverCapacity);
+
+        // Sem o modelo não há como saber: não avisa nada.
+        Assert.Empty(StringNumbering.Number(TagScheme.Default, new ScanSetup(ScanDirection.LeftToRight, []), u.Trafos, u.Inversores, u.Strings, u.Modulos).OverCapacity);
+    }
+
+    [Fact]
+    [Trait("Etapa", "15")]
+    public void RegerarUmPedacoAvisaTagDesatualizadaForaDele()
+    {
+        var u = new Usina();
+        var a = u.Str(u.I1.Id, u.Oeste, 0, 0);
+        var b = u.Str(u.I1.Id, u.Leste, 20, 0);
+        var c = u.Str(u.I1.Id, u.Leste, 20, 10);
+        var setup = new ScanSetup(ScanDirection.LeftToRight, []);
+        var leste = setup.AddBlock();
+        setup.SetTables(leste.Id, [u.Leste]);
+        var gravadas = Aplicar(u.Strings, StringNumbering.Number(TagScheme.Default, setup, u.Trafos, u.Inversores, u.Strings, u.Modulos).Tags);
+
+        // O leste muda de sentido e só o oeste (fora de bloco) é regerado: b e c trocariam, sem repetir número.
+        setup.SetDirection(leste.Id, ScanDirection.BottomToTop);
+        var r = StringNumbering.Number(TagScheme.Default, setup, u.Trafos, u.Inversores, gravadas, u.Modulos, NumberingScope.OfBlock(Guid.Empty));
+
+        Assert.Equal([a.Id], r.Tags.Keys);
+        Assert.Empty(r.DuplicateTags);
+        Assert.Equal(2, r.StaleOutside);
+        _ = (b, c);
+    }
+
+    [Fact]
+    [Trait("Etapa", "15")]
+    public void AFaixaSeMedeDoComecoENaoEncadeia()
+    {
+        // Primeiros módulos em rampa de 0,3 m: duas faixas (0 e 0,3; 0,6 e 0,9), não uma só.
+        var itens = new[] { Em(1, 0.0, 0), Em(2, 0.3, 10), Em(3, 0.6, 0), Em(4, 0.9, 10) };
+        Assert.Equal([2, 1, 4, 3], Numeros(ScanOrder.Order(itens, ScanDirection.LeftToRight)));
     }
 
     [Fact]
