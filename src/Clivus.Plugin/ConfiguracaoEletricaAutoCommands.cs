@@ -216,6 +216,8 @@ public static class ConfiguracaoEletricaAutoCommands
             s.FindInverter(nome) is not { } i ? "inversor nao existe"
             : s.Models.FirstOrDefault(m => ElectricalSetup.SameName(m.Name, doModelo)) is not { } m ? "modelo nao existe"
             : s.EditInverter(i.Id, novo, m.Id));
+        if (porque is null && ConfiguracaoEletricaStore.Ler(database).Setup.FindInverter(novo) is { } editado)
+            EquipamentoEmCampo.Redesenhar(database, EquipmentKind.Inverter, editado.Id);
         return porque is null ? $"inversor {nome} editado" : $"recusado: {porque}";
     }
 

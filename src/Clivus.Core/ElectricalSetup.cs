@@ -101,19 +101,21 @@ public sealed class ElectricalSetup
     /// <summary>
     /// O equipamento do cadastro com a tag e a dimensão do retângulo: a
     /// subestação mostra o nome (o código se o nome está vazio), o trafo o
-    /// apelido. Null se não está no cadastro.
+    /// apelido, o inversor o nome (a dimensão é a do modelo dele). Null se
+    /// não está no cadastro (ou o inversor está sem modelo).
     /// </summary>
     public EquipmentInfo? FindEquipment(EquipmentKind kind, Guid id) => kind switch
     {
         EquipmentKind.ConsumerUnit when FindUnit(id) is { } u =>
             new EquipmentInfo(kind, id, string.IsNullOrWhiteSpace(u.Name) ? u.Code : u.Name, u.Size),
         EquipmentKind.Transformer when FindTransformer(id) is { } t => new EquipmentInfo(kind, id, t.Nickname, t.Size),
+        EquipmentKind.Inverter when FindInverter(id) is { } i && FindModel(i.Model) is { } m => new EquipmentInfo(kind, id, i.Name, m.Size),
         _ => null,
     };
 
     /// <summary>
     /// Os equipamentos que respondem pelo texto: o GUID, ou a tag (código ou
-    /// nome da subestação, apelido do trafo), sem olhar maiúscula. Mais de um
+    /// nome da subestação, apelido do trafo, nome do inversor), sem olhar maiúscula. Mais de um
     /// = ambíguo, quem chama recusa.
     /// </summary>
     public IReadOnlyList<EquipmentInfo> FindEquipment(string? tagOrId)
@@ -128,10 +130,12 @@ public sealed class ElectricalSetup
             || (e.Kind == EquipmentKind.ConsumerUnit && SameName(FindUnit(e.Id)!.Code, texto))).ToList();
     }
 
-    /// <summary>Todos os equipamentos do cadastro que vão para o campo, subestações e trafos, nessa ordem.</summary>
+    /// <summary>Todos os equipamentos do cadastro que vão para o campo: subestações, trafos e inversores (com modelo), nessa ordem.</summary>
     public IEnumerable<EquipmentInfo> Equipment() =>
-        _ucs.Select(u => FindEquipment(EquipmentKind.ConsumerUnit, u.Id)!)
-            .Concat(_trafos.Select(t => FindEquipment(EquipmentKind.Transformer, t.Id)!));
+        _ucs.Select(u => FindEquipment(EquipmentKind.ConsumerUnit, u.Id))
+            .Concat(_trafos.Select(t => FindEquipment(EquipmentKind.Transformer, t.Id)))
+            .Concat(_inversores.Select(i => FindEquipment(EquipmentKind.Inverter, i.Id)))
+            .OfType<EquipmentInfo>();
 
     // -------------------------------------------------------- subestações
 

@@ -74,6 +74,11 @@ internal sealed class AbaInversor : AbaEletrica
         editar.Children.Add(_nomeDoInversor);
         editar.Children.Add(_modeloDoInversor);
         Botao(editar, Tr.T("Salvar inversor"), Tr.T("Grava o nome e o modelo do inversor escolhido."), SalvarInversor);
+        Botao(editar, Tr.T("Alocar em campo"), Tr.T("A janela some: clique o centro do retângulo na planta. Se já está em campo, ele é movido; o vínculo não muda."), () =>
+        {
+            if (InversorEscolhido is { } i) AlocarEmCampo(i.Id);
+            else Avisar(Tr.T("Escolha um inversor na lista."), erro: true);
+        });
         Botao(editar, Tr.T("Apagar inversor"), Tr.T("Tira o inversor do cadastro: as strings dele ficam livres (continuam no desenho) e o retângulo dele sai do campo."), ApagarInversor);
 
         var inversores = new DockPanel();
@@ -201,6 +206,7 @@ internal sealed class AbaInversor : AbaEletrica
     private void MontarInversores()
     {
         var anterior = InversorEscolhido?.Id;
+        var emCampo = EquipamentoEmCampo.EmCampo(Documento.Database);
         _inversores.Items.Clear();
 
         foreach (var inversor in _setup.Inverters)
@@ -222,7 +228,7 @@ internal sealed class AbaInversor : AbaEletrica
             var aviso = StringAllocation.ExcessWarning(inversor, _setup.FindModel(inversor.Model), strings);
             linha.Children.Add(new TextBlock
             {
-                Text = DescreverInversor(_setup, inversor, strings),
+                Text = ComCampo(DescreverInversor(_setup, inversor, strings), emCampo.Contains((EquipmentKind.Inverter, inversor.Id))),
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Foreground = aviso is null ? System.Windows.SystemColors.ControlTextBrush : System.Windows.Media.Brushes.Firebrick,
@@ -359,7 +365,12 @@ internal sealed class AbaInversor : AbaEletrica
         Fazer(() =>
         {
             porque = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.EditModel(editado));
-            return porque is null ? Tr.F("{0} salvo.", editado.Name.Trim()) : null;
+            if (porque is not null) return null;
+
+            // A dimensão do modelo é a dos retângulos dos inversores dele em campo.
+            foreach (var i in ConfiguracaoEletricaStore.Ler(Documento.Database).Setup.Inverters.Where(i => i.Model == m.Id))
+                EquipamentoEmCampo.Redesenhar(Documento.Database, EquipmentKind.Inverter, i.Id);
+            return Tr.F("{0} salvo.", editado.Name.Trim());
         });
         if (porque is not null) Avisar(Tr.F("Não salvei: {0}.", porque), erro: true);
     }

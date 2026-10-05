@@ -499,4 +499,28 @@ public class ElectricalSetupTests
         Assert.False(setup.RemoveInverter(inversores[1].Id));
         Assert.Single(setup.Inverters);
     }
+
+    // ------------------------------------------------------------ 14.6
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void OInversorEmCampoTemONomeEADimensaoDoModelo()
+    {
+        var setup = new ElectricalSetup();
+        var m = setup.AddModel();
+        setup.EditModel(m with { Name = "Huawei 250", Size = new EquipmentSize(1.2, 0.8, 0.9) });
+        var inversores = setup.AddInverters(m.Id, 2);
+
+        var eq = setup.FindEquipment(EquipmentKind.Inverter, inversores[1].Id)!;
+        Assert.Equal("Inversor 2", eq.Tag);
+        Assert.Equal(new EquipmentSize(1.2, 0.8, 0.9), eq.Size);
+        Assert.Equal(inversores[0].Id, setup.FindEquipment("inversor 1").Single().Id);
+        Assert.Equal(2, setup.Equipment().Count(e => e.Kind == EquipmentKind.Inverter));
+
+        // Inversor órfão (modelo sumiu do registro): não vai para o campo.
+        var orfao = new Inverter(Guid.NewGuid(), Guid.NewGuid(), "Órfão", Guid.Empty);
+        var outro = new ElectricalSetup(inverters: [orfao]);
+        Assert.Null(outro.FindEquipment(EquipmentKind.Inverter, orfao.Id));
+        Assert.Empty(outro.Equipment());
+    }
 }
