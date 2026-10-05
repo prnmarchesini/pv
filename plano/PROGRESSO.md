@@ -5074,8 +5074,13 @@ Pedido do Renan: um botão Apagar na Edição que abre uma janela para escolher
   1. Cores: contorno e módulos com a cor do tipo de mesa (sem tipo, ByLayer),
      pilar ByLayer; mesa que não cabe inteira magenta (roxo se tentou todas);
      strings, sinais e textos de análise ByLayer. Zera os registros de peças
-     pintadas das análises e da sombra. A mesa pendente perde o vermelho mas
-     continua pendente no Estado.
+     pintadas das análises e da sombra. A peça que a análise do desenho levou
+     para a camada dela volta à camada original (CLIVUS_MESA/MODULO/PILAR, ou
+     CLIVUS_MARCADA). A mesa pendente perde o vermelho mas continua pendente no
+     Estado. O roxo ("tentou todas") não está gravado no XData: é deduzido pela
+     cor atual ou pela cor de antes guardada pelas análises; numa mesa marcada e
+     pendente ele volta magenta. Com a opção 1 sozinha o "Por que essa sombra?"
+     continua respondendo (os contornos ficam).
   2. Textos: cotas e setas inteiras (o risco e as linhas vão junto), textos de
      análise, tags, tags da numeração, sinais + e − (com o círculo), etiquetas
      de sombra. A marca dos grupos fica (é do grupo).
@@ -5084,7 +5089,8 @@ Pedido do Renan: um botão Apagar na Edição que abre uma janela para escolher
      fica.
   4. Strings: polilinha, sinais e tag de cada string. Ficam os tipos de string
      com os traçados (`STRING_TIPOS`/`STRING_TRACADOS`: são a biblioteca).
-  5. Infra: os blocos em campo (e as definições `CLIVUS_EQUIPAMENTO_*`) e os
+  5. Infra: os blocos em campo (e as definições `CLIVUS_EQUIPAMENTO_*`), os
+     hatches da área dos trafos (`AreaDoTrafo`, que também saem com a opção 4) e os
      registros INVERSORES, TRAFOS, SUBESTACOES, SUBESTACOES_BLOCOS e SKIDS
      esvaziados. As strings ficam soltas, sem tag e ByLayer, e as tags escritas
      somem. Ficam os modelos de inversor (`INVERSOR_MODELOS`), a numeração
@@ -5100,6 +5106,13 @@ Pedido do Renan: um botão Apagar na Edição que abre uma janela para escolher
   pendente, árvore e sombra, e 4 entidades do usuário, duas em camadas
   CLIVUS_*): 12345 e U devolve tudo, depois 3, 1, 5, 2 e 4, conferindo pelo
   LISP o que sumiu, o que ficou e as cores.
+
+Revisão por subagente: apontou o hatch da área do trafo (veio da `main`
+depois desta branch nascer; rebaseado e coberto), a camada da análise (feito),
+a contagem da infra sem as strings só com tag (feito) e o caminho da janela
+sem nível 2 (o Core Console não tem interface; o nível 2 passa pelo mesmo
+plano e execução, pela linha de comando). Nível 2 completo: 77/77 (antes do
+rebase); depois, o caso do Apagar de novo verde.
 
 Roteiro de tela:
 1. Numa usina com strings, numeração, inversores em campo, uma análise
