@@ -59,6 +59,8 @@ public sealed record AutoAllocationResult(
 /// total de entradas). As já alocadas não mudam e contam na capacidade do
 /// inversor delas; inversor cheio é pulado. Uma string recebe no máximo um
 /// inversor (regra elétrica 2): só as livres entram, e cada uma uma vez.
+/// A que aponta para inversor que não está mais no cadastro conta como livre
+/// (a mesma regra da alocação manual).
 /// </summary>
 public static class StringAutoAllocation
 {
@@ -79,12 +81,18 @@ public static class StringAutoAllocation
         // GUID repetido (a polilinha copiada leva o XData junto): fica de fora,
         // senão gravar numa regravaria a outra.
         var repetidos = strings.GroupBy(s => s.Id).Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet();
-        var copias = strings.Count(s => repetidos.Contains(s.Id) && !s.IsAllocated);
+
+        // Livre: sem inversor, ou apontando para inversor que não está mais no
+        // cadastro (como na alocação manual, StringAllocation.IsLockedFor: não
+        // há de quem soltá-la).
+        var cadastrados = inverters.Select(i => i.Id).ToHashSet();
+        bool Livre(ElectricalString s) => !StringAllocation.IsLockedFor(s, Guid.Empty, cadastrados);
+        var copias = strings.Count(s => repetidos.Contains(s.Id) && Livre(s));
 
         // A carga de cada inversor: as strings que já são dele (cada GUID uma vez).
         var carga = StringAllocation.CountByInverter(strings.DistinctBy(s => s.Id)).ToDictionary(x => x.Key, x => x.Value);
 
-        var livres = strings.Where(s => !s.IsAllocated && !repetidos.Contains(s.Id)).ToList();
+        var livres = strings.Where(s => Livre(s) && !repetidos.Contains(s.Id)).ToList();
         var porId = livres.ToDictionary(s => s.Id);
         var aVarrer = new List<ScanItem>(livres.Count);
         foreach (var s in livres)

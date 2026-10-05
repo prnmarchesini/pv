@@ -61,9 +61,9 @@ internal static class AtribuicaoAutomatica
         var linhas = new List<string>();
         if (r.Changed.Count == 0)
         {
-            linhas.Add(r.Leftover > 0
-                ? Tr.F("Nenhuma string atribuída: os inversores estão cheios ({0} string(s) livre(s) sobrando).", r.Leftover)
-                : Tr.T("Nenhuma string livre para atribuir."));
+            linhas.Add(r.Leftover == 0 ? Tr.T("Nenhuma string livre para atribuir.")
+                : r.Full.Count == 0 ? Tr.F("Nenhuma string atribuída: não há inversor com modelo ({0} string(s) livre(s)). Crie inversores na lista.", r.Leftover)
+                : Tr.F("Nenhuma string atribuída: os inversores estão cheios ({0} string(s) livre(s) sobrando).", r.Leftover));
         }
         else
         {

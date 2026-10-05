@@ -264,6 +264,7 @@ internal sealed class AbaInversor : AbaEletrica
         _altura.Text = Numero(m.Size.Height);
 
         // Primeiro a lista, depois o número (o TextChanged do número acha a lista já do tamanho certo).
+        _entradasGuardadas = [];
         MontarEntradas(m.InputsByMppt.Select(n => n.ToString(Tr.Culture)).ToList());
         _mppt.Text = m.Mppts.ToString(Tr.Culture);
     }
@@ -310,10 +311,15 @@ internal sealed class AbaInversor : AbaEletrica
             return;
         }
 
-        var textos = _caixasDasEntradas.Select(c => c.Text).ToList();
-        var ultimo = textos.Count > 0 ? textos[^1] : "1";
-        MontarEntradas([.. textos.Take(quantos), .. Enumerable.Repeat(ultimo, Math.Max(0, quantos - textos.Count))]);
+        // O que sai do fim fica guardado: digitar "10" passa por "1" e não pode
+        // perder as entradas dos MPPTs 2 a 5 (revisão de 05/10/2026).
+        var atuais = _caixasDasEntradas.Select(c => c.Text).ToList();
+        _entradasGuardadas = [.. atuais, .. _entradasGuardadas.Skip(atuais.Count)];
+        MontarEntradas(InverterModel.Resize(_entradasGuardadas, quantos, "1"));
     }
+
+    /// <summary>As entradas de todos os MPPTs já mostrados deste modelo (as que saíram do fim continuam aqui).</summary>
+    private List<string> _entradasGuardadas = [];
 
     /// <summary>As entradas lidas das caixas, ou null se alguma não é número inteiro.</summary>
     private List<int>? LerEntradas()
@@ -502,8 +508,18 @@ internal sealed class AbaInversor : AbaEletrica
         if ((_faixaDaAtribuicao.SelectedItem as ComboBoxItem)?.Tag is not ScanDirection faixa) return;
 
         var varredura = new AllocationScan(sentido, faixa);
-        EscritaForaDeComando.Fazer(Documento, () => AtribuicaoAutomatica.GravarVarredura(Documento.Database, varredura));
-        Avisar(Tr.F("Varredura da atribuição: {0}.", varredura.Describe()));
+        try
+        {
+            EscritaForaDeComando.Fazer(Documento, () => AtribuicaoAutomatica.GravarVarredura(Documento.Database, varredura));
+            Avisar(Tr.F("Varredura da atribuição: {0}.", varredura.Describe()));
+        }
+        catch (Exception erro)
+        {
+            // A caixa mostraria uma varredura que não ficou gravada: volta à gravada e avisa.
+            RegistroDeDiagnostico.Registrar("Falha ao gravar a varredura da atribuição.", erro);
+            MostrarVarredura(AtribuicaoAutomatica.Varredura(Documento.Database).Varredura);
+            Avisar(Tr.F("Não consegui: {0}", erro.Message), erro: true);
+        }
     }
 
     /// <summary>"Atribuir strings": as livres enchem os inversores na ordem da varredura; o relatório no rodapé.</summary>

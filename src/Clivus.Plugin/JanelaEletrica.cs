@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Autodesk.AutoCAD.ApplicationServices;
+using Autodesk.AutoCAD.DatabaseServices;
 using Clivus.Core;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
@@ -135,7 +136,11 @@ internal sealed class JanelaEletrica : Window
     internal static void Comando(Document documento, string comando, string argumento)
     {
         FocarODesenho();
-        documento.SendStringToExecute($"\x03\x03_{comando} {argumento}\n", true, false, false);
+
+        // Os dois ESC só se há comando no meio: no prompt vazio eles apagariam
+        // a seleção implícita que o botão acabou de pôr.
+        var cancelar = string.IsNullOrEmpty(documento.CommandInProgress) ? string.Empty : "\x03\x03";
+        documento.SendStringToExecute($"{cancelar}_{comando} {argumento}\n", true, false, false);
     }
 
     /// <summary>
@@ -148,7 +153,9 @@ internal sealed class JanelaEletrica : Window
     /// </summary>
     internal static int SelecionarStrings(Document documento, Guid inversor)
     {
-        var ids = StringsDoDesenho.Ler(documento.Database).Where(x => x.Value.Inverter == inversor).Select(x => x.Key).ToArray();
+        ObjectId[] ids;
+        using (documento.LockDocument())
+            ids = StringsDoDesenho.Ler(documento.Database).Where(x => x.Value.Inverter == inversor).Select(x => x.Key).ToArray();
 
         try
         {

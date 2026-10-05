@@ -54,6 +54,7 @@ public class InverterModelMpptTests
         // O 1 lido pelo leitor do 2 não passa: a lista "4" não tem 5 MPPTs.
         Assert.Null(InverterModel.Parse(antigo));
         Assert.Null(InverterModel.ParseLegacy([id.ToString("D"), "X", "0", "4", "1", "1", "1"]));
+        Assert.Null(InverterModel.ParseLegacy([id.ToString("D"), "X", "100", "2147483647", "1", "1", "1"]));
     }
 
     [Theory]
@@ -63,6 +64,8 @@ public class InverterModelMpptTests
     [InlineData("2", "4;x")]
     [InlineData("2", "4;-1")]
     [InlineData("0", "")]
+    [InlineData("2", "2147483647;1")]   // registro estragado: a soma estouraria
+    [InlineData("2", "4;101")]          // acima do limite do cadastro
     public void ListaQueNaoBateNaoVoltaDoDesenho(string mppts, string lista)
     {
         Assert.Null(InverterModel.Parse([Guid.NewGuid().ToString("D"), "X", mppts, lista, "1", "1", "1"]));
@@ -72,10 +75,10 @@ public class InverterModelMpptTests
     [Trait("Etapa", "14")]
     public void MudarONumeroDeMpptsCresceRepetindoOUltimoEEncolheDoFim()
     {
-        Assert.Equal([4, 4, 4, 5, 5, 5, 5], InverterModel.Resize([4, 4, 4, 5, 5], 7));
-        Assert.Equal([4, 4], InverterModel.Resize([4, 4, 4, 5, 5], 2));
-        Assert.Equal([1, 1], InverterModel.Resize([], 2));
-        Assert.Empty(InverterModel.Resize([4], 0));
+        Assert.Equal([4, 4, 4, 5, 5, 5, 5], InverterModel.Resize([4, 4, 4, 5, 5], 7, 1));
+        Assert.Equal([4, 4], InverterModel.Resize([4, 4, 4, 5, 5], 2, 1));
+        Assert.Equal([1, 1], InverterModel.Resize([], 2, 1));
+        Assert.Empty(InverterModel.Resize([4], 0, 1));
     }
 
     [Fact]

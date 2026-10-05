@@ -148,16 +148,24 @@ public sealed record InverterModel(Guid Id, string Name, IReadOnlyList<int> Inpu
 
     /// <summary>
     /// A lista com <paramref name="count"/> MPPTs: encolhe tirando do fim;
-    /// cresce repetindo o último valor (1 se a lista estava vazia).
+    /// cresce repetindo o último valor (<paramref name="whenEmpty"/> se a
+    /// lista estava vazia). Genérica para a tela usar com o texto das caixas.
     /// </summary>
-    public static IReadOnlyList<int> Resize(IReadOnlyList<int> inputs, int count)
+    public static IReadOnlyList<T> Resize<T>(IReadOnlyList<T> inputs, int count, T whenEmpty)
     {
         ArgumentNullException.ThrowIfNull(inputs);
         if (count <= 0) return [];
 
-        var ultimo = inputs.Count > 0 ? inputs[^1] : 1;
+        var ultimo = inputs.Count > 0 ? inputs[^1] : whenEmpty;
         return [.. inputs.Take(count), .. Enumerable.Repeat(ultimo, Math.Max(0, count - inputs.Count))];
     }
+
+    /// <summary>
+    /// Dentro dos limites que o cadastro aceita (<see cref="ElectricalDefaults.MaxMppts"/>,
+    /// <see cref="ElectricalDefaults.MaxInputsPerMppt"/>): registro estragado com número
+    /// enorme não volta do desenho (a soma estouraria).
+    /// </summary>
+    private bool WithinLimits => Mppts <= ElectricalDefaults.MaxMppts && InputsByMppt.All(n => n <= ElectricalDefaults.MaxInputsPerMppt);
 
     /// <summary>Formato 2: GUID, nome, quantos MPPTs, a lista ("4;4;4;5;5") e a dimensão.</summary>
     public static InverterModel? Parse(IReadOnlyList<string> c)
@@ -168,7 +176,7 @@ public sealed record InverterModel(Guid Id, string Name, IReadOnlyList<int> Inpu
         if (EquipmentSize.Parse(c, 4) is not { } tamanho) return null;
 
         var m = new InverterModel(id, c[1], entradas, tamanho);
-        return m.IsValid ? m : null;
+        return m.IsValid && m.WithinLimits ? m : null;
     }
 
     /// <summary>Formato 1 (antes de 05/10/2026): MPPT e entradas por MPPT; vira a lista com o mesmo valor repetido.</summary>
@@ -180,13 +188,13 @@ public sealed record InverterModel(Guid Id, string Name, IReadOnlyList<int> Inpu
         if (mppt > ElectricalDefaults.MaxMppts || EquipmentSize.Parse(c, 4) is not { } tamanho) return null;
 
         var m = new InverterModel(id, c[1], mppt, entradas, tamanho);
-        return m.IsValid ? m : null;
+        return m.IsValid && m.WithinLimits ? m : null;
     }
 
     public bool Equals(InverterModel? other) =>
         other is not null && Id == other.Id && Name == other.Name && Size == other.Size && InputsByMppt.SequenceEqual(other.InputsByMppt);
 
-    public override int GetHashCode() => HashCode.Combine(Id, Name, Size, TotalInputs);
+    public override int GetHashCode() => HashCode.Combine(Id, Name, Size, Mppts);
 
     private static int[] Uniform(int mppts, int inputsPerMppt) => mppts > 0 ? Enumerable.Repeat(inputsPerMppt, mppts).ToArray() : [];
 }

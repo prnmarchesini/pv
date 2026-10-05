@@ -184,6 +184,20 @@ public class StringAutoAllocationTests
 
     [Fact]
     [Trait("Etapa", "14")]
+    public void StringDeInversorQueSumiuDoCadastroContaComoLivre()
+    {
+        var (strings, modulos) = Usina(Quadrado);
+        var (modelo, inversores) = Inversores(entradas: 10, quantos: 1);
+        strings[1] = strings[1] with { Inverter = G(777) };   // a 1, de um inversor apagado
+
+        var r = StringAutoAllocation.Allocate(inversores, [modelo], strings, modulos, AllocationScan.Default);
+
+        Assert.Equal([1, 3, 2, 4], r.Changed.Select(s => N(s.Id)));
+        Assert.All(r.Changed, s => Assert.Equal(inversores[0].Id, s.Inverter));
+    }
+
+    [Fact]
+    [Trait("Etapa", "14")]
     public void SemStringLivreNadaMuda()
     {
         var (strings, modulos) = Usina(Quadrado);
