@@ -97,19 +97,34 @@ public sealed record EquipmentSize(double Width, double Length, double Height)
 /// lido por <see cref="ParseLegacy"/>: vira a lista com o valor repetido.
 /// A estrutura por MPPT é para crescer (balanceamento por MPPT); por ora só
 /// o total vale para a capacidade.
+/// <para>
+/// Formato 3 (05/10/2026, pedido do Renan: "falta o campo para inserir a
+/// potência"): o oitavo campo é a potência nominal CA em kW
+/// (<see cref="PowerKw"/>), vazio quando não informada. Os formatos 1 e 2
+/// (7 campos) são lidos com a potência 0.
+/// </para>
 /// </remarks>
-public sealed record InverterModel(Guid Id, string Name, IReadOnlyList<int> InputsByMppt, EquipmentSize Size)
+public sealed record InverterModel(Guid Id, string Name, IReadOnlyList<int> InputsByMppt, EquipmentSize Size, double PowerKw = 0)
 {
-    public const int FieldCount = 7;
+    public const int FieldCount = 8;
+
+    /// <summary>Os campos dos formatos 1 e 2 (antes da potência).</summary>
+    public const int LegacyFieldCount = 7;
 
     /// <summary>O separador da lista de entradas no campo gravado.</summary>
     public const char ListSeparator = ';';
 
     /// <summary>Todos os MPPTs com o mesmo número de entradas (o formato 1, e o atalho dos testes).</summary>
-    public InverterModel(Guid id, string name, int mppts, int inputsPerMppt, EquipmentSize size)
-        : this(id, name, Uniform(mppts, inputsPerMppt), size)
+    public InverterModel(Guid id, string name, int mppts, int inputsPerMppt, EquipmentSize size, double powerKw = 0)
+        : this(id, name, Uniform(mppts, inputsPerMppt), size, powerKw)
     {
     }
+
+    /// <summary>A potência nominal CA foi informada (maior que zero).</summary>
+    public bool HasPower => PowerKw > 0;
+
+    /// <summary>A potência aceita: número finito de 0 (não informada) a <see cref="ElectricalDefaults.MaxInverterPowerKw"/>.</summary>
+    public static bool IsValidPower(double kw) => double.IsFinite(kw) && kw >= 0 && kw <= ElectricalDefaults.MaxInverterPowerKw;
 
     public int Mppts => InputsByMppt.Count;
 
@@ -119,10 +134,12 @@ public sealed record InverterModel(Guid Id, string Name, IReadOnlyList<int> Inpu
     /// <summary>Todos os MPPTs com o mesmo número de entradas.</summary>
     public bool IsUniform => InputsByMppt.Distinct().Count() <= 1;
 
-    public bool IsValid => Id != Guid.Empty && !string.IsNullOrWhiteSpace(Name) && Mppts > 0 && InputsByMppt.All(n => n > 0) && Size.IsValid;
+    public bool IsValid => Id != Guid.Empty && !string.IsNullOrWhiteSpace(Name) && Mppts > 0 && InputsByMppt.All(n => n > 0) && Size.IsValid && IsValidPower(PowerKw);
 
+    /// <summary>Formato 3: os 7 campos do 2 e a potência em kW (vazia quando 0).</summary>
     public IReadOnlyList<string> ToFields() =>
-        [Id.ToString("D"), Name, Mppts.ToString(CultureInfo.InvariantCulture), FormatInputs(InputsByMppt), .. Size.Fields()];
+        [Id.ToString("D"), Name, Mppts.ToString(CultureInfo.InvariantCulture), FormatInputs(InputsByMppt), .. Size.Fields(),
+         HasPower ? PowerKw.ToString("0.############", CultureInfo.InvariantCulture) : string.Empty];
 
     /// <summary>"4;4;4;5;5": a lista como vai para o campo gravado.</summary>
     public static string FormatInputs(IEnumerable<int> inputs) =>
@@ -167,22 +184,30 @@ public sealed record InverterModel(Guid Id, string Name, IReadOnlyList<int> Inpu
     /// </summary>
     private bool WithinLimits => Mppts <= ElectricalDefaults.MaxMppts && InputsByMppt.All(n => n <= ElectricalDefaults.MaxInputsPerMppt);
 
-    /// <summary>Formato 2: GUID, nome, quantos MPPTs, a lista ("4;4;4;5;5") e a dimensão.</summary>
+    /// <summary>
+    /// Formatos 3 e 2: GUID, nome, quantos MPPTs, a lista ("4;4;4;5;5"), a
+    /// dimensão e (só no 3) a potência em kW, vazia = não informada. Com 7
+    /// campos (o 2), a potência fica 0.
+    /// </summary>
     public static InverterModel? Parse(IReadOnlyList<string> c)
     {
-        if (c.Count < FieldCount || !Guid.TryParse(c[0], out var id)) return null;
+        if (c.Count < LegacyFieldCount || !Guid.TryParse(c[0], out var id)) return null;
         if (!int.TryParse(c[2], NumberStyles.None, CultureInfo.InvariantCulture, out var mppt)) return null;
         if (ParseInputs(c[3]) is not { } entradas || entradas.Count != mppt) return null;
         if (EquipmentSize.Parse(c, 4) is not { } tamanho) return null;
 
-        var m = new InverterModel(id, c[1], entradas, tamanho);
+        var potencia = 0.0;
+        if (c.Count >= FieldCount && c[7].Length > 0
+            && !double.TryParse(c[7], NumberStyles.Float, CultureInfo.InvariantCulture, out potencia)) return null;
+
+        var m = new InverterModel(id, c[1], entradas, tamanho, potencia);
         return m.IsValid && m.WithinLimits ? m : null;
     }
 
     /// <summary>Formato 1 (antes de 05/10/2026): MPPT e entradas por MPPT; vira a lista com o mesmo valor repetido.</summary>
     public static InverterModel? ParseLegacy(IReadOnlyList<string> c)
     {
-        if (c.Count < FieldCount || !Guid.TryParse(c[0], out var id)) return null;
+        if (c.Count < LegacyFieldCount || !Guid.TryParse(c[0], out var id)) return null;
         if (!int.TryParse(c[2], NumberStyles.None, CultureInfo.InvariantCulture, out var mppt)) return null;
         if (!int.TryParse(c[3], NumberStyles.None, CultureInfo.InvariantCulture, out var entradas)) return null;
         if (mppt > ElectricalDefaults.MaxMppts || EquipmentSize.Parse(c, 4) is not { } tamanho) return null;
@@ -192,7 +217,7 @@ public sealed record InverterModel(Guid Id, string Name, IReadOnlyList<int> Inpu
     }
 
     public bool Equals(InverterModel? other) =>
-        other is not null && Id == other.Id && Name == other.Name && Size == other.Size && InputsByMppt.SequenceEqual(other.InputsByMppt);
+        other is not null && Id == other.Id && Name == other.Name && Size == other.Size && PowerKw.Equals(other.PowerKw) && InputsByMppt.SequenceEqual(other.InputsByMppt);
 
     public override int GetHashCode() => HashCode.Combine(Id, Name, Size, Mppts);
 

@@ -1,19 +1,29 @@
 using System.Windows;
 using System.Windows.Controls;
 using Autodesk.AutoCAD.ApplicationServices;
+using Database = Autodesk.AutoCAD.DatabaseServices.Database;
 using Clivus.Core;
 
 namespace Clivus.Plugin;
 
 /// <summary>
-/// A aba Inversor (etapa 14): à esquerda os modelos de inversor (os MPPTs
-/// com as entradas de cada um, o total somado, a dimensão); à direita os
-/// inversores da usina.
+/// A aba Inversor (etapa 14): à esquerda os modelos de inversor (nome,
+/// potência, os MPPTs com as entradas de cada um, o total somado, a
+/// dimensão); à direita a tabela dos inversores da usina (cor, nome, modelo,
+/// trafo, strings, kWp, kW, CC/CA e as ações de cada um).
 /// </summary>
+/// <remarks>
+/// 05/10/2026 (Renan: "eu queria uma forma mais fácil de dizer 'esse
+/// inversor, esse e esse é deste trafo'"): o trafo de cada inversor é uma
+/// caixa na própria linha, que grava na hora; várias linhas escolhidas (Ctrl
+/// ou Shift) vão juntas pelo "Pôr no trafo". É o mesmo vínculo do skid
+/// (<see cref="Inverter.Transformer"/>); o agrupar pela seleção em campo
+/// ficou num quadro fechado, "Agrupar em campo (skid)".
+/// </remarks>
 internal sealed class AbaInversor : AbaEletrica
 {
     private readonly ListBox _modelos = new() { MinHeight = 110 };
-    private readonly TextBox _nomeDoModelo, _mppt, _largura, _comprimento, _altura;
+    private readonly TextBox _nomeDoModelo, _potencia, _mppt, _largura, _comprimento, _altura;
 
     /// <summary>As entradas de cada MPPT: uma caixa por MPPT, na ordem (cresce e encolhe com o número de MPPTs).</summary>
     private readonly WrapPanel _entradas = new() { Margin = new Thickness(0, 0, 0, 2) };
@@ -22,7 +32,18 @@ internal sealed class AbaInversor : AbaEletrica
 
     private readonly ComboBox _modeloParaCriar = new() { Height = 26, MinWidth = 160, Margin = new Thickness(0, 0, 6, 6) };
     private readonly TextBox _quantos = new() { Text = "1", Width = 50, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
-    private readonly ListBox _inversores = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch };
+
+    /// <summary>A tabela: uma linha por inversor, várias escolhidas com Ctrl ou Shift.</summary>
+    private readonly ListBox _inversores = new()
+    {
+        HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        SelectionMode = SelectionMode.Extended,
+        Padding = new Thickness(0),
+    };
+
+    private readonly ContentControl _rodapeDaTabela = new();
+    private readonly ComboBox _trafoEmLote = new() { Height = 26, MinWidth = 90, Margin = new Thickness(0, 0, 6, 6) };
+
     private readonly TextBox _nomeDoInversor = new() { Width = 150, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
     private readonly ComboBox _modeloDoInversor = new() { Height = 26, MinWidth = 140, Margin = new Thickness(0, 0, 6, 6) };
 
@@ -42,8 +63,9 @@ internal sealed class AbaInversor : AbaEletrica
     internal AbaInversor(Document documento) : base(documento)
     {
         // ------------------------------------------------- modelos (14.1)
-        var grade = Grade(140);
+        var grade = Grade(130);
         _nomeDoModelo = Campo(grade, Tr.T("Nome do modelo"), Tr.T("Genérico do cliente ou cadastrado (ex. Huawei 250)."));
+        _potencia = Campo(grade, Tr.T("Potência (kW)"), Tr.T("Potência nominal CA do inversor, em kW. Vazio = não informada (a coluna CC/CA fica em branco)."));
         _mppt = Campo(grade, Tr.T("Número de MPPTs"), Tr.T("Quantos MPPTs o inversor tem. Ao mudar, a lista de entradas cresce (repetindo o último valor) ou encolhe."));
 
         // A lista das entradas de cada MPPT (5 MPPTs com 4, 4, 4, 5 e 5 entradas).
@@ -116,8 +138,14 @@ internal sealed class AbaInversor : AbaEletrica
             catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao mudar o sentido na faixa da atribuição.", erro); }
         };
 
-        // O inversor escolhido na lista: editar e apagar (14.5).
-        var editar = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+        // As linhas escolhidas (Ctrl ou Shift) num trafo de uma vez.
+        var lote = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+        Botao(lote, Tr.T("Pôr no trafo"), Tr.T("Põe todas as linhas escolhidas na tabela no trafo ao lado (Ctrl+clique ou Shift+clique escolhe várias)."), PorAsEscolhidasNoTrafo);
+        lote.Children.Add(_trafoEmLote);
+        lote.Children.Add(new TextBlock { Text = Tr.T("as linhas escolhidas (Ctrl ou Shift + clique para várias)"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6), Foreground = System.Windows.SystemColors.GrayTextBrush });
+
+        // O inversor escolhido na tabela: editar e apagar (14.5).
+        var editar = new WrapPanel();
         editar.Children.Add(new TextBlock { Text = Tr.T("Escolhido:"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
         editar.Children.Add(_nomeDoInversor);
         editar.Children.Add(_modeloDoInversor);
@@ -125,28 +153,52 @@ internal sealed class AbaInversor : AbaEletrica
         Botao(editar, Tr.T("Salvar inversor"), Tr.T("Grava o nome e o modelo do inversor escolhido."), SalvarInversor);
         Botao(editar, Tr.T("Alocar em campo"), Tr.T("A janela some: clique o centro do retângulo na planta. Se já está em campo, ele é movido; o vínculo não muda."), () =>
         {
-            if (InversorEscolhido is { } i) AlocarEmCampo(i.Id);
-            else Avisar(Tr.T("Escolha um inversor na lista."), erro: true);
+            if (SoUmEscolhido() is { } i) AlocarEmCampo(i.Id);
         });
         Botao(editar, Tr.T("Apagar inversor"), Tr.T("Tira o inversor do cadastro: as strings dele ficam livres (continuam no desenho) e o retângulo dele sai do campo."), ApagarInversor);
 
-        // O skid (14.7): trafo + inversores escolhidos em campo.
+        // O skid (14.7) pela seleção em campo: fechado, para quem quer.
         var skid = new WrapPanel();
-        skid.Children.Add(new TextBlock { Text = Tr.T("Skid: trafo"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
+        skid.Children.Add(new TextBlock { Text = Tr.T("Trafo:"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
         skid.Children.Add(_trafoDoSkid);
-        skid.Children.Add(new TextBlock { Text = Tr.T("nome"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
+        skid.Children.Add(new TextBlock { Text = Tr.T("nome do skid:"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 6) });
         skid.Children.Add(_nomeDoSkid);
         Botao(skid, Tr.T("Agrupar em campo"), Tr.T("A janela some: selecione em campo só os retângulos dos inversores do skid (Shift+clique tira), Enter volta. Inversor de outro skid fica travado."), AgruparEmCampo);
-        Botao(skid, Tr.T("Tirar do skid"), Tr.T("Tira o inversor escolhido do skid dele (o inversor fica, sem trafo)."), TirarDoSkid);
         _trafoDoSkid.SelectionChanged += (_, _) =>
         {
             try { _nomeDoSkid.Text = (_trafoDoSkid.SelectedItem as ComboBoxItem)?.Tag is Guid t ? _setup.FindSkid(t)?.Name ?? string.Empty : string.Empty; }
             catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao mostrar o skid do trafo.", erro); }
         };
 
+        var explicacao = new TextBlock
+        {
+            Text = Tr.T("Skid = inversores montados juntos com o trafo num mesmo lugar em campo. Escolher o trafo na coluna Trafo já põe o inversor no skid desse trafo; aqui é o mesmo, escolhendo os retângulos no desenho e dando nome ao grupo."),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 6),
+            Foreground = System.Windows.SystemColors.GrayTextBrush,
+        };
+        var quadroDoSkid = new StackPanel();
+        quadroDoSkid.Children.Add(explicacao);
+        quadroDoSkid.Children.Add(skid);
+        var expansor = new Expander { Header = Tr.T("Agrupar em campo (skid)"), IsExpanded = false, Content = quadroDoSkid, Margin = new Thickness(0, 0, 0, 2) };
+
         var rodape = new StackPanel();
+        rodape.Children.Add(lote);
         rodape.Children.Add(editar);
-        rodape.Children.Add(skid);
+        rodape.Children.Add(expansor);
+
+        // A tabela: cabeçalho, linhas e total com as mesmas colunas (SharedSizeGroup).
+        var tabela = new Grid();
+        Grid.SetIsSharedSizeScope(tabela, true);
+        tabela.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        tabela.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        tabela.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var cabecalho = Cabecalho();
+        Grid.SetRow(_inversores, 1);
+        Grid.SetRow(_rodapeDaTabela, 2);
+        tabela.Children.Add(cabecalho);
+        tabela.Children.Add(_inversores);
+        tabela.Children.Add(_rodapeDaTabela);
 
         var inversores = new DockPanel();
         var topo = new StackPanel();
@@ -157,17 +209,18 @@ internal sealed class AbaInversor : AbaEletrica
         DockPanel.SetDock(rodape, Dock.Bottom);
         inversores.Children.Add(topo);
         inversores.Children.Add(rodape);
-        inversores.Children.Add(_inversores);
+        inversores.Children.Add(tabela);
 
-        _inversores.SelectionChanged += (_, _) =>
+        _inversores.SelectionChanged += (_, e) =>
         {
-            try { PreencherInversor(); }
+            try { if (e.OriginalSource == _inversores) PreencherInversor(); }
             catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao mostrar o inversor escolhido.", erro); }
         };
 
+        // O editor do modelo é estreito; a tabela fica com o resto da largura.
         var colunas = new Grid();
-        colunas.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.8, GridUnitType.Star) });
-        colunas.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+        colunas.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(320) });
+        colunas.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var esquerda = new ScrollViewer { Content = modelos, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new Thickness(0, 0, 10, 0) };
         Grid.SetColumn(inversores, 1);
         colunas.Children.Add(esquerda);
@@ -213,22 +266,13 @@ internal sealed class AbaInversor : AbaEletrica
 
         if (_modeloParaCriar.SelectedItem is null && _modeloParaCriar.Items.Count > 0) _modeloParaCriar.SelectedIndex = 0;
 
-        using (var transacao = Documento.Database.TransactionManager.StartOpenCloseTransaction())
-            _contagem = StringAllocation.CountByInverter(ElectricalStore.Strings(transacao, Documento.Database).Select(x => x.String));
+        _contagem = ContarStrings(Documento.Database);
 
         MontarInversores();
         MostrarVarredura(AtribuicaoAutomatica.Varredura(Documento.Database).Varredura);
 
-        var trafoDoSkid = (_trafoDoSkid.SelectedItem as ComboBoxItem)?.Tag as Guid?;
-        _trafoDoSkid.Items.Clear();
-        foreach (var t in setup.Transformers)
-        {
-            var item = new ComboBoxItem { Content = t.Nickname, Tag = t.Id };
-            _trafoDoSkid.Items.Add(item);
-            if (t.Id == trafoDoSkid) _trafoDoSkid.SelectedItem = item;
-        }
-
-        if (_trafoDoSkid.SelectedItem is null && _trafoDoSkid.Items.Count > 0) _trafoDoSkid.SelectedIndex = 0;
+        MontarTrafos(_trafoDoSkid, setup, comSemTrafo: false);
+        MontarTrafos(_trafoEmLote, setup, comSemTrafo: true);
 
         // 14.4: o excesso aparece em vermelho na linha do inversor e no rodapé.
         var excessos = _setup.Inverters
@@ -240,16 +284,46 @@ internal sealed class AbaInversor : AbaEletrica
         else if (_modelos.Items.Count == 0) Avisar(Tr.T("Nenhum modelo de inversor ainda: use Novo modelo."));
     }
 
-    /// <summary>"Huawei 250 — 5 MPPT × 4 entradas = 20 entradas", ou com a lista quando os MPPTs diferem.</summary>
-    internal static string DescreverModelo(InverterModel m) =>
-        m.IsUniform && m.Mppts > 0
+    /// <summary>Os trafos do cadastro na caixa (com "sem trafo" na frente, se pedido), mantendo a escolha.</summary>
+    private static void MontarTrafos(ComboBox caixa, ElectricalSetup setup, bool comSemTrafo)
+    {
+        var antes = (caixa.SelectedItem as ComboBoxItem)?.Tag as Guid?;
+        caixa.Items.Clear();
+        if (comSemTrafo) caixa.Items.Add(new ComboBoxItem { Content = Tr.T("sem trafo"), Tag = Guid.Empty });
+        foreach (var t in setup.Transformers)
+            caixa.Items.Add(new ComboBoxItem { Content = t.Nickname, Tag = t.Id, ToolTip = t.Name });
+
+        caixa.SelectedItem = caixa.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (Guid)i.Tag == antes)
+            ?? caixa.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (Guid)i.Tag != Guid.Empty)
+            ?? (caixa.Items.Count > 0 ? caixa.Items[0] : null);
+    }
+
+    /// <summary>As strings de cada inversor, pelo vínculo (a mesma contagem do aviso de excesso).</summary>
+    internal static IReadOnlyDictionary<Guid, int> ContarStrings(Database database)
+    {
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        return StringAllocation.CountByInverter(ElectricalStore.Strings(transacao, database).Select(x => x.String));
+    }
+
+    /// <summary>
+    /// "Huawei 250 — 5 MPPT × 4 entradas = 20 entradas — 250 kW", ou com a
+    /// lista quando os MPPTs diferem; sem potência informada, sem o kW.
+    /// </summary>
+    internal static string DescreverModelo(InverterModel m)
+    {
+        var entradas = m.IsUniform && m.Mppts > 0
             ? Tr.F("{0} — {1} MPPT × {2} entradas = {3} entradas", m.Name, m.Mppts, m.InputsByMppt[0], m.TotalInputs)
             : Tr.F("{0} — {1} MPPT ({2}) = {3} entradas", m.Name, m.Mppts, string.Join(", ", m.InputsByMppt), m.TotalInputs);
+        return m.HasPower ? Tr.F("{0} — {1} kW", entradas, Kw(m.PowerKw)) : entradas;
+    }
+
+    /// <summary>Potência para a tela: "250", "1.500", "62,5" (na cultura da tela).</summary>
+    private static string Kw(double v) => v.ToString("#,0.##", Tr.Culture);
 
     private void PreencherModelo()
     {
         var m = ModeloEscolhido;
-        var caixas = new[] { _nomeDoModelo, _mppt, _largura, _comprimento, _altura };
+        var caixas = new[] { _nomeDoModelo, _potencia, _mppt, _largura, _comprimento, _altura };
         foreach (var caixa in caixas) caixa.IsEnabled = m is not null;
 
         if (m is null)
@@ -260,6 +334,7 @@ internal sealed class AbaInversor : AbaEletrica
         }
 
         _nomeDoModelo.Text = m.Name;
+        _potencia.Text = m.HasPower ? m.PowerKw.ToString("0.######", Tr.Culture) : string.Empty;
         _largura.Text = Numero(m.Size.Width);
         _comprimento.Text = Numero(m.Size.Length);
         _altura.Text = Numero(m.Size.Height);
@@ -348,61 +423,325 @@ internal sealed class AbaInversor : AbaEletrica
         }
     }
 
+    // ------------------------------------------------------------ a tabela
+
+    /// <summary>As colunas da tabela, na ordem (o cabeçalho, as linhas e o total usam as mesmas).</summary>
+    private static readonly string[] Colunas = ["Cor", "Nome", "Modelo", "Trafo", "Strings", "Kwp", "Kw", "Razao", "Acoes"];
+
+    private const int ColunaCor = 0, ColunaNome = 1, ColunaModelo = 2, ColunaTrafo = 3, ColunaStrings = 4, ColunaKwp = 5, ColunaKw = 6, ColunaRazao = 7, ColunaAcoes = 8;
+
+    /// <summary>Uma linha da tabela: as colunas com a largura repartida (a maior de cada uma) e uma sobra no fim.</summary>
+    private static Grid LinhaDaTabela()
+    {
+        var g = new Grid();
+        foreach (var grupo in Colunas) g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, SharedSizeGroup = "Inversor" + grupo });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        return g;
+    }
+
+    private static T Por<T>(Grid linha, T elemento, int coluna) where T : UIElement
+    {
+        Grid.SetColumn(elemento, coluna);
+        linha.Children.Add(elemento);
+        return elemento;
+    }
+
+    private static TextBlock Celula(string texto, bool numero = false, double larguraMaxima = double.PositiveInfinity) => new()
+    {
+        Text = texto,
+        VerticalAlignment = VerticalAlignment.Center,
+        HorizontalAlignment = numero ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+        TextAlignment = numero ? TextAlignment.Right : TextAlignment.Left,
+        TextTrimming = TextTrimming.CharacterEllipsis,
+        MaxWidth = larguraMaxima,
+        Margin = new Thickness(0, 0, 12, 0),
+    };
+
+    /// <summary>O cabeçalho, alinhado às linhas (a borda e o recuo da lista descontados).</summary>
+    private static Grid Cabecalho()
+    {
+        var g = LinhaDaTabela();
+        g.Margin = new Thickness(4, 0, 2, 2);
+
+        void Titulo(int coluna, string texto, string dica, bool numero = false)
+        {
+            var t = Por(g, Celula(texto, numero), coluna);
+            t.FontWeight = FontWeights.SemiBold;
+            t.ToolTip = dica;
+        }
+
+        Titulo(ColunaNome, Tr.T("Inversor"), Tr.T("O nome do inversor (a tag)."));
+        Titulo(ColunaModelo, Tr.T("Modelo"), Tr.T("O modelo do inversor (à esquerda, o cadastro dos modelos)."));
+        Titulo(ColunaTrafo, Tr.T("Trafo"), Tr.T("O trafo do inversor. Escolher na linha grava na hora; é também o skid do trafo."));
+        Titulo(ColunaStrings, Tr.T("Strings"), Tr.T("Strings alocadas / total de entradas do modelo."), numero: true);
+        Titulo(ColunaKwp, "kWp", Tr.T("Potência CC: a soma da potência dos módulos das strings alocadas (a mesma conta do Resumo elétrico)."), numero: true);
+        Titulo(ColunaKw, "kW", Tr.T("Potência nominal CA do modelo."), numero: true);
+        Titulo(ColunaRazao, Tr.T("CC/CA"), Tr.T("kWp ÷ kW: só com a potência do modelo informada."), numero: true);
+        return g;
+    }
+
+    /// <summary>"5/20": as strings de quantas entradas (sem modelo, só as strings).</summary>
+    private static string Strings(int strings, int entradas, bool comModelo) =>
+        comModelo ? Tr.F("{0}/{1}", strings, entradas) : strings.ToString(Tr.Culture);
+
+    private static string Kwp(double? kwp) => kwp is { } v ? v.ToString("#,0.00", Tr.Culture) : "—";
+
+    private static string Razao(double? razao) => razao is { } r ? r.ToString("0.00", Tr.Culture) : "—";
+
     private Inverter? InversorEscolhido => (_inversores.SelectedItem as ListBoxItem)?.Tag as Inverter;
 
-    /// <summary>A lista dos inversores: nome, modelo e quantas strings tem de quantas entradas.</summary>
+    /// <summary>
+    /// O inversor do "Escolhido" para salvar, alocar em campo ou apagar: com
+    /// várias linhas escolhidas, recusa e avisa (apagar só a primeira, sem
+    /// dizer, enganaria). Null com o recado.
+    /// </summary>
+    private Inverter? SoUmEscolhido()
+    {
+        if (_inversores.SelectedItems.Count > 1)
+        {
+            Avisar(Tr.F("Há {0} linhas escolhidas: para isso, escolha uma só.", _inversores.SelectedItems.Count), erro: true);
+            return null;
+        }
+
+        if (InversorEscolhido is null) Avisar(Tr.T("Escolha um inversor na lista."), erro: true);
+        return InversorEscolhido;
+    }
+
+    /// <summary>
+    /// As linhas da tabela como a aba mostra: as strings pela contagem do
+    /// vínculo e o kWp pelo resumo elétrico (<see cref="ResumoEletricoCommands.Ler"/>,
+    /// a potência dos módulos pela mesa dona). Se o resumo não pôde ser lido,
+    /// o kWp fica "—" e o resto continua.
+    /// </summary>
+    internal static IReadOnlyList<InverterTableRow> LinhasDaTabela(Document documento, ElectricalSetup setup, IReadOnlyDictionary<Guid, int> contagem)
+    {
+        IReadOnlyList<InverterSummary>? resumo = null;
+        try
+        {
+            resumo = ResumoEletricoCommands.Ler(documento).Resumo.AllInverters.ToList();
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("A tabela de inversores ficou sem o kWp (o resumo elétrico não pôde ser lido).", erro);
+        }
+
+        return InverterTable.Rows(setup.Inverters, setup.Models, contagem, resumo);
+    }
+
+    /// <summary>A tabela dos inversores: uma linha por inversor e o total.</summary>
     private void MontarInversores()
     {
-        var anterior = InversorEscolhido?.Id;
+        var escolhidos = _inversores.SelectedItems.OfType<ListBoxItem>().Select(i => ((Inverter)i.Tag).Id).ToHashSet();
+        var principal = InversorEscolhido?.Id;
         var emCampo = EquipamentoEmCampo.EmCampo(Documento.Database);
+        var linhas = LinhasDaTabela(Documento, _setup, _contagem);
         _inversores.Items.Clear();
 
-        foreach (var inversor in _setup.Inverters)
+        foreach (var linha in linhas)
         {
-            var linha = new DockPanel();
-            var acoes = new StackPanel { Orientation = Orientation.Horizontal };
-            DockPanel.SetDock(acoes, Dock.Right);
-            linha.Children.Add(acoes);
-
-            // A cor do inversor (a das strings dele no desenho).
-            var cor = inversor.Color ?? InverterColors.Palette[0].Color;
-            var quadrado = new System.Windows.Shapes.Rectangle
-            {
-                Width = 14,
-                Height = 14,
-                Margin = new Thickness(0, 0, 6, 0),
-                VerticalAlignment = VerticalAlignment.Center,
-                Fill = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(cor.R, cor.G, cor.B)),
-                Stroke = System.Windows.Media.Brushes.Gray,
-                ToolTip = Tr.F("Cor das strings deste inversor: {0}", cor.ToHex()),
-            };
-            DockPanel.SetDock(quadrado, Dock.Left);
-            linha.Children.Add(quadrado);
-
-            var este = inversor;
-            Botao(acoes, "+", Tr.T("Alocar strings: a janela some; selecione só strings em campo (Shift+clique tira), Enter volta."),
-                () => JanelaEletrica.Campo(Documento, PluginInfo.ComandoEletricaAlocar, este.Id.ToString("D")), largura: 30);
-            Botao(acoes, Tr.T("Selecionar"), Tr.T("Seleciona no CAD todas as strings deste inversor."),
-                () => JanelaEletrica.SelecionarStrings(Documento, este.Id));
-            Botao(acoes, Tr.T("Soltar strings"), Tr.T("Solta as strings deste inversor: elas ficam livres e continuam no desenho (nada é apagado)."),
-                () => SoltarTodas(este));
-
-            var strings = _contagem.GetValueOrDefault(inversor.Id);
-            var aviso = StringAllocation.ExcessWarning(inversor, _setup.FindModel(inversor.Model), strings);
-            linha.Children.Add(new TextBlock
-            {
-                Text = ComCampo(DescreverInversor(_setup, inversor, strings), emCampo.Contains((EquipmentKind.Inverter, inversor.Id))),
-                VerticalAlignment = VerticalAlignment.Center,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                Foreground = aviso is null ? System.Windows.SystemColors.ControlTextBrush : System.Windows.Media.Brushes.Firebrick,
-                FontWeight = aviso is null ? FontWeights.Normal : FontWeights.SemiBold,
-                ToolTip = aviso,
-            });
-
-            var item = new ListBoxItem { Content = linha, Tag = inversor };
+            var item = new ListBoxItem { Content = MontarLinha(linha, emCampo.Contains((EquipmentKind.Inverter, linha.Inverter.Id))), Tag = linha.Inverter, Padding = new Thickness(2, 1, 2, 1) };
             _inversores.Items.Add(item);
-            if (inversor.Id == anterior) _inversores.SelectedItem = item;
         }
+
+        // A escolha volta (a principal primeiro, para o "Escolhido" ser o mesmo).
+        foreach (var item in _inversores.Items.OfType<ListBoxItem>().OrderBy(i => ((Inverter)i.Tag).Id == principal ? 0 : 1))
+            if (escolhidos.Contains(((Inverter)item.Tag).Id)) _inversores.SelectedItems.Add(item);
+
+        var total = InverterTable.Total(linhas);
+        var rodape = LinhaDaTabela();
+        rodape.Margin = new Thickness(4, 3, 2, 0);
+        foreach (var t in new[]
+        {
+            Por(rodape, Celula(Tr.F("Total ({0})", total.Inverters)), ColunaNome),
+            Por(rodape, Celula(Strings(total.Strings, total.Capacity, comModelo: true), numero: true), ColunaStrings),
+            Por(rodape, Celula(Kwp(total.PowerKwp), numero: true), ColunaKwp),
+            Por(rodape, Celula(total.PowerKw > 0 ? Kw(total.PowerKw) : "—", numero: true), ColunaKw),
+            Por(rodape, Celula(Razao(total.DcAcRatio), numero: true), ColunaRazao),
+        })
+            t.FontWeight = FontWeights.SemiBold;
+        _rodapeDaTabela.Content = rodape;
+    }
+
+    /// <summary>Uma linha: cor, nome, modelo, a caixa do trafo, strings, kWp, kW, CC/CA e os botões.</summary>
+    private Grid MontarLinha(InverterTableRow linha, bool emCampo)
+    {
+        var inversor = linha.Inverter;
+        var g = LinhaDaTabela();
+
+        // A cor do inversor (a das strings dele no desenho).
+        var cor = inversor.Color ?? InverterColors.Palette[0].Color;
+        Por(g, new System.Windows.Shapes.Rectangle
+        {
+            Width = 14,
+            Height = 14,
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Fill = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(cor.R, cor.G, cor.B)),
+            Stroke = System.Windows.Media.Brushes.Gray,
+            ToolTip = Tr.F("Cor das strings deste inversor: {0}", cor.ToHex()),
+        }, ColunaCor);
+
+        var aviso = StringAllocation.ExcessWarning(inversor, linha.Model, linha.Strings);
+        var nome = Por(g, Celula(ComCampo(inversor.Name, emCampo), larguraMaxima: 220), ColunaNome);
+        nome.ToolTip = aviso ?? ComCampo(inversor.Name, emCampo);
+
+        var modelo = Por(g, Celula(linha.Model?.Name ?? Tr.T("sem modelo"), larguraMaxima: 180), ColunaModelo);
+        modelo.ToolTip = linha.Model is { } m ? DescreverModelo(m) : null;
+
+        Por(g, CaixaDoTrafo(inversor), ColunaTrafo);
+
+        var strings = Por(g, Celula(Strings(linha.Strings, linha.Capacity, linha.Model is not null), numero: true), ColunaStrings);
+        strings.ToolTip = aviso;
+        if (aviso is not null)
+        {
+            foreach (var t in new[] { nome, strings })
+            {
+                t.Foreground = System.Windows.Media.Brushes.Firebrick;
+                t.FontWeight = FontWeights.SemiBold;
+            }
+        }
+
+        Por(g, Celula(Kwp(linha.PowerKwp), numero: true), ColunaKwp);
+        Por(g, Celula(linha.PowerKw > 0 ? Kw(linha.PowerKw) : "—", numero: true), ColunaKw);
+        Por(g, Celula(Razao(linha.DcAcRatio), numero: true), ColunaRazao);
+
+        var acoes = Por(g, new StackPanel { Orientation = Orientation.Horizontal }, ColunaAcoes);
+        var id = inversor.Id;
+        var botoes = new[]
+        {
+            Botao(acoes, "+", Tr.T("Alocar strings: a janela some; selecione só strings em campo (Shift+clique tira), Enter volta."),
+                () => JanelaEletrica.Campo(Documento, PluginInfo.ComandoEletricaAlocar, id.ToString("D")), largura: 28),
+            Botao(acoes, Tr.T("Selecionar"), Tr.T("Seleciona no CAD todas as strings deste inversor."),
+                () => JanelaEletrica.SelecionarStrings(Documento, id)),
+            Botao(acoes, Tr.T("Soltar strings"), Tr.T("Solta as strings deste inversor: elas ficam livres e continuam no desenho (nada é apagado)."),
+                () => SoltarTodas(inversor)),
+        };
+        foreach (var b in botoes)
+        {
+            b.Height = 22;
+            b.Margin = new Thickness(0, 1, 4, 1);
+        }
+
+        return g;
+    }
+
+    /// <summary>
+    /// A caixa do trafo na linha: "sem trafo" e os trafos do cadastro (um
+    /// vínculo para trafo que sumiu aparece como "?"). Escolher grava na hora.
+    /// </summary>
+    private ComboBox CaixaDoTrafo(Inverter inversor)
+    {
+        var caixa = new ComboBox { Height = 22, MinWidth = 86, Margin = new Thickness(0, 0, 12, 0), VerticalContentAlignment = VerticalAlignment.Center };
+        caixa.Items.Add(new ComboBoxItem { Content = Tr.T("sem trafo"), Tag = Guid.Empty });
+        foreach (var t in _setup.Transformers)
+            caixa.Items.Add(new ComboBoxItem { Content = t.Nickname, Tag = t.Id, ToolTip = t.Name });
+
+        if (inversor.Transformer != Guid.Empty && _setup.FindTransformer(inversor.Transformer) is null)
+            caixa.Items.Add(new ComboBoxItem { Content = "?", Tag = inversor.Transformer, ToolTip = Tr.T("o trafo dele não está no cadastro") });
+
+        caixa.SelectedItem = caixa.Items.OfType<ComboBoxItem>().First(i => (Guid)i.Tag == inversor.Transformer);
+        caixa.ToolTip = _setup.FindSkid(inversor.Transformer) is { } skid
+            ? Tr.F("O trafo deste inversor (skid {0}). Escolher grava na hora.", skid.Name)
+            : Tr.T("O trafo deste inversor. Escolher grava na hora.");
+
+        // Grava quando a lista fecha (ou a caixa perde o foco) com outro trafo:
+        // a seta do teclado na caixa fechada não grava a cada passo (revisão
+        // de 05/10/2026: quem desce com a seta trocaria o trafo sem querer).
+        var id = inversor.Id;
+        var atual = inversor.Transformer;
+        var gravando = false;
+        void Confirmar()
+        {
+            try
+            {
+                if (gravando || (caixa.SelectedItem as ComboBoxItem)?.Tag is not Guid trafo || trafo == atual) return;
+                gravando = true;
+
+                // Depois que a escolha assenta: gravar relê e refaz a tabela (e esta caixa).
+                Dispatcher.BeginInvoke(() =>
+                {
+                    try { PorNoTrafoPelaTela([id], trafo); }
+                    catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao trocar o trafo do inversor.", erro); }
+                });
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao escolher o trafo do inversor.", erro);
+            }
+        }
+
+        caixa.DropDownClosed += (_, _) => Confirmar();
+        caixa.LostKeyboardFocus += (_, _) => Confirmar();
+        caixa.SelectionChanged += (_, e) => e.Handled = true;   // não sobe para a tabela (o "Escolhido")
+
+        return caixa;
+    }
+
+    /// <summary>O "Pôr no trafo": as linhas escolhidas vão todas para o trafo da caixa ao lado.</summary>
+    private void PorAsEscolhidasNoTrafo()
+    {
+        var ids = _inversores.SelectedItems.OfType<ListBoxItem>().Select(i => ((Inverter)i.Tag).Id).ToList();
+        if (ids.Count == 0)
+        {
+            Avisar(Tr.T("Escolha uma ou mais linhas na tabela (Ctrl ou Shift + clique para várias)."), erro: true);
+            return;
+        }
+
+        if ((_trafoEmLote.SelectedItem as ComboBoxItem)?.Tag is not Guid trafo)
+        {
+            Avisar(Tr.T("Escolha o trafo (cadastre na aba Transformador, se não há)."), erro: true);
+            return;
+        }
+
+        PorNoTrafoPelaTela(ids, trafo);
+    }
+
+    private void PorNoTrafoPelaTela(IReadOnlyCollection<Guid> inversores, Guid trafo)
+    {
+        string? porque = null;
+        var gravou = false;
+        Fazer(() =>
+        {
+            var (frase, problema) = PorNoTrafo(Documento.Database, inversores, trafo);
+            porque = problema;
+            gravou = true;
+            return frase;
+        });
+
+        // Recusado ou falhou: a tabela volta ao que está gravado (a caixa da linha não fica mostrando o que não foi).
+        if (porque is not null || !gravou)
+        {
+            try { Atualizar(); }
+            catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao reler a tabela de inversores.", erro); }
+        }
+
+        if (porque is not null) Avisar(Tr.F("Não mudei: {0}.", porque), erro: true);
+    }
+
+    /// <summary>
+    /// Grava o trafo dos inversores (<see cref="ElectricalSetup.SetTransformer"/>)
+    /// e diz o que mudou; o problema, se nada mudou. Quem chama trava o
+    /// documento (<see cref="EscritaForaDeComando"/>): a tabela pelo Fazer, o
+    /// nível 2 pelo gancho do mesmo caminho.
+    /// </summary>
+    internal static (string? Frase, string? Problema) PorNoTrafo(Database database, IReadOnlyCollection<Guid> inversores, Guid trafo)
+    {
+        TransformerAssignment? r = null;
+        string? apelido = null;
+        ConfiguracaoEletricaStore.Mudar(database, s =>
+        {
+            r = s.SetTransformer(inversores, trafo);
+            apelido = s.FindTransformer(trafo)?.Nickname;
+            return true;
+        });
+
+        if (r!.Problem is { } problema) return (null, problema);
+
+        var frase = trafo == Guid.Empty
+            ? Tr.F("{0} inversor(es) ficaram sem trafo.", r.Changed)
+            : Tr.F("{0} inversor(es) postos no {1}; {2} já eram dele.", r.Changed, apelido ?? "?", r.AlreadyThere);
+        if (r.Missing > 0) frase += " " + Tr.F("{0} não estão mais no cadastro.", r.Missing);
+        return (frase, null);
     }
 
     private void PreencherInversor()
@@ -545,6 +884,12 @@ internal sealed class AbaInversor : AbaEletrica
 
     private void SalvarInversor()
     {
+        if (_inversores.SelectedItems.Count > 1)
+        {
+            SoUmEscolhido();
+            return;
+        }
+
         if (InversorEscolhido is not { } inversor || (_modeloDoInversor.SelectedItem as ComboBoxItem)?.Tag is not Guid modelo)
         {
             Avisar(Tr.T("Escolha um inversor na lista e o modelo dele."), erro: true);
@@ -565,11 +910,7 @@ internal sealed class AbaInversor : AbaEletrica
 
     private void ApagarInversor()
     {
-        if (InversorEscolhido is not { } inversor)
-        {
-            Avisar(Tr.T("Escolha um inversor na lista."), erro: true);
-            return;
-        }
+        if (SoUmEscolhido() is not { } inversor) return;
 
         var tirou = true;
         Fazer(() =>
@@ -601,18 +942,6 @@ internal sealed class AbaInversor : AbaEletrica
             return Tr.F("{0}: {1} string(s) soltas; continuam no desenho, livres.", inversor.Name, soltas);
         });
 
-    internal static string DescreverInversor(ElectricalSetup setup, Inverter inversor, int strings)
-    {
-        var modelo = setup.FindModel(inversor.Model);
-        var linha = modelo is null
-            ? Tr.F("{0} — sem modelo — {1} string(s)", inversor.Name, strings)
-            : Tr.F("{0} — {1} — {2} de {3} string(s)", inversor.Name, modelo.Name, strings, modelo.TotalInputs);
-
-        return setup.FindTransformer(inversor.Transformer) is { } trafo
-            ? Tr.F("{0} — {1} ({2})", linha, setup.FindSkid(trafo.Id)?.Name ?? Tr.F("Skid {0}", trafo.Nickname), trafo.Nickname)
-            : linha;
-    }
-
     private void AgruparEmCampo()
     {
         if ((_trafoDoSkid.SelectedItem as ComboBoxItem)?.Tag is not Guid trafo)
@@ -623,19 +952,6 @@ internal sealed class AbaInversor : AbaEletrica
 
         // O nome vai como resposta da segunda pergunta do comando (até o Enter).
         JanelaEletrica.Campo(Documento, PluginInfo.ComandoEletricaSkid, trafo.ToString("D") + "\n" + _nomeDoSkid.Text.Trim());
-    }
-
-    private void TirarDoSkid()
-    {
-        if (InversorEscolhido is not { } inversor)
-        {
-            Avisar(Tr.T("Escolha um inversor na lista."), erro: true);
-            return;
-        }
-
-        Fazer(() => ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.Ungroup(inversor.Id))
-            ? Tr.F("{0} saiu do skid.", inversor.Name)
-            : Tr.F("{0} não está em skid nenhum.", inversor.Name));
     }
 
     private void CriarInversores()
@@ -672,6 +988,14 @@ internal sealed class AbaInversor : AbaEletrica
             if (item.Tag is InverterModel m && m.Id == novo?.Id) _modelos.SelectedItem = item;
     }
 
+    /// <summary>A potência digitada: vazio = 0 (não informada); senão um número de 0 ao limite. Se leu.</summary>
+    internal static bool LerPotencia(string? texto, out double kw)
+    {
+        kw = 0;
+        if (string.IsNullOrWhiteSpace(texto)) return true;
+        return NumberInput.TryParseLarge(texto, out kw) && InverterModel.IsValidPower(kw);
+    }
+
     private void SalvarModelo()
     {
         if (ModeloEscolhido is not { } m)
@@ -692,21 +1016,37 @@ internal sealed class AbaInversor : AbaEletrica
             return;
         }
 
+        if (!LerPotencia(_potencia.Text, out var potencia))
+        {
+            Avisar(Tr.F("Potência: um número de 0 a {0:#,0} kW (vazio = não informada).", ElectricalDefaults.MaxInverterPowerKw), erro: true);
+            return;
+        }
+
         if (LerTamanho(_largura, _comprimento, _altura) is not { } tamanho) return;
 
-        var editado = m with { Name = _nomeDoModelo.Text, InputsByMppt = entradas, Size = tamanho };
+        var editado = m with { Name = _nomeDoModelo.Text, InputsByMppt = entradas, Size = tamanho, PowerKw = potencia };
         string? porque = null;
         Fazer(() =>
         {
-            porque = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.EditModel(editado));
-            if (porque is not null) return null;
-
-            // A dimensão do modelo é a dos retângulos dos inversores dele em campo.
-            EquipamentoEmCampo.Redesenhar(Documento.Database, EquipmentKind.Inverter,
-                ConfiguracaoEletricaStore.Ler(Documento.Database).Setup.Inverters.Where(i => i.Model == m.Id).Select(i => i.Id).ToList());
-            return Tr.F("{0} salvo.", editado.Name.Trim());
+            porque = GravarModelo(Documento.Database, editado);
+            return porque is null ? Tr.F("{0} salvo.", editado.Name.Trim()) : null;
         });
         if (porque is not null) Avisar(Tr.F("Não salvei: {0}.", porque), erro: true);
+    }
+
+    /// <summary>
+    /// Grava o modelo editado e redesenha os retângulos dos inversores dele
+    /// em campo (a dimensão do modelo é a deles). Null se gravou, o porquê se
+    /// não. Quem chama trava o documento (o Fazer da aba, ou o gancho do nível 2).
+    /// </summary>
+    internal static string? GravarModelo(Database database, InverterModel editado)
+    {
+        var porque = ConfiguracaoEletricaStore.Mudar(database, s => s.EditModel(editado));
+        if (porque is not null) return porque;
+
+        EquipamentoEmCampo.Redesenhar(database, EquipmentKind.Inverter,
+            ConfiguracaoEletricaStore.Ler(database).Setup.Inverters.Where(i => i.Model == editado.Id).Select(i => i.Id).ToList());
+        return null;
     }
 
     private void ApagarModelo()

@@ -24,7 +24,7 @@ internal sealed class JanelaEletrica : Window
     private JanelaEletrica(Document documento)
     {
         Title = Tr.T("Configuração elétrica — Clivus Solar");
-        Width = 980;
+        Width = 1180;
         Height = 560;
         MinWidth = 820;
         MinHeight = 440;
