@@ -5,21 +5,22 @@ namespace Clivus.Plugin;
 
 /// <summary>
 /// A biblioteca de tipos de string gravada no desenho (elétrica, 11.1), no
-/// dicionário do plugin, chave "STRING_TIPOS". O formato mora no Core
+/// dicionário do plugin: os tipos na chave "STRING_TIPOS", o traçado de
+/// cada um na "STRING_TRACADOS" (11.3). O formato mora no Core
 /// (<see cref="StringTypeRecords"/>).
 /// </summary>
 internal static class StringTypeStore
 {
     private const string Chave = "STRING_TIPOS";
+    private const string ChaveDosTracados = "STRING_TRACADOS";
     private static readonly string OQueE = Tr.N("de tipos de string");
 
     internal static RecordTableResult<StringType> Ler(Database database)
     {
         try
         {
-            using var dados = PluginDictionary.Load(database, Chave);
-            var texto = dados?.AsArray().Select(v => v.Value as string ?? string.Empty).ToList();
-            var lido = StringTypeRecords.Read(texto, OQueE);
+            var texto = Texto(database, Chave);
+            var lido = StringTypeRecords.Read(texto, Texto(database, ChaveDosTracados), OQueE);
 
             if (lido.Problem is { } problema)
             {
@@ -41,6 +42,16 @@ internal static class StringTypeStore
         var buffer = new ResultBuffer();
         foreach (var campo in StringTypeRecords.Write(tipos)) buffer.Add(new TypedValue((int)DxfCode.Text, campo));
         PluginDictionary.Save(database, Chave, buffer);
+
+        var tracados = new ResultBuffer();
+        foreach (var campo in StringTypeRecords.WriteRoutes(tipos)) tracados.Add(new TypedValue((int)DxfCode.Text, campo));
+        PluginDictionary.Save(database, ChaveDosTracados, tracados);
+    }
+
+    private static List<string>? Texto(Database database, string chave)
+    {
+        using var dados = PluginDictionary.Load(database, chave);
+        return dados?.AsArray().Select(v => v.Value as string ?? string.Empty).ToList();
     }
 
     /// <summary>

@@ -19,6 +19,11 @@ internal sealed class JanelaDeStrings : Window
     private readonly ListBox _lista = new() { MinHeight = 220 };
     private readonly TextBlock _recado = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
     private readonly CartesianoDaString _cartesiano = new();
+    private readonly TextBlock _resumoDoTracado = new() { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+
+    /// <summary>A string sendo montada por cliques no cartesiano (do tipo escolhido), ou null.</summary>
+    private RouteBuilder? _montagem;
+    private Guid _tipoDaMontagem;
 
     private JanelaDeStrings(Document documento)
     {
@@ -37,7 +42,8 @@ internal sealed class JanelaDeStrings : Window
         abas.Items.Add(new TabItem { Header = Tr.T("Gerar"), Content = AbaGerar(), ToolTip = Tr.T("Escolhe os tipos que valem e gera o traçado nas mesas selecionadas.") });
 
         Content = abas;
-        _lista.SelectionChanged += (_, _) => _cartesiano.Mostrar(Escolhido);
+        _lista.SelectionChanged += (_, _) => MostrarTipo();
+        _cartesiano.CelulaClicada += Clicou;
         Atualizar();
     }
 
@@ -66,6 +72,9 @@ internal sealed class JanelaDeStrings : Window
         esquerda.Children.Add(_lista);
 
         var direita = new DockPanel();
+        var tracado = BarraDoTracado();
+        DockPanel.SetDock(tracado, Dock.Top);
+        direita.Children.Add(tracado);
         DockPanel.SetDock(_recado, Dock.Bottom);
         direita.Children.Add(_recado);
         direita.Children.Add(_cartesiano);
@@ -75,6 +84,127 @@ internal sealed class JanelaDeStrings : Window
         painel.Children.Add(esquerda);
         painel.Children.Add(direita);
         return painel;
+    }
+
+    /// <summary>
+    /// A barra do traçado (11.3): clique no módulo do + e depois em cada
+    /// ponto de virada; Concluir string grava. Desfazer tira o último trecho.
+    /// </summary>
+    private UIElement BarraDoTracado()
+    {
+        var barra = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+
+        void Botao(string texto, string dica, Action acao)
+        {
+            var b = new Button { Content = texto, Height = 26, Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(8, 0, 8, 0), ToolTip = dica };
+            b.Click += (_, _) => acao();
+            barra.Children.Add(b);
+        }
+
+        barra.Children.Add(_resumoDoTracado);
+        Botao(Tr.T("Concluir string"), Tr.T("Grava a string montada: o + no primeiro módulo clicado, o − no último."), ConcluirString);
+        Botao(Tr.T("Desfazer trecho"), Tr.T("Tira o último trecho da string em montagem."), DesfazerTrecho);
+        Botao(Tr.T("Limpar traçado"), Tr.T("Tira todas as strings do tipo escolhido (as já desenhadas em campo não mudam)."), LimparTracado);
+        return barra;
+    }
+
+    /// <summary>O tipo de trecho do próximo clique.</summary>
+    private static RoutingKind TipoDoTrecho => RoutingKind.Conventional;
+
+    private void MostrarTipo()
+    {
+        var tipo = Escolhido;
+        if (tipo is null || tipo.Id != _tipoDaMontagem) _montagem = null;
+
+        _cartesiano.Mostrar(tipo, _montagem?.Cells);
+
+        if (tipo is null || tipo.Arrangement.IsEmpty)
+        {
+            _resumoDoTracado.Text = string.Empty;
+            return;
+        }
+
+        var ligados = tipo.Routes.Sum(r => r.ModuleCount);
+        var texto = Tr.F("{0} string(s), {1} de {2} módulo(s) ligados.", tipo.Routes.Count, ligados, tipo.Arrangement.ModuleCount);
+        texto += _montagem is { IsEmpty: false } m
+            ? " " + Tr.F("Em montagem: {0} módulo(s).", m.Cells.Count)
+            : " " + Tr.T("Clique no módulo do + para começar uma string.");
+        _resumoDoTracado.Text = texto;
+    }
+
+    private void Clicou(RoutingCell celula)
+    {
+        try
+        {
+            if (Escolhido is not { } tipo) return;
+
+            if (_montagem is null || _tipoDaMontagem != tipo.Id)
+            {
+                _montagem = new RouteBuilder(tipo.Arrangement, tipo.Routes.SelectMany(r => r.Cells));
+                _tipoDaMontagem = tipo.Id;
+            }
+
+            if (_montagem.Click(celula, TipoDoTrecho) is { } porque) Avisar(Tr.F("Não liguei: {0}.", porque), erro: true);
+            else _recado.Text = string.Empty;
+
+            MostrarTipo();
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no clique do cartesiano das strings.", erro);
+            Avisar(Tr.F("Não consegui: {0}", erro.Message), erro: true);
+        }
+    }
+
+    private void DesfazerTrecho()
+    {
+        if (_montagem is null || !_montagem.Undo()) Avisar(Tr.T("Nada a desfazer na string em montagem."), erro: true);
+        MostrarTipo();
+    }
+
+    private void ConcluirString()
+    {
+        if (Escolhido is not { } tipo || _montagem is null || _tipoDaMontagem != tipo.Id)
+        {
+            Avisar(Tr.T("Monte a string clicando nos módulos do cartesiano."), erro: true);
+            return;
+        }
+
+        if (_montagem.Finish(out var porque) is not { } nova)
+        {
+            Avisar(Tr.F("Não gravei: {0}.", porque), erro: true);
+            return;
+        }
+
+        string? recusa = null;
+        Fazer(() =>
+        {
+            StringTypeStore.Mudar(_documento.Database, b => recusa = b.SetStrings(tipo.Id, [.. tipo.Routes, nova]));
+            return recusa is null ? Tr.F("String {0} gravada: {1}.", tipo.Routes.Count + 1, RouteBuilder.Describe(nova)) : null;
+        }, tipo.Id);
+
+        if (recusa is not null) Avisar(Tr.F("Não gravei: {0}.", recusa), erro: true);
+        else
+        {
+            _montagem = null;
+            MostrarTipo();
+        }
+    }
+
+    private void LimparTracado()
+    {
+        if (Escolhido is not { } tipo)
+        {
+            Avisar(Tr.T("Escolha um tipo na lista."), erro: true);
+            return;
+        }
+
+        _montagem = null;
+        Fazer(() =>
+        {
+            StringTypeStore.Mudar(_documento.Database, b => b.SetStrings(tipo.Id, []));
+            return Tr.F("Traçado de {0} limpo.", tipo.Name);
+        }, tipo.Id);
     }
 
     private static UIElement AbaGerar() =>
@@ -101,7 +231,7 @@ internal sealed class JanelaDeStrings : Window
         }
 
         if (_lista.SelectedItem is null && _lista.Items.Count > 0) _lista.SelectedIndex = 0;
-        _cartesiano.Mostrar(Escolhido);
+        MostrarTipo();
 
         if (_lista.Items.Count == 0) _recado.Text = Tr.T("Nenhum tipo de string ainda: use Adicionar tipo de string.");
         if (lido.Problem is { } problema) Avisar(problema, erro: true);
@@ -109,7 +239,8 @@ internal sealed class JanelaDeStrings : Window
 
     internal static string Descrever(StringType tipo) => tipo.Arrangement.IsEmpty
         ? Tr.F("{0} — sem mesas escolhidas", tipo.Name)
-        : Tr.F("{0} — {1} mesa(s), {2} módulo(s) ({3})", tipo.Name, tipo.Arrangement.Tables.Count, tipo.Arrangement.ModuleCount, tipo.Arrangement.ToText());
+        : Tr.F("{0} — {1} mesa(s), {2} módulo(s) ({3})", tipo.Name, tipo.Arrangement.Tables.Count, tipo.Arrangement.ModuleCount, tipo.Arrangement.ToText())
+            + (tipo.Routes.Count > 0 ? Tr.F(", {0} string(s) de {1}", tipo.Routes.Count, string.Join("/", tipo.Routes.Select(r => r.ModuleCount))) : string.Empty);
 
     private void Avisar(string texto, bool erro = false)
     {

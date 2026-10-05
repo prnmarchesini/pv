@@ -197,6 +197,107 @@ public static class StringCommands
         }
     }
 
+    /// <summary>
+    /// CLIVUS_STRING_TRACADO_AUTO (nível 2, 11.3 e 11.4): o nome do tipo e
+    /// os cliques, como no cartesiano. Strings separadas por ";", cliques
+    /// por espaço; cada clique é "mesa.coluna.fileira" (coluna "F" = a
+    /// última da mesa, "M" = a do meio), com "L" na frente para o trecho em
+    /// leapfrog. "FILEIRA:C:0.0.0" ou "FILEIRA:L:0.0.0" liga a fileira
+    /// inteira do clique numa string. Grava o traçado e imprime cada string.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoStringTracadoAutomatico)]
+    public static void TracadoAutomatico()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+        var database = documento.Database;
+
+        try
+        {
+            if (Achar(editor, database) is not { } tipo) return;
+
+            var pedido = editor.GetString(new PromptStringOptions("\nCliques: ") { AllowSpaces = true });
+            if (pedido.Status != PromptStatus.OK) return;
+
+            var strings = new List<StringRoute>();
+
+            foreach (var texto in pedido.StringResult.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                StringRoute? nova;
+                string? porque = null;
+
+                if (texto.StartsWith("FILEIRA:", StringComparison.Ordinal))
+                {
+                    var partes = texto.Split(':');
+                    var celula = Celula(tipo.Arrangement, partes[2]);
+                    nova = celula is null ? null : StringRouting.WholeRow(tipo.Arrangement, celula.Value, partes[1] == "L" ? RoutingKind.Leapfrog : RoutingKind.Conventional, out porque);
+                    porque ??= celula is null ? Tr.T("o módulo não existe neste tipo") : null;
+                }
+                else
+                {
+                    var montagem = new RouteBuilder(tipo.Arrangement, strings.SelectMany(s => s.Cells));
+                    porque = null;
+
+                    foreach (var clique in texto.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        var leapfrog = clique.StartsWith('L');
+                        var celula = Celula(tipo.Arrangement, leapfrog ? clique[1..] : clique);
+                        porque = celula is null ? Tr.T("o módulo não existe neste tipo") : montagem.Click(celula.Value, leapfrog ? RoutingKind.Leapfrog : RoutingKind.Conventional);
+                        if (porque is not null) break;
+                    }
+
+                    nova = porque is null ? montagem.Finish(out porque) : null;
+                }
+
+                if (nova is null)
+                {
+                    editor.WriteMessage(Tr.F("\nSTRING Não liguei: {0}.\n", porque ?? string.Empty));
+                    return;
+                }
+
+                strings.Add(nova);
+            }
+
+            string? recusa = null;
+            StringTypeStore.Mudar(database, b => recusa = b.SetStrings(tipo.Id, strings));
+
+            if (recusa is not null)
+            {
+                editor.WriteMessage(Tr.F("\nSTRING Não gravei: {0}.\n", recusa));
+                return;
+            }
+
+            var gravado = StringTypeStore.Ler(database).Items.First(t => t.Id == tipo.Id);
+            for (var i = 0; i < gravado.Routes.Count; i++)
+                editor.WriteMessage($"\nSTRING_TRACADO {gravado.Name} {i + 1}: {RouteBuilder.Describe(gravado.Routes[i])} [{gravado.Routes[i].ToText()}]");
+            editor.WriteMessage($"\nSTRING_TRACADO {gravado.Name} sem string: {StringRouting.Uncovered(gravado.Arrangement, gravado.Routes)}\n");
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no CLIVUS_STRING_TRACADO_AUTO.", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui mexer na biblioteca de strings: {0}\n", erro.Message));
+        }
+    }
+
+    /// <summary>"0.F.1": mesa, coluna (ou F, a última; M, a do meio), fileira.</summary>
+    private static RoutingCell? Celula(StringArrangement arranjo, string texto)
+    {
+        var partes = texto.Split('.');
+        if (partes.Length != 3 || !int.TryParse(partes[0], out var mesa) || mesa < 0 || mesa >= arranjo.Tables.Count) return null;
+
+        var colunas = arranjo.Tables[mesa].Columns;
+        var coluna = partes[1] switch
+        {
+            "F" => colunas - 1,
+            "M" => colunas / 2 - 1,
+            _ => int.TryParse(partes[1], out var c) ? c : -1,
+        };
+
+        return int.TryParse(partes[2], out var fileira) ? new RoutingCell(mesa, coluna, fileira) : null;
+    }
+
     private static StringType? Achar(Editor editor, Autodesk.AutoCAD.DatabaseServices.Database database)
     {
         var nome = editor.GetString(new PromptStringOptions(Tr.T("\nNome do tipo: ")) { AllowSpaces = true });
