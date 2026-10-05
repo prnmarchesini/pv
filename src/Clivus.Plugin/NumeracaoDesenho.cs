@@ -92,6 +92,10 @@ internal static class NumeracaoDesenho
         var trafos = ElectricalStore.Transformers(database);
         var modelos = ElectricalStore.InverterModels(database);
 
+        // Modelo sem {I} com mais de um inversor (o cadastro cresceu depois de salvar): nada muda, e se diz o porquê.
+        if (esquema.Problem(StringNumbering.CountInverters(inversores.Items)) is { } recusa)
+            return [Tr.F("Não gerei: {0}. Corrija o modelo da tag e salve.", recusa)];
+
         using var transacao = database.TransactionManager.StartTransaction();
 
         var strings = ElectricalStore.Strings(transacao, database);
@@ -99,7 +103,7 @@ internal static class NumeracaoDesenho
         var spots = modulos.ToDictionary(m => m.Key, m => new ModuleSpot(m.Value.Mesa, m.Value.Centro.X, m.Value.Centro.Y));
 
         var resultado = StringNumbering.Number(esquema, varredura, trafos.Items, inversores.Items, strings.Select(s => s.String).ToList(), spots, alcance, modelos.Items);
-        var orfaos = Aplicar(transacao, database, strings, resultado.Tags, modulos, apagarOrfaos: alcance is null || alcance.Kind == NumberingScopeKind.All);
+        var orfaos = Aplicar(transacao, database, strings, resultado.Tags, modulos, apagarOrfaos: alcance is null || alcance.Kind == NumberingScopeKind.All, esquema);
         transacao.Commit();
 
         var linhas = Relatorio(resultado, strings.Count, inversores.Items);
@@ -126,7 +130,7 @@ internal static class NumeracaoDesenho
         var vazias = StringNumbering.Clear(strings.Select(s => s.String).ToList(), alcance, varredura, spots);
         var tinham = strings.Count(s => vazias.ContainsKey(s.String.Id) && s.String.Tag.Length > 0);
 
-        var orfaos = Aplicar(transacao, database, strings, vazias, modulos, apagarOrfaos: alcance.Kind == NumberingScopeKind.All);
+        var orfaos = Aplicar(transacao, database, strings, vazias, modulos, apagarOrfaos: alcance.Kind == NumberingScopeKind.All, TagScheme.Default);
         transacao.Commit();
 
         var frase = Tr.F("{0} tag(s) apagada(s) de {1} string(s).", tinham, vazias.Count);
@@ -140,7 +144,7 @@ internal static class NumeracaoDesenho
     /// geometria não muda) e troca os textos delas: apaga os de antes e
     /// desenha um por string com tag. Com <paramref name="apagarOrfaos"/>
     /// (usina inteira), apaga também o texto de tag cuja string sumiu;
-    /// devolve quantos.
+    /// devolve quantos. O texto ganha o fundo e a moldura da composição.
     /// </summary>
     internal static int Aplicar(
         Transaction transacao,
@@ -148,7 +152,8 @@ internal static class NumeracaoDesenho
         IReadOnlyList<(ObjectId Id, ElectricalString String)> strings,
         IReadOnlyDictionary<Guid, string> tags,
         IReadOnlyDictionary<Guid, Lugar> modulos,
-        bool apagarOrfaos)
+        bool apagarOrfaos,
+        TagScheme esquema)
     {
         var textos = Textos(transacao, database);
         var orfaos = 0;
@@ -207,6 +212,7 @@ internal static class NumeracaoDesenho
             espaco.AppendEntity(mtexto);
             transacao.AddNewlyCreatedDBObject(mtexto, true);
             estilo(mtexto);
+            Emoldurar(mtexto, esquema);
             PluginXData.Save(transacao, mtexto, StringTagText.Tipo, VersaoDaTag, [.. new StringTagText(s.Id, tag).ToFields()]);
             novos.Add(mtexto.ObjectId);
         }
@@ -219,6 +225,57 @@ internal static class NumeracaoDesenho
         }
 
         return orfaos;
+    }
+
+    /// <summary>A folga do fundo e da moldura em volta do texto (1 = colado; o AutoCAD aceita de 1 a 5).</summary>
+    internal const double FolgaDoFundo = 1.2;
+
+    /// <summary>
+    /// O fundo (máscara na cor do fundo da tela, que esconde o que está atrás
+    /// e destaca a tag) e a moldura (o quadro do próprio MText): liga ou
+    /// desliga conforme a composição. Nenhuma entidade a mais: apagar o texto
+    /// leva os dois.
+    /// </summary>
+    internal static void Emoldurar(MText texto, TagScheme esquema)
+    {
+        // A folga liga o fundo no AutoCAD: só com fundo. Para desligar, a cor
+        // da tela sai antes (senão o fundo volta) — conferido no nível 2.
+        if (esquema.Background)
+        {
+            texto.BackgroundFill = true;
+            texto.UseBackgroundColor = true;
+            texto.BackgroundScaleFactor = FolgaDoFundo;
+        }
+        else
+        {
+            if (texto.UseBackgroundColor) texto.UseBackgroundColor = false;
+            texto.BackgroundFill = false;
+        }
+
+        texto.ShowBorders = esquema.Border;
+    }
+
+    /// <summary>
+    /// Põe o fundo e a moldura da composição nos textos de tag já desenhados
+    /// (o texto da tag não muda; só gerar de novo muda). Devolve quantos.
+    /// </summary>
+    internal static int Reemoldurar(Database database, TagScheme esquema)
+    {
+        using var transacao = database.TransactionManager.StartTransaction();
+        var quantos = 0;
+
+        foreach (var grupo in Textos(transacao, database))
+        {
+            foreach (var id in grupo)
+            {
+                if (transacao.GetObject(id, OpenMode.ForWrite) is not MText texto) continue;
+                Emoldurar(texto, esquema);
+                quantos++;
+            }
+        }
+
+        transacao.Commit();
+        return quantos;
     }
 
     /// <summary>O relatório da numeração: o resumo e o que ficou sem tag ou sem trafo (nada falha calado, regra elétrica 6).</summary>

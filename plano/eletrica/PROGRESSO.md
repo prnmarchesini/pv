@@ -152,6 +152,38 @@ Roteiro de tela:
 5. Abra "Agrupar em campo (skid)": a explicação e o agrupar pelo desenho,
    como antes.
 
+## Numeração: tag livre, fundo/moldura, gerar por bloco (05/10/2026): AGUARDANDO VALIDAÇÃO
+
+Pedidos do Renan na aba Numeração:
+- Composição da tag num modelo de texto livre (como o PVcase): `{T}`, `{I}`,
+  `{S}`, com zeros ({I:00}); botões "+ Trafo", "+ Inversor", "+ String" põem
+  o campo no cursor; exemplo ao vivo com o caso "inversor sem trafo" (o
+  pedaço do trafo some). `NUMERACAO` formato 2; o 1 lido e convertido no
+  modelo que dá as mesmas tags (teste de nível 1 com todas as combinações e
+  de nível 2 com um registro gravado no formato 1).
+- Fundo (máscara na cor da tela) e Moldura nas tags: propriedades do próprio
+  MText, sem entidade a mais; Edição › Apagar continua achando (o caso
+  `clivus-apagar` agora gera as tags com fundo e moldura).
+- Seção Gerar em três linhas iguais: Usina inteira / Bloco ▼ / Inversor ▼,
+  cada uma com Gerar e Apagar. "Apagar do bloco" é novo. Sem blocos (ou sem
+  inversores) a linha fica desligada com a dica do porquê.
+- Assumido: com mais de um inversor, {I} é obrigatório; dois campos colados
+  só com zeros no primeiro ({I:00}{S:00}); o separador que sobra no começo
+  quando o trafo some é a pontuação (não letra nem algarismo).
+
+Roteiro de tela:
+1. Configuração elétrica > Numeração: a caixa Modelo mostra T{T}.I{I}.S{S}
+   (ou o equivalente da composição antiga do desenho).
+2. Apague tudo, clique "+ Trafo", digite "-INV", "+ Inversor", "S",
+   "+ String": o exemplo mostra T1-INV1S1 ... e "inversor sem trafo: INV3S1".
+   Troque {I} por {I:00}: INV01. Apague o {S}: o exemplo fica vermelho.
+3. Marque Fundo e Moldura e Salvar: as tags já desenhadas ganham o fundo e o
+   quadro na hora (texto igual). Gerar da usina: tags no modelo novo.
+4. Bloco ▼ Bloco 1 > Apagar: só as tags das mesas dele somem; Gerar: voltam.
+   Inversor ▼ > Apagar/Gerar: só as dele.
+5. Num desenho sem blocos, a linha Bloco fica cinza com a dica "crie um
+   bloco acima".
+
 ## Observações
 - Mesa recalculada troca os GUIDs dos módulos: as strings dela ficam soltas e
   regerar não as reconhece (desenha as novas sem apagar as velhas). Precisa de

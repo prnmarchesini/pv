@@ -26,4 +26,7 @@ public static partial class PluginInfo
 
     /// <summary>Só no build de teste: o MESMO caminho dos botões da linha do bloco (Mostrar) e o resumo da lista, fora de comando. Para o nível 2.</summary>
     public const string ComandoNumeracaoJanelaAutomatico = "CLIVUS_NUMERACAO_JANELA_AUTO";
+
+    /// <summary>Só no build de teste: o MESMO caminho do Salvar da composição e dos Gerar/Apagar da usina, do bloco e do inversor, fora de comando. Para o nível 2.</summary>
+    public const string ComandoNumeracaoTelaAutomatico = "CLIVUS_NUMERACAO_TELA_AUTO";
 }

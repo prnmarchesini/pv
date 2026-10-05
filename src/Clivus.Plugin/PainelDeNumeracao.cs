@@ -21,13 +21,22 @@ internal sealed class PainelDeNumeracao : DockPanel
     private readonly Document _documento;
     private readonly TextBlock _recado = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
 
-    // 15.1: a composição da tag.
-    private readonly CheckBox _comTrafo = new() { Content = Tr.T("Trafo"), VerticalAlignment = VerticalAlignment.Center, ToolTip = Tr.T("Com o pedaço do trafo na tag. Inversor sem trafo fica sem esse pedaço.") };
-    private readonly TextBox _prefixoTrafo = Caixa(Tr.T("Prefixo do trafo (ex. T ou Trafo; vazio é só o número). O número é a posição do trafo na lista."));
-    private readonly TextBox _prefixoInversor = Caixa(Tr.T("Prefixo do inversor (ex. I ou Inv; vazio é só o número). O número é a posição do inversor na lista."));
-    private readonly TextBox _prefixoString = Caixa(Tr.T("Prefixo da string (ex. S). O número recomeça do 1 em cada inversor."));
-    private readonly ComboBox _separador = new() { Width = 120, Height = 24, VerticalContentAlignment = VerticalAlignment.Center, ToolTip = Tr.T("O que vai entre os pedaços.") };
+    // 15.1: a composição da tag (modelo livre, fundo e moldura).
+    private readonly TextBox _modelo = new()
+    {
+        Width = 230,
+        Height = 24,
+        VerticalContentAlignment = VerticalAlignment.Center,
+        Margin = new Thickness(4, 0, 6, 0),
+        FontFamily = new FontFamily("Consolas"),
+        ToolTip = Tr.T("O modelo da tag. {T}, {I} e {S} são os números do trafo, do inversor e da string; o resto é texto fixo (letras, risquinho, ponto, espaço ou nada). Zeros à esquerda: {I:00} dá 01."),
+    };
+    private readonly CheckBox _fundo = new() { Content = Tr.T("Fundo"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 8, 0), ToolTip = Tr.T("Máscara atrás do texto, na cor do fundo da tela: esconde o que está embaixo e destaca a tag.") };
+    private readonly CheckBox _moldura = new() { Content = Tr.T("Moldura"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0), ToolTip = Tr.T("Um quadro em volta do texto da tag.") };
     private readonly TextBlock _exemplo = new() { FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
+
+    /// <summary>Quantos inversores há no cadastro (com mais de um, o modelo precisa de {I}); relido com a tela.</summary>
+    private int _inversores = 1;
 
     // 15.2: a varredura e os blocos.
     private readonly ComboBox _sentidoDaUsina = CaixaDeSentido(Tr.T("O sentido em que a numeração avança nas mesas que não estão em bloco nenhum (a usina inteira, se não há blocos)."));
@@ -35,8 +44,10 @@ internal sealed class PainelDeNumeracao : DockPanel
     private readonly ListBox _blocos = new() { MaxHeight = 260, Margin = new Thickness(0, 6, 0, 0), HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly TextBlock _resumo = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
 
-    // 15.5: o inversor das operações por inversor.
-    private readonly ComboBox _inversor = new() { Width = 200, Height = 24, VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 12, 4), ToolTip = Tr.T("O inversor de Refazer inversor e Apagar do inversor (na ordem do cadastro).") };
+    // 15.5: gerar e apagar, na usina, num bloco ou num inversor.
+    private readonly ComboBox _blocoDeGerar = new() { Width = 180, Height = 24, VerticalContentAlignment = VerticalAlignment.Center };
+    private readonly ComboBox _inversor = new() { Width = 180, Height = 24, VerticalContentAlignment = VerticalAlignment.Center };
+    private readonly Grid _linhasDeGerar = new();
 
     /// <summary>Verdadeiro enquanto a tela é preenchida pelo código: troca de combo aí não é pedido do usuário.</summary>
     private bool _mostrando;
@@ -83,9 +94,6 @@ internal sealed class PainelDeNumeracao : DockPanel
     /// <summary>O painel do desenho (a aba Numeração).</summary>
     internal static UIElement Criar(Document documento) => new PainelDeNumeracao(documento);
 
-    private static TextBox Caixa(string dica) =>
-        new() { Width = 64, Height = 24, VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 12, 0), ToolTip = dica };
-
     private static TextBlock Rotulo(string texto) => new() { Text = texto, VerticalAlignment = VerticalAlignment.Center };
 
     private static WrapPanel Linha(double acima = 0) => new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, acima, 0, 0) };
@@ -113,71 +121,89 @@ internal sealed class PainelDeNumeracao : DockPanel
 
     private UIElement SecaoDaTag()
     {
-        _separador.Items.Add(new ComboBoxItem { Content = Tr.T("Ponto (T1.I1.S1)"), Tag = "." });
-        _separador.Items.Add(new ComboBoxItem { Content = Tr.T("Risquinho (T1-I1-S1)"), Tag = "-" });
-        _separador.Items.Add(new ComboBoxItem { Content = Tr.T("Nada (T1I1S1)"), Tag = string.Empty });
-
         var linha = Linha();
-        linha.Children.Add(_comTrafo);
-        linha.Children.Add(_prefixoTrafo);
-        linha.Children.Add(Rotulo(Tr.T("Inversor")));
-        linha.Children.Add(_prefixoInversor);
-        linha.Children.Add(Rotulo(Tr.T("String")));
-        linha.Children.Add(_prefixoString);
-        linha.Children.Add(Rotulo(Tr.T("Separador")));
-        linha.Children.Add(new Border { Width = 4 });
-        linha.Children.Add(_separador);
+        linha.Children.Add(Rotulo(Tr.T("Modelo:")));
+        linha.Children.Add(_modelo);
+        BotaoPequeno(linha, Tr.T("+ Trafo"), Tr.T("Põe {T}, o número do trafo, onde está o cursor. Inversor sem trafo perde esse pedaço."), () => Inserir(TagScheme.TransformerField));
+        BotaoPequeno(linha, Tr.T("+ Inversor"), Tr.T("Põe {I}, o número do inversor (a posição na lista do cadastro), onde está o cursor."), () => Inserir(TagScheme.InverterField));
+        BotaoPequeno(linha, Tr.T("+ String"), Tr.T("Põe {S}, o número da string (recomeça do 1 em cada inversor), onde está o cursor."), () => Inserir(TagScheme.StringField));
+        linha.Children.Add(_fundo);
+        linha.Children.Add(_moldura);
+        Botao(linha, Tr.T("Salvar"), Tr.T("Grava a composição no desenho. Fundo e moldura mudam já nas tags desenhadas; o texto delas só muda ao gerar de novo."), SalvarEsquema);
+        var salvar = (Button)linha.Children[^1];
+        salvar.Height = 24;
+        salvar.Margin = new Thickness(0);
 
-        var salvar = new WrapPanel();
-        Botao(salvar, Tr.T("Salvar composição"), Tr.T("Grava a composição no desenho. As tags já desenhadas só mudam ao gerar de novo."), SalvarEsquema);
+        var ajuda = new TextBlock
+        {
+            Text = Tr.T("{T} trafo, {I} inversor, {S} string; {I:00} põe zeros (01). Inversor sem trafo: some o {T} com o texto antes dele (e o separador que vinha depois, se ele era o primeiro)."),
+            Foreground = Brushes.Gray,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 0),
+        };
 
-        var embaixo = new DockPanel { Margin = new Thickness(0, 8, 0, 0) };
-        DockPanel.SetDock(salvar, Dock.Left);
-        embaixo.Children.Add(salvar);
-        embaixo.Children.Add(_exemplo);
-
-        foreach (var caixa in new[] { _prefixoTrafo, _prefixoInversor, _prefixoString }) caixa.TextChanged += (_, _) => Previa();
-        _comTrafo.Checked += (_, _) => Previa();
-        _comTrafo.Unchecked += (_, _) => Previa();
-        _separador.SelectionChanged += (_, _) => Previa();
+        _exemplo.Margin = new Thickness(0, 4, 0, 0);
+        _modelo.TextChanged += (_, _) => Previa();
 
         var corpo = new StackPanel { Margin = new Thickness(6) };
         corpo.Children.Add(linha);
-        corpo.Children.Add(embaixo);
+        corpo.Children.Add(_exemplo);
+        corpo.Children.Add(ajuda);
         return new GroupBox { Header = Tr.T("Composição da tag"), Content = corpo, Margin = new Thickness(0, 0, 0, 8) };
     }
 
-    private TagScheme EsquemaDaTela() => new(
-        _comTrafo.IsChecked == true,
-        _prefixoTrafo.Text,
-        _prefixoInversor.Text,
-        _prefixoString.Text,
-        (_separador.SelectedItem as ComboBoxItem)?.Tag as string ?? ".");
+    /// <summary>Um botão baixo e estreito ("+ Trafo"), que não tira o cursor da caixa do modelo.</summary>
+    private void BotaoPequeno(Panel onde, string texto, string dica, Action acao)
+    {
+        Botao(onde, texto, dica, acao);
+        var b = (Button)onde.Children[^1];
+        b.Height = 24;
+        b.Margin = new Thickness(0, 0, 4, 0);
+        b.Padding = new Thickness(6, 0, 6, 0);
+        b.Focusable = false;
+    }
+
+    /// <summary>Põe o campo onde está o cursor da caixa do modelo (troca o trecho marcado, se há).</summary>
+    private void Inserir(string campo)
+    {
+        var onde = Math.Clamp(_modelo.SelectionStart, 0, _modelo.Text.Length);
+        var tira = Math.Clamp(_modelo.SelectionLength, 0, _modelo.Text.Length - onde);
+        _modelo.Text = _modelo.Text.Remove(onde, tira).Insert(onde, campo);
+        _modelo.Focus();
+        _modelo.CaretIndex = onde + campo.Length;
+    }
+
+    private TagScheme EsquemaDaTela() => new(_modelo.Text.Trim(), _fundo.IsChecked == true, _moldura.IsChecked == true);
 
     private void MostrarEsquema(TagScheme esquema)
     {
-        _comTrafo.IsChecked = esquema.IncludeTransformer;
-        _prefixoTrafo.Text = esquema.TransformerPrefix;
-        _prefixoInversor.Text = esquema.InverterPrefix;
-        _prefixoString.Text = esquema.StringPrefix;
-        _separador.SelectedItem = _separador.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == esquema.Separator) ?? _separador.Items[0];
+        _modelo.Text = esquema.Template;
+        _fundo.IsChecked = esquema.Background;
+        _moldura.IsChecked = esquema.Border;
         Previa();
     }
 
-    /// <summary>O exemplo ao vivo: três strings de dois inversores e um inversor sem trafo.</summary>
+    /// <summary>O exemplo ao vivo, enquanto digita: três strings de dois inversores e um inversor sem trafo; ou o porquê de não valer.</summary>
     private void Previa()
     {
-        var esquema = EsquemaDaTela();
-
-        if (esquema.Problem() is { } problema)
+        try
         {
-            _exemplo.Foreground = Brushes.Firebrick;
-            _exemplo.Text = problema;
-            return;
-        }
+            var esquema = EsquemaDaTela();
 
-        _exemplo.Foreground = SystemColors.ControlTextBrush;
-        _exemplo.Text = Exemplo(esquema);
+            if (esquema.Problem(_inversores) is { } problema)
+            {
+                _exemplo.Foreground = Brushes.Firebrick;
+                _exemplo.Text = problema;
+                return;
+            }
+
+            _exemplo.Foreground = SystemColors.ControlTextBrush;
+            _exemplo.Text = Exemplo(esquema);
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no exemplo da tag.", erro);
+        }
     }
 
     internal static string Exemplo(TagScheme esquema) =>
@@ -187,17 +213,42 @@ internal sealed class PainelDeNumeracao : DockPanel
     {
         var esquema = EsquemaDaTela();
 
-        if (esquema.Problem() is { } problema)
+        try
         {
-            Avisar(Tr.F("Não salvei: {0}.", problema), erro: true);
-            return;
+            var (frase, gravou) = SalvarComposicao(_documento, esquema);
+            Recarregar();
+            Avisar(frase, erro: !gravou);
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao salvar a composição da tag.", erro);
+            Avisar(Tr.F("Não consegui: {0}", erro.Message), erro: true);
         }
 
-        Fazer(() =>
+        AtualizarTela();
+    }
+
+    /// <summary>
+    /// O Salvar da composição (o botão e o nível 2 pelo mesmo caminho, fora de
+    /// comando): confere o modelo com os inversores do cadastro, grava e põe
+    /// o fundo e a moldura nas tags já desenhadas. A frase, e se gravou.
+    /// </summary>
+    internal static (string Frase, bool Gravou) SalvarComposicao(Document documento, TagScheme esquema)
+    {
+        var inversores = StringNumbering.CountInverters(ElectricalStore.Inverters(documento.Database).Items);
+        if (esquema.Problem(inversores) is { } problema) return (Tr.F("Não salvei: {0}.", problema), false);
+
+        var mudadas = EscritaForaDeComando.Fazer(documento, () =>
         {
-            NumeracaoStore.GravarEsquema(_documento.Database, esquema);
-            return Tr.T("Composição salva no desenho.");
+            // Primeiro os textos (transação própria: se falhar, nada fica gravado), depois o registro.
+            var quantas = NumeracaoDesenho.Reemoldurar(documento.Database, esquema);
+            NumeracaoStore.GravarEsquema(documento.Database, esquema);
+            return quantas;
         });
+
+        return (mudadas > 0
+            ? Tr.F("Composição salva no desenho; fundo e moldura em {0} tag(s) já desenhada(s). O texto delas muda ao gerar de novo.", mudadas)
+            : Tr.T("Composição salva no desenho."), true);
     }
 
     // ------------------------------------------- 15.2 varredura e blocos
@@ -372,10 +423,14 @@ internal sealed class PainelDeNumeracao : DockPanel
 
         var item = new ListBoxItem { Content = linha, Tag = bloco, Padding = new Thickness(2, 1, 2, 1) };
 
-        // Clicar numa caixa ou botão da linha também escolhe o bloco (o de "Regerar bloco escolhido").
+        // Clicar numa caixa ou botão da linha também escolhe o bloco (o da linha Bloco da seção Gerar).
         item.PreviewMouseLeftButtonDown += (_, _) =>
         {
-            try { item.IsSelected = true; }
+            try
+            {
+                item.IsSelected = true;
+                if (_blocoDeGerar.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (i.Tag as NumberingBlock)?.Id == este.Id) is { } doGerar) _blocoDeGerar.SelectedItem = doGerar;
+            }
             catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao escolher o bloco da numeração.", erro); }
         };
 
@@ -400,6 +455,7 @@ internal sealed class PainelDeNumeracao : DockPanel
             }
 
             if (_blocos.SelectedItem is null && _blocos.Items.Count > 0) _blocos.SelectedIndex = 0;
+            MostrarBlocosDeGerar(varredura, manter);
             _blocos.Visibility = _blocos.Items.Count > 0 ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
             _resumo.Text = varredura.Blocks.Count == 0
                 ? Tr.F("Sem blocos: as {0} string(s) são numeradas nos sentidos da usina. Novo bloco separa um pedaço com sentidos próprios.", contagem.Outside)
@@ -424,14 +480,6 @@ internal sealed class PainelDeNumeracao : DockPanel
         NumberingBlock? novo = null;
         MudarVarredura(v => novo = v.AddBlock(), Tr.T("Bloco novo no fim da lista: escolha as mesas dele com Selecionar."));
         if (novo is not null) Recarregar(novo.Id);
-    }
-
-    private NumberingBlock? BlocoOuAviso()
-    {
-        if (BlocoEscolhido is { } bloco) return bloco;
-
-        Avisar(Tr.T("Escolha um bloco na lista."), erro: true);
-        return null;
     }
 
     /// <summary>15.3: a ordem da lista é a ordem da numeração.</summary>
@@ -580,60 +628,127 @@ internal sealed class PainelDeNumeracao : DockPanel
 
     // ------------------------------------------------------- 15.4 gerar
 
+    /// <summary>
+    /// Gerar e apagar em três alcances, uma linha cada (05/10/2026, Renan: "o
+    /// gerar está por inversor e não por bloco, deveria ter as duas opções"):
+    /// usina inteira, um bloco, um inversor. A conta é sempre a da usina
+    /// inteira; o alcance só escolhe quais strings recebem a tag.
+    /// </summary>
     private UIElement SecaoGerar()
     {
-        var botoes = Linha();
-        Botao(botoes, Tr.T("Gerar tags"), Tr.T("Varre a usina na ordem dos blocos e grava a tag em cada string alocada, com o texto no desenho. String sem inversor fica sem tag."), () => Gerar(NumberingScope.All));
-        Botao(botoes, Tr.T("Regerar bloco escolhido"), Tr.T("Numera de novo só as strings das mesas do bloco escolhido na lista (depois de mudar o sentido dele). As outras não mudam."), RegerarBloco);
-        Botao(botoes, Tr.T("Apagar todas"), Tr.T("Apaga as tags de todas as strings. Strings, alocação e traçado não mudam."), () => Apagar(NumberingScope.All));
+        for (var i = 0; i < 3; i++) _linhasDeGerar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _linhasDeGerar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var i = 0; i < 3; i++) _linhasDeGerar.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        var porInversor = Linha(4);
-        porInversor.Children.Add(Rotulo(Tr.T("Inversor")));
-        porInversor.Children.Add(_inversor);
-        Botao(porInversor, Tr.T("Refazer inversor"), Tr.T("Numera de novo só as strings do inversor escolhido. Como o sequencial recomeça em cada inversor, os outros não mudam."), RefazerInversor);
-        Botao(porInversor, Tr.T("Apagar do inversor"), Tr.T("Apaga só as tags das strings do inversor escolhido. O vínculo não muda."), ApagarDoInversor);
+        LinhaDeGerar(0, Tr.T("Usina inteira:"), null,
+            Tr.T("Varre a usina na ordem dos blocos e grava a tag em cada string alocada, com o texto no desenho. String sem inversor fica sem tag."), () => Gerar(NumberingScope.All),
+            Tr.T("Apaga as tags de todas as strings. Strings, alocação e traçado não mudam."), () => Apagar(NumberingScope.All));
+
+        LinhaDeGerar(1, Tr.T("Bloco:"), _blocoDeGerar,
+            Tr.T("Numera de novo só as strings das mesas do bloco (depois de mudar o sentido dele). As outras não mudam."), () => PorBloco(Gerar),
+            Tr.T("Apaga só as tags das strings das mesas do bloco. As outras não mudam."), () => PorBloco(Apagar));
+
+        LinhaDeGerar(2, Tr.T("Inversor:"), _inversor,
+            Tr.T("Numera de novo só as strings do inversor. Como o sequencial recomeça em cada inversor, os outros não mudam."), () => PorInversor(Gerar),
+            Tr.T("Apaga só as tags das strings do inversor. O vínculo não muda."), () => PorInversor(Apagar));
 
         var corpo = new StackPanel { Margin = new Thickness(6) };
-        corpo.Children.Add(botoes);
-        corpo.Children.Add(porInversor);
+        corpo.Children.Add(_linhasDeGerar);
         return new GroupBox { Header = Tr.T("Gerar"), Content = corpo, Margin = new Thickness(0, 0, 0, 8) };
+    }
+
+    /// <summary>Uma linha da seção Gerar: rótulo, a caixa do alcance (se há) e Gerar e Apagar, alinhados em colunas.</summary>
+    private void LinhaDeGerar(int linha, string rotulo, ComboBox? caixa, string dicaGerar, Action gerar, string dicaApagar, Action apagar)
+    {
+        var texto = Rotulo(rotulo);
+        texto.Margin = new Thickness(0, 0, 8, 4);
+        Grid.SetRow(texto, linha);
+        _linhasDeGerar.Children.Add(texto);
+
+        if (caixa is not null)
+        {
+            caixa.Margin = new Thickness(0, 0, 8, 4);
+            ToolTipService.SetShowOnDisabled(caixa, true);
+            Grid.SetRow(caixa, linha);
+            Grid.SetColumn(caixa, 1);
+            _linhasDeGerar.Children.Add(caixa);
+        }
+
+        var botoes = new StackPanel { Orientation = Orientation.Horizontal, Tag = caixa };
+        Botao(botoes, Tr.T("Gerar"), dicaGerar, gerar);
+        Botao(botoes, Tr.T("Apagar"), dicaApagar, apagar);
+        ToolTipService.SetShowOnDisabled(botoes, true);
+        Grid.SetRow(botoes, linha);
+        Grid.SetColumn(botoes, caixa is null ? 1 : 2);
+        if (caixa is null) Grid.SetColumnSpan(botoes, 2);
+        _linhasDeGerar.Children.Add(botoes);
+    }
+
+    /// <summary>Liga ou desliga a linha da caixa (sem bloco ou sem inversor não há o que escolher), com o porquê na dica.</summary>
+    private void HabilitarLinha(ComboBox caixa, bool liga, string dicaDesligada, string dicaLigada)
+    {
+        caixa.IsEnabled = liga;
+        caixa.ToolTip = liga ? dicaLigada : dicaDesligada;
+
+        foreach (var botoes in _linhasDeGerar.Children.OfType<StackPanel>().Where(p => ReferenceEquals(p.Tag, caixa)))
+        {
+            botoes.IsEnabled = liga;
+            if (liga) botoes.ClearValue(ToolTipProperty);
+            else botoes.ToolTip = dicaDesligada;
+        }
+    }
+
+    /// <summary>A caixa de blocos da linha Bloco, na ordem da lista, mantendo o escolhido.</summary>
+    private void MostrarBlocosDeGerar(ScanSetup varredura, Guid? manter)
+    {
+        var anterior = manter ?? ((_blocoDeGerar.SelectedItem as ComboBoxItem)?.Tag as NumberingBlock)?.Id;
+        _blocoDeGerar.Items.Clear();
+
+        foreach (var bloco in varredura.Blocks)
+        {
+            var item = new ComboBoxItem { Content = bloco.Name, Tag = bloco };
+            _blocoDeGerar.Items.Add(item);
+            if (bloco.Id == anterior) _blocoDeGerar.SelectedItem = item;
+        }
+
+        if (_blocoDeGerar.SelectedItem is null && _blocoDeGerar.Items.Count > 0) _blocoDeGerar.SelectedIndex = 0;
+        HabilitarLinha(_blocoDeGerar, _blocoDeGerar.Items.Count > 0,
+            Tr.T("Sem blocos: crie um bloco acima (Novo bloco)."),
+            Tr.T("O bloco de Gerar e Apagar desta linha (os blocos da lista acima)."));
     }
 
     private void Gerar(NumberingScope alcance)
     {
         _desenho = null;
-        Fazer(() => string.Join("\n", NumeracaoDesenho.Gerar(_documento.Database, alcance)));
+        Fazer(() => GerarNaTela(_documento, alcance));
         AtualizarTela();
     }
 
     private void Apagar(NumberingScope alcance)
     {
         _desenho = null;
-        Fazer(() => NumeracaoDesenho.Apagar(_documento.Database, alcance));
+        Fazer(() => ApagarNaTela(_documento, alcance));
         AtualizarTela();
     }
 
-    private void RegerarBloco()
+    /// <summary>O Gerar da aba (o botão e o nível 2 pelo mesmo caminho, fora de comando): o relatório numa frase.</summary>
+    internal static string GerarNaTela(Document documento, NumberingScope alcance) =>
+        EscritaForaDeComando.Fazer(documento, () => string.Join("\n", NumeracaoDesenho.Gerar(documento.Database, alcance)));
+
+    /// <summary>O Apagar da aba, pelo mesmo caminho.</summary>
+    internal static string ApagarNaTela(Document documento, NumberingScope alcance) =>
+        EscritaForaDeComando.Fazer(documento, () => NumeracaoDesenho.Apagar(documento.Database, alcance));
+
+    private void PorBloco(Action<NumberingScope> acao)
     {
-        if (BlocoOuAviso() is { } bloco) Gerar(NumberingScope.OfBlock(bloco.Id));
+        if ((_blocoDeGerar.SelectedItem as ComboBoxItem)?.Tag is NumberingBlock bloco) acao(NumberingScope.OfBlock(bloco.Id));
+        else Avisar(Tr.T("Sem blocos: crie um bloco acima (Novo bloco)."), erro: true);
     }
 
-    private Inverter? InversorOuAviso()
+    private void PorInversor(Action<NumberingScope> acao)
     {
-        if ((_inversor.SelectedItem as ComboBoxItem)?.Tag is Inverter inversor) return inversor;
-
-        Avisar(Tr.T("Escolha um inversor (os inversores vêm do cadastro da aba Inversor)."), erro: true);
-        return null;
-    }
-
-    private void RefazerInversor()
-    {
-        if (InversorOuAviso() is { } inversor) Gerar(NumberingScope.OfInverter(inversor.Id));
-    }
-
-    private void ApagarDoInversor()
-    {
-        if (InversorOuAviso() is { } inversor) Apagar(NumberingScope.OfInverter(inversor.Id));
+        if ((_inversor.SelectedItem as ComboBoxItem)?.Tag is Inverter inversor) acao(NumberingScope.OfInverter(inversor.Id));
+        else Avisar(Tr.T("Escolha um inversor (os inversores vêm do cadastro da aba Inversor)."), erro: true);
     }
 
     private void MostrarInversores()
@@ -650,6 +765,13 @@ internal sealed class PainelDeNumeracao : DockPanel
         }
 
         if (_inversor.SelectedItem is null && _inversor.Items.Count > 0) _inversor.SelectedIndex = 0;
+        HabilitarLinha(_inversor, _inversor.Items.Count > 0,
+            Tr.T("Sem inversores: cadastre na aba Inversor."),
+            Tr.T("O inversor de Gerar e Apagar desta linha (na ordem do cadastro)."));
+
+        // Com mais de um inversor o modelo precisa de {I}: o exemplo confere com o cadastro de agora.
+        _inversores = StringNumbering.CountInverters(lido.Items);
+        Previa();
         if (lido.Problem is not null) Avisar(lido.Problem, erro: true);
     }
 

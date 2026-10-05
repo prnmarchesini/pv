@@ -1,0 +1,116 @@
+; Teste de nivel 2 da composicao livre da tag (05/10/2026): modelo de texto
+; com {T}, {I}, {S} e zeros, fundo e moldura no texto, e gerar/apagar por
+; bloco e por inversor pelo MESMO caminho dos botoes da aba (fora de comando,
+; CLIVUS_NUMERACAO_TELA_AUTO). Usina, strings de teste, cadeia de exemplo e
+; os dois blocos de CLIVUS_NUMERACAO_EXEMPLO_BLOCOS_AUTO.
+; A: desenho antigo (registro NUMERACAO formato 1, "Trafo|Inv|S|-") gera as
+;    mesmas tags de antes, lido como o modelo equivalente.
+; B: o modelo livre T{T}-INV{I:00}S{S} com fundo e moldura (o Salvar da aba);
+;    os textos ja desenhados ganham fundo e moldura na hora.
+; C: modelos recusados (sem {I} com 4 inversores, campo desconhecido).
+; D: gerar a usina pela tela. E: apagar o Bloco 1. F: gerar o Bloco 1.
+; G: apagar o Inversor 3. H: gerar o Inversor 3. I: tira a moldura.
+; J: so a moldura, sem fundo.
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area numeracao")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento numeracao")
+(command "CLIVUS_MESAS_EXEMPLO_AUTO")
+(command "CLIVUS_USINA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_STRINGS_TESTE_AUTO")
+(command "CLIVUS_NUMERACAO_EXEMPLO_AUTO")
+(command "CLIVUS_NUMERACAO_EXEMPLO_BLOCOS_AUTO")
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:tipo (xd) (cdr (nth 0 xd)))
+
+; Os textos de tag lidos DA ENTIDADE: quantos, quantos escrevem a tag da
+; string, com fundo (90 bit 1), na cor da tela (90 bit 2), com moldura
+; (90 bit 16), a folga (45) e a faixa de cotas.
+(defun clivus:textos (fase / ss i e d xd tags n iguais fundo tela moldura folga zmin zmax z f)
+  (setq ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) i 0 tags nil)
+  (while (< i (clivus:conta ss))
+    (setq xd (clivus:xdata (ssname ss i)))
+    (if (= (clivus:tipo xd) "String") (setq tags (cons (cons (clivus:campo xd 0) (clivus:campo xd 3)) tags)))
+    (setq i (1+ i)))
+  (setq ss (ssget "_X" (list (cons 0 "MTEXT") (list -3 (list "CLIVUS")))) i 0 n 0 iguais 0 fundo 0 tela 0 moldura 0 folga 0.0 zmin 1e99 zmax -1e99)
+  (while (< i (clivus:conta ss))
+    (setq e (ssname ss i) d (entget e) xd (clivus:xdata e))
+    (if (= (clivus:tipo xd) "StringTag")
+      (progn
+        (setq n (1+ n) z (cadddr (assoc 10 d)) f (if (assoc 90 d) (cdr (assoc 90 d)) 0))
+        (setq zmin (min zmin z) zmax (max zmax z))
+        (if (and (= (cdr (assoc 1 d)) (clivus:campo xd 1))
+                 (= (cdr (assoc (clivus:campo xd 0) tags)) (clivus:campo xd 1)))
+          (setq iguais (1+ iguais)))
+        (if (= 1 (logand f 1)) (setq fundo (1+ fundo)))
+        (if (= 2 (logand f 2)) (setq tela (1+ tela)))
+        (if (= 16 (logand f 16)) (setq moldura (1+ moldura)))
+        (if (assoc 45 d) (setq folga (max folga (cdr (assoc 45 d)))))))
+    (setq i (1+ i)))
+  (princ (strcat "\nCLIVUS_NUMERACAO_TEXTOS fase=" fase " textos=" (itoa n) " iguais=" (itoa iguais)
+                 " fundo=" (itoa fundo) " tela=" (itoa tela) " moldura=" (itoa moldura) " folga=" (rtos folga 2 2)
+                 " zmin=" (rtos zmin 2 3) " zmax=" (rtos zmax 2 3))))
+
+(princ "\nCLIVUS_FASE A")
+(command "CLIVUS_NUMERACAO_AUTO" "TagAntiga" "Trafo|Inv|S|-")
+(command "CLIVUS_NUMERACAO_AUTO" "Gerar")
+(command "CLIVUS_NUMERACAO_AUTO" "Strings")
+(clivus:textos "A")
+
+(princ "\nCLIVUS_FASE B")
+(command "CLIVUS_NUMERACAO_TELA_AUTO" "Composicao" "T{T}-INV{I:00}S{S}" "Sim" "Sim")
+(command "CLIVUS_NUMERACAO_AUTO" "Listar")
+(clivus:textos "B")
+
+(princ "\nCLIVUS_FASE C")
+(command "CLIVUS_NUMERACAO_TELA_AUTO" "Composicao" "T{T}S{S}" "Nao" "Nao")
+(command "CLIVUS_NUMERACAO_TELA_AUTO" "Composicao" "T{T}.I{X}.S{S}" "Nao" "Nao")
+(command "CLIVUS_NUMERACAO_AUTO" "Listar")
+
+(princ "\nCLIVUS_FASE D")
+(command "CLIVUS_NUMERACAO_TELA_AUTO" "Gerar" "Usina")
+(command "CLIVUS_NUMERACAO_AUTO" "Strings")
+(clivus:textos "D")
+
+(princ "\nCLIVUS_FASE E")
+(command "CLIVUS_NUMERACAO_TELA_AUTO" "Apagar" "Bloco" "Bloco 1")
+(command "CLIVUS_NUMERACAO_AUTO" "Strings")
+(clivus:textos "E")
+
+(princ "\nCLIVUS_FASE F")
+(command "CLIVUS_NUMERACAO_TELA_AUTO" "Gerar" "Bloco" "Bloco 1")
+(command "CLIVUS_NUMERACAO_AUTO" "Strings")
+(clivus:textos "F")
+
+(princ "\nCLIVUS_FASE G")
+(command "CLIVUS_NUMERACAO_TELA_AUTO" "Apagar" "Inversor" "Inversor 3")
+(command "CLIVUS_NUMERACAO_AUTO" "Strings")
+(clivus:textos "G")
+
+(princ "\nCLIVUS_FASE H")
+(command "CLIVUS_NUMERACAO_TELA_AUTO" "Gerar" "Inversor" "Inversor 3")
+(command "CLIVUS_NUMERACAO_AUTO" "Strings")
+(clivus:textos "H")
+
+(princ "\nCLIVUS_FASE I")
+(command "CLIVUS_NUMERACAO_AUTO" "Moldura" "Nao")
+(clivus:textos "I")
+
+(princ "
+CLIVUS_FASE J")
+(command "CLIVUS_NUMERACAO_AUTO" "Fundo" "Nao")
+(command "CLIVUS_NUMERACAO_AUTO" "Moldura" "Sim")
+(clivus:textos "J")
+
+(princ "\nCLIVUS_NUMERACAO_FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)
