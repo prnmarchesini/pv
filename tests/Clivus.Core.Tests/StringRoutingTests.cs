@@ -72,10 +72,12 @@ public class StringRoutingTests
     [Trait("Etapa", "11")]
     public void CliqueQueNaoSegueFileiraNemColunaERecusado()
     {
+        // 05/10/2026: no convencional a diagonal virou um L (teste próprio
+        // em StringNegativeTests); no leapfrog ela continua recusada.
         var b = new RouteBuilder(Uma28(), []);
         b.Click(C(0, 0, 0), RoutingKind.Conventional);
 
-        Assert.NotNull(b.Click(C(0, 5, 1), RoutingKind.Conventional));   // diagonal
+        Assert.NotNull(b.Click(C(0, 5, 1), RoutingKind.Leapfrog));       // diagonal no leapfrog
         Assert.NotNull(b.Click(C(0, 0, 0), RoutingKind.Conventional));   // o próprio +
         Assert.NotNull(b.Click(C(0, 14, 0), RoutingKind.Conventional));  // fora da mesa
         Assert.NotNull(b.Click(C(1, 0, 0), RoutingKind.Conventional));   // mesa que não existe

@@ -2,7 +2,8 @@
     11.3: polaridade e tracado convencional. Um tipo com a F1.1 (2V, N
     colunas) e duas strings convencionais, uma por fileira: a de baixo com o
     + na coluna 1 e o - na coluna N, a de cima ao contrario (pontas opostas
-    nas duas). Nenhum modulo sem string. O clique em diagonal e recusado, e
+    nas duas). Nenhum modulo sem string. O clique em diagonal no leapfrog e
+    recusado (no convencional vira um L desde 05/10/2026), e
     a biblioteca lida do desenho continua com as duas strings.
 #>
 function Testar-StringTracado {
@@ -35,7 +36,7 @@ function Testar-StringTracado {
         return $false
     }
 
-    Write-Host '  (strings 11.3: duas strings convencionais, + e - em pontas opostas, diagonal recusada)' -ForegroundColor DarkGray
+    Write-Host '  (strings 11.3: duas strings convencionais, + e - em pontas opostas, diagonal no leapfrog recusada)' -ForegroundColor DarkGray
     return $true
 }
 

@@ -1,6 +1,7 @@
 ; Nivel 2 do 11.3 (eletrica): polaridade e tracado convencional. Usina pelo
 ; motor, um tipo com a F1.1 (2V) e duas strings convencionais, uma por
-; fileira (+ e - em pontas opostas); um clique em diagonal e recusado e nao
+; fileira (+ e - em pontas opostas); um clique em diagonal no leapfrog (no
+; convencional ele vira um L desde 05/10/2026) e recusado e nao
 ; estraga o que ficou gravado.
 (setq clivus:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
@@ -24,7 +25,7 @@
 (defun clivus:junta (lista / ss) (setq ss (ssadd)) (foreach e lista (if e (ssadd e ss))) ss)
 (command "CLIVUS_STRING_MESAS" (clivus:junta (list (clivus:mesa "F1.1"))) "")
 (command "CLIVUS_STRING_TRACADO_AUTO" "Modelo 1" "0.0.0 0.F.0;0.F.1 0.0.1")
-(command "CLIVUS_STRING_TRACADO_AUTO" "Modelo 1" "0.0.0 0.5.1")
+(command "CLIVUS_STRING_TRACADO_AUTO" "Modelo 1" "0.0.0 L0.5.1")
 (command "CLIVUS_STRING_TIPO_AUTO" "Listar")
 (princ "\nCLIVUS_STRING_FIM")
 (setvar "SECURELOAD" clivus:secureload)

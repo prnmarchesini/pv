@@ -146,13 +146,39 @@ internal sealed class CartesianoDaString : Border
     private void Tracar(StringType tipo, double altura, IReadOnlyList<RoutingCell> celulas, Color cor, bool tracejado)
     {
         var pincel = new SolidColorBrush(cor);
-        var linha = new Polyline { Stroke = pincel, StrokeThickness = 3, IsHitTestVisible = false };
-        if (tracejado) linha.StrokeDashArray = [2, 1];
+
+        // A ligação elétrica de módulo a módulo (05/10/2026, Renan: "no
+        // leapfrog a linha deveria ser pingando entre módulos"): vizinhos
+        // em linha reta; a ligação que pula módulo vira um arco, por cima
+        // quando vai e por baixo quando volta, sem se sobrepor à linha reta.
+        var figura = new PathFigure { IsFilled = false };
+        var (largura, _) = TamanhoDaCelula(tipo);
 
         for (var k = 0; k < celulas.Count; k++)
         {
             var (cx, cy) = Centro(tipo, altura, celulas[k]);
-            linha.Points.Add(new Point(cx, cy));
+            var ponto = new Point(cx, cy);
+
+            if (k == 0)
+            {
+                figura.StartPoint = ponto;
+            }
+            else
+            {
+                var anterior = figura.Segments.Count == 0 ? figura.StartPoint : Fim(figura.Segments[^1]);
+                var dx = ponto.X - anterior.X;
+                var pula = Math.Abs(ponto.Y - anterior.Y) < 1e-6 && Math.Abs(dx) > 1.5 * largura;
+
+                if (pula)
+                {
+                    var flecha = Math.Min(0.45 * Escala, 0.25 * Math.Abs(dx)) * (dx > 0 ? -1 : 1);
+                    figura.Segments.Add(new QuadraticBezierSegment(new Point((anterior.X + ponto.X) / 2, anterior.Y + 2 * flecha), ponto, true));
+                }
+                else
+                {
+                    figura.Segments.Add(new LineSegment(ponto, true));
+                }
+            }
 
             var numero = new TextBlock { Text = (k + 1).ToString(Tr.Culture), FontSize = 0.3 * Escala, Foreground = Brushes.Black, IsHitTestVisible = false };
             Canvas.SetLeft(numero, cx + 3);
@@ -160,6 +186,14 @@ internal sealed class CartesianoDaString : Border
             _tela.Children.Add(numero);
         }
 
+        var linha = new System.Windows.Shapes.Path
+        {
+            Stroke = pincel,
+            StrokeThickness = 3,
+            IsHitTestVisible = false,
+            Data = new PathGeometry([figura]),
+        };
+        if (tracejado) linha.StrokeDashArray = [2, 1];
         _tela.Children.Add(linha);
 
         Sinal(tipo, altura, celulas[0], "+", pincel);
@@ -173,6 +207,20 @@ internal sealed class CartesianoDaString : Border
         Canvas.SetLeft(texto, cx - 0.45 * Escala);
         Canvas.SetTop(texto, cy - 0.95 * Escala);
         _tela.Children.Add(texto);
+    }
+
+    private static Point Fim(PathSegment segmento) => segmento switch
+    {
+        LineSegment l => l.Point,
+        QuadraticBezierSegment q => q.Point2,
+        _ => default,
+    };
+
+    /// <summary>A largura e a altura de um módulo no cartesiano, em pixels da tela.</summary>
+    private static (double Largura, double Altura) TamanhoDaCelula(StringType tipo)
+    {
+        var (_, _, w, h) = tipo.SketchOrDefault.CellRect(tipo.Arrangement, 0, 0, 0);
+        return (w * Escala, h * Escala);
     }
 
     private static (double X, double Y) Centro(StringType tipo, double altura, RoutingCell c)

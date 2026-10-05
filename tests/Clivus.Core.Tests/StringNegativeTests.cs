@@ -96,6 +96,91 @@ public class StringNegativeTests
         Assert.Equal([C(0, 0, 0)], b.Cells);
     }
 
+    /// <summary>
+    /// O U em quatro cliques (05/10/2026, Renan: "clicar no 1, no 4, no de
+    /// baixo do 4 e aí no de baixo do 1 fechando com o −").
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "11")]
+    public void OUEmQuatroCliques()
+    {
+        var b = new RouteBuilder(new StringArrangement([new ArrangementTable(7, 2)]), []);
+
+        Assert.Null(b.Click(C(0, 0, 1), RoutingKind.Conventional));   // + no 1 (fileira de cima)
+        Assert.Null(b.Click(C(0, 3, 1), RoutingKind.Conventional));   // o 4
+        Assert.Null(b.Click(C(0, 3, 0), RoutingKind.Conventional));   // o de baixo do 4
+        var s = b.FinishAt(C(0, 0, 0), RoutingKind.Conventional, out var problema);   // − no de baixo do 1
+
+        Assert.Null(problema);
+        Assert.Equal(8, s!.ModuleCount);
+        Assert.Equal(C(0, 0, 1), s.Positive);
+        Assert.Equal(C(0, 0, 0), s.Negative);
+    }
+
+    /// <summary>
+    /// Clique em diagonal no convencional vira um L: desce (ou sobe) pela
+    /// coluna e anda pela fileira; se esse caminho passa por módulo usado,
+    /// tenta pela fileira primeiro.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "11")]
+    public void DiagonalNoConvencionalViraL()
+    {
+        var mesa = new StringArrangement([new ArrangementTable(7, 2)]);
+        var b = new RouteBuilder(mesa, []);
+        b.Click(C(0, 0, 1), RoutingKind.Conventional);
+        b.Click(C(0, 6, 1), RoutingKind.Conventional);    // a fileira de cima inteira
+
+        // Do 7 de cima direto ao 1 de baixo: desce pela coluna do 7 e volta pela de baixo.
+        var s = b.FinishAt(C(0, 0, 0), RoutingKind.Conventional, out var problema);
+
+        Assert.Null(problema);
+        Assert.Equal(14, s!.ModuleCount);
+        Assert.Equal(C(0, 6, 0), s.Cells[7]);
+        Assert.Equal(C(0, 0, 0), s.Negative);
+    }
+
+    /// <summary>
+    /// Clicar num módulo por onde a linha já passa recua a string até o
+    /// anterior a ele (05/10/2026: "a linha vai do 1 ao 4, se eu clicasse no 3
+    /// ela pararia no 2").
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "11")]
+    public void CliqueNoMeioDaLinhaRecuaAteOAnterior()
+    {
+        var b = new RouteBuilder(StringRoutingTests.Uma28(), []);
+        b.Click(C(0, 0, 0), RoutingKind.Conventional);
+        b.Click(C(0, 3, 0), RoutingKind.Conventional);
+
+        Assert.Null(b.Click(C(0, 2, 0), RoutingKind.Conventional));
+
+        Assert.Equal([C(0, 0, 0), C(0, 1, 0)], b.Cells);
+        Assert.Equal([new RoutingSegment(1, RoutingKind.Conventional)], b.Segments);
+
+        // Continua dali normalmente.
+        Assert.Null(b.Click(C(0, 5, 0), RoutingKind.Conventional));
+        Assert.Equal(6, b.Cells.Count);
+
+        // No + não recua (Desfazer trecho é para isso).
+        Assert.NotNull(b.Click(C(0, 0, 0), RoutingKind.Conventional));
+    }
+
+    [Fact]
+    [Trait("Etapa", "11")]
+    public void MenosNoMeioDaLinhaFechaNele()
+    {
+        var b = new RouteBuilder(StringRoutingTests.Uma28(), []);
+        b.Click(C(0, 0, 0), RoutingKind.Conventional);
+        b.Click(C(0, 9, 0), RoutingKind.Conventional);
+
+        var s = b.FinishAt(C(0, 5, 0), RoutingKind.Conventional, out var problema);
+
+        Assert.Null(problema);
+        Assert.Equal(6, s!.ModuleCount);
+        Assert.Equal(C(0, 5, 0), s.Negative);
+    }
+
     [Fact]
     [Trait("Etapa", "11")]
     public void LeapfrogAtravessaAsDuasMesasDe14()

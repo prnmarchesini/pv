@@ -369,8 +369,32 @@ public sealed class RouteBuilder
             return null;
         }
 
-        if (_celulas.Contains(celula)) return Tr.T("esse módulo já está nesta string");
-        if (StringRouting.Run(_arranjo, _celulas[^1], celula, out var problema) is not { } corrida) return problema;
+        // Clique num módulo por onde a linha já passa: a string recua até o
+        // anterior a ele (05/10/2026).
+        var ja = _celulas.IndexOf(celula);
+        if (ja == 0) return Tr.T("esse é o + da string: use Desfazer trecho para recomeçar");
+        if (ja > 0)
+        {
+            Recuar(ja - 1);
+            return null;
+        }
+
+        if (StringRouting.Run(_arranjo, _celulas[^1], celula, out var problema) is not { } corrida)
+        {
+            // Diagonal no convencional: um L (05/10/2026: o U em quatro cliques).
+            if (tipo == RoutingKind.Conventional && EmL(celula) is { } l)
+            {
+                foreach (var trecho in l)
+                {
+                    _celulas.AddRange(trecho);
+                    _trechos.Add(new RoutingSegment(_celulas.Count - 1, tipo));
+                }
+
+                return null;
+            }
+
+            return problema;
+        }
 
         var novas = tipo == RoutingKind.Leapfrog ? StringRouting.Leapfrog(corrida) : corrida.Skip(1).ToList();
         if (novas.Any(c => _ocupadas.Contains(c) || _celulas.Contains(c)))
@@ -378,6 +402,49 @@ public sealed class RouteBuilder
 
         _celulas.AddRange(novas);
         _trechos.Add(new RoutingSegment(_celulas.Count - 1, tipo));
+        return null;
+    }
+
+    /// <summary>Deixa a string até a célula de índice <paramref name="ultimo"/>, os trechos acertados.</summary>
+    private void Recuar(int ultimo)
+    {
+        _celulas.RemoveRange(ultimo + 1, _celulas.Count - ultimo - 1);
+
+        var mantidos = _trechos.Where(t => t.End <= ultimo).ToList();
+        var cortado = _trechos.FirstOrDefault(t => t.End > ultimo);
+        if (cortado is not null && (mantidos.Count == 0 ? 0 : mantidos[^1].End) < ultimo)
+            mantidos.Add(new RoutingSegment(ultimo, cortado.Kind));
+
+        _trechos.Clear();
+        _trechos.AddRange(mantidos);
+    }
+
+    /// <summary>
+    /// O caminho em L do fim da string até a célula: primeiro pela coluna e
+    /// depois pela fileira; se passa por módulo usado ou não existe, pela
+    /// fileira e depois pela coluna. Null se nenhum dos dois serve.
+    /// </summary>
+    private List<List<RoutingCell>>? EmL(RoutingCell alvo)
+    {
+        var fim = _celulas[^1];
+        var cantos = new List<RoutingCell?>
+        {
+            new RoutingCell(fim.Table, fim.Column, alvo.Row),
+            StringRouting.AtGlobal(_arranjo, StringRouting.GlobalColumn(_arranjo, alvo), fim.Row),
+        };
+
+        foreach (var canto in cantos)
+        {
+            if (canto is not { } c || !StringRouting.Exists(_arranjo, c) || c == fim || c == alvo) continue;
+            if (StringRouting.Run(_arranjo, fim, c, out _) is not { } a || StringRouting.Run(_arranjo, c, alvo, out _) is not { } b) continue;
+
+            var trechos = new List<List<RoutingCell>> { a.Skip(1).ToList(), b.Skip(1).ToList() };
+            var todas = trechos.SelectMany(t => t).ToList();
+            if (todas.Distinct().Count() != todas.Count || todas.Any(x => _ocupadas.Contains(x) || _celulas.Contains(x))) continue;
+
+            return trechos;
+        }
+
         return null;
     }
 
@@ -422,6 +489,14 @@ public sealed class RouteBuilder
         }
 
         if (_celulas[^1] == negativo) return Finish(out problema);
+
+        // O − num módulo por onde a linha já passa: a string termina nele.
+        var ja = _celulas.IndexOf(negativo);
+        if (ja > 0)
+        {
+            Recuar(ja);
+            return Finish(out problema);
+        }
 
         if (tipo == RoutingKind.Leapfrog)
         {
