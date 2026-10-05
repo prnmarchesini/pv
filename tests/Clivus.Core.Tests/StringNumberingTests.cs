@@ -48,6 +48,7 @@ public class StringNumberingTests
     [InlineData(true, "T1", "I", "S", ".")]   // prefixo terminando em algarismo
     [InlineData(true, "T", "I{", "S", ".")]   // caractere de formatação do texto
     [InlineData(true, "T", "I", "S\\", ".")]
+    [InlineData(true, "T%%", "I", "S", ".")]  // %%d no texto do CAD vira símbolo
     [InlineData(true, "T", "I", "Stringcomprida", ".")] // mais de 12 caracteres
     public void ComposicaoAmbiguaOuInvalidaEhRecusada(bool trafo, string t, string i, string s, string separador)
     {
@@ -287,5 +288,164 @@ public class StringNumberingTests
 
         // Sem blocos, a usina inteira no sentido padrão.
         Assert.Equal([1, 2, 3, 4, 5], Numeros(new ScanSetup(ScanDirection.LeftToRight, []).Sequence(itens)));
+    }
+
+    // ------------------------------------------------------ 15.4 gerar
+
+    private static readonly EquipmentSize Caixa = new(1, 1, 2);
+
+    private static Transformer Trafo(string apelido) => new(Guid.NewGuid(), "Trafo", apelido, 800, 13800, 2500, 0, 6, "", Caixa, Guid.Empty);
+
+    /// <summary>Uma usina pequena: dois trafos, três inversores (o 3 sem trafo), mesas oeste (x 0) e leste (x 20).</summary>
+    private sealed class Usina
+    {
+        public readonly Transformer T1 = Trafo("TA");
+        public readonly Transformer T2 = Trafo("TB");
+        public readonly Inverter I1;
+        public readonly Inverter I2;
+        public readonly Inverter I3;
+        public readonly Guid Oeste = Guid.NewGuid();
+        public readonly Guid Leste = Guid.NewGuid();
+        public readonly Dictionary<Guid, ModuleSpot> Modulos = [];
+        public readonly List<ElectricalString> Strings = [];
+
+        public Usina()
+        {
+            var modelo = Guid.NewGuid();
+            I1 = new Inverter(Guid.NewGuid(), modelo, "Inversor 1", T1.Id);
+            I2 = new Inverter(Guid.NewGuid(), modelo, "Inversor 2", T2.Id);
+            I3 = new Inverter(Guid.NewGuid(), modelo, "Inversor 3", Guid.Empty);
+        }
+
+        public IReadOnlyList<Transformer> Trafos => [T1, T2];
+
+        public IReadOnlyList<Inverter> Inversores => [I1, I2, I3];
+
+        /// <summary>Uma string com o primeiro módulo em (x, y) na mesa dada, mais um módulo ao lado.</summary>
+        public ElectricalString Str(Guid inversor, Guid mesa, double x, double y)
+        {
+            var primeiro = Guid.NewGuid();
+            var segundo = Guid.NewGuid();
+            Modulos[primeiro] = new ModuleSpot(mesa, x, y);
+            Modulos[segundo] = new ModuleSpot(mesa, x + 1, y);
+            var s = new ElectricalString(Guid.NewGuid(), Guid.Empty, [primeiro, segundo], inversor, "velha");
+            Strings.Add(s);
+            return s;
+        }
+    }
+
+    [Fact]
+    [Trait("Etapa", "15")]
+    public void GerarNumeraPorInversorNaOrdemDaVarredura()
+    {
+        var u = new Usina();
+        var a = u.Str(u.I1.Id, u.Oeste, 0, 0);
+        var b = u.Str(u.I1.Id, u.Oeste, 0, 10);
+        var c = u.Str(u.I1.Id, u.Leste, 20, 5);
+        var d = u.Str(u.I2.Id, u.Leste, 20, 0);
+        var e = u.Str(u.I2.Id, u.Oeste, 0, 5);
+        var f = u.Str(u.I3.Id, u.Leste, 20, 10);
+
+        var r = StringNumbering.Number(TagScheme.Default, new ScanSetup(ScanDirection.LeftToRight, []), u.Trafos, u.Inversores, u.Strings, u.Modulos);
+
+        // Da esquerda para a direita; na mesma coluna, de cima para baixo.
+        // O sequencial recomeça em cada inversor; o inversor 3 não tem trafo.
+        Assert.Equal("T1.I1.S1", r.Tags[b.Id]);
+        Assert.Equal("T1.I1.S2", r.Tags[a.Id]);
+        Assert.Equal("T1.I1.S3", r.Tags[c.Id]);
+        Assert.Equal("T2.I2.S1", r.Tags[e.Id]);
+        Assert.Equal("T2.I2.S2", r.Tags[d.Id]);
+        Assert.Equal("I3.S1", r.Tags[f.Id]);
+        Assert.Equal([u.I3.Id], r.InvertersWithoutTransformer);
+        Assert.Equal(0, r.Free);
+        Assert.Equal(6, r.Tagged);
+    }
+
+    [Fact]
+    [Trait("Etapa", "15")]
+    public void OsBlocosNaOrdemDaListaMandamNaSequencia()
+    {
+        var u = new Usina();
+        var a = u.Str(u.I1.Id, u.Oeste, 0, 0);
+        var b = u.Str(u.I1.Id, u.Oeste, 0, 10);
+        var c = u.Str(u.I1.Id, u.Leste, 20, 0);
+        var d = u.Str(u.I1.Id, u.Leste, 20, 10);
+
+        var setup = new ScanSetup(ScanDirection.LeftToRight, []);
+        var leste = setup.AddBlock();
+        var oeste = setup.AddBlock();
+        setup.SetTables(leste.Id, [u.Leste]);
+        setup.SetTables(oeste.Id, [u.Oeste]);
+        setup.SetDirection(oeste.Id, ScanDirection.BottomToTop);
+
+        var r = StringNumbering.Number(TagScheme.Default, setup, u.Trafos, u.Inversores, u.Strings, u.Modulos);
+        Assert.Equal(["T1.I1.S1", "T1.I1.S2", "T1.I1.S3", "T1.I1.S4"], new[] { d, c, a, b }.Select(x => r.Tags[x.Id]));
+
+        // Inverte a ordem dos dois blocos: o oeste inteiro vem antes.
+        setup.Move(oeste.Id, -1);
+        r = StringNumbering.Number(TagScheme.Default, setup, u.Trafos, u.Inversores, u.Strings, u.Modulos);
+        Assert.Equal(["T1.I1.S1", "T1.I1.S2", "T1.I1.S3", "T1.I1.S4"], new[] { a, b, d, c }.Select(x => r.Tags[x.Id]));
+    }
+
+    [Fact]
+    [Trait("Etapa", "15")]
+    public void StringSemInversorOuSemPosicaoFicaSemTagEContada()
+    {
+        var u = new Usina();
+        var livre = u.Str(Guid.Empty, u.Oeste, 0, 0);
+        var fantasma = u.Str(Guid.NewGuid(), u.Oeste, 0, 5);
+        var sumida = u.Str(u.I1.Id, u.Oeste, 0, 10);
+        u.Modulos.Remove(sumida.Modules[0]);
+        var boa = u.Str(u.I1.Id, u.Leste, 20, 0);
+
+        var r = StringNumbering.Number(TagScheme.Default, new ScanSetup(ScanDirection.LeftToRight, []), u.Trafos, u.Inversores, u.Strings, u.Modulos);
+
+        Assert.Equal(string.Empty, r.Tags[livre.Id]);
+        Assert.Equal(string.Empty, r.Tags[fantasma.Id]);
+        Assert.Equal(string.Empty, r.Tags[sumida.Id]);
+        Assert.Equal("T1.I1.S1", r.Tags[boa.Id]);
+        Assert.Equal((1, 1, 1, 1), (r.Free, r.UnknownInverter, r.Unplaced, r.Tagged));
+    }
+
+    [Fact]
+    [Trait("Etapa", "15")]
+    public void ONumeroDoTrafoEDoInversorEhAPosicaoNaLista()
+    {
+        var u = new Usina();
+        var s = u.Str(u.I2.Id, u.Oeste, 0, 0);
+
+        // A lista de inversores com o 2 na frente: ele vira o inversor 1.
+        var r = StringNumbering.Number(TagScheme.Default, new ScanSetup(ScanDirection.LeftToRight, []), [u.T2, u.T1], [u.I2, u.I1, u.I3], u.Strings, u.Modulos);
+        Assert.Equal("T1.I1.S1", r.Tags[s.Id]);
+
+        // Trafo que sumiu do cadastro: o inversor fica sem o pedaço do trafo, e avisado.
+        r = StringNumbering.Number(TagScheme.Default, new ScanSetup(ScanDirection.LeftToRight, []), [u.T1], u.Inversores, u.Strings, u.Modulos);
+        Assert.Equal("I2.S1", r.Tags[s.Id]);
+        Assert.Equal([u.I2.Id], r.InvertersWithoutTransformer);
+    }
+
+    [Fact]
+    [Trait("Etapa", "15")]
+    public void AOrdemDeEntradaNaoMudaONumero()
+    {
+        var u = new Usina();
+        for (var i = 0; i < 12; i++) u.Str(i % 2 == 0 ? u.I1.Id : u.I2.Id, i < 6 ? u.Oeste : u.Leste, i < 6 ? 0 : 20, i * 3);
+
+        var setup = new ScanSetup(ScanDirection.TopToBottom, []);
+        var uma = StringNumbering.Number(TagScheme.Default, setup, u.Trafos, u.Inversores, u.Strings, u.Modulos);
+        var outra = StringNumbering.Number(TagScheme.Default, setup, u.Trafos, u.Inversores, u.Strings.AsEnumerable().Reverse().ToList(), u.Modulos);
+
+        Assert.Equal(uma.Tags.OrderBy(x => x.Key), outra.Tags.OrderBy(x => x.Key));
+        Assert.Equal(12, uma.Tags.Values.Distinct().Count());
+    }
+
+    [Fact]
+    [Trait("Etapa", "15")]
+    public void ATagDesenhadaVaiEVoltaDoXData()
+    {
+        var t = new StringTagText(Guid.NewGuid(), "T1.I2.S3");
+        Assert.Equal(t, StringTagText.Parse(t.ToFields()));
+        Assert.Null(StringTagText.Parse(["nao-e-guid", "T1"]));
+        Assert.Null(StringTagText.Parse([Guid.Empty.ToString("D"), "T1"]));
     }
 }

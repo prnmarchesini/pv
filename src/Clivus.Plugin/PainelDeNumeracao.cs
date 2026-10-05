@@ -49,6 +49,7 @@ internal sealed class PainelDeNumeracao : DockPanel
         var pilha = new StackPanel();
         pilha.Children.Add(SecaoDaTag());
         pilha.Children.Add(SecaoDaVarredura());
+        pilha.Children.Add(SecaoGerar());
         Children.Add(new ScrollViewer { Content = pilha, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
 
         Carregar();
@@ -358,6 +359,36 @@ internal sealed class PainelDeNumeracao : DockPanel
 
     /// <summary>Peças de mesa (bloco, contorno, face); curva de nível em polilinha 2D e o resto nem entram, e o que não é mesa do plugin é ignorado depois.</summary>
     internal static SelectionFilter FiltroDeMesas => new([new TypedValue((int)DxfCode.Start, "INSERT,POLYLINE,3DFACE")]);
+
+    // ------------------------------------------------------- 15.4 gerar
+
+    private UIElement SecaoGerar()
+    {
+        var botoes = Linha();
+        Botao(botoes, Tr.T("Gerar tags"), Tr.T("Varre a usina na ordem dos blocos e grava a tag em cada string alocada, com o texto no desenho. String sem inversor fica sem tag."), Gerar);
+
+        var corpo = new StackPanel { Margin = new Thickness(6) };
+        corpo.Children.Add(botoes);
+        return new GroupBox { Header = Tr.T("Gerar"), Content = corpo, Margin = new Thickness(0, 0, 0, 8) };
+    }
+
+    private void Gerar()
+    {
+        Fazer(() => string.Join("\n", NumeracaoDesenho.Gerar(_documento.Database)));
+        AtualizarTela();
+    }
+
+    private static void AtualizarTela()
+    {
+        try
+        {
+            AcadApp.UpdateScreen();
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui atualizar a tela depois da numeração.", erro);
+        }
+    }
 
     // -------------------------------------------------------------- comum
 

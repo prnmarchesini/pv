@@ -48,7 +48,7 @@ public sealed record TagScheme(bool IncludeTransformer, string TransformerPrefix
         {
             if (prefixo is null) return Tr.T("falta um prefixo");
             if (prefixo.Length > MaxPrefixLength) return Tr.F("o prefixo \"{0}\" passa de {1} caracteres", prefixo, MaxPrefixLength);
-            if (prefixo.Any(c => char.IsControl(c) || c is '\\' or '{' or '}' or '|')) return Tr.F("o prefixo \"{0}\" tem caractere que não pode ir na tag", prefixo);
+            if (prefixo.Any(c => char.IsControl(c) || c is '\\' or '{' or '}' or '|' or '%')) return Tr.F("o prefixo \"{0}\" tem caractere que não pode ir na tag", prefixo);
             if (prefixo.Length > 0 && (char.IsDigit(prefixo[^1]) || char.IsWhiteSpace(prefixo[0]) || char.IsWhiteSpace(prefixo[^1])))
                 return Tr.F("o prefixo \"{0}\" não pode terminar em algarismo nem ter espaço nas pontas", prefixo);
         }
@@ -396,5 +396,116 @@ public sealed class ScanSetup
         }
 
         return (new ScanSetup(padrao, blocos.Select(b => new NumberingBlock(b.Id, b.Nome, b.Sentido, b.Mesas))), perdidas);
+    }
+}
+
+/// <summary>Onde está um módulo, para a varredura: a mesa dele e a posição em planta (o centro).</summary>
+public sealed record ModuleSpot(Guid Table, double X, double Y);
+
+/// <summary>
+/// O resultado da numeração (15.4).
+/// </summary>
+/// <param name="Tags">A tag nova de cada string (vazia: a string fica sem tag).</param>
+/// <param name="Tagged">Quantas strings ganharam tag.</param>
+/// <param name="Free">Strings sem inversor: ficam sem tag (avisar quantas).</param>
+/// <param name="UnknownInverter">Strings cujo inversor não está no cadastro: ficam sem tag.</param>
+/// <param name="Unplaced">Strings alocadas cujo primeiro módulo não está no desenho: sem posição, ficam sem tag.</param>
+/// <param name="InvertersWithoutTransformer">Inversores com string numerada e sem trafo (ou com trafo que sumiu do cadastro): a tag sai sem o pedaço do trafo.</param>
+public sealed record StringNumberingResult(
+    IReadOnlyDictionary<Guid, string> Tags,
+    int Tagged,
+    int Free,
+    int UnknownInverter,
+    int Unplaced,
+    IReadOnlyList<Guid> InvertersWithoutTransformer);
+
+/// <summary>
+/// A numeração das strings (15.4): varre a usina na ordem dos blocos (cada
+/// um no seu sentido, depois o resto no sentido da usina) e, dentro de cada
+/// inversor, numera 1, 2, 3 nessa ordem (regra elétrica 8). O inversor é o do
+/// vínculo (<see cref="ElectricalString.Inverter"/>), nunca o mais perto.
+/// </summary>
+public static class StringNumbering
+{
+    public static StringNumberingResult Number(
+        TagScheme scheme,
+        ScanSetup setup,
+        IReadOnlyList<Transformer> transformers,
+        IReadOnlyList<Inverter> inverters,
+        IReadOnlyList<ElectricalString> strings,
+        IReadOnlyDictionary<Guid, ModuleSpot> modules)
+    {
+        ArgumentNullException.ThrowIfNull(scheme);
+        ArgumentNullException.ThrowIfNull(setup);
+        ArgumentNullException.ThrowIfNull(transformers);
+        ArgumentNullException.ThrowIfNull(inverters);
+        ArgumentNullException.ThrowIfNull(strings);
+        ArgumentNullException.ThrowIfNull(modules);
+        if (scheme.Problem() is { } problema) throw new ArgumentException(problema, nameof(scheme));
+
+        // O número do trafo e o do inversor: a posição na lista do cadastro.
+        var numeroDoTrafo = new Dictionary<Guid, int>();
+        for (var i = 0; i < transformers.Count; i++) numeroDoTrafo.TryAdd(transformers[i].Id, i + 1);
+
+        var numeroDoInversor = new Dictionary<Guid, int>();
+        var inversorPorId = new Dictionary<Guid, Inverter>();
+        for (var i = 0; i < inverters.Count; i++)
+        {
+            if (numeroDoInversor.TryAdd(inverters[i].Id, i + 1)) inversorPorId[inverters[i].Id] = inverters[i];
+        }
+
+        var tags = new Dictionary<Guid, string>();
+        var livres = 0;
+        var semInversor = 0;
+        var semPosicao = 0;
+        var aVarrer = new List<ScanItem>();
+        var porId = new Dictionary<Guid, ElectricalString>();
+
+        foreach (var s in strings)
+        {
+            if (!porId.TryAdd(s.Id, s)) continue;
+            tags[s.Id] = string.Empty;
+
+            if (!s.IsAllocated) livres++;
+            else if (!inversorPorId.ContainsKey(s.Inverter)) semInversor++;
+            else if (s.Modules.Count == 0 || !modules.TryGetValue(s.Modules[0], out var lugar)) semPosicao++;
+            else aVarrer.Add(new ScanItem(s.Id, lugar.X, lugar.Y, lugar.Table));
+        }
+
+        var sequencial = new Dictionary<Guid, int>();
+        var semTrafo = new List<Guid>();
+
+        foreach (var id in setup.Sequence(aVarrer))
+        {
+            var inversor = inversorPorId[porId[id].Inverter];
+            var n = sequencial.GetValueOrDefault(inversor.Id) + 1;
+            sequencial[inversor.Id] = n;
+
+            int? trafo = numeroDoTrafo.TryGetValue(inversor.Transformer, out var t) ? t : null;
+            if (trafo is null && n == 1) semTrafo.Add(inversor.Id);
+
+            tags[id] = scheme.Compose(trafo, numeroDoInversor[inversor.Id], n);
+        }
+
+        return new StringNumberingResult(tags, aVarrer.Count, livres, semInversor, semPosicao, semTrafo);
+    }
+}
+
+/// <summary>
+/// A identidade do texto da tag desenhado sobre a string (15.4): de qual
+/// string ele é e o que escreve. É assim que apagar e refazer acham o texto
+/// de cada string, sem olhar camada nem posição.
+/// </summary>
+public sealed record StringTagText(Guid String, string Tag)
+{
+    public const string Tipo = "StringTag";
+    public const int FieldCount = 2;
+
+    public IReadOnlyList<string> ToFields() => [String.ToString("D"), Tag ?? string.Empty];
+
+    public static StringTagText? Parse(IReadOnlyList<string> c)
+    {
+        ArgumentNullException.ThrowIfNull(c);
+        return c.Count >= FieldCount && Guid.TryParse(c[0], out var s) && s != Guid.Empty ? new StringTagText(s, c[1]) : null;
     }
 }

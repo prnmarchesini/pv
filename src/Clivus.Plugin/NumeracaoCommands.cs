@@ -41,7 +41,8 @@ public static class NumeracaoCommands
     }
 
     /// <summary>
-    /// [Tag/Usina/Bloco/Listar], para o nível 2. Tag pede a composição em uma
+    /// [Tag/Usina/Bloco/Gerar/Strings/Listar], para o nível 2. Gerar numera
+    /// a usina (15.4); Strings lista cada string. Tag pede a composição em uma
     /// linha, "trafo|inversor|string|separador" (trafo "-" tira o pedaço do
     /// trafo; ex. "T|I|S|." ou "-||S|"). Usina pede o sentido da usina
     /// inteira. Bloco pede [Novo/Mesas/Sentido/Subir/Descer/Renomear/Apagar]
@@ -59,13 +60,21 @@ public static class NumeracaoCommands
 
         try
         {
-            var opcao = Palavra(editor, Tr.T("\nNumeração [Tag/Usina/Bloco/Listar]: "), "Tag", "Usina", "Bloco", "Listar");
+            var opcao = Palavra(editor, Tr.T("\nNumeração [Tag/Usina/Bloco/Gerar/Strings/Listar]: "), "Tag", "Usina", "Bloco", "Gerar", "Strings", "Listar");
             if (opcao is null) return;
 
             var database = documento.Database;
 
             switch (opcao)
             {
+                case "Gerar":
+                    Escrever(editor, NumeracaoDesenho.Gerar(database));
+                    return;
+
+                case "Strings":
+                    ListarStrings(editor, database);
+                    return;
+
                 case "Tag":
                     var texto = editor.GetString(new PromptStringOptions(Tr.T("\nComposição (trafo|inversor|string|separador): ")) { AllowSpaces = true });
                     if (texto.Status != PromptStatus.OK) return;
@@ -98,6 +107,43 @@ public static class NumeracaoCommands
         {
             RegistroDeDiagnostico.Registrar("Falha no CLIVUS_NUMERACAO_AUTO.", erro);
             editor.WriteMessage(Tr.F("\nNão consegui mexer na numeração: {0}\n", erro.Message));
+        }
+    }
+
+    /// <summary>O relatório na linha de comando: a primeira linha com o prefixo NUMERACAO.</summary>
+    private static void Escrever(Editor editor, IReadOnlyList<string> linhas)
+    {
+        for (var i = 0; i < linhas.Count; i++)
+            editor.WriteMessage(i == 0 ? Tr.F("\nNUMERACAO {0}\n", linhas[i]) : linhas[i] + "\n");
+    }
+
+    /// <summary>
+    /// Para o nível 2: cada string com a tag gravada, o inversor (do
+    /// vínculo), o bloco da mesa do primeiro módulo (0 = fora de bloco) e a
+    /// posição dele, em números invariantes.
+    /// </summary>
+    private static void ListarStrings(Editor editor, Autodesk.AutoCAD.DatabaseServices.Database database)
+    {
+        var (varredura, _) = NumeracaoStore.Varredura(database);
+        var inversores = ElectricalStore.Inverters(database).Items;
+        var donoDaMesa = varredura.BlockByTable();
+        var posicaoDoBloco = varredura.Blocks.Select((b, i) => (b.Id, i + 1)).ToDictionary(x => x.Id, x => x.Item2);
+
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        var modulos = NumeracaoDesenho.Modulos(transacao, database);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+
+        foreach (var (_, s) in ElectricalStore.Strings(transacao, database))
+        {
+            var nome = inversores.FirstOrDefault(i => i.Id == s.Inverter)?.Name.Replace(' ', '_') ?? "-";
+            if (!modulos.TryGetValue(s.Modules[0], out var lugar))
+            {
+                editor.WriteMessage($"NUMERACAO_STRING tag={(s.Tag.Length > 0 ? s.Tag : "-")} inversor={nome} bloco=- x=- y=-\n");
+                continue;
+            }
+
+            var bloco = donoDaMesa.TryGetValue(lugar.Mesa, out var b) ? posicaoDoBloco[b] : 0;
+            editor.WriteMessage(string.Format(inv, "NUMERACAO_STRING tag={0} inversor={1} bloco={2} x={3:0.###} y={4:0.###}\n", s.Tag.Length > 0 ? s.Tag : "-", nome, bloco, lugar.Centro.X, lugar.Centro.Y));
         }
     }
 
