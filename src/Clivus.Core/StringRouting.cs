@@ -84,22 +84,26 @@ public sealed class StringRoute : IEquatable<StringRoute>
         && Segments[^1].End == Cells.Count - 1
         && Segments.All(s => Enum.IsDefined(s.Kind));
 
-    /// <summary>A mesma string com o positivo e o negativo trocados (espelhar, 11.5).</summary>
-    public StringRoute Mirrored()
+    /// <summary>
+    /// A mesma string refletida de ponta a ponta do arranjo (espelhar, 11.5;
+    /// 05/10/2026, Renan: o espelhar põe o + e o − do outro lado da mesa, não
+    /// troca um com o outro): a coluna c da mesa t vai para a coluna simétrica
+    /// da mesa simétrica, na mesma fileira; a ordem elétrica e os trechos não
+    /// mudam. O arranjo tem que ser simétrico (as mesas lidas de trás para a
+    /// frente dão o mesmo arranjo); quem chama confere.
+    /// </summary>
+    public StringRoute MirroredAcross(StringArrangement arranjo)
     {
-        var n = Cells.Count;
-        var celulas = Cells.Reverse().ToList();
+        ArgumentNullException.ThrowIfNull(arranjo);
+        var ultima = arranjo.Tables.Count - 1;
 
-        // O trecho k ia de (fim do k-1, ou 0) até End; ao contrário, vai de
-        // n-1-End até n-1-começo. Os fins novos são os começos antigos.
-        var trechos = new List<RoutingSegment>();
-        for (var k = Segments.Count - 1; k >= 0; k--)
+        var celulas = Cells.Select(c =>
         {
-            var comeco = k == 0 ? 0 : Segments[k - 1].End;
-            trechos.Add(new RoutingSegment(n - 1 - comeco, Segments[k].Kind));
-        }
+            var mesa = ultima - c.Table;
+            return new RoutingCell(mesa, arranjo.Tables[mesa].Columns - 1 - c.Column, c.Row);
+        }).ToList();
 
-        return new StringRoute(celulas, trechos);
+        return new StringRoute(celulas, Segments);
     }
 
     /// <summary>O tipo do trecho que leva da célula i-1 à célula i.</summary>

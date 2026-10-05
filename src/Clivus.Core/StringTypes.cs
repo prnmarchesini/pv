@@ -217,17 +217,22 @@ public sealed class StringLibrary
     }
 
     /// <summary>
-    /// Espelha o tipo (11.5): a mesma configuração com o positivo do outro
-    /// lado; cada string troca o + com o − (a ordem elétrica se inverte). Null
-    /// se deu certo, o porquê se não.
+    /// Espelha o tipo (11.5): o traçado refletido de um lado ao outro da mesa,
+    /// e o + e o − vão junto para o outro lado (05/10/2026: antes trocava o +
+    /// com o −, e o Renan reprovou). Arranjo não simétrico (14x2 seguida de
+    /// 7x2) não tem espelho. Null se deu certo, o porquê se não.
     /// </summary>
     public string? Mirror(Guid id)
     {
         var posicao = _tipos.FindIndex(t => t.Id == id);
         if (posicao < 0) return Tr.T("esse tipo de string não está mais na biblioteca");
-        if (_tipos[posicao].Routes.Count == 0) return Tr.T("o tipo ainda não tem traçado");
+        var tipo = _tipos[posicao];
+        if (tipo.Routes.Count == 0) return Tr.T("o tipo ainda não tem traçado");
+        if (!tipo.Arrangement.Tables.SequenceEqual(tipo.Arrangement.Tables.Reverse()))
+            return Tr.T("as mesas do tipo não são iguais de trás para a frente, então o traçado não tem espelho");
 
-        _tipos[posicao] = _tipos[posicao] with { Strings = _tipos[posicao].Routes.Select(r => r.Mirrored()).ToList() };
+        var desenho = tipo.Sketch is { } d ? d with { Gaps = d.Gaps.Reverse().ToList() } : null;
+        _tipos[posicao] = tipo with { Sketch = desenho, Strings = tipo.Routes.Select(r => r.MirroredAcross(tipo.Arrangement)).ToList() };
         return null;
     }
 

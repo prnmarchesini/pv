@@ -1,7 +1,9 @@
 <#
     11.5: clonar, espelhar e apagar um tipo. Modelo 1 (F1.1, 2V de N
     colunas) com duas strings convencionais; o clone (Modelo 2) sai igual;
-    espelhado, cada string do Modelo 2 troca o + com o -; o Modelo 1 nao
+    espelhado, cada string do Modelo 2 e refletida de um lado ao outro da
+    mesa: o + e o - vao para a coluna simetrica, na mesma fileira (05/10/2026:
+    antes trocava o + com o -, e o Renan reprovou); o Modelo 1 nao
     muda (o segundo clone, Modelo 3, e igual a ele); apagar o Modelo 3 deixa
     dois tipos no desenho.
 #>
@@ -26,6 +28,13 @@ function Testar-StringModelo {
         return $null
     }
 
+    $colunas = if ($t -match 'Modelo 1 \S+ 1 mesa\(s\), \d+ m\S+dulo\(s\) \((\d+)x2\)') { [int]$Matches[1] } else { 0 }
+    if ($colunas -lt 2) { $erros += 'nao achei as colunas do Modelo 1' }
+    function Refletida([string] $ponta) {
+        if ($ponta -match '^mesa 1 col\. (\d+) fil\. (\d)$') { return "mesa 1 col. $($colunas + 1 - [int]$Matches[1]) fil. $($Matches[2])" }
+        return '?'
+    }
+
     foreach ($i in 1, 2) {
         $original = Pontas 'Modelo 1' $i
         $clone = Pontas 'Modelo 3' $i
@@ -34,7 +43,7 @@ function Testar-StringModelo {
 
         if (-not $original -or -not $clone -or $espelho.Count -ne 2) { $erros += "faltou a string $i em algum modelo"; continue }
         if ($espelho[0][0] -ne $original[0] -or $espelho[0][1] -ne $original[1]) { $erros += "o clone da string $i nao saiu igual" }
-        if ($espelho[1][0] -ne $original[1] -or $espelho[1][1] -ne $original[0]) { $erros += "o espelho da string $i nao trocou o + com o -" }
+        if ($espelho[1][0] -ne (Refletida $original[0]) -or $espelho[1][1] -ne (Refletida $original[1])) { $erros += "o espelho da string $i nao levou o + e o - para o outro lado: $($espelho[1] -join ' / ') (original $($original -join ' / '))" }
         if ($clone[0] -ne $original[0] -or $clone[1] -ne $original[1]) { $erros += "o Modelo 1 mudou depois de espelhar o clone (string $i)" }
     }
 
@@ -46,7 +55,7 @@ function Testar-StringModelo {
         return $false
     }
 
-    Write-Host '  (strings 11.5: clone igual, espelho troca + com -, original intacto, apagar)' -ForegroundColor DarkGray
+    Write-Host '  (strings 11.5: clone igual, espelho reflete + e - para o outro lado, original intacto, apagar)' -ForegroundColor DarkGray
     return $true
 }
 

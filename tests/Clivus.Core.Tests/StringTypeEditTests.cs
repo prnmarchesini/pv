@@ -37,7 +37,10 @@ public class StringTypeEditTests
 
     [Fact]
     [Trait("Etapa", "11")]
-    public void EspelharTrocaOPositivoComONegativoDeCadaString()
+    // 05/10/2026: o requisito mudou. Espelhar era trocar o + com o −; o
+    // Renan reprovou ("o espelhar deveria colocar o + e − para o lado
+    // esquerdo"): agora reflete o traçado de um lado ao outro da mesa.
+    public void EspelharRefleteOTracadoEOMaisEOMenosVaoParaOOutroLado()
     {
         var (biblioteca, tipo) = UmTipoComDuasStrings();
         var copia = biblioteca.Clone(tipo.Id)!;
@@ -47,10 +50,13 @@ public class StringTypeEditTests
 
         for (var i = 0; i < tipo.Routes.Count; i++)
         {
-            Assert.Equal(tipo.Routes[i].Positive, espelhado.Routes[i].Negative);
-            Assert.Equal(tipo.Routes[i].Negative, espelhado.Routes[i].Positive);
-            Assert.Equal(tipo.Routes[i].Cells.Reverse(), espelhado.Routes[i].Cells);
-            Assert.True(espelhado.Routes[i].IsWellFormed);
+            var o = tipo.Routes[i];
+            var e = espelhado.Routes[i];
+            Assert.Equal(o.Cells.Select(c => C(0, 13 - c.Column, c.Row)), e.Cells);
+            Assert.Equal(C(0, 13 - o.Positive.Column, o.Positive.Row), e.Positive);
+            Assert.Equal(C(0, 13 - o.Negative.Column, o.Negative.Row), e.Negative);
+            Assert.Equal(o.Segments, e.Segments);
+            Assert.True(e.IsWellFormed);
         }
 
         // O original não muda; espelhar duas vezes volta ao que era.
@@ -61,16 +67,33 @@ public class StringTypeEditTests
 
     [Fact]
     [Trait("Etapa", "11")]
-    public void EspelharMantemOTipoDeCadaTrecho()
+    public void EspelharMantemOTipoDeCadaTrechoETrocaAOrdemDasMesas()
     {
         var (_, tipo) = UmTipoComDuasStrings();
         var s = tipo.Routes[1];          // sobe (C), leapfrog até 6 (L), convencional até 13 (C)
-        var m = s.Mirrored();
+        var m = s.MirroredAcross(tipo.Arrangement);
 
-        Assert.Equal(s.Segments.Select(t => t.Kind).Reverse(), m.Segments.Select(t => t.Kind));
         for (var i = 1; i < s.Cells.Count; i++)
-            Assert.Equal(s.KindOfStep(i), m.KindOfStep(s.Cells.Count - i));
+            Assert.Equal(s.KindOfStep(i), m.KindOfStep(i));
         Assert.Equal(m, StringRoute.Parse(m.ToText()));
+
+        // Duas mesas 7x2: a coluna 0 da mesa 0 vira a coluna 6 da mesa 1.
+        var duas = new StringArrangement([new ArrangementTable(7, 2), new ArrangementTable(7, 2)]);
+        var r = new StringRoute([C(0, 0, 0), C(0, 1, 0), C(1, 0, 0)], [new RoutingSegment(2, RoutingKind.Conventional)]);
+        Assert.Equal(new[] { C(1, 6, 0), C(1, 5, 0), C(0, 6, 0) }, r.MirroredAcross(duas).Cells);
+    }
+
+    [Fact]
+    [Trait("Etapa", "11")]
+    public void EspelharArranjoNaoSimetricoERecusado()
+    {
+        var biblioteca = new StringLibrary([]);
+        var tipo = biblioteca.Add(new StringArrangement([new ArrangementTable(14, 2), new ArrangementTable(7, 2)]), new ArrangementSketch(1.1, 2.3, [0.5]));
+        var s = new StringRoute([C(0, 0, 0), C(0, 1, 0)], [new RoutingSegment(1, RoutingKind.Conventional)]);
+        Assert.Null(biblioteca.SetStrings(tipo.Id, [s]));
+
+        Assert.NotNull(biblioteca.Mirror(tipo.Id));
+        Assert.Equal(s, biblioteca.Find(tipo.Id)!.Routes.Single());
     }
 
     [Fact]

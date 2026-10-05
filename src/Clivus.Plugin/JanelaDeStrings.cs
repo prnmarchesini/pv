@@ -73,7 +73,7 @@ internal sealed class JanelaDeStrings : Window
         Botao(Tr.T("Renomear"), Tr.T("Troca o nome do tipo escolhido."), Renomear);
         Botao(Tr.T("Apagar"), Tr.T("Tira o tipo escolhido da biblioteca. Strings já desenhadas não mudam."), Apagar);
         Botao(Tr.T("Clonar"), Tr.T("Cria um tipo igual ao escolhido (mesas e traçado), com o próximo nome."), Clonar);
-        Botao(Tr.T("Espelhar"), Tr.T("Troca o + com o − em todas as strings do tipo escolhido (mesma configuração, positivo do outro lado)."), Espelhar);
+        Botao(Tr.T("Espelhar"), Tr.T("Reflete o traçado do tipo escolhido de um lado ao outro da mesa: o + e o − vão para a outra ponta."), Espelhar);
 
         var esquerda = new DockPanel { Width = 280, Margin = new Thickness(0, 0, 8, 0) };
         DockPanel.SetDock(botoes, Dock.Bottom);
@@ -644,7 +644,7 @@ internal sealed class JanelaDeStrings : Window
         Fazer(() =>
         {
             MudarBiblioteca(b => porque = b.Mirror(tipo.Id));
-            return porque is null ? Tr.F("{0} espelhado: o + e o − de cada string trocaram de ponta.", tipo.Name) : null;
+            return porque is null ? Tr.F("{0} espelhado: o traçado foi refletido e o + e o − estão do outro lado da mesa.", tipo.Name) : null;
         }, tipo.Id);
         if (porque is not null) Avisar(Tr.F("Não gravei: {0}.", porque), erro: true);
     }
