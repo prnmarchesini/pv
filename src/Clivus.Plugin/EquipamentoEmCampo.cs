@@ -18,18 +18,31 @@ internal static class EquipamentoEmCampo
 {
     private const string PrefixoDoBloco = PluginInfo.PrefixoDeDados + "_EQUIPAMENTO_";
 
-    /// <summary>As referências em campo de cada equipamento (tipo, GUID).</summary>
-    internal static Dictionary<(EquipmentKind Kind, Guid Id), ObjectId> Posicionados(Transaction transacao, Database database)
+    /// <summary>
+    /// As referências em campo de cada equipamento (tipo, GUID). Procura pelas
+    /// definições CLIVUS_EQUIPAMENTO_* (poucas), não pelo espaço do modelo
+    /// inteiro (milhares de módulos). Um COPY do bloco leva o XData junto: o
+    /// equipamento pode aparecer com mais de uma referência.
+    /// </summary>
+    internal static Dictionary<(EquipmentKind Kind, Guid Id), List<ObjectId>> Posicionados(Transaction transacao, Database database)
     {
-        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
-        var classe = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(BlockReference));
-        var achados = new Dictionary<(EquipmentKind, Guid), ObjectId>();
+        var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForRead);
+        var modelo = SymbolUtilityServices.GetBlockModelSpaceId(database);
+        var achados = new Dictionary<(EquipmentKind, Guid), List<ObjectId>>();
 
-        foreach (ObjectId id in espaco)
+        foreach (ObjectId idDaDefinicao in tabela)
         {
-            if (id.IsErased || !id.ObjectClass.IsDerivedFrom(classe)) continue;
-            if (transacao.GetObject(id, OpenMode.ForRead) is BlockReference b && ElectricalStore.LoadPlacement(b) is { } p)
-                achados.TryAdd((p.Kind, p.Equipment), id);
+            var definicao = (BlockTableRecord)transacao.GetObject(idDaDefinicao, OpenMode.ForRead);
+            if (definicao.IsErased || !definicao.Name.StartsWith(PrefixoDoBloco, StringComparison.OrdinalIgnoreCase)) continue;
+
+            foreach (ObjectId id in definicao.GetBlockReferenceIds(true, false))
+            {
+                if (id.IsErased || transacao.GetObject(id, OpenMode.ForRead) is not BlockReference b || b.OwnerId != modelo) continue;
+                if (ElectricalStore.LoadPlacement(b) is not { } p) continue;
+
+                if (!achados.TryGetValue((p.Kind, p.Equipment), out var lista)) achados[(p.Kind, p.Equipment)] = lista = [];
+                lista.Add(id);
+            }
         }
 
         return achados;
@@ -46,18 +59,20 @@ internal static class EquipamentoEmCampo
     /// Põe o equipamento em campo com o centro da base em <paramref name="baseCentro"/>
     /// (a cota já é a do terreno + 0,80 m). Se ele já estava em campo, o mesmo
     /// bloco é movido (re-alocar), e o desenho dele refeito com a tag e a
-    /// dimensão do cadastro de agora.
+    /// dimensão do cadastro de agora. Devolve quantas cópias A MAIS do
+    /// retângulo o desenho tem (COPY do usuário): elas não são apagadas, quem
+    /// chama avisa.
     /// </summary>
-    internal static ObjectId Posicionar(Database database, EquipmentInfo equipamento, Point3d baseCentro)
+    internal static int Posicionar(Database database, EquipmentInfo equipamento, Point3d baseCentro)
     {
         using var transacao = database.TransactionManager.StartTransaction();
 
         var definicao = GarantirBloco(transacao, database, equipamento);
-        var id = Posicionados(transacao, database).GetValueOrDefault((equipamento.Kind, equipamento.Id));
+        var ids = Posicionados(transacao, database).GetValueOrDefault((equipamento.Kind, equipamento.Id)) ?? [];
 
-        if (!id.IsNull)
+        if (ids.Count > 0)
         {
-            var existente = (BlockReference)transacao.GetObject(id, OpenMode.ForWrite);
+            var existente = (BlockReference)transacao.GetObject(ids[0], OpenMode.ForWrite);
             existente.Position = baseCentro;
             existente.RecordGraphicsModified(true);
         }
@@ -66,64 +81,52 @@ internal static class EquipamentoEmCampo
             var camada = LayoutLayers.Garantir(transacao, database, LayoutLayers.Equipamento, new RgbColor(90, 90, 90));
             var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForWrite);
             var referencia = new BlockReference(baseCentro, definicao) { Layer = camada };
-            id = espaco.AppendEntity(referencia);
+            espaco.AppendEntity(referencia);
             transacao.AddNewlyCreatedDBObject(referencia, true);
             ElectricalStore.SavePlacement(transacao, referencia, new EquipmentPlacement(equipamento.Kind, equipamento.Id));
         }
 
         transacao.Commit();
-        return id;
+        return Math.Max(0, ids.Count - 1);
     }
 
     /// <summary>
-    /// Depois de mudar o cadastro (tag, dimensão): refaz o desenho do bloco
-    /// se o equipamento está em campo. A posição não muda. Se estava.
+    /// Depois de GRAVAR o cadastro (tag, dimensão): refaz o desenho do bloco
+    /// do equipamento, se ele está em campo. A posição não muda. Se estava.
     /// </summary>
-    internal static bool Redesenhar(Database database, EquipmentInfo equipamento)
+    internal static bool Redesenhar(Database database, EquipmentKind tipo, Guid id)
     {
+        if (ConfiguracaoEletricaStore.Ler(database).Setup.FindEquipment(tipo, id) is not { } equipamento) return false;
+
         using var transacao = database.TransactionManager.StartTransaction();
 
-        if (!Posicionados(transacao, database).TryGetValue((equipamento.Kind, equipamento.Id), out var id)) return false;
+        if (!Posicionados(transacao, database).TryGetValue((tipo, id), out var ids)) return false;
 
         GarantirBloco(transacao, database, equipamento);
-        ((BlockReference)transacao.GetObject(id, OpenMode.ForWrite)).RecordGraphicsModified(true);
+        foreach (var referencia in ids) ((BlockReference)transacao.GetObject(referencia, OpenMode.ForWrite)).RecordGraphicsModified(true);
 
         transacao.Commit();
         return true;
     }
 
     /// <summary>
-    /// Depois de editar o cadastro (dentro de <see cref="ConfiguracaoEletricaStore.Mudar"/>):
-    /// se deu certo e o equipamento está em campo, a tag e a dimensão do
-    /// retângulo acompanham. Devolve o porquê da edição, como veio.
+    /// Tira o equipamento do campo (o cadastro dele foi apagado): apaga as
+    /// referências (as cópias também: todas representam um cadastro que não
+    /// existe mais) e a definição do bloco. Quantas referências apagou.
     /// </summary>
-    internal static string? RedesenharSeDeuCerto(Database database, ElectricalSetup setup, string? porque, EquipmentKind tipo, Guid id)
-    {
-        if (porque is null && setup.FindEquipment(tipo, id) is { } equipamento) Redesenhar(database, equipamento);
-        return porque;
-    }
-
-    /// <summary>
-    /// Tira o equipamento do campo (o cadastro dele foi apagado): apaga a
-    /// referência e a definição do bloco. Se estava em campo.
-    /// </summary>
-    internal static bool Apagar(Database database, EquipmentKind tipo, Guid equipamento)
+    internal static int Apagar(Database database, EquipmentKind tipo, Guid equipamento)
     {
         using var transacao = database.TransactionManager.StartTransaction();
 
-        var apagou = false;
-        if (Posicionados(transacao, database).TryGetValue((tipo, equipamento), out var id))
-        {
-            transacao.GetObject(id, OpenMode.ForWrite).Erase();
-            apagou = true;
-        }
+        var ids = Posicionados(transacao, database).GetValueOrDefault((tipo, equipamento)) ?? [];
+        foreach (var id in ids) transacao.GetObject(id, OpenMode.ForWrite).Erase();
 
         var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForRead);
         var nome = NomeDoBloco(tipo, equipamento);
         if (tabela.Has(nome))
         {
             var definicao = (BlockTableRecord)transacao.GetObject(tabela[nome], OpenMode.ForRead);
-            if (definicao.GetBlockReferenceIds(true, false).Count == 0)
+            if (definicao.GetBlockReferenceIds(true, false).Cast<ObjectId>().All(r => r.IsErased))
             {
                 definicao.UpgradeOpen();
                 definicao.Erase();
@@ -131,7 +134,7 @@ internal static class EquipamentoEmCampo
         }
 
         transacao.Commit();
-        return apagou;
+        return ids.Count;
     }
 
     private static string NomeDoBloco(EquipmentKind tipo, Guid equipamento) => $"{PrefixoDoBloco}{tipo}_{equipamento:N}";

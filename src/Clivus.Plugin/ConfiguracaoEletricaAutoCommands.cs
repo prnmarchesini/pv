@@ -99,11 +99,13 @@ public static class ConfiguracaoEletricaAutoCommands
         if (Texto(editor, "\nCampo [Nome/Apelido/Kva/Entrada/Saida/K/Z/Notas]: ") is not { } campo) return null;
         if (Texto(editor, "\nValor: ") is not { } valor) return null;
 
+        var id = Guid.Empty;
         var porque = ConfiguracaoEletricaStore.Mudar(database, s =>
         {
             if (Trafo(s, apelido) is not { } t) return "trafo nao existe";
+            id = t.Id;
             double Num() => double.Parse(valor, Inv);
-            return EquipamentoEmCampo.RedesenharSeDeuCerto(database, s, s.EditTransformer(campo switch
+            return s.EditTransformer(campo switch
             {
                 "Nome" => t with { Name = valor },
                 "Apelido" => t with { Nickname = valor },
@@ -113,9 +115,10 @@ public static class ConfiguracaoEletricaAutoCommands
                 "K" => t with { KFactor = Num() },
                 "Z" => t with { ImpedancePercent = Num() },
                 _ => t with { Notes = valor },
-            }), EquipmentKind.Transformer, t.Id);
+            });
         });
 
+        if (porque is null) EquipamentoEmCampo.Redesenhar(database, EquipmentKind.Transformer, id);
         return porque is null ? $"trafo {apelido} editado" : $"recusado: {porque}";
     }
 

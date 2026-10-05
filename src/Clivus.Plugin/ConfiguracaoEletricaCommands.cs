@@ -60,7 +60,8 @@ public static class ConfiguracaoEletricaCommands
             var qual = editor.GetString(new PromptStringOptions(Tr.T("\nEquipamento (tag ou código): ")) { AllowSpaces = true });
             if (qual.Status != PromptStatus.OK) return;
 
-            var (setup, _) = ConfiguracaoEletricaStore.Ler(documento.Database);
+            var (setup, problema) = ConfiguracaoEletricaStore.Ler(documento.Database);
+            if (problema is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", problema));
             var achados = setup.FindEquipment(qual.StringResult);
 
             if (achados.Count != 1)
@@ -93,9 +94,11 @@ public static class ConfiguracaoEletricaCommands
                 .Select(c => terreno.Mesh.TryGetZ(c.X, c.Y, out var z) ? z : double.NaN);
             var enterrados = EquipmentFootprint.BuriedCorners(baseZ, cantos);
 
-            EquipamentoEmCampo.Posicionar(documento.Database, equipamento, new Point3d(mundo.X, mundo.Y, baseZ));
+            var copias = EquipamentoEmCampo.Posicionar(documento.Database, equipamento, new Point3d(mundo.X, mundo.Y, baseZ));
 
-            editor.WriteMessage(Tr.F("\nEQUIPAMENTO {0} em campo: terreno a {1:0.000} m, base a {2:0.000} m (0,80 m acima do terreno).\n", equipamento.Tag, chao, baseZ));
+            editor.WriteMessage(Tr.F("\nEQUIPAMENTO {0} em campo: terreno a {1:0.000} m, base a {2:0.000} m ({3:0.00} m acima do terreno).\n", equipamento.Tag, chao, baseZ, EquipmentFootprint.FloatHeight));
+            if (copias > 0)
+                editor.WriteMessage(Tr.F("  ATENÇÃO: o desenho tem mais {0} cópia(s) do retângulo de {1} (COPY); só uma foi movida. Apague as cópias.\n", copias, equipamento.Tag));
             if (enterrados > 0)
                 editor.WriteMessage(Tr.F("  ATENÇÃO: o terreno passa da base do retângulo em {0} canto(s); o símbolo entra no chão ali.\n", enterrados));
         }

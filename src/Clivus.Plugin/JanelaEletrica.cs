@@ -254,7 +254,7 @@ internal abstract class AbaEletrica : DockPanel
     /// Número para a caixa, na cultura da tela e sem separador de milhar
     /// (13800, não 13.800): volta igual pela leitura em qualquer idioma.
     /// </summary>
-    protected static string Numero(double v) => v.ToString("0.###", Tr.Culture);
+    protected static string Numero(double v) => v.ToString("0.##", Tr.Culture);
 
     /// <summary>Lê as três medidas de um formulário; null e o recado se alguma não serve.</summary>
     protected EquipmentSize? LerTamanho(TextBox largura, TextBox comprimento, TextBox altura)

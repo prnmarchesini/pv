@@ -41,7 +41,7 @@ internal sealed class AbaTransformador : AbaEletrica
         _notas = Campo(grade, Tr.T("Observações"), Tr.T("Outros campos elétricos: para-raios, ligação, refrigeração..."));
         _largura = Campo(grade, Tr.T("Largura (m)"), Tr.T("Medida em X do retângulo em campo."));
         _comprimento = Campo(grade, Tr.T("Comprimento (m)"), Tr.T("Medida em Y do retângulo em campo."));
-        _altura = Campo(grade, Tr.T("Altura (m)"), Tr.T("Altura do retângulo 3D (a base flutua 0,80 m acima do terreno)."));
+        _altura = Campo(grade, Tr.T("Altura (m)"), Tr.F("Altura do retângulo 3D (a base flutua {0:0.00} m acima do terreno).", Clivus.Geo.EquipmentFootprint.FloatHeight));
 
         var acoes = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
         Botao(acoes, Tr.T("Salvar alterações"), Tr.T("Grava o cadastro do trafo escolhido no desenho."), Salvar);
@@ -167,7 +167,8 @@ internal sealed class AbaTransformador : AbaEletrica
         string? porque = null;
         Fazer(() =>
         {
-            porque = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => EquipamentoEmCampo.RedesenharSeDeuCerto(Documento.Database, s, s.EditTransformer(editado), EquipmentKind.Transformer, t.Id));
+            porque = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.EditTransformer(editado));
+            if (porque is null) EquipamentoEmCampo.Redesenhar(Documento.Database, EquipmentKind.Transformer, t.Id);
             return porque is null ? Tr.F("{0} salvo.", editado.Nickname.Trim()) : null;
         });
         if (porque is not null) Avisar(Tr.F("Não salvei: {0}.", porque), erro: true);
@@ -181,11 +182,14 @@ internal sealed class AbaTransformador : AbaEletrica
             return;
         }
 
+        int? soltos = null;
         Fazer(() =>
         {
-            var soltos = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.RemoveTransformer(t.Id)) ?? 0;
+            soltos = ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.RemoveTransformer(t.Id));
+            if (soltos is null) return null;
             EquipamentoEmCampo.Apagar(Documento.Database, EquipmentKind.Transformer, t.Id);
             return Tr.F("{0} apagado do cadastro; {1} inversor(es) ficaram sem trafo.", t.Nickname, soltos);
         });
+        if (soltos is null) Avisar(Tr.T("Esse trafo não está mais no cadastro."), erro: true);
     }
 }

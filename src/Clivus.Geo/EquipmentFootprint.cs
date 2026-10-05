@@ -44,15 +44,16 @@ public static class EquipmentFootprint
     }
 
     /// <summary>
-    /// A altura da letra da tag escrita no topo: cabe na largura (cada letra
-    /// ocupa por volta de 0,9 da altura) e em um terço do comprimento.
+    /// A altura da letra da tag escrita no topo: a linha cabe em 90% da
+    /// largura com cada letra ocupando por volta de 0,9 da altura (0,9·w /
+    /// (0,9·n) = w / n), e a letra não passa de um terço do comprimento.
     /// </summary>
     public static double TagHeight(int characters, double width, double length)
     {
         Validar(width, length);
 
         var n = Math.Max(1, characters);
-        var cabeNaLargura = 0.9 * width / (0.9 * n);
+        var cabeNaLargura = width / n;
         return Math.Max(MinTagHeight, Math.Min(cabeNaLargura, length / 3));
     }
 

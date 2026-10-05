@@ -29,10 +29,17 @@ internal static class ConfiguracaoEletricaStore
         ElectricalStore.SaveInverters(database, setup.Inverters);
     }
 
-    /// <summary>Lê, aplica a mudança e grava. Devolve o que a mudança devolveu.</summary>
+    /// <summary>
+    /// Lê, aplica a mudança e grava. Devolve o que a mudança devolveu. Se um
+    /// registro não deu para ler (estragado, versão mais nova), nada é
+    /// gravado: regravar apagaria o que não foi lido (revisão da etapa 12).
+    /// </summary>
     internal static T Mudar<T>(Database database, Func<ElectricalSetup, T> mudanca)
     {
-        var (setup, _) = Ler(database);
+        var (setup, problema) = Ler(database);
+        if (problema is not null)
+            throw new InvalidOperationException(Tr.F("o cadastro elétrico do desenho tem registro que não deu para ler ({0}); nada foi gravado, para não perder o que está lá", problema));
+
         var resultado = mudanca(setup);
         Gravar(database, setup);
         return resultado;
