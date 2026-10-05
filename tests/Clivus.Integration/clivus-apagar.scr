@@ -49,6 +49,7 @@
 (command "CLIVUS_ELETRICA_POSICIONAR" "C1" "{{P1}}")
 (command "CLIVUS_ELETRICA_POSICIONAR" "Inversor 1" "{{P2}}")
 (command "CLIVUS_ELETRICA_POSICIONAR" "TA" "{{P3}}")
+(command "CLIVUS_ELETRICA_JANELA_HATCH_AUTO" "*")
 
 ; Analises (textos e a pintura de todo modulo), tags, uma mesa pendente.
 (command "CLIVUS_AN_PB_INSERIR")
@@ -136,7 +137,7 @@
         (if (and (= tp "Modulo") marc (/= (clivus:cor d) (cadr marc))) (clivus:inc "desiguais"))
         (if (and (= tp "Pilar") marc (= (caddr marc) "0") (/= (clivus:cor d) "256/-")) (clivus:inc "pilpintados")))))
   (princ (strcat "\nCLIVUS_APAGAR_DUMP etapa=" etapa))
-  (foreach k '("Mesa" "Modulo" "Pilar" "Face" "Nota" "TextoAnalise" "Tag" "StringTag" "SinalString" "String" "Sombra" "Equipamento"
+  (foreach k '("Mesa" "Modulo" "Pilar" "Face" "Nota" "TextoAnalise" "Tag" "StringTag" "SinalString" "String" "Sombra" "Equipamento" "AreaDoTrafo"
                "Arvore" "Area" "Alinhamento" "contvermelho" "modsombra" "modvermelho" "alocadas" "comtag" "strpintadas" "sinpintados"
                "anpintados" "desiguais" "pilpintados" "foracamada" "perfildiverso")
     (princ (strcat " " k "=" (itoa (clivus:get k)))))

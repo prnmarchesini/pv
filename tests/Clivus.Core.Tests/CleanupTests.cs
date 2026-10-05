@@ -37,6 +37,7 @@ public class CleanupTests
         Assert.Equal(CleanupTarget.ShadowOutline, Cleanup.Classify(Cleanup.ShadowType, isText: false));
         Assert.Equal(CleanupTarget.ShadowLabel, Cleanup.Classify(Cleanup.ShadowType, isText: true));
         Assert.Equal(CleanupTarget.Equipment, Cleanup.Classify(EquipmentPlacement.Tipo, isText: false));
+        Assert.Equal(CleanupTarget.TransformerArea, Cleanup.Classify(TransformerAreaMark.Tipo, isText: false));
     }
 
     [Theory]
@@ -48,6 +49,7 @@ public class CleanupTests
     [InlineData(CleanupTarget.ShadowOutline, CleanupOptions.Shadows)]
     [InlineData(CleanupTarget.ShadowLabel, CleanupOptions.Shadows | CleanupOptions.Texts)]
     [InlineData(CleanupTarget.Equipment, CleanupOptions.Electrical)]
+    [InlineData(CleanupTarget.TransformerArea, CleanupOptions.Electrical | CleanupOptions.Strings)]
     [InlineData(CleanupTarget.None, CleanupOptions.None)]
     public void CadaAlvoSaiSoComAsSuasOpcoes(CleanupTarget alvo, CleanupOptions esperadas)
     {
@@ -94,7 +96,7 @@ public class CleanupTests
         {
             CleanupTarget.Annotation, CleanupTarget.Annotation, CleanupTarget.StringTag, CleanupTarget.StringSign, CleanupTarget.StringSign,
             CleanupTarget.StringPath, CleanupTarget.ShadowOutline, CleanupTarget.ShadowOutline, CleanupTarget.ShadowLabel,
-            CleanupTarget.Equipment, CleanupTarget.Equipment, CleanupTarget.Equipment, CleanupTarget.None,
+            CleanupTarget.Equipment, CleanupTarget.Equipment, CleanupTarget.Equipment, CleanupTarget.TransformerArea, CleanupTarget.None,
         };
 
         var c = Cleanup.Count(alvos, recolored: 7, shadowModules: 4, inverters: 2, transformers: 1, substations: 1, skids: 1, freedStrings: 5);
@@ -103,8 +105,8 @@ public class CleanupTests
         Assert.Equal(6, c.Of(CleanupOptions.Texts));        // 2 anotações, a tag, 2 sinais, a etiqueta
         Assert.Equal(3 + 4, c.Of(CleanupOptions.Shadows));  // 2 contornos e a etiqueta; 4 módulos
         Assert.Equal(1, c.Of(CleanupOptions.Strings));
-        Assert.Equal(2 + 1 + 1 + 1 + 3 + 5, c.Of(CleanupOptions.Electrical));
-        Assert.Equal(3, c.Placed);
+        Assert.Equal(2 + 1 + 1 + 1 + 4 + 5, c.Of(CleanupOptions.Electrical));
+        Assert.Equal(4, c.Placed);
 
         Assert.False(c.IsEmpty(CleanupOptions.Strings));
         Assert.Throws<ArgumentOutOfRangeException>(() => c.Of(CleanupOptions.Colors | CleanupOptions.Texts));

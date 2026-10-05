@@ -58,6 +58,9 @@ public enum CleanupTarget
 
     /// <summary>O bloco de um equipamento elétrico em campo (subestação, trafo, inversor).</summary>
     Equipment,
+
+    /// <summary>O hatch da área das strings de um trafo (aba Transformador).</summary>
+    TransformerArea,
 }
 
 /// <summary>A peça de uma mesa que tem cor própria.</summary>
@@ -81,7 +84,7 @@ public enum CleanupPiece
 /// <param name="Transformers">Trafos do cadastro.</param>
 /// <param name="Substations">Subestações: as UCs e os blocos compartilhados.</param>
 /// <param name="Skids">Skids (nomes dos agrupamentos).</param>
-/// <param name="Placed">Blocos de equipamento em campo.</param>
+/// <param name="Placed">Blocos de equipamento e hatches das áreas dos trafos em campo.</param>
 /// <param name="FreedStrings">Strings com inversor ou tag que ficam soltas (a geometria fica).</param>
 public sealed record CleanupCount(
     int Recolored,
@@ -177,6 +180,7 @@ public static class Cleanup
         ElectricalString.Tipo => CleanupTarget.StringPath,
         ShadowType => isText ? CleanupTarget.ShadowLabel : CleanupTarget.ShadowOutline,
         EquipmentPlacement.Tipo => CleanupTarget.Equipment,
+        TransformerAreaMark.Tipo => CleanupTarget.TransformerArea,
         _ => CleanupTarget.None,
     };
 
@@ -193,6 +197,9 @@ public static class Cleanup
         CleanupTarget.ShadowOutline => CleanupOptions.Shadows,
         CleanupTarget.ShadowLabel => CleanupOptions.Shadows | CleanupOptions.Texts,
         CleanupTarget.Equipment => CleanupOptions.Electrical,
+
+        // A área é das strings do trafo: sem o trafo ou sem as strings, não é nada.
+        CleanupTarget.TransformerArea => CleanupOptions.Electrical | CleanupOptions.Strings,
         _ => CleanupOptions.None,
     };
 
@@ -239,7 +246,7 @@ public static class Cleanup
             transformers,
             substations,
             skids,
-            N(CleanupTarget.Equipment),
+            N(CleanupTarget.Equipment) + N(CleanupTarget.TransformerArea),
             freedStrings);
     }
 

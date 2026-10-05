@@ -66,7 +66,7 @@ function Testar-Apagar {
 
     # O desenho de partida tem de tudo.
     foreach ($k in 'String', 'SinalString', 'StringTag', 'TextoAnalise', 'Tag', 'Sombra', 'alocadas', 'comtag', 'strpintadas', 'sinpintados',
-                   'anpintados', 'modsombra', 'modvermelho', 'contvermelho', 'desiguais', 'Arvore') {
+                   'anpintados', 'modsombra', 'modvermelho', 'contvermelho', 'desiguais', 'Arvore', 'AreaDoTrafo') {
         if ((N 'inicio' $k) -le 0) { $erros += "o desenho de partida nao tem $k" }
     }
     if ((N 'inicio' 'Equipamento') -ne 3 -or (N 'inicio' 'defs') -ne 3) { $erros += "esperava 3 equipamentos em campo (tem $($i['Equipamento']), $($i['defs']) definicoes)" }
@@ -79,7 +79,7 @@ function Testar-Apagar {
     foreach ($e in 'tudo', 'desfeito', 'sombras', 'cores', 'infra', 'textos', 'strings') { Igual $e $fixas }
 
     # 12345 de uma vez.
-    foreach ($k in 'Nota', 'TextoAnalise', 'Tag', 'StringTag', 'SinalString', 'String', 'Sombra', 'Equipamento', 'defs', 'contvermelho',
+    foreach ($k in 'Nota', 'TextoAnalise', 'Tag', 'StringTag', 'SinalString', 'String', 'Sombra', 'Equipamento', 'AreaDoTrafo', 'defs', 'contvermelho',
                    'modsombra', 'modvermelho', 'desiguais', 'pilpintados', 'anpintados', 'foracamada', 'perfildiverso') {
         if ((N 'tudo' $k) -ne 0) { $erros += "12345 deixou $k=$($etapas['tudo'][$k])" }
     }
@@ -93,7 +93,7 @@ function Testar-Apagar {
     if ((N $s 'Sombra') -ne 0 -or (N $s 'modsombra') -ne 0) { $erros += 'as sombras ficaram (contorno ou modulo marcado)' }
     if ((N $s 'modvermelho') -ne (N $s 'Modulo')) { $erros += "os modulos nao voltaram a cor de antes da sombra (vermelhos: $($etapas[$s]['modvermelho']) de $($etapas[$s]['Modulo']))" }
     if ((N $s 'sombrapint') -ne 1 -or (N $s 'motivos') -ne 1) { $erros += 'os registros da sombra nao zeraram' }
-    Igual $s @('Nota', 'TextoAnalise', 'Tag', 'StringTag', 'SinalString', 'String', 'Equipamento', 'defs', 'alocadas', 'comtag', 'strpintadas', 'inv', 'anpint')
+    Igual $s @('Nota', 'TextoAnalise', 'Tag', 'StringTag', 'SinalString', 'String', 'Equipamento', 'AreaDoTrafo', 'defs', 'alocadas', 'comtag', 'strpintadas', 'inv', 'anpint')
 
     # 1: cores.
     $c = 'cores'
@@ -101,11 +101,11 @@ function Testar-Apagar {
         if ((N $c $k) -ne 0) { $erros += "as cores deixaram $k=$($etapas[$c][$k])" }
     }
     if ((N $c 'anpint') -ne 1) { $erros += 'o registro das pecas pintadas da analise nao zerou' }
-    Igual $c @('Nota', 'TextoAnalise', 'Tag', 'StringTag', 'SinalString', 'String', 'Equipamento', 'defs', 'alocadas', 'comtag', 'inv', 'trafos')
+    Igual $c @('Nota', 'TextoAnalise', 'Tag', 'StringTag', 'SinalString', 'String', 'Equipamento', 'AreaDoTrafo', 'defs', 'alocadas', 'comtag', 'inv', 'trafos')
 
     # 5: infra.
     $f = 'infra'
-    foreach ($k in 'Equipamento', 'defs', 'alocadas', 'comtag', 'StringTag') { if ((N $f $k) -ne 0) { $erros += "a infra deixou $k=$($etapas[$f][$k])" } }
+    foreach ($k in 'Equipamento', 'AreaDoTrafo', 'defs', 'alocadas', 'comtag', 'StringTag') { if ((N $f $k) -ne 0) { $erros += "a infra deixou $k=$($etapas[$f][$k])" } }
     if ($etapas[$f]['inv'] -ne '0' -or $etapas[$f]['trafos'] -ne '0' -or $etapas[$f]['ucs'] -ne '0') { $erros += 'a infra nao zerou inversores, trafos e UCs' }
     Igual $f @('String', 'SinalString', 'TextoAnalise', 'Tag', 'Nota')
 

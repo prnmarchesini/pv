@@ -25,6 +25,7 @@ internal static class Limpeza
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDoTexto = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(DBText));
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDoCirculo = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Circle));
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDaLinha = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Line));
+    private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDaHachura = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Hatch));
 
     /// <summary>As cores que as sombras usaram até 03/10/2026 (amarelo, laranja, vermelho), as mesmas de SombrasCommands.</summary>
     private static readonly RgbColor[] CoresAntigasDaSombra = [new(255, 220, 0), new(255, 140, 0), new(190, 30, 0)];
@@ -130,7 +131,7 @@ internal static class Limpeza
                 if (id.IsErased) continue;
 
                 var classe = id.ObjectClass;
-                if (classe != ClasseDaPolilinha && classe != ClasseDoMText && classe != ClasseDoTexto && classe != ClasseDoCirculo && classe != ClasseDaLinha) continue;
+                if (classe != ClasseDaPolilinha && classe != ClasseDoMText && classe != ClasseDoTexto && classe != ClasseDoCirculo && classe != ClasseDaLinha && classe != ClasseDaHachura) continue;
                 if (transacao.GetObject(id, OpenMode.ForRead) is not Entity entidade || TipoDoXData(entidade) is not { } tipo) continue;
 
                 var alvo = Cleanup.Classify(tipo, entidade is MText or DBText);
