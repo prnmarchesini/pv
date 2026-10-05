@@ -176,6 +176,9 @@ def icones():
                      [t('M18,3 L8,18 H16 L13,29 L24,13 H16 Z')]),
         'resumo_eletrico': ([T('M4,8 H15 M4,16 H15 M4,24 H15'), ambar_cheio('M24,4 L18,16 H23 L21,28 L28,14 H23 Z')],
                             [t('M4,9 H14 M4,17 H14 M4,25 H14'), ambar_cheio('M24,4 L18,16 H23 L21,28 L28,14 H23 Z')]),
+        # Edição > Apagar (05/10/2026): a lixeira, com a tampa em âmbar (a ação).
+        'apagar': ([T('M8,10 L10,28 H22 L24,10'), T('M13.5,14 V24 M18.5,14 V24'), ambar_traco('M5,9 H27 M13,9 V5 H19 V9', L)],
+                   [t('M8,11 L10,28 H22 L24,11'), ambar_traco('M5,9 H27 M13,9 V5 H19 V9', S)]),
         # Elétrica (11.1): dois módulos ligados pelo cabo da string, + e -.
         'string': ([T(modulo(9, 10, 9, 6)), T(modulo(23, 10, 9, 6)), ambar_traco('M9,14 C9,24 23,24 23,14', L),
                     ambar_traco('M3,27 H9 M6,24 V30', L), T('M23,27 H29')],

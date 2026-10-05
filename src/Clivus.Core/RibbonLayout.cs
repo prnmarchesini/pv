@@ -70,7 +70,7 @@ public static class RibbonLayout
             ]),
             new(Tr.N("Edição"),
             [
-                new RibbonMenuSpec(Tr.N("Edição"), Tr.N("Recalcular, pontas à mão, validar, recontar e os outros ajustes de mesas já desenhadas."), "edicao",
+                new RibbonMenuSpec(Tr.N("Edição"), Tr.N("Recalcular, pontas à mão, validar, recontar, apagar e os outros ajustes de mesas já desenhadas."), "edicao",
                 [
                     B(Tr.N("Recalcular"), PluginInfo.ComandoRecalcular, Tr.N("Refaz a mesa escolhida no terreno de onde ela está, com o mesmo GUID."), "recalcular"),
                     B(Tr.N("Recalcular pendentes"), PluginInfo.ComandoRecalcularPendentes, Tr.N("Refaz só as mesas marcadas como pendentes (movidas, copiadas)."), "recalcular_pendentes"),
@@ -82,6 +82,7 @@ public static class RibbonLayout
                     B(Tr.N("Marcar pendente"), PluginInfo.ComandoPendente, Tr.N("Marca a mesa escolhida como pendente, para recalcular depois."), "pendente"),
                     B(Tr.N("Trocar mesa"), PluginInfo.ComandoTrocarMesa, Tr.N("Troca a mesa clicada por uma ou mais de outro tipo (por exemplo, uma de 28 por duas de 14), travando o início ou o fim dela."), "trocar"),
                     B(Tr.N("Regerar fileira"), PluginInfo.ComandoRegerarFileira, Tr.N("Apaga e gera de novo só a fileira da mesa clicada, com as mesas em uso; acerta o espaçamento depois de uma troca."), "regerar_fileira"),
+                    B(Tr.N("Apagar"), PluginInfo.ComandoApagar, Tr.N("Escolhe o que apagar de uma vez no desenho todo: as cores (as mesas voltam à cor original), os textos, as sombras, as strings ou a infra elétrica. Só o que o Clivus Solar criou; mostra quantos itens antes e U desfaz."), "apagar"),
                 ]),
                 B(Tr.N("Grupos"), PluginInfo.ComandoGruposPainel, Tr.N("Abre o painel de grupos: mesas, módulos, pilares e kWp de cada grupo."), "grupos", grande: true),
             ]),

@@ -186,6 +186,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_AN_PRUEBA_PIEZAS")]
     public static void CLIVUS_AN_PRUEBA_PIEZAS() => AnalisesIndependentesCommands.TestePecas();
 
+    [CommandMethod("CLIVUS_ERASE")]
+    public static void CLIVUS_ERASE() => ApagarCommands.Apagar();
+
+    [CommandMethod("CLIVUS_BORRAR")]
+    public static void CLIVUS_BORRAR() => ApagarCommands.Apagar();
+
     [CommandMethod("CLIVUS_ERASE_ALL", CommandFlags.UsePickSet)]
     public static void CLIVUS_ERASE_ALL() => ApagarTudoCommands.ApagarTudo();
 

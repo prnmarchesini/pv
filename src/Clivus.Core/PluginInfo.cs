@@ -304,6 +304,13 @@ public static partial class PluginInfo
     public const string ComandoApagarTudoAutomatico = "CLIVUS_APAGAR_TUDO_AUTO";
 
     /// <summary>
+    /// Edição > Apagar (05/10/2026): a janela com as caixas (cores, textos,
+    /// sombras, strings, infra elétrica) e a confirmação com as contagens. Sem
+    /// interface (Core Console), pergunta as opções na linha de comando.
+    /// </summary>
+    public const string ComandoApagar = "CLIVUS_APAGAR";
+
+    /// <summary>
     /// Prefixo de tudo que o plugin grava com nome próprio: XData, dicionário
     /// do desenho, dados pendurados no documento (ver 02-arquitetura.md).
     /// </summary>

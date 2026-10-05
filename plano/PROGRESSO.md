@@ -5056,3 +5056,62 @@ Roteiro de tela:
 4. Área do cliente e 3D: o seletor PT · EN · ES no topo.
 5. Grupos: se a mensagem do registro aparecer de novo, me mande o fim de
    `%LOCALAPPDATA%\Clivus Solar\clivus.log`.
+
+### 05/10/2026: Edição > Apagar — AGUARDANDO VALIDAÇÃO
+
+Pedido do Renan: um botão Apagar na Edição que abre uma janela para escolher
+(1) cores, (2) textos, (3) sombras, (4) strings, (5) infra elétrica.
+
+- **Onde:** Edição > Apagar (`CLIVUS_APAGAR`, também `CLIVUS_ERASE` e
+  `CLIVUS_BORRAR`; ícone da lixeira). A janela tem uma caixa por opção com o
+  que ela leva ao lado (lido do desenho; opção sem nada fica cinza), Apagar e
+  Cancelar; Apagar mostra a confirmação com as contagens das marcadas. Tudo
+  num comando e numa transação: um U desfaz. Sem interface (Core Console) o
+  comando pergunta os números na linha de comando ("135", "*" todas).
+- **Regra:** só entidade com o nosso XData (pelo tipo, nunca pela camada). O
+  que cada opção leva mora no Core (`Cleanup`, com teste); o plugin lê num
+  plano e executa (`Limpeza`).
+  1. Cores: contorno e módulos com a cor do tipo de mesa (sem tipo, ByLayer),
+     pilar ByLayer; mesa que não cabe inteira magenta (roxo se tentou todas);
+     strings, sinais e textos de análise ByLayer. Zera os registros de peças
+     pintadas das análises e da sombra. A mesa pendente perde o vermelho mas
+     continua pendente no Estado.
+  2. Textos: cotas e setas inteiras (o risco e as linhas vão junto), textos de
+     análise, tags, tags da numeração, sinais + e − (com o círculo), etiquetas
+     de sombra. A marca dos grupos fica (é do grupo).
+  3. Sombras: contornos e etiquetas; os módulos marcados voltam à cor de antes
+     (a guardada pela sombra); zera SOMBRA_PINTADAS e SOMBRA_MOTIVOS. A árvore
+     fica.
+  4. Strings: polilinha, sinais e tag de cada string. Ficam os tipos de string
+     com os traçados (`STRING_TIPOS`/`STRING_TRACADOS`: são a biblioteca).
+  5. Infra: os blocos em campo (e as definições `CLIVUS_EQUIPAMENTO_*`) e os
+     registros INVERSORES, TRAFOS, SUBESTACOES, SUBESTACOES_BLOCOS e SKIDS
+     esvaziados. As strings ficam soltas, sem tag e ByLayer, e as tags escritas
+     somem. Ficam os modelos de inversor (`INVERSOR_MODELOS`), a numeração
+     (`NUMERACAO*`) e a varredura da atribuição (`ALOCACAO_VARREDURA`): são
+     configuração. Não há cabo nem eletrocalha no plugin hoje.
+- **Achado e corrigido:** `PluginDictionary.Save` trocava o Xrecord por um novo
+  (SetAt); depois de um U o registro SUMIA do desenho (provado no nível 2 com
+  dois `CLIVUS_ELETRICA_AUTO Trafo` e U: TRAFOS desaparecia). Agora o registro
+  que existe é regravado no lugar. Vale para todo comando que grava no
+  dicionário.
+- **Testes:** nível 1 `CleanupTests`; nível 2 `eletrica-apagar.ps1` (usina
+  mista com strings de verdade, cadeia, cores, tags, 3 equipamentos, análises,
+  pendente, árvore e sombra, e 4 entidades do usuário, duas em camadas
+  CLIVUS_*): 12345 e U devolve tudo, depois 3, 1, 5, 2 e 4, conferindo pelo
+  LISP o que sumiu, o que ficou e as cores.
+
+Roteiro de tela:
+1. Numa usina com strings, numeração, inversores em campo, uma análise
+   pintada, tags e uma sombra: Edição > Apagar. As cinco caixas mostram as
+   contagens; marque Sombras e Apagar: a confirmação lista; Sim. As sombras
+   somem e os módulos voltam à cor de antes. U: tudo volta.
+2. Apagar > Cores: as mesas ficam só com a cor do tipo (magenta nas que não
+   cabem); strings sem a cor do inversor.
+3. Apagar > Infra elétrica: inversores, trafos e subestações somem da janela
+   elétrica e do campo; as strings ficam, soltas.
+4. Apagar > Textos e depois Strings. Um texto seu numa camada CLIVUS_* fica.
+
+Observação: se a janela da configuração elétrica estiver aberta durante o
+Apagar, ela pode mostrar o cadastro antigo até ser reaberta (não mexi nela;
+outra frente trabalha lá).

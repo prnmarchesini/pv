@@ -47,11 +47,22 @@ internal static class PluginDictionary
             transacao.AddNewlyCreatedDBObject(nosso, true);
         }
 
-        var registro = new Xrecord { Data = dados };
+        if (nosso.Contains(chave) && transacao.GetObject(nosso.GetAt(chave), OpenMode.ForWrite) is Xrecord existente)
+        {
+            // O registro que já existe é regravado no lugar. Trocar por um
+            // novo (SetAt) perdia o registro no U: o desfazer tirava o novo e
+            // não devolvia o antigo (nível 2 do Apagar, 05/10/2026: depois de
+            // um U os registros INVERSORES, TRAFOS... sumiam do desenho).
+            existente.Data = dados;
+        }
+        else
+        {
+            var registro = new Xrecord { Data = dados };
 
-        // SetAt substitui o anterior e o apaga: não é preciso remover antes.
-        nosso.SetAt(chave, registro);
-        transacao.AddNewlyCreatedDBObject(registro, true);
+            // SetAt substitui o anterior e o apaga: não é preciso remover antes.
+            nosso.SetAt(chave, registro);
+            transacao.AddNewlyCreatedDBObject(registro, true);
+        }
 
         transacao.Commit();
 
