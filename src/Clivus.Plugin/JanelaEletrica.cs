@@ -35,11 +35,28 @@ internal sealed class JanelaEletrica : Window
         void Aba(string titulo, string dica, UIElement conteudo)
         {
             abas.Items.Add(new TabItem { Header = titulo, ToolTip = dica, Content = conteudo });
-            if (conteudo is AbaEletrica a) _abas.Add(a);
+            if (conteudo is not AbaEletrica a) return;
+            a.AoMudar = Atualizar;
+            _abas.Add(a);
         }
 
+        Aba(Tr.T("Subestação"), Tr.T("As subestações (unidades consumidoras), os trafos de cada uma e a posição em campo."), new AbaSubestacao(documento));
         Aba(Tr.T("Transformador"), Tr.T("Os trafos: cadastro livre ou a partir de um padrão, apelido (tag) e posição em campo."), new AbaTransformador(documento));
         Aba(Tr.T("Numeração"), Tr.T("A numeração das strings (tags)."), PainelDeNumeracao.Criar(documento));
+
+        // Trocar de aba relê o desenho (o usuário pode ter mexido no CAD).
+        // O evento sobe também das listas de dentro: só o da própria TabControl conta.
+        abas.SelectionChanged += (_, e) =>
+        {
+            try
+            {
+                if (e.OriginalSource == abas && abas.SelectedContent is AbaEletrica aba) aba.Atualizar();
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao trocar de aba na configuração elétrica.", erro);
+            }
+        };
 
         Content = abas;
         Atualizar();
@@ -133,6 +150,9 @@ internal abstract class AbaEletrica : DockPanel
     /// <summary>Relê o desenho e remonta a aba.</summary>
     internal abstract void Atualizar();
 
+    /// <summary>Quem relê depois de uma mudança: a janela inteira (as outras abas mostram o mesmo cadastro).</summary>
+    internal Action? AoMudar { get; set; }
+
     protected void Avisar(string texto, bool erro = false)
     {
         _recado.Foreground = erro ? Brushes.Firebrick : Brushes.ForestGreen;
@@ -150,7 +170,7 @@ internal abstract class AbaEletrica : DockPanel
         try
         {
             var frase = EscritaForaDeComando.Fazer(Documento, operacao);
-            Atualizar();
+            (AoMudar ?? Atualizar)();
             if (frase is not null) Avisar(frase, erro);
         }
         catch (Exception falha)

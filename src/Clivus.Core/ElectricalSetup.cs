@@ -54,20 +54,116 @@ public static class ElectricalDefaults
 /// </summary>
 public sealed class ElectricalSetup
 {
+    private readonly List<ConsumerUnit> _ucs;
     private readonly List<Transformer> _trafos;
     private readonly List<Inverter> _inversores;
 
-    public ElectricalSetup(IEnumerable<Transformer>? transformers = null, IEnumerable<Inverter>? inverters = null)
+    public ElectricalSetup(
+        IEnumerable<Transformer>? transformers = null,
+        IEnumerable<Inverter>? inverters = null,
+        IEnumerable<ConsumerUnit>? units = null)
     {
         _trafos = transformers?.ToList() ?? [];
         _inversores = inverters?.ToList() ?? [];
+        _ucs = units?.ToList() ?? [];
     }
+
+    public IReadOnlyList<ConsumerUnit> Units => _ucs;
 
     public IReadOnlyList<Transformer> Transformers => _trafos;
 
     public IReadOnlyList<Inverter> Inverters => _inversores;
 
     public Transformer? FindTransformer(Guid id) => _trafos.FirstOrDefault(t => t.Id == id);
+
+    public ConsumerUnit? FindUnit(Guid id) => _ucs.FirstOrDefault(u => u.Id == id);
+
+    // -------------------------------------------------------- subestações
+
+    /// <summary>
+    /// Cria a próxima subestação compartilhada (C1, C2...; o número segue o
+    /// maior código, sem reaproveitar), com nome padrão e o tamanho padrão.
+    /// </summary>
+    public ConsumerUnit AddSharedUnit()
+    {
+        var codigo = "C" + NextNumber(_ucs.Select(u => u.Code), "C").ToString(CultureInfo.InvariantCulture);
+        var uc = new ConsumerUnit(Guid.NewGuid(), codigo, Tr.F("Subestação {0}", codigo), ConsumerUnitMode.Shared, ElectricalDefaults.ConsumerUnitSize);
+        _ucs.Add(uc);
+        return uc;
+    }
+
+    /// <summary>Troca nome e tamanho do bloquinho (código e modo não mudam). Null se deu certo, o porquê se não.</summary>
+    public string? EditUnit(Guid id, string? name, EquipmentSize size)
+    {
+        ArgumentNullException.ThrowIfNull(size);
+
+        var posicao = _ucs.FindIndex(u => u.Id == id);
+        if (posicao < 0) return Tr.T("essa subestação não está mais no cadastro");
+
+        var nome = name?.Trim() ?? string.Empty;
+        if (nome.Length == 0) return Tr.T("o nome não pode ficar vazio");
+        if (nome.Length > ElectricalDefaults.MaxNameLength) return Tr.F("o nome tem no máximo {0} caracteres", ElectricalDefaults.MaxNameLength);
+        if (!size.IsValid) return Tr.T("largura, comprimento e altura têm que ser maiores que zero");
+
+        _ucs[posicao] = _ucs[posicao] with { Name = nome, Size = size };
+        return null;
+    }
+
+    /// <summary>
+    /// Tira a subestação do cadastro. Os trafos dela ficam sem UC (o vínculo
+    /// some, o trafo fica). Quantos trafos foram soltos, ou null se não existia.
+    /// </summary>
+    public int? RemoveUnit(Guid id)
+    {
+        if (_ucs.RemoveAll(u => u.Id == id) == 0) return null;
+
+        var soltos = 0;
+        for (var i = 0; i < _trafos.Count; i++)
+        {
+            if (_trafos[i].ConsumerUnit != id) continue;
+            _trafos[i] = _trafos[i] with { ConsumerUnit = Guid.Empty };
+            soltos++;
+        }
+
+        return soltos;
+    }
+
+    /// <summary>Os trafos ligados à subestação (o vínculo mora no trafo).</summary>
+    public IReadOnlyList<Transformer> TransformersOf(Guid unit) => _trafos.Where(t => t.ConsumerUnit == unit).ToList();
+
+    /// <summary>
+    /// Associa o trafo à subestação (12.1). Trafo que já é de outra fica
+    /// travado: soltar primeiro é um ato explícito, nada muda sozinho. Null se
+    /// deu certo (ou já era dela), o porquê se não.
+    /// </summary>
+    public string? LinkTransformer(Guid unit, Guid transformer)
+    {
+        var uc = FindUnit(unit);
+        if (uc is null) return Tr.T("essa subestação não está mais no cadastro");
+
+        var posicao = _trafos.FindIndex(t => t.Id == transformer);
+        if (posicao < 0) return Tr.T("esse transformador não está mais no cadastro");
+
+        var trafo = _trafos[posicao];
+        if (trafo.ConsumerUnit == unit) return null;
+
+        // Vínculo para uma UC que não existe mais (registro estragado) não trava.
+        if (FindUnit(trafo.ConsumerUnit) is { } dona)
+            return Tr.F("{0} já está ligado a {1}; solte antes de ligar a outra subestação", trafo.Nickname, dona.Code);
+
+        _trafos[posicao] = trafo with { ConsumerUnit = unit };
+        return null;
+    }
+
+    /// <summary>Solta o trafo da subestação dele; se havia o que soltar.</summary>
+    public bool UnlinkTransformer(Guid transformer)
+    {
+        var posicao = _trafos.FindIndex(t => t.Id == transformer);
+        if (posicao < 0 || _trafos[posicao].ConsumerUnit == Guid.Empty) return false;
+
+        _trafos[posicao] = _trafos[posicao] with { ConsumerUnit = Guid.Empty };
+        return true;
+    }
 
     // ------------------------------------------------------------- trafos
 

@@ -1,5 +1,5 @@
 using System.Globalization;
-using Autodesk.AutoCAD.ApplicationServices;
+using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using Clivus.Core;
@@ -22,6 +22,8 @@ public static class ConfiguracaoEletricaAutoCommands
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
+    private static readonly string[] Palavras = ["Trafo", "Editar", "Uc", "Vincular", "Soltar", "Listar"];
+
 #if DEBUG
     [CommandMethod(PluginInfo.ComandoEletricaAutomatico)]
 #endif
@@ -34,56 +36,25 @@ public static class ConfiguracaoEletricaAutoCommands
 
         try
         {
-            var o = new PromptKeywordOptions("\nEletrica [Trafo/Editar/Listar]: ") { AllowNone = false };
-            foreach (var k in new[] { "Trafo", "Editar", "Listar" }) o.Keywords.Add(k);
+            var o = new PromptKeywordOptions($"\nEletrica [{string.Join("/", Palavras)}]: ") { AllowNone = false };
+            foreach (var k in Palavras) o.Keywords.Add(k);
 
             var r = editor.GetKeywords(o);
             if (r.Status != PromptStatus.OK) return;
 
             var database = documento.Database;
-
-            switch (r.StringResult)
+            string? frase = r.StringResult switch
             {
-                case "Trafo":
-                    // Trafo <0 = em branco | n = o n-ésimo padrão, a partir de 1>
-                    if (Inteiro(editor, "\nPadrao (0 = em branco): ") is not { } n) return;
-                    TransformerTemplate? padrao = null;
-                    if (n > 0)
-                    {
-                        if (n > ElectricalDefaults.TransformerTemplates.Count) { editor.WriteMessage($"\nELETRICA ERRO padrao {n} nao existe\n"); return; }
-                        padrao = ElectricalDefaults.TransformerTemplates[n - 1];
-                    }
+                "Trafo" => NovoTrafo(editor, database),
+                "Editar" => EditarTrafo(editor, database),
+                "Uc" => "uc " + ConfiguracaoEletricaStore.Mudar(database, s => s.AddSharedUnit()).Code + " criada",
+                "Vincular" => Vincular(editor, database),
+                "Soltar" => SoltarTrafo(editor, database),
+                _ => string.Empty,
+            };
 
-                    var novo = ConfiguracaoEletricaStore.Mudar(database, s => s.AddTransformer(padrao));
-                    editor.WriteMessage($"\nELETRICA trafo {novo.Nickname} criado\n");
-                    break;
-
-                case "Editar":
-                    // Editar <apelido> <campo> <valor>: o mesmo caminho do Salvar da janela.
-                    if (Texto(editor, "\nTrafo (apelido): ") is not { } apelido) return;
-                    if (Texto(editor, "\nCampo [Nome/Apelido/Kva/Entrada/Saida/K/Z/Notas]: ") is not { } campo) return;
-                    if (Texto(editor, "\nValor: ") is not { } valor) return;
-                    var porque = ConfiguracaoEletricaStore.Mudar(database, s =>
-                    {
-                        var t = s.Transformers.FirstOrDefault(x => ElectricalSetup.SameName(x.Nickname, apelido));
-                        if (t is null) return "nao existe";
-                        double Num() => double.Parse(valor, Inv);
-                        return s.EditTransformer(campo switch
-                        {
-                            "Nome" => t with { Name = valor },
-                            "Apelido" => t with { Nickname = valor },
-                            "Kva" => t with { PowerKva = Num() },
-                            "Entrada" => t with { InputVoltage = Num() },
-                            "Saida" => t with { OutputVoltage = Num() },
-                            "K" => t with { KFactor = Num() },
-                            "Z" => t with { ImpedancePercent = Num() },
-                            _ => t with { Notes = valor },
-                        });
-                    });
-                    editor.WriteMessage(porque is null ? $"\nELETRICA trafo {apelido} editado\n" : $"\nELETRICA recusado: {porque}\n");
-                    break;
-            }
-
+            if (frase is null) return;
+            if (frase.Length > 0) editor.WriteMessage($"\nELETRICA {frase}\n");
             Listar(editor, database);
         }
         catch (System.Exception erro)
@@ -93,8 +64,70 @@ public static class ConfiguracaoEletricaAutoCommands
         }
     }
 
+    /// <summary>Trafo &lt;0 = em branco | n = o n-ésimo padrão, a partir de 1&gt;.</summary>
+    private static string? NovoTrafo(Editor editor, Database database)
+    {
+        if (Inteiro(editor, "\nPadrao (0 = em branco): ") is not { } n) return null;
+        if (n > ElectricalDefaults.TransformerTemplates.Count) return $"ERRO padrao {n} nao existe";
+
+        var padrao = n > 0 ? ElectricalDefaults.TransformerTemplates[n - 1] : null;
+        return "trafo " + ConfiguracaoEletricaStore.Mudar(database, s => s.AddTransformer(padrao)).Nickname + " criado";
+    }
+
+    /// <summary>Editar &lt;apelido&gt; &lt;campo&gt; &lt;valor&gt;: o mesmo caminho do Salvar da janela.</summary>
+    private static string? EditarTrafo(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nTrafo (apelido): ") is not { } apelido) return null;
+        if (Texto(editor, "\nCampo [Nome/Apelido/Kva/Entrada/Saida/K/Z/Notas]: ") is not { } campo) return null;
+        if (Texto(editor, "\nValor: ") is not { } valor) return null;
+
+        var porque = ConfiguracaoEletricaStore.Mudar(database, s =>
+        {
+            if (Trafo(s, apelido) is not { } t) return "trafo nao existe";
+            double Num() => double.Parse(valor, Inv);
+            return s.EditTransformer(campo switch
+            {
+                "Nome" => t with { Name = valor },
+                "Apelido" => t with { Nickname = valor },
+                "Kva" => t with { PowerKva = Num() },
+                "Entrada" => t with { InputVoltage = Num() },
+                "Saida" => t with { OutputVoltage = Num() },
+                "K" => t with { KFactor = Num() },
+                "Z" => t with { ImpedancePercent = Num() },
+                _ => t with { Notes = valor },
+            });
+        });
+
+        return porque is null ? $"trafo {apelido} editado" : $"recusado: {porque}";
+    }
+
+    /// <summary>Vincular &lt;código da UC&gt; &lt;apelido do trafo&gt;.</summary>
+    private static string? Vincular(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nSubestacao (codigo): ") is not { } codigo) return null;
+        if (Texto(editor, "\nTrafo (apelido): ") is not { } apelido) return null;
+
+        var porque = ConfiguracaoEletricaStore.Mudar(database, s =>
+            Uc(s, codigo) is not { } u ? "subestacao nao existe"
+            : Trafo(s, apelido) is not { } t ? "trafo nao existe"
+            : s.LinkTransformer(u.Id, t.Id));
+
+        return porque is null ? $"{apelido} ligado a {codigo}" : $"recusado: {porque}";
+    }
+
+    private static string? SoltarTrafo(Editor editor, Database database)
+    {
+        if (Texto(editor, "\nTrafo (apelido): ") is not { } apelido) return null;
+        var soltou = ConfiguracaoEletricaStore.Mudar(database, s => Trafo(s, apelido) is { } t && s.UnlinkTransformer(t.Id));
+        return $"{apelido} solto={soltou}";
+    }
+
+    private static Transformer? Trafo(ElectricalSetup s, string apelido) => s.Transformers.FirstOrDefault(t => ElectricalSetup.SameName(t.Nickname, apelido));
+
+    private static ConsumerUnit? Uc(ElectricalSetup s, string codigo) => s.Units.FirstOrDefault(u => ElectricalSetup.SameName(u.Code, codigo));
+
     /// <summary>O cadastro inteiro, uma linha por registro, números invariantes.</summary>
-    private static void Listar(Editor editor, Autodesk.AutoCAD.DatabaseServices.Database database)
+    private static void Listar(Editor editor, Database database)
     {
         var (setup, problema) = ConfiguracaoEletricaStore.Ler(database);
         if (problema is not null) editor.WriteMessage($"\nELETRICA PROBLEMA {problema}\n");
@@ -102,9 +135,13 @@ public static class ConfiguracaoEletricaAutoCommands
         static string N(double v) => v.ToString("0.###", Inv);
         static string Tam(EquipmentSize t) => $"{N(t.Width)}x{N(t.Length)}x{N(t.Height)}";
 
-        editor.WriteMessage($"\nELETRICA {setup.Transformers.Count} trafo(s)\n");
+        editor.WriteMessage($"\nELETRICA {setup.Units.Count} subestacao(oes)\n");
+        foreach (var u in setup.Units)
+            editor.WriteMessage($"ELETRICA UC {u.Code} modo={u.Mode} nome=\"{u.Name}\" tamanho={Tam(u.Size)} trafos={string.Join(",", setup.TransformersOf(u.Id).Select(t => t.Nickname))}\n");
+
+        editor.WriteMessage($"ELETRICA {setup.Transformers.Count} trafo(s)\n");
         foreach (var t in setup.Transformers)
-            editor.WriteMessage($"ELETRICA TRAFO {t.Nickname} nome=\"{t.Name}\" entrada={N(t.InputVoltage)} saida={N(t.OutputVoltage)} kva={N(t.PowerKva)} k={N(t.KFactor)} z={N(t.ImpedancePercent)} tamanho={Tam(t.Size)} notas=\"{t.Notes}\"\n");
+            editor.WriteMessage($"ELETRICA TRAFO {t.Nickname} nome=\"{t.Name}\" entrada={N(t.InputVoltage)} saida={N(t.OutputVoltage)} kva={N(t.PowerKva)} k={N(t.KFactor)} z={N(t.ImpedancePercent)} tamanho={Tam(t.Size)} notas=\"{t.Notes}\" uc={setup.FindUnit(t.ConsumerUnit)?.Code}\n");
     }
 
     private static string? Texto(Editor editor, string pergunta)

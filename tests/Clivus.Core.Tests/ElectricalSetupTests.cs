@@ -123,4 +123,118 @@ public class ElectricalSetupTests
         Assert.Equal(2, setup.Inverters.Count);
         Assert.All(setup.Inverters, i => Assert.Equal(Guid.Empty, i.Transformer));
     }
+
+    // ------------------------------------------------------------ 12.1
+
+    [Fact]
+    [Trait("Etapa", "12")]
+    public void SubestacaoCompartilhadaGanhaCodigoEmSequencia()
+    {
+        var setup = new ElectricalSetup();
+
+        var c1 = setup.AddSharedUnit();
+        var c2 = setup.AddSharedUnit();
+        setup.AddSharedUnit();
+        setup.RemoveUnit(c2.Id);
+        var c4 = setup.AddSharedUnit();
+
+        Assert.Equal("C1", c1.Code);
+        Assert.Equal("Subestação C1", c1.Name);
+        Assert.Equal(ConsumerUnitMode.Shared, c1.Mode);
+        Assert.Equal("C4", c4.Code);   // o C2 saiu e não volta
+        Assert.True(c1.IsValid);
+        Assert.Equal(c1, ConsumerUnit.Parse(c1.ToFields()));
+    }
+
+    [Fact]
+    [Trait("Etapa", "12")]
+    public void UmaSubestacaoCompartilhadaRecebeUmOuMaisTrafos()
+    {
+        var setup = new ElectricalSetup();
+        var c1 = setup.AddSharedUnit();
+        var c2 = setup.AddSharedUnit();
+        var t1 = setup.AddTransformer();
+        var t2 = setup.AddTransformer();
+        var t3 = setup.AddTransformer();
+
+        Assert.Null(setup.LinkTransformer(c1.Id, t1.Id));
+        Assert.Null(setup.LinkTransformer(c1.Id, t2.Id));
+        Assert.Null(setup.LinkTransformer(c2.Id, t3.Id));
+        Assert.Null(setup.LinkTransformer(c1.Id, t1.Id));   // já era dela: nada muda
+
+        Assert.Equal(["T1", "T2"], setup.TransformersOf(c1.Id).Select(t => t.Nickname));
+        Assert.Equal(["T3"], setup.TransformersOf(c2.Id).Select(t => t.Nickname));
+        Assert.Equal(c1.Id, setup.FindTransformer(t1.Id)!.ConsumerUnit);
+    }
+
+    [Fact]
+    [Trait("Etapa", "12")]
+    public void TrafoDeUmaSubestacaoFicaTravadoAteSerSolto()
+    {
+        var setup = new ElectricalSetup();
+        var c1 = setup.AddSharedUnit();
+        var c2 = setup.AddSharedUnit();
+        var t1 = setup.AddTransformer();
+        setup.LinkTransformer(c1.Id, t1.Id);
+
+        var porque = setup.LinkTransformer(c2.Id, t1.Id);
+
+        Assert.NotNull(porque);
+        Assert.Contains("C1", porque);
+        Assert.Equal(c1.Id, setup.FindTransformer(t1.Id)!.ConsumerUnit);
+
+        Assert.True(setup.UnlinkTransformer(t1.Id));
+        Assert.False(setup.UnlinkTransformer(t1.Id));
+        Assert.Null(setup.LinkTransformer(c2.Id, t1.Id));
+        Assert.Equal(c2.Id, setup.FindTransformer(t1.Id)!.ConsumerUnit);
+    }
+
+    [Fact]
+    [Trait("Etapa", "12")]
+    public void VinculoComSubestacaoQueNaoExisteMaisNaoTrava()
+    {
+        var t = new Transformer(Guid.NewGuid(), "Trafo 1", "T1", 0, 0, 0, 0, 0, "", ElectricalDefaults.TransformerSize, Guid.NewGuid());
+        var setup = new ElectricalSetup([t]);
+        var c1 = setup.AddSharedUnit();
+
+        Assert.Null(setup.LinkTransformer(c1.Id, t.Id));
+        Assert.NotNull(setup.LinkTransformer(Guid.NewGuid(), t.Id));
+        Assert.NotNull(setup.LinkTransformer(c1.Id, Guid.NewGuid()));
+    }
+
+    [Fact]
+    [Trait("Etapa", "12")]
+    public void ApagarSubestacaoSoltaOsTrafosSemApagarOsTrafos()
+    {
+        var setup = new ElectricalSetup();
+        var c1 = setup.AddSharedUnit();
+        var t1 = setup.AddTransformer();
+        var t2 = setup.AddTransformer();
+        setup.LinkTransformer(c1.Id, t1.Id);
+        setup.LinkTransformer(c1.Id, t2.Id);
+
+        Assert.Equal(2, setup.RemoveUnit(c1.Id));
+        Assert.Null(setup.RemoveUnit(c1.Id));
+
+        Assert.Equal(2, setup.Transformers.Count);
+        Assert.All(setup.Transformers, t => Assert.Equal(Guid.Empty, t.ConsumerUnit));
+    }
+
+    [Fact]
+    [Trait("Etapa", "12")]
+    public void EditarSubestacaoTrocaNomeETamanhoENaoOCodigo()
+    {
+        var setup = new ElectricalSetup();
+        var c1 = setup.AddSharedUnit();
+
+        Assert.Null(setup.EditUnit(c1.Id, " Medição Norte ", new EquipmentSize(6, 3, 2.8)));
+        Assert.NotNull(setup.EditUnit(c1.Id, " ", new EquipmentSize(6, 3, 2.8)));
+        Assert.NotNull(setup.EditUnit(c1.Id, "X", new EquipmentSize(6, 0, 2.8)));
+        Assert.NotNull(setup.EditUnit(Guid.NewGuid(), "X", new EquipmentSize(6, 3, 2.8)));
+
+        var editada = setup.FindUnit(c1.Id)!;
+        Assert.Equal("Medição Norte", editada.Name);
+        Assert.Equal("C1", editada.Code);
+        Assert.Equal(6, editada.Size.Width);
+    }
 }
