@@ -22,7 +22,7 @@ public static class AbaInversorAutoCommands
 
     /// <summary>
     /// CLIVUS_ELETRICA_JANELA_TRAFO_AUTO &lt;inversores separados por ;&gt; &lt;trafo, ou - para sem trafo&gt;:
-    /// a caixa Trafo da linha (um inversor) ou o "Pôr no trafo" (vários).
+    /// a caixa Trafo da linha (um inversor) ou o "Aplicar" da barra das escolhidas (vários).
     /// </summary>
     [CommandMethod(PluginInfo.ComandoEletricaJanelaTrafoAutomatico, CommandFlags.Session)]
     public static void Trafo()
@@ -113,6 +113,84 @@ public static class AbaInversorAutoCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha no CLIVUS_ELETRICA_JANELA_MODELO_AUTO.", erro);
+            editor.WriteMessage($"\nELETRICA ERRO {erro.Message}\n");
+        }
+    }
+
+    /// <summary>
+    /// CLIVUS_ELETRICA_JANELA_LINHA_AUTO &lt;inversores separados por ;&gt; &lt;Nome|Modelo|Apagar&gt; &lt;valor&gt;:
+    /// o nome editado na célula, o modelo escolhido na caixa da linha (um
+    /// inversor) e o Apagar da barra das escolhidas (vários; o valor é
+    /// ignorado: a confirmação da tela é o "sim" do teste).
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoEletricaJanelaLinhaAutomatico, CommandFlags.Session)]
+    public static void Linha()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+        try
+        {
+            var nomes = editor.GetString(new PromptStringOptions("\nInversores (nomes separados por ;): ") { AllowSpaces = true });
+            if (nomes.Status != PromptStatus.OK) return;
+            var oQue = editor.GetString(new PromptStringOptions("\nNome, Modelo ou Apagar: ") { AllowSpaces = false });
+            if (oQue.Status != PromptStatus.OK) return;
+            var valor = editor.GetString(new PromptStringOptions("\nValor (. = vazio): ") { AllowSpaces = true });
+            if (valor.Status != PromptStatus.OK) return;
+            var texto = valor.StringResult == "." ? string.Empty : valor.StringResult;
+
+            var setup = ConfiguracaoEletricaStore.Ler(documento.Database).Setup;
+            var ids = new List<Guid>();
+            foreach (var nome in nomes.StringResult.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (setup.FindInverter(nome) is not { } i)
+                {
+                    editor.WriteMessage($"\nELETRICA janela linha recusado: inversor {nome} nao existe\n");
+                    return;
+                }
+
+                ids.Add(i.Id);
+            }
+
+            switch (oQue.StringResult.Trim().ToUpperInvariant())
+            {
+                case "NOME" when ids.Count == 1:
+                {
+                    var porque = EscritaForaDeComando.Fazer(documento, () => AbaInversor.RenomearNaLinha(documento.Database, ids[0], texto));
+                    editor.WriteMessage(porque is null ? $"\nELETRICA janela linha nome: [{texto.Trim()}] gravado\n" : $"\nELETRICA janela linha recusado: {porque}\n");
+                    break;
+                }
+
+                case "MODELO" when ids.Count == 1:
+                {
+                    var modelo = setup.Models.FirstOrDefault(m => ElectricalSetup.SameName(m.Name, texto));
+                    if (modelo is null)
+                    {
+                        editor.WriteMessage($"\nELETRICA janela linha recusado: modelo {texto} nao existe\n");
+                        break;
+                    }
+
+                    var porque = EscritaForaDeComando.Fazer(documento, () => AbaInversor.TrocarModeloNaLinha(documento.Database, ids[0], modelo.Id));
+                    editor.WriteMessage(porque is null ? $"\nELETRICA janela linha modelo: {modelo.Name} gravado\n" : $"\nELETRICA janela linha recusado: {porque}\n");
+                    break;
+                }
+
+                case "APAGAR":
+                {
+                    var (apagados, soltas) = EscritaForaDeComando.Fazer(documento, () => AbaInversor.ApagarInversores(documento.Database, ids));
+                    editor.WriteMessage($"\nELETRICA janela linha apagados={string.Join(",", apagados.Select(i => i.Name))} soltas={soltas} fim\n");
+                    break;
+                }
+
+                default:
+                    editor.WriteMessage($"\nELETRICA janela linha recusado: [{oQue.StringResult}] com {ids.Count} inversor(es)\n");
+                    break;
+            }
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no CLIVUS_ELETRICA_JANELA_LINHA_AUTO.", erro);
             editor.WriteMessage($"\nELETRICA ERRO {erro.Message}\n");
         }
     }

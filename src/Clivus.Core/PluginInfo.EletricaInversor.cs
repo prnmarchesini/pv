@@ -10,7 +10,7 @@ public static partial class PluginInfo
     /// </summary>
     public const string ComandoEletricaJanelaSelecionarAutomatico = "CLIVUS_ELETRICA_JANELA_SELECIONAR_AUTO";
 
-    /// <summary>Só no build de teste: a coluna Trafo / o "Pôr no trafo" da tabela de inversores, pelo caminho da janela.</summary>
+    /// <summary>Só no build de teste: a coluna Trafo / o "Aplicar" da barra das linhas escolhidas da tabela de inversores, pelo caminho da janela.</summary>
     public const string ComandoEletricaJanelaTrafoAutomatico = "CLIVUS_ELETRICA_JANELA_TRAFO_AUTO";
 
     /// <summary>Só no build de teste: o Salvar modelo da aba Inversor (com a potência), pelo caminho da janela.</summary>
@@ -18,4 +18,10 @@ public static partial class PluginInfo
 
     /// <summary>Só no build de teste: as linhas da tabela de inversores (strings, kWp, kW, CC/CA), como a aba monta.</summary>
     public const string ComandoEletricaJanelaTabelaAutomatico = "CLIVUS_ELETRICA_JANELA_TABELA_AUTO";
+
+    /// <summary>
+    /// Só no build de teste: a edição direto na linha da tabela de inversores
+    /// (o nome, o modelo) e o apagar de várias linhas, pelo caminho da janela.
+    /// </summary>
+    public const string ComandoEletricaJanelaLinhaAutomatico = "CLIVUS_ELETRICA_JANELA_LINHA_AUTO";
 }

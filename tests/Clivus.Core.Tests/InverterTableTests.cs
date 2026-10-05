@@ -257,4 +257,97 @@ public class InverterTableTests
         Assert.Null(InverterTable.Total(linhas).PowerKwp);
         Assert.Equal(50, InverterTable.Total(linhas).PowerKw);
     }
+
+    // ------------------------------------- a edição na linha (05/10/2026)
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void RenomearNaLinhaTrocaSoONomeComAsMesmasRegras()
+    {
+        var setup = new ElectricalSetup();
+        var m = setup.AddModel();
+        var inv = setup.AddInverters(m.Id, 2);
+
+        Assert.Null(setup.RenameInverter(inv[0].Id, "  INV-NORTE "));
+        Assert.Equal("INV-NORTE", setup.FindInverter(inv[0].Id)!.Name);
+        Assert.Equal(m.Id, setup.FindInverter(inv[0].Id)!.Model);
+
+        // O mesmo nome nele mesmo (outra caixa) serve; noutro, não.
+        Assert.Null(setup.RenameInverter(inv[0].Id, "inv-norte"));
+        Assert.NotNull(setup.RenameInverter(inv[1].Id, "Inv-Norte"));
+        Assert.NotNull(setup.RenameInverter(inv[1].Id, "   "));
+        Assert.NotNull(setup.RenameInverter(inv[1].Id, null));
+        Assert.NotNull(setup.RenameInverter(inv[1].Id, Guid.NewGuid().ToString()));
+        Assert.NotNull(setup.RenameInverter(inv[1].Id, new string('x', ElectricalDefaults.MaxNameLength + 1)));
+        Assert.NotNull(setup.RenameInverter(Guid.NewGuid(), "Outro"));
+        Assert.Equal(inv[1], setup.FindInverter(inv[1].Id));
+    }
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void RenomearServeAteParaInversorDeModeloQueSumiu()
+    {
+        var setup = new ElectricalSetup();
+        var m = setup.AddModel();
+        var inv = setup.AddInverters(m.Id, 1)[0];
+        var semModelo = new Inverter(inv.Id, Guid.NewGuid(), inv.Name, Guid.Empty, inv.Color);
+        var outro = new ElectricalSetup(inverters: [semModelo], models: [m]);
+
+        Assert.Null(outro.RenameInverter(inv.Id, "Antigo"));
+        Assert.Equal("Antigo", outro.FindInverter(inv.Id)!.Name);
+        Assert.Equal(semModelo.Model, outro.FindInverter(inv.Id)!.Model);
+    }
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void TrocarOModeloNaLinhaRecusaOQueNaoComportaAsStrings()
+    {
+        var setup = new ElectricalSetup();
+        var grande = setup.AddModel();
+        Assert.Null(setup.EditModel(grande with { Name = "Grande", InputsByMppt = [4, 4, 4, 4, 4] }));
+        var pequeno = setup.AddModel();
+        Assert.Null(setup.EditModel(pequeno with { Name = "Pequeno", InputsByMppt = [2, 2] }));
+        var inv = setup.AddInverters(grande.Id, 1)[0];
+
+        // 5 strings alocadas: o Pequeno (4 entradas) não serve; nada muda.
+        var porque = setup.ChangeInverterModel(inv.Id, pequeno.Id, 5);
+        Assert.NotNull(porque);
+        Assert.Contains("Pequeno", porque);
+        Assert.Contains("4", porque);
+        Assert.Equal(grande.Id, setup.FindInverter(inv.Id)!.Model);
+
+        // Com 4 cabe (no limite), e volta ao Grande com qualquer número que caiba.
+        Assert.Null(setup.ChangeInverterModel(inv.Id, pequeno.Id, 4));
+        Assert.Equal(pequeno.Id, setup.FindInverter(inv.Id)!.Model);
+        Assert.Null(setup.ChangeInverterModel(inv.Id, grande.Id, 4));
+        Assert.Equal(grande.Id, setup.FindInverter(inv.Id)!.Model);
+
+        // O mesmo modelo não é troca (mesmo em excesso, que já existia: nada a recusar).
+        Assert.Null(setup.ChangeInverterModel(inv.Id, grande.Id, 99));
+
+        // Modelo ou inversor que não existe: recusado.
+        Assert.NotNull(setup.ChangeInverterModel(inv.Id, Guid.NewGuid(), 0));
+        Assert.NotNull(setup.ChangeInverterModel(Guid.NewGuid(), grande.Id, 0));
+        Assert.Equal(inv.Name, setup.FindInverter(inv.Id)!.Name);
+    }
+
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void ApagarVariasLinhasDeUmaVez()
+    {
+        var (setup, t1, _, inv) = Usina();
+        setup.SetTransformer([inv[0].Id, inv[1].Id], t1.Id);
+        setup.Group(t1.Id, "Skid Norte", []);
+        Assert.NotNull(setup.FindSkid(t1.Id));
+
+        var sairam = setup.RemoveInverters([inv[1].Id, inv[0].Id, inv[4].Id, Guid.NewGuid(), inv[4].Id]);
+
+        // Na ordem do cadastro, sem repetir, o que não existia não conta.
+        Assert.Equal(["Inversor 1", "Inversor 2", "Inversor 5"], sairam.Select(i => i.Name));
+        Assert.Equal(["Inversor 3", "Inversor 4", "Inversor 6"], setup.Inverters.Select(i => i.Name));
+
+        // O skid do T1, sem inversor, deixa de existir (como apagar um por um).
+        Assert.Null(setup.FindSkid(t1.Id));
+        Assert.Empty(setup.RemoveInverters([]));
+    }
 }

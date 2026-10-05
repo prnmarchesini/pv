@@ -33,11 +33,13 @@ usos no mesmo commit.
   mesma coisa: não há outro vínculo inversor → trafo. Muda por dois
   caminhos (05/10/2026):
   - a tabela da aba Inversor (`ElectricalSetup.SetTransformer`): a caixa
-    Trafo da linha ou o "Pôr no trafo" das linhas escolhidas. Escolha
-    explícita: o inversor de outro trafo MUDA (sem trava); "sem trafo" solta.
-  - a seleção em campo, `CLIVUS_ELETRICA_SKID` (`Group`, no quadro fechado
-    "Agrupar em campo (skid)"): dá nome ao grupo; inversor de outro skid fica
-    travado.
+    Trafo da linha ou o "Aplicar" da barra das linhas escolhidas (aparece
+    com duas ou mais). Escolha explícita: o inversor de outro trafo MUDA
+    (sem trava); "sem trafo" solta.
+  - a seleção em campo, `CLIVUS_ELETRICA_SKID` (`Group`, botão "Trafo pelo
+    desenho…" da aba, que manda o nome vazio: fica o nome que o skid já
+    tem, ou "Skid T1"; o comando digitado ainda pergunta o nome): inversor
+    de outro skid fica travado.
   Nos dois, o trafo que fica sem inversor perde o registro `Skid` (o nome);
   o nome do skid do trafo de destino fica. Sem registro, o nome mostrado é
   "Skid T1".
@@ -100,6 +102,16 @@ Nenhum vínculo é derivado de posição no desenho.
 - O formato 1 (MPPT e entradas por MPPT, o mesmo número para todos) é lido
   pela versão do cabeçalho (`InverterModel.ParseLegacy`): vira a lista com o
   valor repetido. Grava-se hoje o 3 (acima).
+
+## A edição na linha da tabela de inversores (05/10/2026)
+
+- O nome (`ElectricalSetup.RenameInverter`: as regras do `EditInverter`,
+  sem conferir o modelo), o modelo (`ChangeInverterModel`: recusa o modelo
+  com menos entradas que as strings já alocadas, contadas pelo vínculo) e o
+  apagar de várias linhas (`RemoveInverters`, cada uma como `RemoveInverter`;
+  quem chama solta as strings e tira os retângulos). No Plugin,
+  `AbaInversor.RenomearNaLinha/TrocarModeloNaLinha/ApagarInversores`, o
+  mesmo caminho da tela e do nível 2 (`CLIVUS_ELETRICA_JANELA_LINHA_AUTO`).
 
 ## A cor do inversor (05/10/2026)
 

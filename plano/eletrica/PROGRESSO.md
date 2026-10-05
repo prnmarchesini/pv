@@ -152,6 +152,58 @@ Roteiro de tela:
 5. Abra "Agrupar em campo (skid)": a explicação e o agrupar pelo desenho,
    como antes.
 
+## Aba Inversor: tudo na linha (05/10/2026): AGUARDANDO VALIDAÇÃO
+
+Pedido do Renan sobre o bloco embaixo da tabela ("Pôr no trafo",
+"Escolhido: ... Salvar inversor / Alocar em campo / Apagar inversor" e o
+quadro "Agrupar em campo (skid)"): "essa parte não estou entendendo nada,
+melhore MUITO ela". O bloco saiu.
+
+- Na linha: a cor é o quadradinho (clique abre a paleta e "Mais cores...");
+  o nome é editável na célula (Enter ou sair grava, Esc desfaz; vazio,
+  repetido ou GUID recusados com o porquê); o Modelo é uma caixa que grava ao
+  escolher e recusa o modelo com menos entradas que as strings já alocadas
+  (a caixa volta ao gravado); o Trafo como antes.
+- Ações com nome e dica: "+ Strings", "Ver" e "⋯" (Soltar strings, Pôr em
+  campo, ou Mover em campo se o retângulo já está no desenho, e Apagar
+  inversor…, com confirmação).
+- Duas ou mais linhas escolhidas (Ctrl/Shift): aparece embaixo da tabela a
+  barra "3 inversores escolhidos: Trafo [T1] [Aplicar] [Apagar os 3]
+  [Cancelar seleção]"; com 0 ou 1, some. Escolhida a barra (e não "mudar a
+  caixa de uma escolhida muda todas") porque é explícita: mudar o trafo de
+  uma linha muda só ela, sempre. Embaixo, e não em cima, para não empurrar
+  as linhas que estão sendo clicadas.
+- "Trafo pelo desenho…" (ao lado de Criar): a lista dos trafos; escolher
+  um esconde a janela e roda o CLIVUS_ELETRICA_SKID para clicar os
+  retângulos dos inversores. O nome do skid saiu da tela (fica o que já tem,
+  ou "Skid T1"; o registro SKIDS e o comando não mudaram).
+- Topo: "Criar [1] inversor(es) do modelo [..] [Criar]" e "Distribuir
+  strings livres: [sentido] e na faixa [..] [Distribuir] [Soltar todas da
+  usina]"; uma linha de ajuda cinza em cima da tabela.
+- Core: `RenameInverter`, `ChangeInverterModel`, `RemoveInverters` (testes
+  em `InverterTableTests`); nível 2 novo `eletrica-inversor-linha.ps1`
+  (modelo recusado pelas strings, nome recusado/gravado, apagar várias).
+- Assumido: o apagar de várias pede uma confirmação só, com os nomes; o
+  "Apagar" da linha fica no "⋯" (não à vista) para não ser clicado sem
+  querer; antes a troca de modelo para um menor só avisava em vermelho,
+  agora é recusada (pedido de 05/10/2026).
+
+Roteiro de tela:
+1. Configuração elétrica > Inversor: clique no nome de um inversor, digite
+   outro e Enter: o recado verde diz "Inversor renomeado". Digite o nome de
+   outro inversor: recusado em vermelho e o nome volta. Esc desfaz.
+2. Num inversor com 5 strings, escolha na caixa Modelo um modelo de 4
+   entradas: recusado ("solte 1 string(s) antes...") e a caixa volta.
+3. Clique no quadradinho da cor: a paleta abre; escolha outra: as strings
+   dele mudam de cor no desenho.
+4. Ctrl+clique em três linhas (na parte das Strings/kWp): a barra aparece
+   embaixo; Trafo T2 > Aplicar: as três vão para o T2. Cancelar seleção: a
+   barra some.
+5. "⋯" de uma linha: Pôr em campo (clique no desenho) e, de volta, o "⋯"
+   mostra "Mover em campo". "Apagar inversor…" pergunta antes.
+6. "Trafo pelo desenho…" > T1: a janela some; clique nos retângulos dos
+   inversores, Enter: eles mostram T1 na coluna Trafo.
+
 ## Observações
 - Mesa recalculada troca os GUIDs dos módulos: as strings dela ficam soltas e
   regerar não as reconhece (desenha as novas sem apagar as velhas). Precisa de

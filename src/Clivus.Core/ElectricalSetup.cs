@@ -654,13 +654,61 @@ public sealed class ElectricalSetup
         if (posicao < 0) return Tr.T("esse inversor não está mais no cadastro");
 
         var nome = name?.Trim() ?? string.Empty;
+        if (InverterNameProblem(id, nome) is { } porque) return porque;
+        if (FindModel(model) is null) return Tr.T("esse modelo de inversor não está mais no cadastro");
+
+        _inversores[posicao] = _inversores[posicao] with { Name = nome, Model = model };
+        return null;
+    }
+
+    /// <summary>O porquê de o nome (já aparado) não servir para o inversor, ou null.</summary>
+    private string? InverterNameProblem(Guid id, string nome)
+    {
         if (nome.Length == 0) return Tr.T("o nome não pode ficar vazio");
         if (nome.Length > ElectricalDefaults.MaxNameLength) return Tr.F("o nome tem no máximo {0} caracteres", ElectricalDefaults.MaxNameLength);
         if (Guid.TryParse(nome, out _)) return Tr.T("o nome não pode ser um GUID");
         if (_inversores.Any(i => i.Id != id && SameName(i.Name, nome))) return Tr.F("já existe um inversor chamado \"{0}\"", nome);
-        if (FindModel(model) is null) return Tr.T("esse modelo de inversor não está mais no cadastro");
+        return null;
+    }
 
-        _inversores[posicao] = _inversores[posicao] with { Name = nome, Model = model };
+    /// <summary>
+    /// Só o nome do inversor (o nome editado na própria linha da tabela,
+    /// 05/10/2026), com as mesmas regras de <see cref="EditInverter"/>; o
+    /// modelo não muda (nem é conferido: um inversor de modelo que sumiu
+    /// também pode ser renomeado). Null se deu certo, o porquê se não.
+    /// </summary>
+    public string? RenameInverter(Guid id, string? name)
+    {
+        var posicao = _inversores.FindIndex(i => i.Id == id);
+        if (posicao < 0) return Tr.T("esse inversor não está mais no cadastro");
+
+        var nome = name?.Trim() ?? string.Empty;
+        if (InverterNameProblem(id, nome) is { } porque) return porque;
+
+        _inversores[posicao] = _inversores[posicao] with { Name = nome };
+        return null;
+    }
+
+    /// <summary>
+    /// Só o modelo do inversor (a caixa Modelo da linha da tabela,
+    /// 05/10/2026). Recusa o modelo com menos entradas que as strings já
+    /// alocadas nele (<paramref name="allocatedStrings"/>, contadas pelo
+    /// vínculo no desenho por quem chama): trocar deixaria o inversor em
+    /// excesso sem ninguém pedir. Null se deu certo, o porquê se não.
+    /// </summary>
+    public string? ChangeInverterModel(Guid id, Guid model, int allocatedStrings)
+    {
+        var posicao = _inversores.FindIndex(i => i.Id == id);
+        if (posicao < 0) return Tr.T("esse inversor não está mais no cadastro");
+        if (FindModel(model) is not { } modelo) return Tr.T("esse modelo de inversor não está mais no cadastro");
+
+        var inversor = _inversores[posicao];
+        if (inversor.Model == model) return null;
+        if (allocatedStrings > modelo.TotalInputs)
+            return Tr.F("o {0} tem {1} entradas e o {2} já tem {3} strings; solte {4} string(s) antes ou escolha um modelo maior",
+                modelo.Name, modelo.TotalInputs, inversor.Name, allocatedStrings, allocatedStrings - modelo.TotalInputs);
+
+        _inversores[posicao] = inversor with { Model = model };
         return null;
     }
 
@@ -688,6 +736,22 @@ public sealed class ElectricalSetup
         _inversores.RemoveAll(i => i.Id == id);
         if (inversor.Transformer != Guid.Empty && InvertersOf(inversor.Transformer).Count == 0) _skids.RemoveAll(s => s.Transformer == inversor.Transformer);
         return true;
+    }
+
+    /// <summary>
+    /// Tira vários inversores de uma vez (as linhas escolhidas da tabela,
+    /// 05/10/2026), cada um como <see cref="RemoveInverter"/>. Devolve os que
+    /// existiam e saíram, na ordem do cadastro (as strings deles têm que ser
+    /// soltas por quem chama).
+    /// </summary>
+    public IReadOnlyList<Inverter> RemoveInverters(IEnumerable<Guid> ids)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        var pedidos = ids.ToHashSet();
+        var sairam = _inversores.Where(i => pedidos.Contains(i.Id)).ToList();
+        foreach (var i in sairam) RemoveInverter(i.Id);
+        return sairam;
     }
 
     // ----------------------------------------------------------------- skid
