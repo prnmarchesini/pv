@@ -159,6 +159,32 @@ public static class DrawingTables
         return Palette.FirstOrDefault(c => !usadas.Contains(c), Palette[usadas.Count % Palette.Length]);
     }
 
+    /// <summary>
+    /// A mesa que volta da janela de Mesa aberta para uma mesa do desenho:
+    /// a confirmada em "Usar esta mesa"; sem ela, a última gravada em
+    /// "Salvar perfil" com o mesmo nome da mesa aberta; senão, null (nada
+    /// muda).
+    ///
+    /// Origem (05/10/2026): o Renan abriu a mesa "Mesa 28 módulos" pelas
+    /// Configurações, trocou para 56, clicou em "Salvar perfil", confirmou a
+    /// substituição e fechou. O arquivo da biblioteca ficou com 56, mas a
+    /// janela devolvia null por ter sido fechada, e a mesa DO DESENHO — que
+    /// as Configurações listam antes da biblioteca e que esconde o perfil de
+    /// mesmo nome — continuava com 28. Para ele, "não salva".
+    ///
+    /// Gravado com outro nome é cópia para a biblioteca, e não mexe na mesa
+    /// aberta.
+    /// </summary>
+    public static TableProfile? AfterEdit(string? nomeAberto, TableProfile? confirmada, TableProfile? salva)
+    {
+        if (confirmada is not null) return confirmada;
+        if (salva is null || string.IsNullOrWhiteSpace(nomeAberto)) return null;
+
+        return string.Equals(salva.Name.Trim(), nomeAberto.Trim(), StringComparison.CurrentCultureIgnoreCase)
+            ? salva
+            : null;
+    }
+
     /// <summary>A mesa com este nome (ignorando maiúscula e espaço), ou null.</summary>
     public static DrawingTable? Find(IEnumerable<DrawingTable> mesas, string? nome) =>
         string.IsNullOrWhiteSpace(nome) ? null

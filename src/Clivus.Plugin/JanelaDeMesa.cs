@@ -115,9 +115,32 @@ internal sealed class JanelaDeMesa : Window
     /// <summary>A mesa que o usuário confirmou, ou null se ele desistiu.</summary>
     internal TableProfile? Escolhida { get; private set; }
 
-    internal JanelaDeMesa(TableProfileStore perfis, TableProfile inicial)
+    /// <summary>O último perfil gravado em "Salvar perfil" (como foi lido de volta do disco), ou null.</summary>
+    internal TableProfile? Salvo { get; private set; }
+
+    /// <summary>O nome da mesa com que a janela abriu.</summary>
+    private readonly string _nomeAberto;
+
+    /// <summary>Se a janela foi aberta para uma mesa do desenho (Configurações).</summary>
+    private readonly bool _doDesenho;
+
+    /// <summary>
+    /// O que volta para a mesa do desenho: a confirmada, ou a gravada em
+    /// "Salvar perfil" com o mesmo nome da aberta (ver <see cref="DrawingTables.AfterEdit"/>).
+    /// </summary>
+    internal TableProfile? Resultado => DrawingTables.AfterEdit(_nomeAberto, Escolhida, Salvo);
+
+    /// <param name="perfis">A biblioteca de perfis (pasta do usuário).</param>
+    /// <param name="inicial">A mesa com que a janela abre.</param>
+    /// <param name="doDesenho">
+    /// Aberta para uma mesa do desenho (Configurações): o recado de "Salvar
+    /// perfil" diz que a mesa do desenho acompanha e que falta gravar no desenho.
+    /// </param>
+    internal JanelaDeMesa(TableProfileStore perfis, TableProfile inicial, bool doDesenho = false)
     {
         _perfis = perfis ?? throw new ArgumentNullException(nameof(perfis));
+        _nomeAberto = (inicial ?? throw new ArgumentNullException(nameof(inicial))).Name;
+        _doDesenho = doDesenho;
 
         Title = Tr.T("Clivus Solar — Mesa");
         Width = 1320;
@@ -369,7 +392,8 @@ internal sealed class JanelaDeMesa : Window
 
     // --------------------------------------------------------- ida e volta
 
-    private void ListarSalvos()
+    /// <param name="escolher">O perfil que fica escolhido na lista, ou null para "(nenhum — mesa atual)".</param>
+    private void ListarSalvos(string? escolher = null)
     {
         _salvos.Items.Clear();
         _salvos.Items.Add(new ComboBoxItem { Content = Tr.T("(nenhum — mesa atual)"), Tag = null });
@@ -385,6 +409,16 @@ internal sealed class JanelaDeMesa : Window
         }
 
         _salvos.SelectedIndex = 0;
+
+        if (escolher is null) return;
+
+        foreach (ComboBoxItem item in _salvos.Items)
+        {
+            if (item.Tag is not string nome || !string.Equals(nome, escolher, StringComparison.Ordinal)) continue;
+
+            _salvos.SelectedItem = item;
+            return;
+        }
     }
 
     private void CarregarSalvo()
@@ -786,11 +820,28 @@ internal sealed class JanelaDeMesa : Window
 
             _perfis.Save(perfil);
 
+            // O recado diz o que ESTÁ no disco, lido de volta, e não o que
+            // se mandou gravar (05/10/2026: "aparece a mensagem se quero
+            // substituir, eu falo que sim, mas não salva").
+            var gravado = _perfis.Load(perfil.Name);
+            Salvo = gravado;
+
+            // A lista passa a mostrar o perfil gravado, em vez de voltar para
+            // "(nenhum — mesa atual)" como se nada tivesse acontecido.
             _preenchendo = true;
-            ListarSalvos();
+            ListarSalvos(gravado.Name);
             _preenchendo = false;
 
-            Avisar(Tr.F("Perfil \"{0}\" salvo em {1}.", perfil.Name, _perfis.Folder));
+            var recado = Tr.F("Perfil \"{0}\" gravado: {1}, {2:0.#} kWp.\nArquivo na pasta {3}.",
+                gravado.Name,
+                gravado.Layout.Describe(),
+                gravado.Layout.ModuleCount * gravado.Layout.Module.PowerWatts / 1000,
+                _perfis.Folder);
+
+            if (_doDesenho && Resultado is not null)
+                recado += "\n\n" + Tr.T("A mesa do desenho com este nome fica com estes números ao fechar esta janela. Para gravá-la no desenho, clique em \"Salvar no desenho\" nas Configurações.");
+
+            Avisar(recado);
         }
         catch (Exception erro)
         {
