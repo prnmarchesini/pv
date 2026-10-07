@@ -2,7 +2,7 @@
     O fluxo eletrico inteiro num desenho so, com as pecas de verdade: usina
     mista pelo motor, dois tipos de string com tracado (duas de 28 vizinhas e
     uma de 28), strings reais geradas em todas as mesas (duas selecoes: uma
-    mesa de 28 sozinha, depois o resto), subestacoes C1 e U1,
+    mesa de 28 sozinha, depois o resto), subestacoes UC1 e U1,
     trafos T1 e T2, quatro inversores Huawei 250, alocacao pela selecao,
     skid pela selecao dos retangulos em campo, trafo na subestacao, numeracao
     e resumo. Sem CLIVUS_STRINGS_TESTE_AUTO nem a cadeia de exemplo.
@@ -187,7 +187,7 @@ function Testar-EletricaFluxo {
         $uc = if ($tr -and $ucs.ContainsKey($tr.Uc)) { $ucs[$tr.Uc] } else { '-' }
         $cadeia[$i.Nome] = "$(if ($tr) { $tr.Apelido } else { '-' }) $uc"
     }
-    $esperada = @{ 'Inversor_1' = 'T1 C1'; 'Inversor_2' = 'T1 C1'; 'Inversor_3' = 'T2 U1'; 'Inversor_4' = 'T2 U1' }
+    $esperada = @{ 'Inversor_1' = 'T1 UC1'; 'Inversor_2' = 'T1 UC1'; 'Inversor_3' = 'T2 U1'; 'Inversor_4' = 'T2 U1' }
     foreach ($k in $esperada.Keys) { if ($cadeia[$k] -ne $esperada[$k]) { $erros += "$k esta em [$($cadeia[$k])], esperava [$($esperada[$k])] (trafo subestacao)" } }
 
     # ---- 5. as tags: esquema e sequencial por inversor -----------------------
@@ -247,8 +247,8 @@ function Testar-EletricaFluxo {
 
     # Trafo e subestacao: as linhas do texto do resumo (kWp com duas casas, na cultura da tela).
     function Numero([string] $x) { [double]::Parse($x.Replace(',', '.'), $inv) }
-    $grupos = @{ 'T1' = @('Inversor_1', 'Inversor_2'); 'T2' = @('Inversor_3', 'Inversor_4'); 'C1' = @('Inversor_1', 'Inversor_2'); 'U1' = @('Inversor_3', 'Inversor_4') }
-    foreach ($quem in 'T1', 'T2', 'C1', 'U1') {
+    $grupos = @{ 'T1' = @('Inversor_1', 'Inversor_2'); 'T2' = @('Inversor_3', 'Inversor_4'); 'UC1' = @('Inversor_1', 'Inversor_2'); 'U1' = @('Inversor_3', 'Inversor_4') }
+    foreach ($quem in 'T1', 'T2', 'UC1', 'U1') {
         $fim = if ($quem.StartsWith('T')) { 'inversor\(es\)' } else { 'trafo\(s\)' }
         if ($resumo -notmatch "(?m)^\s*$quem \([^)]*\): (\d+) string\(s\), (\d+) m\S+dulo\(s\), ([\d.,]+) kWp; \d+ $fim") { $erros += "o resumo nao tem a linha do $quem"; continue }
         $erros += @(Confere $quem ([int]$Matches[1]) ([int]$Matches[2]) (Numero $Matches[3]) (Soma $grupos[$quem]))
@@ -261,7 +261,7 @@ function Testar-EletricaFluxo {
     }
 
     $porInv = (1..4 | ForEach-Object { $conta["Inversor_$_"].S }) -join '/'
-    Write-Host ("  (fluxo eletrico: $($strings.Count) strings reais em $($de28.Count) mesas de 28 ($($de14.Count) de 14 avisada(s)), $porInv por inversor, T1>C1 e T2>U1, tags por inversor, resumo {0:0.00} kWp igual ao XData)" -f ($total.W / 1000)) -ForegroundColor DarkGray
+    Write-Host ("  (fluxo eletrico: $($strings.Count) strings reais em $($de28.Count) mesas de 28 ($($de14.Count) de 14 avisada(s)), $porInv por inversor, T1>UC1 e T2>U1, tags por inversor, resumo {0:0.00} kWp igual ao XData)" -f ($total.W / 1000)) -ForegroundColor DarkGray
     return $true
 }
 

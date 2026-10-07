@@ -108,6 +108,9 @@ public static class ApagarTudoCommands
                 apagadas.Entities,
                 orfas > 0 ? ", " + Tr.F("mais {0} nota(s) órfã(s) de desenho antigo", orfas) : string.Empty));
 
+        if (apagadas.Eletrica.Strings > 0)
+            editor.WriteMessage(Tr.F("  {0} string(s) das mesas apagadas foram junto, com o + e o − e as tags.\n", apagadas.Eletrica.Strings));
+
         if (gruposApagados.Count > 0)
             editor.WriteMessage(Tr.F("  Grupo(s) sem mesa, apagado(s): {0}.\n", string.Join(", ", gruposApagados)));
 

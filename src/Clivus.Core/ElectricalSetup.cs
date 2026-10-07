@@ -238,7 +238,7 @@ public sealed class ElectricalSetup
         var todos = Equipment().ToList();
         if (Guid.TryParse(texto, out var id)) return todos.Where(e => e.Id == id).ToList();
 
-        // A UC compartilhada responde pelo bloco dela (código ou nome): "C1" põe o cubículo em campo.
+        // A UC compartilhada responde pelo bloco dela (código ou nome): "UC1" põe o cubículo em campo.
         bool DaSubestacao(EquipmentInfo e) =>
             e.Kind == EquipmentKind.ConsumerUnit
             && (FindUnit(e.Id) is { } u ? SameName(u.Code, texto)
@@ -276,7 +276,7 @@ public sealed class ElectricalSetup
     }
 
     /// <summary>
-    /// Cria a próxima UC compartilhada (C1, C2...; o número segue o maior
+    /// Cria a próxima UC compartilhada (UC1, UC2...; o número segue o maior
     /// código, sem reaproveitar) dentro do bloco da usina (criado se não
     /// existe), com nome padrão.
     /// </summary>
@@ -287,7 +287,7 @@ public sealed class ElectricalSetup
     {
         if (FindSubstation(substation) is null) throw new InvalidOperationException(Tr.T("essa subestação não está mais no cadastro"));
 
-        var codigo = "C" + NextNumber(_ucs.Select(u => u.Code), "C").ToString(CultureInfo.InvariantCulture);
+        var codigo = "UC" + NextNumber(_ucs.Select(u => u.Code), "UC").ToString(CultureInfo.InvariantCulture);
         var uc = new ConsumerUnit(Guid.NewGuid(), codigo, Tr.F("Subestação {0}", codigo), ConsumerUnitMode.Shared, ElectricalDefaults.ConsumerUnitSize, substation);
         _ucs.Add(uc);
         return uc;

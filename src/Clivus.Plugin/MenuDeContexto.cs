@@ -50,6 +50,11 @@ internal static class MenuDeContexto
         ItensDaMesa.Add(Item(Tr.T("Mudar inclinação (alturas das pontas)"), PluginInfo.ComandoPontas));
         ItensDaMesa.Add(Item(Tr.T("Recalcular esta mesa"), PluginInfo.ComandoRecalcular));
 
+        // 07/10/2026, Renan: "quero clicar com o botão direito e trocar a
+        // estrutura ... e a opção de refazer fileira inteira".
+        ItensDaMesa.Add(Item(Tr.T("Trocar a estrutura…"), PluginInfo.ComandoTrocarMesa));
+        ItensDaMesa.Add(Item(Tr.T("Refazer a fileira inteira"), PluginInfo.ComandoRegerarFileira));
+
         foreach (var item in ItensDaArea.Concat(ItensDaMesa)) _raiz.MenuItems.Add(item);
 
         menu.MenuItems.Add(_raiz);

@@ -113,7 +113,7 @@ internal static class ElectricalStore
     internal static void SaveConsumerUnits(Database db, IReadOnlyList<ConsumerUnit> itens) =>
         PluginRecords.Save(db, ChaveDasUcs, VersaoDasUcs, ConsumerUnit.FieldCount, itens, i => i.ToFields());
 
-    /// <summary>O bloco físico da subestação compartilhada (o cubículo com as UCs C1, C2... dentro).</summary>
+    /// <summary>O bloco físico da subestação compartilhada (o cubículo com as UCs UC1, UC2... dentro).</summary>
     internal static RecordTableResult<Substation> Substations(Database db) =>
         PluginRecords.Load<Substation>(db, "SUBESTACOES_BLOCOS", 1, Substation.FieldCount, Substation.Parse, OQueBlocos);
 

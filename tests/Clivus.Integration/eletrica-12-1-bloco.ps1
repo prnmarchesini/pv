@@ -1,6 +1,6 @@
 <#
     Reprovacao de 05/10/2026 (subestacao compartilhada x UCs): o bloco fisico
-    da compartilhada (dicionario SUBESTACOES_BLOCOS) com as UCs C1, C2...
+    da compartilhada (dicionario SUBESTACOES_BLOCOS) com as UCs UC1, UC2...
     dentro (cada uma aponta para ele). O desenho do formato 1 (UCs sem bloco)
     e lido com as compartilhadas num bloco "Subestacao compartilhada" (o mesmo
     GUID antes e depois de gravar); a unitaria continua bloco e UC. O resumo
@@ -33,22 +33,22 @@ function Testar-EletricaSubestacaoBloco {
 
     $idLido = $null
     if ($lido -notmatch 'ELETRICA 1 bloco\(s\) migradas=2 formato_ucs=1') { $erros += 'o formato antigo nao foi lido com as 2 compartilhadas num bloco' }
-    if ($lido -match 'ELETRICA BLOCO nome="Subesta\S+o compartilhada" tamanho=5x4x3 ucs=C1,C2 id=(\S+) fim') { $idLido = $Matches[1] }
-    else { $erros += 'o bloco do formato antigo nao tem C1 e C2 com o tamanho da C1' }
+    if ($lido -match 'ELETRICA BLOCO nome="Subesta\S+o compartilhada" tamanho=5x4x3 ucs=UC1,UC2 id=(\S+) fim') { $idLido = $Matches[1] }
+    else { $erros += 'o bloco do formato antigo nao tem UC1 e UC2 com o tamanho da UC1' }
     if ($lido -notmatch 'ELETRICA UC U1 modo=Unitary') { $erros += 'a unitaria do formato antigo sumiu' }
 
-    if ($t -notmatch 'ELETRICA uc C3 criada') { $erros += 'a C3 nao foi criada' }
-    if ($t -notmatch 'ELETRICA uc C2 editada') { $erros += 'o nome da C2 nao foi salvo' }
+    if ($t -notmatch 'ELETRICA uc UC3 criada') { $erros += 'a UC3 nao foi criada' }
+    if ($t -notmatch 'ELETRICA uc UC2 editada') { $erros += 'o nome da UC2 nao foi salvo' }
     if ($t -notmatch 'ELETRICA bloco editado') { $erros += 'o bloco nao foi editado' }
     if ($gravado -notmatch 'ELETRICA 1 bloco\(s\) migradas=0 formato_ucs=2') { $erros += 'depois de gravar, o desenho nao esta no formato 2 com o bloco' }
-    if ($gravado -match 'ELETRICA BLOCO nome="Cubiculo Norte" tamanho=6x3x2\.8 ucs=C1,C2,C3 id=(\S+) fim') {
+    if ($gravado -match 'ELETRICA BLOCO nome="Cubiculo Norte" tamanho=6x3x2\.8 ucs=UC1,UC2,UC3 id=(\S+) fim') {
         if ($Matches[1] -ne $idLido) { $erros += "o bloco mudou de GUID ao gravar ($idLido -> $($Matches[1]))" }
     }
     else { $erros += 'o bloco gravado nao tem nome, tamanho e as tres UCs' }
-    if ($gravado -notmatch 'ELETRICA UC C1 modo=Shared .* trafos=T1,T2\s') { $erros += 'a C1 nao tem T1 e T2' }
-    if ($gravado -notmatch 'ELETRICA UC C2 modo=Shared nome="Medicao Sul"') { $erros += 'a C2 nao tem o nome novo' }
+    if ($gravado -notmatch 'ELETRICA UC UC1 modo=Shared .* trafos=T1,T2\s') { $erros += 'a UC1 nao tem T1 e T2' }
+    if ($gravado -notmatch 'ELETRICA UC UC2 modo=Shared nome="Medicao Sul"') { $erros += 'a UC2 nao tem o nome novo' }
     if ($gravado -notmatch 'ELETRICA UC U1 modo=Unitary .* trafos=T3\s') { $erros += 'a U1 nao tem o T3' }
-    if ($gravado -notmatch 'RESUMO_BLOCO nome=Cubiculo_Norte ucs=C1,C2,C3 ') { $erros += 'o resumo nao mostra o bloco com as UCs' }
+    if ($gravado -notmatch 'RESUMO_BLOCO nome=Cubiculo_Norte ucs=UC1,UC2,UC3 ') { $erros += 'o resumo nao mostra o bloco com as UCs' }
 
     if ($t -notmatch 'ELETRICA bloco apagado ucs=3 trafos=2') { $erros += 'apagar o bloco nao levou as 3 UCs e os 2 trafos' }
     if ($apagado -notmatch 'ELETRICA 1 subestacao\(oes\)') { $erros += 'sobrou UC compartilhada depois de apagar o bloco' }

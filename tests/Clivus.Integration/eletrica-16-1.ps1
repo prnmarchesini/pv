@@ -1,6 +1,6 @@
 <#
     16.1: o resumo do sistema pela cadeia de vinculo. A cadeia de exemplo
-    (C1 com TA; TB sem UC; inversores 1 e 2 no TA, 3 no TB, 4 sem trafo;
+    (UC1 com TA; TB sem UC; inversores 1 e 2 no TA, 3 no TB, 4 sem trafo;
     modelo de 4 entradas; 5, 4, 3 e 2 strings) e conferida linha a linha, e
     os totais (strings alocadas, modulos e kWp) contra a conta refeita em
     LISP pelo XData (watts pela mesa dona de cada modulo). Antes de gerar a
@@ -50,7 +50,7 @@ function Testar-EletricaResumo {
             $somaModulos += [int]$l.Groups[7].Value
         }
 
-        $cadeia = @{ 'Inversor_1' = 'TA C1 5 4 1'; 'Inversor_2' = 'TA C1 4 4 0'; 'Inversor_3' = 'TB - 3 4 0'; 'Inversor_4' = '- - 2 4 0' }
+        $cadeia = @{ 'Inversor_1' = 'TA UC1 5 4 1'; 'Inversor_2' = 'TA UC1 4 4 0'; 'Inversor_3' = 'TB - 3 4 0'; 'Inversor_4' = '- - 2 4 0' }
         foreach ($k in $cadeia.Keys) { if ($linhas[$k] -ne $cadeia[$k]) { $erros += "${n}: $k [$($linhas[$k])], esperava [$($cadeia[$k])] (trafo uc strings capacidade excesso)" } }
         if ($somaModulos -ne $lisp.Modulos) { $erros += "${n}: os inversores somam $somaModulos modulos, o total e $($lisp.Modulos)" }
 
@@ -67,7 +67,7 @@ function Testar-EletricaResumo {
         return $false
     }
 
-    Write-Host "  (resumo: C1 > TA > inversores 1 e 2, TB sem UC, inversor 4 sem trafo; 14 strings, $($lisp.Modulos) modulos, $([math]::Round($lisp.Kwp, 2)) kWp iguais a conta do LISP)" -ForegroundColor DarkGray
+    Write-Host "  (resumo: UC1 > TA > inversores 1 e 2, TB sem UC, inversor 4 sem trafo; 14 strings, $($lisp.Modulos) modulos, $([math]::Round($lisp.Kwp, 2)) kWp iguais a conta do LISP)" -ForegroundColor DarkGray
     return $true
 }
 

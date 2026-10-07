@@ -8,7 +8,7 @@ namespace Clivus.Plugin;
 
 /// <summary>
 /// A aba Subestação (etapa 12). A lista tem as subestações físicas: o bloco
-/// compartilhado (um cubículo em campo com as UCs C1, C2... dentro) e as
+/// compartilhado (um cubículo em campo com as UCs UC1, UC2... dentro) e as
 /// unitárias (U1, U2..., cada uma bloco e UC ao mesmo tempo). Escolhido o
 /// bloco, o formulário mostra o nome e a dimensão dele e a lista das UCs dele
 /// (nome de cada uma e os trafos de cada uma); escolhida uma unitária, o nome,
@@ -38,7 +38,7 @@ internal sealed class AbaSubestacao : AbaEletrica
     internal AbaSubestacao(Document documento) : base(documento)
     {
         var botoes = new WrapPanel();
-        Botao(botoes, Tr.T("Adicionar subestação"), Tr.T("Pergunta se é a subestação compartilhada (um bloco com as UCs C1, C2... dentro) ou várias unitárias (U1, U2...)."), Adicionar);
+        Botao(botoes, Tr.T("Adicionar subestação"), Tr.T("Pergunta se é a subestação compartilhada (um bloco com as UCs UC1, UC2... dentro) ou várias unitárias (U1, U2...)."), Adicionar);
         Botao(botoes, Tr.T("Apagar"), Tr.T("Tira a subestação do cadastro e o retângulo dela do campo (a compartilhada leva as UCs dela junto). Os trafos ficam sem subestação; nada mais é apagado."), Apagar);
 
         var grade = Grade();
@@ -72,7 +72,7 @@ internal sealed class AbaSubestacao : AbaEletrica
         _doBloco.Children.Add(new TextBlock { Text = Tr.T("Unidades consumidoras desta subestação"), FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 8, 0, 4) });
         _doBloco.Children.Add(_ucs);
         var botoesDaUc = new WrapPanel();
-        Botao(botoesDaUc, Tr.T("Adicionar UC"), Tr.T("Cria a próxima UC (C1, C2...) dentro desta subestação."), AdicionarUc);
+        Botao(botoesDaUc, Tr.T("Adicionar UC"), Tr.T("Cria a próxima UC (UC1, UC2...) dentro desta subestação."), AdicionarUc);
         Botao(botoesDaUc, Tr.T("Apagar UC"), Tr.T("Tira a UC escolhida da subestação e do cadastro. Os trafos dela ficam sem subestação; nada mais é apagado."), ApagarUc);
         _doBloco.Children.Add(botoesDaUc);
         var nomeDaUc = new WrapPanel();

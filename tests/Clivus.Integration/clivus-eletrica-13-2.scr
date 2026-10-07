@@ -1,6 +1,6 @@
 ; Nivel 2 do 13.2 (eletrica): dois trafos em campo (Z do clique absurdo), o
 ; T1 movido e com o apelido trocado: a tag no topo acompanha, o vinculo com a
-; C1 fica.
+; UC1 fica.
 (setq clivus:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
 (command "_.NETLOAD" "{{DLL}}")
@@ -10,7 +10,7 @@
 (command "CLIVUS_ELETRICA_AUTO" "Trafo" "2")
 (command "CLIVUS_ELETRICA_AUTO" "Trafo" "3")
 (command "CLIVUS_ELETRICA_AUTO" "Uc" "Compartilhada")
-(command "CLIVUS_ELETRICA_AUTO" "Vincular" "C1" "T1")
+(command "CLIVUS_ELETRICA_AUTO" "Vincular" "UC1" "T1")
 (command "CLIVUS_ELETRICA_POSICIONAR" "T1" "{{P1}}")
 (command "CLIVUS_ELETRICA_POSICIONAR" "T2" "{{P2}}")
 (command "CLIVUS_ELETRICA_POSICIONAR" "t1" "{{P3}}")

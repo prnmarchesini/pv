@@ -3,7 +3,7 @@ namespace Clivus.Core.Tests;
 /// <summary>
 /// O bloco físico da subestação compartilhada (reprovação de 05/10/2026: "era
 /// para ter uma listinha para eu colocar as UCs que fazem parte daquela
-/// subestação"). Um cubículo em campo com as UCs C1, C2... dentro; a unitária
+/// subestação"). Um cubículo em campo com as UCs UC1, UC2... dentro; a unitária
 /// continua sendo bloco e UC ao mesmo tempo. Desenho do formato antigo
 /// continua sendo lido.
 /// </summary>
@@ -29,7 +29,7 @@ public class SubstationBlockTests
     public void AUcGuardaOBlocoEOFormatoAntigoContinuaSendoLido()
     {
         var bloco = Guid.NewGuid();
-        var c1 = new ConsumerUnit(Guid.NewGuid(), "C1", "Medição 1", ConsumerUnitMode.Shared, Caixa, bloco);
+        var c1 = new ConsumerUnit(Guid.NewGuid(), "UC1", "Medição 1", ConsumerUnitMode.Shared, Caixa, bloco);
 
         Assert.Equal(ConsumerUnit.FieldCount, c1.ToFields().Count);
         Assert.Equal(c1, ConsumerUnit.Parse(c1.ToFields()));
@@ -69,7 +69,7 @@ public class SubstationBlockTests
         var bloco = Assert.Single(setup.Substations);
         Assert.Equal(bloco.Id, c1.Substation);
         Assert.Equal(bloco.Id, c2.Substation);
-        Assert.Equal(["C1", "C2"], setup.UnitsOf(bloco.Id).Select(u => u.Code));
+        Assert.Equal(["UC1", "UC2"], setup.UnitsOf(bloco.Id).Select(u => u.Code));
         Assert.Equal("Subestação compartilhada", bloco.Name);
         Assert.Equal(ElectricalDefaults.ConsumerUnitSize, bloco.Size);
 
@@ -118,9 +118,9 @@ public class SubstationBlockTests
         Assert.Null(setup.FindEquipment(EquipmentKind.ConsumerUnit, c1.Id));
         Assert.NotNull(setup.FindEquipment(EquipmentKind.ConsumerUnit, u1.Id));
 
-        // O código ou o nome de uma UC do bloco acha o bloco (o comando de campo aceita "C1").
-        Assert.Equal(bloco.Id, setup.FindEquipment("c1").Single().Id);
-        Assert.Equal(bloco.Id, setup.FindEquipment(" subestação C1 ").Single().Id);
+        // O código ou o nome de uma UC do bloco acha o bloco (o comando de campo aceita "UC1").
+        Assert.Equal(bloco.Id, setup.FindEquipment("uc1").Single().Id);
+        Assert.Equal(bloco.Id, setup.FindEquipment(" subestação UC1 ").Single().Id);
         Assert.Equal(bloco.Id, setup.FindEquipment("cubículo").Single().Id);
         Assert.Equal(u1.Id, setup.FindEquipment("U1").Single().Id);
         Assert.Equal(2, setup.Equipment().Count());
@@ -169,7 +169,7 @@ public class SubstationBlockTests
         // Depois de apagado, a próxima compartilhada cria um bloco novo (o
         // código segue o maior que existe, a regra de sempre).
         var c3 = setup.AddSharedUnit();
-        Assert.Equal("C1", c3.Code);
+        Assert.Equal("UC1", c3.Code);
         Assert.NotEqual(bloco.Id, c3.Substation);
         Assert.Single(setup.Substations);
     }
@@ -193,9 +193,9 @@ public class SubstationBlockTests
     [Trait("Etapa", "12")]
     public void DesenhoAntigoPoeAsCompartilhadasNumBlocoNaLeituraComIdentidadeEstavel()
     {
-        // Formato 1: C1 e C2 compartilhadas sem bloco, U1 unitária.
-        var c1 = new ConsumerUnit(Guid.NewGuid(), "C1", "Medição 1", ConsumerUnitMode.Shared, new EquipmentSize(5, 4, 3));
-        var c2 = new ConsumerUnit(Guid.NewGuid(), "C2", "Medição 2", ConsumerUnitMode.Shared, Caixa);
+        // Formato 1: UC1 e UC2 compartilhadas sem bloco, U1 unitária.
+        var c1 = new ConsumerUnit(Guid.NewGuid(), "UC1", "Medição 1", ConsumerUnitMode.Shared, new EquipmentSize(5, 4, 3));
+        var c2 = new ConsumerUnit(Guid.NewGuid(), "UC2", "Medição 2", ConsumerUnitMode.Shared, Caixa);
         var u1 = new ConsumerUnit(Guid.NewGuid(), "U1", "Posto", ConsumerUnitMode.Unitary, Caixa);
 
         var setup = new ElectricalSetup(units: [c1, c2, u1]);
@@ -204,7 +204,7 @@ public class SubstationBlockTests
         Assert.Equal(2, setup.MigratedUnits);
         Assert.Equal("Subestação compartilhada", bloco.Name);
         Assert.Equal(c1.Size, bloco.Size);   // o tamanho do primeiro bloquinho antigo
-        Assert.Equal(["C1", "C2"], setup.UnitsOf(bloco.Id).Select(u => u.Code));
+        Assert.Equal(["UC1", "UC2"], setup.UnitsOf(bloco.Id).Select(u => u.Code));
         Assert.Equal(Guid.Empty, setup.FindUnit(u1.Id)!.Substation);
 
         // Ler de novo (antes de gravar) dá o mesmo bloco: o "Alocar em campo"
@@ -223,8 +223,8 @@ public class SubstationBlockTests
     public void UcQueApontaParaBlocoSumidoCaiNoBlocoQueExiste()
     {
         var bloco = new Substation(Guid.NewGuid(), "Cubículo", Caixa);
-        var c1 = new ConsumerUnit(Guid.NewGuid(), "C1", "M1", ConsumerUnitMode.Shared, Caixa, bloco.Id);
-        var c2 = new ConsumerUnit(Guid.NewGuid(), "C2", "M2", ConsumerUnitMode.Shared, Caixa, Guid.NewGuid());
+        var c1 = new ConsumerUnit(Guid.NewGuid(), "UC1", "M1", ConsumerUnitMode.Shared, Caixa, bloco.Id);
+        var c2 = new ConsumerUnit(Guid.NewGuid(), "UC2", "M2", ConsumerUnitMode.Shared, Caixa, Guid.NewGuid());
 
         var setup = new ElectricalSetup(units: [c1, c2], substations: [bloco]);
 
@@ -238,8 +238,8 @@ public class SubstationBlockTests
     public void OResumoMostraOBlocoComAsUcsDentroEAUnitariaComoAntes()
     {
         var bloco = new Substation(Guid.NewGuid(), "Cubículo", Caixa);
-        var c1 = new ConsumerUnit(Guid.NewGuid(), "C1", "Medição 1", ConsumerUnitMode.Shared, Caixa, bloco.Id);
-        var c2 = new ConsumerUnit(Guid.NewGuid(), "C2", "Medição 2", ConsumerUnitMode.Shared, Caixa, bloco.Id);
+        var c1 = new ConsumerUnit(Guid.NewGuid(), "UC1", "Medição 1", ConsumerUnitMode.Shared, Caixa, bloco.Id);
+        var c2 = new ConsumerUnit(Guid.NewGuid(), "UC2", "Medição 2", ConsumerUnitMode.Shared, Caixa, bloco.Id);
         var u1 = new ConsumerUnit(Guid.NewGuid(), "U1", "Posto", ConsumerUnitMode.Unitary, Caixa);
         var t1 = new Transformer(Guid.NewGuid(), "Trafo", "T1", 800, 13800, 2500, 1, 6, "", Caixa, c1.Id);
         var t2 = new Transformer(Guid.NewGuid(), "Trafo", "T2", 800, 13800, 2500, 1, 6, "", Caixa, u1.Id);
@@ -262,10 +262,10 @@ public class SubstationBlockTests
         Assert.Equal(0, b.Level);
         Assert.Equal("Cubículo", b.Name);
         Assert.Equal(2, b.Strings);
-        Assert.Equal((SummaryRowKind.Unit, 1, "C1"), (linhas[1].Kind, linhas[1].Level, linhas[1].Name));
+        Assert.Equal((SummaryRowKind.Unit, 1, "UC1"), (linhas[1].Kind, linhas[1].Level, linhas[1].Name));
         Assert.Equal((SummaryRowKind.Transformer, 2, "T1"), (linhas[2].Kind, linhas[2].Level, linhas[2].Name));
         Assert.Equal((SummaryRowKind.Inverter, 3, "Inversor 1"), (linhas[3].Kind, linhas[3].Level, linhas[3].Name));
-        Assert.Equal((SummaryRowKind.Unit, 1, "C2"), (linhas[4].Kind, linhas[4].Level, linhas[4].Name));
+        Assert.Equal((SummaryRowKind.Unit, 1, "UC2"), (linhas[4].Kind, linhas[4].Level, linhas[4].Name));
         Assert.Equal((SummaryRowKind.Unit, 0, "U1"), (linhas[5].Kind, linhas[5].Level, linhas[5].Name));
         Assert.Equal((SummaryRowKind.Transformer, 1, "T2"), (linhas[6].Kind, linhas[6].Level, linhas[6].Name));
         Assert.Equal(3, r.UnitCount);
@@ -278,7 +278,7 @@ public class SubstationBlockTests
     [Trait("Etapa", "16")]
     public void SemBlocoOResumoFicaComoEra()
     {
-        var c1 = new ConsumerUnit(Guid.NewGuid(), "C1", "Medição 1", ConsumerUnitMode.Shared, Caixa);
+        var c1 = new ConsumerUnit(Guid.NewGuid(), "UC1", "Medição 1", ConsumerUnitMode.Shared, Caixa);
         var r = ElectricalSummary.Build([c1], [], [], [], [], new Dictionary<Guid, double?>(), null);
 
         Assert.Equal((SummaryRowKind.Unit, 0), (r.Rows()[0].Kind, r.Rows()[0].Level));

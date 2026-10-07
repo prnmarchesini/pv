@@ -67,6 +67,27 @@ public sealed record ElectricalString(Guid Id, Guid Type, IReadOnlyList<Guid> Mo
     }
 }
 
+/// <summary>
+/// Apagar mesa leva a parte elétrica dela (Renan, 07/10/2026: "toda vez que
+/// regerar as mesas é preciso apagar tudo o que é relacionado com a mesa,
+/// strings, tags, etc"). O módulo redesenhado nasce com GUID novo, então a
+/// string que apontava para um módulo que sumiu não tem mais onde estar.
+/// </summary>
+public static class StringsOfErasedTables
+{
+    /// <summary>
+    /// As strings que morrem: alguma peça dela não é módulo vivo no desenho
+    /// (apagado agora, ou já órfã de um apagar antigo), ou ela não tem módulo.
+    /// </summary>
+    public static IReadOnlySet<Guid> Doomed(IEnumerable<ElectricalString> strings, IReadOnlySet<Guid> livingModules)
+    {
+        ArgumentNullException.ThrowIfNull(strings);
+        ArgumentNullException.ThrowIfNull(livingModules);
+
+        return strings.Where(s => s.Modules.Count == 0 || s.Modules.Any(m => !livingModules.Contains(m))).Select(s => s.Id).ToHashSet();
+    }
+}
+
 /// <summary>Dimensão física de um equipamento em campo, em metros (o retângulo 3D).</summary>
 public sealed record EquipmentSize(double Width, double Length, double Height)
 {
@@ -317,7 +338,7 @@ public sealed record Transformer(
 /// <summary>O modo da subestação (12.1, 12.2).</summary>
 public enum ConsumerUnitMode
 {
-    /// <summary>Compartilhada: C1, C2... cada uma com um ou mais trafos.</summary>
+    /// <summary>Compartilhada: UC1, UC2... cada uma com um ou mais trafos.</summary>
     Shared,
 
     /// <summary>Unitária: um bloquinho independente com o seu trafo.</summary>
@@ -325,7 +346,7 @@ public enum ConsumerUnitMode
 }
 
 /// <summary>
-/// Uma unidade consumidora (elétrica, 12.1–12.3): código (C1, U1), nome e
+/// Uma unidade consumidora (elétrica, 12.1–12.3): código (UC1, U1), nome e
 /// modo. A unitária é ao mesmo tempo a UC e o bloquinho físico (tem a
 /// dimensão e vai para o campo). A compartilhada é uma medição dentro do
 /// bloco físico <see cref="Substation"/> (o GUID do <see cref="Clivus.Core.Substation"/>);
@@ -365,15 +386,30 @@ public sealed record ConsumerUnit(Guid Id, string Code, string Name, ConsumerUni
         if (c.Count >= FieldCount && !ElectricalString.OptionalGuid(c[7], out bloco)) return null;
         if (modo == ConsumerUnitMode.Unitary) bloco = Guid.Empty;
 
-        var u = new ConsumerUnit(id, c[1], c[2], modo.Value, tamanho, bloco);
+        var (codigo, nome) = modo == ConsumerUnitMode.Shared ? CodigoAtual(c[1], c[2]) : (c[1], c[2]);
+        var u = new ConsumerUnit(id, codigo, nome, modo.Value, tamanho, bloco);
         return u.IsValid ? u : null;
+    }
+
+    /// <summary>
+    /// A UC compartilhada é UC1, UC2... (Renan, 07/10/2026: "é UC1 UC2, de
+    /// unidade consumidora"). Desenho de antes guardou C1, C2: ao ler, o código
+    /// vira UCn, e o nome padrão ("Subestação C1") acompanha; nome dado pelo
+    /// usuário fica. Gravado assim no próximo salvar do cadastro.
+    /// </summary>
+    internal static (string Codigo, string Nome) CodigoAtual(string codigo, string nome)
+    {
+        if (codigo.Length < 2 || codigo[0] != 'C' || !codigo.AsSpan(1).ToString().All(char.IsAsciiDigit)) return (codigo, nome);
+
+        var novo = "U" + codigo;
+        return (novo, nome == Tr.F("Subestação {0}", codigo) ? Tr.F("Subestação {0}", novo) : nome);
     }
 }
 
 /// <summary>
 /// O bloco físico da subestação compartilhada (elétrica, 12.1 e 12.3): um
-/// cubículo só em campo, com nome e dimensão, que abriga várias UCs (C1,
-/// C2...; cada uma aponta para ele em <see cref="ConsumerUnit.Substation"/>).
+/// cubículo só em campo, com nome e dimensão, que abriga várias UCs (UC1,
+/// UC2...; cada uma aponta para ele em <see cref="ConsumerUnit.Substation"/>).
 /// A unitária não usa este registro: ela é o próprio bloco.
 /// </summary>
 public sealed record Substation(Guid Id, string Name, EquipmentSize Size)

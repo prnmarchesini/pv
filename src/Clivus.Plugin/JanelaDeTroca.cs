@@ -17,8 +17,8 @@ internal sealed class JanelaDeTroca : Window
     private readonly RadioButton _fim = new() { Content = Tr.T("Fim"), ToolTip = Tr.T("A última mesa nova termina onde a antiga terminava (o lado do último pilar).") };
     private readonly CheckBox _reespacar = new()
     {
-        Content = Tr.T("Reespaçar a fileira depois (mantém as mesas, acerta o espaçamento)"),
-        ToolTip = Tr.T("Depois da troca, as mesas da fileira são postas de novo com o espaçamento da configuração, cada uma com o tipo dela. Sem isso, as vizinhas não se mexem e a troca pode passar delas."),
+        Content = Tr.T("Refazer a fileira inteira (acerta o espaçamento)"),
+        ToolTip = Tr.T("Depois da troca, as mesas da fileira são postas de novo com o espaçamento da configuração, cada uma com o tipo dela; as strings da fileira são apagadas. Sem isso, as vizinhas não se mexem e a troca pode passar delas."),
         Margin = new Thickness(0, 8, 0, 0),
     };
 
