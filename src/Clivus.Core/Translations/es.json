@@ -459,7 +459,6 @@
  "Dentro da mesma faixa (linha ou coluna), em que sentido as strings são tomadas.": "Dentro de la misma franja (fila o columna), en qué sentido se toman los strings.",
  "Dentro do limite não pinta nada. Fora, pinta com a cor escolhida para aquele lado. Os limites são os da esquerda; cada análise vai na sua camada, para ligar e desligar.": "Dentro del límite no se pinta nada. Fuera, se pinta con el color elegido para ese lado. Los límites son los de la izquierda; cada análisis va en su capa, para activarla y desactivarla.",
  "Depois clique onde pôr cada árvore (Enter termina). O pé fica no terreno, e a árvore arrastada volta ao chão do lugar novo.": "Luego haga clic donde colocar cada árbol (Enter termina). El pie queda sobre el terreno, y el árbol arrastrado vuelve al suelo del nuevo lugar.",
- "Depois da troca, as mesas da fileira são postas de novo com o espaçamento da configuração, cada uma com o tipo dela. Sem isso, as vizinhas não se mexem e a troca pode passar delas.": "Después del cambio, las mesas de la fila se vuelven a colocar con el espaciado de la configuración, cada una con su tipo. Sin esto, las vecinas no se mueven y el cambio puede superponerse a ellas.",
  "Desce a mesa escolhida na lista: menos prioridade para o motor.": "Baja la mesa elegida en la lista: menos prioridad para el motor.",
  "Desce o bloco na lista: ele passa a ser numerado depois do de baixo.": "Baja el bloque en la lista: pasa a numerarse después del de abajo.",
  "Desenha um hatch translúcido, na cor do trafo, em volta dos módulos das strings dos inversores do skid dele. Gerar de novo substitui o anterior.": "Dibuja un sombreado translúcido, en el color del transformador, alrededor de los módulos de las strings de los inversores de su skid. Generar de nuevo reemplaza el anterior.",
@@ -1303,7 +1302,6 @@
  "Recalcular, pontas à mão, validar, recontar, apagar e os outros ajustes de mesas já desenhadas.": "Recalcular, extremos a mano, validar, recontar, borrar y los demás ajustes de mesas ya dibujadas.",
  "Recontar": "Recontar",
  "Recusados (tire do skid deles antes): {0}": "Rechazados (quítelos antes de su skid): {0}",
- "Reespaçar a fileira depois (mantém as mesas, acerta o espaçamento)": "Reespaciar la fila después (mantiene las mesas, ajusta el espaciado)",
  "Reespaçar a fileira depois? [Sim/Nao]:": "¿Reespaciar la fila después? [Sim/Nao]:",
  "Refaz a contagem de mesas, módulos, pilares e kWp pelo que está no desenho.": "Vuelve a contar mesas, módulos, pilotes y kWp según lo que hay en el dibujo.",
  "Refaz a lista com vãos iguais (ao milímetro) para este número de pilares; o último leva o resto.": "Rehace la lista con vanos iguales (al milímetro) para este número de pilotes; el último lleva el resto.",
@@ -2211,5 +2209,9 @@
  "árvore": "árbol",
  "é outra superfície": "es otra superficie",
  "▲ Subir": "▲ Subir",
- "▼ Descer": "▼ Bajar"
+ "▼ Descer": "▼ Bajar",
+ "Refazer a fileira inteira (acerta o espaçamento)": "Rehacer la fila entera (ajusta el espaciado)",
+ "Depois da troca, as mesas da fileira são postas de novo com o espaçamento da configuração, cada uma com o tipo dela; as strings da fileira são apagadas. Sem isso, as vizinhas não se mexem e a troca pode passar delas.": "Tras el cambio, las mesas de la fila se colocan de nuevo con el espaciado de la configuración, cada una con su tipo; los strings de la fila se borran. Sin esto, las vecinas no se mueven y el cambio puede invadirlas.",
+ "Trocar a estrutura…": "Cambiar la estructura…",
+ "Refazer a fileira inteira": "Rehacer la fila entera"
 }

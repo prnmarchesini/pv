@@ -459,7 +459,6 @@
  "Dentro da mesma faixa (linha ou coluna), em que sentido as strings são tomadas.": "Within the same band (row or column), the direction in which strings are taken.",
  "Dentro do limite não pinta nada. Fora, pinta com a cor escolhida para aquele lado. Os limites são os da esquerda; cada análise vai na sua camada, para ligar e desligar.": "Within the limit nothing is colored. Outside, it is colored with the color chosen for that side. The limits are the ones on the left; each analysis goes on its own layer, to turn on and off.",
  "Depois clique onde pôr cada árvore (Enter termina). O pé fica no terreno, e a árvore arrastada volta ao chão do lugar novo.": "Then click where to place each tree (Enter finishes). The base stays on the terrain, and a dragged tree drops back to the ground at its new spot.",
- "Depois da troca, as mesas da fileira são postas de novo com o espaçamento da configuração, cada uma com o tipo dela. Sem isso, as vizinhas não se mexem e a troca pode passar delas.": "After the swap, the row's tables are placed again with the configured spacing, each with its own type. Without this, the neighbors don't move and the swap may overlap them.",
  "Desce a mesa escolhida na lista: menos prioridade para o motor.": "Moves the selected table down the list: lower priority for the engine.",
  "Desce o bloco na lista: ele passa a ser numerado depois do de baixo.": "Moves the block down the list: it is numbered after the one below.",
  "Desenha um hatch translúcido, na cor do trafo, em volta dos módulos das strings dos inversores do skid dele. Gerar de novo substitui o anterior.": "Draws a translucent hatch, in the transformer's color, around the modules of the strings of the inverters in its skid. Generating again replaces the previous one.",
@@ -1303,7 +1302,6 @@
  "Recalcular, pontas à mão, validar, recontar, apagar e os outros ajustes de mesas já desenhadas.": "Recalculate, manual ends, validate, recount, delete and the other adjustments to tables already drawn.",
  "Recontar": "Recount",
  "Recusados (tire do skid deles antes): {0}": "Refused (remove them from their skid first): {0}",
- "Reespaçar a fileira depois (mantém as mesas, acerta o espaçamento)": "Respace the row afterwards (keeps the tables, fixes the spacing)",
  "Reespaçar a fileira depois? [Sim/Nao]:": "Respace the row afterwards? [Sim/Nao]:",
  "Refaz a contagem de mesas, módulos, pilares e kWp pelo que está no desenho.": "Recounts tables, modules, piles and kWp from what is in the drawing.",
  "Refaz a lista com vãos iguais (ao milímetro) para este número de pilares; o último leva o resto.": "Rebuilds the list with equal spans (to the millimeter) for this number of piles; the last one takes the remainder.",
@@ -2211,5 +2209,9 @@
  "árvore": "tree",
  "é outra superfície": "is another surface",
  "▲ Subir": "▲ Up",
- "▼ Descer": "▼ Down"
+ "▼ Descer": "▼ Down",
+ "Refazer a fileira inteira (acerta o espaçamento)": "Redo the whole row (fixes the spacing)",
+ "Depois da troca, as mesas da fileira são postas de novo com o espaçamento da configuração, cada uma com o tipo dela; as strings da fileira são apagadas. Sem isso, as vizinhas não se mexem e a troca pode passar delas.": "After the swap, the tables of the row are placed again with the configured spacing, each with its own type; the strings of the row are deleted. Without this, the neighbours do not move and the swap may run into them.",
+ "Trocar a estrutura…": "Swap the structure…",
+ "Refazer a fileira inteira": "Redo the whole row"
 }
