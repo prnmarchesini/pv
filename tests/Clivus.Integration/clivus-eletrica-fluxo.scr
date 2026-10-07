@@ -144,7 +144,8 @@
     (setq r (cons (reverse g) r)))
   (reverse r))
 (setq clivus:arq (open "{{DUMP}}" "w"))
-(foreach i (clivus:itens "INVERSORES" (if (= (nth 1 (clivus:registro "INVERSORES")) "1") 4 5))
+; INVERSORES: 4 campos no formato 1, 5 no 2 (a cor), 6 no 3 (a meta de strings, 07/10/2026).
+(foreach i (clivus:itens "INVERSORES" (cond ((= (nth 1 (clivus:registro "INVERSORES")) "1") 4) ((= (nth 1 (clivus:registro "INVERSORES")) "2") 5) (T 6)))
   (write-line (strcat "INV " (nth 0 i) " " (clivus:sem-espaco (nth 3 i)) " " (clivus:sem-espaco (nth 2 i))) clivus:arq))
 (foreach clivus:tr (clivus:itens "TRAFOS" 13)
   (write-line (strcat "TRAFO " (nth 0 clivus:tr) " " (clivus:sem-espaco (nth 12 clivus:tr)) " " (clivus:sem-espaco (nth 2 clivus:tr))) clivus:arq))

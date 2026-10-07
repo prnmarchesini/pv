@@ -856,6 +856,42 @@ public sealed class ElectricalSetup
         return new TransformerAssignment(mudaram, jaEram, sumidos, null);
     }
 
+    /// <summary>
+    /// A meta de strings dos inversores (07/10/2026: "quero uma opção de eu
+    /// falar QUANTAS strings eu quero por inversor ... em lote também"): até
+    /// quantas a distribuição automática põe em cada um. Null = todas as
+    /// entradas. Recusa tudo (nada muda) se a meta passa das entradas do
+    /// modelo de algum deles. Quantos mudaram, ou o porquê.
+    /// </summary>
+    public (int Changed, string? Problem) SetTarget(IEnumerable<Guid> inverters, int? target)
+    {
+        ArgumentNullException.ThrowIfNull(inverters);
+        if (target is < 1) return (0, Tr.T("a meta é de 1 string para cima (vazio: todas as entradas)"));
+
+        var posicoes = inverters.Distinct().Select(id => _inversores.FindIndex(i => i.Id == id)).Where(p => p >= 0).ToList();
+        if (posicoes.Count == 0) return (0, Tr.T("esses inversores não estão mais no cadastro"));
+
+        if (target is { } meta)
+        {
+            var passam = posicoes.Select(p => _inversores[p])
+                .Where(i => FindModel(i.Model) is { } m && meta > m.TotalInputs)
+                .Select(i => i.Name)
+                .ToList();
+            if (passam.Count > 0)
+                return (0, Tr.F("{0} string(s) passa das entradas do modelo de {1}", meta, string.Join(", ", passam.Take(5)) + (passam.Count > 5 ? "…" : string.Empty)));
+        }
+
+        var mudaram = 0;
+        foreach (var p in posicoes)
+        {
+            if (_inversores[p].Target == target) continue;
+            _inversores[p] = _inversores[p] with { Target = target };
+            mudaram++;
+        }
+
+        return (mudaram, null);
+    }
+
     // ----------------------------------------------------------- comuns
 
     public static bool SameName(string? a, string? b) =>

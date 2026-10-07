@@ -40,6 +40,19 @@ public static class InverterTable
     /// (base 0) das linhas, contadas de 1 como a tabela mostra. "Até" vazio é
     /// a mesma linha; de trás para a frente vale; fora da tabela é recusado.
     /// </summary>
+    /// <summary>
+    /// A meta escrita na caixa (07/10/2026): vazio é sem meta (todas as
+    /// entradas); senão um inteiro de 1 para cima.
+    /// </summary>
+    public static (int? Target, string? Problem) ParseTarget(string? text)
+    {
+        var t = text?.Trim() ?? string.Empty;
+        if (t.Length == 0) return (null, null);
+        return int.TryParse(t, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) && n >= 1
+            ? (n, null)
+            : (null, Tr.T("a meta é de 1 string para cima (vazio: todas as entradas)"));
+    }
+
     public static (IReadOnlyList<int> Rows, string? Problem) Range(int count, string? from, string? to)
     {
         if (count <= 0) return ([], Tr.T("a tabela não tem inversor"));

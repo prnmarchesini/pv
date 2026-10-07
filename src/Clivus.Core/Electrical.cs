@@ -257,32 +257,53 @@ public sealed record InverterModel(Guid Id, string Name, IReadOnlyList<int> Inpu
 /// 1 (4 campos, sem cor) continua sendo lido: a cor fica null e o cadastro
 /// (<see cref="ElectricalSetup"/>) dá uma automática na leitura.
 /// </remarks>
-public sealed record Inverter(Guid Id, Guid Model, string Name, Guid Transformer, RgbColor? Color = null)
+/// <param name="Target">
+/// Quantas strings a distribuição automática põe nele (Renan, 07/10/2026:
+/// "quero uma opção de eu falar QUANTAS strings eu quero por inversor");
+/// null: todas as entradas do modelo.
+/// </param>
+public sealed record Inverter(Guid Id, Guid Model, string Name, Guid Transformer, RgbColor? Color = null, int? Target = null)
 {
-    public const int FieldCount = 5;
+    public const int FieldCount = 6;
+
+    /// <summary>Os campos do formato 2 (com a cor, antes da meta).</summary>
+    public const int ColorFieldCount = 5;
 
     /// <summary>Os campos do formato 1 (antes da cor).</summary>
     public const int LegacyFieldCount = 4;
 
-    public bool IsValid => Id != Guid.Empty && Model != Guid.Empty && !string.IsNullOrWhiteSpace(Name);
+    public bool IsValid => Id != Guid.Empty && Model != Guid.Empty && !string.IsNullOrWhiteSpace(Name) && Target is null or > 0;
+
+    /// <summary>Até quantas strings a distribuição leva a ele: a meta, sem passar das entradas do modelo.</summary>
+    public int Limit(int inputs) => Target is { } meta ? Math.Min(meta, inputs) : inputs;
 
     public IReadOnlyList<string> ToFields() =>
-        [Id.ToString("D"), Model.ToString("D"), Name, Transformer == Guid.Empty ? string.Empty : Transformer.ToString("D"), Color?.ToHex() ?? string.Empty];
+    [
+        Id.ToString("D"), Model.ToString("D"), Name, Transformer == Guid.Empty ? string.Empty : Transformer.ToString("D"), Color?.ToHex() ?? string.Empty,
+        Target?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+    ];
 
-    /// <summary>Lê o formato 2 (5 campos, com a cor) ou o 1 (4 campos, cor null).</summary>
+    /// <summary>Lê o formato 3 (6 campos, com a meta), o 2 (5, com a cor) ou o 1 (4, cor null).</summary>
     public static Inverter? Parse(IReadOnlyList<string> c)
     {
         if (c.Count < LegacyFieldCount || !Guid.TryParse(c[0], out var id) || !Guid.TryParse(c[1], out var modelo)) return null;
         if (!ElectricalString.OptionalGuid(c[3], out var trafo)) return null;
 
         RgbColor? cor = null;
-        if (c.Count >= FieldCount && c[4].Length > 0)
+        if (c.Count >= ColorFieldCount && c[4].Length > 0)
         {
             if (!RgbColor.TryParseHex(c[4], out var lida)) return null;
             cor = lida;
         }
 
-        var i = new Inverter(id, modelo, c[2], trafo, cor);
+        int? meta = null;
+        if (c.Count >= FieldCount && c[5].Length > 0)
+        {
+            if (!int.TryParse(c[5], NumberStyles.None, CultureInfo.InvariantCulture, out var lida)) return null;
+            meta = lida;
+        }
+
+        var i = new Inverter(id, modelo, c[2], trafo, cor, meta);
         return i.IsValid ? i : null;
     }
 }

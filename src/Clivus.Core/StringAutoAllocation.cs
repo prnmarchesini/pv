@@ -116,7 +116,8 @@ public static class StringAutoAllocation
                 continue;
             }
 
-            var cabe = entradas - carga.GetValueOrDefault(inversor.Id);
+            // A meta do inversor (07/10/2026), quando há, limita antes das entradas.
+            var cabe = inversor.Limit(entradas) - carga.GetValueOrDefault(inversor.Id);
             if (cabe <= 0)
             {
                 cheios.Add(inversor.Id);
