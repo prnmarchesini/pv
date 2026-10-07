@@ -866,7 +866,7 @@ public sealed class ElectricalSetup
     public (int Changed, string? Problem) SetTarget(IEnumerable<Guid> inverters, int? target)
     {
         ArgumentNullException.ThrowIfNull(inverters);
-        if (target is < 1) return (0, Tr.T("a meta é de 1 string para cima (vazio: todas as entradas)"));
+        if (target is < 1) return (0, Tr.T("o limite é de 1 string para cima (vazio: todas as entradas)"));
 
         var posicoes = inverters.Distinct().Select(id => _inversores.FindIndex(i => i.Id == id)).Where(p => p >= 0).ToList();
         if (posicoes.Count == 0) return (0, Tr.T("esses inversores não estão mais no cadastro"));

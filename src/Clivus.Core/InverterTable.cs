@@ -35,14 +35,8 @@ public sealed record InverterTableTotal(int Inverters, int Strings, int Capacity
 public static class InverterTable
 {
     /// <summary>
-    /// As linhas "de ... a ..." do trafo em lote (Renan, 07/10/2026: "um por
-    /// um ... é bem demorado, crie uma opção de atribuir em lote"): os índices
-    /// (base 0) das linhas, contadas de 1 como a tabela mostra. "Até" vazio é
-    /// a mesma linha; de trás para a frente vale; fora da tabela é recusado.
-    /// </summary>
-    /// <summary>
-    /// A meta escrita na caixa (07/10/2026): vazio é sem meta (todas as
-    /// entradas); senão um inteiro de 1 para cima.
+    /// O limite de strings escrito na caixa (07/10/2026): vazio é sem limite
+    /// (todas as entradas); senão um inteiro de 1 para cima.
     /// </summary>
     public static (int? Target, string? Problem) ParseTarget(string? text)
     {
@@ -50,20 +44,7 @@ public static class InverterTable
         if (t.Length == 0) return (null, null);
         return int.TryParse(t, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) && n >= 1
             ? (n, null)
-            : (null, Tr.T("a meta é de 1 string para cima (vazio: todas as entradas)"));
-    }
-
-    public static (IReadOnlyList<int> Rows, string? Problem) Range(int count, string? from, string? to)
-    {
-        if (count <= 0) return ([], Tr.T("a tabela não tem inversor"));
-        if (!int.TryParse(from?.Trim(), out var de)) return ([], Tr.T("escreva o número da primeira linha"));
-
-        var ate = de;
-        if (!string.IsNullOrWhiteSpace(to) && !int.TryParse(to.Trim(), out ate)) return ([], Tr.T("escreva o número da última linha"));
-        if (ate < de) (de, ate) = (ate, de);
-        if (de < 1 || ate > count) return ([], Tr.F("as linhas vão de 1 a {0}", count));
-
-        return (Enumerable.Range(de - 1, ate - de + 1).ToList(), null);
+            : (null, Tr.T("o limite é de 1 string para cima (vazio: todas as entradas)"));
     }
 
     /// <summary>

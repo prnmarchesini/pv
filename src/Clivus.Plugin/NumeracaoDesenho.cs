@@ -193,9 +193,10 @@ internal static class NumeracaoDesenho
             var lugares = s.Modules.Select(m => modulos.GetValueOrDefault(m)).OfType<Lugar>().ToList();
             if (lugares.Count == 0) continue;
 
-            var primeiro = lugares[0].Centro;
-            var ultimo = lugares[^1].Centro;
-            var rumo = primeiro.DistanceTo(ultimo) < 1e-6 ? 0 : LayoutDrawer.RumoLegivel(ultimo.X - primeiro.X, ultimo.Y - primeiro.Y);
+            // O eixo da mesa, nunca o caminho do primeiro ao último módulo (a
+            // string em U dava a tag em pé; Renan, 07/10/2026: "jamais quero
+            // texto virado").
+            var (rumo, comprimento) = StringTagLayout.Axis(lugares.Select(l => (l.Centro.X, l.Centro.Y)).ToList());
 
             var mtexto = new MText
             {
@@ -213,6 +214,11 @@ internal static class NumeracaoDesenho
             transacao.AddNewlyCreatedDBObject(mtexto, true);
             estilo(mtexto);
             Emoldurar(mtexto, esquema);
+
+            // Não cabe no comprimento da string: a fonte diminui (o texto não gira).
+            var largura = mtexto.ActualWidth * FolgaDaLargura;
+            var altura = StringTagLayout.FitHeight(Altura, largura, comprimento);
+            if (altura < Altura) mtexto.TextHeight = altura;
             PluginXData.Save(transacao, mtexto, StringTagText.Tipo, VersaoDaTag, [.. new StringTagText(s.Id, tag).ToFields()]);
             novos.Add(mtexto.ObjectId);
         }
@@ -226,6 +232,9 @@ internal static class NumeracaoDesenho
 
         return orfaos;
     }
+
+    /// <summary>Quanto a tag ocupa além do texto (o fundo e a moldura), na conta de caber na string.</summary>
+    private const double FolgaDaLargura = 1.15;
 
     /// <summary>A folga do fundo e da moldura em volta do texto (1 = colado; o AutoCAD aceita de 1 a 5).</summary>
     internal const double FolgaDoFundo = 1.2;

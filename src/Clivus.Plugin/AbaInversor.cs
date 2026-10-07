@@ -39,11 +39,14 @@ internal sealed class AbaInversor : AbaEletrica
     private readonly ComboBox _modeloParaCriar = new() { Height = 26, MinWidth = 160, Margin = new Thickness(0, 0, 6, 6) };
     private readonly TextBox _quantos = new() { Text = "1", Width = 50, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
 
-    /// <summary>O trafo em lote: as linhas "de ... a ..." e o trafo (07/10/2026).</summary>
-    private readonly TextBox _loteDe = new() { Width = 40, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
-    private readonly TextBox _loteAte = new() { Width = 40, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
-    private readonly ComboBox _trafoDoLote = new() { Height = 26, MinWidth = 90, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
-    private readonly TextBox _metaDoLote = new() { Width = 40, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
+    // O quadro "Vários inversores de uma vez" (07/10/2026, Renan: "não consigo
+    // entender o em lote ... melhora 10x isso"): primeiro QUAIS (do ... ao ...,
+    // ou Ctrl/Shift + clique na tabela; ficam destacados), depois O QUE muda.
+    private readonly ComboBox _doInversor = new() { Height = 24, MinWidth = 110, Margin = new Thickness(0, 0, 6, 4) };
+    private readonly ComboBox _aoInversor = new() { Height = 24, MinWidth = 110, Margin = new Thickness(0, 0, 6, 4) };
+    private readonly TextBox _limiteDasEscolhidas = new() { Width = 44, Height = 24, Margin = new Thickness(0, 0, 6, 4), VerticalContentAlignment = VerticalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Right };
+    private readonly StackPanel _acoesDasEscolhidas = new() { Orientation = Orientation.Horizontal };
+    private bool _mostrandoEscolha;
 
     /// <summary>A tabela: uma linha por inversor, várias escolhidas com Ctrl ou Shift.</summary>
     private readonly ListBox _inversores = new()
@@ -55,23 +58,17 @@ internal sealed class AbaInversor : AbaEletrica
 
     private readonly ContentControl _rodapeDaTabela = new();
 
-    /// <summary>
-    /// A barra das linhas escolhidas: só aparece com duas ou mais (Ctrl ou
-    /// Shift + clique), embaixo da tabela (aparecer lá não empurra as linhas
-    /// que o usuário está clicando).
-    /// </summary>
+    /// <summary>O quadro de vários inversores, em cima da tabela, sempre à vista.</summary>
     private readonly Border _barraDasEscolhidas = new()
     {
-        Visibility = Visibility.Collapsed,
-        Margin = new Thickness(0, 4, 0, 0),
-        Padding = new Thickness(6, 3, 6, 0),
+        Margin = new Thickness(0, 2, 0, 6),
+        Padding = new Thickness(8, 4, 8, 2),
         BorderThickness = new Thickness(1),
-        BorderBrush = System.Windows.SystemColors.HighlightBrush,
-        Background = System.Windows.SystemColors.InfoBrush,
+        BorderBrush = System.Windows.SystemColors.ActiveBorderBrush,
     };
 
-    private readonly TextBlock _quantasEscolhidas = new() { VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 10, 3) };
-    private readonly ComboBox _trafoDasEscolhidas = new() { Height = 22, MinWidth = 90, Margin = new Thickness(0, 0, 6, 3) };
+    private readonly TextBlock _quantasEscolhidas = new() { VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 12, 4) };
+    private readonly ComboBox _trafoDasEscolhidas = new() { Height = 24, MinWidth = 90, Margin = new Thickness(0, 0, 6, 4) };
     private readonly Button _apagarAsEscolhidas;
 
     // A atribuição automática: o sentido que avança e o sentido na faixa (a varredura própria dela).
@@ -144,35 +141,13 @@ internal sealed class AbaInversor : AbaEletrica
         peloDesenho = Botao(criar, Tr.T("Trafo pelo desenho…"), Tr.T("Escolha um trafo e depois clique nos inversores no desenho: eles passam a ser desse trafo (só os que já estão em campo; inversor de outro trafo não muda)."), () => MenuDoTrafoPeloDesenho(peloDesenho!));
         peloDesenho.Margin = new Thickness(18, 0, 6, 6);
 
-        // O lote (Renan, 07/10/2026: "um por um ... é bem demorado"; "quero a
-        // opção dessa especificação em lote também"):
-        // "Em lote, linhas [7] a [12]: trafo [T2] [Pôr]  meta [18] strings [Pôr]".
-        var lote = new WrapPanel();
-        lote.Children.Add(Rotulo(Tr.T("Em lote, linhas")));
-        lote.Children.Add(_loteDe);
-        lote.Children.Add(Rotulo(Tr.T("a")));
-        lote.Children.Add(_loteAte);
-        lote.Children.Add(Rotulo(Tr.T(": trafo")));
-        lote.Children.Add(_trafoDoLote);
-        _loteDe.ToolTip = Tr.T("A primeira linha da tabela (a contagem começa em 1, de cima para baixo).");
-        _loteAte.ToolTip = Tr.T("A última linha (vazio: só a primeira).");
-        _trafoDoLote.ToolTip = Tr.T("O trafo dessas linhas (sem trafo solta).");
-        Botao(lote, Tr.T("Pôr"), Tr.T("Põe as linhas de ... a ... no trafo escolhido (o inversor que era de outro trafo muda). Também vale: escolher várias linhas (Ctrl ou Shift + clique) e trocar o trafo de uma delas."), PorOLoteNoTrafo);
-        var rotuloDaMeta = Rotulo(Tr.T("meta"));
-        rotuloDaMeta.Margin = new Thickness(12, rotuloDaMeta.Margin.Top, rotuloDaMeta.Margin.Right, rotuloDaMeta.Margin.Bottom);
-        lote.Children.Add(rotuloDaMeta);
-        lote.Children.Add(_metaDoLote);
-        lote.Children.Add(Rotulo(Tr.T("strings")));
-        _metaDoLote.ToolTip = Tr.T("Quantas strings o Distribuir põe em cada inversor dessas linhas (vazio: todas as entradas).");
-        Botao(lote, Tr.T("Pôr"), Tr.T("Grava a meta nas linhas de ... a ... (vazio tira a meta). Depois use Distribuir (antes, Soltar todas da usina para redistribuir do zero)."), PorAMetaNoLote);
-
         // A distribuição automática das strings livres nos inversores, pela varredura dela.
         var atribuir = new WrapPanel();
         atribuir.Children.Add(Rotulo(Tr.T("Distribuir strings livres:")));
         atribuir.Children.Add(_sentidoDaAtribuicao);
         atribuir.Children.Add(Rotulo(Tr.T("e na faixa")));
         atribuir.Children.Add(_faixaDaAtribuicao);
-        Botao(atribuir, Tr.T("Distribuir"), Tr.T("As strings livres, na ordem desta varredura, enchem os inversores na ordem da tabela, cada um até a meta dele (coluna Meta; vazia: o total de entradas). As já alocadas não mudam (e contam); inversor cheio é pulado; as que sobrarem são avisadas. Para redistribuir do zero, use antes Soltar todas da usina."), AtribuirStrings);
+        Botao(atribuir, Tr.T("Distribuir"), Tr.T("As strings livres, na ordem desta varredura, enchem os inversores na ordem da tabela, cada um até o limite dele (coluna Limite; vazia: o total de entradas). As já alocadas não mudam (e contam); inversor cheio é pulado; as que sobrarem são avisadas. Para redistribuir do zero, use antes Soltar todas da usina."), AtribuirStrings);
         Botao(atribuir, Tr.T("Soltar todas da usina"), Tr.T("Solta as strings de todos os inversores: ficam livres e continuam no desenho (nada é apagado). Depois, Distribuir redistribui do zero."), SoltarTodasDaUsina);
         _sentidoDaAtribuicao.ToolTip = Tr.T("O sentido em que a distribuição percorre a usina (é só da distribuição; a numeração tem o seu).");
         _faixaDaAtribuicao.ToolTip = Tr.T("Dentro da mesma faixa (linha ou coluna), em que sentido as strings são tomadas.");
@@ -189,7 +164,7 @@ internal sealed class AbaInversor : AbaEletrica
         };
 
         // A ajuda de uma linha, em cima da tabela.
-        var textoDaAjuda = Tr.T("Trafo: na coluna Trafo; em lote, pelas linhas de ... a ..., ou escolha várias (Ctrl ou Shift + clique) e troque o trafo de uma. Strings: + Strings ou Distribuir.");
+        var textoDaAjuda = Tr.T("Cada linha grava na hora. Para vários de uma vez, use o quadro acima.");
         var ajuda = new TextBlock
         {
             Text = textoDaAjuda,
@@ -199,23 +174,59 @@ internal sealed class AbaInversor : AbaEletrica
             Margin = new Thickness(0, 0, 0, 3),
         };
 
-        // A barra das linhas escolhidas (duas ou mais).
-        var barra = new WrapPanel();
-        barra.Children.Add(_quantasEscolhidas);
-        barra.Children.Add(Rotulo(Tr.T("Trafo"), 3));
-        barra.Children.Add(_trafoDasEscolhidas);
-        _trafoDasEscolhidas.ToolTip = Tr.T("O trafo para todas as linhas escolhidas (sem trafo solta).");
+        // O quadro de vários: 1. quais; 2. o que muda nos escolhidos.
+        var quais = new WrapPanel();
+        var passo1 = Rotulo(Tr.T("1. Quais:"), 4);
+        passo1.FontWeight = FontWeights.SemiBold;
+        quais.Children.Add(passo1);
+        quais.Children.Add(Rotulo(Tr.T("do"), 4));
+        quais.Children.Add(_doInversor);
+        quais.Children.Add(Rotulo(Tr.T("ao"), 4));
+        quais.Children.Add(_aoInversor);
+        _doInversor.ToolTip = _aoInversor.ToolTip = Tr.T("Os inversores do primeiro ao último ficam escolhidos (destacados na tabela).");
         foreach (var b in new[]
         {
-            Botao(barra, Tr.T("Aplicar"), Tr.T("Põe todas as linhas escolhidas no trafo ao lado (o inversor que era de outro trafo muda)."), PorAsEscolhidasNoTrafo),
-            _apagarAsEscolhidas = Botao(barra, Tr.T("Apagar"), Tr.T("Apaga do cadastro todos os inversores escolhidos (pede confirmação): as strings deles ficam livres e os retângulos saem do campo."), ApagarAsEscolhidas),
-            Botao(barra, Tr.T("Cancelar seleção"), Tr.T("Desmarca as linhas escolhidas."), () => _inversores.UnselectAll()),
+            Botao(quais, Tr.T("Todos"), Tr.T("Escolhe todos os inversores da tabela."), () => _inversores.SelectAll()),
+            Botao(quais, Tr.T("Nenhum"), Tr.T("Desmarca a escolha."), () => _inversores.UnselectAll()),
         })
         {
-            b.Height = 22;
-            b.Margin = new Thickness(0, 0, 6, 3);
+            b.Height = 24;
+            b.Margin = new Thickness(0, 0, 6, 4);
         }
 
+        var dica = Rotulo(Tr.T("(ou Ctrl/Shift + clique nas linhas)"), 4);
+        dica.Foreground = System.Windows.SystemColors.GrayTextBrush;
+        quais.Children.Add(dica);
+        _doInversor.SelectionChanged += (_, _) => EscolherPeloIntervalo();
+        _aoInversor.SelectionChanged += (_, _) => EscolherPeloIntervalo();
+
+        var oQue = new WrapPanel();
+        var passo2 = Rotulo(Tr.T("2."), 4);
+        passo2.FontWeight = FontWeights.SemiBold;
+        oQue.Children.Add(passo2);
+        oQue.Children.Add(_quantasEscolhidas);
+        oQue.Children.Add(_acoesDasEscolhidas);
+        _acoesDasEscolhidas.Children.Add(Rotulo(Tr.T("Trafo"), 4));
+        _acoesDasEscolhidas.Children.Add(_trafoDasEscolhidas);
+        _trafoDasEscolhidas.ToolTip = Tr.T("O trafo para os inversores escolhidos (sem trafo solta).");
+        var aplicarTrafo = Botao(_acoesDasEscolhidas, Tr.T("Aplicar trafo"), Tr.T("Põe os inversores escolhidos no trafo ao lado (o que era de outro trafo muda)."), PorAsEscolhidasNoTrafo);
+        var rotuloDoLimite = Rotulo(Tr.T("Limite de strings"), 4);
+        rotuloDoLimite.Margin = new Thickness(14, 0, 6, 4);
+        _acoesDasEscolhidas.Children.Add(rotuloDoLimite);
+        _acoesDasEscolhidas.Children.Add(_limiteDasEscolhidas);
+        _limiteDasEscolhidas.ToolTip = Tr.T("Quantas strings o Distribuir põe em cada inversor escolhido (vazio: todas as entradas do modelo).");
+        var aplicarLimite = Botao(_acoesDasEscolhidas, Tr.T("Aplicar limite"), Tr.T("Grava o limite nos inversores escolhidos (vazio tira o limite). Depois use Distribuir; para redistribuir do zero, antes Soltar todas da usina."), PorOLimiteNasEscolhidas);
+        _apagarAsEscolhidas = Botao(_acoesDasEscolhidas, Tr.T("Apagar"), Tr.T("Apaga do cadastro todos os inversores escolhidos (pede confirmação): as strings deles ficam livres e os retângulos saem do campo."), ApagarAsEscolhidas);
+        _apagarAsEscolhidas.Margin = new Thickness(14, 0, 6, 4);
+        foreach (var b in new[] { aplicarTrafo, aplicarLimite, _apagarAsEscolhidas }) b.Height = 24;
+        aplicarTrafo.Margin = aplicarLimite.Margin = new Thickness(0, 0, 6, 4);
+
+        var titulo = Rotulo(Tr.T("Vários inversores de uma vez"), 4);
+        titulo.FontWeight = FontWeights.SemiBold;
+        var barra = new StackPanel();
+        barra.Children.Add(titulo);
+        barra.Children.Add(quais);
+        barra.Children.Add(oQue);
         _barraDasEscolhidas.Child = barra;
 
         // A tabela: ajuda, cabeçalho, linhas e total com as mesmas colunas (SharedSizeGroup).
@@ -239,17 +250,15 @@ internal sealed class AbaInversor : AbaEletrica
         var topo = new StackPanel();
         topo.Children.Add(Titulo(Tr.T("Inversores da usina")));
         topo.Children.Add(criar);
-        topo.Children.Add(lote);
         topo.Children.Add(atribuir);
+        topo.Children.Add(_barraDasEscolhidas);
         DockPanel.SetDock(topo, Dock.Top);
-        DockPanel.SetDock(_barraDasEscolhidas, Dock.Bottom);
         inversores.Children.Add(topo);
-        inversores.Children.Add(_barraDasEscolhidas);
         inversores.Children.Add(tabela);
 
         _inversores.SelectionChanged += (_, e) =>
         {
-            try { if (e.OriginalSource == _inversores) MostrarAsEscolhidas(); }
+            try { if (e.OriginalSource == _inversores && !_mostrandoEscolha) MostrarAsEscolhidas(); }
             catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao mostrar as linhas escolhidas.", erro); }
         };
 
@@ -311,7 +320,6 @@ internal sealed class AbaInversor : AbaEletrica
         MostrarVarredura(AtribuicaoAutomatica.Varredura(Documento.Database).Varredura);
 
         MontarTrafos(_trafoDasEscolhidas, setup, comSemTrafo: true);
-        MontarTrafos(_trafoDoLote, setup, comSemTrafo: true);
 
         // 14.4: o excesso aparece em vermelho na linha do inversor e no rodapé.
         var excessos = _setup.Inverters
@@ -513,7 +521,7 @@ internal sealed class AbaInversor : AbaEletrica
         Titulo(ColunaNome, Tr.T("Inversor"), Tr.T("O nome do inversor (a tag): clique no nome para renomear."));
         Titulo(ColunaModelo, Tr.T("Modelo"), Tr.T("O modelo do inversor: escolher outro grava na hora (o cadastro dos modelos fica à esquerda)."));
         Titulo(ColunaTrafo, Tr.T("Trafo"), Tr.T("O trafo do inversor. Escolher na linha grava na hora; é também o skid do trafo."));
-        Titulo(ColunaMeta, Tr.T("Meta"), Tr.T("Quantas strings o Distribuir põe neste inversor (vazio: todas as entradas do modelo). Enter grava; com várias linhas escolhidas, vale para todas."), numero: true);
+        Titulo(ColunaMeta, Tr.T("Limite"), Tr.T("Limite de strings: quantas o Distribuir põe neste inversor (vazio: todas as entradas do modelo). Enter grava; com várias linhas escolhidas, vale para todas."), numero: true);
         Titulo(ColunaStrings, Tr.T("Strings"), Tr.T("Strings alocadas / total de entradas do modelo."), numero: true);
         Titulo(ColunaKwp, "kWp", Tr.T("Potência CC: a soma da potência dos módulos das strings alocadas (a mesma conta do Resumo elétrico)."), numero: true);
         Titulo(ColunaKw, "kW", Tr.T("Potência nominal CA do modelo."), numero: true);
@@ -568,6 +576,8 @@ internal sealed class AbaInversor : AbaEletrica
             var item = new ListBoxItem { Content = MontarLinha(linha, emCampo.Contains((EquipmentKind.Inverter, linha.Inverter.Id))), Tag = linha.Inverter, Padding = new Thickness(2, 1, 2, 1) };
             _inversores.Items.Add(item);
         }
+
+        MontarIntervalo(linhas.Select(l => l.Inverter).ToList());
 
         // A escolha volta (o que sumiu do cadastro sai dela).
         foreach (var item in _inversores.Items.OfType<ListBoxItem>())
@@ -646,13 +656,90 @@ internal sealed class AbaInversor : AbaEletrica
         }
     }
 
-    /// <summary>A barra das escolhidas: aparece com duas ou mais linhas, com quantas são.</summary>
+    /// <summary>
+    /// O quadro de vários: quantos estão escolhidos (e quais, se é um trecho
+    /// seguido), as ações só com algum escolhido, e o "do ... ao ..." seguindo
+    /// a escolha feita na tabela.
+    /// </summary>
     private void MostrarAsEscolhidas()
     {
-        var n = _inversores.SelectedItems.Count;
-        _barraDasEscolhidas.Visibility = n >= 2 ? Visibility.Visible : Visibility.Collapsed;
-        _quantasEscolhidas.Text = Tr.F("{0} inversores escolhidos:", n);
-        _apagarAsEscolhidas.Content = Tr.F("Apagar os {0}", n);
+        var itens = _inversores.Items.OfType<ListBoxItem>().ToList();
+        var posicoes = itens.Select((item, i) => (item, i)).Where(x => x.item.IsSelected).Select(x => x.i).ToList();
+        var n = posicoes.Count;
+
+        _quantasEscolhidas.Text = n switch
+        {
+            0 => Tr.T("Nenhum escolhido."),
+            1 => Tr.F("{0}:", ((Inverter)itens[posicoes[0]].Tag).Name),
+            _ when posicoes[^1] - posicoes[0] + 1 == n => Tr.F("{0} escolhidos ({1} ao {2}):", n, ((Inverter)itens[posicoes[0]].Tag).Name, ((Inverter)itens[posicoes[^1]].Tag).Name),
+            _ => Tr.F("{0} escolhidos:", n),
+        };
+        _acoesDasEscolhidas.IsEnabled = n > 0;
+        _apagarAsEscolhidas.Content = n > 1 ? Tr.F("Apagar os {0}", n) : Tr.T("Apagar");
+
+        // O "do ... ao ..." acompanha a escolha da tabela (sem escolher de volta).
+        if (n == 0) return;
+        _mostrandoEscolha = true;
+        try
+        {
+            _doInversor.SelectedIndex = posicoes[0];
+            _aoInversor.SelectedIndex = posicoes[^1];
+        }
+        finally
+        {
+            _mostrandoEscolha = false;
+        }
+    }
+
+    /// <summary>Mudou o "do" ou o "ao": os inversores do trecho ficam escolhidos na tabela.</summary>
+    private void EscolherPeloIntervalo()
+    {
+        try
+        {
+            if (_mostrandoEscolha || _doInversor.SelectedIndex < 0 || _aoInversor.SelectedIndex < 0) return;
+
+            var de = Math.Min(_doInversor.SelectedIndex, _aoInversor.SelectedIndex);
+            var ate = Math.Max(_doInversor.SelectedIndex, _aoInversor.SelectedIndex);
+            var itens = _inversores.Items.OfType<ListBoxItem>().ToList();
+
+            _mostrandoEscolha = true;
+            try
+            {
+                _inversores.UnselectAll();
+                for (var i = de; i <= ate && i < itens.Count; i++) _inversores.SelectedItems.Add(itens[i]);
+            }
+            finally
+            {
+                _mostrandoEscolha = false;
+            }
+
+            MostrarAsEscolhidas();
+            if (de < itens.Count) _inversores.ScrollIntoView(itens[de]);
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao escolher os inversores pelo intervalo.", erro);
+        }
+    }
+
+    /// <summary>Os nomes da tabela no "do" e no "ao", mantendo o que estava escolhido.</summary>
+    private void MontarIntervalo(IReadOnlyList<Inverter> inversores)
+    {
+        _mostrandoEscolha = true;
+        try
+        {
+            foreach (var caixa in new[] { _doInversor, _aoInversor })
+            {
+                var antes = caixa.SelectedIndex;
+                caixa.Items.Clear();
+                foreach (var i in inversores) caixa.Items.Add(new ComboBoxItem { Content = i.Name, Tag = i.Id });
+                caixa.SelectedIndex = Math.Min(antes, inversores.Count - 1);
+            }
+        }
+        finally
+        {
+            _mostrandoEscolha = false;
+        }
     }
 
     /// <summary>
@@ -962,7 +1049,7 @@ internal sealed class AbaInversor : AbaEletrica
         var ids = Escolhidos().Select(i => i.Id).ToList();
         if (ids.Count == 0)
         {
-            Avisar(Tr.T("Escolha uma ou mais linhas na tabela (Ctrl ou Shift + clique para várias)."), erro: true);
+            Avisar(Tr.T("Escolha os inversores no passo 1 (do ... ao ..., Todos, ou Ctrl/Shift + clique nas linhas)."), erro: true);
             return;
         }
 
@@ -991,7 +1078,7 @@ internal sealed class AbaInversor : AbaEletrica
             HorizontalContentAlignment = HorizontalAlignment.Right,
             VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 10, 0),
-            ToolTip = Tr.F("Quantas strings o Distribuir põe neste inversor (vazio: todas as {0} entradas). Enter grava, Esc desfaz.", entradas),
+            ToolTip = Tr.F("Limite de strings: quantas o Distribuir põe neste inversor (vazio: todas as {0} entradas). Enter grava, Esc desfaz.", entradas),
         };
 
         var id = inversor.Id;
@@ -1041,10 +1128,17 @@ internal sealed class AbaInversor : AbaEletrica
         return caixa;
     }
 
-    /// <summary>O "Pôr" da meta em lote: as linhas de ... a ... ficam com a meta escrita.</summary>
-    private void PorAMetaNoLote()
+    /// <summary>O "Aplicar limite" do quadro: os escolhidos ficam com o limite escrito.</summary>
+    private void PorOLimiteNasEscolhidas()
     {
-        if (LinhasDoLote() is { } ids) PorAMetaPelaTela(ids, _metaDoLote.Text);
+        var ids = Escolhidos().Select(i => i.Id).ToList();
+        if (ids.Count == 0)
+        {
+            Avisar(Tr.T("Escolha os inversores no passo 1 (do ... ao ..., Todos, ou Ctrl/Shift + clique nas linhas)."), erro: true);
+            return;
+        }
+
+        PorAMetaPelaTela(ids, _limiteDasEscolhidas.Text);
     }
 
     private void PorAMetaPelaTela(IReadOnlyCollection<Guid> inversores, string texto) =>
@@ -1068,33 +1162,8 @@ internal sealed class AbaInversor : AbaEletrica
 
         if (r.Problem is { } problema) return (null, problema);
         return (meta is { } m
-            ? Tr.F("Meta de {0} string(s) em {1} inversor(es); o Distribuir para nela.", m, r.Changed)
-            : Tr.F("{0} inversor(es) sem meta: o Distribuir enche todas as entradas.", r.Changed), null);
-    }
-
-    /// <summary>As linhas "de ... a ..." do lote, ou null (com o aviso dado).</summary>
-    private List<Guid>? LinhasDoLote()
-    {
-        var linhas = _inversores.Items.OfType<ListBoxItem>().Select(i => (Inverter)i.Tag).ToList();
-        var (indices, problema) = InverterTable.Range(linhas.Count, _loteDe.Text, _loteAte.Text);
-        if (problema is null) return indices.Select(i => linhas[i].Id).ToList();
-
-        Avisar(Tr.F("Não mudei: {0}.", problema), erro: true);
-        return null;
-    }
-
-    /// <summary>O "Pôr" do trafo em lote: as linhas de ... a ... vão para o trafo escolhido.</summary>
-    private void PorOLoteNoTrafo()
-    {
-        if (LinhasDoLote() is not { } ids) return;
-
-        if ((_trafoDoLote.SelectedItem as ComboBoxItem)?.Tag is not Guid trafo)
-        {
-            Avisar(Tr.T("Escolha o trafo (cadastre na aba Transformador, se não há)."), erro: true);
-            return;
-        }
-
-        PorNoTrafoPelaTela(ids, trafo);
+            ? Tr.F("Limite de {0} string(s) em {1} inversor(es); o Distribuir para nele.", m, r.Changed)
+            : Tr.F("{0} inversor(es) sem limite: o Distribuir enche todas as entradas.", r.Changed), null);
     }
 
     private void PorNoTrafoPelaTela(IReadOnlyCollection<Guid> inversores, Guid trafo) =>
@@ -1241,6 +1310,7 @@ internal sealed class AbaInversor : AbaEletrica
                 : Tr.F("{0} inversores apagados do cadastro; {1} string(s) ficaram livres no desenho.", apagados.Count, soltas);
         });
         if (nenhum) Avisar(Tr.T("Esse inversor não está mais no cadastro."), erro: true);
+        else RedesenharODesenho();
     }
 
     /// <summary>
@@ -1285,6 +1355,7 @@ internal sealed class AbaInversor : AbaEletrica
             var n = CorDasStrings.Repintar(Documento.Database, id);
             return Tr.F("{0}: cor trocada para {1}; {2} string(s) repintada(s).", inversor.Name, cor.ToHex(), n);
         });
+        RedesenharODesenho();
     }
 
     /// <summary>Põe nas caixas a varredura gravada (sem gravar de novo).</summary>
@@ -1356,23 +1427,30 @@ internal sealed class AbaInversor : AbaEletrica
         }
 
         var (r, linhas) = resultado;
+        RedesenharODesenho();
         (AoMudar ?? Atualizar)();
         Avisar(string.Join("\n", linhas), erro: r.Changed.Count == 0 || r.Leftover > 0 || r.WithoutModel.Count > 0 || r.Unplaced > 0 || r.Duplicates > 0);
     }
 
-    private void SoltarTodasDaUsina() =>
+    private void SoltarTodasDaUsina()
+    {
         Fazer(() =>
         {
             var soltas = StringsDoDesenho.SoltarTodasDaUsina(Documento.Database);
-            return Tr.F("{0} string(s) soltas de todos os inversores; continuam no desenho, livres.", soltas);
+            return Tr.F("{0} string(s) soltas de todos os inversores; continuam no desenho, livres, na cor da camada.", soltas);
         });
+        RedesenharODesenho();
+    }
 
-    private void SoltarTodas(Inverter inversor) =>
+    private void SoltarTodas(Inverter inversor)
+    {
         Fazer(() =>
         {
             var soltas = StringsDoDesenho.Soltar(Documento.Database, inversor.Id);
-            return Tr.F("{0}: {1} string(s) soltas; continuam no desenho, livres.", inversor.Name, soltas);
+            return Tr.F("{0}: {1} string(s) soltas; continuam no desenho, livres, na cor da camada.", inversor.Name, soltas);
         });
+        RedesenharODesenho();
+    }
 
     private void CriarInversores()
     {

@@ -275,6 +275,27 @@ internal abstract class AbaEletrica : DockPanel
         }
     }
 
+    /// <summary>
+    /// Redesenha o desenho depois de mudar a cor das strings pela janela
+    /// (07/10/2026, Renan: "quando eu solto as strings ... continuam com as
+    /// cores dos inversores"): fora de comando, o AutoCAD grava a cor nova
+    /// mas a tela só mostrava depois de outro redesenho.
+    /// </summary>
+    protected void RedesenharODesenho()
+    {
+        if (!ClivusExtension.TemInterface()) return;
+
+        try
+        {
+            using (Documento.LockDocument()) Documento.Editor.Regen();
+            AcadApp.UpdateScreen();
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao redesenhar o desenho depois da janela elétrica.", erro);
+        }
+    }
+
     /// <summary>A linha da lista com " — em campo" quando o retângulo do equipamento já está no desenho.</summary>
     protected static string ComCampo(string linha, bool emCampo) => emCampo ? Tr.F("{0} — em campo", linha) : linha;
 
