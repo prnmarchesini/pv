@@ -138,10 +138,10 @@ public class ElectricalSetupTests
         setup.RemoveUnit(c2.Id);
         var c4 = setup.AddSharedUnit();
 
-        Assert.Equal("C1", c1.Code);
-        Assert.Equal("Subestação C1", c1.Name);
+        Assert.Equal("UC1", c1.Code);
+        Assert.Equal("Subestação UC1", c1.Name);
         Assert.Equal(ConsumerUnitMode.Shared, c1.Mode);
-        Assert.Equal("C4", c4.Code);   // o C2 saiu e não volta
+        Assert.Equal("UC4", c4.Code);   // o UC2 saiu e não volta
         Assert.True(c1.IsValid);
         Assert.Equal(c1, ConsumerUnit.Parse(c1.ToFields()));
     }
@@ -180,7 +180,7 @@ public class ElectricalSetupTests
         var porque = setup.LinkTransformer(c2.Id, t1.Id);
 
         Assert.NotNull(porque);
-        Assert.Contains("C1", porque);
+        Assert.Contains("UC1", porque);
         Assert.Equal(c1.Id, setup.FindTransformer(t1.Id)!.ConsumerUnit);
 
         Assert.True(setup.UnlinkTransformer(t1.Id));
@@ -234,7 +234,7 @@ public class ElectricalSetupTests
 
         var editada = setup.FindUnit(c1.Id)!;
         Assert.Equal("Medição Norte", editada.Name);
-        Assert.Equal("C1", editada.Code);
+        Assert.Equal("UC1", editada.Code);
         Assert.Equal(6, editada.Size.Width);
     }
 
@@ -254,7 +254,7 @@ public class ElectricalSetupTests
         Assert.Equal("U4", mais.Single().Code);
         Assert.All(unitarias, u => Assert.Equal(ConsumerUnitMode.Unitary, u.Mode));
         Assert.Equal(3, unitarias.Select(u => u.Id).Distinct().Count());
-        Assert.Equal("C2", setup.AddSharedUnit().Code);   // a compartilhada tem a sequência dela
+        Assert.Equal("UC2", setup.AddSharedUnit().Code);   // a compartilhada tem a sequência dela
         Assert.Equal(6, setup.Units.Count);
         Assert.Throws<ArgumentOutOfRangeException>(() => setup.AddUnitaryUnits(0));
         Assert.Throws<ArgumentOutOfRangeException>(() => setup.AddUnitaryUnits(ElectricalDefaults.MaxAtOnce + 1));
@@ -319,8 +319,8 @@ public class ElectricalSetupTests
         var bloco = setup.Substations.Single();
 
         // O código e o nome da UC compartilhada acham o bloco físico dela.
-        Assert.Equal(bloco.Id, setup.FindEquipment("c1").Single().Id);
-        Assert.Equal(bloco.Id, setup.FindEquipment(" subestação C1 ").Single().Id);
+        Assert.Equal(bloco.Id, setup.FindEquipment("uc1").Single().Id);
+        Assert.Equal(bloco.Id, setup.FindEquipment(" subestação UC1 ").Single().Id);
         Assert.Equal(t1.Id, setup.FindEquipment("t1").Single().Id);
         Assert.Equal(t1.Id, setup.FindEquipment(t1.Id.ToString()).Single().Id);
         Assert.Empty(setup.FindEquipment("T9"));

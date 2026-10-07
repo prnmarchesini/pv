@@ -7,7 +7,7 @@ namespace Clivus.Plugin;
 /// <summary>A pergunta do Adicionar subestação (12.2): uma compartilhada ou várias unitárias.</summary>
 internal sealed class JanelaDeNovaSubestacao : Window
 {
-    private readonly RadioButton _compartilhada = new() { Content = Tr.T("A subestação compartilhada: um bloco em campo com as UCs C1, C2... dentro, cada uma com um ou mais trafos"), IsChecked = true, Margin = new Thickness(0, 0, 0, 6) };
+    private readonly RadioButton _compartilhada = new() { Content = Tr.T("A subestação compartilhada: um bloco em campo com as UCs UC1, UC2... dentro, cada uma com um ou mais trafos"), IsChecked = true, Margin = new Thickness(0, 0, 0, 6) };
     private readonly RadioButton _unitarias = new() { Content = Tr.T("Várias subestações unitárias (U1, U2...): cada bloquinho com o seu trafo"), Margin = new Thickness(0, 0, 0, 6) };
     private readonly TextBox _quantas = new() { Text = "2", Width = 60, Height = 24, VerticalContentAlignment = VerticalAlignment.Center };
     private readonly TextBlock _aviso = new() { Foreground = System.Windows.Media.Brushes.Firebrick, TextWrapping = TextWrapping.Wrap };

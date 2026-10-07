@@ -1,5 +1,5 @@
 ; Teste de nivel 2 do 16.1 (eletrica): o resumo do sistema pela cadeia de
-; vinculo. Usina pelo motor, strings de teste e a cadeia de exemplo (C1 com
+; vinculo. Usina pelo motor, strings de teste e a cadeia de exemplo (UC1 com
 ; TA; TB sem UC; inversores 1 e 2 no TA, 3 no TB, 4 sem trafo; 5, 4, 3 e 2
 ; strings). O resumo roda antes e depois de gerar as tags. O LISP refaz a
 ; conta pelo XData (strings alocadas, modulos delas e watts pela mesa dona de

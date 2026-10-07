@@ -49,7 +49,7 @@
 (command "CLIVUS_NUMERACAO_AUTO" "Fundo" "Sim")
 (command "CLIVUS_NUMERACAO_AUTO" "Moldura" "Sim")
 (command "CLIVUS_NUMERACAO_AUTO" "Gerar")
-(command "CLIVUS_ELETRICA_POSICIONAR" "C1" "{{P1}}")
+(command "CLIVUS_ELETRICA_POSICIONAR" "UC1" "{{P1}}")
 (command "CLIVUS_ELETRICA_POSICIONAR" "Inversor 1" "{{P2}}")
 (command "CLIVUS_ELETRICA_POSICIONAR" "TA" "{{P3}}")
 (command "CLIVUS_ELETRICA_JANELA_HATCH_AUTO" "*")

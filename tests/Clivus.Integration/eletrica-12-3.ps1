@@ -89,14 +89,14 @@ function Testar-Eletrica123 {
     }
 
     $t = $r.Texto
-    # Relatorios na ordem: C1 em P1, U1 em P2, C1 em P3 (movida).
+    # Relatorios na ordem: UC1 em P1, U1 em P2, UC1 em P3 (movida).
     $erros = @(Conferir-Equipamentos -Texto $t -Esperados @(
         @{ Tipo = 'ConsumerUnit'; XY = $pontos.XY.P3; Relatorio = 2 },
         @{ Tipo = 'ConsumerUnit'; XY = $pontos.XY.P2; Relatorio = 1 }))
 
-    if ($t -notmatch 'EQUIPAMENTO N\S+o h\S+ equipamento "C9"') { $erros += 'equipamento inexistente nao foi avisado' }
+    if ($t -notmatch 'EQUIPAMENTO N\S+o h\S+ equipamento "UC9"') { $erros += 'equipamento inexistente nao foi avisado' }
     $final = $t.Substring($t.LastIndexOf('ELETRICA 2 subestacao(oes)'))
-    if ($final -notmatch 'ELETRICA UC C1 modo=Shared .* trafos=T1\s') { $erros += 'o vinculo C1-T1 mudou ao mover' }
+    if ($final -notmatch 'ELETRICA UC UC1 modo=Shared .* trafos=T1\s') { $erros += 'o vinculo UC1-T1 mudou ao mover' }
 
     if ($erros.Count -gt 0) {
         $problemas.Add("clivus-eletrica-12-3: $($erros -join '; '). Veja $($r.Saida)")

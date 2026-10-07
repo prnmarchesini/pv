@@ -309,22 +309,38 @@ public static class RecalcularCommands
     /// <summary>Apaga todas as peças de uma mesa, numa transação.</summary>
     internal static void Apagar(Document documento, TableParts mesa) => Apagar(documento, [mesa]);
 
-    /// <summary>Apaga todas as peças destas mesas, e os grupos que ficarem vazios, numa transação só.</summary>
+    /// <summary>
+    /// Apaga todas as peças destas mesas, e os grupos que ficarem vazios, numa
+    /// transação só. As strings dos módulos delas (com sinais e tags) vão
+    /// junto: o módulo redesenhado tem GUID novo (<see cref="EletricaDasMesas"/>).
+    /// </summary>
     internal static void Apagar(Document documento, IReadOnlyCollection<TableParts> mesas)
     {
-        using var transacao = documento.Database.TransactionManager.StartTransaction();
+        var database = documento.Database;
+        EletricaDasMesas.Apagado eletrica;
 
-        var pecas = mesas.SelectMany(m => m.All).ToList();
-        var grupos = LayoutGroups.GruposDe(transacao, pecas);
-
-        foreach (var peca in pecas)
+        using (var transacao = database.TransactionManager.StartTransaction())
         {
-            var entidade = (Entity)transacao.GetObject(peca, OpenMode.ForWrite);
-            entidade.Erase();
+            var pecas = mesas.SelectMany(m => m.All).ToList();
+            var grupos = LayoutGroups.GruposDe(transacao, pecas);
+            var modulos = new HashSet<Guid>();
+
+            foreach (var peca in pecas)
+            {
+                var entidade = (Entity)transacao.GetObject(peca, OpenMode.ForWrite);
+                if (LayoutXData.LoadModule(entidade) is { } modulo) modulos.Add(modulo.Id);
+                entidade.Erase();
+            }
+
+            LayoutGroups.ApagarVazios(transacao, grupos);
+            eletrica = EletricaDasMesas.Apagar(transacao, database, modulos);
+            transacao.Commit();
         }
 
-        LayoutGroups.ApagarVazios(transacao, grupos);
-        transacao.Commit();
+        EletricaDasMesas.AcertarHatches(database, eletrica);
+
+        if (eletrica.Strings > 0)
+            documento.Editor.WriteMessage(Tr.F("\n  {0} string(s) dessas mesas apagada(s), com o + e o − e as tags.\n", eletrica.Strings));
     }
 
     internal static Guid? MesaDaSelecao(Editor editor, Document documento)

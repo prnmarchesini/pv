@@ -1,5 +1,5 @@
 ; Nivel 2 do 12.3 (eletrica): o retangulo da subestacao em campo. Os pontos
-; vem com Z absurdo (9999): a cota tem que vir do terreno. A C1 e posta duas
+; vem com Z absurdo (9999): a cota tem que vir do terreno. A UC1 e posta duas
 ; vezes (a segunda move o mesmo retangulo); o vinculo com o T1 nao muda.
 (setq clivus:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
@@ -10,11 +10,11 @@
 (command "CLIVUS_ELETRICA_AUTO" "Trafo" "2")
 (command "CLIVUS_ELETRICA_AUTO" "Uc" "Compartilhada")
 (command "CLIVUS_ELETRICA_AUTO" "Uc" "Unitarias" "1")
-(command "CLIVUS_ELETRICA_AUTO" "Vincular" "C1" "T1")
-(command "CLIVUS_ELETRICA_POSICIONAR" "C1" "{{P1}}")
+(command "CLIVUS_ELETRICA_AUTO" "Vincular" "UC1" "T1")
+(command "CLIVUS_ELETRICA_POSICIONAR" "UC1" "{{P1}}")
 (command "CLIVUS_ELETRICA_POSICIONAR" "u1" "{{P2}}")
-(command "CLIVUS_ELETRICA_POSICIONAR" "C1" "{{P3}}")
-(command "CLIVUS_ELETRICA_POSICIONAR" "C9")
+(command "CLIVUS_ELETRICA_POSICIONAR" "UC1" "{{P3}}")
+(command "CLIVUS_ELETRICA_POSICIONAR" "UC9")
 (setvar "OSMODE" clivus:osmode)
 (command "CLIVUS_ELETRICA_AUTO" "Listar")
 (defun clivus:equip ( / ss i e d x p)

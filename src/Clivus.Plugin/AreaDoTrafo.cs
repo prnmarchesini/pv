@@ -262,7 +262,7 @@ internal static class AreaDoTrafo
     }
 
     /// <summary>Os hatches de área de trafo do desenho, com o trafo de cada um.</summary>
-    private static List<(ObjectId Id, Guid Trafo)> Hatches(Transaction transacao, Database database)
+    internal static List<(ObjectId Id, Guid Trafo)> Hatches(Transaction transacao, Database database)
     {
         var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
         var classe = RXObject.GetClass(typeof(Hatch));

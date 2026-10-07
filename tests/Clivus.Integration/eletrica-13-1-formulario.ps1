@@ -38,9 +38,9 @@ function Testar-EletricaTrafoFormulario {
 
     $final = $t.Substring($iFinal)
     if ($final -notmatch 'ELETRICA TRAFO T1 nome="Trafo seco" entrada=800 saida=13800 kva=2500 k=4 z=6\.5 tamanho=3x2\.5x2\.5 notas="" uc=U1\s') { $erros += 'T1 no desenho nao tem os numeros digitados (800 / 13.800 / 2500 / 4 / 6,5) e a U1' }
-    if ($final -notmatch 'ELETRICA TRAFO T2 nome="Trafo 2" entrada=800 saida=13800 kva=3150 k=1 z=7\.5 tamanho=3\.2x2\.6x2\.6 notas="" uc=C1\s') { $erros += 'T2 no desenho nao tem os numeros digitados (3.150 / 7,5 %) e a C1' }
+    if ($final -notmatch 'ELETRICA TRAFO T2 nome="Trafo 2" entrada=800 saida=13800 kva=3150 k=1 z=7\.5 tamanho=3\.2x2\.6x2\.6 notas="" uc=UC1\s') { $erros += 'T2 no desenho nao tem os numeros digitados (3.150 / 7,5 %) e a UC1' }
     if ($final -notmatch 'ELETRICA UC U1 .* trafos=T1\s') { $erros += 'a U1 nao lista o T1' }
-    if ($final -notmatch 'ELETRICA UC C1 .* trafos=T2\s') { $erros += 'a C1 nao lista o T2' }
+    if ($final -notmatch 'ELETRICA UC UC1 .* trafos=T2\s') { $erros += 'a UC1 nao lista o T2' }
 
     if ($erros.Count -gt 0) {
         $problemas.Add("clivus-eletrica-13-1-formulario: $($erros -join '; '). Veja $($r.Saida)")

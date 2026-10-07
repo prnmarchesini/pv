@@ -45,7 +45,7 @@ public class ElectricalContractTests
         var modelo = new InverterModel(Guid.NewGuid(), "Huawei 250", 6, 4, Caixa);
         var inversor = new Inverter(Guid.NewGuid(), modelo.Id, "Inversor 1", Guid.Empty);
         var trafo = new Transformer(Guid.NewGuid(), "Trafo seco", "T1", 800, 13800, 2500, 4, 6.5, "nota | com separador", Caixa, Guid.NewGuid());
-        var uc = new ConsumerUnit(Guid.NewGuid(), "C1", "Medição norte", ConsumerUnitMode.Shared, Caixa);
+        var uc = new ConsumerUnit(Guid.NewGuid(), "UC1", "Medição norte", ConsumerUnitMode.Shared, Caixa);
         var lugar = new EquipmentPlacement(EquipmentKind.Transformer, trafo.Id);
 
         Assert.Equal(24, modelo.TotalInputs);
@@ -69,7 +69,7 @@ public class ElectricalContractTests
         Assert.Null(InverterModel.Parse(new InverterModel(Guid.NewGuid(), "X", 0, 4, Caixa).ToFields()));
         Assert.Null(InverterModel.Parse(new InverterModel(Guid.NewGuid(), "X", 2, 4, new EquipmentSize(0, 1, 1)).ToFields()));
         Assert.Null(Inverter.Parse(new Inverter(Guid.NewGuid(), Guid.Empty, "I1", Guid.Empty).ToFields()));
-        Assert.Null(ConsumerUnit.Parse(["6f9619ff-8b86-d011-b42d-00cf4fc964ff", "C1", "", "X", "1", "1", "1"]));
+        Assert.Null(ConsumerUnit.Parse(["6f9619ff-8b86-d011-b42d-00cf4fc964ff", "UC1", "", "X", "1", "1", "1"]));
         Assert.Null(EquipmentPlacement.Parse(["Bomba", Guid.NewGuid().ToString()]));
         Assert.Null(Transformer.Parse(new Transformer(Guid.NewGuid(), "", "  ", 1, 1, 1, 1, 1, "", Caixa, Guid.Empty).ToFields()));
     }

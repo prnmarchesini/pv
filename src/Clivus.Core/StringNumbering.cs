@@ -306,6 +306,29 @@ public sealed class ScanSetup
     public bool Remove(Guid id) => _blocos.RemoveAll(b => b.Id == id) > 0;
 
     /// <summary>
+    /// Tira dos blocos as mesas apagadas (07/10/2026: apagar mesa leva o que é
+    /// dela). Bloco que fica sem mesa sai da lista, como o grupo. Quantos blocos mudaram.
+    /// </summary>
+    public int ForgetTables(IReadOnlySet<Guid> tables)
+    {
+        ArgumentNullException.ThrowIfNull(tables);
+
+        var mudados = 0;
+        for (var i = _blocos.Count - 1; i >= 0; i--)
+        {
+            var b = _blocos[i];
+            if (!b.Tables.Any(tables.Contains)) continue;
+
+            mudados++;
+            var restantes = b.Tables.Where(t => !tables.Contains(t)).ToList();
+            if (restantes.Count == 0) _blocos.RemoveAt(i);
+            else _blocos[i] = b with { Tables = restantes };
+        }
+
+        return mudados;
+    }
+
+    /// <summary>
     /// O sentido que avança do bloco. O da faixa continua se ainda é
     /// perpendicular (ex. da esquerda para a direita virou da direita para a
     /// esquerda); se o que avança mudou de eixo, o da faixa vira o padrão do

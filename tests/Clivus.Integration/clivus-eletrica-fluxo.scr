@@ -6,11 +6,11 @@
 ; volta a ficar livre depois do Renomear). Nenhum tipo casa com a mesa de 14:
 ; ela tem que ser avisada pelo nome. Gerar em duas selecoes (uma mesa de 28
 ; sozinha, onde so o Modelo 1 cabe; depois todas as outras mesas);
-; C1 (compartilhada) e U1 (unitaria); T1 e T2; modelo Huawei 250 (5x4) e
+; UC1 (compartilhada) e U1 (unitaria); T1 e T2; modelo Huawei 250 (5x4) e
 ; quatro inversores; as strings reais alocadas em quatro partes pelo comando
 ; de verdade (selecao montada no LISP), e depois todas de novo para o
 ; Inversor 4 (as dos outros ficam travadas); trafos e inversores em campo e o
-; skid pela selecao dos retangulos; T1 na C1 e T2 na U1; numeracao e resumo.
+; skid pela selecao dos retangulos; T1 na UC1 e T2 na U1; numeracao e resumo.
 ; No fim o LISP grava num arquivo o que esta no desenho (XData das strings,
 ; dos modulos e das mesas; registros do dicionario: inversores, trafos e
 ; subestacoes), com os watts de cada string somados aqui, pela mesa dona de
@@ -119,7 +119,7 @@
 (princ "\nCLIVUS_FLUXO SKID")
 (command "CLIVUS_ELETRICA_SKID" "T1" "Skid A" (clivus:blocos (list "Inversor 1" "Inversor 2")) "")
 (command "CLIVUS_ELETRICA_SKID" "T2" "Skid B" (clivus:blocos (list "Inversor 3" "Inversor 4")) "")
-(command "CLIVUS_ELETRICA_AUTO" "Vincular" "C1" "T1")
+(command "CLIVUS_ELETRICA_AUTO" "Vincular" "UC1" "T1")
 (command "CLIVUS_ELETRICA_AUTO" "Vincular" "U1" "T2")
 ; ---- numeracao e resumo ----------------------------------------------------
 (princ "\nCLIVUS_FLUXO NUMERACAO")

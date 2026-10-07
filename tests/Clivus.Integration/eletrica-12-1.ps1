@@ -1,6 +1,6 @@
 <#
-    12.1: subestacoes compartilhadas (C1, C2) e a tabela de trafos. C1 recebe
-    T1 e T2; o T1 nao pode ir para a C2 (travado ate ser solto); C2 recebe T3.
+    12.1: subestacoes compartilhadas (UC1, UC2) e a tabela de trafos. UC1 recebe
+    T1 e T2; o T1 nao pode ir para a UC2 (travado ate ser solto); UC2 recebe T3.
     O vinculo e lido do desenho (o trafo guarda a UC).
 #>
 function Testar-Eletrica121 {
@@ -15,19 +15,19 @@ function Testar-Eletrica121 {
 
     $t = $r.Texto
     $erros = @()
-    if ($t -notmatch 'ELETRICA uc C1 criada' -or $t -notmatch 'ELETRICA uc C2 criada') { $erros += 'C1 e C2 nao foram criadas' }
-    if ($t -notmatch 'ELETRICA recusado: T1 j\S+ est\S+ ligado a C1') { $erros += 'o T1 nao ficou travado na C1' }
+    if ($t -notmatch 'ELETRICA uc UC1 criada' -or $t -notmatch 'ELETRICA uc UC2 criada') { $erros += 'UC1 e UC2 nao foram criadas' }
+    if ($t -notmatch 'ELETRICA recusado: T1 j\S+ est\S+ ligado a UC1') { $erros += 'o T1 nao ficou travado na UC1' }
     $final = $t.Substring($t.LastIndexOf('ELETRICA 2 subestacao(oes)'))
-    if ($final -notmatch 'ELETRICA UC C1 modo=Shared nome="Subesta\S+ C1" tamanho=4x3x3 trafos=T1,T2') { $erros += 'C1 nao tem T1 e T2' }
-    if ($final -notmatch 'ELETRICA UC C2 modo=Shared nome="Subesta\S+ C2" tamanho=4x3x3 trafos=T3\s') { $erros += 'C2 nao tem so o T3' }
-    if ($final -notmatch 'ELETRICA TRAFO T1 .* uc=C1') { $erros += 'o T1 no desenho nao aponta para a C1' }
+    if ($final -notmatch 'ELETRICA UC UC1 modo=Shared nome="Subesta\S+ UC1" tamanho=4x3x3 trafos=T1,T2') { $erros += 'UC1 nao tem T1 e T2' }
+    if ($final -notmatch 'ELETRICA UC UC2 modo=Shared nome="Subesta\S+ UC2" tamanho=4x3x3 trafos=T3\s') { $erros += 'UC2 nao tem so o T3' }
+    if ($final -notmatch 'ELETRICA TRAFO T1 .* uc=UC1') { $erros += 'o T1 no desenho nao aponta para a UC1' }
 
     if ($erros.Count -gt 0) {
         $problemas.Add("clivus-eletrica-12-1: $($erros -join '; '). Veja $($r.Saida)")
         return $false
     }
 
-    Write-Host '  (subestacao: C1 com T1 e T2, C2 com T3, trafo de outra travado)' -ForegroundColor DarkGray
+    Write-Host '  (subestacao: UC1 com T1 e T2, UC2 com T3, trafo de outra travado)' -ForegroundColor DarkGray
     return $true
 }
 

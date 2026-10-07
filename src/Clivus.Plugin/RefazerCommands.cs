@@ -130,6 +130,9 @@ public static class RefazerCommands
                 ? Tr.F("\nREFAZER {0} mesa(s) apagada(s) dentro de {1} ({2} entidade(s), mais {3} nota(s) órfã(s) de desenho antigo); desenhando de novo com a configuração atual (se algo falhar, U devolve as apagadas)...\n", apagadas.Tables.Count, area.Nome, apagadas.Entities, orfas)
                 : Tr.F("\nREFAZER {0} mesa(s) apagada(s) dentro de {1} ({2} entidade(s)); desenhando de novo com a configuração atual (se algo falhar, U devolve as apagadas)...\n", apagadas.Tables.Count, area.Nome, apagadas.Entities));
 
+        if (apagadas.Eletrica.Strings > 0)
+            editor.WriteMessage(Tr.F("  {0} string(s) das mesas apagadas foram junto, com o + e o − e as tags.\n", apagadas.Eletrica.Strings));
+
         UsinaCommands.Desenhar(editor, documento, plano);
     }
 
@@ -179,15 +182,17 @@ public static class RefazerCommands
     }
 }
 
-/// <summary>O que o apagar por área removeu: os GUIDs das mesas e quantas entidades.</summary>
-internal sealed record Erased(IReadOnlyList<Guid> Tables, int Entities);
+/// <summary>O que o apagar por área removeu: os GUIDs das mesas, quantas entidades e a parte elétrica que foi junto.</summary>
+internal sealed record Erased(IReadOnlyList<Guid> Tables, int Entities, EletricaDasMesas.Apagado Eletrica);
 
 /// <summary>
 /// Apaga o que o plugin desenhou dentro de uma área: toda mesa com algum
 /// vértice do contorno (ou, sem contorno, a primeira peça) dentro do
 /// polígono, com pilares, módulos, faces e notas; mesa copiada (dois
 /// contornos com o mesmo GUID) vai inteira, com as duas cópias. Pelo
-/// XData, nunca pela camada.
+/// XData, nunca pela camada. As strings das mesas apagadas (com sinais e
+/// tags) vão junto (<see cref="EletricaDasMesas"/>), e as mesas saem dos
+/// blocos da numeração.
 /// </summary>
 internal static class LayoutEraser
 {
@@ -199,31 +204,41 @@ internal static class LayoutEraser
         var mesas = new List<Guid>();
         var entidades = 0;
         var grupos = new HashSet<ObjectId>();
+        var modulos = new HashSet<Guid>();
+        EletricaDasMesas.Apagado eletrica;
 
-        using var transacao = database.TransactionManager.StartTransaction();
-
-        foreach (var (guid, mesa) in LayoutScan.Tables(transacao, database))
+        using (var transacao = database.TransactionManager.StartTransaction())
         {
-            var referencias = mesa.Contours.Count > 0 ? mesa.Contours : mesa.All.Take(1).ToList();
-
-            if (!referencias.Any(id => Pontos(transacao, id).Any(p => Polygons.Contains(area, p.X, p.Y)))) continue;
-
-            grupos.UnionWith(LayoutGroups.GruposDe(transacao, mesa.All));
-
-            foreach (var peca in mesa.All)
+            foreach (var (guid, mesa) in LayoutScan.Tables(transacao, database))
             {
-                var entidade = (Entity)transacao.GetObject(peca, OpenMode.ForWrite);
-                entidade.Erase();
-                entidades++;
+                var referencias = mesa.Contours.Count > 0 ? mesa.Contours : mesa.All.Take(1).ToList();
+
+                if (!referencias.Any(id => Pontos(transacao, id).Any(p => Polygons.Contains(area, p.X, p.Y)))) continue;
+
+                grupos.UnionWith(LayoutGroups.GruposDe(transacao, mesa.All));
+
+                foreach (var peca in mesa.All)
+                {
+                    var entidade = (Entity)transacao.GetObject(peca, OpenMode.ForWrite);
+                    if (LayoutXData.LoadModule(entidade) is { } modulo) modulos.Add(modulo.Id);
+                    entidade.Erase();
+                    entidades++;
+                }
+
+                mesas.Add(guid);
             }
 
-            mesas.Add(guid);
+            LayoutGroups.ApagarVazios(transacao, grupos);
+
+            // A parte elétrica das mesas apagadas: strings, sinais, tags.
+            eletrica = EletricaDasMesas.Apagar(transacao, database, modulos);
+            transacao.Commit();
         }
 
-        LayoutGroups.ApagarVazios(transacao, grupos);
-        transacao.Commit();
+        EletricaDasMesas.AcertarHatches(database, eletrica);
+        EletricaDasMesas.EsquecerMesas(database, mesas);
 
-        return new Erased(mesas, entidades);
+        return new Erased(mesas, entidades, eletrica);
     }
 
     /// <summary>

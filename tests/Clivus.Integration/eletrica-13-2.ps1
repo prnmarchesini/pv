@@ -2,7 +2,7 @@
     13.2: o retangulo do trafo em campo. Dois trafos com o Z do clique
     absurdo (9999): a cota de cada um, lida da entidade, e a do terreno +
     0,80 m. O T1 e posto de novo (move o mesmo) e ganha o apelido TR-A: a
-    tag escrita no topo do bloco acompanha; o vinculo com a C1 fica.
+    tag escrita no topo do bloco acompanha; o vinculo com a UC1 fica.
     Usa Pontos-Do-Terreno e Conferir-Equipamentos de eletrica-12-3.ps1.
 #>
 function Testar-Eletrica132 {
@@ -30,7 +30,7 @@ function Testar-Eletrica132 {
     if ($t -notmatch "CLIVUS_EQUIP tipo=Transformer x=$([regex]::Escape($x3)) .* fim tag=TR-A /tag") { $erros += 'a tag do T1 em campo nao virou TR-A' }
     if ($t -notmatch "CLIVUS_EQUIP tipo=Transformer x=$([regex]::Escape($x2)) .* fim tag=T2 /tag") { $erros += 'a tag do T2 em campo nao e T2' }
     $final = $t.Substring($t.LastIndexOf('ELETRICA 1 subestacao(oes)'))
-    if ($final -notmatch 'ELETRICA UC C1 .* trafos=TR-A\s') { $erros += 'o vinculo C1-T1 mudou' }
+    if ($final -notmatch 'ELETRICA UC UC1 .* trafos=TR-A\s') { $erros += 'o vinculo UC1-T1 mudou' }
 
     if ($erros.Count -gt 0) {
         $problemas.Add("clivus-eletrica-13-2: $($erros -join '; '). Veja $($r.Saida)")
