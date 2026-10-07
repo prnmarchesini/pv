@@ -39,6 +39,11 @@ internal sealed class AbaInversor : AbaEletrica
     private readonly ComboBox _modeloParaCriar = new() { Height = 26, MinWidth = 160, Margin = new Thickness(0, 0, 6, 6) };
     private readonly TextBox _quantos = new() { Text = "1", Width = 50, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
 
+    /// <summary>O trafo em lote: as linhas "de ... a ..." e o trafo (07/10/2026).</summary>
+    private readonly TextBox _loteDe = new() { Width = 40, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
+    private readonly TextBox _loteAte = new() { Width = 40, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
+    private readonly ComboBox _trafoDoLote = new() { Height = 26, MinWidth = 90, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
+
     /// <summary>A tabela: uma linha por inversor, várias escolhidas com Ctrl ou Shift.</summary>
     private readonly ListBox _inversores = new()
     {
@@ -138,6 +143,20 @@ internal sealed class AbaInversor : AbaEletrica
         peloDesenho = Botao(criar, Tr.T("Trafo pelo desenho…"), Tr.T("Escolha um trafo e depois clique nos inversores no desenho: eles passam a ser desse trafo (só os que já estão em campo; inversor de outro trafo não muda)."), () => MenuDoTrafoPeloDesenho(peloDesenho!));
         peloDesenho.Margin = new Thickness(18, 0, 6, 6);
 
+        // O trafo em lote (Renan, 07/10/2026: "um por um ... é bem demorado"):
+        // "Trafo em lote: linhas [7] a [12] no [T2] [Pôr]".
+        var lote = new WrapPanel();
+        lote.Children.Add(Rotulo(Tr.T("Trafo em lote: linhas")));
+        lote.Children.Add(_loteDe);
+        lote.Children.Add(Rotulo(Tr.T("a")));
+        lote.Children.Add(_loteAte);
+        lote.Children.Add(Rotulo(Tr.T("no")));
+        lote.Children.Add(_trafoDoLote);
+        _loteDe.ToolTip = Tr.T("A primeira linha da tabela (a contagem começa em 1, de cima para baixo).");
+        _loteAte.ToolTip = Tr.T("A última linha (vazio: só a primeira).");
+        _trafoDoLote.ToolTip = Tr.T("O trafo dessas linhas (sem trafo solta).");
+        Botao(lote, Tr.T("Pôr"), Tr.T("Põe as linhas de ... a ... no trafo escolhido (o inversor que era de outro trafo muda). Também vale: escolher várias linhas (Ctrl ou Shift + clique) e trocar o trafo de uma delas."), PorOLoteNoTrafo);
+
         // A distribuição automática das strings livres nos inversores, pela varredura dela.
         var atribuir = new WrapPanel();
         atribuir.Children.Add(Rotulo(Tr.T("Distribuir strings livres:")));
@@ -161,7 +180,7 @@ internal sealed class AbaInversor : AbaEletrica
         };
 
         // A ajuda de uma linha, em cima da tabela.
-        var textoDaAjuda = Tr.T("Trafo: escolha na coluna Trafo. Strings: + Strings e clique no desenho, ou Distribuir. Várias linhas: Ctrl ou Shift + clique.");
+        var textoDaAjuda = Tr.T("Trafo: na coluna Trafo; em lote, pelas linhas de ... a ..., ou escolha várias (Ctrl ou Shift + clique) e troque o trafo de uma. Strings: + Strings ou Distribuir.");
         var ajuda = new TextBlock
         {
             Text = textoDaAjuda,
@@ -211,6 +230,7 @@ internal sealed class AbaInversor : AbaEletrica
         var topo = new StackPanel();
         topo.Children.Add(Titulo(Tr.T("Inversores da usina")));
         topo.Children.Add(criar);
+        topo.Children.Add(lote);
         topo.Children.Add(atribuir);
         DockPanel.SetDock(topo, Dock.Top);
         DockPanel.SetDock(_barraDasEscolhidas, Dock.Bottom);
@@ -282,6 +302,7 @@ internal sealed class AbaInversor : AbaEletrica
         MostrarVarredura(AtribuicaoAutomatica.Varredura(Documento.Database).Varredura);
 
         MontarTrafos(_trafoDasEscolhidas, setup, comSemTrafo: true);
+        MontarTrafos(_trafoDoLote, setup, comSemTrafo: true);
 
         // 14.4: o excesso aparece em vermelho na linha do inversor e no rodapé.
         var excessos = _setup.Inverters
@@ -875,10 +896,15 @@ internal sealed class AbaInversor : AbaEletrica
 
         caixa.SelectedItem = caixa.Items.OfType<ComboBoxItem>().First(i => (Guid)i.Tag == inversor.Transformer);
         caixa.ToolTip = _setup.FindSkid(inversor.Transformer) is { } skid
-            ? Tr.F("O trafo deste inversor (skid {0}). Escolher grava na hora.", skid.Name)
-            : Tr.T("O trafo deste inversor. Escolher grava na hora.");
+            ? Tr.F("O trafo deste inversor (skid {0}). Escolher grava na hora; com várias linhas escolhidas, vale para todas.", skid.Name)
+            : Tr.T("O trafo deste inversor. Escolher grava na hora; com várias linhas escolhidas, vale para todas.");
 
-        AoEscolher(caixa, inversor.Transformer, trafo => PorNoTrafoPelaTela([inversor.Id], trafo), "Falha ao trocar o trafo do inversor.");
+        // Linha que faz parte de uma escolha de várias: o trafo vai para todas (07/10/2026).
+        AoEscolher(caixa, inversor.Transformer, trafo =>
+        {
+            var escolhidos = Escolhidos().Select(i => i.Id).ToList();
+            PorNoTrafoPelaTela(escolhidos.Count >= 2 && escolhidos.Contains(inversor.Id) ? escolhidos : [inversor.Id], trafo);
+        }, "Falha ao trocar o trafo do inversor.");
         return caixa;
     }
 
@@ -936,6 +962,26 @@ internal sealed class AbaInversor : AbaEletrica
         }
 
         PorNoTrafoPelaTela(ids, trafo);
+    }
+
+    /// <summary>O "Pôr" do trafo em lote: as linhas de ... a ... vão para o trafo escolhido.</summary>
+    private void PorOLoteNoTrafo()
+    {
+        var linhas = _inversores.Items.OfType<ListBoxItem>().Select(i => (Inverter)i.Tag).ToList();
+        var (indices, problema) = InverterTable.Range(linhas.Count, _loteDe.Text, _loteAte.Text);
+        if (problema is not null)
+        {
+            Avisar(Tr.F("Não mudei: {0}.", problema), erro: true);
+            return;
+        }
+
+        if ((_trafoDoLote.SelectedItem as ComboBoxItem)?.Tag is not Guid trafo)
+        {
+            Avisar(Tr.T("Escolha o trafo (cadastre na aba Transformador, se não há)."), erro: true);
+            return;
+        }
+
+        PorNoTrafoPelaTela(indices.Select(i => linhas[i].Id).ToList(), trafo);
     }
 
     private void PorNoTrafoPelaTela(IReadOnlyCollection<Guid> inversores, Guid trafo) =>
