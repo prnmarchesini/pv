@@ -316,10 +316,11 @@ public static class CableRouter
     /// o inversor está, em planta (pelo ponto dele, registrado nela ou não);
     /// fora de toda área, a área em que ele está registrado; sem nenhuma, a
     /// caixa dele. Assim todos os inversores de uma área chegam pela vala que
-    /// entra nela, mesmo o que ficou sem o registro da área.
+    /// entra nela, mesmo o que ficou sem o registro da área. Área dentro de
+    /// área: a menor (a de dentro), como a tabela (<see cref="InverterSites.AreaOf"/>).
     /// </summary>
     public static IReadOnlyList<Point3>? AccessOutline(Point3 point, IReadOnlyList<Point3>? box, IEnumerable<IReadOnlyList<Point3>> areas, IReadOnlyList<Point3>? registeredArea = null) =>
-        areas.FirstOrDefault(a => a.Count >= 3 && Polygons.Contains(a, point.X, point.Y)) ?? registeredArea ?? box;
+        InverterSites.SmallestAt(point.X, point.Y, areas) ?? registeredArea ?? box;
 
     private static double Plano(Point3 a, Point3 b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
 }

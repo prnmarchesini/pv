@@ -405,7 +405,9 @@ public static class RotaDeCabosCampo
             var rede = new TrenchNetwork(valas);
             double? Chao(double x, double y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null;
 
-            var linhas = new List<string>();
+            // Todo inversor em campo (de qualquer modo) com a base fora do terreno + 0,80
+            // (MOVE sem terreno carregado, desenho antigo) volta para lá antes de ler as pontas.
+            var linhas = LocalDosInversores.Reassentar(db, terreno);
             var leitura = LeituraDaRota.Ler(db);
 
             // CC: os inversores automáticos vão para o lado da vala antes de traçar; a
@@ -685,8 +687,10 @@ internal sealed class LeituraDaRota
 
         foreach (var ((tipo, guid), ids) in EquipamentoEmCampo.Posicionados(t, db))
         {
-            if (ids.Count == 0 || t.GetObject(ids[0], OpenMode.ForRead) is not BlockReference b) continue;
-            l._emCampo[(tipo, guid)] = (P(b.Position), ids[0]);
+            if (ids.Count == 0) continue;
+            var principal = EquipamentoEmCampo.Principal(ids);
+            if (t.GetObject(principal, OpenMode.ForRead) is not BlockReference b) continue;
+            l._emCampo[(tipo, guid)] = (P(b.Position), principal);
             var definicao = (BlockTableRecord)t.GetObject(b.BlockTableRecord, OpenMode.ForRead);
             l._caixas[(tipo, guid)] = definicao.Cast<ObjectId>().Where(id => id.ObjectClass.IsDerivedFrom(RXObject.GetClass(typeof(Solid3d)))).ToList();
             if (Contorno(t, b, l._caixas[(tipo, guid)]) is { } contorno) l._contornos[(tipo, guid)] = l.Contornos[(tipo, guid)] = contorno;

@@ -65,6 +65,41 @@ public sealed record SiteMark(Guid Id, string Name)
     }
 
     /// <summary>
+    /// As marcas efetivas das polilinhas de área (correção de 10/10/2026, à
+    /// noite): o COPY, o MIRROR ou o ARRAY da polilinha leva o XData junto e
+    /// a cópia nasce com o GUID e o nome da original. Por GUID repetido, fica
+    /// com ele a de menor handle (a mais antiga); cada outra ganha GUID
+    /// próprio (<see cref="CopyId"/>, o mesmo a cada leitura até ser gravado)
+    /// e o nome "Área N" seguinte. Nenhuma é descartada. Na ordem de <paramref name="lidas"/>.
+    /// </summary>
+    public static IReadOnlyList<SiteMark> ResolveCopies(IReadOnlyList<(long Handle, SiteMark Mark)> lidas)
+    {
+        ArgumentNullException.ThrowIfNull(lidas);
+        var saida = lidas.Select(l => l.Mark).ToArray();
+        var donos = lidas.GroupBy(l => l.Mark.Id).ToDictionary(g => g.Key, g => g.Min(l => l.Handle));
+        var repetidas = Enumerable.Range(0, lidas.Count).Where(i => lidas[i].Handle != donos[lidas[i].Mark.Id]).OrderBy(i => lidas[i].Handle).ToList();
+        if (repetidas.Count == 0) return saida;
+
+        var nomes = Enumerable.Range(0, lidas.Count).Where(i => !repetidas.Contains(i)).Select(i => lidas[i].Mark.Name).ToList();
+        foreach (var i in repetidas)
+        {
+            var nome = NextDefaultName(nomes);
+            nomes.Add(nome);
+            saida[i] = new SiteMark(CopyId(lidas[i].Mark.Id, lidas[i].Handle), nome);
+        }
+
+        return saida;
+    }
+
+    /// <summary>O GUID da cópia de uma área: tirado do GUID da original e do handle da cópia (estável entre leituras).</summary>
+    public static Guid CopyId(Guid original, long handle)
+    {
+        var bytes = original.ToByteArray().Concat(BitConverter.GetBytes(handle)).ToArray();
+        var hash = System.Security.Cryptography.SHA256.HashData(bytes);
+        return new Guid(hash.AsSpan(0, 16));
+    }
+
+    /// <summary>
     /// Por que o nome não serve para a área (item 6 de 10/10/2026): vazio,
     /// comprido demais, com caractere de controle ou repetido de outra área
     /// (sem diferença de maiúscula). Null se serve.
@@ -255,7 +290,8 @@ public static class InverterSites
     /// 0,50 m de folga. Os 9 e 10 voltavam "0 de 2", e o aviso só ia para a
     /// linha de comando, atrás da janela que voltava.
     /// </remarks>
-    public static AreaFill Fill(IReadOnlyList<Point3> poligono, IReadOnlyList<(double Width, double Length)> tamanhos, IReadOnlyList<IReadOnlyList<Point3>> obstaculos)
+    public static AreaFill Fill(IReadOnlyList<Point3> poligono, IReadOnlyList<(double Width, double Length)> tamanhos, IReadOnlyList<IReadOnlyList<Point3>> obstaculos,
+        Func<IReadOnlyList<(double X, double Y)>, bool>? livre = null)
     {
         ArgumentNullException.ThrowIfNull(poligono);
         ArgumentNullException.ThrowIfNull(tamanhos);
@@ -273,7 +309,9 @@ public static class InverterSites
 
         // 1) A grade de sempre, com a folga cheia.
         // A grade também guarda a folga cheia até o que já está lá (outro modelo, mesa encostada na área).
-        var grade = InArea(poligono, tamanhos, Gap, cantos => !perto.Any(o => Overlaps(Crescer(cantos, Gap - 1e-6), o)));
+        // O <paramref name="livre"/> de quem chama (a caixa não encosta numa vala, 10/10/2026 à noite) vale nas duas etapas.
+        livre ??= _ => true;
+        var grade = InArea(poligono, tamanhos, Gap, cantos => livre(cantos) && !perto.Any(o => Overlaps(Crescer(cantos, Gap - 1e-6), o)));
         var postos = new List<IReadOnlyList<Point3>>();
         for (var i = 0; i < tamanhos.Count; i++)
         {
@@ -295,7 +333,7 @@ public static class InverterSites
             semVaga.Add((w, l));
             foreach (var folga in Gaps)
             {
-                if (Vaga(poligono, w, l, folga, [.. perto, .. postos]) is not { } p) continue;
+                if (Vaga(poligono, w, l, folga, [.. perto, .. postos], livre) is not { } p) continue;
                 centros[i] = p;
                 folgas[i] = folga;
                 postos.Add(Retangulo(p.X, p.Y, w, l, 0));
@@ -314,7 +352,7 @@ public static class InverterSites
     /// nas bordas (1 cm) e nos obstáculos (com a folga), e uma varredura
     /// regular entre eles (área girada ou côncava). Null se não há.
     /// </summary>
-    private static Point3? Vaga(IReadOnlyList<Point3> poligono, double w, double l, double folga, IReadOnlyList<IReadOnlyList<Point3>> obstaculos)
+    private static Point3? Vaga(IReadOnlyList<Point3> poligono, double w, double l, double folga, IReadOnlyList<IReadOnlyList<Point3>> obstaculos, Func<IReadOnlyList<(double X, double Y)>, bool> livre)
     {
         const double borda = 0.01;
         var (minX, minY, maxX, maxY) = Caixa(poligono);
@@ -358,7 +396,8 @@ public static class InverterSites
                 var (ax, ay, bx, by) = (x - w / 2 - crescer, y - l / 2 - crescer, x + w / 2 + crescer, y + l / 2 + crescer);
                 var crescida = EquipmentFootprint.Corners(x, y, w + 2 * crescer, l + 2 * crescer);
                 if (caixas.Any(c => c.Caixa.MinX <= bx && c.Caixa.MaxX >= ax && c.Caixa.MinY <= by && c.Caixa.MaxY >= ay && Overlaps(crescida, c.Obstaculo))) continue;
-                if (!Dentro(poligono, EquipmentFootprint.Corners(x, y, w, l))) continue;
+                var cantos = EquipmentFootprint.Corners(x, y, w, l);
+                if (!Dentro(poligono, cantos) || !livre(cantos)) continue;
                 return new Point3(x, y, 0);
             }
 
@@ -415,6 +454,9 @@ public static class InverterSites
         return melhor;
     }
 
+    /// <summary>A área em planta do polígono (m², sem sinal).</summary>
+    public static double PlanArea(IReadOnlyList<Point3> poligono) => Math.Abs(AreaDe(poligono));
+
     private static double AreaDe(IReadOnlyList<Point3> p)
     {
         var s = 0.0;
@@ -468,6 +510,46 @@ public static class InverterSites
         }
 
         return saida;
+    }
+
+    /// <summary>
+    /// O que se grava no registro a partir do local pela geometria
+    /// (<paramref name="certo"/>): o mesmo, menos num caso (correção de
+    /// 10/10/2026, à noite). O automático que o usuário levou com o MOVE para
+    /// dentro de uma área aparece como da área (a geometria manda na tabela e
+    /// na rota), mas a ESCOLHA de automático fica gravada: tirado da área,
+    /// ele volta a ser automático, em vez de cair para "à mão" só porque
+    /// alguma gravação passou no meio. Quem foi mudado de propósito
+    /// (<paramref name="mudados"/>: Escolher área, À mão) fica como o certo diz.
+    /// </summary>
+    public static List<InverterPlacement> ForRecord(IReadOnlyList<InverterPlacement> gravado, IReadOnlyList<InverterPlacement> certo, IReadOnlyCollection<Guid>? mudados = null)
+    {
+        ArgumentNullException.ThrowIfNull(gravado);
+        ArgumentNullException.ThrowIfNull(certo);
+        var automaticos = gravado.Where(g => g.Mode == InverterPlacementMode.Automatic).Select(g => g.Inverter).ToHashSet();
+        return [.. certo.Select(c => c.Mode == InverterPlacementMode.Area && automaticos.Contains(c.Inverter) && (mudados is null || !mudados.Contains(c.Inverter))
+            ? new InverterPlacement(c.Inverter, InverterPlacementMode.Automatic, Guid.Empty)
+            : c)];
+    }
+
+    /// <summary>O menor contorno que contém o ponto (área dentro de área: a de dentro), ou null.</summary>
+    public static IReadOnlyList<Point3>? SmallestAt(double x, double y, IEnumerable<IReadOnlyList<Point3>> areas)
+    {
+        ArgumentNullException.ThrowIfNull(areas);
+        IReadOnlyList<Point3>? melhor = null;
+        var menor = double.PositiveInfinity;
+        foreach (var contorno in areas)
+        {
+            if (contorno.Count < 3 || !Polygons.Contains(contorno, x, y)) continue;
+            var area = Math.Abs(AreaDe(contorno));
+            if (area < menor)
+            {
+                menor = area;
+                melhor = contorno;
+            }
+        }
+
+        return melhor;
     }
 
     /// <summary>Se as duas listas de local dizem o mesmo (a ordem não importa).</summary>
@@ -550,12 +632,20 @@ public static class InverterSites
     /// entre esses, o de menor soma; Reached diz quantas. Null se nenhuma
     /// string chega à rede.
     /// </summary>
-    public static (TrenchPoint Point, Point3 Direction, double Total, int Reached)? BestTrenchPoint(TrenchNetwork valas, IReadOnlyList<StringAccess> strings)
+    public static (TrenchPoint Point, Point3 Direction, double Total, int Reached)? BestTrenchPoint(TrenchNetwork valas, IReadOnlyList<StringAccess> strings) =>
+        RankTrenchPoints(valas, strings) is { Count: > 0 } r ? r[0] : null;
+
+    /// <summary>
+    /// Os candidatos de <see cref="BestTrenchPoint"/> do melhor para o pior:
+    /// mais strings alcançadas antes, depois a menor soma (empate: a ordem
+    /// dos candidatos, como antes). Vazia se nenhuma string chega à rede.
+    /// </summary>
+    public static IReadOnlyList<(TrenchPoint Point, Point3 Direction, double Total, int Reached)> RankTrenchPoints(TrenchNetwork valas, IReadOnlyList<StringAccess> strings)
     {
         ArgumentNullException.ThrowIfNull(valas);
         ArgumentNullException.ThrowIfNull(strings);
         var uteis = strings.Where(s => s.Sides.Count > 0).ToList();
-        if (uteis.Count == 0) return null;
+        if (uteis.Count == 0) return [];
 
         // Uma árvore de caminhos por batida (Dijkstra uma vez, consultada em todos os candidatos).
         var arvores = new Dictionary<(int, double, double), TrenchNetwork.TrenchTree>();
@@ -572,7 +662,7 @@ public static class InverterSites
                 foreach (var (hit, _) in lado)
                     candidatos.Add((hit, valas.Direction(hit.Edge)));
 
-        (TrenchPoint, Point3, double, int)? melhor = null;
+        var avaliados = new List<(TrenchPoint, Point3, double, int)>();
         foreach (var (ponto, direcao) in candidatos)
         {
             var total = 0.0;
@@ -586,11 +676,42 @@ public static class InverterSites
             }
 
             if (alcancadas == 0) continue;
-            if (melhor is null || alcancadas > melhor.Value.Item4 || (alcancadas == melhor.Value.Item4 && total < melhor.Value.Item3))
-                melhor = (ponto, direcao, total, alcancadas);
+            avaliados.Add((ponto, direcao, total, alcancadas));
         }
 
-        return melhor;
+        // Ordenação estável: no empate fica o primeiro candidato, como no "só troca se melhorar" de antes.
+        return [.. avaliados.OrderByDescending(a => a.Item4).ThenBy(a => a.Item3)];
+    }
+
+    /// <summary>
+    /// O lugar do inversor automático (correção de 10/10/2026, à noite): ao
+    /// lado da vala no ponto de menor cabo CC, mas NUNCA dentro de uma área
+    /// de inversores (<paramref name="areas"/>: o automático não é de área
+    /// nenhuma; antes, a rota podia pô-lo dentro de uma sala e a geometria o
+    /// fazia "da área"). Se os dois lados do melhor ponto caem numa área, vale
+    /// o ponto seguinte da lista (<see cref="RankTrenchPoints"/>) que alcança
+    /// as mesmas strings. Moved diz se saiu do melhor ponto. Null se nenhuma
+    /// string chega à rede (<paramref name="alcanca"/> falso) ou se todo ponto
+    /// cai dentro de uma área.
+    /// </summary>
+    public static (Point3 Center, bool Free, double Total, int Reached, bool Moved)? AutomaticSite(TrenchNetwork valas, IReadOnlyList<StringAccess> strings,
+        double largura, double comprimento, Func<IReadOnlyList<(double X, double Y)>, bool> livre, IReadOnlyList<IReadOnlyList<Point3>> areas, out bool alcanca)
+    {
+        ArgumentNullException.ThrowIfNull(livre);
+        ArgumentNullException.ThrowIfNull(areas);
+        var ranking = RankTrenchPoints(valas, strings);
+        alcanca = ranking.Count > 0;
+        if (ranking.Count == 0) return null;
+
+        bool NaArea(IReadOnlyList<(double X, double Y)> cantos) => areas.Any(a => Overlaps(cantos, a));
+        for (var i = 0; i < ranking.Count && ranking[i].Reached == ranking[0].Reached; i++)
+        {
+            var c = ranking[i];
+            if (BesideTrench(c.Point.At, valas.DirectionsAt(c.Point), largura, comprimento, livre, NaArea) is { } lugar)
+                return (lugar.Center, lugar.Free, c.Total, c.Reached, i > 0);
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -602,8 +723,20 @@ public static class InverterSites
     /// fora das mesas, dos equipamentos e das valas). Nenhum livre: o primeiro
     /// lugar, com Free falso, para quem chama avisar.
     /// </summary>
-    public static (Point3 Center, bool Free) BesideTrench(Point3 at, IReadOnlyList<Point3> direcoes, double largura, double comprimento, Func<IReadOnlyList<(double X, double Y)>, bool> livre, double folga = Gap)
+    public static (Point3 Center, bool Free) BesideTrench(Point3 at, IReadOnlyList<Point3> direcoes, double largura, double comprimento, Func<IReadOnlyList<(double X, double Y)>, bool> livre, double folga = Gap) =>
+        BesideTrench(at, direcoes, largura, comprimento, livre, _ => false, folga) ?? (at, false);
+
+    /// <summary>
+    /// O mesmo, com lugares <paramref name="proibido"/>s (dentro de uma área
+    /// de inversores): nunca devolvidos, nem como o "primeiro lugar" sem
+    /// folga. Null se todos os lugares em volta do ponto são proibidos.
+    /// </summary>
+    public static (Point3 Center, bool Free)? BesideTrench(Point3 at, IReadOnlyList<Point3> direcoes, double largura, double comprimento,
+        Func<IReadOnlyList<(double X, double Y)>, bool> livre, Func<IReadOnlyList<(double X, double Y)>, bool> proibido, double folga = Gap)
     {
+        ArgumentNullException.ThrowIfNull(direcoes);
+        ArgumentNullException.ThrowIfNull(livre);
+        ArgumentNullException.ThrowIfNull(proibido);
         Point3? primeiro = null;
         foreach (var direcao in direcoes)
         {
@@ -613,11 +746,13 @@ public static class InverterSites
             foreach (var sinal in new[] { 1.0, -1.0 })
             {
                 var c = new Point3(at.X + n.X * afastamento * sinal, at.Y + n.Y * afastamento * sinal, 0);
+                var cantos = EquipmentFootprint.Corners(c.X, c.Y, largura, comprimento);
+                if (proibido(cantos)) continue;
                 primeiro ??= c;
-                if (livre(EquipmentFootprint.Corners(c.X, c.Y, largura, comprimento))) return (c, true);
+                if (livre(cantos)) return (c, true);
             }
         }
 
-        return (primeiro ?? at, false);
+        return primeiro is { } p ? (p, false) : null;
     }
 }

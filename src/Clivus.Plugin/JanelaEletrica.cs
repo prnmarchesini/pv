@@ -71,8 +71,152 @@ internal sealed class JanelaEletrica : Window
         raiz.Children.Add(_potenciaSimulada);
         raiz.Children.Add(abas);
         Content = raiz;
-        Activated += (_, _) => _potenciaSimulada.Atualizar();
+        Activated += (_, _) =>
+        {
+            _potenciaSimulada.Atualizar();
+            if (_pendente) AtualizarAVisivel();
+        };
         Atualizar();
+
+        _vigia = new VigiaDaJanela(documento, this);
+        Closed += (_, _) => _vigia.Soltar();
+    }
+
+    private readonly VigiaDaJanela _vigia;
+
+    /// <summary>O desenho mudou (equipamento ou área) e a aba visível ainda não releu.</summary>
+    private bool _pendente;
+
+    /// <summary>Relê só a aba que está na frente (as outras releem ao trocar de aba).</summary>
+    internal void AtualizarAVisivel()
+    {
+        _pendente = false;
+        try
+        {
+            _potenciaSimulada.Atualizar();
+            if (_abasDaJanela.SelectedContent is AbaEletrica aba) aba.Atualizar();
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao reler a janela elétrica depois de uma mudança no desenho.", erro);
+        }
+    }
+
+    /// <summary>
+    /// O "webhook" do Renan (segunda rodada de 10/10/2026, item 2, e a revisão
+    /// da noite): com a janela aberta, o MOVE, o COPY, o ERASE, o grip, o U ou
+    /// a paleta de Propriedades num bloco de equipamento (CLIVUS_EQUIPAMENTO_*)
+    /// ou numa polilinha de área de inversores marcam a janela como pendente;
+    /// no fim do comando (ou sem comando), na folga do AutoCAD, a aba da
+    /// frente relê o desenho (o local pela geometria, a cota no terreno).
+    /// Com a janela escondida (um comando de campo em curso), relê quando ela volta a ficar ativa.
+    /// Os nossos comandos (CLIVUS_*) já devolvem a janela relida (<see cref="Voltar"/>).
+    /// </summary>
+    private sealed class VigiaDaJanela
+    {
+        private readonly Document _documento;
+        private readonly Database _banco;
+        private readonly JanelaEletrica _janela;
+        private bool _mexeu;
+        private bool _folgaAgendada;
+        private int _nossos;
+
+        internal VigiaDaJanela(Document documento, JanelaEletrica janela)
+        {
+            _documento = documento;
+            _banco = documento.Database;
+            _janela = janela;
+            _banco.ObjectModified += AoMexer;
+            _banco.ObjectAppended += AoMexer;
+            _banco.ObjectErased += AoApagar;
+            _documento.CommandWillStart += AoComecar;
+            _documento.CommandEnded += AoTerminar;
+            _documento.CommandCancelled += AoTerminar;
+            _documento.CommandFailed += AoTerminar;
+        }
+
+        internal void Soltar()
+        {
+            try
+            {
+                _banco.ObjectModified -= AoMexer;
+                _banco.ObjectAppended -= AoMexer;
+                _banco.ObjectErased -= AoApagar;
+                _documento.CommandWillStart -= AoComecar;
+                _documento.CommandEnded -= AoTerminar;
+                _documento.CommandCancelled -= AoTerminar;
+                _documento.CommandFailed -= AoTerminar;
+                if (_folgaAgendada) AcadApp.Idle -= NaFolga;
+                _folgaAgendada = false;
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao soltar o vigia da janela elétrica.", erro);
+            }
+        }
+
+        private static bool EhNosso(string? comando) => comando is not null && comando.TrimStart().StartsWith(PluginInfo.PrefixoDeComando, StringComparison.OrdinalIgnoreCase);
+
+        private void AoComecar(object? sender, CommandEventArgs e)
+        {
+            if (EhNosso(e.GlobalCommandName)) _nossos++;
+        }
+
+        private void AoMexer(object? sender, ObjectEventArgs e) => Anotar(e.DBObject);
+
+        private void AoApagar(object? sender, ObjectErasedEventArgs e) => Anotar(e.DBObject);
+
+        /// <summary>Só lê o XData (dentro do evento não se escreve).</summary>
+        private void Anotar(DBObject objeto)
+        {
+            if (_mexeu || _nossos > 0) return;
+            try
+            {
+                var nosso = objeto switch
+                {
+                    BlockReference b => ElectricalStore.LoadPlacement(b) is not null,
+                    Curve c => LocalDosInversores.Marca(c) is not null,
+                    _ => false,
+                };
+                if (!nosso) return;
+
+                _mexeu = true;
+                if (string.IsNullOrEmpty(_documento.CommandInProgress)) AgendarFolga();
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("O vigia da janela elétrica não conseguiu ler um objeto.", erro);
+            }
+        }
+
+        private void AoTerminar(object? sender, CommandEventArgs e)
+        {
+            if (EhNosso(e.GlobalCommandName))
+            {
+                if (_nossos > 0) _nossos--;
+                return;
+            }
+
+            if (_mexeu) AgendarFolga();
+        }
+
+        private void AgendarFolga()
+        {
+            if (_folgaAgendada) return;
+            AcadApp.Idle += NaFolga;
+            _folgaAgendada = true;
+        }
+
+        private void NaFolga(object? sender, EventArgs e)
+        {
+            AcadApp.Idle -= NaFolga;
+            _folgaAgendada = false;
+            if (!_mexeu || _nossos > 0 || !string.IsNullOrEmpty(_documento.CommandInProgress)) return;
+
+            _mexeu = false;
+            if (_janela.IsVisible) _janela.AtualizarAVisivel();
+            else _janela._pendente = true;
+        }
     }
 
     private readonly AvisoDePotenciaSimulada _potenciaSimulada;

@@ -312,7 +312,8 @@ public static class AbaInversorAutoCommands
 
             if (op == "LINHAS")
             {
-                // O mesmo caminho da tabela: o registro acompanha a geometria e a coluna Local sai da mesma conta.
+                // O mesmo caminho da tabela: os inversores no terreno + 0,80 e a coluna Local pela geometria.
+                if (AbaInversor.AssentarNoTerreno(documento) is { } assentados) editor.WriteMessage($"\nELETRICA LOCAL_ASSENTAR {assentados.Texto.Replace(' ', '_')} erro={assentados.Erro} fim\n");
                 var (locais, areas, emCampo, _) = AbaInversor.LerOsLocais(documento);
                 foreach (var i in setup.Inverters)
                 {

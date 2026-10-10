@@ -191,6 +191,39 @@
 (command "CLIVUS_ELETRICA_AREA_RENOMEAR" (clivus:areapor "Sala Itatiba") "Sala Itatiba B")
 (command "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO" "Areas" "*" ".")
 (princ "\nCLIVUS_LOCAL G_FIM")
+; ---- (14) revisao de 10/10/2026, a noite ---------------------------------
+; (a) MOVE de um inversor a mao para um ponto de outra cota: o vigia poe a base
+; no TIN + 0,80 no fim do MOVE (sem abrir a aba).
+(princ "\nCLIVUS_LOCAL R_MOVE")
+(command "_.MOVE" (clivus:inv "Inversor 26") "" "0,0" "{{DR}}")
+(command "CLIVUS_ROTA_CONFERIR_AUTO")
+; (b) um U desfaz o MOVE e o assentar juntos (o mesmo grupo de UNDO).
+(princ "\nCLIVUS_LOCAL R_UNDO")
+(clivus:equip "antesu")
+(command "_.MOVE" (clivus:inv "Inversor 26") "" "0,0" "{{DR}}")
+(clivus:equip "movidou")
+(command "_.U")
+(clivus:equip "desfeitou")
+; (c) mudado sem comando (entmod, como um LISP): o vigia nao ve; a leitura da aba poe no TIN + 0,80.
+(princ "\nCLIVUS_LOCAL R_ENTMOD")
+(setq clivus:e26 (clivus:inv "Inversor 26") clivus:d26 (entget clivus:e26) clivus:p26 (cdr (assoc 10 clivus:d26)))
+(entmod (subst (list 10 (car clivus:p26) (- (cadr clivus:p26) {{DE}}) (caddr clivus:p26)) (assoc 10 clivus:d26) clivus:d26))
+(command "CLIVUS_ROTA_CONFERIR_AUTO")
+(princ "\nCLIVUS_LOCAL R_ENTMOD_ABA")
+(command "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO" "Linhas" "*" ".")
+(command "CLIVUS_ROTA_CONFERIR_AUTO")
+; (d) COPY da polilinha da Skid norte: a copia e outra area (GUID e nome proprios);
+; o 26 levado para dentro da copia e dela, e a Skid norte continua com os dela.
+(princ "\nCLIVUS_LOCAL R_COPIA")
+(command "_.COPY" (clivus:areapor "Skid norte") "" "0,0" "{{DC}}")
+(command "_.MOVE" (clivus:inv "Inversor 26") "" "{{DQ1}}" "{{DQ2}}")
+(command "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO" "Areas" "*" ".")
+(command "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO" "Linhas" "*" ".")
+; (e) MOVE da polilinha da area (Sala Itatiba B): o vigia a drapeia de novo no terreno do lugar novo.
+(princ "\nCLIVUS_LOCAL R_AREA_MOVE")
+(command "_.MOVE" (clivus:areapor "Sala Itatiba B") "" "0,0" "0,8")
+(command "CLIVUS_ROTA_CONFERIR_AUTO")
+(princ "\nCLIVUS_LOCAL R_FIM")
 ; ---- (13) item 5: pre-tag com fundo e moldura; sem nada com Inserir nome desmarcado
 (defun clivus:pretagf (etapa / ss i d f n fundo moldura)
   (setq ss (ssget "_X" (list (cons 0 "MTEXT") (cons 8 "CLIVUS_STRING_PRETAG"))) i 0 n 0 fundo 0 moldura 0)

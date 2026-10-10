@@ -881,31 +881,49 @@ internal sealed class AbaInversor : AbaEletrica
 
     /// <summary>
     /// O local de cada inversor como a coluna Local mostra (o caminho da tela,
-    /// também do nível 2): primeiro o registro acompanha a geometria (item 2
-    /// da segunda rodada de 10/10/2026: o inversor com o centro dentro de uma
-    /// área é dela, não importa como chegou lá; fora, deixa de ser), gravado
-    /// só se mudou; depois a leitura. A área de cada um, as áreas e quem está em campo.
+    /// também do nível 2), pela geometria (item 2 da segunda rodada de
+    /// 10/10/2026: o inversor com o centro dentro de uma área é dela, não
+    /// importa como chegou lá; fora, deixa de ser). Só lê: o registro não é
+    /// gravado aqui (correção de 10/10/2026, à noite: gravar fora de comando
+    /// abria um grupo de UNDO próprio, e o U depois de um MOVE com a janela
+    /// aberta desfazia só o registro, nunca o MOVE). A área de cada um, as
+    /// áreas e quem está em campo.
     /// </summary>
     internal static (Dictionary<Guid, InverterPlacement> Locais, Dictionary<Guid, SiteMark> Areas, HashSet<(EquipmentKind Kind, Guid Id)> EmCampo, string? Problema) LerOsLocais(Document documento)
     {
         var db = documento.Database;
         var c = LocalDosInversores.Conferir(db);
-        if (c.Problema is null && !InverterSites.SamePlacements(c.Gravado, c.Certo))
-        {
-            try
-            {
-                EscritaForaDeComando.Fazer(documento, () => LocalDosInversores.Gravar(db, c.Certo));
-            }
-            catch (Exception erro)
-            {
-                // Não gravar não muda o que a tabela mostra: a leitura já segue a geometria.
-                RegistroDeDiagnostico.Registrar("Não consegui gravar o local dos inversores pela geometria.", erro);
-            }
-        }
-
         var locais = c.Certo.GroupBy(l => l.Inverter).ToDictionary(g => g.Key, g => g.First());
         var areas = c.Areas.ToDictionary(a => a.Key, a => a.Value.Marca);
         return (locais, areas, EquipamentoEmCampo.EmCampo(db), c.Problema);
+    }
+
+    /// <summary>
+    /// Antes de mostrar a tabela (ao abrir a aba, ao trocar de aba, ao voltar
+    /// à janela): todo inversor em campo com a base fora do terreno + 0,80
+    /// volta para lá (<see cref="LocalDosInversores.Reassentar"/>). O vigia
+    /// (<see cref="ArvoreVigia"/>) já faz isso no fim do MOVE, no mesmo grupo
+    /// de UNDO; aqui fica o que ele não viu (desenho antigo, MOVE sem terreno
+    /// carregado). Grava só se há o que mudar. Sem terreno carregado, não
+    /// mexe e diz por quê (só se há inversor em campo). A frase (e se é aviso), ou null.
+    /// </summary>
+    internal static (string Texto, bool Erro)? AssentarNoTerreno(Document documento)
+    {
+        try
+        {
+            var emCampo = EquipamentoEmCampo.EmCampo(documento.Database).Any(e => e.Kind == EquipmentKind.Inverter);
+            if (!emCampo) return null;
+            if (TerrainCache.Get(documento) is not { } terreno)
+                return (Tr.T("ATENÇÃO: o terreno não está carregado: a cota dos inversores em campo não foi conferida (base = terreno + 0,80 m). Use o botão Terreno."), true);
+
+            var frases = EscritaForaDeComando.Fazer(documento, () => LocalDosInversores.Reassentar(documento.Database, terreno));
+            return frases.Count == 0 ? null : (string.Join(" ", frases), false);
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui pôr os inversores no terreno + 0,80 ao ler a aba.", erro);
+            return null;
+        }
     }
 
     /// <summary>A linha de um inversor: o estado (botão, Ver em campo) e o texto da coluna Local.</summary>
@@ -921,6 +939,7 @@ internal sealed class AbaInversor : AbaEletrica
     {
         var escolhidos = Escolhidos().Select(i => i.Id).ToHashSet();
         var foco = OndeEstaOFoco();
+        if (AssentarNoTerreno(Documento) is { } assentados) Avisar(assentados.Texto, assentados.Erro);
         var (locais, areas, emCampo, problemaDoLocal) = LerOsLocais(Documento);
         _locais = locais;
         _areas = areas;

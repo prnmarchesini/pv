@@ -44,8 +44,14 @@ function Testar-EletricaRotaArea {
     $t = $r.Texto
     $erros = @()
 
-    $i = $t.IndexOf('CLIVUS_ROTAAREA CONFERIR')
-    $conf = if ($i -ge 0) { $t.Substring($i) } else { '' }
+    function Trecho([string] $de, [string] $ate) {
+        $a = $t.IndexOf($de)
+        if ($a -lt 0) { return '' }
+        $b = $t.IndexOf($ate, $a + $de.Length)
+        if ($b -lt 0) { $b = $t.Length }
+        return $t.Substring($a, $b - $a)
+    }
+    $conf = Trecho 'CLIVUS_ROTAAREA CONFERIR' 'CLIVUS_ROTAAREA AUTO1'
 
     if ($t -notmatch 'ROTA CC: 24 lance') { $erros += 'o Gerar CC nao desenhou os 24 lances' }
 
@@ -62,6 +68,28 @@ function Testar-EletricaRotaArea {
         if ($n -eq 2 -and $raio -lt 1) { $erros += 'a vala do norte nao ficou no raio do Inversor 2 (o caso nao prova a regra)' }
         if ($dentro -ne 12 -or $fora -ne 0) { $erros += "dos 12 lances do Inversor $n, $dentro chegam pela vala de dentro da area e $fora por fora dela" }
     }
+
+    # ---- revisao da noite de 10/10/2026 -------------------------------------
+    # (a) o automatico nunca dentro de uma area.
+    if ((Trecho 'CLIVUS_ROTAAREA AUTO1' 'CLIVUS_ROTAAREA_SALA_AUTO') -notmatch 'Inversor 3 posto ao lado da vala') { $erros += '(a) o Gerar nao pos o Inversor 3 (automatico)' }
+    $auto2 = Trecho 'CLIVUS_ROTAAREA AUTO2' 'CLIVUS_ROTAAREA AUTO_CONFERIR'
+    if ($auto2 -notmatch 'Inversor 3: o ponto de menor cabo cai dentro de uma') { $erros += '(a) o Recolocar nao disse que o ponto de menor cabo do Inversor 3 cai na sala' }
+    $sala = [regex]::Match($t, 'CLIVUS_ROTAAREA_SALA_AUTO minx=(-?[\d.]+) miny=(-?[\d.]+) maxx=(-?[\d.]+) maxy=(-?[\d.]+) fim')
+    $c3 = [regex]::Match((Trecho 'CLIVUS_ROTAAREA AUTO_CONFERIR' 'CLIVUS_ROTAAREA PATIO'), 'ROTA_EQUIP tag=Inversor_3 desvio=([\d.]+) minx=(-?[\d.]+) miny=(-?[\d.]+) maxx=(-?[\d.]+) maxy=(-?[\d.]+) fim')
+    if (-not $sala.Success -or -not $c3.Success) { $erros += '(a) nao achei a sala nem a caixa do Inversor 3' }
+    else {
+        $s = 1..4 | ForEach-Object { [double]::Parse($sala.Groups[$_].Value, $inv) }
+        $c = 2..5 | ForEach-Object { [double]::Parse($c3.Groups[$_].Value, $inv) }
+        if ($c[0] -lt $s[2] -and $s[0] -lt $c[2] -and $c[1] -lt $s[3] -and $s[1] -lt $c[3]) { $erros += '(a) o Recolocar pos o Inversor 3 (automatico) dentro da Sala auto' }
+        if ([double]::Parse($c3.Groups[1].Value, $inv) -gt 0.001) { $erros += '(a) o Inversor 3 recolocado nao esta no TIN + 0,80' }
+    }
+    $ac = Trecho 'CLIVUS_ROTAAREA AUTO_CONFERIR' 'CLIVUS_ROTAAREA PATIO'
+    if ($ac -notmatch 'ROTA_ACESSO inversor=Inversor_4 \S+ \S+ na_area=Sala_auto ') { $erros += '(a) o Inversor 4 nao ficou na Sala auto' }
+    if ($ac -notmatch 'ROTA_ACESSO inversor=Inversor_3 contorno=\S+ local=Automatic ') { $erros += '(a) o Inversor 3, tirado da sala com o MOVE, nao voltou a ser automatico' }
+
+    # (b) area dentro de area: o Inversor 4 escolhido para o Patio fora vai para fora da Sala auto e e do Patio.
+    $pt = Trecho 'CLIVUS_ROTAAREA PATIO' 'CLIVUS_ROTAAREA REVISAO_FIM'
+    if ($pt -notmatch 'ROTA_ACESSO inversor=Inversor_4 \S+ local=Area na_area=Patio_fora ') { $erros += '(b) o Inversor 4, escolhido para o Patio fora, nao ficou nele (caiu na sala de dentro?)' }
 
     if ($erros.Count -gt 0) {
         $problemas.Add("${rotulo}: $($erros -join '; '). Veja $($r.Saida)")

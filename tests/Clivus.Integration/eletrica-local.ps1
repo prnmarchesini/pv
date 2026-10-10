@@ -35,6 +35,8 @@ function Testar-EletricaLocal {
         # Segunda rodada: a Area 1 do Itatiba do Renan (3,7717 x 5,1538 m), o Por em campo e o MOVE.
         '{{I1}}' = (P 42 12); '{{I2}}' = (P 45.7717 12); '{{I3}}' = (P 45.7717 17.1538); '{{I4}}' = (P 42 17.1538)
         '{{J1}}' = (P 50 -8); '{{J2}}' = (P 40 20); '{{DJ}}' = '8,-28'
+        # Revisao da noite: MOVE, U, entmod e a copia da Skid norte (14 m ao sul dela).
+        '{{DR}}' = '0,6'; '{{DE}}' = '6'; '{{DC}}' = '0,-14'; '{{DQ1}}' = (P 40 20); '{{DQ2}}' = (P 47 -22)
     }
 
     $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo $rotulo -Script (Join-Path $PSScriptRoot 'clivus-eletrica-local.scr') -Substituicoes $sub
@@ -260,7 +262,8 @@ function Testar-EletricaLocal {
     for ($i = 0; $i -lt $itat.Count; $i++) {
         for ($j = $i + 1; $j -lt $itat.Count; $j++) {
             $a = $itat[$i]; $b = $itat[$j]
-            if ($a.MinX -lt $b.MaxX + 0.05 -and $b.MinX -lt $a.MaxX + 0.05 -and $a.MinY -lt $b.MaxY + 0.05 -and $b.MinY -lt $a.MaxY + 0.05) { $erros += "(a) $($a.Tag) e $($b.Tag) se sobrepoem (ou ficam a menos de 5 cm)" }
+            # A folga minima prometida e 0,10 m (InverterSites.MinGap), menos 1 mm de arredondamento da conferencia.
+            if ($a.MinX -lt $b.MaxX + 0.099 -and $b.MinX -lt $a.MaxX + 0.099 -and $a.MinY -lt $b.MaxY + 0.099 -and $b.MinY -lt $a.MaxY + 0.099) { $erros += "(a) $($a.Tag) e $($b.Tag) se sobrepoem (ou ficam a menos de 10 cm)" }
         }
     }
     $lG = Linhas (Trecho 'CLIVUS_LOCAL G_CONFERIR' 'CLIVUS_LOCAL G_MAO')
@@ -295,6 +298,58 @@ function Testar-EletricaLocal {
     $totG = [regex]::Match($ar, 'LOCAL_TOTAL_LIMITE texto=(\d+)/(\d+)_\S+ vermelho=True fim')
     $somaG = [regex]::Match($ar, 'LOCAL_SOMA bate=False \[Limites: (\d+) de (\d+) strings')
     if (-not $totG.Success -or -not $somaG.Success -or $totG.Groups[1].Value -ne $somaG.Groups[1].Value -or $totG.Groups[2].Value -ne $somaG.Groups[2].Value) { $erros += '(f) com os inversores novos, o total do Limite nao mostra soma/uteis em vermelho' }
+
+    # ---- (14) revisao da noite de 10/10/2026 --------------------------------
+    function Desvio26([string] $trecho) {
+        $m = [regex]::Match($trecho, 'ROTA_EQUIP tag=Inversor_26 desvio=([\d.]+) ')
+        if (-not $m.Success) { return $null }
+        return [double]::Parse($m.Groups[1].Value, $inv)
+    }
+    function Equip26([string] $etapa) { Equip $etapa | Where-Object { $_.Tag -eq 'Inversor_26' } | Select-Object -First 1 }
+
+    # (a) MOVE para outra cota: o vigia pos a base no TIN + 0,80 no fim do MOVE, sem abrir a aba.
+    $rm = Trecho 'CLIVUS_LOCAL R_MOVE' 'CLIVUS_LOCAL R_UNDO'
+    if ($rm -notmatch 'EQUIPAMENTO 1 equipamento\(s\) mexido') { $erros += '(14a) o MOVE do Inversor 26 nao foi reassentado no fim do comando (ou o terreno do teste e plano ali)' }
+    $d = Desvio26 $rm
+    if ($null -eq $d -or $d -gt 0.001) { $erros += "(14a) depois do MOVE, a base do Inversor 26 nao esta no TIN + 0,80 (desvio $d)" }
+
+    # (b) um U desfaz o MOVE e o assentar juntos: volta ao ponto e a cota de antes.
+    $ru = Trecho 'CLIVUS_LOCAL R_UNDO' 'CLIVUS_LOCAL R_ENTMOD'
+    $a0 = Equip26 'antesu'; $a1 = Equip26 'movidou'; $a2 = Equip26 'desfeitou'
+    if (-not $a0 -or -not $a1 -or -not $a2) { $erros += '(14b) nao achei o Inversor 26 antes, depois do MOVE e depois do U' }
+    else {
+        if ([math]::Abs($a1.Y - $a0.Y - 6) -gt 0.01) { $erros += '(14b) o MOVE nao levou o Inversor 26 6 m ao norte' }
+        if ([math]::Abs($a1.Z - $a0.Z) -lt 0.001) { $erros += '(14b) a cota do Inversor 26 nao mudou no MOVE (o caso nao prova o U)' }
+        if ([math]::Abs($a2.X - $a0.X) -gt 0.001 -or [math]::Abs($a2.Y - $a0.Y) -gt 0.001 -or [math]::Abs($a2.Z - $a0.Z) -gt 0.001) { $erros += "(14b) um U nao desfez o MOVE e o assentar juntos (antes $($a0.X),$($a0.Y),$($a0.Z); depois do U $($a2.X),$($a2.Y),$($a2.Z))" }
+    }
+    if ($ru -notmatch 'EQUIPAMENTO 1 equipamento\(s\) mexido') { $erros += '(14b) o segundo MOVE nao foi reassentado' }
+
+    # (c) mudado sem comando (entmod): fica fora da cota ate a aba ler; a leitura da aba poe no TIN + 0,80.
+    $d1 = Desvio26 (Trecho 'CLIVUS_LOCAL R_ENTMOD' 'CLIVUS_LOCAL R_ENTMOD_ABA')
+    if ($null -eq $d1 -or $d1 -le 0.001) { $erros += "(14c) o entmod nao tirou o Inversor 26 da cota (desvio $d1): o caso nao prova a leitura da aba" }
+    $rab = Trecho 'CLIVUS_LOCAL R_ENTMOD_ABA' 'CLIVUS_LOCAL R_COPIA'
+    if ($rab -notmatch 'ELETRICA LOCAL_ASSENTAR Inversor_26_estava_fora_da_cota') { $erros += '(14c) a leitura da aba nao disse que reassentou o Inversor 26' }
+    $d2 = Desvio26 $rab
+    if ($null -eq $d2 -or $d2 -gt 0.001) { $erros += "(14c) depois da leitura da aba, a base do Inversor 26 nao esta no TIN + 0,80 (desvio $d2)" }
+
+    # (d) COPY da Skid norte: a copia e outra area, com nome proprio; o 26 dentro da copia e dela.
+    $rc = Trecho 'CLIVUS_LOCAL R_COPIA' 'CLIVUS_LOCAL R_FIM'
+    if ($rc -notmatch 'LOCAL_AREA nome=Skid_norte inversores=2 fim') { $erros += '(14d) depois do COPY, a Skid norte nao ficou com os 2 dela' }
+    # A area do 26 pela coluna Local: uma area nova (nao estava na lista antes do COPY), com so ele.
+    $lc = Linhas $rc
+    $doVinte = if ($lc['Inversor_26']) { $lc['Inversor_26'].Local } else { '-' }
+    $antes = Trecho 'CLIVUS_LOCAL G_AREAS' 'CLIVUS_LOCAL G_FIM'
+    if ($doVinte -in 'Skid_norte', '-' -or $doVinte -match '^.{1,2}_m.o$') { $erros += "(14d) o Inversor 26, dentro da copia da Skid norte, nao mostra uma area propria (mostra $doVinte)" }
+    elseif ($antes -match "LOCAL_AREA nome=$([regex]::Escape($doVinte)) ") { $erros += "(14d) o Inversor 26 mostra uma area que ja existia ($doVinte), nao a copia" }
+    elseif ($rc -notmatch "LOCAL_AREA nome=$([regex]::Escape($doVinte)) inversores=1 fim") { $erros += "(14d) a lista de areas nao mostra a copia ($doVinte) com o Inversor 26" }
+    if (@([regex]::Matches($rc, 'LOCAL_AREA nome=Skid_norte ')).Count -ne 1) { $erros += '(14d) a copia ficou com o nome da Skid norte' }
+
+    # (e) MOVE da polilinha da area: drapeada de novo no terreno do lugar novo (cada vertice no TIN).
+    $ra = Trecho 'CLIVUS_LOCAL R_AREA_MOVE' 'CLIVUS_LOCAL R_FIM'
+    if ($ra -notmatch 'AREA 1 .{1,3}rea\(s\) de inversores mexida') { $erros += '(14e) o MOVE da area nao foi drapeado de novo no fim do comando' }
+    $m = [regex]::Match($ra, 'ROTA_AREA nome=Sala_Itatiba_B fechada=True fora=0 desvio=([\d.]+) fim')
+    if (-not $m.Success -or [double]::Parse($m.Groups[1].Value, $inv) -gt 0.001) { $erros += '(14e) depois do MOVE, a polilinha da Sala Itatiba B nao esta no TIN' }
+    if (@([regex]::Matches($ra, 'ROTA_AREA nome=Sala_Itatiba_B ')).Count -ne 1) { $erros += '(14e) a conferencia achou mais de uma polilinha da Sala Itatiba B' }
 
     # ---- (13) item 5: a pre-tag com fundo e moldura, sem eles, e nenhuma sem "Inserir nome" ----
     function PretagF([string] $etapa) {

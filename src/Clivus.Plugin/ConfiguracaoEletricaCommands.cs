@@ -105,7 +105,7 @@ public static class ConfiguracaoEletricaCommands
             // com o centro dentro de uma área, é dela; posto fora, deixa de ser.
             if (equipamento.Kind == EquipmentKind.Inverter)
             {
-                LocalDosInversores.Sincronizar(documento.Database, out _);
+                LocalDosInversores.Sincronizar(documento.Database, out _, terreno);
                 var agora = LocalDosInversores.Ler(documento.Database, out _).FirstOrDefault(l => l.Inverter == equipamento.Id);
                 var areas = LocalDosInversores.Areas(documento.Database);
                 if (agora is { Mode: InverterPlacementMode.Area } && areas.TryGetValue(agora.Site, out var dentro))

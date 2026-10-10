@@ -48,6 +48,13 @@ internal static class EquipamentoEmCampo
         return achados;
     }
 
+    /// <summary>
+    /// A referência que vale quando o equipamento tem cópias (COPY): a de
+    /// menor handle, a mais antiga. Um critério só para o local, o Pôr em
+    /// campo e a rota (a ordem das referências do AutoCAD não é garantida).
+    /// </summary>
+    internal static ObjectId Principal(IReadOnlyCollection<ObjectId> ids) => ids.OrderBy(x => x.Handle.Value).First();
+
     /// <summary>O que já está em campo, numa leitura só (para as listas da janela).</summary>
     internal static HashSet<(EquipmentKind Kind, Guid Id)> EmCampo(Database database)
     {
@@ -72,7 +79,7 @@ internal static class EquipamentoEmCampo
 
         if (ids.Count > 0)
         {
-            var existente = (BlockReference)transacao.GetObject(ids[0], OpenMode.ForWrite);
+            var existente = (BlockReference)transacao.GetObject(Principal(ids), OpenMode.ForWrite);
             existente.Position = baseCentro;
             existente.RecordGraphicsModified(true);
         }

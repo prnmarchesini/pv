@@ -94,7 +94,7 @@ public static class RotaDeCabosConferir
             var setup = ConfiguracaoEletricaStore.Ler(db).Setup;
             foreach (var ((tipo, guid), ids) in EquipamentoEmCampo.Posicionados(t, db))
             {
-                if (ids.Count == 0 || t.GetObject(ids[0], OpenMode.ForRead) is not BlockReference b) continue;
+                if (ids.Count == 0 || t.GetObject(EquipamentoEmCampo.Principal(ids), OpenMode.ForRead) is not BlockReference b) continue;
                 var tag = setup.FindEquipment(tipo, guid)?.Tag ?? "?";
                 var desvio = terreno.Mesh.TryGetZ(b.Position.X, b.Position.Y, out var chao) ? Math.Abs(b.Position.Z - (chao + EquipmentFootprint.FloatHeight)) : double.NaN;
                 var caixa = setup.FindEquipment(tipo, guid)?.Size;
@@ -103,23 +103,20 @@ public static class RotaDeCabosConferir
                     tag.Replace(' ', '_'), desvio, b.Position.X - w, b.Position.Y - l, b.Position.X + w, b.Position.Y + l));
             }
 
-            // As áreas de inversores: cada vértice no terreno daquele XY.
-            foreach (var (_, (marca, _)) in LocalDosInversores.Areas(db))
+            // As áreas de inversores: cada vértice no terreno daquele XY (a marca efetiva: a cópia de uma área é outra área).
+            foreach (var (id, _, marca) in LocalDosInversores.Marcadas(t, db))
             {
-                foreach (ObjectId id in espaco)
+                if (t.GetObject(id, OpenMode.ForRead) is not Polyline3d p3) continue;
+                double maior = 0;
+                var fora = 0;
+                foreach (var v in p3.Cast<ObjectId>().Where(v => !v.IsErased))
                 {
-                    if (t.GetObject(id, OpenMode.ForRead) is not Polyline3d p3 || PluginXData.Load(p3, SiteMark.Tipo, 1, SiteMark.FieldCount) is not { } c || SiteMark.Parse(c)?.Id != marca.Id) continue;
-                    double maior = 0;
-                    var fora = 0;
-                    foreach (var v in p3.Cast<ObjectId>().Where(v => !v.IsErased))
-                    {
-                        var p = ((PolylineVertex3d)t.GetObject(v, OpenMode.ForRead)).Position;
-                        if (terreno.Mesh.TryGetZ(p.X, p.Y, out var z)) maior = Math.Max(maior, Math.Abs(p.Z - z));
-                        else fora++;
-                    }
-
-                    editor.WriteMessage(string.Format(inv, "\nROTA_AREA nome={0} fechada={1} fora={2} desvio={3:0.0000} fim\n", marca.Name.Replace(' ', '_'), p3.Closed, fora, maior));
+                    var p = ((PolylineVertex3d)t.GetObject(v, OpenMode.ForRead)).Position;
+                    if (terreno.Mesh.TryGetZ(p.X, p.Y, out var z)) maior = Math.Max(maior, Math.Abs(p.Z - z));
+                    else fora++;
                 }
+
+                editor.WriteMessage(string.Format(inv, "\nROTA_AREA nome={0} fechada={1} fora={2} desvio={3:0.0000} fim\n", marca.Name.Replace(' ', '_'), p3.Closed, fora, maior));
             }
 
             // Item 10: cada lance CC (com o destino e o handle) e, por mesa, se todos os
@@ -230,7 +227,8 @@ public static class RotaDeCabosConferir
             var contorno = leitura.Contorno(EquipmentKind.Inverter, i.Id);
             var entram = contorno is { Count: >= 3 } ? rede.Entering(contorno, ponto) : [];
             var raio = rede.Within(ponto, config.Radius);
-            var (marca, area) = areas.Values.FirstOrDefault(a => Polygons.Contains(a.Contorno, ponto.X, ponto.Y));
+            // Área dentro de área: a menor (a de dentro), como a tabela e a rota.
+            var (marca, area) = InverterSites.AreaOf(ponto.X, ponto.Y, areas.Select(a => (a.Key, a.Value.Contorno))) is { } qual ? areas[qual] : default;
             var alvo = area ?? contorno;
 
             int deDentro = 0, deFora = 0;

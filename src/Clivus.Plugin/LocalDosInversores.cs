@@ -75,25 +75,77 @@ public static class LocalDosInversores
         foreach (var ((tipo, id), ids) in EquipamentoEmCampo.Posicionados(t, db))
         {
             if (tipo != EquipmentKind.Inverter || ids.Count == 0) continue;
-            var primeiro = ids.OrderBy(x => x.Handle.Value).First();
-            if (t.GetObject(primeiro, OpenMode.ForRead) is BlockReference b) centros[id] = (b.Position.X, b.Position.Y);
+            if (t.GetObject(EquipamentoEmCampo.Principal(ids), OpenMode.ForRead) is BlockReference b) centros[id] = (b.Position.X, b.Position.Y);
         }
 
         return centros;
     }
 
     /// <summary>
-    /// Grava o registro como a geometria diz (só se mudou: abrir a janela
-    /// não suja o desenho à toa). Registro ilegível: não grava (o problema).
-    /// Quem chama trava o documento. Se gravou.
+    /// Grava o registro como a geometria diz (só se mudou), com a escolha de
+    /// automático guardada (<see cref="InverterSites.ForRecord"/>). Antes: a
+    /// cópia de área ganha a marca própria e, com o <paramref name="terreno"/>,
+    /// todo inversor em campo volta ao terreno + 0,80 (<see cref="Reassentar"/>).
+    /// Registro ilegível: não grava (o problema). Só nos comandos e botões que
+    /// mudam o local (Escolher área, Pôr em campo, Mover); a leitura da janela
+    /// não grava o registro (correção de 10/10/2026, à noite: a gravação fora
+    /// de comando era um grupo de UNDO próprio, e o U depois de um MOVE com a
+    /// janela aberta desfazia só ela). Quem chama trava o documento. Se gravou o registro.
     /// </summary>
-    internal static bool Sincronizar(Database db, out string? problema)
+    internal static bool Sincronizar(Database db, out string? problema, ProcessedTerrain? terreno = null)
     {
+        GravarCopiasDeArea(db);
+        if (terreno is not null) Reassentar(db, terreno);
         var c = Conferir(db);
         problema = c.Problema;
-        if (problema is not null || InverterSites.SamePlacements(c.Gravado, c.Certo)) return false;
-        Gravar(db, c.Certo);
+        var novo = InverterSites.ForRecord(c.Gravado, c.Certo);
+        if (problema is not null || InverterSites.SamePlacements(c.Gravado, novo)) return false;
+        Gravar(db, novo);
         return true;
+    }
+
+    /// <summary>
+    /// "Todo desenho respeita o TIN" (correção de 10/10/2026, à noite): cada
+    /// referência de inversor em campo (as cópias também) cuja base não está
+    /// no terreno + 0,80 do centro de agora volta para lá, no mesmo X e Y; é
+    /// a conta do <see cref="ConfiguracaoEletricaCommands.NoTerreno"/>. Pega o
+    /// que o vigia (<see cref="ArvoreVigia"/>) não viu: desenho antigo, MOVE
+    /// sem terreno carregado, LISP. Só abre transação de escrita se há o que
+    /// mudar. As frases dos que mudaram. Quem chama trava o documento.
+    /// </summary>
+    internal static List<string> Reassentar(Database db, ProcessedTerrain terreno)
+    {
+        var frases = new List<string>();
+        var mudar = new List<(ObjectId Id, Point3d Base, Guid Inversor)>();
+        using (var t = db.TransactionManager.StartOpenCloseTransaction())
+        {
+            foreach (var ((tipo, id), ids) in EquipamentoEmCampo.Posicionados(t, db))
+            {
+                if (tipo != EquipmentKind.Inverter) continue;
+                foreach (var r in ids)
+                {
+                    if (t.GetObject(r, OpenMode.ForRead) is not BlockReference b || !terreno.Mesh.TryGetZ(b.Position.X, b.Position.Y, out var chao)) continue;
+                    var baseZ = EquipmentFootprint.BaseElevation(chao);
+                    if (Math.Abs(b.Position.Z - baseZ) > 0.001) mudar.Add((r, new Point3d(b.Position.X, b.Position.Y, baseZ), id));
+                }
+            }
+        }
+
+        if (mudar.Count == 0) return frases;
+
+        var setup = ConfiguracaoEletricaStore.Ler(db).Setup;
+        using (var t = db.TransactionManager.StartTransaction())
+        {
+            foreach (var (r, ponto, inversor) in mudar)
+            {
+                ((BlockReference)t.GetObject(r, OpenMode.ForWrite)).Position = ponto;
+                frases.Add(Tr.F("{0} estava fora da cota: a base voltou ao terreno + 0,80 m do lugar dele ({1:0.000} m).", setup.FindInverter(inversor)?.Name ?? "?", ponto.Z));
+            }
+
+            t.Commit();
+        }
+
+        return frases;
     }
 
     internal static void Gravar(Database db, IReadOnlyList<InverterPlacement> locais) =>
@@ -102,9 +154,10 @@ public static class LocalDosInversores
     /// <summary>Troca o local dos inversores (null = à mão). Recusa, com o motivo, se o registro está ilegível.</summary>
     internal static string? Mudar(Database db, IReadOnlyCollection<Guid> inversores, InverterPlacementMode? modo, Guid area = default)
     {
-        var lista = Ler(db, out var problema);
-        if (problema is not null) return problema;
-        Gravar(db, InverterPlacement.With(lista, inversores, modo, area));
+        GravarCopiasDeArea(db);
+        var c = Conferir(db);
+        if (c.Problema is not null) return c.Problema;
+        Gravar(db, InverterSites.ForRecord(c.Gravado, InverterPlacement.With(c.Certo, inversores, modo, area), inversores));
         return null;
     }
 
@@ -156,15 +209,14 @@ public static class LocalDosInversores
         if (limpo == atual.Marca.Name) return (null, null);
         if (SiteMark.NameProblem(limpo, areas.Values.Where(a => a.Marca.Id != area).Select(a => a.Marca.Name)) is { } porque) return (null, porque);
 
+        // A cópia de área (COPY) tem a marca da original: só a polilinha desta área muda de nome.
+        GravarCopiasDeArea(db);
         using var t = db.TransactionManager.StartTransaction();
-        var espaco = (BlockTableRecord)t.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
-        var classe = RXObject.GetClass(typeof(Curve));
         var mudou = 0;
-        foreach (ObjectId id in espaco)
+        foreach (var (id, _, efetiva) in Marcadas(t, db))
         {
-            if (!id.ObjectClass.IsDerivedFrom(classe) || t.GetObject(id, OpenMode.ForRead) is not Curve c || Marca(c) is not { } marca || marca.Id != area) continue;
-            c.UpgradeOpen();
-            PluginXData.Save(t, c, SiteMark.Tipo, 1, [.. (marca with { Name = limpo }).ToFields()]);
+            if (efetiva.Id != area || t.GetObject(id, OpenMode.ForWrite) is not Curve c) continue;
+            PluginXData.Save(t, c, SiteMark.Tipo, 1, [.. (efetiva with { Name = limpo }).ToFields()]);
             mudou++;
         }
 
@@ -229,26 +281,55 @@ public static class LocalDosInversores
         }
     }
 
-    /// <summary>A marca de área da entidade, se ela tem uma.</summary>
+    /// <summary>A marca de área da entidade, se ela tem uma (a efetiva: a cópia de uma área é outra área).</summary>
     private static SiteMark? MarcaDe(Database db, ObjectId id)
     {
         using var t = db.TransactionManager.StartOpenCloseTransaction();
-        return t.GetObject(id, OpenMode.ForRead) is Entity e ? Marca(e) : null;
+        return Marcadas(t, db).Where(m => m.Id == id).Select(m => m.Efetiva).FirstOrDefault();
     }
 
-    /// <summary>As áreas de inversores do desenho: a marca e o contorno em planta.</summary>
+    /// <summary>
+    /// As polilinhas com marca de área: a marca gravada e a efetiva (GUID
+    /// repetido por COPY/MIRROR/ARRAY: a de menor handle fica com ele, as
+    /// outras ganham GUID e nome próprios, <see cref="SiteMark.ResolveCopies"/>).
+    /// </summary>
+    internal static List<(ObjectId Id, SiteMark Gravada, SiteMark Efetiva)> Marcadas(Transaction t, Database db)
+    {
+        var lidas = new List<(ObjectId Id, SiteMark Marca)>();
+        var espaco = (BlockTableRecord)t.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
+        var classe = RXObject.GetClass(typeof(Curve));
+        foreach (ObjectId id in espaco)
+            if (id.ObjectClass.IsDerivedFrom(classe) && t.GetObject(id, OpenMode.ForRead) is Curve c && Marca(c) is { } marca) lidas.Add((id, marca));
+
+        var efetivas = SiteMark.ResolveCopies([.. lidas.Select(l => (l.Id.Handle.Value, l.Marca))]);
+        return [.. lidas.Select((l, i) => (l.Id, l.Marca, efetivas[i]))];
+    }
+
+    /// <summary>
+    /// Grava a marca própria nas cópias de área (COPY da polilinha), se há
+    /// alguma; a leitura já as trata como áreas próprias. Quantas. Quem chama trava o documento.
+    /// </summary>
+    internal static int GravarCopiasDeArea(Database db)
+    {
+        List<(ObjectId Id, SiteMark Gravada, SiteMark Efetiva)> copias;
+        using (var leitura = db.TransactionManager.StartOpenCloseTransaction())
+            copias = Marcadas(leitura, db).Where(m => m.Gravada != m.Efetiva).ToList();
+        if (copias.Count == 0) return 0;
+
+        using var t = db.TransactionManager.StartTransaction();
+        foreach (var (id, _, efetiva) in copias)
+            if (t.GetObject(id, OpenMode.ForWrite) is Entity e) PluginXData.Save(t, e, SiteMark.Tipo, 1, [.. efetiva.ToFields()]);
+        t.Commit();
+        return copias.Count;
+    }
+
+    /// <summary>As áreas de inversores do desenho: a marca (a efetiva) e o contorno em planta.</summary>
     internal static Dictionary<Guid, (SiteMark Marca, IReadOnlyList<Point3> Contorno)> Areas(Database db)
     {
         var areas = new Dictionary<Guid, (SiteMark, IReadOnlyList<Point3>)>();
         using var t = db.TransactionManager.StartOpenCloseTransaction();
-        var espaco = (BlockTableRecord)t.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
-        var classe = RXObject.GetClass(typeof(Curve));
-
-        foreach (ObjectId id in espaco)
-        {
-            if (!id.ObjectClass.IsDerivedFrom(classe) || t.GetObject(id, OpenMode.ForRead) is not Curve c || Marca(c) is not { } marca) continue;
-            if (Contorno(c, t) is { Count: >= 3 } contorno) areas[marca.Id] = (marca, contorno);
-        }
+        foreach (var (id, _, marca) in Marcadas(t, db))
+            if (t.GetObject(id, OpenMode.ForRead) is Curve c && Contorno(c, t) is { Count: >= 3 } contorno) areas[marca.Id] = (marca, contorno);
 
         return areas;
     }
@@ -422,9 +503,16 @@ public static class LocalDosInversores
             // ficam de fora; os que estão sendo postos agora não contam no lugar velho.
             // O Encher (item 2 da segunda rodada): a grade de sempre e, para quem
             // não coube nela, a vaga livre entre os que já estão lá, com a folga reduzida se preciso.
+            // Correção de 10/10/2026, à noite: as áreas menores que esta (uma sala dentro
+            // da área de fora) também são obstáculo: o centro dentro delas seria delas.
+            // E a caixa não encosta em vala (o automático já não encostava).
             var obstaculos = LeituraDaRota.Ler(db).Obstaculos(ids.ToHashSet());
+            var tamanho = InverterSites.PlanArea(area.Value.Contorno);
+            obstaculos.AddRange(Areas(db).Where(a => a.Key != area.Value.Marca.Id && InverterSites.PlanArea(a.Value.Contorno) < tamanho).Select(a => a.Value.Contorno));
+            var redes = RotaDeCabosStore.Valas(db).Values.Where(v => v.Count > 0).Select(v => new TrenchNetwork(v)).ToList();
             var tamanhos = inversores.Select(i => Tamanho(setup, i)).ToList();
-            var cheia = InverterSites.Fill(area.Value.Contorno, tamanhos, obstaculos);
+            var cheia = InverterSites.Fill(area.Value.Contorno, tamanhos, obstaculos,
+                cantos => !redes.Any(r => r.Touches([.. cantos.Select(c => new Point3(c.X, c.Y, 0))])));
             var postos = new List<Guid>();
             for (var i = 0; i < inversores.Count; i++)
                 if (cheia.Centers[i] is { } c && setup.FindEquipment(EquipmentKind.Inverter, inversores[i].Id) is { } equipamento
@@ -441,7 +529,7 @@ public static class LocalDosInversores
                 return;
             }
 
-            Sincronizar(db, out _);
+            Sincronizar(db, out _, terreno);
 
             var frase = Tr.F("{0} de {1} inversor(es) postos na {2}.", postos.Count, inversores.Count, area.Value.Marca.Name);
             var reduzidos = Enumerable.Range(0, inversores.Count).Where(i => postos.Contains(inversores[i].Id) && cheia.Gaps[i] < InverterSites.Gap).ToList();
@@ -631,10 +719,12 @@ public static class LocalDosInversores
         using var t = db.TransactionManager.StartTransaction();
         if (t.GetObject(id, OpenMode.ForRead) is not Curve curva) return null;
 
-        var marca = Marca(curva);
+        // A marca efetiva: a cópia (COPY) de uma área é outra área, com GUID e nome próprios.
+        var gravada = Marca(curva);
+        var marca = gravada is null ? null : Marcadas(t, db).Where(m => m.Id == id).Select(m => m.Efetiva).FirstOrDefault();
         using (var nossa = curva.GetXDataForApplication(PluginInfo.PrefixoDeDados))
         {
-            if (marca is null && nossa is not null)
+            if (gravada is null && nossa is not null)
             {
                 recusa = Tr.T("Essa polilinha é do Clivus Solar (mesa, área, vala, string...): desenhe um retângulo próprio para a sala.");
                 return null;
