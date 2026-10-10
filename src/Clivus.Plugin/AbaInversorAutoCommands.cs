@@ -118,10 +118,15 @@ public static class AbaInversorAutoCommands
     }
 
     /// <summary>
-    /// CLIVUS_ELETRICA_JANELA_LINHA_AUTO &lt;inversores separados por ;&gt; &lt;Nome|Modelo|Apagar&gt; &lt;valor&gt;:
+    /// CLIVUS_ELETRICA_JANELA_LINHA_AUTO &lt;inversores separados por ;, ou * para todos&gt;
+    /// &lt;Nome|Modelo|Apagar|Soltar|SoltarUsina|Mover|Ordenar&gt; &lt;valor&gt;:
     /// o nome editado na célula, o modelo escolhido na caixa da linha (um
-    /// inversor) e o Apagar da barra das escolhidas (vários; o valor é
-    /// ignorado: a confirmação da tela é o "sim" do teste).
+    /// inversor), o Apagar das escolhidas e o "Apagar todos" (com *; o valor
+    /// é ignorado: a confirmação da tela é o "sim" do teste), o Soltar da
+    /// linha (cada um) e o "Soltar todas da usina" (10/10/2026: as tags saem
+    /// junto), o arrastar da linha (Mover: o valor é o nome do inversor onde
+    /// ela cai) e o "Ordenar" (o valor é Nome, Trafo ou TrafoNome; os
+    /// inversores são ignorados).
     /// </summary>
     [CommandMethod(PluginInfo.ComandoEletricaJanelaLinhaAutomatico, CommandFlags.Session)]
     public static void Linha()
@@ -134,7 +139,7 @@ public static class AbaInversorAutoCommands
         {
             var nomes = editor.GetString(new PromptStringOptions("\nInversores (nomes separados por ;): ") { AllowSpaces = true });
             if (nomes.Status != PromptStatus.OK) return;
-            var oQue = editor.GetString(new PromptStringOptions("\nNome, Modelo ou Apagar: ") { AllowSpaces = false });
+            var oQue = editor.GetString(new PromptStringOptions("\nNome, Modelo, Apagar, Soltar, SoltarUsina, Mover ou Ordenar: ") { AllowSpaces = false });
             if (oQue.Status != PromptStatus.OK) return;
             var valor = editor.GetString(new PromptStringOptions("\nValor (. = vazio): ") { AllowSpaces = true });
             if (valor.Status != PromptStatus.OK) return;
@@ -142,15 +147,19 @@ public static class AbaInversorAutoCommands
 
             var setup = ConfiguracaoEletricaStore.Ler(documento.Database).Setup;
             var ids = new List<Guid>();
-            foreach (var nome in nomes.StringResult.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            if (nomes.StringResult.Trim() == "*") ids.AddRange(setup.Inverters.Select(i => i.Id));
+            else
             {
-                if (setup.FindInverter(nome) is not { } i)
+                foreach (var nome in nomes.StringResult.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 {
-                    editor.WriteMessage($"\nELETRICA janela linha recusado: inversor {nome} nao existe\n");
-                    return;
-                }
+                    if (setup.FindInverter(nome) is not { } i)
+                    {
+                        editor.WriteMessage($"\nELETRICA janela linha recusado: inversor {nome} nao existe\n");
+                        return;
+                    }
 
-                ids.Add(i.Id);
+                    ids.Add(i.Id);
+                }
             }
 
             switch (oQue.StringResult.Trim().ToUpperInvariant())
@@ -178,8 +187,58 @@ public static class AbaInversorAutoCommands
 
                 case "APAGAR":
                 {
-                    var (apagados, soltas) = EscritaForaDeComando.Fazer(documento, () => AbaInversor.ApagarInversores(documento.Database, ids));
+                    var (apagados, soltas, tags) = EscritaForaDeComando.Fazer(documento, () => AbaInversor.ApagarInversores(documento.Database, ids));
                     editor.WriteMessage($"\nELETRICA janela linha apagados={string.Join(",", apagados.Select(i => i.Name))} soltas={soltas} fim\n");
+                    editor.WriteMessage($"ELETRICA janela linha apagados={apagados.Count} tags={tags} fim\n");
+                    break;
+                }
+
+                case "SOLTAR":
+                    foreach (var id in ids)
+                    {
+                        var (soltas, tags) = EscritaForaDeComando.Fazer(documento, () => StringsDoDesenho.Soltar(documento.Database, id));
+                        editor.WriteMessage($"\nELETRICA janela linha soltar {setup.FindInverter(id)!.Name}: soltas={soltas} tags={tags} fim\n");
+                    }
+
+                    break;
+
+                case "SOLTARUSINA":
+                {
+                    var (soltas, tags) = EscritaForaDeComando.Fazer(documento, () => StringsDoDesenho.SoltarTodasDaUsina(documento.Database));
+                    editor.WriteMessage($"\nELETRICA janela linha soltar usina: soltas={soltas} tags={tags} fim\n");
+                    break;
+                }
+
+                case "MOVER" when ids.Count == 1:
+                {
+                    if (setup.FindInverter(texto) is not { } alvo)
+                    {
+                        editor.WriteMessage($"\nELETRICA janela linha recusado: inversor {texto} nao existe\n");
+                        break;
+                    }
+
+                    var (frase, problema) = EscritaForaDeComando.Fazer(documento, () => AbaInversor.Mover(documento.Database, ids[0], alvo.Id));
+                    editor.WriteMessage(problema is null ? $"\nELETRICA janela linha mover: {frase}\n" : $"\nELETRICA janela linha recusado: {problema}\n");
+                    break;
+                }
+
+                case "ORDENAR":
+                {
+                    InverterOrder? ordem = texto.Trim().ToUpperInvariant() switch
+                    {
+                        "NOME" => InverterOrder.Name,
+                        "TRAFO" => InverterOrder.Transformer,
+                        "TRAFONOME" => InverterOrder.TransformerThenName,
+                        _ => null,
+                    };
+                    if (ordem is not { } o)
+                    {
+                        editor.WriteMessage($"\nELETRICA janela linha recusado: ordem [{texto}]\n");
+                        break;
+                    }
+
+                    var (frase, _) = EscritaForaDeComando.Fazer(documento, () => AbaInversor.Ordenar(documento.Database, o));
+                    editor.WriteMessage($"\nELETRICA janela linha ordenar {o}: {frase}\n");
                     break;
                 }
 

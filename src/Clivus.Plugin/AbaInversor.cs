@@ -21,10 +21,17 @@ namespace Clivus.Plugin;
 /// trafo"/skid embaixo da tabela: "essa parte não estou entendendo nada,
 /// melhore MUITO ela"): tudo na própria linha. O nome é editável na célula,
 /// o modelo e a cor são caixas que gravam ao escolher, e as ações têm nome
-/// (+ Strings, Ver e o "⋯" com Soltar strings, Pôr/Mover em campo e Apagar).
+/// (+ Strings, Ver e o "⋯" com Soltar strings, Pôr/Mover em campo e Apagar;
+/// o "⋯" saiu em 10/10/2026, veja abaixo).
 /// Com duas ou mais linhas escolhidas aparece a barra delas (trafo de todas,
 /// apagar todas). O agrupar pela seleção em campo virou o botão "Trafo pelo
 /// desenho…" (o nome do skid sai da tela; fica o que já tem, ou "Skid T1").
+/// 10/10/2026 (Renan: "tem o botão três pontinhos, mas tem espaço para mais
+/// colunas"): o "⋯" saiu; Soltar, Pôr em campo/Mover e Apagar ficam à vista na
+/// linha. Soltar apaga as tags das strings soltas; "Apagar todos" no quadro
+/// Inversores da usina; a ordem da lista (a do cadastro: a da tabela, a do
+/// Distribuir e o número {I} da tag) muda arrastando a linha pela alça "⠿" ou
+/// pelo "Ordenar" (nome, trafo, trafo e nome).
 /// </remarks>
 internal sealed class AbaInversor : AbaEletrica
 {
@@ -59,6 +66,16 @@ internal sealed class AbaInversor : AbaEletrica
 
     private readonly ComboBox _trafoDasEscolhidas = new() { Height = 24, MinWidth = 90, Margin = new Thickness(0, 0, 6, 4) };
     private readonly Button _apagarAsEscolhidas;
+    private readonly Button _apagarTodos;
+
+    /// <summary>O "Ordenar:" do quadro Inversores da usina: por nome, por trafo, por trafo e nome.</summary>
+    private readonly ComboBox _ordem = new() { Height = 24, MinWidth = 120, Margin = new Thickness(0, 0, 6, 4) };
+
+    /// <summary>A marca de onde a linha arrastada vai cair, uma por linha (pelo inversor).</summary>
+    private readonly Dictionary<Guid, Border> _marcas = [];
+
+    /// <summary>O formato do arrasto de uma linha da tabela (o GUID do inversor).</summary>
+    private const string FormatoDoArrasto = "ClivusInversor";
 
     // A atribuição automática: o sentido que avança e o sentido na faixa (a varredura própria dela).
     private readonly ComboBox _sentidoDaAtribuicao = new() { Height = 26, MinWidth = 150, Margin = new Thickness(0, 0, 6, 6) };
@@ -128,6 +145,19 @@ internal sealed class AbaInversor : AbaEletrica
         Botao(criar, Tr.T("Criar"), Tr.T("Cria os inversores do modelo escolhido (Inversor 1, 2..., continuando a numeração). Depois escolha o trafo de cada um na tabela."), CriarInversores);
         _apagarAsEscolhidas = Botao(criar, Tr.T("Apagar os escolhidos"), Tr.T("Apaga do cadastro os inversores escolhidos na tabela (clique, Ctrl ou Shift + clique; pede confirmação): as strings deles ficam livres e os retângulos saem do campo."), ApagarAsEscolhidas);
         _apagarAsEscolhidas.Margin = new Thickness(18, 0, 6, 4);
+        _apagarTodos = Botao(criar, Tr.T("Apagar todos"), Tr.T("Apaga do cadastro todos os inversores da usina (pede confirmação): as strings ficam livres no desenho, as tags delas saem e os retângulos saem do campo."), ApagarTodos);
+
+        // A ordem da lista (10/10/2026): "Ordenar: [por Nome | por Trafo | por Trafo e Nome] [Ordenar]".
+        var ordenar = Rotulo(Tr.T("Ordenar:"), 4);
+        ordenar.Margin = new Thickness(18, 0, 6, 4);
+        criar.Children.Add(ordenar);
+        criar.Children.Add(_ordem);
+        _ordem.Items.Add(new ComboBoxItem { Content = Tr.T("por Nome"), Tag = InverterOrder.Name });
+        _ordem.Items.Add(new ComboBoxItem { Content = Tr.T("por Trafo"), Tag = InverterOrder.Transformer });
+        _ordem.Items.Add(new ComboBoxItem { Content = Tr.T("por Trafo e Nome"), Tag = InverterOrder.TransformerThenName });
+        _ordem.SelectedIndex = 2;
+        _ordem.ToolTip = Tr.T("Nome: Inversor 2 antes de Inversor 10. Trafo: T1, T2, ..., T10 (sem trafo por último), cada trafo com a ordem que já tinha. Trafo e Nome: os do T1 pelo nome, depois os do T2...");
+        Botao(criar, Tr.T("Ordenar"), Tr.T("Grava a ordem escolhida na lista de inversores: é a ordem da tabela, a do Distribuir e a do número do inversor na tag (gere as tags de novo). Para pôr um inversor num lugar, arraste a linha pela alça ⠿."), OrdenarPelaTela);
 
         // Seção Trafo: "Do [..] ao [..] [Todos]  no trafo [..] [Aplicar]  [Trafo pelo desenho…]".
         var trafo = new WrapPanel();
@@ -165,7 +195,7 @@ internal sealed class AbaInversor : AbaEletrica
         atribuir.Children.Add(Rotulo(Tr.T("e na faixa"), 4));
         atribuir.Children.Add(_faixaDaAtribuicao);
         Botao(atribuir, Tr.T("Distribuir"), Tr.T("As strings livres, na ordem desta varredura, enchem os inversores na ordem da tabela, cada um até o limite dele (coluna Limite; vazia: o total de entradas). As já alocadas não mudam (e contam); inversor cheio é pulado; as que sobrarem são avisadas. Para redistribuir do zero, use antes Soltar todas da usina."), AtribuirStrings);
-        Botao(atribuir, Tr.T("Soltar todas da usina"), Tr.T("Solta as strings de todos os inversores: ficam livres e continuam no desenho (nada é apagado). Depois, Distribuir redistribui do zero."), SoltarTodasDaUsina);
+        Botao(atribuir, Tr.T("Soltar todas da usina"), Tr.T("Solta as strings de todos os inversores: ficam livres e continuam no desenho; as tags de numeração delas são apagadas. Depois, Distribuir redistribui do zero."), SoltarTodasDaUsina);
         _sentidoDaAtribuicao.ToolTip = Tr.T("O sentido em que a distribuição percorre a usina (é só da distribuição; a numeração tem o seu).");
         _faixaDaAtribuicao.ToolTip = Tr.T("Dentro da mesma faixa (linha ou coluna), em que sentido as strings são tomadas.");
         foreach (var sentido in Enum.GetValues<ScanDirection>()) _sentidoDaAtribuicao.Items.Add(new ComboBoxItem { Content = ScanOrder.Describe(sentido), Tag = sentido });
@@ -188,7 +218,7 @@ internal sealed class AbaInversor : AbaEletrica
             }
 
         // A ajuda de uma linha, em cima da tabela.
-        var textoDaAjuda = Tr.T("Cada linha grava na hora. Com várias linhas escolhidas (Ctrl ou Shift + clique), trocar o trafo ou o limite de uma muda todas.");
+        var textoDaAjuda = Tr.T("Cada linha grava na hora. Com várias linhas escolhidas (Ctrl ou Shift + clique), trocar o trafo ou o limite de uma muda todas. Arraste pela alça ⠿ para mudar a ordem.");
         var ajuda = new TextBlock
         {
             Text = textoDaAjuda,
@@ -228,6 +258,31 @@ internal sealed class AbaInversor : AbaEletrica
         {
             try { if (e.OriginalSource == _inversores) MostrarAsEscolhidas(); }
             catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao mostrar as linhas escolhidas.", erro); }
+        };
+
+        // Arrastar e soltar a linha (10/10/2026). Os eventos "Preview" descem
+        // antes das caixas da linha: a caixa do nome não pega o arrasto como texto.
+        _inversores.AllowDrop = true;
+        _inversores.PreviewDragOver += (_, e) =>
+        {
+            try { ArrastandoPorCima(e); }
+            catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao arrastar a linha de inversor.", erro); }
+        };
+        _inversores.PreviewDragLeave += (_, e) =>
+        {
+            try
+            {
+                // Passar de uma célula para outra também dispara: só esconde quando saiu da lista.
+                var p = e.GetPosition(_inversores);
+                var fora = p.X < 0 || p.Y < 0 || p.X >= _inversores.ActualWidth || p.Y >= _inversores.ActualHeight;
+                if (fora && e.Data.GetDataPresent(FormatoDoArrasto)) EsconderAsMarcas();
+            }
+            catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao sair do arrasto da linha de inversor.", erro); }
+        };
+        _inversores.PreviewDrop += (_, e) =>
+        {
+            try { Soltou(e); }
+            catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao soltar a linha de inversor.", erro); }
         };
 
         // O editor do modelo é estreito; a tabela fica com o resto da largura.
@@ -441,9 +496,9 @@ internal sealed class AbaInversor : AbaEletrica
     // ------------------------------------------------------------ a tabela
 
     /// <summary>As colunas da tabela, na ordem (o cabeçalho, as linhas e o total usam as mesmas).</summary>
-    private static readonly string[] Colunas = ["Cor", "Nome", "Modelo", "Trafo", "Meta", "Strings", "Kwp", "Kw", "Razao", "Acoes"];
+    private static readonly string[] Colunas = ["Alca", "Cor", "Nome", "Modelo", "Trafo", "Meta", "Strings", "Kwp", "Kw", "Razao", "Acoes"];
 
-    private const int ColunaCor = 0, ColunaNome = 1, ColunaModelo = 2, ColunaTrafo = 3, ColunaMeta = 4, ColunaStrings = 5, ColunaKwp = 6, ColunaKw = 7, ColunaRazao = 8, ColunaAcoes = 9;
+    private const int ColunaAlca = 0, ColunaCor = 1, ColunaNome = 2, ColunaModelo = 3, ColunaTrafo = 4, ColunaMeta = 5, ColunaStrings = 6, ColunaKwp = 7, ColunaKw = 8, ColunaRazao = 9, ColunaAcoes = 10;
 
     /// <summary>Uma linha da tabela: as colunas com a largura repartida (a maior de cada uma) e uma sobra no fim.</summary>
     private static Grid LinhaDaTabela()
@@ -538,6 +593,7 @@ internal sealed class AbaInversor : AbaEletrica
         var emCampo = EquipamentoEmCampo.EmCampo(Documento.Database);
         var linhas = LinhasDaTabela(Documento, _setup, _contagem);
         _inversores.Items.Clear();
+        _marcas.Clear();
 
         foreach (var linha in linhas)
         {
@@ -696,14 +752,29 @@ internal sealed class AbaInversor : AbaEletrica
     /// <summary>
     /// Uma linha: a cor (clique abre a paleta), o nome (editável na própria
     /// célula), o modelo e o trafo (caixas que gravam ao escolher), strings,
-    /// kWp, kW, CC/CA e as ações (+ Strings, Ver e o "⋯" com o resto).
+    /// kWp, kW, CC/CA e as ações (+ Strings, Ver, Soltar, Pôr em campo ou
+    /// Mover, Apagar). À esquerda, a alça "⠿" de arrastar a linha.
     /// </summary>
     private Grid MontarLinha(InverterTableRow linha, bool emCampo)
     {
         var inversor = linha.Inverter;
         var g = LinhaDaTabela();
 
+        Por(g, Alca(inversor.Id), ColunaAlca);
         Por(g, CaixaDaCor(inversor), ColunaCor);
+
+        // A marca de onde a linha arrastada cai: um traço na borda de cima ou de baixo, por cima de tudo.
+        var marca = new Border
+        {
+            Height = 2,
+            Background = System.Windows.SystemColors.HighlightBrush,
+            IsHitTestVisible = false,
+            Visibility = Visibility.Collapsed,
+        };
+        Grid.SetColumnSpan(marca, Colunas.Length + 1);
+        Panel.SetZIndex(marca, 1);
+        g.Children.Add(marca);
+        _marcas[inversor.Id] = marca;
 
         var aviso = StringAllocation.ExcessWarning(inversor, linha.Model, linha.Strings);
         var nome = Por(g, CaixaDoNome(inversor, aviso, emCampo), ColunaNome);
@@ -725,15 +796,24 @@ internal sealed class AbaInversor : AbaEletrica
 
         var acoes = Por(g, new StackPanel { Orientation = Orientation.Horizontal }, ColunaAcoes);
         var id = inversor.Id;
-        Button? mais = null;
+
+        // 10/10/2026 (Renan: "tem o botão três pontinhos, mas tem espaço para
+        // mais colunas"): as ações do antigo "⋯" à vista, do mesmo tamanho.
         var botoes = new[]
         {
             Botao(acoes, Tr.T("+ Strings"), Tr.T("Pôr strings neste inversor: a janela some; clique nas strings no desenho (Shift+clique tira) e Enter volta."),
                 () => JanelaEletrica.Campo(Documento, PluginInfo.ComandoEletricaAlocar, id.ToString("D"))),
             Botao(acoes, Tr.T("Ver"), Tr.T("Mostra no desenho as strings deste inversor (ficam selecionadas)."),
                 () => JanelaEletrica.SelecionarStrings(Documento, id)),
-            mais = Botao(acoes, "⋯", Tr.T("Mais: soltar as strings, pôr em campo, apagar o inversor."),
-                () => MenuDaLinha(mais!, inversor, emCampo)),
+            Botao(acoes, Tr.T("Soltar"), Tr.T("Solta as strings deste inversor: ficam livres e continuam no desenho; as tags de numeração delas são apagadas."),
+                () => SoltarTodas(inversor)),
+            Botao(acoes, emCampo ? Tr.T("Mover") : Tr.T("Pôr em campo"),
+                emCampo
+                    ? Tr.T("O retângulo do inversor já está no desenho: a janela some e você clica o novo centro dele. O vínculo não muda.")
+                    : Tr.T("Põe o retângulo do inversor no desenho: a janela some e você clica o centro dele."),
+                () => AlocarEmCampo(id)),
+            Botao(acoes, Tr.T("Apagar"), Tr.T("Tira o inversor do cadastro (pede confirmação): as strings dele ficam livres, as tags delas saem e o retângulo sai do campo."),
+                () => Apagar([inversor])),
         };
         foreach (var b in botoes)
         {
@@ -746,21 +826,159 @@ internal sealed class AbaInversor : AbaEletrica
     }
 
     /// <summary>
-    /// O "⋯" da linha: soltar as strings, pôr (ou mover) o retângulo em campo
-    /// e apagar o inversor (com confirmação).
+    /// A alça "⠿" da linha: apertar e arrastar leva o inversor para outro
+    /// lugar da lista (a caixa do nome e as outras continuam como eram). A
+    /// alça prende o mouse para o arrasto começar mesmo saindo dela.
     /// </summary>
-    private void MenuDaLinha(Button botao, Inverter inversor, bool emCampo)
+    private TextBlock Alca(Guid inversor)
     {
-        var menu = new ContextMenu { PlacementTarget = botao, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
-        Item(menu, Tr.T("Soltar strings"), Tr.T("As strings deste inversor ficam livres; continuam no desenho (nada é apagado)."), () => SoltarTodas(inversor));
-        Item(menu, emCampo ? Tr.T("Mover em campo") : Tr.T("Pôr em campo"),
-            emCampo
-                ? Tr.T("O retângulo do inversor já está no desenho: a janela some e você clica o novo centro dele. O vínculo não muda.")
-                : Tr.T("Põe o retângulo do inversor no desenho: a janela some e você clica o centro dele."),
-            () => AlocarEmCampo(inversor.Id));
-        menu.Items.Add(new Separator());
-        Item(menu, Tr.T("Apagar inversor…"), Tr.T("Tira o inversor do cadastro (pede confirmação): as strings dele ficam livres e o retângulo sai do campo."), () => Apagar([inversor]));
-        menu.IsOpen = true;
+        var alca = new TextBlock
+        {
+            Text = "⠿",
+            FontSize = 14,
+            Foreground = System.Windows.SystemColors.GrayTextBrush,
+            Background = System.Windows.Media.Brushes.Transparent,
+            Cursor = System.Windows.Input.Cursors.SizeNS,
+            VerticalAlignment = VerticalAlignment.Center,
+            Padding = new Thickness(2, 0, 2, 0),
+            Margin = new Thickness(0, 0, 4, 0),
+            ToolTip = Tr.T("Arraste para mudar a ordem: a linha cai no lugar da linha onde você soltar."),
+        };
+
+        Point? inicio = null;
+        alca.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            try
+            {
+                inicio = e.GetPosition(alca);
+                alca.CaptureMouse();
+                e.Handled = true;   // a lista não começa a escolher linhas arrastando
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao pegar a alça da linha de inversor.", erro);
+            }
+        };
+        alca.PreviewMouseLeftButtonUp += (_, _) =>
+        {
+            try
+            {
+                inicio = null;
+                if (alca.IsMouseCaptured) alca.ReleaseMouseCapture();
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao largar a alça da linha de inversor.", erro);
+            }
+        };
+        // A captura perdida (Alt+Tab, uma janela por cima) não deixa arrasto pendurado.
+        alca.LostMouseCapture += (_, _) => inicio = null;
+        alca.PreviewMouseMove += (_, e) =>
+        {
+            try
+            {
+                if (inicio is not { } de || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed) return;
+                var agora = e.GetPosition(alca);
+                if (Math.Abs(agora.Y - de.Y) < SystemParameters.MinimumVerticalDragDistance && Math.Abs(agora.X - de.X) < SystemParameters.MinimumHorizontalDragDistance) return;
+
+                inicio = null;
+                alca.ReleaseMouseCapture();
+                try
+                {
+                    // O GUID como texto: um destino de fora (a área de desenho) não precisa serializar objeto.
+                    DragDrop.DoDragDrop(alca, new DataObject(FormatoDoArrasto, inversor.ToString("D")), DragDropEffects.Move);
+                }
+                finally
+                {
+                    EsconderAsMarcas();
+                }
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao arrastar a linha de inversor.", erro);
+            }
+        };
+
+        return alca;
+    }
+
+    /// <summary>O inversor arrastado e a linha onde o mouse está (null se não é arrasto de linha ou está fora delas).</summary>
+    private (Guid Arrastado, ListBoxItem Alvo)? AlvoDoArrasto(DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(FormatoDoArrasto) || e.Data.GetData(FormatoDoArrasto) is not string texto || !Guid.TryParse(texto, out var arrastado)) return null;
+        if (e.OriginalSource is not DependencyObject sob || ItemsControl.ContainerFromElement(_inversores, sob) is not ListBoxItem { Tag: Inverter } alvo) return null;
+        return (arrastado, alvo);
+    }
+
+    /// <summary>
+    /// O arrasto passa por cima da tabela: a marca mostra onde a linha cai
+    /// (descendo, embaixo da linha de baixo do mouse; subindo, em cima dela);
+    /// perto da borda a lista rola.
+    /// </summary>
+    private void ArrastandoPorCima(DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(FormatoDoArrasto)) return;
+        e.Handled = true;
+        e.Effects = DragDropEffects.None;
+        Rolar(e.GetPosition(_inversores).Y);
+
+        EsconderAsMarcas();
+        if (AlvoDoArrasto(e) is not { } a) return;
+
+        var de = PosicaoNaTabela(a.Arrastado);
+        var para = _inversores.ItemContainerGenerator.IndexFromContainer(a.Alvo);
+        if (de < 0 || para < 0 || de == para || !_marcas.TryGetValue(((Inverter)a.Alvo.Tag).Id, out var marca)) return;
+
+        marca.VerticalAlignment = de < para ? VerticalAlignment.Bottom : VerticalAlignment.Top;
+        marca.Visibility = Visibility.Visible;
+        e.Effects = DragDropEffects.Move;
+    }
+
+    /// <summary>Soltou a linha: o inversor vai para o lugar da linha de baixo do mouse (depois do evento: gravar refaz a lista).</summary>
+    private void Soltou(DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(FormatoDoArrasto)) return;
+        e.Handled = true;
+        EsconderAsMarcas();
+        if (AlvoDoArrasto(e) is not { } a) return;
+
+        var alvo = ((Inverter)a.Alvo.Tag).Id;
+        if (alvo == a.Arrastado) return;
+
+        Dispatcher.BeginInvoke(() =>
+        {
+            try { if (DesenhoAberto()) MoverPelaTela(a.Arrastado, alvo); }
+            catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao mover o inversor na lista.", erro); }
+        });
+    }
+
+    private int PosicaoNaTabela(Guid inversor) =>
+        _inversores.Items.OfType<ListBoxItem>().ToList().FindIndex(i => ((Inverter)i.Tag).Id == inversor);
+
+    private void EsconderAsMarcas()
+    {
+        foreach (var m in _marcas.Values) m.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>Arrastando perto da borda de cima ou de baixo da tabela, a lista rola uma linha.</summary>
+    private void Rolar(double y)
+    {
+        const double Borda = 18;
+        if (AchaORolador(_inversores) is not { } rolador) return;
+        if (y < Borda) rolador.LineUp();
+        else if (y > _inversores.ActualHeight - Borda) rolador.LineDown();
+    }
+
+    private static ScrollViewer? AchaORolador(DependencyObject de)
+    {
+        for (var k = 0; k < System.Windows.Media.VisualTreeHelper.GetChildrenCount(de); k++)
+        {
+            var filho = System.Windows.Media.VisualTreeHelper.GetChild(de, k);
+            if (filho is ScrollViewer rolador) return rolador;
+            if (AchaORolador(filho) is { } achado) return achado;
+        }
+
+        return null;
     }
 
     /// <summary>Um item de menu com o clique em try/catch (exceção num evento WPF derrubaria o Civil 3D).</summary>
@@ -1252,29 +1470,41 @@ internal sealed class AbaInversor : AbaEletrica
     }
 
     /// <summary>
-    /// Apaga os inversores (um, pelo "⋯" da linha, ou as linhas escolhidas):
-    /// primeiro o cadastro (se o registro não pode ser gravado, nada muda),
-    /// depois o vínculo das strings e os retângulos em campo (se falhar, a
-    /// string fica apontando para um inversor que não existe, e essa não
-    /// trava: pode ser alocada de novo). Os apagados e quantas strings ficaram livres.
+    /// Apaga os inversores (um, pelo Apagar da linha; as linhas escolhidas;
+    /// ou todos): primeiro o cadastro (se o registro não pode ser gravado,
+    /// nada muda), depois o vínculo das strings (e as tags delas, como no
+    /// Soltar) e os retângulos em campo (se falhar, a string fica apontando
+    /// para um inversor que não existe, e essa não trava: pode ser alocada de
+    /// novo). Os apagados, quantas strings ficaram livres e quantas tags saíram.
     /// </summary>
-    internal static (IReadOnlyList<Inverter> Apagados, int Soltas) ApagarInversores(Database database, IReadOnlyCollection<Guid> inversores)
+    internal static (IReadOnlyList<Inverter> Apagados, int Soltas, int Tags) ApagarInversores(Database database, IReadOnlyCollection<Guid> inversores)
     {
         var apagados = ConfiguracaoEletricaStore.Mudar(database, s => s.RemoveInverters(inversores));
-        var soltas = 0;
-        foreach (var i in apagados)
-        {
-            soltas += StringsDoDesenho.Soltar(database, i.Id);
-            EquipamentoEmCampo.Apagar(database, EquipmentKind.Inverter, i.Id);
-        }
+        if (apagados.Count == 0) return (apagados, 0, 0);
 
-        return (apagados, soltas);
+        // Todos de uma vez (uma leitura do desenho), não um por inversor (revisão de 10/10/2026).
+        var (soltas, tags) = StringsDoDesenho.Soltar(database, apagados.Select(i => i.Id).ToList());
+        foreach (var i in apagados) EquipamentoEmCampo.Apagar(database, EquipmentKind.Inverter, i.Id);
+
+        return (apagados, soltas, tags);
     }
 
     private void ApagarAsEscolhidas() => Apagar(Escolhidos());
 
-    /// <summary>Apaga os inversores depois da confirmação (o nome de cada um na pergunta).</summary>
-    private void Apagar(IReadOnlyList<Inverter> inversores)
+    /// <summary>O "Apagar todos" (10/10/2026: "quero ter a opção de apagar TODOS os inversores da usina").</summary>
+    private void ApagarTodos()
+    {
+        if (_setup.Inverters.Count == 0)
+        {
+            Avisar(Tr.T("A usina não tem inversor para apagar."), erro: true);
+            return;
+        }
+
+        Apagar(_setup.Inverters, todos: true);
+    }
+
+    /// <summary>Apaga os inversores depois da confirmação (o nome de cada um na pergunta; todos: quantos são).</summary>
+    private void Apagar(IReadOnlyList<Inverter> inversores, bool todos = false)
     {
         if (inversores.Count == 0)
         {
@@ -1283,24 +1513,69 @@ internal sealed class AbaInversor : AbaEletrica
         }
 
         var nomes = string.Join(", ", inversores.Take(8).Select(i => i.Name)) + (inversores.Count > 8 ? ", …" : string.Empty);
-        var pergunta = inversores.Count == 1
-            ? Tr.F("Apagar o {0}? As strings dele ficam livres (continuam no desenho) e o retângulo sai do campo.", nomes)
-            : Tr.F("Apagar {0} inversores ({1})? As strings deles ficam livres (continuam no desenho) e os retângulos saem do campo.", inversores.Count, nomes);
+        var pergunta = todos
+            ? Tr.F("Apagar TODOS os {0} inversores da usina? As strings deles ficam livres (continuam no desenho), as tags delas saem e os retângulos saem do campo.", inversores.Count)
+            : inversores.Count == 1
+                ? Tr.F("Apagar o {0}? As strings dele ficam livres (continuam no desenho), as tags delas saem e o retângulo sai do campo.", nomes)
+                : Tr.F("Apagar {0} inversores ({1})? As strings deles ficam livres (continuam no desenho), as tags delas saem e os retângulos saem do campo.", inversores.Count, nomes);
         if (MessageBox.Show(Window.GetWindow(this), pergunta, Tr.T("Apagar inversor"), MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
 
         var ids = inversores.Select(i => i.Id).ToList();
         var nenhum = false;
         Fazer(() =>
         {
-            var (apagados, soltas) = ApagarInversores(Documento.Database, ids);
+            var (apagados, soltas, tags) = ApagarInversores(Documento.Database, ids);
             nenhum = apagados.Count == 0;
             if (nenhum) return null;
             return apagados.Count == 1
-                ? Tr.F("{0} apagado do cadastro; {1} string(s) ficaram livres no desenho.", apagados[0].Name, soltas)
-                : Tr.F("{0} inversores apagados do cadastro; {1} string(s) ficaram livres no desenho.", apagados.Count, soltas);
+                ? Tr.F("{0} apagado do cadastro; {1} string(s) ficaram livres no desenho; {2} tag(s) apagada(s).", apagados[0].Name, soltas, tags)
+                : Tr.F("{0} inversores apagados do cadastro; {1} string(s) ficaram livres no desenho; {2} tag(s) apagada(s).", apagados.Count, soltas, tags);
         });
         if (nenhum) Avisar(Tr.T("Esse inversor não está mais no cadastro."), erro: true);
         else RedesenharODesenho();
+    }
+
+    private void MoverPelaTela(Guid inversor, Guid alvo) =>
+        GravarNaLinha(() => Mover(Documento.Database, inversor, alvo), p => Tr.F("Não mudei a ordem: {0}.", p));
+
+    /// <summary>
+    /// Arrastar a linha (10/10/2026): o inversor vai para o lugar do alvo na
+    /// lista do cadastro (<see cref="ElectricalSetup.MoveInverter"/>). A
+    /// frase, ou o porquê de nada mudar. Quem chama trava o documento.
+    /// </summary>
+    internal static (string? Frase, string? Problema) Mover(Database database, Guid inversor, Guid alvo)
+    {
+        var (nome, posicao) = (string.Empty, 0);
+        var mudou = ConfiguracaoEletricaStore.Mudar(database, s =>
+        {
+            if (!s.MoveInverter(inversor, alvo)) return false;
+            nome = s.FindInverter(inversor)!.Name;
+            posicao = s.Inverters.ToList().FindIndex(i => i.Id == inversor) + 1;
+            return true;
+        });
+
+        return mudou
+            ? (Tr.F("{0} agora é o {1}º da lista (a ordem do Distribuir e do número do inversor na tag; gere as tags de novo).", nome, posicao), null)
+            : (null, Tr.T("esse inversor não está mais no cadastro"));
+    }
+
+    private void OrdenarPelaTela()
+    {
+        if ((_ordem.SelectedItem as ComboBoxItem)?.Tag is not InverterOrder ordem) return;
+        GravarNaLinha(() => Ordenar(Documento.Database, ordem), p => Tr.F("Não mudei a ordem: {0}.", p));
+    }
+
+    /// <summary>
+    /// O "Ordenar" (10/10/2026): a lista do cadastro pelo nome, pelo trafo ou
+    /// pelo trafo e nome (<see cref="ElectricalSetup.SortInverters"/>). A
+    /// frase com quantos mudaram de lugar. Quem chama trava o documento.
+    /// </summary>
+    internal static (string? Frase, string? Problema) Ordenar(Database database, InverterOrder ordem)
+    {
+        var mudaram = ConfiguracaoEletricaStore.Mudar(database, s => s.SortInverters(ordem));
+        return (mudaram == 0
+            ? Tr.T("A lista já estava nessa ordem.")
+            : Tr.F("Lista ordenada: {0} inversor(es) mudaram de lugar (a ordem do Distribuir e do número do inversor na tag; gere as tags de novo).", mudaram), null);
     }
 
     /// <summary>
@@ -1318,7 +1593,7 @@ internal sealed class AbaInversor : AbaEletrica
 
         if (!EquipamentoEmCampo.EmCampo(Documento.Database).Any(e => e.Kind == EquipmentKind.Inverter))
         {
-            Avisar(Tr.T("Nenhum inversor em campo: ponha os inversores no desenho antes (⋯ › Pôr em campo, na linha de cada um)."), erro: true);
+            Avisar(Tr.T("Nenhum inversor em campo: ponha os inversores no desenho antes (Pôr em campo, na linha de cada um)."), erro: true);
             return;
         }
 
@@ -1426,8 +1701,8 @@ internal sealed class AbaInversor : AbaEletrica
     {
         Fazer(() =>
         {
-            var soltas = StringsDoDesenho.SoltarTodasDaUsina(Documento.Database);
-            return Tr.F("{0} string(s) soltas de todos os inversores; continuam no desenho, livres, na cor da camada.", soltas);
+            var (soltas, tags) = StringsDoDesenho.SoltarTodasDaUsina(Documento.Database);
+            return Tr.F("{0} string(s) soltas de todos os inversores; continuam no desenho, livres, na cor da camada; {1} tag(s) apagada(s).", soltas, tags);
         });
         RedesenharODesenho();
     }
@@ -1436,8 +1711,8 @@ internal sealed class AbaInversor : AbaEletrica
     {
         Fazer(() =>
         {
-            var soltas = StringsDoDesenho.Soltar(Documento.Database, inversor.Id);
-            return Tr.F("{0}: {1} string(s) soltas; continuam no desenho, livres, na cor da camada.", inversor.Name, soltas);
+            var (soltas, tags) = StringsDoDesenho.Soltar(Documento.Database, inversor.Id);
+            return Tr.F("{0}: {1} string(s) soltas; continuam no desenho, livres, na cor da camada; {2} tag(s) apagada(s).", inversor.Name, soltas, tags);
         });
         RedesenharODesenho();
     }

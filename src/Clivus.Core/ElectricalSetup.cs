@@ -768,6 +768,57 @@ public sealed class ElectricalSetup
         return sairam;
     }
 
+    /// <summary>
+    /// Leva o inversor para a posição de outro na lista do cadastro (arrastar
+    /// e soltar a linha da tabela, 10/10/2026): sai de onde está e entra onde
+    /// o outro estava (descendo, fica depois dele; subindo, antes). A ordem é
+    /// a da tabela, a do Distribuir e o número {I} da tag. Se mudou.
+    /// </summary>
+    public bool MoveInverter(Guid id, Guid target)
+    {
+        var de = _inversores.FindIndex(i => i.Id == id);
+        var para = _inversores.FindIndex(i => i.Id == target);
+        if (de < 0 || para < 0 || de == para) return false;
+
+        var inversor = _inversores[de];
+        _inversores.RemoveAt(de);
+        _inversores.Insert(para, inversor);
+        return true;
+    }
+
+    /// <summary>
+    /// Ordena a lista do cadastro (10/10/2026): pelo nome, pelo trafo ou pelo
+    /// trafo e depois o nome, na ordem natural (<see cref="NaturalStringComparer"/>).
+    /// O trafo vale pelo apelido (T1, T2, ..., T10); os de trafo que sumiu do
+    /// cadastro vêm depois, e os sem trafo por último. Empate fica na ordem
+    /// que já tinha. Quantos mudaram de posição.
+    /// </summary>
+    public int SortInverters(InverterOrder order)
+    {
+        var natural = NaturalStringComparer.Instance;
+        var posicaoDoTrafo = new Dictionary<Guid, int>();
+        foreach (var (t, k) in _trafos.OrderBy(t => t.Nickname, natural).Select((t, k) => (t, k)))
+            posicaoDoTrafo.TryAdd(t.Id, k);
+
+        int Trafo(Inverter i) =>
+            i.Transformer == Guid.Empty ? int.MaxValue
+            : posicaoDoTrafo.TryGetValue(i.Transformer, out var k) ? k
+            : int.MaxValue - 1;
+
+        var ordenados = (order switch
+        {
+            InverterOrder.Name => _inversores.OrderBy(i => i.Name, natural),
+            InverterOrder.Transformer => _inversores.OrderBy(Trafo),
+            InverterOrder.TransformerThenName => _inversores.OrderBy(Trafo).ThenBy(i => i.Name, natural),
+            _ => throw new ArgumentOutOfRangeException(nameof(order), order, null),
+        }).ToList();
+
+        var mudaram = ordenados.Where((i, k) => i.Id != _inversores[k].Id).Count();
+        _inversores.Clear();
+        _inversores.AddRange(ordenados);
+        return mudaram;
+    }
+
     // ------------------------------------------------------------- combiner
 
     /// <summary>Uma combiner nova (19.1): "CB N", 16 entradas, sem inversor.</summary>
