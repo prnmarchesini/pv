@@ -16,8 +16,12 @@ public enum CableRoute
     MediumVoltage,
 }
 
-/// <summary>Quantos equipamentos de um tipo há no cadastro e quantos têm o retângulo em campo.</summary>
-public readonly record struct EquipmentCount(int Registered, int InField);
+/// <summary>
+/// Quantos equipamentos de um tipo há no cadastro, quantos têm o retângulo em
+/// campo e (inversores) quantos dos que não estão em campo são de alocação
+/// automática: o Gerar CC é quem os põe (Renan, 10/10/2026, item 19).
+/// </summary>
+public readonly record struct EquipmentCount(int Registered, int InField, int Automatic = 0);
 
 /// <summary>
 /// O que o desenho tem, para saber quais rotas são possíveis (17.1): strings
@@ -57,13 +61,21 @@ public static class CableRoutes
     /// um só, o bloco) e quantos deles têm o retângulo em <paramref name="inField"/>.
     /// Retângulo sem cadastro (COPY, UNDO, desenho copiado) não conta.
     /// </summary>
-    public static CableRouteDrawing Drawing(ElectricalSetup setup, int strings, IReadOnlySet<(EquipmentKind Kind, Guid Id)> inField)
+    /// <remarks>
+    /// <paramref name="automatic"/>: os inversores marcados como "Automático
+    /// pelas strings" (local dos inversores). Os que não estão em campo contam
+    /// à parte: a aba CC não fica bloqueada por eles, porque o Gerar CC os põe.
+    /// </remarks>
+    public static CableRouteDrawing Drawing(ElectricalSetup setup, int strings, IReadOnlySet<(EquipmentKind Kind, Guid Id)> inField, IReadOnlySet<Guid>? automatic = null)
     {
         var equipamentos = setup.Equipment().ToList();
 
         EquipmentCount Contar(EquipmentKind tipo) => new(
             equipamentos.Count(e => e.Kind == tipo),
-            equipamentos.Count(e => e.Kind == tipo && inField.Contains((e.Kind, e.Id))));
+            equipamentos.Count(e => e.Kind == tipo && inField.Contains((e.Kind, e.Id))),
+            tipo == EquipmentKind.Inverter && automatic is not null
+                ? equipamentos.Count(e => e.Kind == tipo && automatic.Contains(e.Id) && !inField.Contains((e.Kind, e.Id)))
+                : 0);
 
         return new CableRouteDrawing(strings, Contar(EquipmentKind.Combiner), Contar(EquipmentKind.Inverter), Contar(EquipmentKind.Transformer), Contar(EquipmentKind.ConsumerUnit));
     }
@@ -100,8 +112,9 @@ public static class CableRoutes
         {
             case CableRoute.DirectCurrent:
                 Strings();
-                // Com combiner em campo, o trecho CC vai até ela; sem, até o inversor.
-                if (desenho.Combiners.InField == 0) Inversor();
+                // Com combiner em campo, o trecho CC vai até ela; sem, até o inversor. O
+                // inversor automático fora de campo também libera: o Gerar CC o põe (item 19).
+                if (desenho.Combiners.InField == 0 && desenho.Inverters.Automatic == 0) Inversor();
                 break;
 
             case CableRoute.Combiner:

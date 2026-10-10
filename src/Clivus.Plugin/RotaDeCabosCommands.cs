@@ -70,7 +70,13 @@ public static class RotaDeCabosCommands
     {
         var database = documento.Database;
         var (setup, problema) = ConfiguracaoEletricaStore.Ler(database);
-        return (CableRoutes.Drawing(setup, StringsDoDesenho.Ler(database).Count, EquipamentoEmCampo.EmCampo(database)), problema);
+
+        // Inversor de alocação automática fora de campo não bloqueia a aba CC: o Gerar CC o põe (item 19).
+        var automaticos = LocalDosInversores.Ler(database, out var problemaDoLocal)
+            .Where(l => l.Mode == InverterPlacementMode.Automatic).Select(l => l.Inverter).ToHashSet();
+        if (problemaDoLocal is not null) problema = problema is null ? Tr.F("o local dos inversores não se lê ({0})", problemaDoLocal) : problema + "; " + Tr.F("o local dos inversores não se lê ({0})", problemaDoLocal);
+
+        return (CableRoutes.Drawing(setup, StringsDoDesenho.Ler(database).Count, EquipamentoEmCampo.EmCampo(database), automaticos), problema);
     }
 }
 
@@ -362,6 +368,10 @@ internal sealed class AbaDeRota : AbaEletrica
         linhaDaVala.Children.Add(_valas);
         Botao(linhaDaVala, Tr.T("Selecionar vala"), Tr.T("A janela some; clique nas polilinhas que são vala desta rota (Shift+clique tira; Enter termina). Elas vão para a camada da vala da rota e viram 3D, acompanhando o terreno na profundidade desta aba; o traçado em planta não muda."),
             () => Comando(PluginInfo.ComandoRotaVala, _rota.ToString()));
+        Botao(linhaDaVala, Tr.T("Atualizar valas"), Tr.T("Relê as valas desta rota: as linhas que você apagou saem da rota, e as que ficaram voltam para o terreno na profundidade desta aba (se o terreno está processado)."),
+            () => Comando(PluginInfo.ComandoRotaValaAtualizar, _rota.ToString()));
+        Botao(linhaDaVala, Tr.T("Soltar valas"), Tr.T("A janela some; clique nas linhas que devem deixar de ser vala desta rota (Enter termina). A linha não é apagada: perde a marca de vala e vai para a camada corrente."),
+            () => Comando(PluginInfo.ComandoRotaValaSoltar, _rota.ToString()));
         pilha.Children.Add(linhaDaVala);
 
         Titulo(pilha, Tr.T("Cabos"));
@@ -373,6 +383,9 @@ internal sealed class AbaDeRota : AbaEletrica
         if (rota == CableRoute.DirectCurrent)
             Botao(acoes, Tr.T("Recolocar automáticos"), Tr.T("Os inversores automáticos (aba Inversor da configuração elétrica) voltam ao lado da vala, no ponto de menor cabo CC das strings deles, mesmo os que você moveu; e a rota CC é refeita."),
                 () => Comando(PluginInfo.ComandoRotaRecolocar, _rota.ToString()));
+        if (rota == CableRoute.DirectCurrent)
+            Botao(acoes, Tr.T("Recalcular rota..."), Tr.T("Refaz só os cabos CC dos inversores que você escolher (na lista ou no desenho), da posição de agora: mova um inversor à mão e recalcule só ele. Os cabos dos outros não mudam."),
+                Recalcular);
         Botao(acoes, Tr.T("Apagar tudo"), Tr.T("Apaga todos os cabos desta rota. Só cabo: strings, valas e mesas ficam."),
             () => Comando(PluginInfo.ComandoRotaApagar, _rota + " Tudo"));
         Botao(acoes, Tr.T("Apagar escolhendo"), Tr.T("Escolha em campo os cabos desta rota a apagar."),
@@ -546,6 +559,21 @@ internal sealed class AbaDeRota : AbaEletrica
         return gravou;
     }
 
+    /// <summary>"Recalcular rota": a lista dos inversores; os marcados (ou os escolhidos no desenho) vão para o comando.</summary>
+    private void Recalcular()
+    {
+        var (setup, _) = ConfiguracaoEletricaStore.Ler(Documento.Database);
+        if (setup.Inverters.Count == 0)
+        {
+            Avisar(Tr.T("Não há inversor no cadastro."), erro: true);
+            return;
+        }
+
+        var janela = new JanelaDeRecalculo(setup.Inverters.OrderBy(i => i.Name, NaturalStringComparer.Instance).ToList(), EquipamentoEmCampo.EmCampo(Documento.Database));
+        AcadApp.ShowModalWindow(janela);
+        if (janela.Argumento is { } argumento) Comando(PluginInfo.ComandoRotaRecalcular, argumento);
+    }
+
     private void LimparTabelas()
     {
         _tabelas.Children.Clear();
@@ -591,10 +619,14 @@ internal sealed class AbaDeRota : AbaEletrica
     {
         _ultimas = RotaDeCabosTabelas.Montar(Documento, _rota, out var recontagem);
         TabelaNaTela.Mostrar(_tabelas, _ultimas);
-        Avisar(recontagem.Sumidos.Count == 0
-                ? Tr.F("Recontado: {0} lance(s) no desenho.", recontagem.Lances.Count)
-                : Tr.F("Recontado: {0} lance(s) no desenho; {1} gerado(s) e apagado(s) à mão (a origem foi pintada).", recontagem.Lances.Count, recontagem.Sumidos.Count),
-            erro: recontagem.Sumidos.Count > 0);
+        var frase = recontagem.Sumidos.Count == 0
+            ? Tr.F("Recontado: {0} lance(s) no desenho.", recontagem.Lances.Count)
+            : Tr.F("Recontado: {0} lance(s) no desenho; {1} gerado(s) e apagado(s) à mão (a origem foi pintada).", recontagem.Lances.Count, recontagem.Sumidos.Count);
+
+        // Item 18: o cabo cuja ponta saiu de campo não entra na tabela; a aba diz quem.
+        if (recontagem.Orfaos.Count > 0)
+            frase += "\n" + Tr.F("{0} cabo(s) desenhado(s) ligam em equipamento que não está mais em campo: ficaram fora do resumo e foram pintados. Gere a rota de novo ou apague esses cabos.", recontagem.Orfaos.Count);
+        Avisar(frase, erro: recontagem.Sumidos.Count > 0 || recontagem.Orfaos.Count > 0);
     }
 
     private void ExportarCsv()
@@ -612,17 +644,94 @@ internal sealed class AbaDeRota : AbaEletrica
 }
 
 /// <summary>
+/// "Recalcular rota" (item 19): a lista dos inversores, com caixas de marcar
+/// (os em campo dizem isso), Marcar todos, e Escolher no desenho. O
+/// argumento do comando fica em <see cref="Argumento"/> (null = cancelado).
+/// </summary>
+internal sealed class JanelaDeRecalculo : Window
+{
+    /// <summary>Os GUIDs marcados separados por ";", ou "Selecionar"; null se cancelou.</summary>
+    internal string? Argumento { get; private set; }
+
+    internal JanelaDeRecalculo(IReadOnlyList<Inverter> inversores, IReadOnlySet<(EquipmentKind Kind, Guid Id)> emCampo)
+    {
+        Title = Tr.T("Recalcular rota CC");
+        SizeToContent = SizeToContent.WidthAndHeight;
+        MaxHeight = 640;
+        ResizeMode = ResizeMode.NoResize;
+        ShowInTaskbar = false;
+        WindowStartupLocation = WindowStartupLocation.CenterScreen;
+
+        var caixas = inversores.Select(i => new CheckBox
+        {
+            Content = emCampo.Contains((EquipmentKind.Inverter, i.Id)) ? Tr.F("{0} — em campo", i.Name) : Tr.F("{0} — fora de campo", i.Name),
+            Tag = i.Id,
+            Margin = new Thickness(0, 0, 12, 4),
+        }).ToList();
+
+        // Em colunas, para a lista longa não virar rolagem (regra de 02/10/2026).
+        var lista = new WrapPanel { Orientation = Orientation.Vertical, MaxHeight = 420 };
+        foreach (var c in caixas) lista.Children.Add(c);
+
+        var todos = new CheckBox { Content = Tr.T("Marcar todos"), Margin = new Thickness(0, 0, 0, 8), FontWeight = FontWeights.SemiBold };
+        todos.Click += (_, _) => caixas.ForEach(c => c.IsChecked = todos.IsChecked);
+
+        var botoes = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        Button Botao(string texto, string dica, Action acao)
+        {
+            var b = new Button { Content = texto, ToolTip = dica, Height = 26, Padding = new Thickness(8, 0, 8, 0), Margin = new Thickness(0, 0, 6, 0) };
+            b.Click += (_, _) =>
+            {
+                try
+                {
+                    acao();
+                }
+                catch (System.Exception erro)
+                {
+                    RegistroDeDiagnostico.Registrar("Falha na janela de recalcular rota.", erro);
+                }
+            };
+            botoes.Children.Add(b);
+            return b;
+        }
+
+        Botao(Tr.T("Recalcular os marcados"), Tr.T("Refaz só os cabos CC das strings dos inversores marcados, da posição de agora."), () =>
+        {
+            var marcados = caixas.Where(c => c.IsChecked == true).Select(c => ((Guid)c.Tag).ToString("D")).ToList();
+            if (marcados.Count == 0) return;
+            Argumento = string.Join(";", marcados);
+            Close();
+        }).IsDefault = true;
+        Botao(Tr.T("Escolher no desenho"), Tr.T("A janela some; clique nos inversores em campo (Enter termina)."), () =>
+        {
+            Argumento = "Selecionar";
+            Close();
+        });
+        Botao(Tr.T("Cancelar"), Tr.T("Fecha sem recalcular."), Close).IsCancel = true;
+
+        var raiz = new StackPanel { Margin = new Thickness(12) };
+        raiz.Children.Add(todos);
+        raiz.Children.Add(lista);
+        raiz.Children.Add(botoes);
+        Content = raiz;
+    }
+}
+
+/// <summary>
 /// O resumo de cabos da usina (24.1, 24.2), recontando antes: uma aba por
-/// tipo de cabo (CC, com as strings e as combiners; CA; MT), cada circuito
-/// uma linha com De → Para, a especificação do cabo, o método, os lances, o
-/// comprimento, as vias (editáveis: mudam a totalização na hora), os cabos e
-/// os metros de cabo; e a lista de material com a folga do usuário (Renan,
-/// 10/10/2026: "quero uma aba resumo para cada cabo, CC, CA e MT").
+/// tipo de cabo (CC, com as strings e as combiners; CA; MT) e a lista de
+/// material com a folga do usuário. Desde os itens 12, 16 e 18 de
+/// 10/10/2026: a tabela vem agrupada (CC: UC > trafo > inversor > strings;
+/// CA: UC > trafo > inversores; MT: UC > trafos), cada grupo com o subtotal
+/// de cabos e metros, tudo fechado no começo (só as UCs), cada grupo com
+/// abrir/fechar tudo abaixo; no CC, a tag da string e as contas por string;
+/// e o cabo cuja ponta saiu de campo (o inversor apagado) não entra: a aba diz quem.
 /// </summary>
 internal sealed class AbaResumoDeCabos : AbaEletrica
 {
     private readonly TextBox _folga = new() { Width = 60, Text = "0", VerticalContentAlignment = VerticalAlignment.Center };
-    private readonly List<(DataGrid Grade, TextBlock Rodape)> _circuitos = [];
+    private readonly List<(DataGrid Grade, TextBlock Rodape, HashSet<string> Abertos)> _circuitos = [];
+    private readonly List<RotaDeCabosTabelas.ResumoDoTipo?> _resumos = [];
     private readonly StackPanel _material = new();
     private List<CableTable> _ultimas = [];
 
@@ -635,24 +744,26 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
         _folga.Margin = new Thickness(0, 0, 12, 6);
         topo.Children.Add(_folga);
         Botao(topo, Tr.T("Atualizar (reconta)"), Tr.T("Reconta todas as rotas no desenho e monta os resumos e a lista de material."), Montar);
-        Botao(topo, Tr.T("Exportar CSV"), Tr.T("Grava os resumos de CC, CA e MT e a lista de material num CSV."), Exportar);
+        Botao(topo, Tr.T("Exportar CSV"), Tr.T("Grava os resumos de CC, CA e MT (agrupados, com os subtotais) e a lista de material num CSV."), Exportar);
         topo.Children.Add(new TextBlock
         {
-            Text = Tr.T("As vias se trocam na própria linha (duplo clique na coluna Vias); vazio volta às da aba."),
-            Foreground = Brushes.Gray, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 6),
+            Text = Tr.T("▸ abre um grupo; ⊞ abre tudo abaixo e ⊟ fecha. As vias se trocam na linha do circuito (duplo clique em Vias); vazio volta às da aba."),
+            Foreground = Brushes.Gray, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 6), TextWrapping = TextWrapping.Wrap,
         });
 
         var abas = new TabControl();
         foreach (var (titulo, rotas) in RotaDeCabosTabelas.TiposDeCabo)
         {
-            var grade = Grade(rotas);
+            var abertos = new HashSet<string>();
+            var grade = Grade(rotas, abertos, _circuitos.Count);
             var rodape = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
             var painel = new DockPanel();
             DockPanel.SetDock(rodape, Dock.Bottom);
             painel.Children.Add(rodape);
             painel.Children.Add(grade);
             abas.Items.Add(new TabItem { Header = Tr.T(titulo), Content = painel });
-            _circuitos.Add((grade, rodape));
+            _circuitos.Add((grade, rodape, abertos));
+            _resumos.Add(null);
         }
 
         abas.Items.Add(new TabItem
@@ -672,36 +783,109 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
     {
     }
 
-    /// <summary>Uma linha da grade: o circuito e o texto de cada coluna.</summary>
-    private sealed class Linha(CableReport.CircuitRun c)
+    /// <summary>Uma linha da grade: um grupo (UC, trafo, inversor) com o subtotal, ou um circuito.</summary>
+    private sealed class Linha
     {
-        public CableReport.CircuitRun Circuito { get; } = c;
-        public string DePara => CableReport.DePara(Circuito.FromName, Circuito.ToName);
-        public string Rota => CableRoutes.Title(Circuito.Route);
-        public string Cabo => Circuito.Cable?.Name ?? Tr.T("(sem cabo escolhido)");
-        public string Formacao => Circuito.Cable?.Formation ?? string.Empty;
-        public string Secao => Circuito.Cable is { } x ? x.SectionMm2.ToString("0.##", Tr.Culture) : string.Empty;
-        public string Condutor => Circuito.Cable?.Conductor ?? string.Empty;
-        public string Isolacao => CableReport.Isolacao(Circuito.Cable) ?? string.Empty;
-        public string Metodo => Circuito.Method;
-        public int Lances => Circuito.Runs;
-        public string Comprimento => Circuito.Length.ToString("0.00", Tr.Culture);
-        public string Vias { get; set; } = c.Wires.ToString(Tr.Culture);
-        public int Cabos => Circuito.Cables;
-        public string Total => Circuito.CableLength.ToString("0.00", Tr.Culture);
+        internal Linha(CableReport.CircuitGroup grupo, bool aberto)
+        {
+            Grupo = grupo;
+            Nivel = grupo.Level;
+            Aberto = aberto;
+            Vias = string.Empty;
+        }
+
+        internal Linha(CableReport.CircuitRun circuito, int nivel, StringCheck? conta)
+        {
+            Circuito = circuito;
+            Nivel = nivel;
+            Conta = conta;
+            Vias = circuito.Wires.ToString(Tr.Culture);
+        }
+
+        public CableReport.CircuitGroup? Grupo { get; }
+        public CableReport.CircuitRun? Circuito { get; }
+        public StringCheck? Conta { get; }
+        public int Nivel { get; }
+        public bool Aberto { get; }
+        public bool EhGrupo => Grupo is not null;
+
+        public Thickness Recuo => new(Nivel * 18 + (EhGrupo ? 0 : 18), 0, 0, 0);
+        public Visibility DeGrupo => EhGrupo ? Visibility.Visible : Visibility.Collapsed;
+        public string Seta => Aberto ? "▾" : "▸";
+
+        public string Nome => Grupo is { } g ? Tr.F("{0} ({1} circuito(s))", g.Name, g.CircuitCount) : CableReport.DePara(Circuito!.FromName, Circuito.ToName);
+        public string Tag => Circuito is { From.Kind: CableEndKind.String } c ? c.FromName : string.Empty;
+        public string Rota => Circuito is { } c ? CableRoutes.Title(c.Route) : string.Empty;
+        public string Cabo => Circuito is { } c ? c.Cable?.Name ?? Tr.T("(sem cabo escolhido)") : string.Empty;
+        public string Formacao => Circuito?.Cable?.Formation ?? string.Empty;
+        public string Secao => Circuito?.Cable is { } x ? x.SectionMm2.ToString("0.##", Tr.Culture) : string.Empty;
+        public string Condutor => Circuito?.Cable?.Conductor ?? string.Empty;
+        public string Isolacao => CableReport.Isolacao(Circuito?.Cable) ?? string.Empty;
+        public string Metodo => Circuito?.Method ?? string.Empty;
+        public int Lances => Grupo?.Runs ?? Circuito!.Runs;
+        public string Comprimento => (Grupo?.Length ?? Circuito!.Length).ToString("0.00", Tr.Culture);
+        public string Vias { get; set; }
+        public int Cabos => Grupo?.Cables ?? Circuito!.Cables;
+        public string Total => (Grupo?.CableLength ?? Circuito!.CableLength).ToString("0.00", Tr.Culture);
+
+        public string Voc => Numero(Conta?.VocAtMin);
+        public string Vmp => Numero(Conta?.Vmp);
+        public string Isc => Numero(Conta?.Isc);
+        public string Imp => Numero(Conta?.Imp);
+        public string Capacidade => Numero(Conta?.Ampacity);
+        public string Suporta => Conta?.Supports is { } s ? (s ? Tr.T("Sim") : Tr.T("Não")) : string.Empty;
+
+        private static string Numero(double? v) => v is { } x && double.IsFinite(x) ? x.ToString("0.##", Tr.Culture) : string.Empty;
     }
 
-    private DataGrid Grade(IReadOnlyCollection<CableRoute> rotas)
+    private DataGrid Grade(IReadOnlyCollection<CableRoute> rotas, HashSet<string> abertos, int tipo)
     {
         var grade = new DataGrid
         {
             AutoGenerateColumns = false,
             CanUserAddRows = false,
             CanUserDeleteRows = false,
+            CanUserSortColumns = false,
             HeadersVisibility = DataGridHeadersVisibility.Column,
             SelectionUnit = DataGridSelectionUnit.Cell,
             GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
         };
+
+        // O grupo em negrito e com fundo: a hierarquia se lê de longe.
+        var estilo = new Style(typeof(DataGridRow));
+        var gatilho = new DataTrigger { Binding = new System.Windows.Data.Binding(nameof(Linha.EhGrupo)), Value = true };
+        gatilho.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
+        gatilho.Setters.Add(new Setter(Control.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0xEE, 0xF2, 0xF7))));
+        estilo.Triggers.Add(gatilho);
+        grade.RowStyle = estilo;
+
+        // A primeira coluna: o recuo do nível, a seta (abre e fecha), ⊞ (abre tudo abaixo), ⊟ (fecha tudo abaixo) e o nome.
+        var pilha = new FrameworkElementFactory(typeof(StackPanel));
+        pilha.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+        pilha.SetBinding(MarginProperty, new System.Windows.Data.Binding(nameof(Linha.Recuo)));
+        FrameworkElementFactory BotaoDoGrupo(string acao, System.Windows.Data.BindingBase conteudo, string dica)
+        {
+            var b = new FrameworkElementFactory(typeof(Button));
+            b.SetBinding(ContentControl.ContentProperty, conteudo);
+            b.SetValue(TagProperty, acao);
+            b.SetValue(ToolTipProperty, dica);
+            b.SetValue(Control.PaddingProperty, new Thickness(3, 0, 3, 0));
+            b.SetValue(MarginProperty, new Thickness(0, 0, 3, 0));
+            b.SetValue(Control.BorderThicknessProperty, new Thickness(0));
+            b.SetValue(Control.BackgroundProperty, Brushes.Transparent);
+            b.SetValue(FocusableProperty, false);
+            b.SetBinding(VisibilityProperty, new System.Windows.Data.Binding(nameof(Linha.DeGrupo)));
+            return b;
+        }
+
+        pilha.AppendChild(BotaoDoGrupo("alternar", new System.Windows.Data.Binding(nameof(Linha.Seta)), Tr.T("Abrir ou fechar este grupo")));
+        pilha.AppendChild(BotaoDoGrupo("abrir", new System.Windows.Data.Binding { Source = "⊞" }, Tr.T("Abrir tudo abaixo")));
+        pilha.AppendChild(BotaoDoGrupo("fechar", new System.Windows.Data.Binding { Source = "⊟" }, Tr.T("Fechar tudo abaixo")));
+        var nome = new FrameworkElementFactory(typeof(TextBlock));
+        nome.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(Linha.Nome)));
+        nome.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
+        pilha.AppendChild(nome);
+        grade.Columns.Add(new DataGridTemplateColumn { Header = Tr.T("Agrupamento / circuito"), CellTemplate = new DataTemplate { VisualTree = pilha }, IsReadOnly = true });
 
         void Coluna(string titulo, string campo, bool editavel = false, bool numero = false)
         {
@@ -715,7 +899,8 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
             grade.Columns.Add(coluna);
         }
 
-        Coluna(Tr.T("De → Para"), nameof(Linha.DePara));
+        var dc = rotas.Contains(CableRoute.DirectCurrent);
+        if (dc) Coluna(Tr.T("Tag da string"), nameof(Linha.Tag));
         if (rotas.Count > 1) Coluna(Tr.T("Rota"), nameof(Linha.Rota));
         Coluna(Tr.T("Cabo"), nameof(Linha.Cabo));
         Coluna(Tr.T("Formação"), nameof(Linha.Formacao));
@@ -728,13 +913,25 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
         Coluna(Tr.T("Vias"), nameof(Linha.Vias), editavel: true, numero: true);
         Coluna(Tr.T("Cabos"), nameof(Linha.Cabos), numero: true);
         Coluna(Tr.T("Total de cabo (m)"), nameof(Linha.Total), numero: true);
+        if (dc)
+        {
+            var titulos = StringCheck.Headers();
+            string[] campos = [nameof(Linha.Voc), nameof(Linha.Vmp), nameof(Linha.Isc), nameof(Linha.Imp), nameof(Linha.Capacidade), nameof(Linha.Suporta)];
+            for (var i = 0; i < campos.Length; i++) Coluna(titulos[i], campos[i], numero: i < campos.Length - 1);
+        }
+
+        // As vias só se trocam na linha do circuito.
+        grade.BeginningEdit += (_, e) =>
+        {
+            if (e.Row.Item is Linha { EhGrupo: true }) e.Cancel = true;
+        };
 
         grade.CellEditEnding += (_, e) =>
         {
             try
             {
-                if (e.EditAction != DataGridEditAction.Commit || e.Row.Item is not Linha linha || e.EditingElement is not TextBox caixa) return;
-                TrocarVias(linha.Circuito, caixa.Text);
+                if (e.EditAction != DataGridEditAction.Commit || e.Row.Item is not Linha { Circuito: { } circuito } || e.EditingElement is not TextBox caixa) return;
+                TrocarVias(circuito, caixa.Text);
             }
             catch (System.Exception falha)
             {
@@ -743,7 +940,59 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
             }
         };
 
+        // Os botões da primeira coluna: abrir/fechar o grupo, abrir/fechar tudo abaixo.
+        grade.AddHandler(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, new RoutedEventHandler((_, e) =>
+        {
+            try
+            {
+                if (e.OriginalSource is not Button { Tag: string acao, DataContext: Linha { Grupo: { } g } }) return;
+                var abaixo = g.Descendants.Select(d => d.Key).Prepend(g.Key);
+                switch (acao)
+                {
+                    case "alternar":
+                        if (!abertos.Remove(g.Key)) abertos.Add(g.Key);
+                        break;
+                    case "abrir":
+                        abertos.UnionWith(abaixo);
+                        break;
+                    default:
+                        abertos.ExceptWith(abaixo);
+                        break;
+                }
+
+                e.Handled = true;
+                Mostrar(tipo);
+            }
+            catch (System.Exception falha)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao abrir ou fechar um grupo do resumo de cabos.", falha);
+            }
+        }));
+
         return grade;
+    }
+
+    /// <summary>Monta as linhas visíveis de um tipo de cabo pelos grupos abertos (tudo fechado no começo: só as UCs).</summary>
+    private void Mostrar(int tipo)
+    {
+        var (grade, _, abertos) = _circuitos[tipo];
+        if (_resumos[tipo] is not { } resumo) return;
+
+        var linhas = new List<Linha>();
+        void Grupo(CableReport.CircuitGroup g)
+        {
+            var aberto = abertos.Contains(g.Key);
+            linhas.Add(new Linha(g, aberto));
+            if (!aberto) return;
+            foreach (var f in g.Children) Grupo(f);
+            foreach (var c in g.Circuits) linhas.Add(new Linha(c, g.Level + 1, resumo.Contas.GetValueOrDefault(c.From)));
+        }
+
+        foreach (var g in resumo.Grupos) Grupo(g);
+
+        // Uma edição que ficou aberta (saiu da célula com Tab) não pode estar no meio quando a lista troca.
+        grade.CancelEdit(DataGridEditingUnit.Row);
+        grade.ItemsSource = linhas;
     }
 
     /// <summary>
@@ -788,38 +1037,39 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
             }
 
             var db = Documento.Database;
-            var leitura = LeituraDaRota.Ler(db);
-            var sumidos = CableRoutes.All.Sum(r => RotaDeCabosTabelas.Recontar(Documento, r, leitura).Sumidos.Count);
+            var usina = RotaDeCabosTabelas.Usina(Documento);
+            var sumidos = usina.Sumidos;
+            var orfaos = usina.Orfaos;
 
             _ultimas = [];
             for (var i = 0; i < RotaDeCabosTabelas.TiposDeCabo.Length; i++)
             {
-                var (circuitos, tabela) = RotaDeCabosTabelas.Resumo(db, leitura, i);
-                _ultimas.Add(tabela);
+                var resumo = usina.Tipos[i];
+                _resumos[i] = resumo;
+                _ultimas.Add(resumo.Tabela);
+                Mostrar(i);
 
-                var (grade, rodape) = _circuitos[i];
-
-                // Uma edição que ficou aberta (saiu da célula com Tab) não pode estar no meio quando a lista troca.
-                grade.CancelEdit(DataGridEditingUnit.Row);
-                grade.ItemsSource = circuitos
-                    .OrderBy(c => c.Route).ThenBy(c => c.FromName, NaturalStringComparer.Instance).ThenBy(c => c.ToName, NaturalStringComparer.Instance)
-                    .Select(c => new Linha(c)).ToList();
-                rodape.Text = string.Join("\n", new[]
-                {
-                    Tr.F("{0} circuito(s), {1} cabo(s), {2:0.00} m de traçado e {3:0.00} m de cabo.",
-                        circuitos.Count, circuitos.Sum(c => c.Cables), circuitos.Sum(c => c.Length), circuitos.Sum(c => c.CableLength)),
-                }.Concat(tabela.Notes.Select(n => "• " + n)));
+                var circuitos = resumo.Circuitos;
+                var (_, rodape, _) = _circuitos[i];
+                var linhas = new List<string>();
+                if (resumo.ForaDeCampo is { } fora) linhas.Add(fora);
+                linhas.Add(Tr.F("Total da usina: {0} circuito(s), {1} cabo(s), {2:0.00} m de traçado e {3:0.00} m de cabo.",
+                    circuitos.Count, circuitos.Sum(c => c.Cables), circuitos.Sum(c => c.Length), circuitos.Sum(c => c.CableLength)));
+                linhas.AddRange(resumo.Tabela.Notes.Where(n => n != resumo.ForaDeCampo).Select(n => "• " + n));
+                rodape.Text = string.Join("\n", linhas);
+                rodape.Foreground = resumo.ForaDeCampo is null ? SystemColors.ControlTextBrush : Brushes.Firebrick;
             }
 
-            var material = CableReport.Material(RotaDeCabosTabelas.Medidos(db), folga);
+            var material = CableReport.Material(usina.Medidos, folga);
             if (RotaDeCabosTabelas.ProblemaDasVias(db) is { } ilegivel) material = material with { Notes = [.. material.Notes, ilegivel] };
             _ultimas.Add(material);
             TabelaNaTela.Mostrar(_material, [material]);
 
             var frase = sumidos == 0 ? Tr.T("Recontado.") : Tr.F("Recontado: {0} lance(s) gerado(s) e apagado(s) à mão (a origem foi pintada).", sumidos);
+            if (orfaos > 0) frase += "\n" + Tr.F("{0} cabo(s) desenhado(s) ligam em equipamento que não está mais em campo: ficaram fora do resumo e foram pintados. Gere a rota de novo ou apague esses cabos.", orfaos);
             var vias = RotaDeCabosTabelas.ProblemaDasVias(db);
             if (vias is not null) frase += "\n" + vias;
-            Avisar(frase, erro: sumidos > 0 || vias is not null);
+            Avisar(frase, erro: sumidos > 0 || orfaos > 0 || vias is not null);
         }
         catch (System.Exception falha)
         {

@@ -64,3 +64,51 @@ public static class CableCalc
     /// <summary>A queda em porcentagem da tensão de referência.</summary>
     public static double Percent(double queda, double tensao) => tensao > 0 ? queda / tensao * 100 : double.NaN;
 }
+
+/// <summary>
+/// As contas por string do resumo CC (Renan, 10/10/2026, item 16; "por
+/// enquanto não vamos considerar fatores de agrupamento"): a Voc da string
+/// na temperatura mínima, a Vmp e as correntes do módulo (Isc e Imp, as da
+/// string em série), a capacidade do cabo no método da aba e se ele suporta.
+/// </summary>
+/// <remarks>
+/// O critério de "suporta" é o simples pedido para este teste:
+/// Isc × <see cref="SafetyFactor"/> (1,25) ≤ capacidade de condução do cabo
+/// no método de instalação da aba (da biblioteca de cabos), sem fator de
+/// agrupamento nem de temperatura. É a exceção pedida pelo Renan à regra 8
+/// (o sistema não aprova cabo): a parte 2, com os fatores da norma, vem depois.
+/// Sem capacidade para o método, a coluna fica vazia (null), nunca "Não".
+/// </remarks>
+public sealed record StringCheck(double VocAtMin, double Vmp, double Isc, double Imp, double? Ampacity)
+{
+    /// <summary>O fator sobre a Isc do critério simples (item 16).</summary>
+    public const double SafetyFactor = 1.25;
+
+    /// <summary>A corrente de projeto: Isc × 1,25.</summary>
+    public double DesignCurrent => Isc * SafetyFactor;
+
+    /// <summary>Se o cabo suporta (Isc × 1,25 ≤ capacidade); null sem a capacidade.</summary>
+    public bool? Supports => Ampacity is { } a ? DesignCurrent <= a + 1e-9 : null;
+
+    /// <summary>
+    /// As contas de uma string: <paramref name="modulo"/> é o do PAN (null:
+    /// sem conta, as colunas ficam vazias), <paramref name="serie"/> os módulos
+    /// em série, <paramref name="tMin"/> a mínima de Configurações (°C).
+    /// </summary>
+    public static StringCheck? For(PanModule? modulo, int serie, double tMin, Cable? cabo, string? metodo)
+    {
+        if (modulo is null || serie <= 0) return null;
+        return new StringCheck(CableCalc.OpenCircuitAtMin(modulo, serie, tMin), serie * modulo.Vmp, modulo.Isc, modulo.Imp, cabo?.AmpacityFor(metodo));
+    }
+
+    /// <summary>Os títulos das colunas, na ordem de <see cref="Cells"/>.</summary>
+    public static IReadOnlyList<string> Headers() =>
+    [
+        Tr.T("Voc na mínima (V)"), Tr.T("Vmp, Vmppt (V)"), Tr.T("Isc (A)"), Tr.T("Imp, Imppt (A)"),
+        Tr.T("Capacidade do cabo (A)"), Tr.T("Suporta (Isc × 1,25)"),
+    ];
+
+    /// <summary>As células, na ordem de <see cref="Headers"/>.</summary>
+    public IReadOnlyList<object?> Cells() =>
+        [VocAtMin, Vmp, Isc, Imp, Ampacity, Supports is { } s ? (s ? Tr.T("Sim") : Tr.T("Não")) : null];
+}

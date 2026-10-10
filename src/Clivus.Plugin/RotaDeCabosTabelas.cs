@@ -8,28 +8,69 @@ namespace Clivus.Plugin;
 /// As tabelas do "Ver cabos" (17.8, 18.8, 23.4, 23.6) e do resumo (24):
 /// sempre a partir do desenho de agora (regra 7). Antes de montar, reconta:
 /// os lances gerados que não estão mais no desenho (apagados com Delete por
-/// fora do plugin) são contados e a origem deles é pintada.
+/// fora do plugin) são contados e a origem deles é pintada; e o cabo cuja
+/// ponta não está mais em campo (o inversor apagado, item 18) sai da conta,
+/// é pintado e avisado.
 /// </summary>
 internal static class RotaDeCabosTabelas
 {
-    /// <summary>A recontagem de uma rota: os lances do desenho e os sumidos.</summary>
-    internal sealed record Recontagem(List<RotaDeCabosStore.LanceNoDesenho> Lances, List<CableRun> Sumidos);
+    /// <summary>
+    /// A recontagem de uma rota: os lances do desenho com as duas pontas em
+    /// campo, os sumidos (gerados e apagados à mão), os órfãos (cabo ainda
+    /// desenhado cuja ponta saiu de campo) e as pontas que faltam.
+    /// </summary>
+    internal sealed record Recontagem(List<RotaDeCabosStore.LanceNoDesenho> Lances, List<CableRun> Sumidos, List<RotaDeCabosStore.LanceNoDesenho> Orfaos, List<CableEnd> Faltam);
 
-    /// <summary>Reconta a rota e pinta a origem dos lances sumidos (somando à pintura que já havia).</summary>
+    /// <summary>Reconta a rota e pinta a origem dos lances sumidos e os cabos órfãos (somando à pintura que já havia).</summary>
     internal static Recontagem Recontar(Document documento, CableRoute rota, LeituraDaRota leitura)
     {
         var db = documento.Database;
-        var lances = RotaDeCabosStore.Lances(db).Where(l => l.Lance.Route == rota).ToList();
-        var presentes = lances.Select(l => l.Lance.Id).ToHashSet();
-        var sumidos = RotaDeCabosStore.LancesGerados(db).Where(l => l.Route == rota && !presentes.Contains(l.Id)).ToList();
+        var todos = RotaDeCabosStore.Lances(db).Where(l => l.Lance.Route == rota).ToList();
+        var (lances, faltam) = CableReport.InField(todos, l => l.Lance.From, l => l.Lance.To, leitura.EmCampo);
+        var ficam = lances.Select(l => l.Id).ToHashSet();
+        var orfaos = todos.Where(l => !ficam.Contains(l.Id)).ToList();
 
-        if (sumidos.Count > 0)
+        // Sumido é o gerado que saiu do desenho com as pontas ainda em campo; o
+        // do equipamento que também saiu não é mais esperado.
+        var presentes = todos.Select(l => l.Lance.Id).ToHashSet();
+        var sumidos = RotaDeCabosStore.LancesGerados(db)
+            .Where(l => l.Route == rota && !presentes.Contains(l.Id) && leitura.EmCampo(l.From) && leitura.EmCampo(l.To))
+            .ToList();
+
+        if (sumidos.Count > 0 || orfaos.Count > 0)
         {
-            var pintar = sumidos.SelectMany(s => s.From.Kind == CableEndKind.String ? leitura.MesasDaString(s.From.Id) : leitura.Pintaveis(s.From)).ToList();
+            var pintar = sumidos.SelectMany(s => s.From.Kind == CableEndKind.String ? leitura.MesasDaString(s.From.Id) : leitura.Pintaveis(s.From))
+                .Concat(orfaos.Select(o => o.Id))
+                .ToList();
             EscritaForaDeComando.Fazer(documento, () => RotaDeCabosStore.Pintar(db, rota, pintar, somar: true));
         }
 
-        return new Recontagem(lances, sumidos);
+        return new Recontagem(lances, sumidos, orfaos, faltam);
+    }
+
+    /// <summary>O nome de uma ponta para o aviso de fora de campo (a tag da string, o nome do equipamento).</summary>
+    internal static Func<CableEnd, string> NomeDaPonta(LeituraDaRota leitura)
+    {
+        var tags = leitura.Strings().ToDictionary(x => x.String.Id, x => x.String.Tag);
+        return p => Nome(leitura.Setup, tags, p);
+    }
+
+    /// <summary>
+    /// O módulo (PAN) da string, pelo perfil da mesa da ponta + dela: o PAN do
+    /// modelo do módulo da mesa, ou o único PAN do desenho. É o ÚNICO ponto
+    /// de onde as tabelas e o resumo leem o módulo (a fonte do PAN vai passar
+    /// a ser a estrutura/mesa: troca-se só aqui).
+    /// </summary>
+    internal static Func<string?, PanModule?> ModuloPan(Database db)
+    {
+        var pans = RotaDeCabosStore.ModulosPan(db);
+        var mesas = MesasDoDesenho.Ler(db);
+        return perfil =>
+        {
+            var modelo = DrawingTables.Find(mesas, perfil)?.Profile.Layout.Module.Model;
+            return pans.FirstOrDefault(p => modelo is not null && string.Equals(p.Model.Trim(), modelo.Trim(), StringComparison.OrdinalIgnoreCase))
+                   ?? (pans.Count == 1 ? pans[0] : null);
+        };
     }
 
     /// <summary>As tabelas de uma rota (o CC tem uma; a Combiner tem as strings e os alimentadores).</summary>
@@ -41,18 +82,18 @@ internal static class RotaDeCabosTabelas
 
         var config = RotaDeCabosStore.Configuracao(db, rota);
         var projeto = SettingsStore.Load(db).Settings ?? ProjectSettings.Default;
-        var pans = RotaDeCabosStore.ModulosPan(db);
         var titulo = Tr.F("Cabos {0}", CableRoutes.Title(rota));
+        var foraDeCampo = CableReport.MissingMessage(recontagem.Faltam, NomeDaPonta(leitura), recontagem.Lances.Count == 0 && recontagem.Sumidos.Count == 0);
+
+        List<CableTable> ComAviso(List<CableTable> tabelas)
+        {
+            if (foraDeCampo is not null && tabelas.Count > 0) tabelas[0] = tabelas[0] with { Notes = [foraDeCampo, .. tabelas[0].Notes] };
+            return tabelas;
+        }
 
         if (rota is CableRoute.DirectCurrent or CableRoute.Combiner)
         {
-            var mesas = MesasDoDesenho.Ler(db);
-            PanModule? Modulo(string? perfil)
-            {
-                var modelo = DrawingTables.Find(mesas, perfil)?.Profile.Layout.Module.Model;
-                return pans.FirstOrDefault(p => modelo is not null && string.Equals(p.Model.Trim(), modelo.Trim(), StringComparison.OrdinalIgnoreCase))
-                       ?? (pans.Count == 1 ? pans[0] : null);
-            }
+            var modulo = ModuloPan(db);
 
             var porString = recontagem.Lances.Where(l => l.Lance.From.Kind == CableEndKind.String)
                 .GroupBy(l => l.Lance.From.Id)
@@ -65,7 +106,7 @@ internal static class RotaDeCabosTabelas
                 {
                     porString.TryGetValue(x.String.Id, out var dela);
                     double? Comprimento(CablePolarity p) => dela?.Where(l => l.Lance.Polarity == p).Select(l => (double?)l.Comprimento).Sum();
-                    return new DcStringRun(x.String.Id, x.String.Tag, x.String.Modules.Count, Comprimento(CablePolarity.Positive), Comprimento(CablePolarity.Negative), Modulo(x.Perfil));
+                    return new DcStringRun(x.String.Id, x.String.Tag, x.String.Modules.Count, Comprimento(CablePolarity.Positive), Comprimento(CablePolarity.Negative), modulo(x.Perfil));
                 })
                 .ToList();
 
@@ -78,19 +119,19 @@ internal static class RotaDeCabosTabelas
 
             if (rota == CableRoute.Combiner)
             {
-                var serieDe = leitura.Strings().ToDictionary(x => x.String.Id, x => (x.String.Modules.Count, Modulo(x.Perfil)));
+                var serieDe = leitura.Strings().ToDictionary(x => x.String.Id, x => (x.String.Modules.Count, modulo(x.Perfil)));
                 var alimentadores = recontagem.Lances.Where(l => l.Lance.From.Kind == CableEndKind.Combiner)
                     .Select(l =>
                     {
                         var cb = l.Lance.From.Id;
                         var dela = leitura.CombinerDaString.Where(x => x.Value == cb).Select(x => x.Key).Where(serieDe.ContainsKey).ToList();
-                        var (serie, modulo) = dela.Count > 0 ? serieDe[dela[0]] : (0, null);
-                        return new DcFeederRun(leitura.Setup.FindCombiner(cb)?.Name ?? "?", leitura.Setup.FindInverter(l.Lance.To.Id)?.Name ?? "?", l.Comprimento, dela.Count, serie, modulo);
+                        var (serie, pan) = dela.Count > 0 ? serieDe[dela[0]] : (0, null);
+                        return new DcFeederRun(leitura.Setup.FindCombiner(cb)?.Name ?? "?", leitura.Setup.FindInverter(l.Lance.To.Id)?.Name ?? "?", l.Comprimento, dela.Count, serie, pan);
                     });
                 tabelas.Add(CableReport.Feeders(Tr.T("Combiner → inversor"), alimentadores, config.Cable, projeto.MaxTemperature));
             }
 
-            return tabelas;
+            return ComAviso(tabelas);
         }
 
         var setup = leitura.Setup;
@@ -116,18 +157,20 @@ internal static class RotaDeCabosTabelas
                 faltaMt is null ? CableCalc.ThreePhaseCurrentKva(t!.PowerKva, mt) : null, mt > 0 ? mt : null, faltaMt);
         });
 
-        return [CableReport.Equipment(titulo, trechos, config.Cable, config.Method, config.PowerFactor, rota != CableRoute.AlternatingCurrent || config.ThreePhase)];
+        return ComAviso([CableReport.Equipment(titulo, trechos, config.Cable, config.Method, config.PowerFactor, rota != CableRoute.AlternatingCurrent || config.ThreePhase)]);
     }
 
     /// <summary>
     /// Os lances medidos de todas as rotas, com o nome do cabo da aba e as
-    /// vias do circuito (as trocadas no resumo, ou as da aba), para a lista de material.
+    /// vias do circuito (as trocadas no resumo, ou as da aba), para a lista
+    /// de material. Com <paramref name="leitura"/>, só os de pontas em campo (item 18).
     /// </summary>
-    internal static List<CableReport.MeasuredRun> Medidos(Database db)
+    internal static List<CableReport.MeasuredRun> Medidos(Database db, LeituraDaRota? leitura = null)
     {
         var config = RotaDeCabosStore.Configuracoes(db, out _);
         var vias = ViasPorCircuito(db, config);
         return RotaDeCabosStore.Lances(db)
+            .Where(l => leitura is null || (leitura.EmCampo(l.Lance.From) && leitura.EmCampo(l.Lance.To)))
             .Select(l => new CableReport.MeasuredRun(l.Lance.Route, l.Lance.Polarity, config[l.Lance.Route].Cable?.Name ?? Tr.T("(sem cabo escolhido)"), l.Comprimento,
                 vias(l.Lance.Route, l.Lance.From, l.Lance.To)))
             .ToList();
@@ -153,21 +196,23 @@ internal static class RotaDeCabosTabelas
     /// <summary>
     /// Os circuitos das rotas pedidas, medidos agora (regra 7): um por par de
     /// pontas (no CC, a string e o inversor, com o + e o −), com o nome das
-    /// pontas, os lances, o comprimento somado, as vias, o cabo e o método da aba.
+    /// pontas, os lances, o comprimento somado, as vias, o cabo e o método da
+    /// aba. Só os de pontas em campo (item 18); as que faltam voltam à parte.
     /// </summary>
-    internal static List<CableReport.CircuitRun> Circuitos(Database db, LeituraDaRota leitura, IReadOnlyCollection<CableRoute> rotas)
+    internal static (List<CableReport.CircuitRun> Circuitos, List<CableEnd> Faltam) Circuitos(Database db, LeituraDaRota leitura, IReadOnlyCollection<CableRoute> rotas)
     {
         var config = RotaDeCabosStore.Configuracoes(db, out _);
         var vias = ViasPorCircuito(db, config);
         var tags = leitura.Strings().ToDictionary(x => x.String.Id, x => x.String.Tag);
 
-        return RotaDeCabosStore.Lances(db)
+        var todos = RotaDeCabosStore.Lances(db)
             .Where(l => rotas.Contains(l.Lance.Route))
             .GroupBy(l => (l.Lance.Route, l.Lance.From, l.Lance.To))
             .Select(g => new CableReport.CircuitRun(
                 g.Key.Route, g.Key.From, g.Key.To, Nome(leitura.Setup, tags, g.Key.From), Nome(leitura.Setup, tags, g.Key.To),
-                g.Count(), g.Sum(l => l.Comprimento), vias(g.Key.Route, g.Key.From, g.Key.To), config[g.Key.Route].Cable, config[g.Key.Route].Method))
-            .ToList();
+                g.Count(), g.Sum(l => l.Comprimento), vias(g.Key.Route, g.Key.From, g.Key.To), config[g.Key.Route].Cable, config[g.Key.Route].Method));
+
+        return CableReport.InField(todos, c => c.From, c => c.To, leitura.EmCampo);
     }
 
     /// <summary>Os tipos de cabo do resumo e as rotas de cada um (as combiners são cabo CC).</summary>
@@ -178,12 +223,72 @@ internal static class RotaDeCabosTabelas
         (Tr.N("MT"), [CableRoute.MediumVoltage]),
     ];
 
-    /// <summary>O resumo de um tipo de cabo: os circuitos dele, medidos agora, e a tabela.</summary>
-    internal static (List<CableReport.CircuitRun> Circuitos, CableTable Tabela) Resumo(Database db, LeituraDaRota leitura, int tipo)
+    /// <summary>
+    /// O resumo de um tipo de cabo (itens 12, 16 e 18): os circuitos de pontas
+    /// em campo, agrupados (UC > trafo > inversor no CC; UC > trafo no CA; UC
+    /// na MT), as contas por string do CC, a tabela agrupada (a do Excel) e o
+    /// aviso das pontas fora de campo.
+    /// </summary>
+    internal sealed record ResumoDoTipo(
+        List<CableReport.CircuitRun> Circuitos, IReadOnlyList<CableReport.CircuitGroup> Grupos, Dictionary<CableEnd, StringCheck> Contas, CableTable Tabela, string? ForaDeCampo);
+
+    /// <summary>O resumo de um tipo de cabo, medido agora.</summary>
+    internal static ResumoDoTipo Resumo(Database db, LeituraDaRota leitura, int tipo)
     {
         var (titulo, rotas) = TiposDeCabo[tipo];
-        var circuitos = Circuitos(db, leitura, rotas);
-        return (circuitos, CableReport.Circuits(Tr.F("Resumo de cabos {0}", Tr.T(titulo)), circuitos));
+        var (circuitos, faltam) = Circuitos(db, leitura, rotas);
+        var foraDeCampo = CableReport.MissingMessage(faltam, NomeDaPonta(leitura), circuitos.Count == 0);
+        var grupos = CableReport.Group(circuitos, c => CableReport.GroupPath(leitura.Setup, c));
+
+        var dc = rotas.Contains(CableRoute.DirectCurrent);
+        var contas = new Dictionary<CableEnd, StringCheck>();
+        var notas = new List<string>();
+        if (foraDeCampo is not null) notas.Add(foraDeCampo);
+
+        if (dc)
+        {
+            var projeto = SettingsStore.Load(db).Settings ?? ProjectSettings.Default;
+            var modulo = ModuloPan(db);
+            var dasStrings = leitura.Strings().ToDictionary(x => x.String.Id);
+            var semPan = 0;
+            foreach (var c in circuitos.Where(c => c.From.Kind == CableEndKind.String))
+            {
+                if (!dasStrings.TryGetValue(c.From.Id, out var s)) continue;
+                if (StringCheck.For(modulo(s.Perfil), s.String.Modules.Count, projeto.MinTemperature, c.Cable, c.Method) is { } conta) contas[c.From] = conta;
+                else semPan++;
+            }
+
+            if (semPan > 0) notas.Add(Tr.F("{0} string(s) sem módulo com PAN: as colunas de cálculo ficam vazias (carregue o PAN na aba CC).", semPan));
+            if (contas.Values.Any(k => k.Ampacity is null))
+                notas.Add(Tr.T("Cabo sem capacidade de condução para o método da aba (biblioteca de cabos): a capacidade e o Suporta ficam vazios."));
+            notas.Add(Tr.F("Cálculo simples, sem fatores de agrupamento nem de temperatura: suporta se Isc × {0:0.00} ≤ capacidade do cabo no método da aba. Voc na mínima de {1} °C (Configurações).",
+                StringCheck.SafetyFactor, projeto.MinTemperature));
+        }
+
+        var tabela = CableReport.GroupedCircuits(Tr.F("Resumo de cabos {0}", Tr.T(titulo)), grupos, dc, rotas.Length > 1, contas, notas);
+        return new ResumoDoTipo(circuitos, grupos, contas, tabela, foraDeCampo);
+    }
+
+    /// <summary>O resumo da usina inteira, como a aba Resumo monta: as recontagens de todas as rotas, os resumos por tipo de cabo e os lances medidos.</summary>
+    internal sealed record ResumoDaUsina(List<Recontagem> Recontagens, List<ResumoDoTipo> Tipos, List<CableReport.MeasuredRun> Medidos)
+    {
+        internal int Sumidos => Recontagens.Sum(r => r.Sumidos.Count);
+
+        internal int Orfaos => Recontagens.Sum(r => r.Orfaos.Count);
+    }
+
+    /// <summary>
+    /// O "Atualizar (reconta)" da aba Resumo (e o comando de teste do nível
+    /// 2, pelo mesmo caminho): reconta todas as rotas (pinta os sumidos e os
+    /// órfãos) e monta o resumo de cada tipo de cabo com o desenho de agora.
+    /// </summary>
+    internal static ResumoDaUsina Usina(Document documento)
+    {
+        var db = documento.Database;
+        var leitura = LeituraDaRota.Ler(db);
+        var recontagens = CableRoutes.All.Select(r => Recontar(documento, r, leitura)).ToList();
+        var tipos = Enumerable.Range(0, TiposDeCabo.Length).Select(i => Resumo(db, leitura, i)).ToList();
+        return new ResumoDaUsina(recontagens, tipos, Medidos(db, leitura));
     }
 
     /// <summary>O nome de uma ponta para a tela: a tag da string, o nome do equipamento, a UC ou o bloco.</summary>

@@ -70,6 +70,94 @@ public static class RotaDeCabosCampo
         }
     }
 
+    // As valas apagadas já contadas por um Atualizar (o objeto apagado fica no desenho até fechar).
+    private static readonly HashSet<ObjectId> ApagadasJaContadas = [];
+
+    /// <summary>
+    /// "Atualizar valas" da aba (Renan, 10/10/2026, item 11): relê as valas da
+    /// rota no desenho; as linhas apagadas saem da rota (e são contadas no
+    /// recado), e as que ficaram são assentadas de novo no terreno na
+    /// profundidade da aba, se o terreno está na memória (a linha editada à mão
+    /// volta para o TIN). Nada é apagado nem desenhado além disso.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoRotaValaAtualizar)]
+    public static void ValaAtualizar()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+        var editor = documento.Editor;
+
+        try
+        {
+            if (PerguntarRota(editor) is not { } rota) return;
+            var db = documento.Database;
+
+            var apagadas = RotaDeCabosStore.ValasApagadas(db, rota).Where(ApagadasJaContadas.Add).Count();
+            var linhas = new List<string>();
+
+            if (TerrainCache.Get(documento) is { } terreno)
+            {
+                var profundidade = RotaDeCabosStore.Configuracao(db, rota).Depth;
+                var (_, fora) = RotaDeCabosStore.AssentarValas(db, rota, profundidade, terreno.Mesh);
+                linhas.Add(Tr.F("Valas {0} relidas e assentadas no terreno a {1:0.00} m de profundidade.", CableRoutes.Title(rota), profundidade));
+                if (fora > 0) linhas.Add(Tr.F("ATENÇÃO: {0} ponto(s) da vala fora do terreno ficaram com a cota que tinham.", fora));
+            }
+            else
+            {
+                linhas.Add(Tr.F("Valas {0} relidas (o terreno não está processado nesta sessão: o Gerar assenta).", CableRoutes.Title(rota)));
+            }
+
+            if (apagadas > 0) linhas.Add(Tr.F("{0} vala(s) apagada(s) do desenho saíram da rota.", apagadas));
+            linhas.Add(Tr.F("A rota tem {0} vala(s).", RotaDeCabosStore.IdsDasValas(db, rota).Count));
+            Relatar(documento, rota, string.Join("\n", linhas));
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao atualizar as valas.", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui atualizar as valas: {0}\n", erro.Message));
+        }
+        finally
+        {
+            JanelaDeRotaDeCabos.Voltar(documento);
+        }
+    }
+
+    /// <summary>
+    /// "Soltar valas" da aba (item 11): o usuário escolhe linhas no desenho e
+    /// elas deixam de ser vala desta rota (sai a marca, a linha fica, na camada
+    /// corrente). A que já virou Polyline3d no TIN continua assim, como linha comum.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoRotaValaSoltar)]
+    public static void ValaSoltar()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+        var editor = documento.Editor;
+
+        try
+        {
+            if (PerguntarRota(editor) is not { } rota) return;
+            var db = documento.Database;
+
+            var filtro = new SelectionFilter([new TypedValue((int)DxfCode.Start, "LWPOLYLINE,POLYLINE,LINE")]);
+            var r = editor.GetSelection(new PromptSelectionOptions { MessageForAdding = Tr.F("\nValas {0} a soltar (só as desta rota contam; a linha fica no desenho): ", CableRoutes.Title(rota)) }, filtro);
+            if (r.Status != PromptStatus.OK) return;
+
+            var n = RotaDeCabosStore.SoltarValas(db, r.Value.GetObjectIds(), rota);
+            Relatar(documento, rota, Tr.F("{0} linha(s) deixaram de ser vala {1} (continuam no desenho, como linha comum). A rota tem {2} vala(s).",
+                n, CableRoutes.Title(rota), RotaDeCabosStore.IdsDasValas(db, rota).Count));
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao soltar as valas.", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui soltar as valas: {0}\n", erro.Message));
+        }
+        finally
+        {
+            JanelaDeRotaDeCabos.Voltar(documento);
+        }
+    }
+
     /// <summary>
     /// A seleção das polilinhas da vala: só curvas soltas do usuário (as do
     /// plugin, como string e contorno de mesa, ficam fora), com a contagem ao
@@ -176,6 +264,74 @@ public static class RotaDeCabosCampo
     [CommandMethod(PluginInfo.ComandoRotaRecolocar)]
     public static void Recolocar() => Gerar(recolocar: true);
 
+    /// <summary>
+    /// "Recalcular rota" da aba CC (Renan, 10/10/2026, item 19): para um,
+    /// vários ou todos os inversores (nomes ou GUIDs separados por ";",
+    /// Todos, ou Selecionar para escolher os retângulos em campo), refaz só os
+    /// cabos CC das strings deles, a partir da posição de agora (o inversor
+    /// movido à mão fica onde está; o automático que não está em campo é posto).
+    /// Os cabos dos outros inversores não são tocados.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoRotaRecalcular)]
+    public static void Recalcular()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+        var editor = documento.Editor;
+
+        try
+        {
+            var r = editor.GetString(new PromptStringOptions(Tr.T("\nInversores a recalcular (nomes separados por ;, Todos ou Selecionar): ")) { AllowSpaces = true });
+            if (r.Status != PromptStatus.OK) return;
+
+            var db = documento.Database;
+            var (setup, _) = ConfiguracaoEletricaStore.Ler(db);
+            var texto = r.StringResult.Trim();
+            var escolhidos = new HashSet<Guid>();
+
+            if (string.Equals(texto, "Todos", StringComparison.OrdinalIgnoreCase) || texto == "*")
+            {
+                escolhidos.UnionWith(setup.Inverters.Select(i => i.Id));
+            }
+            else if (string.Equals(texto, "Selecionar", StringComparison.OrdinalIgnoreCase))
+            {
+                var filtro = new SelectionFilter([new TypedValue((int)DxfCode.Start, "INSERT")]);
+                var s = editor.GetSelection(new PromptSelectionOptions { MessageForAdding = Tr.T("\nInversores em campo a recalcular (Enter termina): ") }, filtro);
+                if (s.Status != PromptStatus.OK) return;
+                var marcados = s.Value.GetObjectIds().ToHashSet();
+                using var t = db.TransactionManager.StartOpenCloseTransaction();
+                foreach (var ((tipo, guid), ids) in EquipamentoEmCampo.Posicionados(t, db))
+                    if (tipo == EquipmentKind.Inverter && ids.Any(marcados.Contains)) escolhidos.Add(guid);
+            }
+            else
+            {
+                foreach (var nome in texto.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    var achado = Guid.TryParse(nome, out var g) ? setup.FindInverter(g) : setup.Inverters.FirstOrDefault(i => string.Equals(i.Name, nome, StringComparison.CurrentCultureIgnoreCase));
+                    if (achado is null) editor.WriteMessage(Tr.F("\nROTA Não há inversor \"{0}\".\n", nome));
+                    else escolhidos.Add(achado.Id);
+                }
+            }
+
+            if (escolhidos.Count == 0)
+            {
+                Relatar(documento, CableRoute.DirectCurrent, Tr.T("Nenhum inversor escolhido: nada foi recalculado."));
+                return;
+            }
+
+            Gerar(documento, CableRoute.DirectCurrent, recolocar: false, escolhidos);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao recalcular a rota dos inversores.", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui recalcular a rota: {0}\n", erro.Message));
+        }
+        finally
+        {
+            JanelaDeRotaDeCabos.Voltar(documento);
+        }
+    }
+
     private static void Gerar(bool recolocar)
     {
         var documento = AcadApp.DocumentManager.MdiActiveDocument;
@@ -191,6 +347,30 @@ public static class RotaDeCabosCampo
                 return;
             }
 
+            Gerar(documento, rota, recolocar, null);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao gerar a rota de cabos.", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui gerar os cabos: {0}\n", erro.Message));
+        }
+        finally
+        {
+            JanelaDeRotaDeCabos.Voltar(documento);
+        }
+    }
+
+    /// <summary>
+    /// O Gerar de uma rota. Com <paramref name="soInversores"/> (só CC), só
+    /// os cabos das strings desses inversores são apagados e desenhados de
+    /// novo (o resto da rota fica); a conta é feita com todas as strings, para
+    /// a ponta de cada fileira e o ponto de juntar de cada mesa serem os
+    /// mesmos de um Gerar inteiro.
+    /// </summary>
+    private static void Gerar(Document documento, CableRoute rota, bool recolocar, IReadOnlySet<Guid>? soInversores)
+    {
+        var editor = documento.Editor;
+        {
             if (FileiraCommands.ExigirTerreno(editor, documento) is not { } terreno) return;
 
             var db = documento.Database;
@@ -229,32 +409,52 @@ public static class RotaDeCabosCampo
             // leitura é refeita com eles em campo (e sem as falhas que a conta já anotou).
             if (rota == CableRoute.DirectCurrent)
             {
-                linhas.AddRange(PosicaoAutomatica.Colocar(editor, db, terreno, rede, config, leitura, recolocar));
+                linhas.AddRange(PosicaoAutomatica.Colocar(editor, db, terreno, rede, config, leitura, recolocar, soInversores));
                 leitura = LeituraDaRota.Ler(db);
             }
 
             var resultado = rota switch
             {
-                CableRoute.DirectCurrent => CableRouter.Strings(leitura.StringsCc(), rota, rede, config, Chao),
+                CableRoute.DirectCurrent => CcDaRota(leitura, rede, config, Chao),
                 CableRoute.AlternatingCurrent => CableRouter.Equipment(leitura.Trechos(CableChain.AlternatingCurrent(leitura.Setup)), rota, rede, config, Chao),
                 CableRoute.MediumVoltage => CableRouter.Equipment(leitura.Trechos(CableChain.MediumVoltage(leitura.Setup)), rota, rede, config, Chao),
                 _ => CombinerDaRota.Rotear(leitura, rede, config, Chao),
             };
 
             var falhas = leitura.Falhas.Where(f => f.Route == rota).Select(f => f.Falha).Concat(resultado.Failures).ToList();
+            var runs = resultado.Runs;
 
-            // Refaz a rota inteira: apaga só os cabos dela, desenha os novos.
-            var antigos = RotaDeCabosStore.Lances(db).Where(l => l.Lance.Route == rota).Select(l => l.Id).ToList();
-            RotaDeCabosStore.Apagar(db, antigos);
-            RotaDeCabosStore.Desenhar(db, resultado.Runs);
+            // O inversor de cada string, para o recalcular só de alguns.
+            var inversorDaString = leitura.StringsComPontas.ToDictionary(x => x.String.Id, x => x.String.Inverter);
+            bool DosEscolhidos(CableEnd ponta) => soInversores is null
+                || (ponta.Kind == CableEndKind.Inverter && soInversores.Contains(ponta.Id))
+                || (ponta.Kind == CableEndKind.String && inversorDaString.TryGetValue(ponta.Id, out var inv) && soInversores.Contains(inv));
 
-            var gerados = RotaDeCabosStore.LancesGerados(db).Where(l => l.Route != rota).Concat(resultado.Runs.Select(r => r.Run)).ToList();
+            if (soInversores is not null)
+            {
+                runs = runs.Where(r => DosEscolhidos(r.Run.From) || DosEscolhidos(r.Run.To)).ToList();
+                falhas = falhas.Where(f => f.Paint.Any(DosEscolhidos)).ToList();
+            }
+
+            // Refaz a rota (ou só a dos inversores escolhidos): apaga os cabos dela, desenha os novos.
+            var antigos = RotaDeCabosStore.Lances(db).Where(l => l.Lance.Route == rota && (DosEscolhidos(l.Lance.From) || DosEscolhidos(l.Lance.To))).ToList();
+            RotaDeCabosStore.Apagar(db, antigos.Select(l => l.Id));
+            RotaDeCabosStore.Desenhar(db, runs);
+
+            var saem = antigos.Select(l => l.Lance.Id).ToHashSet();
+            var gerados = RotaDeCabosStore.LancesGerados(db)
+                .Where(l => l.Route != rota || (soInversores is not null && !saem.Contains(l.Id) && !DosEscolhidos(l.From) && !DosEscolhidos(l.To)))
+                .Concat(runs.Select(r => r.Run)).ToList();
             RotaDeCabosStore.GravarLancesGerados(db, gerados);
 
-            RotaDeCabosStore.Pintar(db, rota, leitura.ParaPintar(falhas));
+            // No recalcular de alguns, a pintura dos outros fica (soma).
+            RotaDeCabosStore.Pintar(db, rota, leitura.ParaPintar(falhas), somar: soInversores is not null);
 
+            if (soInversores is not null)
+                linhas.Insert(0, Tr.F("Recalculados {0} inversor(es): {1}. Os cabos dos outros não foram tocados.", soInversores.Count,
+                    string.Join(", ", soInversores.Select(i => leitura.Setup.FindInverter(i)?.Name ?? "?").OrderBy(n => n, NaturalStringComparer.Instance))));
             linhas.Insert(0, Tr.F("{0}: {1} lance(s) desenhado(s), {2:0.0} m no total (3D, com as descidas da vala de {3:0.00} m).",
-                CableRoutes.Title(rota), resultado.Runs.Count, resultado.Runs.Sum(r => r.Length), config.Depth));
+                CableRoutes.Title(rota), runs.Count, runs.Sum(r => r.Length), config.Depth));
             if (valaFora > 0) linhas.Add(Tr.F("ATENÇÃO: {0} ponto(s) da vala fora do terreno ficaram com a cota que tinham.", valaFora));
             if (leitura.ProblemaDoLocal is { } local && rota != CableRoute.MediumVoltage)
                 linhas.Add(Tr.F("ATENÇÃO: o local dos inversores não se lê ({0}); a área deles não valeu como contorno.", local));
@@ -262,15 +462,13 @@ public static class RotaDeCabosCampo
             linhas.AddRange(falhas.Select(f => "• " + f.What + ": " + f.Reason));
             Relatar(documento, rota, string.Join("\n", linhas));
         }
-        catch (System.Exception erro)
-        {
-            RegistroDeDiagnostico.Registrar("Falha ao gerar a rota de cabos.", erro);
-            editor.WriteMessage(Tr.F("\nNão consegui gerar os cabos: {0}\n", erro.Message));
-        }
-        finally
-        {
-            JanelaDeRotaDeCabos.Voltar(documento);
-        }
+    }
+
+    /// <summary>O CC: as strings diretas, saindo pelo lado alto das mesas da usina, uma entrada por mesa (item 10).</summary>
+    private static RouteResult CcDaRota(LeituraDaRota leitura, TrenchNetwork rede, RouteSettings config, Func<double, double, double?> chao)
+    {
+        var strings = leitura.StringsCc();
+        return CableRouter.Strings(strings, CableRoute.DirectCurrent, rede, config, chao, ExitPattern.For(strings, leitura.LadoDaUsina));
     }
 
     // ------------------------------------------------------------- 17.9 apagar
@@ -593,6 +791,23 @@ internal sealed class LeituraDaRota
 
     internal Point3? Ponto(EquipmentKind tipo, Guid id) => _emCampo.TryGetValue((tipo, id), out var e) ? e.Ponto : null;
 
+    /// <summary>
+    /// Se a ponta de um cabo existe no desenho agora (item 18): a string
+    /// desenhada, ou o equipamento com o retângulo em campo. O resumo e o Ver
+    /// cabos só contam o cabo com as duas pontas assim.
+    /// </summary>
+    internal bool EmCampo(CableEnd ponta) => ponta.Kind == CableEndKind.String
+        ? (_idsDasStrings ??= _strings.Select(s => s.String.Id).ToHashSet()).Contains(ponta.Id)
+        : _emCampo.ContainsKey((Tipo(ponta.Kind), ponta.Id));
+
+    private HashSet<Guid>? _idsDasStrings;
+
+    /// <summary>O lado de saída das strings da usina (item 10): o alto das mesas, somado em todas as mesas do desenho; null se todas são planas.</summary>
+    internal Point3? LadoDaUsina => ExitPattern.PlantSide(_mesas.Values.Select(m => m.Mesa.Corners));
+
+    /// <summary>A mesa (GUID, letreiro, cantos) de cada ponta de string do CC, para a conferência do nível 2.</summary>
+    internal RowTable? MesaDoModulo(Guid modulo) => _mesaDoModulo.TryGetValue(modulo, out var m) && _mesas.TryGetValue(m, out var t) ? t.Mesa : null;
+
     internal IReadOnlyList<Point3>? Contorno(EquipmentKind tipo, Guid id) => _contornos.TryGetValue((tipo, id), out var c) ? c : null;
 
     internal static EquipmentKind Tipo(CableEndKind k) => k switch
@@ -686,7 +901,7 @@ internal static class CombinerDaRota
             .Select(c => new ChainLink(new CableEnd(CableEndKind.Combiner, c.Id), c.Name,
                 new CableEnd(CableEndKind.Inverter, leitura.Setup.FindInverter(c.Inverter)?.Id ?? Guid.Empty), leitura.Setup.FindInverter(c.Inverter)?.Name ?? "-"));
 
-        var a = CableRouter.Strings(strings, CableRoute.Combiner, rede, config, chao);
+        var a = CableRouter.Strings(strings, CableRoute.Combiner, rede, config, chao, ExitPattern.For(strings, leitura.LadoDaUsina));
         var b = CableRouter.Equipment(leitura.Trechos(ligacoes), CableRoute.Combiner, rede, config, chao);
         return new RouteResult([.. a.Runs, .. b.Runs], [.. a.Failures, .. b.Failures]);
     }

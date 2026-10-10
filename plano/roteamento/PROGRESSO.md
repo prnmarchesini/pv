@@ -258,6 +258,100 @@ Roteiro de tela:
    especificação do cabo; duplo clique em Vias, digite 3: Cabos e Total mudam.
 5. A ribbon: Resumo e Rota de cabos pequenos, um em cima do outro.
 
+## Rodada de tela de 10/10/2026, frente m-rota (itens 10, 11, 12, 16, 18 e 19, lado da rota): AGUARDANDO VALIDAÇÃO
+
+Texto do Renan em `plano/melhorias-2026-10-10.md`.
+
+- **Item 10, uma entrada por mesa**: todas as strings de uma mesa saem pela
+  mesma borda comprida e passam por um ponto só (o "ponto de juntar": a
+  ponta de string mais adiantada para a ponta da fileira), e as strings da
+  mesa vão para a mesma ponta da fileira (a de menor soma; as mesas ligadas
+  por uma string decidem juntas). A borda é a do lado alto: o software soma a
+  direção da borda mais alta de cada mesa (pela cota real dos cantos do
+  contorno) e tira o padrão da usina inteira (`ExitPattern`, `RowExit.HighSide`);
+  a mesa torta segue o padrão. Mesa atravessada ao padrão (mais de 80°) usa o
+  alto dela; mesa plana, a borda mais perto do meio das pontas dela. O
+  "Forçar lado" continua valendo por cima (a string forçada vai pela dela).
+- **Item 11**: na linha da vala de cada aba, "Atualizar valas"
+  (`CLIVUS_ROTA_VALA_ATUALIZAR`: relê, conta as apagadas, reassenta no TIN se
+  o terreno está na memória) e "Soltar valas" (`CLIVUS_ROTA_VALA_SOLTAR`: as
+  linhas escolhidas perdem o XData de vala e vão para a camada corrente, ou a
+  0 se a corrente é do Clivus; a linha nunca é apagada; a Polyline3d no TIN
+  fica assim).
+- **Item 12**: o Resumo agrupado: CC UC > trafo > inversor > strings, CA
+  UC > trafo > inversores, MT UC > trafos. Cada grupo com o subtotal de
+  lances, comprimento, cabos e metros de cabo; tudo fechado no começo (só as
+  UCs); ▸ abre/fecha, ⊞ abre tudo abaixo, ⊟ fecha tudo abaixo. Coluna "Tag da
+  string" no CC. As vias continuam editáveis na linha do circuito. O total da
+  usina no rodapé. O agrupamento é do Core (`CableReport.Group`,
+  `GroupPath`, `GroupedCircuits`); o Exportar (Excel e CSV) leva as linhas de
+  grupo com o subtotal, recuadas pelo nível.
+- **Item 16**: no Resumo CC, Voc na mínima, Vmp (Vmppt, a da string em STC,
+  série × Vmp), Isc, Imp (Imppt), a capacidade do cabo (biblioteca, método da
+  aba) e "Suporta" (Sim/Não). Critério simples pedido: **Isc × 1,25 ≤
+  capacidade**, sem fator de agrupamento nem de temperatura (`StringCheck`).
+  Sem PAN, as colunas ficam vazias com a nota; sem capacidade no método, o
+  Suporta fica vazio (nunca "Não"). O módulo é lido por um ponto só,
+  `RotaDeCabosTabelas.ModuloPan` (a frente m-potencia troca a fonte ali).
+- **Item 18 (erro grave)**: o Resumo, o Ver cabos, a lista de material e o
+  Excel só contam o cabo com as duas pontas em campo (string desenhada,
+  equipamento com o retângulo). Inversor apagado: a aba diz "Inversor não
+  está em campo: não é possível mostrar o resumo (Inversor 1, ...)" quando
+  nada sobra, ou "Fora de campo: Inversor 2. ..." quando só alguns sumiram.
+  Vale igual no CA (inversor ou trafo) e na MT (trafo ou subestação). O cabo
+  desenhado órfão não é apagado (a regra é avisar e pintar): é pintado de
+  laranja e avisado; o Gerar seguinte da rota o apaga, como sempre.
+- **Item 19, lado da rota**: inversor "Automático pelas strings" fora de
+  campo não bloqueia mais a aba CC (o CA e a Combiner continuam pedindo o
+  inversor em campo). "Recalcular rota..." na aba CC: lista dos inversores
+  (marcar, Marcar todos) ou "Escolher no desenho"; `CLIVUS_ROTA_RECALCULAR`
+  refaz só os cabos CC das strings deles, da posição de agora (o automático
+  fora de campo é posto); os cabos dos outros não são tocados.
+
+**Assumido (conferir)**
+- "Vmppt" = a Vmp da string em STC (série × Vmp do PAN); a tensão de operação
+  na máxima continua no Ver cabos.
+- "Suporta" contraria a regra 8 do roteamento (o sistema não aprova cabo):
+  é a exceção pedida no item 16, com o critério escrito na nota da tabela.
+- A UC no agrupamento aparece pelo código (U1, UC1), não pelo nome.
+- Não existe registro das valas além do XData: "tirar o registro" do Soltar
+  é tirar a marca. O Atualizar conta como apagadas as valas apagadas na
+  sessão (o objeto apagado fica no desenho até fechar).
+- No Recalcular de alguns inversores, a pintura de aviso dos outros fica.
+- O padrão de saída é calculado com todas as mesas do desenho; o ponto de
+  juntar e a ponta da fileira com todas as strings do CC (também no
+  Recalcular, para dar o mesmo de um Gerar inteiro).
+
+Testes: nível 1 novo `CableRouteMelhoriasTests` (entrada única com duas
+strings, lado alto ganha, padrão da usina, mesa plana, mesma ponta e forçado,
+ponto de juntar no `RowExit`, aba CC com automático, agrupamento CC/CA/MT com
+subtotais e a tabela do Excel, fora de campo, contas da string). Nível 2 novo
+`eletrica-rota-cc.ps1` (aba CC liberada pelos automáticos; Atualizar e Soltar
+valas; entrada única do lado alto em cada mesa, a menos de 1 m dela, lida das
+entidades; resumo U1 > T1 > inversores com a tag e as colunas de cálculo;
+Recalcular só do Inversor 1 com os handles do 2 iguais; inversor apagado sai do
+resumo com o aviso). Com a regra do item 10 desligada o nível 2 reprova
+(conferido).
+
+**Roteiro de tela**
+1. Configuração elétrica, aba Inversor: deixe dois inversores em
+   "Automático pelas strings" e nenhum em campo. Rota de cabos: a aba CC abre.
+2. Aba CC: Selecionar vala em três linhas; apague uma com Delete; "Atualizar
+   valas": o recado diz 1 apagada e a rota com 2. "Soltar valas" numa delas:
+   ela fica no desenho (3D no terreno), fora da camada da vala.
+3. Gerar: em cada mesa de duas strings, os quatro cabos saem pela borda alta
+   (no hemisfério sul, a sul) e se juntam num ponto rente à mesa; uma reta só
+   entrando na fileira.
+4. Mova um inversor à mão; "Recalcular rota...", marque só ele: só os cabos
+   dele mudam.
+5. Resumo, Atualizar: CC mostra só as UCs; ▸ abre, ⊞ abre tudo abaixo, ⊟ fecha.
+   Coluna "Tag da string" e, com o PAN carregado, Voc, Vmp, Isc, Imp,
+   capacidade e Suporta. Duplo clique em Vias numa string: os subtotais mudam.
+6. Apague um inversor e Atualize o Resumo: os cabos dele saem e o rodapé diz
+   quem está fora de campo; apague todos: "Inversor não está em campo: não é
+   possível mostrar o resumo". Os cabos desenhados dele ficam laranja.
+7. Exportar (Excel): o resumo de cabos sai agrupado, com as linhas de subtotal.
+
 ## Observações
 
 - A combiner box tinha ficado fora do plano elétrico (etapas 11 a 16) por decisão do Renan. Entra agora, na etapa 19: a cadeia de `plano/eletrica/04-modelo-de-dados.md` (UC -> trafo -> inversor -> string) ganha o elo opcional inversor -> combiner -> string, e a alocação de strings no inversor que já existe (14.3 elétrica) continua valendo quando não há combiner.

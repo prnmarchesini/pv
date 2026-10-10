@@ -171,7 +171,9 @@ internal static class RotaDeCabosStore
             Vertices(transacao, nova, vala.Vertices);
             using (var xdata = curva.XData) nova.XData = xdata;
 
+            // A antiga sai sem a marca: senão o "Atualizar valas" a contaria como vala apagada pelo usuário.
             curva.UpgradeOpen();
+            using (var vazio = new ResultBuffer(new TypedValue((int)DxfCode.ExtendedDataRegAppName, PluginXData.Aplicativo))) curva.XData = vazio;
             curva.Erase();
         }
 
@@ -234,6 +236,69 @@ internal static class RotaDeCabosStore
 
     /// <summary>Quantas valas cada rota tem.</summary>
     internal static Dictionary<CableRoute, int> QuantasValas(Database db) => Valas(db).ToDictionary(v => v.Key, v => v.Value.Count);
+
+    /// <summary>As entidades vivas que são vala da rota (as apagadas do desenho ficam de fora).</summary>
+    internal static List<ObjectId> IdsDasValas(Database db, CableRoute rota)
+    {
+        var ids = new List<ObjectId>();
+        using var transacao = db.TransactionManager.StartOpenCloseTransaction();
+        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
+        var classeCurva = RXObject.GetClass(typeof(Curve));
+
+        foreach (var id in espaco)
+            if (!id.IsErased && id.ObjectClass.IsDerivedFrom(classeCurva) && transacao.GetObject(id, OpenMode.ForRead) is Curve c && Vala(c)?.Route == rota) ids.Add(id);
+
+        return ids;
+    }
+
+    /// <summary>
+    /// As valas da rota que o usuário apagou nesta sessão (o objeto apagado
+    /// fica no desenho até fechar, com a marca): para o "Atualizar valas" dizer
+    /// quantas saíram. A que o assentamento trocou por uma nova sai sem a marca.
+    /// </summary>
+    internal static List<ObjectId> ValasApagadas(Database db, CableRoute rota)
+    {
+        var ids = new List<ObjectId>();
+        using var transacao = db.TransactionManager.StartOpenCloseTransaction();
+        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
+        var classeCurva = RXObject.GetClass(typeof(Curve));
+
+        foreach (var id in espaco.IncludingErased)
+        {
+            if (!id.IsErased || !id.ObjectClass.IsDerivedFrom(classeCurva)) continue;
+            if (transacao.GetObject(id, OpenMode.ForRead, true) is Curve c && Vala(c)?.Route == rota) ids.Add(id);
+        }
+
+        return ids;
+    }
+
+    /// <summary>
+    /// "Soltar valas" (Renan, 10/10/2026, item 11): as linhas escolhidas
+    /// deixam de ser vala da rota: sai a marca (o XData do Clivus) e elas vão
+    /// para a camada corrente (ou a 0, se a corrente é do Clivus). A linha
+    /// nunca é apagada; a que já virou Polyline3d assentada no TIN fica assim,
+    /// como linha comum. Só as desta rota contam. Quantas.
+    /// </summary>
+    internal static int SoltarValas(Database db, IEnumerable<ObjectId> ids, CableRoute rota)
+    {
+        using var transacao = db.TransactionManager.StartTransaction();
+        var corrente = (LayerTableRecord)transacao.GetObject(db.Clayer, OpenMode.ForRead);
+        var camada = corrente.Name.StartsWith(PluginInfo.PrefixoDeDados, StringComparison.OrdinalIgnoreCase) ? "0" : corrente.Name;
+        var n = 0;
+
+        foreach (var id in ids.Distinct())
+        {
+            if (id.IsErased || transacao.GetObject(id, OpenMode.ForRead) is not Curve curva || Vala(curva)?.Route != rota) continue;
+            curva.UpgradeOpen();
+            // Só o nome do aplicativo, sem dados: o AutoCAD tira o XData dele (o dos outros aplicativos fica).
+            using (var vazio = new ResultBuffer(new TypedValue((int)DxfCode.ExtendedDataRegAppName, PluginXData.Aplicativo))) curva.XData = vazio;
+            curva.Layer = camada;
+            n++;
+        }
+
+        transacao.Commit();
+        return n;
+    }
 
     /// <summary>Tira os pontos que estão na reta entre o anterior e o seguinte, em planta (até 1 mm dela).</summary>
     internal static List<Point3> SemColineares(List<Point3> pontos)
