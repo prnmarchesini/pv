@@ -99,7 +99,41 @@ function Testar-EletricaLocal {
     else {
         $dx = [math]::Abs($auto[0].X - ($cx + 35))
         if ($dx -lt 0.5 -or $dx -gt 2.5) { $erros += "o Inversor 1 nao ficou ao lado da vala (a $dx m dela)" }
-        if ($auto[0].Y -lt $cy - 30 -or $auto[0].Y -gt $cy + 30) { $erros += "o Inversor 1 ficou fora da altura da usina (y $($auto[0].Y))" }
+        # Ponto de menor cabo, recalculado aqui (troca de 10/10/2026: antes so
+        # se pedia y dentro de cy +- 30, a altura da usina; com as strings em
+        # ordem fixa as 6 do Inversor 1 sao as do sul, cujos lances correm pela
+        # borda sul, 0,5 m fora da usina, e batem na vala em cy - 30,5: o certo
+        # caia fora do limite velho). Cada lance desenhado chega a vala (x = cx
+        # + 35) num ponto; pela vala ate o inversor anda |y_batida - y|. O y do
+        # inversor tem de dar a menor soma entre os candidatos (as batidas e as
+        # pontas da vala), e a soma da saida ate a batida mais a vala tem de ser
+        # o total que o Gerar anunciou.
+        $valaX = $cx + 35
+        $deG = $t.IndexOf('CLIVUS_LOCAL GERAR1'); $ateM = $t.IndexOf('CLIVUS_LOCAL MOVER')
+        $trechoG = if ($deG -ge 0 -and $ateM -gt $deG) { $t.Substring($deG, $ateM - $deG) } else { '' }
+        $batidas = @(); $antes = 0.0
+        foreach ($m in [regex]::Matches($trechoG, 'ROTA_CABO rota=DirectCurrent vertices=\d+ fora=\d+ abaixo=\S+ acima=\S+ zmin=\S+ planta=(\S+)')) {
+            $pts = @($m.Groups[1].Value.Split(';') | ForEach-Object { $a = $_.Split(','); , @([double]::Parse($a[0], $inv), [double]::Parse($a[1], $inv)) })
+            $l = 0.0; $bateu = $null
+            for ($k = 0; $k -lt $pts.Count; $k++) {
+                if ($k -gt 0) { $l += [math]::Sqrt([math]::Pow($pts[$k][0] - $pts[$k - 1][0], 2) + [math]::Pow($pts[$k][1] - $pts[$k - 1][1], 2)) }
+                if ([math]::Abs($pts[$k][0] - $valaX) -lt 0.01) { $bateu = $pts[$k][1]; break }
+            }
+            if ($null -eq $bateu) { $erros += 'um lance do Inversor 1 nao passa pela vala'; continue }
+            $batidas += $bateu; $antes += $l
+        }
+        if ($batidas.Count -ne 12) { $erros += "esperava 12 lances do Inversor 1 batendo na vala, achei $($batidas.Count)" }
+        else {
+            function SomaNaVala([double] $y) { $s = 0.0; foreach ($b in $batidas) { $s += [math]::Abs($b - $y) }; $s }
+            $menor = (@($batidas) + @(($cy - 35), ($cy + 35)) | ForEach-Object { SomaNaVala $_ } | Measure-Object -Minimum).Minimum
+            $doInversor = SomaNaVala $auto[0].Y
+            if ($doInversor -gt $menor + 0.01) { $erros += "o Inversor 1 (y $($auto[0].Y)) nao esta no ponto de menor cabo da vala ($doInversor m pela vala contra $menor m)" }
+            if ($auto[0].Y -lt $cy - 35 - 0.01 -or $auto[0].Y -gt $cy + 35 + 0.01) { $erros += "o Inversor 1 ficou fora do trecho da vala (y $($auto[0].Y))" }
+            if ($t -match 'Inversor 1 posto ao lado da vala, no ponto de menor cabo CC das 6 string\(s\) dele \(([\d.,]+) m em planta\)') {
+                $anunciado = [double]::Parse($Matches[1].Replace('.', '').Replace(',', '.'), $inv)
+                if ([math]::Abs($antes + $doInversor - $anunciado) -gt 0.06) { $erros += "o total anunciado ($anunciado m) nao e o dos lances desenhados ($($antes + $doInversor) m)" }
+            }
+        }
         $rel = $relatorios | Where-Object { $_.Tag -eq 'Inversor 1' } | Select-Object -First 1
         if (-not $rel -or [math]::Abs($rel.Base - $auto[0].Z) -gt 0.001) { $erros += 'Inversor 1: a cota da entidade nao e a base do relatorio' }
     }

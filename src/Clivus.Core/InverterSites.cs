@@ -637,8 +637,8 @@ public static class InverterSites
 
     /// <summary>
     /// Os candidatos de <see cref="BestTrenchPoint"/> do melhor para o pior:
-    /// mais strings alcançadas antes, depois a menor soma (empate: a ordem
-    /// dos candidatos, como antes). Vazia se nenhuma string chega à rede.
+    /// mais strings alcançadas antes, depois a menor soma (empate: menor X, depois menor Y).
+    /// Vazia se nenhuma string chega à rede.
     /// </summary>
     public static IReadOnlyList<(TrenchPoint Point, Point3 Direction, double Total, int Reached)> RankTrenchPoints(TrenchNetwork valas, IReadOnlyList<StringAccess> strings)
     {
@@ -679,8 +679,13 @@ public static class InverterSites
             avaliados.Add((ponto, direcao, total, alcancadas));
         }
 
-        // Ordenação estável: no empate fica o primeiro candidato, como no "só troca se melhorar" de antes.
-        return [.. avaliados.OrderByDescending(a => a.Item4).ThenBy(a => a.Item3)];
+        // Desempate pela posição (correção de 10/10/2026): somas iguais ao
+        // micrômetro vão do ponto de menor X e, nele, de menor Y. Antes o empate
+        // ficava com o primeiro candidato, e a ordem dos candidatos segue a ordem
+        // das strings lidas do desenho: o mesmo desenho podia pôr o inversor em
+        // lugares diferentes conforme a leitura.
+        return [.. avaliados.OrderByDescending(a => a.Item4).ThenBy(a => Math.Round(a.Item3, 6))
+            .ThenBy(a => Math.Round(a.Item1.At.X, 6)).ThenBy(a => Math.Round(a.Item1.At.Y, 6))];
     }
 
     /// <summary>

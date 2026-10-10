@@ -88,6 +88,33 @@ public class InverterSitesTests
         Assert.Equal(3 * 2 + 2 * (1 + 20), melhor.Value.Total, 6);
     }
 
+    /// <summary>
+    /// Empate (10/10/2026): duas strings, uma em 30 e outra em 70, dão a mesma
+    /// soma em qualquer ponto entre elas. O escolhido é o de menor X (numa vala
+    /// norte-sul, o de menor Y), seja qual for a ordem em que as strings vêm do
+    /// desenho. Antes ficava o primeiro candidato, e a ordem dependia da leitura.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "18")]
+    public void EmpateVaiPelaPosicaoNaoPelaOrdemDasStrings()
+    {
+        var rede = new TrenchNetwork([[new(0, 0, 0), new(100, 0, 0)]]);
+        TrenchPoint Em(double x) => rede.Nearest(new Point3(x, 0, 0), 1)!.Value;
+        InverterSites.StringAccess Uma(double x) => new([[(Em(x), 5.0), (Em(x), 5.0)]]);
+
+        var ida = InverterSites.BestTrenchPoint(rede, [Uma(30), Uma(70)]);
+        var volta = InverterSites.BestTrenchPoint(rede, [Uma(70), Uma(30)]);
+        Assert.Equal(30, ida!.Value.Point.At.X, 6);
+        Assert.Equal(30, volta!.Value.Point.At.X, 6);
+        Assert.Equal(ida.Value.Total, volta.Value.Total, 6);
+
+        var norteSul = new TrenchNetwork([[new(0, 100, 0), new(0, 0, 0)]]);
+        TrenchPoint EmY(double y) => norteSul.Nearest(new Point3(0, y, 0), 1)!.Value;
+        InverterSites.StringAccess UmaY(double y) => new([[(EmY(y), 5.0), (EmY(y), 5.0)]]);
+        Assert.Equal(30, InverterSites.BestTrenchPoint(norteSul, [UmaY(70), UmaY(30)])!.Value.Point.At.Y, 6);
+        Assert.Equal(30, InverterSites.BestTrenchPoint(norteSul, [UmaY(30), UmaY(70)])!.Value.Point.At.Y, 6);
+    }
+
     [Fact]
     [Trait("Etapa", "18")]
     public void SemBatidaNaoHaPonto()
