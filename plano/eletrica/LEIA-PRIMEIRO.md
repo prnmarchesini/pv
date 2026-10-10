@@ -46,7 +46,7 @@ A parte de corrente contínua (strings) é um universo. A configuração elétri
 3. Inversor
 4. Numeração das strings
 
-São três universos distintos de ponta a ponta: corrente contínua, baixa tensão e média tensão, cada um com rota própria. Este plano cobre a corrente contínua (strings) e a configuração elétrica até a numeração. Roteamento de cabo e combiner box ficam para planos futuros.
+São três universos distintos de ponta a ponta: corrente contínua, baixa tensão e média tensão, cada um com rota própria. Este plano cobre a corrente contínua (strings) e a configuração elétrica até a numeração. Roteamento de cabo e combiner box estão em `plano/roteamento/` (etapas 17 a 24).
 
 ## Idioma
 
