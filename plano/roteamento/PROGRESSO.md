@@ -5,7 +5,7 @@ Só o Renan marca VALIDADO (exceto `VALIDADO (automático)`, ver `LEIA-PRIMEIRO.
 
 ## Etapa 17: base comum das rotas
 
-- 17.1 Botão e abas (CC, Combiner, CA, MT) com pré-requisitos da cadeia: PENDENTE
+- 17.1 Botão e abas (CC, Combiner, CA, MT) com pré-requisitos da cadeia: AGUARDANDO VALIDAÇÃO
 - 17.2 Layers e cores por rota: PENDENTE
 - 17.3 Profundidade da vala por aba: PENDENTE
 - 17.4 Seleção da vala em campo e atribuição automática da layer: PENDENTE
@@ -69,6 +69,40 @@ Só o Renan marca VALIDADO (exceto `VALIDADO (automático)`, ver `LEIA-PRIMEIRO.
 
 - 24.1 Aba de cabos no resumo da usina: PENDENTE
 - 24.2 Lista de material de cabo: PENDENTE
+
+## 17.1 Botão e abas (10/10/2026): AGUARDANDO VALIDAÇÃO
+
+- Botão **Rota de cabos** no painel Elétrica (`CLIVUS_ROTA_CABOS`; em inglês
+  `CLIVUS_CABLE_ROUTES`, em espanhol `CLIVUS_RUTA_CABLES`), ícone da vala com
+  o cabo descendo até o fundo. Janela solta, uma por desenho, abas CC,
+  Combiner, CA, MT.
+- A regra é do Core (`CableRoutes.Missing`): aba indisponível fica
+  desabilitada, a dica dela (passando o mouse) e o rodapé da janela dizem o
+  que falta. Voltar para a janela relê o desenho.
+- Sem interface (Core Console), o comando escreve `ROTA CC: disponível.` ou
+  `ROTA CA: falta ...` por aba.
+- Assumido: "existe no desenho" = string desenhada e equipamento com o
+  retângulo **em campo** (a rota precisa do ponto físico). Só cadastrado não
+  libera, mas o recado diz "N no cadastro, nenhum com o retângulo em campo".
+  A conta é pelo cadastro (`CableRoutes.Drawing`): a subestação compartilhada
+  é um equipamento só (o bloco), e retângulo sem cadastro (COPY, UNDO) não
+  libera aba. Cadastro ilegível aparece como ATENÇÃO no rodapé.
+- Assumido: a aba Combiner pede string, combiner e inversor (os dois
+  trechos). Enquanto a combiner não existe (etapa 19), ela fica sempre
+  desabilitada, dizendo isso.
+- Feito numa VM Linux: Core e Geo compilados e testados (.NET 10 SDK com
+  `-p:LangVersion=13`, o C# do PC). O `Clivus.Plugin` NÃO foi compilado aqui
+  (precisa do AutoCAD); compilar no PC antes de testar.
+- `tools/rodar-testes.ps1` passou a rodar até a etapa 17.
+
+**Como conferir:** num desenho sem trafo em campo, botão Rota de cabos: a aba
+CA aparece cinza, e a dica dela e o rodapé dizem "CA: falta um transformador
+(não há nenhum no cadastro)" (ou "um transformador em campo (1 no cadastro,
+...)" se ele só estiver cadastrado). Ponha o trafo em campo, volte à janela:
+a aba CA libera.
+- Revisão (subagente): apontou a contagem de UCs no lugar de blocos, o
+  retângulo órfão liberando aba e o cadastro ilegível calado; os três
+  corrigidos, com teste.
 
 ## Observações
 

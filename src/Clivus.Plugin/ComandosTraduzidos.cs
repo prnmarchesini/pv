@@ -429,6 +429,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_RENOMBRAR_BLOQUES")]
     public static void CLIVUS_RENOMBRAR_BLOQUES() => RenomearCommands.Renomear();
 
+    [CommandMethod("CLIVUS_CABLE_ROUTES")]
+    public static void CLIVUS_CABLE_ROUTES() => RotaDeCabosCommands.RotaCabos();
+
+    [CommandMethod("CLIVUS_RUTA_CABLES")]
+    public static void CLIVUS_RUTA_CABLES() => RotaDeCabosCommands.RotaCabos();
+
     [CommandMethod("CLIVUS_ABOUT")]
     public static void CLIVUS_ABOUT() => SobreCommands.Sobre();
 
