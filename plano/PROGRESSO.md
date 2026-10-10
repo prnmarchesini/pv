@@ -133,6 +133,14 @@ automático vira português. 10.2: `TranslationCatalogTests` (toda frase de
 `Tr` reprovado) e `tools/traducoes.py` (lista, exporta o que falta, junta,
 limpa).
 
+### 10/10/2026: Melhorias.docx da rodada elétrica/rota — AGUARDANDO VALIDAÇÃO
+
+Os 18 itens (1 a 19, sem o 9) de `plano/melhorias-2026-10-10.md` foram feitos
+em 4 frentes (troca e ribbon; aba Inversor; rota e resumo; potência e PAN),
+juntados na main com as correções de uma revisão cruzada. Tudo de tela
+aguarda o Renan. Decisões e roteiros: seções dos itens no
+`plano/roteamento/PROGRESSO.md` e nos relatórios dos commits (`git log`).
+
 ### 01/10/2026: etapa 8 (Melhorias.docx) feita inteira
 
 O Renan deixou a revisão dos menus em `0 - Assets/Melhorias.docx`; virou a
