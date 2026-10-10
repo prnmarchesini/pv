@@ -1,0 +1,74 @@
+; Teste de nivel 2 dos itens 14 e 15 (melhorias de 10/10/2026): o PAN na
+; estrutura (fonte unica), a divergencia PAN x estrutura x mesas desenhadas,
+; o "Atualizar a potencia das mesas desenhadas" (so a potencia muda) e a
+; potencia trocada pela area (simulacao que desliga os calculos eletricos),
+; desfeita pelo botao da faixa (clivus-usar-a-mesa, fora de comando) e pela
+; palavra Mesa do comando. O LISP mede a geometria e refaz os watts pelo XData.
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area potencia")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento potencia")
+(command "CLIVUS_MESAS_EXEMPLO_AUTO")
+(command "CLIVUS_USINA_AUTO")
+; Uma mesa de 28 vira duas de 14: o desenho fica com mesas das duas estruturas.
+(command "CLIVUS_TROCAR_MESA_AUTO" "F1.2" 2 2 "Esquerda" "Nao")
+(setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_STRINGS_TESTE_AUTO")
+(command "CLIVUS_NUMERACAO_EXEMPLO_AUTO")
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:tipo (xd) (cdr (nth 0 xd)))
+
+; A geometria (quantas entidades nossas e a soma dos pontos de insercao dos
+; blocos) e os watts pelo XData (modulos x potencia da mesa dona).
+(defun clivus:medir (fase / ss i e xd mesas modulos soma p watts nmod)
+  (setq ss (ssget "_X" (list (list -3 (list "CLIVUS")))) i 0 mesas nil modulos nil soma 0.0)
+  (while (< i (clivus:conta ss))
+    (setq e (ssname ss i) xd (clivus:xdata e))
+    (cond ((= (clivus:tipo xd) "Mesa") (setq mesas (cons (cons (clivus:campo xd 0) (atof (clivus:campo xd 9))) mesas)))
+          ((= (clivus:tipo xd) "Modulo") (setq modulos (cons (clivus:campo xd 1) modulos))))
+    (if (= (cdr (assoc 0 (entget e))) "INSERT")
+      (progn (setq p (cdr (assoc 10 (entget e)))) (setq soma (+ soma (car p) (cadr p) (caddr p)))))
+    (setq i (1+ i)))
+  (setq watts 0.0 nmod 0)
+  (foreach m modulos
+    (setq nmod (1+ nmod))
+    (if (assoc m mesas) (setq watts (+ watts (cdr (assoc m mesas))))))
+  (princ (strcat "\nCLIVUS_POT_LISP fase=" fase " entidades=" (itoa (clivus:conta ss)) " soma=" (rtos soma 2 4)
+                 " modulos=" (itoa nmod) " watts=" (rtos watts 2 1))))
+
+(princ "\nCLIVUS_FASE INICIO")
+(clivus:medir "inicio")
+(command "CLIVUS_POTENCIA_AUTO")
+
+(princ "\nCLIVUS_FASE PAN")
+(command "CLIVUS_ESTRUTURA_PAN" "Mesa 2V28" "{{PAN}}")
+(command "CLIVUS_POTENCIA_AUTO")
+
+(princ "\nCLIVUS_FASE ATUALIZADA")
+(command "CLIVUS_POTENCIA_PELO_PAN" "Mesa 2V28")
+(clivus:medir "atualizada")
+(command "CLIVUS_POTENCIA_AUTO")
+
+(princ "\nCLIVUS_FASE SIMULADA")
+(command "CLIVUS_TROCAR_POTENCIA" "650")
+(command "CLIVUS_POTENCIA_AUTO")
+
+(princ "\nCLIVUS_FASE DESFEITA")
+(clivus-usar-a-mesa)
+(command "CLIVUS_POTENCIA_AUTO")
+
+(princ "\nCLIVUS_FASE MESA")
+(command "CLIVUS_TROCAR_POTENCIA" "600")
+(command "CLIVUS_TROCAR_POTENCIA" "Mesa")
+(command "CLIVUS_POTENCIA_AUTO")
+(princ "\nCLIVUS_POTENCIA_FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

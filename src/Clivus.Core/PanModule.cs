@@ -88,6 +88,42 @@ public sealed record PanModule(
         return m;
     }
 
+    /// <summary>
+    /// Lê um arquivo .PAN do disco. O PVsyst grava em UTF-8 (com BOM, nos
+    /// recentes) ou em Latin-1 (nos antigos): o texto que não é UTF-8 válido
+    /// é relido como Latin-1, para o fabricante sair com o acento certo.
+    /// </summary>
+    public static PanModule? Load(string caminho, out IReadOnlyList<string> missing)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(caminho);
+
+        var bytes = File.ReadAllBytes(caminho);
+        string texto;
+
+        try
+        {
+            texto = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(bytes);
+        }
+        catch (System.Text.DecoderFallbackException)
+        {
+            texto = System.Text.Encoding.Latin1.GetString(bytes);
+        }
+
+        return Parse(texto.TrimStart('﻿'), out missing);
+    }
+
+    /// <summary>O coeficiente da Voc em %/°C (o do datasheet).</summary>
+    public double VocCoefficientPercent => VocCoefficient / Voc * 100;
+
+    /// <summary>O coeficiente da Isc em %/°C (o do datasheet).</summary>
+    public double IscCoefficientPercent => IscCoefficient / Isc * 100;
+
+    /// <summary>A linha que descreve o módulo elétrico para o usuário, com os números arredondados.</summary>
+    public string Describe() =>
+        Tr.F("{0}: {1:0.#} Wp, Voc {2:0.##} V, Isc {3:0.###} A, Vmp {4:0.##} V, Imp {5:0.###} A, β Voc {6:0.###} %/°C",
+            string.IsNullOrWhiteSpace(Manufacturer) ? Model.Trim() : $"{Manufacturer.Trim()} {Model.Trim()}",
+            Pmax, Voc, Isc, Vmp, Imp, VocCoefficientPercent);
+
     /// <summary>Por que os números não fazem sentido (null se fazem).</summary>
     public string? WhyInvalid()
     {
@@ -95,6 +131,8 @@ public sealed record PanModule(
         if (!(Pmax > 0) || !(Voc > 0) || !(Isc > 0) || !(Vmp > 0) || !(Imp > 0)) return Tr.T("potência, tensões e correntes têm que ser maiores que zero");
         if (Vmp > Voc || Imp > Isc) return Tr.T("Vmp maior que Voc ou Imp maior que Isc");
         if (!double.IsFinite(VocCoefficient) || !double.IsFinite(IscCoefficient)) return Tr.T("coeficiente de temperatura ilegível");
+        if (PowerCoefficient is { } g && !double.IsFinite(g)) return Tr.T("coeficiente de temperatura ilegível");
+        if (Noct is { } n && !double.IsFinite(n)) return Tr.T("coeficiente de temperatura ilegível");
         return null;
     }
 

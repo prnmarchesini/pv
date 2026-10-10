@@ -61,13 +61,24 @@ internal sealed class JanelaEletrica : Window
             }
         };
 
-        Content = abas;
+        // Item 14 (10/10/2026): com a potência trocada pela área, a faixa diz
+        // por que os cálculos elétricos sumiram e devolve a configuração da mesa.
+        _potenciaSimulada = new AvisoDePotenciaSimulada(documento) { AoMudar = Atualizar };
+        var raiz = new DockPanel();
+        DockPanel.SetDock(_potenciaSimulada, Dock.Top);
+        raiz.Children.Add(_potenciaSimulada);
+        raiz.Children.Add(abas);
+        Content = raiz;
+        Activated += (_, _) => _potenciaSimulada.Atualizar();
         Atualizar();
     }
+
+    private readonly AvisoDePotenciaSimulada _potenciaSimulada;
 
     /// <summary>Relê o desenho em todas as abas.</summary>
     internal void Atualizar()
     {
+        _potenciaSimulada.Atualizar();
         foreach (var aba in _abas) aba.Atualizar();
     }
 

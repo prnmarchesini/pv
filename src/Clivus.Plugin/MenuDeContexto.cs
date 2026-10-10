@@ -47,6 +47,10 @@ internal static class MenuDeContexto
 
         ItensDaArea.Add(Item(Tr.T("Refazer as mesas desta área"), PluginInfo.ComandoRefazer));
         ItensDaArea.Add(Item(Tr.T("Apagar tudo"), PluginInfo.ComandoApagarTudo));
+
+        // 10/10/2026, Renan (item 14): "Trocar potência do módulo", uma
+        // simulação para a usina inteira, sem mexer no tamanho.
+        ItensDaArea.Add(Item(Tr.T("Trocar potência do módulo…"), PluginInfo.ComandoTrocarPotencia));
         ItensDaMesa.Add(Item(Tr.T("Mudar inclinação (alturas das pontas)"), PluginInfo.ComandoPontas));
         ItensDaMesa.Add(Item(Tr.T("Recalcular esta mesa"), PluginInfo.ComandoRecalcular));
 

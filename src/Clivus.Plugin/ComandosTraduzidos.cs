@@ -264,6 +264,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_ELECTRICA_COMBINER")]
     public static void CLIVUS_ELECTRICA_COMBINER() => CombinerCommands.Strings();
 
+    [CommandMethod("CLIVUS_ELECTRICAL_SITE")]
+    public static void CLIVUS_ELECTRICAL_SITE() => LocalDosInversores.Local();
+
+    [CommandMethod("CLIVUS_ELECTRICA_LUGAR")]
+    public static void CLIVUS_ELECTRICA_LUGAR() => LocalDosInversores.Local();
+
     [CommandMethod("CLIVUS_ELECTRICAL_PLACE")]
     public static void CLIVUS_ELECTRICAL_PLACE() => ConfiguracaoEletricaCommands.Posicionar();
 
@@ -293,6 +299,12 @@ public static class ComandosTraduzidos
 
     [CommandMethod("CLIVUS_STYLES")]
     public static void CLIVUS_STYLES() => EstilosCommands.Estilos();
+
+    [CommandMethod("CLIVUS_STRUCTURE_PAN")]
+    public static void CLIVUS_STRUCTURE_PAN() => PotenciaCommands.EstruturaPan();
+
+    [CommandMethod("CLIVUS_ESTRUCTURA_PAN")]
+    public static void CLIVUS_ESTRUCTURA_PAN() => PotenciaCommands.EstruturaPan();
 
     [CommandMethod("CLIVUS_EXPORT", CommandFlags.UsePickSet)]
     public static void CLIVUS_EXPORT() => ExportCommands.Exportar();
@@ -396,6 +408,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_EXTREMOS", CommandFlags.UsePickSet)]
     public static void CLIVUS_EXTREMOS() => PontasCommands.Pontas();
 
+    [CommandMethod("CLIVUS_POWER_FROM_PAN")]
+    public static void CLIVUS_POWER_FROM_PAN() => PotenciaCommands.PotenciaPeloPan();
+
+    [CommandMethod("CLIVUS_POTENCIA_DEL_PAN")]
+    public static void CLIVUS_POTENCIA_DEL_PAN() => PotenciaCommands.PotenciaPeloPan();
+
     [CommandMethod("CLIVUS_RECALCULATE", CommandFlags.UsePickSet)]
     public static void CLIVUS_RECALCULATE() => RecalcularCommands.Recalcular();
 
@@ -447,18 +465,6 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_RUTA_CABLES")]
     public static void CLIVUS_RUTA_CABLES() => RotaDeCabosCommands.RotaCabos();
 
-    [CommandMethod("CLIVUS_ELECTRICAL_SITE")]
-    public static void CLIVUS_ELECTRICAL_SITE() => LocalDosInversores.Local();
-
-    [CommandMethod("CLIVUS_ELECTRICA_LUGAR")]
-    public static void CLIVUS_ELECTRICA_LUGAR() => LocalDosInversores.Local();
-
-    [CommandMethod("CLIVUS_CABLE_ROUTES_REPLACE")]
-    public static void CLIVUS_CABLE_ROUTES_REPLACE() => RotaDeCabosCampo.Recolocar();
-
-    [CommandMethod("CLIVUS_RUTA_CABLES_RECOLOCAR")]
-    public static void CLIVUS_RUTA_CABLES_RECOLOCAR() => RotaDeCabosCampo.Recolocar();
-
     [CommandMethod("CLIVUS_CABLE_ROUTES_GENERATE")]
     public static void CLIVUS_CABLE_ROUTES_GENERATE() => RotaDeCabosCampo.Gerar();
 
@@ -470,6 +476,12 @@ public static class ComandosTraduzidos
 
     [CommandMethod("CLIVUS_RUTA_CABLES_LADO")]
     public static void CLIVUS_RUTA_CABLES_LADO() => RotaDeCabosCampo.Lado();
+
+    [CommandMethod("CLIVUS_CABLE_ROUTES_REPLACE")]
+    public static void CLIVUS_CABLE_ROUTES_REPLACE() => RotaDeCabosCampo.Recolocar();
+
+    [CommandMethod("CLIVUS_RUTA_CABLES_RECOLOCAR")]
+    public static void CLIVUS_RUTA_CABLES_RECOLOCAR() => RotaDeCabosCampo.Recolocar();
 
     [CommandMethod("CLIVUS_CABLE_ROUTES_TRENCH")]
     public static void CLIVUS_CABLE_ROUTES_TRENCH() => RotaDeCabosCampo.Vala();
@@ -575,6 +587,12 @@ public static class ComandosTraduzidos
 
     [CommandMethod("CLIVUS_CAMBIAR_MESA", CommandFlags.UsePickSet)]
     public static void CLIVUS_CAMBIAR_MESA() => TrocarMesaCommands.Trocar();
+
+    [CommandMethod("CLIVUS_CHANGE_MODULE_POWER", CommandFlags.Modal | CommandFlags.UsePickSet)]
+    public static void CLIVUS_CHANGE_MODULE_POWER() => PotenciaCommands.TrocarPotencia();
+
+    [CommandMethod("CLIVUS_CAMBIAR_POTENCIA", CommandFlags.Modal | CommandFlags.UsePickSet)]
+    public static void CLIVUS_CAMBIAR_POTENCIA() => PotenciaCommands.TrocarPotencia();
 
     [CommandMethod("CLIVUS_PLANT")]
     public static void CLIVUS_PLANT() => UsinaCommands.Usina();

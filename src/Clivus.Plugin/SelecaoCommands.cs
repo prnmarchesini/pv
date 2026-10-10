@@ -101,6 +101,7 @@ public static class SelecaoCommands
             ? FileiraCommands.PerfilDaMesa(documento.Editor, silencioso: true).Layout.Module.PowerWatts
             : contadas.Select(t => t.Identity?.ModulePowerWatts).FirstOrDefault(p => p is > 0) ?? 1;
 
-        return new SelectionSummary(LayoutCensus.Count(contadas, reserva));
+        // A potência trocada pela área (item 14) vale para a usina inteira, a seleção inclusive.
+        return new SelectionSummary(LayoutCensus.Count(contadas, reserva, FonteDoModulo.Simulada(documento.Database)?.Watts));
     }
 }

@@ -71,7 +71,8 @@ public static class RecontarCommands
             mesas.Add(Contar(transacao, partes));
         }
 
-        return LayoutCensus.Count(mesas, potenciaDoModuloWatts);
+        // A potência trocada pela área (item 14 de 10/10/2026) vale para todas as mesas.
+        return LayoutCensus.Count(mesas, potenciaDoModuloWatts, FonteDoModulo.Simulada(database)?.Watts);
     }
 
     /// <summary>Uma mesa contada com os comprimentos dos pilares (lidos do XData de cada um).</summary>

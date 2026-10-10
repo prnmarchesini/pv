@@ -150,6 +150,7 @@ public static class ExcelCommands
         var modulos = 0;
         var watts = 0.0;
         var pilares = new List<QuantityPillar>();
+        var simulada = FonteDoModulo.Simulada(database)?.Watts;
 
         foreach (var (_, partes) in LayoutScan.Tables(transacao, database))
         {
@@ -157,7 +158,7 @@ public static class ExcelCommands
 
             mesas++;
             modulos += partes.Modules.Count;
-            watts += partes.Modules.Count * (mesa.ModulePowerWatts ?? 0);
+            watts += partes.Modules.Count * (simulada ?? mesa.ModulePowerWatts ?? 0);
 
             foreach (var id in partes.Pillars)
             {
