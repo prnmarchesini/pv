@@ -275,7 +275,8 @@ public static class CableReport
     /// <summary>"T1 → UC1".</summary>
     public static string DePara(string de, string para) => Tr.F("{0} → {1}", de, para);
 
-    private static string? Isolacao(Cable? c) =>
+    /// <summary>A isolação para a tela: o material e a tensão ("EPR 8,7/15 kV").</summary>
+    public static string? Isolacao(Cable? c) =>
         c is null ? null : string.Join(" ", new[] { c.InsulationMaterial, c.Insulation }.Where(x => !string.IsNullOrWhiteSpace(x)));
 
     private static string Polaridade(CablePolarity p) => p switch

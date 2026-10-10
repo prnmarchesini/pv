@@ -366,8 +366,13 @@ internal sealed class AbaDeRota : AbaEletrica
 
         Titulo(pilha, Tr.T("Cabos"));
         var acoes = new WrapPanel();
-        Botao(acoes, Tr.T("Gerar"), Tr.T("Apaga os cabos desta rota e desenha de novo, pelas valas. O que não der para rotear é avisado e pintado de vermelho."),
+        Botao(acoes, Tr.T("Gerar"), rota == CableRoute.DirectCurrent
+                ? Tr.T("Apaga os cabos desta rota e desenha de novo, pelas valas, com os inversores onde estão (moveu um? Gere de novo). Os inversores automáticos que não estão em campo vão antes para o lado da vala, no ponto de menor cabo. O que não der para rotear é avisado e pintado de vermelho.")
+                : Tr.T("Apaga os cabos desta rota e desenha de novo, pelas valas. O que não der para rotear é avisado e pintado de vermelho."),
             () => Comando(PluginInfo.ComandoRotaGerar, _rota.ToString()));
+        if (rota == CableRoute.DirectCurrent)
+            Botao(acoes, Tr.T("Recolocar automáticos"), Tr.T("Os inversores automáticos (aba Inversor da configuração elétrica) voltam ao lado da vala, no ponto de menor cabo CC das strings deles, mesmo os que você moveu; e a rota CC é refeita."),
+                () => Comando(PluginInfo.ComandoRotaRecolocar, _rota.ToString()));
         Botao(acoes, Tr.T("Apagar tudo"), Tr.T("Apaga todos os cabos desta rota. Só cabo: strings, valas e mesas ficam."),
             () => Comando(PluginInfo.ComandoRotaApagar, _rota + " Tudo"));
         Botao(acoes, Tr.T("Apagar escolhendo"), Tr.T("Escolha em campo os cabos desta rota a apagar."),
@@ -522,10 +527,17 @@ internal sealed class AbaDeRota : AbaEletrica
             var frase = Tr.F("Aba {0} salva. Trocar o cabo não redesenha: use Ver cabos para a tabela com as contas novas.", CableRoutes.Title(_rota));
 
             // Profundidade nova: as valas descem (ou sobem) junto, se o terreno já está na memória; senão o Gerar assenta.
-            if (Math.Abs(antes - nova.Depth) > 1e-9 && TerrainCache.Get(Documento) is { } terreno)
+            if (Math.Abs(antes - nova.Depth) > 1e-9)
             {
-                var (valas, _) = RotaDeCabosStore.AssentarValas(Documento.Database, _rota, nova.Depth, terreno.Mesh);
-                frase += " " + Tr.F("{0} vala(s) assentada(s) a {1:0.00} m.", valas, nova.Depth);
+                if (TerrainCache.Get(Documento) is { } terreno)
+                {
+                    var (valas, _) = RotaDeCabosStore.AssentarValas(Documento.Database, _rota, nova.Depth, terreno.Mesh);
+                    frase += " " + Tr.F("{0} vala(s) assentada(s) a {1:0.00} m.", valas, nova.Depth);
+                }
+                else
+                {
+                    frase += " " + Tr.T("O terreno não está processado nesta sessão: o Gerar assenta as valas na profundidade nova.");
+                }
             }
 
             return frase;
@@ -670,7 +682,7 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
         public string Formacao => Circuito.Cable?.Formation ?? string.Empty;
         public string Secao => Circuito.Cable is { } x ? x.SectionMm2.ToString("0.##", Tr.Culture) : string.Empty;
         public string Condutor => Circuito.Cable?.Conductor ?? string.Empty;
-        public string Isolacao => Circuito.Cable is { } x ? string.Join(" ", new[] { x.InsulationMaterial, x.Insulation }.Where(t => !string.IsNullOrWhiteSpace(t))) : string.Empty;
+        public string Isolacao => CableReport.Isolacao(Circuito.Cable) ?? string.Empty;
         public string Metodo => Circuito.Method;
         public int Lances => Circuito.Runs;
         public string Comprimento => Circuito.Length.ToString("0.00", Tr.Culture);
@@ -786,6 +798,9 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
                 _ultimas.Add(tabela);
 
                 var (grade, rodape) = _circuitos[i];
+
+                // Uma edição que ficou aberta (saiu da célula com Tab) não pode estar no meio quando a lista troca.
+                grade.CancelEdit(DataGridEditingUnit.Row);
                 grade.ItemsSource = circuitos
                     .OrderBy(c => c.Route).ThenBy(c => c.FromName, NaturalStringComparer.Instance).ThenBy(c => c.ToName, NaturalStringComparer.Instance)
                     .Select(c => new Linha(c)).ToList();
@@ -797,10 +812,14 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
             }
 
             var material = CableReport.Material(RotaDeCabosTabelas.Medidos(db), folga);
+            if (RotaDeCabosTabelas.ProblemaDasVias(db) is { } ilegivel) material = material with { Notes = [.. material.Notes, ilegivel] };
             _ultimas.Add(material);
             TabelaNaTela.Mostrar(_material, [material]);
 
-            Avisar(sumidos == 0 ? Tr.T("Recontado.") : Tr.F("Recontado: {0} lance(s) gerado(s) e apagado(s) à mão (a origem foi pintada).", sumidos), erro: sumidos > 0);
+            var frase = sumidos == 0 ? Tr.T("Recontado.") : Tr.F("Recontado: {0} lance(s) gerado(s) e apagado(s) à mão (a origem foi pintada).", sumidos);
+            var vias = RotaDeCabosTabelas.ProblemaDasVias(db);
+            if (vias is not null) frase += "\n" + vias;
+            Avisar(frase, erro: sumidos > 0 || vias is not null);
         }
         catch (System.Exception falha)
         {

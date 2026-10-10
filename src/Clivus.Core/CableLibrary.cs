@@ -108,13 +108,15 @@ public static class CableLibrary
 
     /// <summary>
     /// As vias que a formação diz: "3x1x25" (três cabos de um condutor) = 3;
-    /// "1x6" ou "1x(3x95)" = 1. Null se a formação não começa com um número
-    /// de cabos.
+    /// "1x6", "1x(3x95)" ou "4x16" (um cabo de vários condutores) = 1. Null
+    /// se a formação não começa com número.
     /// </summary>
     public static int? WiresFromFormation(string? formacao)
     {
-        var m = System.Text.RegularExpressions.Regex.Match(formacao ?? string.Empty, @"^\s*(\d{1,2})\s*[xX×]");
-        return m.Success && int.TryParse(m.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var n) && n >= 1 ? n : null;
+        var texto = formacao ?? string.Empty;
+        var unipolares = System.Text.RegularExpressions.Regex.Match(texto, @"^\s*(\d{1,2})\s*[xX×]\s*1\s*[xX×]");
+        if (unipolares.Success && int.TryParse(unipolares.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var n) && n >= 1) return n;
+        return System.Text.RegularExpressions.Regex.IsMatch(texto, @"^\s*\d") ? 1 : null;
     }
 
     /// <summary>Lê a biblioteca; arquivo que não existe = a de partida. Problema de leitura vai em <paramref name="problem"/> e volta a de partida.</summary>

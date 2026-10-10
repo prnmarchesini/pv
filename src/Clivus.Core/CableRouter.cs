@@ -48,8 +48,9 @@ public static class CableRouter
         var lances = new List<PlannedRun>();
         var falhas = new List<RouteFailure>();
 
-        // As árvores de caminho a partir das valas de cada destino: uma vez por destino, não por string.
-        var arvores = new Dictionary<CableEnd, IReadOnlyList<TrenchNetwork.TrenchTree>>();
+        // As árvores de caminho a partir das valas de cada destino, por nível de
+        // preferência (as que entram no contorno, depois as do raio): uma vez por destino.
+        var arvores = new Dictionary<CableEnd, List<List<TrenchNetwork.TrenchTree>>>();
 
         foreach (var s in strings)
         {
@@ -69,9 +70,9 @@ public static class CableRouter
             }
 
             // As valas que chegam no destino: as que entram no contorno dele; sem
-            // nenhuma, todas dentro do raio (a mais perto pode estar solta).
+            // nenhuma que se ligue, todas dentro do raio (a mais perto pode estar solta).
             if (!arvores.TryGetValue(s.Destination, out var chegadas))
-                arvores[s.Destination] = chegadas = TrenchAccess(valas, destino, s.DestinationOutline, config.Radius).Select(valas.Tree).ToList();
+                arvores[s.Destination] = chegadas = TrenchAccessLevels(valas, destino, s.DestinationOutline, config.Radius).Select(n => n.Select(valas.Tree).ToList()).ToList();
 
             if (chegadas.Count == 0)
             {
@@ -107,36 +108,22 @@ public static class CableRouter
 
             PlannedRun? Lance(StringEndInput ponta, RowEnd lado, CablePolarity polaridade, out string? problema)
             {
-                problema = null;
-                (IReadOnlyList<Point3> Points, Point3 Direction) saida;
-                try
-                {
-                    saida = RowExit.Plan(ponta.Point, ponta.TableCorners, ponta.RowCorners, lado);
-                }
-                catch (ArgumentException)
-                {
-                    // Mesa sem os 4 cantos ou sem direção: avisa e pinta, não derruba o Gerar.
-                    problema = Tr.T("a mesa da ponta da string não tem os 4 cantos legíveis");
-                    return null;
-                }
+                if (StringExit(ponta, lado, valas, config, out problema) is not { } saida) return null;
+                var batida = saida.Hit;
 
-                // Do fim da fileira, reto até bater na vala (18.4); não bateu: a vala não passa da mesa (18.5).
-                if (valas.Ray(saida.Points[^1], saida.Direction, config.Reach) is not { } batida)
-                {
-                    problema = Tr.F("nenhuma vala cruza a reta do fim da fileira (alcance {0:0.#} m): falta a referência da vala", config.Reach);
-                    return null;
-                }
-
-                // A chegada com o menor percurso (pela vala até ela, mais dela ao destino).
-                var arvore = chegadas.MinBy(a => a.Length(batida) + Plano(a.From.At, destino));
-                if (arvore is null || double.IsInfinity(arvore.Length(batida)) || arvore.Path(batida) is not { } deChegada)
+                // A chegada com o menor percurso (pela vala até ela, mais dela ao
+                // destino), no primeiro nível em que alguma se liga.
+                var arvore = chegadas
+                    .Select(nivel => nivel.Where(a => double.IsFinite(a.Length(batida))).MinBy(a => a.Length(batida) + Plano(a.From.At, destino)))
+                    .FirstOrDefault(a => a is not null);
+                if (arvore is null || arvore.Path(batida) is not { } deChegada)
                 {
                     problema = Tr.F("a vala do fim da fileira não se liga às valas de {0}", s.DestinationName);
                     return null;
                 }
 
                 var pelaVala = Enumerable.Reverse(deChegada).ToList();
-                var percurso = CablePath.Build(ponta.Point, [.. saida.Points, batida.At], pelaVala, [], destino, config.Depth, chao, out var fora);
+                var percurso = CablePath.Build(ponta.Point, [.. saida.Exit, batida.At], pelaVala, [], destino, config.Depth, chao, out var fora);
                 if (percurso is null)
                 {
                     problema = Tr.F("trecho fora do terreno em ({0:0.##}; {1:0.##})", fora!.Value.X, fora.Value.Y);
@@ -184,8 +171,8 @@ public static class CableRouter
                 continue;
             }
 
-            var saidas = TrenchAccess(valas, de, t.FromOutline, config.Radius);
-            var chegadas = TrenchAccess(valas, para, t.ToOutline, config.Radius);
+            var saidas = TrenchAccessLevels(valas, de, t.FromOutline, config.Radius);
+            var chegadas = TrenchAccessLevels(valas, para, t.ToOutline, config.Radius);
             if (saidas.Count == 0 || chegadas.Count == 0)
             {
                 var sem = new List<CableEnd>();
@@ -196,17 +183,28 @@ public static class CableRouter
                 continue;
             }
 
-            // O par (saída, chegada) de menor total que se liga.
+            // O par (saída, chegada) de menor total que se liga, nos níveis de
+            // preferência: as valas que entram nos contornos antes das do raio.
             (TrenchPoint Saida, IReadOnlyList<Point3> Caminho, double Total)? melhor = null;
-            foreach (var s in saidas)
+            foreach (var nivelDeSaida in saidas)
             {
-                var arvore = valas.Tree(s);
-                foreach (var c in chegadas)
+                foreach (var nivelDeChegada in chegadas)
                 {
-                    var total = Plano(de, s.At) + arvore.Length(c) + Plano(c.At, para);
-                    if (double.IsInfinity(total) || (melhor is { } m && m.Total <= total)) continue;
-                    if (arvore.Path(c) is { } caminho) melhor = (s, caminho, total);
+                    foreach (var s in nivelDeSaida)
+                    {
+                        var arvore = valas.Tree(s);
+                        foreach (var c in nivelDeChegada)
+                        {
+                            var total = Plano(de, s.At) + arvore.Length(c) + Plano(c.At, para);
+                            if (double.IsInfinity(total) || (melhor is { } m && m.Total <= total)) continue;
+                            if (arvore.Path(c) is { } caminho) melhor = (s, caminho, total);
+                        }
+                    }
+
+                    if (melhor is not null) break;
                 }
+
+                if (melhor is not null) break;
             }
 
             if (melhor is not { } escolhido)
@@ -229,16 +227,52 @@ public static class CableRouter
     }
 
     /// <summary>
-    /// Por onde o cabo entra e sai da rede de valas num equipamento: primeiro
-    /// as valas que entram no contorno dele (o rabicho que o usuário desenhou
-    /// até ele, só em planta); sem nenhuma, as que passam dentro do raio
-    /// (Renan, 10/10/2026: "o motor deve procurar primeiro por valas que
-    /// entram e em seguida fazer a busca pelo raio").
+    /// A saída de uma ponta de string até a vala, que não depende do destino
+    /// (18.1, 18.4): da ponta, contornando a fileira pelo lado
+    /// <paramref name="lado"/>, e do fim da fileira reto até bater na vala.
+    /// Null, com o motivo, se a mesa não tem os cantos ou se nenhuma vala
+    /// cruza a reta no alcance (18.5).
     /// </summary>
-    public static IReadOnlyList<TrenchPoint> TrenchAccess(TrenchNetwork valas, Point3 ponto, IReadOnlyList<Point3>? contorno, double raio)
+    public static (IReadOnlyList<Point3> Exit, TrenchPoint Hit)? StringExit(StringEndInput ponta, RowEnd lado, TrenchNetwork valas, RouteSettings config, out string? problema)
     {
-        if (contorno is { Count: >= 3 } && valas.Entering(contorno, ponto) is { Count: > 0 } entram) return entram;
-        return valas.Within(ponto, raio);
+        problema = null;
+        (IReadOnlyList<Point3> Points, Point3 Direction) saida;
+        try
+        {
+            saida = RowExit.Plan(ponta.Point, ponta.TableCorners, ponta.RowCorners, lado);
+        }
+        catch (ArgumentException)
+        {
+            // Mesa sem os 4 cantos ou sem direção: avisa e pinta, não derruba o Gerar.
+            problema = Tr.T("a mesa da ponta da string não tem os 4 cantos legíveis");
+            return null;
+        }
+
+        // Do fim da fileira, reto até bater na vala (18.4); não bateu: a vala não passa da mesa (18.5).
+        if (valas.Ray(saida.Points[^1], saida.Direction, config.Reach) is not { } batida)
+        {
+            problema = Tr.F("nenhuma vala cruza a reta do fim da fileira (alcance {0:0.#} m): falta a referência da vala", config.Reach);
+            return null;
+        }
+
+        return (saida.Points, batida);
+    }
+
+    /// <summary>
+    /// Por onde o cabo entra e sai da rede de valas num equipamento, em
+    /// níveis de preferência: primeiro as valas que entram no contorno dele
+    /// (o rabicho que o usuário desenhou até ele, só em planta); depois as que
+    /// passam dentro do raio (Renan, 10/10/2026: "o motor deve procurar
+    /// primeiro por valas que entram e em seguida fazer a busca pelo raio").
+    /// Quem roteia usa o segundo nível só se nenhuma do primeiro se liga
+    /// (rabicho solto). Níveis vazios ficam de fora; sem nenhum, vazio.
+    /// </summary>
+    public static IReadOnlyList<IReadOnlyList<TrenchPoint>> TrenchAccessLevels(TrenchNetwork valas, Point3 ponto, IReadOnlyList<Point3>? contorno, double raio)
+    {
+        var niveis = new List<IReadOnlyList<TrenchPoint>>();
+        if (contorno is { Count: >= 3 } && valas.Entering(contorno, ponto) is { Count: > 0 } entram) niveis.Add(entram);
+        if (valas.Within(ponto, raio) is { Count: > 0 } perto) niveis.Add(perto);
+        return niveis;
     }
 
     private static double Plano(Point3 a, Point3 b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));

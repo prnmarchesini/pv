@@ -133,6 +133,16 @@ internal static class RotaDeCabosTabelas
             .ToList();
     }
 
+    /// <summary>
+    /// O aviso de quando as vias trocadas no resumo não se leem: os totais
+    /// voltam às vias das abas, e o usuário precisa saber (null se tudo bem).
+    /// </summary>
+    internal static string? ProblemaDasVias(Database db)
+    {
+        RotaDeCabosStore.Vias(db, out var problema);
+        return problema is null ? null : Tr.F("ATENÇÃO: as vias trocadas no resumo não se leem ({0}); os totais usam as vias das abas.", problema);
+    }
+
     /// <summary>As vias de um circuito: as trocadas à mão no resumo; sem troca, as da aba da rota.</summary>
     private static Func<CableRoute, CableEnd, CableEnd, int> ViasPorCircuito(Database db, IReadOnlyDictionary<CableRoute, RouteSettings> config)
     {

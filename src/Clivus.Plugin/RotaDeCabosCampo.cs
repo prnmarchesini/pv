@@ -159,8 +159,24 @@ public static class RotaDeCabosCampo
 
     // ------------------------------------------------------------- gerar
 
+    /// <summary>
+    /// O Gerar da aba (e o refazer depois de mover um equipamento): apaga os
+    /// cabos da rota e desenha de novo, com os equipamentos onde estão. No
+    /// CC, os inversores automáticos que ainda não estão em campo são postos
+    /// ao lado da vala, no ponto de menor cabo das strings deles, antes.
+    /// </summary>
     [CommandMethod(PluginInfo.ComandoRotaGerar)]
-    public static void Gerar()
+    public static void Gerar() => Gerar(recolocar: false);
+
+    /// <summary>
+    /// "Recolocar automáticos" (aba CC): TODOS os inversores automáticos
+    /// voltam ao ponto de menor cabo (mesmo os que o usuário moveu) e a rota
+    /// CC é refeita.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoRotaRecolocar)]
+    public static void Recolocar() => Gerar(recolocar: true);
+
+    private static void Gerar(bool recolocar)
     {
         var documento = AcadApp.DocumentManager.MdiActiveDocument;
         if (documento is null) return;
@@ -169,6 +185,12 @@ public static class RotaDeCabosCampo
         try
         {
             if (PerguntarRota(editor) is not { } rota) return;
+            if (recolocar && rota != CableRoute.DirectCurrent)
+            {
+                editor.WriteMessage(Tr.T("\nROTA Recolocar os inversores automáticos é da rota CC.\n"));
+                return;
+            }
+
             if (FileiraCommands.ExigirTerreno(editor, documento) is not { } terreno) return;
 
             var db = documento.Database;
@@ -176,6 +198,14 @@ public static class RotaDeCabosCampo
             if (problemaDaConfig is not null)
             {
                 Relatar(documento, rota, Tr.F("Não gerei: a configuração da rota está ilegível ({0}).", problemaDaConfig));
+                return;
+            }
+
+            RotaDeCabosStore.LancesGerados(db, out var problemaDosLances);
+            if (problemaDosLances is not null)
+            {
+                // Regravar por cima apagaria os esperados das outras rotas sem aviso.
+                Relatar(documento, rota, Tr.F("Não gerei: o registro dos lances gerados está ilegível ({0}).", problemaDosLances));
                 return;
             }
 
@@ -189,18 +219,20 @@ public static class RotaDeCabosCampo
                 return;
             }
 
-            RotaDeCabosStore.LancesGerados(db, out var problemaDosLances);
-            if (problemaDosLances is not null)
-            {
-                // Regravar por cima apagaria os esperados das outras rotas sem aviso.
-                Relatar(documento, rota, Tr.F("Não gerei: o registro dos lances gerados está ilegível ({0}).", problemaDosLances));
-                return;
-            }
-
             var rede = new TrenchNetwork(valas);
             double? Chao(double x, double y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null;
 
+            var linhas = new List<string>();
             var leitura = LeituraDaRota.Ler(db);
+
+            // CC: os inversores automáticos vão para o lado da vala antes de traçar; a
+            // leitura é refeita com eles em campo (e sem as falhas que a conta já anotou).
+            if (rota == CableRoute.DirectCurrent)
+            {
+                linhas.AddRange(PosicaoAutomatica.Colocar(editor, db, terreno, rede, config, leitura, recolocar));
+                leitura = LeituraDaRota.Ler(db);
+            }
+
             var resultado = rota switch
             {
                 CableRoute.DirectCurrent => CableRouter.Strings(leitura.StringsCc(), rota, rede, config, Chao),
@@ -221,11 +253,8 @@ public static class RotaDeCabosCampo
 
             RotaDeCabosStore.Pintar(db, rota, leitura.ParaPintar(falhas));
 
-            var linhas = new List<string>
-            {
-                Tr.F("{0}: {1} lance(s) desenhado(s), {2:0.0} m no total (3D, com as descidas da vala de {3:0.00} m).",
-                    CableRoutes.Title(rota), resultado.Runs.Count, resultado.Runs.Sum(r => r.Length), config.Depth),
-            };
+            linhas.Insert(0, Tr.F("{0}: {1} lance(s) desenhado(s), {2:0.0} m no total (3D, com as descidas da vala de {3:0.00} m).",
+                CableRoutes.Title(rota), resultado.Runs.Count, resultado.Runs.Sum(r => r.Length), config.Depth));
             if (valaFora > 0) linhas.Add(Tr.F("ATENÇÃO: {0} ponto(s) da vala fora do terreno ficaram com a cota que tinham.", valaFora));
             if (falhas.Count > 0) linhas.Add(Tr.F("{0} trecho(s) sem rota, pintado(s) de vermelho:", falhas.Count));
             linhas.AddRange(falhas.Select(f => "• " + f.What + ": " + f.Reason));
@@ -458,7 +487,28 @@ internal sealed class LeituraDaRota
             if (Contorno(t, b, l._caixas[(tipo, guid)]) is { } contorno) l._contornos[(tipo, guid)] = contorno;
         }
 
+        // Inversor numa área (sala, skid): a vala que entra na ÁREA é a que chega nele.
+        var areas = LocalDosInversores.Areas(db);
+        foreach (var local in LocalDosInversores.Ler(db, out _))
+            if (local.Mode == InverterPlacementMode.Area && areas.TryGetValue(local.Site, out var area) && l._emCampo.ContainsKey((EquipmentKind.Inverter, local.Inverter)))
+                l._contornos[(EquipmentKind.Inverter, local.Inverter)] = area.Contorno;
+
         return l;
+    }
+
+    /// <summary>Se o retângulo (cantos em planta) cai numa mesa ou noutro equipamento em campo (menos <paramref name="exceto"/>).</summary>
+    internal bool Ocupado(IReadOnlyList<(double X, double Y)> cantos, Guid exceto)
+    {
+        var x = cantos.Average(c => c.X);
+        var y = cantos.Average(c => c.Y);
+        var pontos = cantos.Append((x, y)).ToList();
+
+        bool Dentro(IReadOnlyList<Point3> poligono) =>
+            pontos.Any(p => Polygons.Contains(poligono, p.Item1, p.Item2))
+            || poligono.Any(q => Polygons.Contains(cantos.Select(c => new Point3(c.X, c.Y, 0)).ToList(), q.X, q.Y));
+
+        return _mesas.Values.Any(m => Dentro(m.Mesa.Corners))
+            || _contornos.Where(c => c.Key.Item2 != exceto && _caixas.ContainsKey(c.Key)).Any(c => Dentro(c.Value));
     }
 
     private static Point3 P(Point3d p) => new(p.X, p.Y, p.Z);

@@ -73,6 +73,7 @@ public class CableRoutingContractTests
         Assert.Equal(3, CableLibrary.WiresFromFormation(" 3 × 1 × 95"));
         Assert.Equal(1, CableLibrary.WiresFromFormation("1x6"));
         Assert.Equal(1, CableLibrary.WiresFromFormation("1x(3x95)"));
+        Assert.Equal(1, CableLibrary.WiresFromFormation("4x16"));
         Assert.Null(CableLibrary.WiresFromFormation("tripolar"));
 
         var troca = new CircuitWires(CableRoute.MediumVoltage, new CableEnd(CableEndKind.Transformer, Guid.NewGuid()), new CableEnd(CableEndKind.Substation, Guid.NewGuid()), 4);
@@ -457,6 +458,13 @@ public class CableRouterTests
 
         Assert.Contains(lance.Path, p => Em(p, 7, 10));
         Assert.Contains(lance.Path, p => Em(p, 0, 10));
+
+        // Rabicho solto (a ponta a 0,8 m da principal, mais que o encosto de 0,5): ele não se
+        // liga a nada, e o cabo cai na busca pelo raio em vez de falhar (revisão de 10/10/2026).
+        var solto = new TrenchNetwork([principal, [new(0.8, 10, 0), new(7, 10, 0)]]);
+        var pelaPrincipal = CableRouter.Equipment([t], CableRoute.MediumVoltage, solto, RouteSettings.Default(CableRoute.MediumVoltage), Chao);
+        Assert.Empty(pelaPrincipal.Failures);
+        Assert.DoesNotContain(Assert.Single(pelaPrincipal.Runs).Path, p => Em(p, 7, 10));
 
         // Sem o contorno (como era), o raio acha o vértice (0; 5) a 9,4 m e o cabo corta na diagonal.
         var semContorno = Assert.Single(CableRouter.Equipment([t with { FromOutline = null }], CableRoute.MediumVoltage, rede, RouteSettings.Default(CableRoute.MediumVoltage), Chao).Runs);

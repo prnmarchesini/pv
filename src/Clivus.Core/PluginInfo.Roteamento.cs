@@ -18,6 +18,12 @@ public static partial class PluginInfo
     /// <summary>"Forçar lado" (18.3): a rota, as strings em campo e um clique do lado para onde os cabos delas vão (ou Automatico).</summary>
     public const string ComandoRotaLado = "CLIVUS_ROTA_LADO";
 
+    /// <summary>Local dos inversores (10/10/2026): Area (clique na polilinha fechada), Automatico (pela rota CC) ou Manual, e os inversores.</summary>
+    public const string ComandoEletricaLocal = "CLIVUS_ELETRICA_LOCAL";
+
+    /// <summary>"Recolocar automáticos" da aba CC: os inversores automáticos voltam ao ponto de menor cabo e a rota é refeita.</summary>
+    public const string ComandoRotaRecolocar = "CLIVUS_ROTA_RECOLOCAR";
+
     /// <summary>Só no build de teste: confere cada vala e cada cabo contra o TIN e escreve os vértices dos cabos (nível 2).</summary>
     public const string ComandoRotaConferirAutomatico = "CLIVUS_ROTA_CONFERIR_AUTO";
 

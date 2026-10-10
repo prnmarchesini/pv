@@ -58,8 +58,9 @@ public static class RotaDeCabosConferir
                 double maiorDesvio = 0, abaixo = 0, acima = 0;
                 var fora = 0;
 
-                foreach (var p in pontos)
+                for (var i = 0; i < pontos.Count; i++)
                 {
+                    var p = pontos[i];
                     if (!terreno.Mesh.TryGetZ(p.X, p.Y, out var z))
                     {
                         fora++;
@@ -69,8 +70,10 @@ public static class RotaDeCabosConferir
                     if (vala is not null) maiorDesvio = Math.Max(maiorDesvio, Math.Abs(p.Z - (z - fundo)));
                     else
                     {
+                        // As pontas são o módulo da string ou a base do equipamento: só o miolo
+                        // tem que ficar entre o fundo da vala e o terreno + 0,80.
                         abaixo = Math.Max(abaixo, (z - fundo) - p.Z);
-                        acima = Math.Max(acima, p.Z - (z + EquipmentFootprint.FloatHeight));
+                        if (i > 0 && i < pontos.Count - 1) acima = Math.Max(acima, p.Z - (z + EquipmentFootprint.FloatHeight));
                     }
                 }
 

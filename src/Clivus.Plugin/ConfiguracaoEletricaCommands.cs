@@ -82,25 +82,7 @@ public static class ConfiguracaoEletricaCommands
 
             // O clique é em coordenadas do usuário; a cota vem do terreno.
             var mundo = ponto.Value.TransformBy(editor.CurrentUserCoordinateSystem);
-
-            if (!terreno.Mesh.TryGetZ(mundo.X, mundo.Y, out var chao))
-            {
-                editor.WriteMessage(Tr.F("\nEQUIPAMENTO Esse ponto está fora do terreno; {0} não foi posto.\n", equipamento.Tag));
-                return;
-            }
-
-            var baseZ = EquipmentFootprint.BaseElevation(chao);
-            var cantos = EquipmentFootprint.Corners(mundo.X, mundo.Y, equipamento.Size.Width, equipamento.Size.Length)
-                .Select(c => terreno.Mesh.TryGetZ(c.X, c.Y, out var z) ? z : double.NaN);
-            var enterrados = EquipmentFootprint.BuriedCorners(baseZ, cantos);
-
-            var copias = EquipamentoEmCampo.Posicionar(documento.Database, equipamento, new Point3d(mundo.X, mundo.Y, baseZ));
-
-            editor.WriteMessage(Tr.F("\nEQUIPAMENTO {0} em campo: terreno a {1:0.000} m, base a {2:0.000} m ({3:0.00} m acima do terreno).\n", equipamento.Tag, chao, baseZ, EquipmentFootprint.FloatHeight));
-            if (copias > 0)
-                editor.WriteMessage(Tr.F("  ATENÇÃO: o desenho tem mais {0} cópia(s) do retângulo de {1} (COPY); só uma foi movida. Apague as cópias.\n", copias, equipamento.Tag));
-            if (enterrados > 0)
-                editor.WriteMessage(Tr.F("  ATENÇÃO: o terreno passa da base do retângulo em {0} canto(s); o símbolo entra no chão ali.\n", enterrados));
+            NoTerreno(editor, documento.Database, terreno, equipamento, mundo.X, mundo.Y);
         }
         catch (System.Exception erro)
         {
@@ -111,5 +93,35 @@ public static class ConfiguracaoEletricaCommands
         {
             JanelaEletrica.Voltar(documento);
         }
+    }
+
+    /// <summary>
+    /// Põe (ou move) o retângulo do equipamento com o centro em (x, y): a
+    /// base 0,80 m acima da cota do TERRENO ali (regra sagrada 5), avisando
+    /// as cópias e os cantos que entram no chão. Quem chama: o Pôr em campo,
+    /// a área dos inversores e o automático da rota CC. Falso (e avisado) se
+    /// o ponto está fora do terreno.
+    /// </summary>
+    internal static bool NoTerreno(Editor editor, Autodesk.AutoCAD.DatabaseServices.Database database, ProcessedTerrain terreno, EquipmentInfo equipamento, double x, double y)
+    {
+        if (!terreno.Mesh.TryGetZ(x, y, out var chao))
+        {
+            editor.WriteMessage(Tr.F("\nEQUIPAMENTO Esse ponto está fora do terreno; {0} não foi posto.\n", equipamento.Tag));
+            return false;
+        }
+
+        var baseZ = EquipmentFootprint.BaseElevation(chao);
+        var cantos = EquipmentFootprint.Corners(x, y, equipamento.Size.Width, equipamento.Size.Length)
+            .Select(c => terreno.Mesh.TryGetZ(c.X, c.Y, out var z) ? z : double.NaN);
+        var enterrados = EquipmentFootprint.BuriedCorners(baseZ, cantos);
+
+        var copias = EquipamentoEmCampo.Posicionar(database, equipamento, new Point3d(x, y, baseZ));
+
+        editor.WriteMessage(Tr.F("\nEQUIPAMENTO {0} em campo: terreno a {1:0.000} m, base a {2:0.000} m ({3:0.00} m acima do terreno).\n", equipamento.Tag, chao, baseZ, EquipmentFootprint.FloatHeight));
+        if (copias > 0)
+            editor.WriteMessage(Tr.F("  ATENÇÃO: o desenho tem mais {0} cópia(s) do retângulo de {1} (COPY); só uma foi movida. Apague as cópias.\n", copias, equipamento.Tag));
+        if (enterrados > 0)
+            editor.WriteMessage(Tr.F("  ATENÇÃO: o terreno passa da base do retângulo em {0} canto(s); o símbolo entra no chão ali.\n", enterrados));
+        return true;
     }
 }

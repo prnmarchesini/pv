@@ -133,7 +133,9 @@ public static class ExcelCommands
                 var leitura = LeituraDaRota.Ler(documento.Database);
                 for (var i = 0; i < RotaDeCabosTabelas.TiposDeCabo.Length; i++)
                     if (RotaDeCabosTabelas.Resumo(documento.Database, leitura, i) is { Circuitos.Count: > 0 } resumo) tabelas.Add(resumo.Tabela);
-                tabelas.Add(CableReport.Material(medidos, 0));
+                var material = CableReport.Material(medidos, 0);
+                if (RotaDeCabosTabelas.ProblemaDasVias(documento.Database) is { } ilegivel) material = material with { Notes = [.. material.Notes, ilegivel] };
+                tabelas.Add(material);
             }
         }
 

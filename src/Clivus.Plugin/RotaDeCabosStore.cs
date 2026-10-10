@@ -149,7 +149,7 @@ internal static class RotaDeCabosStore
         {
             if (id.IsErased || transacao.GetObject(id, OpenMode.ForRead) is not Curve curva || Vala(curva) is not { } marca || marca.Route != rota) continue;
 
-            var planta = Pontos(curva, transacao);
+            var planta = SemColineares(Pontos(curva, transacao));
             if (planta.Count < 2) continue;
 
             var vala = Draping.Below(terreno, planta, profundidade);
@@ -222,7 +222,10 @@ internal static class RotaDeCabosStore
         {
             if (!id.ObjectClass.IsDerivedFrom(classeCurva)) continue;
             if (transacao.GetObject(id, OpenMode.ForRead) is not Curve curva || Vala(curva) is not { } marca) continue;
-            var pontos = Pontos(curva, transacao);
+            // Os vértices que o assentamento pôs nas arestas do TIN estão na reta
+            // entre os do usuário: a rede fica só com os de planta (senão ela
+            // cresce dezenas de vezes e a conta dos cruzamentos é quadrática).
+            var pontos = SemColineares(Pontos(curva, transacao));
             if (pontos.Count >= 2) valas[marca.Route].Add(pontos);
         }
 
@@ -232,11 +235,35 @@ internal static class RotaDeCabosStore
     /// <summary>Quantas valas cada rota tem.</summary>
     internal static Dictionary<CableRoute, int> QuantasValas(Database db) => Valas(db).ToDictionary(v => v.Key, v => v.Value.Count);
 
+    /// <summary>Tira os pontos que estão na reta entre o anterior e o seguinte, em planta (até 1 mm dela).</summary>
+    internal static List<Point3> SemColineares(List<Point3> pontos)
+    {
+        if (pontos.Count < 3) return pontos;
+        var saida = new List<Point3> { pontos[0] };
+        for (var i = 1; i < pontos.Count - 1; i++)
+        {
+            var a = saida[^1];
+            var b = pontos[i];
+            var c = pontos[i + 1];
+            var dx = c.X - a.X;
+            var dy = c.Y - a.Y;
+            var l = Math.Sqrt(dx * dx + dy * dy);
+            var t = l < 1e-9 ? 0 : ((b.X - a.X) * dx + (b.Y - a.Y) * dy) / (l * l);
+            var fora = l < 1e-9 ? double.PositiveInfinity : Math.Abs((b.X - a.X) * dy - (b.Y - a.Y) * dx) / l;
+            if (fora <= 1e-3 && t > 0 && t < 1) continue;
+            saida.Add(b);
+        }
+
+        saida.Add(pontos[^1]);
+        return saida;
+    }
+
     /// <summary>Os pontos de planta de uma curva: vértices, e arcos divididos em trechos de até 1 m.</summary>
     private static List<Point3> Pontos(Curve curva, Transaction transacao)
     {
         var pontos = new List<Point3>();
-        void Somar(Point3d p) => pontos.Add(new Point3(p.X, p.Y, 0));
+        // A cota de cada ponto vai junto: o ponto que cair fora do terreno fica com ela (nunca zero).
+        void Somar(Point3d p) => pontos.Add(new Point3(p.X, p.Y, p.Z));
 
         switch (curva)
         {

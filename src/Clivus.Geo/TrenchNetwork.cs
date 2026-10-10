@@ -159,6 +159,33 @@ public sealed class TrenchNetwork
     }
 
     /// <summary>
+    /// Os nós da rede (pontas, vértices e cruzamentos das valas) como pontos
+    /// dela, cada um num trecho que chega nele, com a direção desse trecho.
+    /// Na soma das distâncias pela rede a vários pontos, o mínimo cai num nó
+    /// ou num desses pontos (entre eles, a soma é côncava no trecho).
+    /// </summary>
+    public IReadOnlyList<(TrenchPoint Point, Point3 Direction)> Nodes()
+    {
+        var nos = new List<(TrenchPoint, Point3)>();
+        for (var i = 0; i < _nos.Count; i++)
+        {
+            if (_ligacoes[i].Count == 0) continue;
+            nos.Add((new TrenchPoint(_nos[i], _ligacoes[i][0].Aresta, 0), Direction(_ligacoes[i][0].Aresta)));
+        }
+
+        return nos;
+    }
+
+    /// <summary>A direção (unitária, em planta) do trecho <paramref name="edge"/>.</summary>
+    public Point3 Direction(int edge)
+    {
+        var a = _nos[_arestas[edge].A];
+        var b = _nos[_arestas[edge].B];
+        var d = Dist(a, b);
+        return d < Eps ? new Point3(1, 0, 0) : new Point3((b.X - a.X) / d, (b.Y - a.Y) / d, 0);
+    }
+
+    /// <summary>
     /// As valas que ENTRAM no contorno de um equipamento (o rabicho que o
     /// usuário desenha até a porta dele), só em planta: de cada trecho que
     /// tem um pedaço dentro do contorno (ou a até <paramref name="tolerance"/>
