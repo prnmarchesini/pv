@@ -11,7 +11,7 @@ public class CableRouteAvailabilityTests
     private static readonly EquipmentCount SoCadastrado = new(3, 0);
 
     /// <summary>Uma usina com strings, inversores, trafos e subestação em campo; sem combiner.</summary>
-    private static readonly CableRouteDrawing Completa = new(Strings: 40, Combiners: 0, Inverters: EmCampo, Transformers: EmCampo, Substations: EmCampo);
+    private static readonly CableRouteDrawing Completa = new(Strings: 40, Combiners: Nenhum, Inverters: EmCampo, Transformers: EmCampo, Substations: EmCampo);
 
     [Fact]
     [Trait("Etapa", "17")]
@@ -47,7 +47,7 @@ public class CableRouteAvailabilityTests
     [Trait("Etapa", "17")]
     public void SemNadaCadaAbaListaOsDoisLados()
     {
-        var vazio = new CableRouteDrawing(0, 0, Nenhum, Nenhum, Nenhum);
+        var vazio = new CableRouteDrawing(0, Nenhum, Nenhum, Nenhum, Nenhum);
 
         Assert.Equal(2, CableRoutes.Missing(CableRoute.DirectCurrent, vazio).Count);
         Assert.Equal(3, CableRoutes.Missing(CableRoute.Combiner, vazio).Count);
@@ -75,7 +75,7 @@ public class CableRouteAvailabilityTests
     [Trait("Etapa", "17")]
     public void CcComCombinerEmCampoNaoPrecisaDeInversor()
     {
-        var soCombiner = Completa with { Combiners = 1, Inverters = Nenhum };
+        var soCombiner = Completa with { Combiners = EmCampo, Inverters = Nenhum };
 
         Assert.Empty(CableRoutes.Missing(CableRoute.DirectCurrent, soCombiner));
         Assert.Single(CableRoutes.Missing(CableRoute.Combiner, soCombiner));
@@ -85,7 +85,7 @@ public class CableRouteAvailabilityTests
     [Trait("Etapa", "17")]
     public void SemStringACcEACombinerAvisam()
     {
-        var semString = Completa with { Strings = 0, Combiners = 1 };
+        var semString = Completa with { Strings = 0, Combiners = EmCampo };
 
         Assert.Contains("string", Assert.Single(CableRoutes.Missing(CableRoute.DirectCurrent, semString)));
         Assert.Contains("string", Assert.Single(CableRoutes.Missing(CableRoute.Combiner, semString)));
@@ -96,7 +96,7 @@ public class CableRouteAvailabilityTests
     [Trait("Etapa", "17")]
     public void ComTudoACombinerLibera()
     {
-        Assert.Empty(CableRoutes.Missing(CableRoute.Combiner, Completa with { Combiners = 2 }));
+        Assert.Empty(CableRoutes.Missing(CableRoute.Combiner, Completa with { Combiners = EmCampo }));
     }
 
     [Fact]

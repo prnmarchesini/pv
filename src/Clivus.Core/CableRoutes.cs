@@ -22,10 +22,9 @@ public readonly record struct EquipmentCount(int Registered, int InField);
 /// <summary>
 /// O que o desenho tem, para saber quais rotas são possíveis (17.1): strings
 /// desenhadas e equipamentos com o retângulo em campo. A rota precisa do
-/// ponto físico, então equipamento só cadastrado não conta. A combiner box
-/// ainda não existe no plugin (etapa 19): por enquanto vem sempre zero.
+/// ponto físico, então equipamento só cadastrado não conta.
 /// </summary>
-public sealed record CableRouteDrawing(int Strings, int Combiners, EquipmentCount Inverters, EquipmentCount Transformers, EquipmentCount Substations);
+public sealed record CableRouteDrawing(int Strings, EquipmentCount Combiners, EquipmentCount Inverters, EquipmentCount Transformers, EquipmentCount Substations);
 
 /// <summary>Quais abas da rota de cabos ficam habilitadas e, nas outras, o que falta (17.1).</summary>
 public static class CableRoutes
@@ -66,7 +65,7 @@ public static class CableRoutes
             equipamentos.Count(e => e.Kind == tipo),
             equipamentos.Count(e => e.Kind == tipo && inField.Contains((e.Kind, e.Id))));
 
-        return new CableRouteDrawing(strings, 0, Contar(EquipmentKind.Inverter), Contar(EquipmentKind.Transformer), Contar(EquipmentKind.ConsumerUnit));
+        return new CableRouteDrawing(strings, Contar(EquipmentKind.Combiner), Contar(EquipmentKind.Inverter), Contar(EquipmentKind.Transformer), Contar(EquipmentKind.ConsumerUnit));
     }
 
     /// <summary>O que falta no desenho para a rota; vazio = a aba fica habilitada.</summary>
@@ -79,10 +78,9 @@ public static class CableRoutes
             if (desenho.Strings == 0) falta.Add(Tr.T("uma string desenhada (não há nenhuma)"));
         }
 
-        void Combiner()
-        {
-            if (desenho.Combiners == 0) falta.Add(Tr.T("uma combiner box em campo (o cadastro de combiner ainda não existe no plugin)"));
-        }
+        void Combiner() => Equipamento(desenho.Combiners,
+            Tr.T("uma combiner box (não há nenhuma no cadastro: Configuração elétrica, aba Combiner)"),
+            c => Tr.F("uma combiner box em campo ({0} no cadastro, nenhuma com o retângulo em campo)", c));
 
         void Equipamento(EquipmentCount n, string nenhum, Func<int, string> semCampo)
         {
@@ -103,7 +101,7 @@ public static class CableRoutes
             case CableRoute.DirectCurrent:
                 Strings();
                 // Com combiner em campo, o trecho CC vai até ela; sem, até o inversor.
-                if (desenho.Combiners == 0) Inversor();
+                if (desenho.Combiners.InField == 0) Inversor();
                 break;
 
             case CableRoute.Combiner:

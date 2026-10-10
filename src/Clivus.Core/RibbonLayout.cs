@@ -117,7 +117,7 @@ public static class RibbonLayout
             new(Tr.N("Saída"),
             [
                 B(Tr.N("PVsyst"), PluginInfo.ComandoExportar, Tr.N("Exporta as faces dos módulos escolhidos para o PVsyst (DAE)."), "pvsyst", grande: true),
-                B(Tr.N("Excel"), PluginInfo.ComandoExportarExcel, Tr.N("Exporta para o Excel o resumo, as quantificações das análises e os pilares."), "excel", grande: true),
+                B(Tr.N("Exportar"), PluginInfo.ComandoExportarExcel, Tr.N("Escolha o que vai para o Excel, num arquivo só: resumo, análises, pilares, compra de pilares, resumo elétrico e cabos com totalização."), "excel", grande: true),
                 B(Tr.N("3D"), PluginInfo.ComandoVer3D, Tr.N("Abre no navegador um modelo 3D para girar e dar zoom: terreno, mesas com as cores dos tipos, pilares e árvores. Funciona sem internet."), "ver3d", grande: true),
             ]),
         ]),

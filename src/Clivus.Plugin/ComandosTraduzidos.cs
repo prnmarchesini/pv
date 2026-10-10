@@ -258,6 +258,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_ELECTRICA_ASIGNAR")]
     public static void CLIVUS_ELECTRICA_ASIGNAR() => AlocacaoDeStringsCommands.Alocar();
 
+    [CommandMethod("CLIVUS_ELECTRICAL_COMBINER")]
+    public static void CLIVUS_ELECTRICAL_COMBINER() => CombinerCommands.Strings();
+
+    [CommandMethod("CLIVUS_ELECTRICA_COMBINER")]
+    public static void CLIVUS_ELECTRICA_COMBINER() => CombinerCommands.Strings();
+
     [CommandMethod("CLIVUS_ELECTRICAL_PLACE")]
     public static void CLIVUS_ELECTRICAL_PLACE() => ConfiguracaoEletricaCommands.Posicionar();
 
@@ -429,11 +435,35 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_RENOMBRAR_BLOQUES")]
     public static void CLIVUS_RENOMBRAR_BLOQUES() => RenomearCommands.Renomear();
 
+    [CommandMethod("CLIVUS_CABLE_ROUTES_DELETE")]
+    public static void CLIVUS_CABLE_ROUTES_DELETE() => RotaDeCabosCampo.Apagar();
+
+    [CommandMethod("CLIVUS_RUTA_CABLES_BORRAR")]
+    public static void CLIVUS_RUTA_CABLES_BORRAR() => RotaDeCabosCampo.Apagar();
+
     [CommandMethod("CLIVUS_CABLE_ROUTES")]
     public static void CLIVUS_CABLE_ROUTES() => RotaDeCabosCommands.RotaCabos();
 
     [CommandMethod("CLIVUS_RUTA_CABLES")]
     public static void CLIVUS_RUTA_CABLES() => RotaDeCabosCommands.RotaCabos();
+
+    [CommandMethod("CLIVUS_CABLE_ROUTES_GENERATE")]
+    public static void CLIVUS_CABLE_ROUTES_GENERATE() => RotaDeCabosCampo.Gerar();
+
+    [CommandMethod("CLIVUS_RUTA_CABLES_GENERAR")]
+    public static void CLIVUS_RUTA_CABLES_GENERAR() => RotaDeCabosCampo.Gerar();
+
+    [CommandMethod("CLIVUS_CABLE_ROUTES_SIDE")]
+    public static void CLIVUS_CABLE_ROUTES_SIDE() => RotaDeCabosCampo.Lado();
+
+    [CommandMethod("CLIVUS_RUTA_CABLES_LADO")]
+    public static void CLIVUS_RUTA_CABLES_LADO() => RotaDeCabosCampo.Lado();
+
+    [CommandMethod("CLIVUS_CABLE_ROUTES_TRENCH")]
+    public static void CLIVUS_CABLE_ROUTES_TRENCH() => RotaDeCabosCampo.Vala();
+
+    [CommandMethod("CLIVUS_RUTA_CABLES_ZANJA")]
+    public static void CLIVUS_RUTA_CABLES_ZANJA() => RotaDeCabosCampo.Vala();
 
     [CommandMethod("CLIVUS_ABOUT")]
     public static void CLIVUS_ABOUT() => SobreCommands.Sobre();

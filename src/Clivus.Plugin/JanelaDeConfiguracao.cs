@@ -83,6 +83,8 @@ internal sealed class JanelaDeConfiguracao : Window
         Margin = new Thickness(0, 6, 0, 2),
     };
     private readonly TextBox _pilarAcimaDe = Campo();
+    private readonly TextBox _temperaturaMin = Campo();
+    private readonly TextBox _temperaturaMax = Campo();
 
     private readonly TextBlock _resumo = new()
     {
@@ -300,6 +302,13 @@ internal sealed class JanelaDeConfiguracao : Window
         pilha.Children.Add(_temDeclividade);
         Linha(Tr.T("Declividade máxima da mesa (graus)"), _declividadeMax);
 
+        if (!_soAnalises)
+        {
+            pilha.Children.Add(Secao(Tr.T("Temperatura ambiente do local (cabos)")));
+            Linha(Tr.T("Mínima (°C): leva a Voc ao pior caso no frio"), _temperaturaMin);
+            Linha(Tr.T("Máxima (°C): leva a tensão de operação ao pior caso no calor"), _temperaturaMax);
+        }
+
         foreach (var campo in CamposDeTexto()) campo.TextChanged += (_, _) => Conferir();
 
         _temDeclividade.Checked += (_, _) => Conferir();
@@ -496,6 +505,8 @@ internal sealed class JanelaDeConfiguracao : Window
         yield return _enterroMax;
         yield return _declividadeMax;
         yield return _pilarAcimaDe;
+        yield return _temperaturaMin;
+        yield return _temperaturaMax;
     }
 
     // --------------------------------------------------------- ida e volta
@@ -517,6 +528,8 @@ internal sealed class JanelaDeConfiguracao : Window
         _declividadeMax.Text = form.MaxSlopeDegrees;
         _pintarPilar.IsChecked = form.PaintPillars;
         _pilarAcimaDe.Text = form.PillarLongerThan;
+        _temperaturaMin.Text = form.MinTemperature;
+        _temperaturaMax.Text = form.MaxTemperature;
 
         foreach (var kind in AnalysisRules.RangedKinds)
         {
@@ -573,6 +586,8 @@ internal sealed class JanelaDeConfiguracao : Window
             MaxSlopeDegrees = _declividadeMax.Text,
             PaintPillars = _pintarPilar.IsChecked == true,
             PillarLongerThan = _pilarAcimaDe.Text,
+            MinTemperature = _temperaturaMin.Text,
+            MaxTemperature = _temperaturaMax.Text,
             Rules = regras,
             Edge = new EdgeRule(
                 Enabled: borda.Ligada.IsChecked == true,

@@ -218,6 +218,8 @@ public class ProjectSettingsFormTests
             nameof(ProjectSettingsForm.MaxEmbedmentCm) => f with { MaxEmbedmentCm = "   " },
             nameof(ProjectSettingsForm.MaxSlopeDegrees) => f with { MaxSlopeDegrees = "   " },
             nameof(ProjectSettingsForm.PillarLongerThan) => f with { PillarLongerThan = "   " },
+            nameof(ProjectSettingsForm.MinTemperature) => f with { MinTemperature = "   " },
+            nameof(ProjectSettingsForm.MaxTemperature) => f with { MaxTemperature = "   " },
             _ => throw new ArgumentException(campo),
         };
 

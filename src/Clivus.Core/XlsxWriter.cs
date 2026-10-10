@@ -16,6 +16,9 @@ public sealed class XlsxWriter
 {
     private readonly List<(string Nome, List<object?[]> Linhas)> _abas = [];
 
+    /// <summary>Se já há uma aba com este nome (o Excel não diferencia maiúscula).</summary>
+    public bool HasSheet(string nome) => _abas.Any(a => string.Equals(a.Nome, nome, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>Uma aba nova; devolve a lista de linhas para encher.</summary>
     /// <exception cref="ArgumentException">Nome vazio, repetido ou com caractere que o Excel recusa.</exception>
     public List<object?[]> Sheet(string nome)

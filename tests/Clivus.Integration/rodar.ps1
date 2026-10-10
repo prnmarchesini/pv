@@ -1106,10 +1106,11 @@ function Testar-Config {
 
     $gravados = @([regex]::Matches($gravar.Texto, '(?m)^CONFIG_CAMPO ([^\r\n]+?)\s*$') | ForEach-Object { $_.Groups[1].Value })
 
-    # 33 campos, o mesmo numero que o teste de nivel 1 exige: um campo a menos
-    # na gravacao passaria por "preservou tudo" se so o conjunto fosse comparado.
-    if ($gravados.Count -ne 33) {
-        $problemas.Add("clivus-config: a primeira metade escreveu $($gravados.Count) campos, e sao 33. Veja $($gravar.Saida)")
+    # 35 campos (33 + as temperaturas minima e maxima, 10/10/2026), o mesmo numero que o
+    # teste de nivel 1 exige: um campo a menos na gravacao passaria por "preservou tudo"
+    # se so o conjunto fosse comparado.
+    if ($gravados.Count -ne 35) {
+        $problemas.Add("clivus-config: a primeira metade escreveu $($gravados.Count) campos, e sao 35. Veja $($gravar.Saida)")
         return $false
     }
 

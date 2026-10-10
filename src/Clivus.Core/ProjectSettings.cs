@@ -28,8 +28,16 @@ public sealed record ProjectSettingsResult(ProjectSettings? Settings, string? Pr
 /// </summary>
 /// <param name="Configuration">Os limites do projeto.</param>
 /// <param name="Analyses">O que se pinta, de que cor, em que camada.</param>
-public sealed record ProjectSettings(SystemConfiguration Configuration, AnalysisRules Analyses)
+/// <param name="MinTemperature">Temperatura ambiente mínima do local, °C (roteamento, 22.4): leva a Voc ao pior caso no frio.</param>
+/// <param name="MaxTemperature">Temperatura ambiente máxima do local, °C (22.4): leva a tensão de operação ao pior caso no calor.</param>
+public sealed record ProjectSettings(SystemConfiguration Configuration, AnalysisRules Analyses, double MinTemperature = ProjectSettings.DefaultMinTemperature, double MaxTemperature = ProjectSettings.DefaultMaxTemperature)
 {
+    /// <summary>As temperaturas de partida (°C) e a faixa aceita.</summary>
+    public const double DefaultMinTemperature = 0;
+    public const double DefaultMaxTemperature = 40;
+    public const double LowestTemperature = -60;
+    public const double HighestTemperature = 90;
+
     /// <summary>Marca do campo de versão, sempre o primeiro.</summary>
     public const string CampoVersao = "FORMATO";
 
@@ -38,7 +46,8 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
     /// não lido pela metade: um formato futuro que troque a unidade de um
     /// campo faria a leitura antiga entender errado o que está escrito.
     /// </summary>
-    public const int VersaoDoFormato = 1;
+    /// <remarks>2 (10/10/2026): as temperaturas mínima e máxima. A versão 1 (sem elas) continua legível, com as de partida.</remarks>
+    public const int VersaoDoFormato = 2;
 
     /// <summary>
     /// As configurações para uma mesa desta estrutura: o enterro mínimo T3
@@ -89,6 +98,8 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
     private const string CampoEspacamentoMesas = "ESPACAMENTO_MESAS";
     private const string CampoEspacamento = "ESPACAMENTO_QUEBRA";
     private const string CampoPilarPintarAcima = "PILAR_PINTAR_ACIMA";
+    private const string CampoTemperaturaMin = "TEMPERATURA_MIN";
+    private const string CampoTemperaturaMax = "TEMPERATURA_MAX";
 
     private const string SufixoLigada = "_LIGADA";
     private const string SufixoCamada = "_CAMADA";
@@ -136,7 +147,7 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
             EdgeRule: new EdgeRule(false, "TESTE_BORDA", new RgbColor(0, 0, 0)),
             PaintPillarsLongerThan: 2.75);
 
-        return new ProjectSettings(config, analises);
+        return new ProjectSettings(config, analises, MinTemperature: -3, MaxTemperature: 47);
     }
 
     /// <summary>Se as duas partes fecham.</summary>
@@ -149,6 +160,10 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
         {
             if (Configuration is null) return Tr.T("a configuração do sistema está ausente");
             if (Analyses is null) return Tr.T("as regras de análise estão ausentes");
+
+            if (!double.IsFinite(MinTemperature) || !double.IsFinite(MaxTemperature)
+                || MinTemperature < LowestTemperature || MaxTemperature > HighestTemperature || MinTemperature >= MaxTemperature)
+                return Tr.F("as temperaturas têm que estar entre {0} e {1} °C, com a mínima abaixo da máxima", LowestTemperature, HighestTemperature);
 
             return Configuration.WhyInvalid ?? Analyses.WhyInvalid;
         }
@@ -194,6 +209,8 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
             Par(CampoEspacamentoMesas, Numero(c.TableGap)),
             Par(CampoEspacamento, Numero(c.MaxGapBeforeBreak)),
             Par(CampoPilarPintarAcima, Opcional(a.PaintPillarsLongerThan)),
+            Par(CampoTemperaturaMin, Numero(MinTemperature)),
+            Par(CampoTemperaturaMax, Numero(MaxTemperature)),
         };
 
         foreach (var kind in AnalysisRules.RangedKinds)
@@ -239,7 +256,7 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
             return Problema(Tr.T("a configuração gravada não diz de que versão do formato é"));
 
         if (!int.TryParse(versaoTexto, NumberStyles.Integer, CultureInfo.InvariantCulture, out var versao)
-            || versao != VersaoDoFormato)
+            || versao is < 1 or > VersaoDoFormato)
         {
             return Problema(
                 Tr.F("a configuração gravada é da versão {0} do formato, e este plugin lê a versão {1}", versaoTexto, VersaoDoFormato));
@@ -283,9 +300,14 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
                 Color: leitor.Cor(PrefixoBorda + SufixoCor)),
             PaintPillarsLongerThan: leitor.RealOpcional(CampoPilarPintarAcima));
 
+        // As temperaturas entraram na versão 2: um registro da 1 (desenho de antes de
+        // 10/10/2026) não as tem e fica com as de partida; na 2 são obrigatórias.
+        var tMin = versao >= 2 ? leitor.Real(CampoTemperaturaMin) : DefaultMinTemperature;
+        var tMax = versao >= 2 ? leitor.Real(CampoTemperaturaMax) : DefaultMaxTemperature;
+
         if (leitor.Problema is { } problema) return Problema(problema);
 
-        var lido = new ProjectSettings(configuracao, analises);
+        var lido = new ProjectSettings(configuracao, analises, tMin, tMax);
 
         if (lido.WhyInvalid is { } motivo)
             return Problema(Tr.F("a configuração gravada não fecha: {0}", motivo));

@@ -52,7 +52,9 @@ public sealed record ProjectSettingsForm(
     bool PaintPillars,
     string PillarLongerThan,
     IReadOnlyDictionary<AnalysisKind, AnalysisRule> Rules,
-    EdgeRule Edge)
+    EdgeRule Edge,
+    string MinTemperature = "0",
+    string MaxTemperature = "40")
 {
     private const double Grau = Math.PI / 180;
 
@@ -75,6 +77,8 @@ public sealed record ProjectSettingsForm(
         (nameof(MaxEmbedmentCm), Tr.N("Enterro máximo")),
         (nameof(MaxSlopeDegrees), Tr.N("Declividade máxima")),
         (nameof(PillarLongerThan), Tr.N("Pintar pilar mais comprido que")),
+        (nameof(MinTemperature), Tr.N("Temperatura mínima")),
+        (nameof(MaxTemperature), Tr.N("Temperatura máxima")),
     ];
 
     /// <summary>O formulário que mostra estas configurações.</summary>
@@ -111,7 +115,9 @@ public sealed record ProjectSettingsForm(
             PaintPillars: a.PaintPillarsLongerThan is not null,
             PillarLongerThan: a.PaintPillarsLongerThan is { } pilar ? Numero(pilar) : Numero(2.5),
             Rules: regras,
-            Edge: a.EdgeRule);
+            Edge: a.EdgeRule,
+            MinTemperature: Numero(settings.MinTemperature),
+            MaxTemperature: Numero(settings.MaxTemperature));
     }
 
     /// <summary>
@@ -207,7 +213,10 @@ public sealed record ProjectSettingsForm(
             EdgeRule: Edge,
             PaintPillarsLongerThan: pilar);
 
-        var settings = new ProjectSettings(configuracao, analises);
+        NumberInput.TryParseMeasure(MinTemperature, out var tMin);
+        NumberInput.TryParseMeasure(MaxTemperature, out var tMax);
+
+        var settings = new ProjectSettings(configuracao, analises, tMin, tMax);
 
         if (settings.WhyInvalid is { } porQue)
         {
@@ -234,6 +243,8 @@ public sealed record ProjectSettingsForm(
         nameof(MaxEmbedmentCm) => MaxEmbedmentCm,
         nameof(MaxSlopeDegrees) => MaxSlopeDegrees,
         nameof(PillarLongerThan) => PillarLongerThan,
+        nameof(MinTemperature) => MinTemperature,
+        nameof(MaxTemperature) => MaxTemperature,
         _ => throw new ArgumentException($"Campo desconhecido: {campo}.", nameof(campo)),
     } ?? string.Empty;
 

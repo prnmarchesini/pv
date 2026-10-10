@@ -37,6 +37,9 @@ public static class ElectricalDefaults
 
     public static EquipmentSize InverterSize { get; } = new(1.1, 0.7, 0.6);
 
+    /// <summary>A combiner box de partida (roteamento, 19.1): uma caixa de parede no poste.</summary>
+    public static EquipmentSize CombinerSize { get; } = new(0.8, 0.3, 0.8);
+
     /// <summary>
     /// Os trafos padrão (13.1): elevadores de usina, 800 V dos inversores para
     /// 13,8 kV ou 34,5 kV, mais um pequeno de 380 V. Impedância típica da
@@ -112,6 +115,7 @@ public sealed class ElectricalSetup
     private readonly List<InverterModel> _modelos;
     private readonly List<Skid> _skids;
     private readonly List<Substation> _blocos;
+    private readonly List<Combiner> _combiners;
 
     /// <summary>
     /// O cadastro lido. A compartilhada sem bloco (formato 1, antes de
@@ -127,8 +131,10 @@ public sealed class ElectricalSetup
         IEnumerable<ConsumerUnit>? units = null,
         IEnumerable<InverterModel>? models = null,
         IEnumerable<Skid>? skids = null,
-        IEnumerable<Substation>? substations = null)
+        IEnumerable<Substation>? substations = null,
+        IEnumerable<Combiner>? combiners = null)
     {
+        _combiners = combiners?.ToList() ?? [];
         _trafos = transformers?.ToList() ?? [];
         _inversores = inverters?.ToList() ?? [];
         _ucs = units?.ToList() ?? [];
@@ -203,6 +209,10 @@ public sealed class ElectricalSetup
 
     public Transformer? FindTransformer(Guid id) => _trafos.FirstOrDefault(t => t.Id == id);
 
+    public IReadOnlyList<Combiner> Combiners => _combiners;
+
+    public Combiner? FindCombiner(Guid id) => _combiners.FirstOrDefault(c => c.Id == id);
+
     public ConsumerUnit? FindUnit(Guid id) => _ucs.FirstOrDefault(u => u.Id == id);
 
     // ------------------------------------------------- equipamento em campo
@@ -222,6 +232,7 @@ public sealed class ElectricalSetup
         EquipmentKind.ConsumerUnit when FindSubstation(id) is { } b => new EquipmentInfo(kind, id, b.Name, b.Size),
         EquipmentKind.Transformer when FindTransformer(id) is { } t => new EquipmentInfo(kind, id, t.Nickname, t.Size),
         EquipmentKind.Inverter when FindInverter(id) is { } i && FindModel(i.Model) is { } m => new EquipmentInfo(kind, id, i.Name, m.Size),
+        EquipmentKind.Combiner when FindCombiner(id) is { } c => new EquipmentInfo(kind, id, c.Name, c.Size),
         _ => null,
     };
 
@@ -257,6 +268,7 @@ public sealed class ElectricalSetup
             .Concat(_blocos.Select(b => FindEquipment(EquipmentKind.ConsumerUnit, b.Id)))
             .Concat(_trafos.Select(t => FindEquipment(EquipmentKind.Transformer, t.Id)))
             .Concat(_inversores.Select(i => FindEquipment(EquipmentKind.Inverter, i.Id)))
+            .Concat(_combiners.Select(c => FindEquipment(EquipmentKind.Combiner, c.Id)))
             .OfType<EquipmentInfo>();
 
     // -------------------------------------------------------- subestações
@@ -734,6 +746,8 @@ public sealed class ElectricalSetup
         if (FindInverter(id) is not { } inversor) return false;
 
         _inversores.RemoveAll(i => i.Id == id);
+        for (var c = 0; c < _combiners.Count; c++)
+            if (_combiners[c].Inverter == id) _combiners[c] = _combiners[c] with { Inverter = Guid.Empty };
         if (inversor.Transformer != Guid.Empty && InvertersOf(inversor.Transformer).Count == 0) _skids.RemoveAll(s => s.Transformer == inversor.Transformer);
         return true;
     }
@@ -753,6 +767,36 @@ public sealed class ElectricalSetup
         foreach (var i in sairam) RemoveInverter(i.Id);
         return sairam;
     }
+
+    // ------------------------------------------------------------- combiner
+
+    /// <summary>Uma combiner nova (19.1): "CB N", 16 entradas, sem inversor.</summary>
+    public Combiner AddCombiner()
+    {
+        var n = NextNumber(_combiners.Select(c => c.Name), "CB");
+        var c = new Combiner(Guid.NewGuid(), "CB" + n, 16, ElectricalDefaults.CombinerSize, Guid.Empty);
+        _combiners.Add(c);
+        return c;
+    }
+
+    /// <summary>Grava a combiner editada (nome único, entradas, dimensão, inversor que existe). Null se gravou, o porquê se não.</summary>
+    public string? EditCombiner(Combiner editada)
+    {
+        ArgumentNullException.ThrowIfNull(editada);
+        var i = _combiners.FindIndex(c => c.Id == editada.Id);
+        if (i < 0) return Tr.T("essa combiner não está mais no cadastro");
+        if (string.IsNullOrWhiteSpace(editada.Name)) return Tr.T("o nome (tag) da combiner não pode ficar em branco");
+        if (_combiners.Any(c => c.Id != editada.Id && SameName(c.Name, editada.Name))) return Tr.F("já há uma combiner chamada {0}", editada.Name.Trim());
+        if (editada.Inputs is < 1 or > Combiner.MaxInputs) return Tr.F("as entradas têm que ser de 1 a {0}", Combiner.MaxInputs);
+        if (!editada.Size.IsValid) return Tr.T("largura, comprimento e altura têm que ser maiores que zero");
+        if (editada.Inverter != Guid.Empty && FindInverter(editada.Inverter) is null) return Tr.T("esse inversor não está mais no cadastro");
+
+        _combiners[i] = editada with { Name = editada.Name.Trim() };
+        return null;
+    }
+
+    /// <summary>Tira a combiner do cadastro; as strings dela são soltas por quem chama.</summary>
+    public bool RemoveCombiner(Guid id) => _combiners.RemoveAll(c => c.Id == id) > 0;
 
     // ----------------------------------------------------------------- skid
 

@@ -47,14 +47,40 @@ public class ProjectSettingsTests
 
     /// <summary>
     /// O número de campos é fixo e conhecido: 1 de versão, 13 da configuração,
-    /// 4 por análise de faixa e 3 da borda. O teste de nível 2 exige o mesmo
-    /// número; um campo a menos aqui tem que doer aqui também.
+    /// 4 por análise de faixa, 3 da borda e as 2 temperaturas (roteamento,
+    /// 22.4, 10/10/2026). O teste de nível 2 exige o mesmo número; um campo a
+    /// menos aqui tem que doer aqui também.
     /// </summary>
     [Fact]
     [Trait("Etapa", "4")]
-    public void SaoTrintaETresCampos()
+    public void SaoTrintaECincoCampos()
     {
-        Assert.Equal(33, Padrao().ToFields().Count);
+        Assert.Equal(35, Padrao().ToFields().Count);
+    }
+
+    /// <summary>
+    /// Desenho de antes das temperaturas (formato 1, sem os dois campos)
+    /// continua legível, com as de partida; no formato 2, temperatura
+    /// ilegível é problema (faltando, o <see cref="CampoFaltandoENomeado"/>).
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "22")]
+    public void SemTemperaturaLeOPadraoEIlegivelERecusada()
+    {
+        var antigo = TudoDiferente().ToFields()
+            .Where(c => !c.Key.StartsWith("TEMPERATURA", StringComparison.Ordinal))
+            .Select(c => c.Key == "FORMATO" ? new KeyValuePair<string, string>(c.Key, "1") : c)
+            .ToList();
+        var lido = ProjectSettings.Parse(antigo);
+
+        Assert.Null(lido.Problem);
+        Assert.Equal(ProjectSettings.DefaultMinTemperature, lido.Settings!.MinTemperature);
+        Assert.Equal(ProjectSettings.DefaultMaxTemperature, lido.Settings.MaxTemperature);
+
+        var estragado = TudoDiferente().ToFields().Select(c => c.Key == "TEMPERATURA_MIN" ? new KeyValuePair<string, string>(c.Key, "frio") : c).ToList();
+        Assert.NotNull(ProjectSettings.Parse(estragado).Problem);
+
+        Assert.False((TudoDiferente() with { MinTemperature = 50, MaxTemperature = 40 }).IsValid);
     }
 
     // ------------------------------------------------------------- padrão
@@ -166,7 +192,7 @@ public class ProjectSettingsTests
         var campos = Padrao().ToFields();
 
         Assert.Equal("FORMATO", campos[0].Key);
-        Assert.Equal("1", campos[0].Value);
+        Assert.Equal("2", campos[0].Value);
     }
 
     /// <summary>
@@ -228,8 +254,9 @@ public class ProjectSettingsTests
     [Trait("Etapa", "4")]
     public void OutraVersaoDoFormatoERecusadaComOMotivo()
     {
+        // Uma versão futura (a 3; a 2 é a atual desde 10/10/2026 e a 1 continua legível).
         var campos = Padrao().ToFields()
-            .Select(c => c.Key == "FORMATO" ? new KeyValuePair<string, string>(c.Key, "2") : c)
+            .Select(c => c.Key == "FORMATO" ? new KeyValuePair<string, string>(c.Key, "3") : c)
             .ToList();
 
         var lido = ProjectSettings.Parse(campos);

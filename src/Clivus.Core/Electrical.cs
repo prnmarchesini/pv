@@ -398,6 +398,9 @@ public enum EquipmentKind
     ConsumerUnit,
     Transformer,
     Inverter,
+
+    /// <summary>A combiner box (roteamento, 19.1).</summary>
+    Combiner,
 }
 
 /// <summary>

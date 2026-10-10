@@ -129,7 +129,7 @@ internal sealed class JanelaDeAnalises : Window
 
         pilha.Children.Add(new TextBlock
         {
-            Text = Tr.T("Para a planilha, use o botão Excel da ribbon (painel Saída)."),
+            Text = Tr.T("Para a planilha, use o botão Exportar da ribbon (painel Saída)."),
             Foreground = Brushes.Gray,
             Margin = new Thickness(0, 14, 0, 0),
         });
