@@ -13,12 +13,12 @@ internal sealed class JanelaDeTroca : Window
 {
     private readonly ComboBox _tipo = new() { Width = 300, ToolTip = Tr.T("A mesa que entra no lugar: as mesas cadastradas neste desenho (Configurações > Estruturas).") };
     private readonly ComboBox _quantas = new() { Width = 60, ToolTip = Tr.T("Quantas mesas novas no lugar da antiga, uma depois da outra, com o espaçamento entre mesas da configuração.") };
-    private readonly RadioButton _inicio = new() { Content = Tr.T("Início"), IsChecked = true, Margin = new Thickness(0, 0, 14, 0), ToolTip = Tr.T("A primeira mesa nova começa onde a antiga começava (o lado do primeiro pilar).") };
-    private readonly RadioButton _fim = new() { Content = Tr.T("Fim"), ToolTip = Tr.T("A última mesa nova termina onde a antiga terminava (o lado do último pilar).") };
+    private readonly RadioButton _esquerda = new() { Content = Tr.T("Esquerda"), IsChecked = true, Margin = new Thickness(0, 0, 14, 0), ToolTip = Tr.T("A ponta esquerda fica parada, olhando o desenho com o norte para cima (a ponta de menor X; numa fileira norte-sul, a ponta sul). Com \"Refazer a fileira inteira\", vale para a ponta esquerda da fileira.") };
+    private readonly RadioButton _direita = new() { Content = Tr.T("Direita"), ToolTip = Tr.T("A ponta direita fica parada, olhando o desenho com o norte para cima (a ponta de maior X; numa fileira norte-sul, a ponta norte). Com \"Refazer a fileira inteira\", vale para a ponta direita da fileira.") };
     private readonly CheckBox _reespacar = new()
     {
         Content = Tr.T("Refazer a fileira inteira (acerta o espaçamento)"),
-        ToolTip = Tr.T("Depois da troca, as mesas da fileira são postas de novo com o espaçamento da configuração, cada uma com o tipo dela; as strings da fileira são apagadas. Sem isso, as vizinhas não se mexem e a troca pode passar delas."),
+        ToolTip = Tr.T("Depois da troca, as mesas da fileira são postas de novo com o espaçamento da configuração, cada uma com o tipo dela, encostadas na ponta do lado travado, que fica parada; as strings da fileira são apagadas. Sem isso, as vizinhas não se mexem e a troca pode passar delas."),
         Margin = new Thickness(0, 8, 0, 0),
     };
 
@@ -57,8 +57,8 @@ internal sealed class JanelaDeTroca : Window
         }
 
         var lados = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        lados.Children.Add(_inicio);
-        lados.Children.Add(_fim);
+        lados.Children.Add(_esquerda);
+        lados.Children.Add(_direita);
 
         Linha(0, Tr.T("Mesa nova"), _tipo);
         Linha(1, Tr.T("Quantas"), _quantas);
@@ -74,7 +74,7 @@ internal sealed class JanelaDeTroca : Window
         ok.Click += (_, _) =>
         {
             Escolhida = new TrocarMesaCommands.Escolha(
-                _tipo.SelectedIndex, (int)_quantas.SelectedItem!, _fim.IsChecked == true ? SwapAnchor.End : SwapAnchor.Start, _reespacar.IsChecked == true);
+                _tipo.SelectedIndex, (int)_quantas.SelectedItem!, _direita.IsChecked == true ? RowSide.Right : RowSide.Left, _reespacar.IsChecked == true);
             DialogResult = true;
         };
         botoes.Children.Add(ok);

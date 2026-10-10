@@ -3608,8 +3608,11 @@ function Testar-UsinaMista {
     Trocar mesa e regerar fileira (9.2 e 9.3), na area da usina mista (90 m
     de largura, 28 e 14 em uso). A F1.2 vira duas de 14 (F1.2a e F1.2b, com o
     perfil de 14), com a cota no terreno; reespacar a fileira 1 mantem as
-    mesas e deixa pelo menos o espacamento entre vizinhas; a fileira 2 pelo
-    motor volta com o mesmo numero de mesas.
+    mesas e deixa pelo menos o espacamento entre vizinhas; a F1.2b (14, no
+    meio) trocada por uma de 28 travando a Direita e refazendo a fileira deixa
+    parada a ponta direita da fileira (pelo norte; numa fileira norte-sul, a
+    ponta norte) e o espacamento; a fileira 2 pelo motor volta com o mesmo
+    numero de mesas.
 #>
 function Testar-Trocar {
     param([string] $Desenho)
@@ -3657,7 +3660,9 @@ function Testar-Trocar {
     }
 
     $padrao = 'CLIVUS_TROCAR total0=(\d+) total1=(\d+) total2=(\d+) f1antes=(\d+) f1troca=(\d+) f1manter=(\d+) f2antes=(\d+) f2motor=(\d+) ' +
-              'perfil12=(.+?) p2a=(.+?) p2b=(.+?) sem12=(.+?) p2amanter=(.+?) vao0=(-?[\d.]+) vaotroca=(-?[\d.]+) vaomanter=(-?[\d.]+) zmin=(-?[\d.]+) zmax=(-?[\d.]+)'
+              'perfil12=(.+?) p2a=(.+?) p2b=(.+?) sem12=(.+?) p2amanter=(.+?) vao0=(-?[\d.]+) vaotroca=(-?[\d.]+) vaomanter=(-?[\d.]+) zmin=(-?[\d.]+) zmax=(-?[\d.]+) ' +
+              'f1direita=(\d+) p2bdireita=(.+?) vaodireita=(-?[\d.]+) ' +
+              'pontasantes=(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) pontasdireita=(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)'
 
     if ($r.Texto -notmatch $padrao) {
         $problemas.Add("clivus-trocar: nao consegui ler o LISP. Veja $($r.Saida)")
@@ -3696,12 +3701,35 @@ function Testar-Trocar {
         return $false
     }
 
+    # Troca no meio travando a Direita, com a fileira refeita (10/10/2026): a
+    # ponta direita da fileira fica parada (antes do conserto, o reespacar
+    # empacotava sempre a partir do inicio e a ponta direita andava os 9 m
+    # que a de 28 tem a mais que a de 14).
+    $f1direita = [int] $m[19]
+    $vaoDireita = [double]::Parse($m[21], $invariante)
+    $antes = @(22..25 | ForEach-Object { [double]::Parse($m[$_], $invariante) })
+    $depois = @(26..29 | ForEach-Object { [double]::Parse($m[$_], $invariante) })
+
+    # Fileira mais comprida em X que em Y: a direita e o maior X; senao
+    # (norte-sul), a ponta norte, o maior Y.
+    $leste = ($antes[1] - $antes[0]) -ge ($antes[3] - $antes[2])
+    $direitaAntes = if ($leste) { $antes[1] } else { $antes[3] }
+    $direitaDepois = if ($leste) { $depois[1] } else { $depois[3] }
+    $esquerdaAntes = if ($leste) { $antes[0] } else { $antes[2] }
+    $esquerdaDepois = if ($leste) { $depois[0] } else { $depois[2] }
+
+    if ($f1direita -ne $f1manter -or $m[20] -ne 'Mesa 2V28' -or [math]::Abs($direitaDepois - $direitaAntes) -gt 0.05 -or
+        $vaoDireita -le 0 -or $vaoDireita -lt ($vao0 - 0.1)) {
+        $problemas.Add("clivus-trocar: trocar a F1.2b por uma de 28 travando a Direita e refazendo a fileira deveria manter $f1manter mesas (deu $f1direita), a F1.2b de 28 (deu $($m[20])), a ponta direita parada (de $direitaAntes para $direitaDepois; esquerda de $esquerdaAntes para $esquerdaDepois) e o vao do motor ($vao0 m, menos 0,1; deu $vaoDireita). Veja $($r.Saida)")
+        return $false
+    }
+
     if ($f2motor -ne $f2antes -or $total2 -ne $total1) {
         $problemas.Add("clivus-trocar: a fileira 2 pelo motor deveria voltar com $f2antes mesas (deu $f2motor; total $total1 -> $total2). Veja $($r.Saida)")
         return $false
     }
 
-    Write-Host "  (trocar: F1.2 ($($m[9])) virou 2 de 14, vao minimo $($m[15]) m (motor $vao0); reespacada com $vaoManter m; fileira 2 pelo motor com $f2motor mesas)" -ForegroundColor DarkGray
+    Write-Host "  (trocar: F1.2 ($($m[9])) virou 2 de 14, vao minimo $($m[15]) m (motor $vao0); reespacada com $vaoManter m; F1.2b de 28 travada a direita: ponta direita $direitaAntes -> $direitaDepois, esquerda $esquerdaAntes -> $esquerdaDepois; fileira 2 pelo motor com $f2motor mesas)" -ForegroundColor DarkGray
     return $true
 }
 
