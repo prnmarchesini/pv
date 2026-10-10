@@ -101,14 +101,82 @@ public class InverterSitesTests
     [Trait("Etapa", "18")]
     public void AoLadoDaValaDoLadoLivre()
     {
-        var direcao = new Point3(1, 0, 0);
+        Point3[] direcao = [new(1, 0, 0)];
 
-        var livre = InverterSites.BesideTrench(new Point3(50, 0, 0), direcao, 1.1, 0.7, _ => true);
+        var (livre, ok) = InverterSites.BesideTrench(new Point3(50, 0, 0), direcao, 1.1, 0.7, _ => true);
+        Assert.True(ok);
         Assert.Equal(50, livre.X, 6);
         Assert.Equal(0.35 + InverterSites.Gap, livre.Y, 6);
 
-        var outro = InverterSites.BesideTrench(new Point3(50, 0, 0), direcao, 1.1, 0.7, cantos => cantos.All(c => c.Y < 0));
+        var (outro, ok2) = InverterSites.BesideTrench(new Point3(50, 0, 0), direcao, 1.1, 0.7, cantos => cantos.All(c => c.Y < 0));
+        Assert.True(ok2);
         Assert.Equal(-(0.35 + InverterSites.Gap), outro.Y, 6);
+
+        // Nenhum lado livre: devolve o primeiro e diz que não estava livre (quem chama avisa).
+        var (_, ok3) = InverterSites.BesideTrench(new Point3(50, 0, 0), direcao, 1.1, 0.7, _ => false);
+        Assert.False(ok3);
+    }
+
+    /// <summary>
+    /// Num cruzamento em T (a principal em X e um ramal subindo em +Y), o
+    /// lado normal à principal cai em cima do ramal: o inversor vai para um
+    /// lugar sem vala (revisão de 10/10/2026).
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "18")]
+    public void NoCruzamentoNaoFicaEmCimaDoRamal()
+    {
+        var rede = new TrenchNetwork([[new(0, 0, 0), new(100, 0, 0)], [new(50, 0, 0), new(50, 40, 0)]]);
+        var no = rede.Nearest(new Point3(50, 0, 0), 0.01)!.Value;
+
+        var (centro, livre) = InverterSites.BesideTrench(no.At, rede.DirectionsAt(no), 1.1, 0.7,
+            cantos => !rede.Touches(cantos.Select(c => new Point3(c.X, c.Y, 0)).ToList()));
+
+        Assert.True(livre);
+        Assert.False(rede.Touches(EquipmentFootprint.Corners(centro.X, centro.Y, 1.1, 0.7).Select(c => new Point3(c.X, c.Y, 0)).ToList()));
+        Assert.True(rede.DirectionsAt(no).Count >= 2);
+    }
+
+    /// <summary>
+    /// Strings em valas que não se ligam: vale o ponto que alcança mais delas
+    /// (antes devolvia nada e o inversor não era posto).
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "18")]
+    public void ValasSeparadasFicaComAQueAlcancaMais()
+    {
+        var rede = new TrenchNetwork([[new(0, 0, 0), new(100, 0, 0)], [new(0, 50, 0), new(100, 50, 0)]]);
+        TrenchPoint Em(double x, double y) => rede.Nearest(new Point3(x, y, 0), 1)!.Value;
+        InverterSites.StringAccess Uma(double x, double y) => new([[(Em(x, y), 1.0), (Em(x, y), 1.0)]]);
+
+        var melhor = InverterSites.BestTrenchPoint(rede, [Uma(10, 0), Uma(20, 0), Uma(30, 0), Uma(50, 50)]);
+
+        Assert.NotNull(melhor);
+        Assert.Equal(3, melhor!.Value.Reached);
+        Assert.Equal(0, melhor.Value.Point.At.Y, 6);
+        Assert.Equal(20, melhor.Value.Point.At.X, 6);
+    }
+
+    /// <summary>
+    /// Área côncava com um dente estreito entrando: a caixa não pode
+    /// atravessar o dente (os 4 cantos dentro não bastam); e a vaga ocupada
+    /// (um inversor que já está na área) fica de fora.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "14")]
+    public void DenteDaAreaEVagaOcupada()
+    {
+        // Retângulo 10 x 2 com um dente de 0,2 m de largura descendo do topo até y = 0,5, em x = 2: cai entre os cantos de uma vaga.
+        Point3[] comDente = [new(0, 0, 0), new(10, 0, 0), new(10, 2, 0), new(2.1, 2, 0), new(2.1, 0.5, 0), new(1.9, 0.5, 0), new(1.9, 2, 0), new(0, 2, 0)];
+        var centros = InverterSites.InArea(comDente, Enumerable.Repeat((1.0, 1.0), 3).ToList());
+        Assert.All(centros.Where(c => c is not null), c => Assert.True(InverterSites.Dentro(comDente, EquipmentFootprint.Corners(c!.Value.X, c.Value.Y, 1, 1))));
+        Assert.All(centros, c => Assert.NotNull(c));
+
+        Point3[] sala = [new(0, 0, 0), new(10, 0, 0), new(10, 4, 0), new(0, 4, 0)];
+        var primeiro = InverterSites.InArea(sala, [(1.0, 1.0)])[0]!.Value;
+        var ocupado = EquipmentFootprint.Corners(primeiro.X, primeiro.Y, 1, 1).Select(c => new Point3(c.X, c.Y, 0)).ToList();
+        var segundo = InverterSites.InArea(sala, [(1.0, 1.0)], livre: cantos => !InverterSites.Overlaps(cantos, ocupado))[0]!.Value;
+        Assert.False(InverterSites.Overlaps(EquipmentFootprint.Corners(segundo.X, segundo.Y, 1, 1), ocupado));
     }
 
     [Fact]

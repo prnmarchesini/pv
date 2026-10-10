@@ -63,22 +63,57 @@ public static class LocalDosInversores
     private static SiteMark? Marca(Entity e) =>
         PluginXData.Load(e, SiteMark.Tipo, 1, SiteMark.FieldCount) is { } c ? SiteMark.Parse(c) : null;
 
-    /// <summary>Os vértices em planta de uma polilinha fechada (2D ou 3D); null se não é fechada.</summary>
+    /// <summary>
+    /// Os vértices de uma polilinha fechada (ou com a ponta no começo), com a
+    /// cota que têm (o ponto que cair fora do terreno fica com ela, nunca
+    /// zero) e os arcos divididos em trechos de até 1 m; sem repetir o
+    /// primeiro no fim. Null se não é fechada.
+    /// </summary>
     private static List<Point3>? Contorno(Curve c, Transaction t)
     {
+        if (!c.Closed && c.StartPoint.DistanceTo(c.EndPoint) > 1e-6) return null;
+
+        var pontos = new List<Point3>();
         switch (c)
         {
-            case Polyline p when p.Closed || p.StartPoint.DistanceTo(p.EndPoint) < 1e-6:
-                return Enumerable.Range(0, p.NumberOfVertices).Select(i => p.GetPoint3dAt(i)).Select(q => new Point3(q.X, q.Y, 0)).ToList();
-            case Polyline3d p3 when p3.Closed:
-                return p3.Cast<ObjectId>().Where(v => !v.IsErased)
-                    .Select(v => ((PolylineVertex3d)t.GetObject(v, OpenMode.ForRead)).Position).Select(q => new Point3(q.X, q.Y, 0)).ToList();
-            case Polyline2d p2 when p2.Closed:
-                return p2.Cast<ObjectId>().Where(v => !v.IsErased)
-                    .Select(v => ((Vertex2d)t.GetObject(v, OpenMode.ForRead)).Position).Select(q => new Point3(q.X, q.Y, 0)).ToList();
+            case Polyline p:
+                for (var i = 0; i < p.NumberOfVertices; i++)
+                {
+                    var q = p.GetPoint3dAt(i);
+                    pontos.Add(new Point3(q.X, q.Y, q.Z));
+                    if (p.GetBulgeAt(i) == 0 || (i == p.NumberOfVertices - 1 && !p.Closed)) continue;
+
+                    var ate = i == p.NumberOfVertices - 1 ? p.EndParam : i + 1;
+                    var partes = Math.Max(2, (int)Math.Ceiling(p.GetDistanceAtParameter(ate) - p.GetDistanceAtParameter(i)));
+                    for (var k = 1; k < partes; k++)
+                    {
+                        var r = p.GetPointAtParameter(i + (ate - i) * k / partes);
+                        pontos.Add(new Point3(r.X, r.Y, r.Z));
+                    }
+                }
+
+                break;
+            case Polyline3d p3:
+                pontos.AddRange(p3.Cast<ObjectId>().Where(v => !v.IsErased)
+                    .Select(v => ((PolylineVertex3d)t.GetObject(v, OpenMode.ForRead)).Position).Select(q => new Point3(q.X, q.Y, q.Z)));
+                break;
+            case Polyline2d p2:
+                // Arco, spline e OCS: a própria curva dá os pontos no desenho, um a cada metro.
+                var total = p2.GetDistanceAtParameter(p2.EndParam);
+                var passos = Math.Max(3, (int)Math.Ceiling(total));
+                for (var k = 0; k < passos; k++)
+                {
+                    var r = p2.GetPointAtDist(total * k / passos);
+                    pontos.Add(new Point3(r.X, r.Y, r.Z));
+                }
+
+                break;
             default:
                 return null;
         }
+
+        if (pontos.Count > 1 && Math.Abs(pontos[0].X - pontos[^1].X) < 1e-6 && Math.Abs(pontos[0].Y - pontos[^1].Y) < 1e-6) pontos.RemoveAt(pontos.Count - 1);
+        return pontos;
     }
 
     /// <summary>
@@ -98,9 +133,9 @@ public static class LocalDosInversores
 
         try
         {
-            var modo = new PromptKeywordOptions(Tr.T("\nLocal dos inversores [Area/Automatico/Manual]: ")) { AllowNone = false };
+            var modo = new PromptKeywordOptions(Tr.T("\nLocal dos inversores [Area/Strings/Manual]: ")) { AllowNone = false };
             modo.Keywords.Add("Area");
-            modo.Keywords.Add("Automatico");
+            modo.Keywords.Add("Strings");
             modo.Keywords.Add("Manual");
             var qual = editor.GetKeywords(modo);
             if (qual.Status != PromptStatus.OK) return;
@@ -128,7 +163,7 @@ public static class LocalDosInversores
 
             if (qual.StringResult != "Area")
             {
-                var novo = qual.StringResult == "Automatico" ? InverterPlacementMode.Automatic : (InverterPlacementMode?)null;
+                var novo = qual.StringResult == "Strings" ? InverterPlacementMode.Automatic : (InverterPlacementMode?)null;
                 if (Mudar(db, ids, novo) is { } problema)
                 {
                     editor.WriteMessage(Tr.F("\nLOCAL Não gravei: {0}\n", problema));
@@ -137,7 +172,7 @@ public static class LocalDosInversores
 
                 editor.WriteMessage(novo is null
                     ? Tr.F("\nLOCAL {0} inversor(es) de volta ao Pôr em campo à mão (a posição de agora fica).\n", ids.Count)
-                    : Tr.F("\nLOCAL {0} inversor(es) automáticos: o Gerar da rota CC põe cada um ao lado da vala, no ponto de menor cabo das strings dele.\n", ids.Count));
+                    : Tr.F("\nLOCAL {0} inversor(es) automáticos: o Gerar da rota CC põe ao lado da vala, no ponto de menor cabo, os que ainda não estão em campo; os que já estão vão com Recolocar automáticos.\n", ids.Count));
                 return;
             }
 
@@ -151,26 +186,33 @@ public static class LocalDosInversores
             var clicado = editor.GetEntity(opcoes);
             if (clicado.Status != PromptStatus.OK) return;
 
-            if (MarcarArea(db, clicado.ObjectId, terreno.Mesh) is not { } area)
+            var area = MarcarArea(db, clicado.ObjectId, terreno.Mesh, out var recusa, out var pontosFora);
+            if (area is null)
             {
-                editor.WriteMessage(Tr.T("\nLOCAL A polilinha não é fechada: feche-a (ou desenhe um retângulo) e tente de novo.\n"));
+                editor.WriteMessage("\nLOCAL " + recusa + "\n");
                 return;
             }
 
-            if (Mudar(db, ids, InverterPlacementMode.Area, area.Marca.Id) is { } erro)
+            if (pontosFora > 0)
+                editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0} ponto(s) da área fora do terreno ficaram com a cota que tinham.\n", pontosFora));
+
+            if (Mudar(db, ids, InverterPlacementMode.Area, area.Value.Marca.Id) is { } erro)
             {
                 editor.WriteMessage(Tr.F("\nLOCAL Não gravei: {0}\n", erro));
                 return;
             }
 
-            var centros = InverterSites.InArea(area.Contorno, inversores.Select(i => Tamanho(setup, i)).ToList());
+            // As vagas ocupadas (inversores que já estão na área, mesas, outros equipamentos) ficam de fora.
+            var obstaculos = LeituraDaRota.Ler(db).Obstaculos(ids.ToHashSet());
+            var centros = InverterSites.InArea(area.Value.Contorno, inversores.Select(i => Tamanho(setup, i)).ToList(),
+                livre: cantos => !obstaculos.Any(o => InverterSites.Overlaps(cantos, o)));
             var postos = 0;
             for (var i = 0; i < inversores.Count; i++)
                 if (centros[i] is { } c && setup.FindEquipment(EquipmentKind.Inverter, inversores[i].Id) is { } equipamento
                     && ConfiguracaoEletricaCommands.NoTerreno(editor, db, terreno, equipamento, c.X, c.Y))
                     postos++;
 
-            editor.WriteMessage(Tr.F("\nLOCAL {0} de {1} inversor(es) postos na {2}.\n", postos, inversores.Count, area.Marca.Name));
+            editor.WriteMessage(Tr.F("\nLOCAL {0} de {1} inversor(es) postos na {2}.\n", postos, inversores.Count, area.Value.Marca.Name));
             var fora = inversores.Where((_, i) => centros[i] is null).Select(i => i.Name).ToList();
             if (fora.Count > 0)
                 editor.WriteMessage(Tr.F("  ATENÇÃO: não couberam na área: {0}. Aumente o retângulo ou ponha à mão.\n", string.Join(", ", fora)));
@@ -194,19 +236,44 @@ public static class LocalDosInversores
     /// A polilinha fechada vira área de inversores: ganha a marca (a que já
     /// tinha fica, com o mesmo GUID) e é assentada no terreno (regra
     /// universal: todo desenho respeita o TIN), virando uma Polyline3d
-    /// fechada com as propriedades e o XData da antiga. Null se não é fechada.
+    /// fechada com as propriedades e o XData da antiga. Null, com o motivo, se
+    /// não é fechada ou se é uma polilinha do próprio Clivus (mesa, área da
+    /// usina, vala, string: não vira sala).
     /// </summary>
-    private static (SiteMark Marca, IReadOnlyList<Point3> Contorno)? MarcarArea(Database db, ObjectId id, Tin terreno)
+    private static (SiteMark Marca, IReadOnlyList<Point3> Contorno)? MarcarArea(Database db, ObjectId id, Tin terreno, out string recusa, out int pontosFora)
     {
+        recusa = string.Empty;
+        pontosFora = 0;
         var existentes = Areas(db);
 
         using var t = db.TransactionManager.StartTransaction();
-        if (t.GetObject(id, OpenMode.ForRead) is not Curve curva || Contorno(curva, t) is not { Count: >= 3 } contorno) return null;
+        if (t.GetObject(id, OpenMode.ForRead) is not Curve curva) return null;
 
-        var marca = Marca(curva) ?? new SiteMark(Guid.NewGuid(), Tr.F("Área {0}", existentes.Count + 1));
+        var marca = Marca(curva);
+        using (var nossa = curva.GetXDataForApplication(PluginInfo.PrefixoDeDados))
+        {
+            if (marca is null && nossa is not null)
+            {
+                recusa = Tr.T("Essa polilinha é do Clivus Solar (mesa, área, vala, string...): desenhe um retângulo próprio para a sala.");
+                return null;
+            }
+        }
+
+        if (Contorno(curva, t) is not { Count: >= 3 } contorno)
+        {
+            recusa = Tr.T("A polilinha não é fechada: feche-a (ou desenhe um retângulo) e tente de novo.");
+            return null;
+        }
+
+        var nomes = existentes.Values.Select(a => a.Marca.Name).ToHashSet();
+        var n = existentes.Count + 1;
+        while (nomes.Contains(Tr.F("Área {0}", n))) n++;
+        marca ??= new SiteMark(Guid.NewGuid(), Tr.F("Área {0}", n));
 
         // Fechada: o primeiro vértice repetido no fim, para o drapeado fechar o último lado.
-        var noChao = Draping.Along(terreno, [.. contorno, contorno[0]]).Vertices.ToList();
+        var drapeada = Draping.Along(terreno, [.. contorno, contorno[0]]);
+        pontosFora = drapeada.OutsideCount;
+        var noChao = drapeada.Vertices.ToList();
         if (noChao.Count > 1 && Math.Abs(noChao[0].X - noChao[^1].X) < 1e-6 && Math.Abs(noChao[0].Y - noChao[^1].Y) < 1e-6) noChao.RemoveAt(noChao.Count - 1);
 
         var espaco = (BlockTableRecord)t.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForWrite);

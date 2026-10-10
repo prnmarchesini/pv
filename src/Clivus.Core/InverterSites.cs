@@ -69,10 +69,14 @@ public static class InverterSites
     /// Os centros dos retângulos (largura em X, comprimento em Y, como o
     /// bloco do equipamento) dentro do polígono, em fileiras ao longo do lado
     /// comprido do menor retângulo que o contém, com <paramref name="gap"/>
-    /// entre eles e 1 cm da borda (encostar na parede da sala vale). Null
-    /// para o que não coube.
+    /// entre eles e 1 cm da borda (encostar na parede da sala vale). A caixa
+    /// tem que caber inteira (nenhum lado do polígono a corta: dente de área
+    /// côncava) e estar livre (<paramref name="livre"/>: fora dos inversores
+    /// que já estão na área, das mesas e dos outros equipamentos). Null para o
+    /// que não coube.
     /// </summary>
-    public static IReadOnlyList<Point3?> InArea(IReadOnlyList<Point3> poligono, IReadOnlyList<(double Width, double Length)> tamanhos, double gap = Gap)
+    public static IReadOnlyList<Point3?> InArea(IReadOnlyList<Point3> poligono, IReadOnlyList<(double Width, double Length)> tamanhos, double gap = Gap,
+        Func<IReadOnlyList<(double X, double Y)>, bool>? livre = null)
     {
         ArgumentNullException.ThrowIfNull(poligono);
         ArgumentNullException.ThrowIfNull(tamanhos);
@@ -117,7 +121,7 @@ public static class InverterSites
                 posU += eu + gap;
                 alturaDaFileira = Math.Max(alturaDaFileira, ev);
 
-                if (cantos.All(c => Polygons.Contains(poligono, c.X, c.Y)))
+                if (Dentro(poligono, cantos) && (livre is null || livre(cantos)))
                 {
                     saida[i] = p;
                     break;
@@ -126,6 +130,30 @@ public static class InverterSites
         }
 
         return saida;
+    }
+
+    /// <summary>Se o retângulo está inteiro dentro do polígono: os cantos dentro e nenhum lado do polígono cortando os dele.</summary>
+    public static bool Dentro(IReadOnlyList<Point3> poligono, IReadOnlyList<(double X, double Y)> cantos)
+    {
+        if (!cantos.All(c => Polygons.Contains(poligono, c.X, c.Y))) return false;
+        var caixa = cantos.Select(c => new Point3(c.X, c.Y, 0)).ToList();
+        for (var i = 0; i < poligono.Count; i++)
+            for (var j = 0; j < caixa.Count; j++)
+                if (Polygons.SegmentsCross(poligono[i], poligono[(i + 1) % poligono.Count], caixa[j], caixa[(j + 1) % caixa.Count])) return false;
+        return true;
+    }
+
+    /// <summary>Se o retângulo (cantos) e o polígono se sobrepõem em planta: um vértice (ou o centro) dentro do outro, ou lados que se cruzam.</summary>
+    public static bool Overlaps(IReadOnlyList<(double X, double Y)> cantos, IReadOnlyList<Point3> poligono)
+    {
+        if (poligono.Count < 3) return false;
+        var caixa = cantos.Select(c => new Point3(c.X, c.Y, 0)).ToList();
+        if (caixa.Any(c => Polygons.Contains(poligono, c.X, c.Y)) || poligono.Any(q => Polygons.Contains(caixa, q.X, q.Y))) return true;
+        if (Polygons.Contains(poligono, caixa.Average(c => c.X), caixa.Average(c => c.Y))) return true;
+        for (var i = 0; i < poligono.Count; i++)
+            for (var j = 0; j < caixa.Count; j++)
+                if (Polygons.SegmentsCross(poligono[i], poligono[(i + 1) % poligono.Count], caixa[j], caixa[(j + 1) % caixa.Count])) return true;
+        return false;
     }
 
     /// <summary>O menor retângulo que contém o polígono, com um lado num lado dele: centro, eixos (u o comprido) e meias medidas.</summary>
@@ -171,10 +199,12 @@ public static class InverterSites
     /// O ponto da rede de valas de menor cabo CC para as strings: a soma, em
     /// cada string, do lado mais curto (saída da mesa até a vala e pela vala
     /// até o ponto, do + e do −). Candidatos: os nós da rede e as batidas
-    /// (entre eles a soma não tem mínimo). Null se nenhuma string chega à
-    /// rede ou se nenhum ponto liga todas elas.
+    /// (entre eles a soma não tem mínimo). Se as valas das strings não se
+    /// ligam todas (redes separadas), vale o ponto que alcança mais strings e,
+    /// entre esses, o de menor soma; Reached diz quantas. Null se nenhuma
+    /// string chega à rede.
     /// </summary>
-    public static (TrenchPoint Point, Point3 Direction, double Total)? BestTrenchPoint(TrenchNetwork valas, IReadOnlyList<StringAccess> strings)
+    public static (TrenchPoint Point, Point3 Direction, double Total, int Reached)? BestTrenchPoint(TrenchNetwork valas, IReadOnlyList<StringAccess> strings)
     {
         ArgumentNullException.ThrowIfNull(valas);
         ArgumentNullException.ThrowIfNull(strings);
@@ -196,17 +226,22 @@ public static class InverterSites
                 foreach (var (hit, _) in lado)
                     candidatos.Add((hit, valas.Direction(hit.Edge)));
 
-        (TrenchPoint, Point3, double)? melhor = null;
+        (TrenchPoint, Point3, double, int)? melhor = null;
         foreach (var (ponto, direcao) in candidatos)
         {
             var total = 0.0;
+            var alcancadas = 0;
             foreach (var s in uteis)
             {
-                total += s.Sides.Min(lado => lado.Sum(x => x.Before + Arvore(x.Hit).Length(ponto)));
-                if (double.IsInfinity(total) || (melhor is { } m0 && total >= m0.Item3)) break;
+                var desta = s.Sides.Min(lado => lado.Sum(x => x.Before + Arvore(x.Hit).Length(ponto)));
+                if (double.IsInfinity(desta)) continue;
+                total += desta;
+                alcancadas++;
             }
 
-            if (double.IsFinite(total) && (melhor is null || total < melhor.Value.Item3)) melhor = (ponto, direcao, total);
+            if (alcancadas == 0) continue;
+            if (melhor is null || alcancadas > melhor.Value.Item4 || (alcancadas == melhor.Value.Item4 && total < melhor.Value.Item3))
+                melhor = (ponto, direcao, total, alcancadas);
         }
 
         return melhor;
@@ -214,23 +249,29 @@ public static class InverterSites
 
     /// <summary>
     /// O centro do retângulo do inversor ao lado da vala, no ponto
-    /// <paramref name="at"/> do trecho de direção <paramref name="direcao"/>:
-    /// afastado o bastante para a caixa não ficar em cima da vala, mais
-    /// <paramref name="folga"/>, do lado em que os cantos ficam livres
-    /// (<paramref name="livre"/>: fora das mesas e de outros equipamentos); se
-    /// nenhum lado está livre, o da esquerda da vala.
+    /// <paramref name="at"/>: para cada trecho que passa ali
+    /// (<paramref name="direcoes"/>; num cruzamento, mais de um), dos dois
+    /// lados, afastado o bastante para a caixa não ficar em cima dele, mais
+    /// <paramref name="folga"/>; o primeiro lugar livre (<paramref name="livre"/>:
+    /// fora das mesas, dos equipamentos e das valas). Nenhum livre: o primeiro
+    /// lugar, com Free falso, para quem chama avisar.
     /// </summary>
-    public static Point3 BesideTrench(Point3 at, Point3 direcao, double largura, double comprimento, Func<IReadOnlyList<(double X, double Y)>, bool> livre, double folga = Gap)
+    public static (Point3 Center, bool Free) BesideTrench(Point3 at, IReadOnlyList<Point3> direcoes, double largura, double comprimento, Func<IReadOnlyList<(double X, double Y)>, bool> livre, double folga = Gap)
     {
-        var n = new Point3(-direcao.Y, direcao.X, 0);
-        var afastamento = (Math.Abs(largura * n.X) + Math.Abs(comprimento * n.Y)) / 2 + folga;
-
-        foreach (var sinal in new[] { 1.0, -1.0 })
+        Point3? primeiro = null;
+        foreach (var direcao in direcoes)
         {
-            var c = new Point3(at.X + n.X * afastamento * sinal, at.Y + n.Y * afastamento * sinal, 0);
-            if (livre(EquipmentFootprint.Corners(c.X, c.Y, largura, comprimento))) return c;
+            var n = new Point3(-direcao.Y, direcao.X, 0);
+            var afastamento = (Math.Abs(largura * n.X) + Math.Abs(comprimento * n.Y)) / 2 + folga;
+
+            foreach (var sinal in new[] { 1.0, -1.0 })
+            {
+                var c = new Point3(at.X + n.X * afastamento * sinal, at.Y + n.Y * afastamento * sinal, 0);
+                primeiro ??= c;
+                if (livre(EquipmentFootprint.Corners(c.X, c.Y, largura, comprimento))) return (c, true);
+            }
         }
 
-        return new Point3(at.X + n.X * afastamento, at.Y + n.Y * afastamento, 0);
+        return (primeiro ?? at, false);
     }
 }

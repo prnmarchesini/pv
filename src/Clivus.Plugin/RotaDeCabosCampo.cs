@@ -256,6 +256,8 @@ public static class RotaDeCabosCampo
             linhas.Insert(0, Tr.F("{0}: {1} lance(s) desenhado(s), {2:0.0} m no total (3D, com as descidas da vala de {3:0.00} m).",
                 CableRoutes.Title(rota), resultado.Runs.Count, resultado.Runs.Sum(r => r.Length), config.Depth));
             if (valaFora > 0) linhas.Add(Tr.F("ATENÇÃO: {0} ponto(s) da vala fora do terreno ficaram com a cota que tinham.", valaFora));
+            if (leitura.ProblemaDoLocal is { } local && rota != CableRoute.MediumVoltage)
+                linhas.Add(Tr.F("ATENÇÃO: o local dos inversores não se lê ({0}); a área deles não valeu como contorno.", local));
             if (falhas.Count > 0) linhas.Add(Tr.F("{0} trecho(s) sem rota, pintado(s) de vermelho:", falhas.Count));
             linhas.AddRange(falhas.Select(f => "• " + f.What + ": " + f.Reason));
             Relatar(documento, rota, string.Join("\n", linhas));
@@ -484,32 +486,38 @@ internal sealed class LeituraDaRota
             l._emCampo[(tipo, guid)] = (P(b.Position), ids[0]);
             var definicao = (BlockTableRecord)t.GetObject(b.BlockTableRecord, OpenMode.ForRead);
             l._caixas[(tipo, guid)] = definicao.Cast<ObjectId>().Where(id => id.ObjectClass.IsDerivedFrom(RXObject.GetClass(typeof(Solid3d)))).ToList();
-            if (Contorno(t, b, l._caixas[(tipo, guid)]) is { } contorno) l._contornos[(tipo, guid)] = contorno;
+            if (Contorno(t, b, l._caixas[(tipo, guid)]) is { } contorno) l._contornos[(tipo, guid)] = l.Contornos[(tipo, guid)] = contorno;
         }
 
         // Inversor numa área (sala, skid): a vala que entra na ÁREA é a que chega nele.
         var areas = LocalDosInversores.Areas(db);
-        foreach (var local in LocalDosInversores.Ler(db, out _))
+        var locais = LocalDosInversores.Ler(db, out var problemaDoLocal);
+        l.ProblemaDoLocal = problemaDoLocal;
+        foreach (var local in locais)
             if (local.Mode == InverterPlacementMode.Area && areas.TryGetValue(local.Site, out var area) && l._emCampo.ContainsKey((EquipmentKind.Inverter, local.Inverter)))
                 l._contornos[(EquipmentKind.Inverter, local.Inverter)] = area.Contorno;
 
         return l;
     }
 
-    /// <summary>Se o retângulo (cantos em planta) cai numa mesa ou noutro equipamento em campo (menos <paramref name="exceto"/>).</summary>
-    internal bool Ocupado(IReadOnlyList<(double X, double Y)> cantos, Guid exceto)
+    /// <summary>
+    /// O que um inversor posto pelo plugin não pode cobrir: as mesas e as
+    /// caixas dos equipamentos em campo (menos as de <paramref name="exceto"/>,
+    /// os que estão sendo postos agora).
+    /// </summary>
+    internal List<IReadOnlyList<Point3>> Obstaculos(IReadOnlySet<Guid> exceto)
     {
-        var x = cantos.Average(c => c.X);
-        var y = cantos.Average(c => c.Y);
-        var pontos = cantos.Append((x, y)).ToList();
-
-        bool Dentro(IReadOnlyList<Point3> poligono) =>
-            pontos.Any(p => Polygons.Contains(poligono, p.Item1, p.Item2))
-            || poligono.Any(q => Polygons.Contains(cantos.Select(c => new Point3(c.X, c.Y, 0)).ToList(), q.X, q.Y));
-
-        return _mesas.Values.Any(m => Dentro(m.Mesa.Corners))
-            || _contornos.Where(c => c.Key.Item2 != exceto && _caixas.ContainsKey(c.Key)).Any(c => Dentro(c.Value));
+        var lista = _mesas.Values.Select(m => m.Mesa.Corners).ToList();
+        foreach (var ((tipo, id), caixas) in _caixas)
+            if (!exceto.Contains(id) && caixas.Count > 0 && Contornos.TryGetValue((tipo, id), out var c)) lista.Add(c);
+        return lista;
     }
+
+    /// <summary>As caixas dos equipamentos em campo (sem a troca pela área dos inversores).</summary>
+    private Dictionary<(EquipmentKind, Guid), IReadOnlyList<Point3>> Contornos { get; } = [];
+
+    /// <summary>O local dos inversores não se leu: a área deles não vale como contorno (avisado no Gerar).</summary>
+    internal string? ProblemaDoLocal { get; private set; }
 
     private static Point3 P(Point3d p) => new(p.X, p.Y, p.Z);
 

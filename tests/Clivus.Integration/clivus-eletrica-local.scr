@@ -1,6 +1,6 @@
 ; Nivel 2 do local dos inversores (10/10/2026). Usina pelo motor, strings de
 ; teste, um modelo e quatro inversores. (1) Area: um retangulo 2D desenhado
-; ao leste da usina vira a area do Inversor 2, 3 e 4: eles vao para dentro
+; ao leste da usina (60 x 60 m) vira a area do Inversor 2, 3 e 4: eles vao para dentro
 ; dele, na cota do terreno + 0,80, e o retangulo vira Polyline3d no TIN. (2)
 ; Automatico: o Inversor 1 recebe 6 strings e fica automatico; uma vala CC
 ; norte-sul a 5 m da borda leste; o Gerar CC poe o Inversor 1 ao lado da vala
@@ -44,8 +44,10 @@
   (if (= (cdr (cadr (cadr (assoc -3 clivus:d)))) "AreaInversores")
     (princ (strcat "\nCLIVUS_LOCAL_SALA tipo=" (cdr (assoc 0 clivus:d)) " flags=" (itoa (cdr (assoc 70 clivus:d))) " fim"))))
 (clivus:equip "area")
+(princ "\nCLIVUS_LOCAL CONFERIR_AREA")
+(command "CLIVUS_ROTA_CONFERIR_AUTO")
 ; ---- (2) automatico -------------------------------------------------------
-(command "CLIVUS_ELETRICA_LOCAL" "Automatico" "Inversor 1")
+(command "CLIVUS_ELETRICA_LOCAL" "Strings" "Inversor 1")
 (command "_.PLINE" "{{V1}}" "{{V2}}" "")
 (setq clivus:vala (ssadd (entlast)))
 (command "CLIVUS_ROTA_VALA" "CC" clivus:vala "")

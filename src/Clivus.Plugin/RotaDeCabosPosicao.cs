@@ -37,11 +37,16 @@ internal static class PosicaoAutomatica
         // As strings do CC de cada inversor (as de combiner vão pela aba Combiner).
         var porInversor = leitura.StringsCc().GroupBy(s => s.Destination.Id).ToDictionary(g => g.Key, g => g.ToList());
 
+        // O que não pode ser coberto: mesas e equipamentos em campo (os que estão sendo
+        // postos agora não contam no lugar velho) e os já postos nesta rodada.
+        var obstaculos = leitura.Obstaculos(automaticos.Select(i => i.Id).ToHashSet());
+        var postos = new List<IReadOnlyList<Point3>>();
+
         foreach (var inversor in automaticos)
         {
             if (!porInversor.TryGetValue(inversor.Id, out var strings) || strings.Count == 0)
             {
-                frases.Add(Tr.F("{0} é automático mas não tem string: não foi posto.", inversor.Name));
+                frases.Add(Tr.F("{0} é automático mas não tem string direta no CC (nenhuma, ou as dele vão por combiner): não foi posto.", inversor.Name));
                 continue;
             }
 
@@ -52,16 +57,32 @@ internal static class PosicaoAutomatica
                 continue;
             }
 
-            if (leitura.Setup.FindEquipment(EquipmentKind.Inverter, inversor.Id) is not { } equipamento) continue;
+            if (leitura.Setup.FindEquipment(EquipmentKind.Inverter, inversor.Id) is not { } equipamento)
+            {
+                frases.Add(Tr.F("{0}: o modelo dele não está no cadastro (sem a medida da caixa); não foi posto.", inversor.Name));
+                continue;
+            }
 
-            var centro = InverterSites.BesideTrench(melhor.Point.At, melhor.Direction, equipamento.Size.Width, equipamento.Size.Length,
-                cantos => !leitura.Ocupado(cantos, inversor.Id));
+            bool Livre(IReadOnlyList<(double X, double Y)> cantos) =>
+                !obstaculos.Any(o => InverterSites.Overlaps(cantos, o))
+                && !postos.Any(o => InverterSites.Overlaps(cantos, o))
+                && !rede.Touches(cantos.Select(c => new Point3(c.X, c.Y, 0)).ToList());
 
-            if (ConfiguracaoEletricaCommands.NoTerreno(editor, db, terreno, equipamento, centro.X, centro.Y))
-                frases.Add(Tr.F("{0} posto ao lado da vala, no ponto de menor cabo CC das {1} string(s) dele ({2:0.0} m em planta). Mova à mão se o lugar não servir e Gere de novo.",
-                    inversor.Name, strings.Count, melhor.Total));
-            else
+            var (centro, livre) = InverterSites.BesideTrench(melhor.Point.At, rede.DirectionsAt(melhor.Point), equipamento.Size.Width, equipamento.Size.Length, Livre);
+
+            if (!ConfiguracaoEletricaCommands.NoTerreno(editor, db, terreno, equipamento, centro.X, centro.Y))
+            {
                 frases.Add(Tr.F("{0}: o ponto de menor cabo está fora do terreno; não foi posto.", inversor.Name));
+                continue;
+            }
+
+            postos.Add(EquipmentFootprint.Corners(centro.X, centro.Y, equipamento.Size.Width, equipamento.Size.Length).Select(c => new Point3(c.X, c.Y, 0)).ToList());
+            frases.Add(Tr.F("{0} posto ao lado da vala, no ponto de menor cabo CC das {1} string(s) dele ({2:0.0} m em planta). Mova à mão se o lugar não servir e Gere de novo.",
+                inversor.Name, melhor.Reached, melhor.Total));
+            if (!livre)
+                frases.Add(Tr.F("ATENÇÃO: em volta desse ponto não há lado livre (mesa, equipamento ou outra vala): {0} ficou em cima de algo. Mova à mão e Gere de novo.", inversor.Name));
+            if (melhor.Reached < strings.Count)
+                frases.Add(Tr.F("ATENÇÃO: {0} string(s) de {1} chegam a valas que não se ligam às das outras: elas ficam sem rota (avisadas abaixo).", strings.Count - melhor.Reached, inversor.Name));
         }
 
         return frases;

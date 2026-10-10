@@ -176,6 +176,35 @@ public sealed class TrenchNetwork
         return nos;
     }
 
+    /// <summary>
+    /// As direções de todos os trechos que passam no ponto (o dele e, num nó,
+    /// os que chegam nele): num cruzamento, o inversor pode ir ao lado de
+    /// qualquer um.
+    /// </summary>
+    public IReadOnlyList<Point3> DirectionsAt(TrenchPoint p)
+    {
+        var direcoes = new List<Point3> { Direction(p.Edge) };
+        for (var e = 0; e < _arestas.Count; e++)
+        {
+            if (e == p.Edge) continue;
+            if (Dist(_nos[_arestas[e].A], p.At) < 1e-6 || Dist(_nos[_arestas[e].B], p.At) < 1e-6) direcoes.Add(Direction(e));
+        }
+
+        return direcoes;
+    }
+
+    /// <summary>Se alguma vala passa por dentro do polígono (ou corta a borda dele), em planta.</summary>
+    public bool Touches(IReadOnlyList<Point3> polygon)
+    {
+        ArgumentNullException.ThrowIfNull(polygon);
+        if (polygon.Count < 3) return false;
+        var contorno = polygon.Select(Plano).ToList();
+        var centro = new Point3(contorno.Average(p => p.X), contorno.Average(p => p.Y), 0);
+        for (var e = 0; e < _arestas.Count; e++)
+            if (PertoDoContorno(_nos[_arestas[e].A], _nos[_arestas[e].B], contorno, centro, 0) is not null) return true;
+        return false;
+    }
+
     /// <summary>A direção (unitária, em planta) do trecho <paramref name="edge"/>.</summary>
     public Point3 Direction(int edge)
     {

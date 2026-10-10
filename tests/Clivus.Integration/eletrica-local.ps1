@@ -8,8 +8,9 @@
         traca os lances (2 por string), todos medidos contra o TIN;
       - movido a mao, o Gerar refaz a rota da posicao nova (nao recoloca);
       - Recolocar automaticos devolve o inversor ao ponto de menor cabo.
-    A usina e a de Substituicoes-Da-Usina (100 x 100 m no centro do terreno);
-    a vala CC corre norte-sul 5 m a leste da borda.
+    A usina tem 60 x 60 m no centro do terreno (longe da borda do TIN, que
+    tem buracos); a vala CC corre norte-sul 5 m a leste dela, e a area fica
+    entre a vala e a borda do terreno.
 #>
 function Testar-EletricaLocal {
     param([string] $Desenho)
@@ -24,11 +25,11 @@ function Testar-EletricaLocal {
     function P([double] $dx, [double] $dy) { [string]::Format($inv, '{0:0.###},{1:0.###}', $cx + $dx, $cy + $dy) }
 
     $sub = @{
-        '{{A1}}' = (P -50 -50); '{{A2}}' = (P 50 -50); '{{A3}}' = (P 50 50); '{{A4}}' = (P -50 50)
-        '{{L1}}' = (P -50 -50); '{{L2}}' = (P -50 50); '{{LADO}}' = (P 0 0)
-        '{{S1}}' = (P 62 -10); '{{S2}}' = (P 72 -10); '{{S3}}' = (P 72 -6); '{{S4}}' = (P 62 -6)
-        '{{V1}}' = (P 55 -60); '{{V2}}' = (P 55 60)
-        '{{M}}' = (P 60 5)
+        '{{A1}}' = (P -30 -30); '{{A2}}' = (P 30 -30); '{{A3}}' = (P 30 30); '{{A4}}' = (P -30 30)
+        '{{L1}}' = (P -30 -30); '{{L2}}' = (P -30 30); '{{LADO}}' = (P 0 0)
+        '{{S1}}' = (P 42 -10); '{{S2}}' = (P 52 -10); '{{S3}}' = (P 52 -6); '{{S4}}' = (P 42 -6)
+        '{{V1}}' = (P 35 -35); '{{V2}}' = (P 35 35)
+        '{{M}}' = (P 40 5)
     }
 
     $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo $rotulo -Script (Join-Path $PSScriptRoot 'clivus-eletrica-local.scr') -Substituicoes $sub
@@ -51,16 +52,28 @@ function Testar-EletricaLocal {
     if ($t -notmatch 'CLIVUS_LOCAL_SALA tipo=POLYLINE flags=(\d+) fim' -or (([int]$Matches[1]) -band 9) -ne 9) { $erros += 'o retangulo da area nao virou Polyline3d fechada' }
     $area = @(Equip 'area' | Where-Object { $_.Tag -in 'Inversor_2', 'Inversor_3', 'Inversor_4' })
     if ($area.Count -ne 3) { $erros += "esperava os inversores 2, 3 e 4 em campo na area, achei $($area.Count)" }
-    foreach ($e in $area) {
-        if ($e.X -lt $cx + 62 -or $e.X -gt $cx + 72 -or $e.Y -lt $cy - 10 -or $e.Y -gt $cy - 6) { $erros += "$($e.Tag) fora da area ($($e.X), $($e.Y))" }
+    # A pegada real de cada caixa (do comando de conferencia, logo depois da area): inteira dentro, sem sobrepor; base no TIN + 0,80.
+    $de = $t.LastIndexOf('CLIVUS_LOCAL CONFERIR_AREA')
+    $trechoArea = if ($de -ge 0) { $t.Substring($de, $t.IndexOf('ROTA_CONFERIR_FIM', $de) - $de) } else { '' }
+    $caixas = @([regex]::Matches($trechoArea, 'ROTA_EQUIP tag=(Inversor_[234]) desvio=([\d.]+) minx=(-?[\d.]+) miny=(-?[\d.]+) maxx=(-?[\d.]+) maxy=(-?[\d.]+) fim') | ForEach-Object {
+        [pscustomobject]@{ Tag = $_.Groups[1].Value; Desvio = [double]::Parse($_.Groups[2].Value, $inv)
+            MinX = [double]::Parse($_.Groups[3].Value, $inv); MinY = [double]::Parse($_.Groups[4].Value, $inv)
+            MaxX = [double]::Parse($_.Groups[5].Value, $inv); MaxY = [double]::Parse($_.Groups[6].Value, $inv) }
+    })
+    if ($caixas.Count -ne 3) { $erros += "a conferencia nao achou as 3 caixas da area (achou $($caixas.Count))" }
+    foreach ($c in $caixas) {
+        if ($c.MinX -lt $cx + 42 - 0.001 -or $c.MaxX -gt $cx + 52 + 0.001 -or $c.MinY -lt $cy - 10 - 0.001 -or $c.MaxY -gt $cy - 6 + 0.001) { $erros += "$($c.Tag): a caixa sai da area" }
+        if ($c.Desvio -gt 0.001) { $erros += "$($c.Tag): a base nao esta no TIN + 0,80 (desvio $($c.Desvio) m)" }
     }
-    for ($i = 0; $i -lt $area.Count; $i++) {
-        for ($j = $i + 1; $j -lt $area.Count; $j++) {
-            $d = [math]::Sqrt([math]::Pow($area[$i].X - $area[$j].X, 2) + [math]::Pow($area[$i].Y - $area[$j].Y, 2))
-            if ($d -lt 0.9) { $erros += "$($area[$i].Tag) e $($area[$j].Tag) um em cima do outro ($d m)" }
+    for ($i = 0; $i -lt $caixas.Count; $i++) {
+        for ($j = $i + 1; $j -lt $caixas.Count; $j++) {
+            $a = $caixas[$i]; $b = $caixas[$j]
+            if ($a.MinX -lt $b.MaxX - 0.001 -and $b.MinX -lt $a.MaxX - 0.001 -and $a.MinY -lt $b.MaxY - 0.001 -and $b.MinY -lt $a.MaxY - 0.001) { $erros += "$($a.Tag) e $($b.Tag) se sobrepoem" }
         }
     }
+    if ($trechoArea -notmatch 'ROTA_AREA nome=\S+ fechada=True fora=0 desvio=([\d.]+) fim' -or [double]::Parse($Matches[1], $inv) -gt 0.001) { $erros += 'a polilinha da area nao esta no TIN' }
     if ($t -notmatch 'LOCAL 3 de 3 inversor\(es\) postos na') { $erros += 'o comando nao disse que pos os 3 na area' }
+    if ($t -match 'fora do terreno ficaram com a cota') { $erros += 'algum ponto da area ou da vala caiu fora do terreno (o desenho do teste tem que ficar dentro do TIN)' }
 
     # Cota: cada relatorio do comando (terreno e base) contra a entidade: base = terreno + 0,80.
     $relatorios = @([regex]::Matches($t, 'EQUIPAMENTO (Inversor \d) em campo: terreno a (-?[\d.,]+) m, base a (-?[\d.,]+) m') | ForEach-Object {
@@ -77,9 +90,9 @@ function Testar-EletricaLocal {
     $auto = @(Equip 'auto' | Where-Object { $_.Tag -eq 'Inversor_1' })
     if ($auto.Count -ne 1) { $erros += 'o Gerar CC nao pos o Inversor 1 (automatico) em campo' }
     else {
-        $dx = [math]::Abs($auto[0].X - ($cx + 55))
+        $dx = [math]::Abs($auto[0].X - ($cx + 35))
         if ($dx -lt 0.5 -or $dx -gt 2.5) { $erros += "o Inversor 1 nao ficou ao lado da vala (a $dx m dela)" }
-        if ($auto[0].Y -lt $cy - 50 -or $auto[0].Y -gt $cy + 50) { $erros += "o Inversor 1 ficou fora da altura da usina (y $($auto[0].Y))" }
+        if ($auto[0].Y -lt $cy - 30 -or $auto[0].Y -gt $cy + 30) { $erros += "o Inversor 1 ficou fora da altura da usina (y $($auto[0].Y))" }
         $rel = $relatorios | Where-Object { $_.Tag -eq 'Inversor 1' } | Select-Object -First 1
         if (-not $rel -or [math]::Abs($rel.Base - $auto[0].Z) -gt 0.001) { $erros += 'Inversor 1: a cota da entidade nao e a base do relatorio' }
     }
@@ -95,7 +108,7 @@ function Testar-EletricaLocal {
 
     # ---- (3) movido e (4) recolocado --------------------------------------
     $movido = @(Equip 'movido' | Where-Object { $_.Tag -eq 'Inversor_1' })
-    if ($movido.Count -ne 1 -or [math]::Abs($movido[0].X - ($cx + 60)) -gt 0.01 -or [math]::Abs($movido[0].Y - ($cy + 5)) -gt 0.01) { $erros += 'movido a mao, o Gerar tirou o Inversor 1 do lugar' }
+    if ($movido.Count -ne 1 -or [math]::Abs($movido[0].X - ($cx + 40)) -gt 0.01 -or [math]::Abs($movido[0].Y - ($cy + 5)) -gt 0.01) { $erros += 'movido a mao, o Gerar tirou o Inversor 1 do lugar' }
     $de = $t.LastIndexOf('CLIVUS_LOCAL MOVER')
     $ate = $t.LastIndexOf('CLIVUS_LOCAL RECOLOCAR')
     if ($de -lt 0 -or $ate -le $de) { $erros += 'nao achei os marcadores MOVER e RECOLOCAR' }

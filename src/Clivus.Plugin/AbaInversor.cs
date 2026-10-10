@@ -604,7 +604,8 @@ internal sealed class AbaInversor : AbaEletrica
         var escolhidos = Escolhidos().Select(i => i.Id).ToHashSet();
         var foco = OndeEstaOFoco();
         var emCampo = EquipamentoEmCampo.EmCampo(Documento.Database);
-        _locais = LocalDosInversores.Ler(Documento.Database, out _).GroupBy(l => l.Inverter).ToDictionary(g => g.Key, g => g.First().Mode);
+        _locais = LocalDosInversores.Ler(Documento.Database, out var problemaDoLocal).GroupBy(l => l.Inverter).ToDictionary(g => g.Key, g => g.First().Mode);
+        if (problemaDoLocal is not null) Avisar(Tr.F("ATENÇÃO: o local dos inversores não se lê ({0}); a coluna Local fica vazia.", problemaDoLocal), erro: true);
         var linhas = LinhasDaTabela(Documento, _setup, _contagem);
         _inversores.Items.Clear();
         _marcas.Clear();
@@ -1533,7 +1534,7 @@ internal sealed class AbaInversor : AbaEletrica
             ? throw new InvalidOperationException(problema)
             : modo is null
                 ? Tr.F("{0} inversor(es) à mão: use Pôr em campo (a posição de agora fica).", escolhidos.Count)
-                : Tr.F("{0} inversor(es) automáticos: o Gerar da rota CC põe cada um ao lado da vala, no ponto de menor cabo das strings dele.", escolhidos.Count));
+                : Tr.F("{0} inversor(es) automáticos: o Gerar da rota CC põe ao lado da vala, no ponto de menor cabo, os que ainda não estão em campo; os que já estão vão com Recolocar automáticos.", escolhidos.Count));
     }
 
     /// <summary>O "Apagar todos" (10/10/2026: "quero ter a opção de apagar TODOS os inversores da usina").</summary>

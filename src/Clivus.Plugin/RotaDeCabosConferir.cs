@@ -90,6 +90,38 @@ public static class RotaDeCabosConferir
                 }
             }
 
+            // Os equipamentos em campo: a base contra o TIN no centro (+ 0,80) e a pegada da caixa em planta.
+            var setup = ConfiguracaoEletricaStore.Ler(db).Setup;
+            foreach (var ((tipo, guid), ids) in EquipamentoEmCampo.Posicionados(t, db))
+            {
+                if (ids.Count == 0 || t.GetObject(ids[0], OpenMode.ForRead) is not BlockReference b) continue;
+                var tag = setup.FindEquipment(tipo, guid)?.Tag ?? "?";
+                var desvio = terreno.Mesh.TryGetZ(b.Position.X, b.Position.Y, out var chao) ? Math.Abs(b.Position.Z - (chao + EquipmentFootprint.FloatHeight)) : double.NaN;
+                var caixa = setup.FindEquipment(tipo, guid)?.Size;
+                var (w, l) = caixa is null ? (0.0, 0.0) : (caixa.Width / 2, caixa.Length / 2);
+                editor.WriteMessage(string.Format(inv, "\nROTA_EQUIP tag={0} desvio={1:0.0000} minx={2:0.###} miny={3:0.###} maxx={4:0.###} maxy={5:0.###} fim\n",
+                    tag.Replace(' ', '_'), desvio, b.Position.X - w, b.Position.Y - l, b.Position.X + w, b.Position.Y + l));
+            }
+
+            // As áreas de inversores: cada vértice no terreno daquele XY.
+            foreach (var (_, (marca, _)) in LocalDosInversores.Areas(db))
+            {
+                foreach (ObjectId id in espaco)
+                {
+                    if (t.GetObject(id, OpenMode.ForRead) is not Polyline3d p3 || PluginXData.Load(p3, SiteMark.Tipo, 1, SiteMark.FieldCount) is not { } c || SiteMark.Parse(c)?.Id != marca.Id) continue;
+                    double maior = 0;
+                    var fora = 0;
+                    foreach (var v in p3.Cast<ObjectId>().Where(v => !v.IsErased))
+                    {
+                        var p = ((PolylineVertex3d)t.GetObject(v, OpenMode.ForRead)).Position;
+                        if (terreno.Mesh.TryGetZ(p.X, p.Y, out var z)) maior = Math.Max(maior, Math.Abs(p.Z - z));
+                        else fora++;
+                    }
+
+                    editor.WriteMessage(string.Format(inv, "\nROTA_AREA nome={0} fechada={1} fora={2} desvio={3:0.0000} fim\n", marca.Name.Replace(' ', '_'), p3.Closed, fora, maior));
+                }
+            }
+
             editor.WriteMessage("\nROTA_CONFERIR_FIM\n");
         }
         catch (System.Exception erro)
