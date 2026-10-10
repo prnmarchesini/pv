@@ -281,19 +281,33 @@ internal static class StringsDoDesenho
     }
 
     /// <summary>
-    /// Solta todas as strings do inversor (14.5, "apagar todas"): só o
-    /// vínculo no XData; as strings continuam no desenho, livres. Quantas.
+    /// Solta todas as strings do inversor (14.5, "apagar todas"): o vínculo
+    /// no XData sai e as tags de numeração delas são apagadas (Renan,
+    /// 10/10/2026: "quando eu clicar em soltar as strings de um inversor, as
+    /// tags devem ser apagadas"); as strings continuam no desenho, livres.
+    /// Quantas soltou e quantas tinham tag.
     /// </summary>
-    internal static int Soltar(Database database, Guid inversor) =>
-        Gravar(database, StringAllocation.Release(inversor, Ler(database).Values));
+    internal static (int Soltas, int Tags) Soltar(Database database, Guid inversor) =>
+        Gravar(database, StringAllocation.Release(inversor, Ler(database).Values), apagarTags: true);
+
+    /// <summary>
+    /// O <see cref="Soltar(Database, Guid)"/> de vários inversores numa
+    /// transação só (apagar os escolhidos ou todos: uma leitura do desenho,
+    /// não uma por inversor). Quantas soltou e quantas tinham tag.
+    /// </summary>
+    internal static (int Soltas, int Tags) Soltar(Database database, IReadOnlyCollection<Guid> inversores)
+    {
+        var deles = inversores.ToHashSet();
+        return Gravar(database, Ler(database).Values.Where(s => deles.Contains(s.Inverter)).DistinctBy(s => s.Id).Select(s => s with { Inverter = Guid.Empty }).ToList(), apagarTags: true);
+    }
 
     /// <summary>
     /// Solta as strings de todos os inversores (05/10/2026: "apagar todas as
-    /// strings da usina"): só o vínculo; as strings continuam no desenho,
-    /// livres, na cor da camada. Quantas.
+    /// strings da usina"): o vínculo e as tags; as strings continuam no
+    /// desenho, livres, na cor da camada. Quantas soltou e quantas tinham tag.
     /// </summary>
-    internal static int SoltarTodasDaUsina(Database database) =>
-        Gravar(database, Ler(database).Values.Where(s => s.IsAllocated).Select(s => s with { Inverter = Guid.Empty }).ToList());
+    internal static (int Soltas, int Tags) SoltarTodasDaUsina(Database database) =>
+        Gravar(database, Ler(database).Values.Where(s => s.IsAllocated).DistinctBy(s => s.Id).Select(s => s with { Inverter = Guid.Empty }).ToList(), apagarTags: true);
 
     /// <summary>
     /// Regrava o XData das strings mudadas (o vínculo com o inversor), numa
@@ -301,9 +315,19 @@ internal static class StringsDoDesenho
     /// tocada; a cor da string (e dos sinais dela) passa a ser a do inversor,
     /// ou ByLayer se ficou livre (<see cref="CorDasStrings"/>). Quantas gravou.
     /// </summary>
-    internal static int Gravar(Database database, IReadOnlyCollection<ElectricalString> mudadas)
+    internal static int Gravar(Database database, IReadOnlyCollection<ElectricalString> mudadas) =>
+        Gravar(database, mudadas, apagarTags: false).Soltas;
+
+    /// <summary>
+    /// O <see cref="Gravar(Database, IReadOnlyCollection{ElectricalString})"/>;
+    /// com <paramref name="apagarTags"/>, na mesma transação, a tag das
+    /// strings gravadas fica vazia e o texto dela sai do desenho, pela mesma
+    /// rotina do Apagar da aba Numeração (<see cref="NumeracaoDesenho.Aplicar"/>).
+    /// Quantas gravou e quantas tinham tag.
+    /// </summary>
+    private static (int Soltas, int Tags) Gravar(Database database, IReadOnlyCollection<ElectricalString> mudadas, bool apagarTags)
     {
-        if (mudadas.Count == 0) return 0;
+        if (mudadas.Count == 0) return (0, 0);
 
         var setup = ConfiguracaoEletricaStore.Ler(database).Setup;
         using var transacao = database.TransactionManager.StartTransaction();
@@ -320,8 +344,22 @@ internal static class StringsDoDesenho
         foreach (var (id, atual) in alvos)
             ElectricalStore.SaveString(transacao, (Entity)transacao.GetObject(id, OpenMode.ForWrite), porGuid[atual.Id]);
 
+        var tags = 0;
+        if (apagarTags)
+        {
+            tags = alvos.Count(x => x.String.Tag.Length > 0);
+            NumeracaoDesenho.Aplicar(
+                transacao,
+                database,
+                alvos.Select(x => (x.Id, porGuid[x.String.Id])).ToList(),
+                alvos.ToDictionary(x => x.String.Id, _ => string.Empty),
+                new Dictionary<Guid, NumeracaoDesenho.Lugar>(),
+                apagarOrfaos: false,
+                TagScheme.Default);
+        }
+
         CorDasStrings.Pintar(transacao, database, CorDasStrings.PeloCadastro(setup, mudadas));
         transacao.Commit();
-        return alvos.Count;
+        return (alvos.Count, tags);
     }
 }

@@ -383,7 +383,8 @@ public static class ConfiguracaoEletricaAutoCommands
     {
         if (Texto(editor, "\nInversor (nome): ") is not { } nome) return null;
         if (ConfiguracaoEletricaStore.Ler(database).Setup.FindInverter(nome) is not { } inversor) return "recusado: inversor nao existe";
-        return $"soltas {StringsDoDesenho.Soltar(database, inversor.Id)} de {inversor.Name}";
+        var (soltas, tags) = StringsDoDesenho.Soltar(database, inversor.Id);
+        return $"soltas {soltas} de {inversor.Name} tags {tags}";
     }
 
     /// <summary>

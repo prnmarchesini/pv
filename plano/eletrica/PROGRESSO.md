@@ -235,6 +235,71 @@ Roteiro de tela:
 5. Num desenho sem blocos, a linha Bloco fica cinza com a dica "crie um
    bloco acima".
 
+## Inversor: botões na linha, soltar apaga tags, apagar todos, ordem por arrastar e ordenar (10/10/2026): AGUARDANDO VALIDAÇÃO
+
+Pedidos do Renan na aba Inversor da Configuração elétrica:
+- O "⋯" saiu da linha. As ações dele ficam à vista, do tamanho do "+ Strings"
+  e do "Ver": **Soltar**, **Pôr em campo** (ou **Mover**, se já está em campo)
+  e **Apagar** (com a mesma confirmação). Dicas iguais às de antes, com a
+  frase das tags acrescentada.
+- Soltar as strings apaga as tags de numeração delas: o Soltar da linha, o
+  "Soltar todas da usina" e o apagar inversor (da linha, das escolhidas e o
+  novo "Apagar todos"). Usa a mesma rotina do Apagar da aba Numeração
+  (`NumeracaoDesenho.Aplicar` com a tag vazia), na mesma transação que solta
+  o vínculo. As strings ficam no desenho, livres; o recado diz quantas tags
+  saíram. A camada e o estilo da tag só são criados quando há texto a
+  desenhar (só apagar não cria nada).
+- "Apagar todos" ao lado de "Apagar os escolhidos": pergunta com quantos são
+  e diz que as strings ficam livres; mesma rotina do apagar.
+- A ordem da lista é a ordem do cadastro de inversores gravada no desenho.
+  Ela já valia para a tabela, para o Distribuir (enche os inversores nessa
+  ordem) e para o número {I} da tag (a posição no cadastro). A ordem nova vale
+  para os três. No Core: `ElectricalSetup.MoveInverter` (leva o inversor para
+  o lugar de outro) e `SortInverters` (por Nome, por Trafo, por Trafo e Nome),
+  com ordem natural (`NaturalStringComparer`: Inversor 2 antes de Inversor
+  10; T1, T2, ..., T10).
+- Na tela: alça "⠿" à esquerda de cada linha para arrastar (um traço azul
+  mostra onde cai; perto da borda a lista rola); e no quadro "Inversores da
+  usina", na mesma linha do Criar: "Ordenar: [por Nome | por Trafo | por
+  Trafo e Nome] [Ordenar]". Grava na hora e redesenha a lista; a escolha
+  das linhas e as caixas do/ao seguem a ordem nova.
+- Testes: nível 1 `InverterOrderTests` (ordem natural, o caso Inversor 21
+  renomeado para Inversor 1, arrastar subindo e descendo, por trafo com T10
+  cadastrado antes do T2, trafo sumido, o Distribuir e o {I} da tag na ordem
+  nova, hífen comparado igual em qualquer cultura); nível 2
+  `clivus-eletrica-inversor-ordem` (Soltar da linha leva 5 tags, Soltar
+  todas da usina leva o resto, a ordem gravada lida de volta depois de cada
+  ordenar e arrastar, Apagar todos leva as 3 tags).
+
+Assumido:
+- Arrastar leva só a linha pega pela alça, mesmo com várias escolhidas.
+  Soltar sobre uma linha põe o inversor no lugar dela: descendo fica depois
+  dela, subindo fica antes. O traço mostra qual.
+- Por Trafo: o apelido do trafo em ordem natural; inversor de trafo que
+  sumiu do cadastro vem depois dos trafos e antes dos sem trafo; dentro do
+  mesmo trafo fica a ordem que já tinham (por Trafo e Nome ordena pelo nome).
+- Mudar a ordem muda o {I} da tag na próxima geração; as tags já desenhadas
+  não mudam sozinhas (o recado lembra de gerar de novo).
+- A ordem padrão da caixa é "por Trafo e Nome".
+
+Roteiro de tela:
+1. Configuração elétrica > Inversor: cada linha tem "⠿" à esquerda e, no
+   fim, + Strings, Ver, Soltar, Pôr em campo (ou Mover) e Apagar; o "⋯"
+   sumiu.
+2. Numeração > Gerar da usina. Volte ao Inversor e clique Soltar num
+   inversor com strings: as tags dele somem do desenho, as strings ficam
+   (na cor da camada); o recado diz "N string(s) soltas ... N tag(s)
+   apagada(s)". Depois "Soltar todas da usina": as outras tags somem.
+3. Crie um inversor (sai "Inversor 21", no fim), renomeie para
+   "Inversor 1". Pegue a alça "⠿" dele e arraste até a primeira linha: o
+   traço azul aparece em cima dela; solte: ele vira o primeiro.
+4. Ordenar: "por Trafo e Nome" > Ordenar: os do T1 pelo nome, depois os do
+   T2..., os sem trafo no fim. Teste também "por Nome" e "por Trafo".
+5. Escolha duas linhas com Ctrl e troque o trafo de uma: as duas mudam; o
+   "do ... ao ..." lista os nomes na ordem nova.
+6. "Apagar todos": a pergunta diz quantos são; Sim: a tabela fica vazia, as
+   strings livres e as tags delas somem.
+
 ## Observações
 - Mesa recalculada troca os GUIDs dos módulos: as strings dela ficam soltas e
   regerar não as reconhece (desenha as novas sem apagar as velhas). Precisa de

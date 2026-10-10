@@ -173,9 +173,11 @@ internal static class NumeracaoDesenho
                 }
             }
         }
-        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForWrite);
-        var camada = LayoutLayers.Garantir(transacao, database, CamadaDaTag, new RgbColor(255, 140, 0));
-        var estilo = EstiloDoProjeto.PrepararTexto(transacao, database);
+        // A camada, o estilo e o espaço só quando há texto a desenhar: só
+        // apagar (soltar as strings, 10/10/2026) não cria camada nem estilo.
+        BlockTableRecord? espaco = null;
+        string camada = string.Empty;
+        Action<MText> estilo = _ => { };
         var novos = new List<ObjectId>();
 
         foreach (var (id, s) in strings)
@@ -197,6 +199,13 @@ internal static class NumeracaoDesenho
             // string em U dava a tag em pé; Renan, 07/10/2026: "jamais quero
             // texto virado").
             var (rumo, comprimento) = StringTagLayout.Axis(lugares.Select(l => (l.Centro.X, l.Centro.Y)).ToList());
+
+            if (espaco is null)
+            {
+                espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForWrite);
+                camada = LayoutLayers.Garantir(transacao, database, CamadaDaTag, new RgbColor(255, 140, 0));
+                estilo = EstiloDoProjeto.PrepararTexto(transacao, database);
+            }
 
             var mtexto = new MText
             {
@@ -224,7 +233,7 @@ internal static class NumeracaoDesenho
         }
 
         // Por cima dos módulos na ordem de desenho, como as outras tags.
-        if (novos.Count > 0)
+        if (espaco is not null && novos.Count > 0)
         {
             var ordem = (DrawOrderTable)transacao.GetObject(espaco.DrawOrderTableId, OpenMode.ForWrite);
             ordem.MoveToTop(new ObjectIdCollection(novos.ToArray()));
