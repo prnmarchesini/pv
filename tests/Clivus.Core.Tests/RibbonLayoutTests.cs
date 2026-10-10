@@ -87,6 +87,27 @@ public class RibbonLayoutTests
         Assert.True(edicao.Items.Count <= 2);
     }
 
+    /// <summary>
+    /// Item 13 de 10/10/2026 ("o submenu explodiu"): todo suspenso (Edição,
+    /// Objetos e os que vierem) abre como menu comum, com ícone pequeno e o
+    /// texto numa linha, e nenhum item dele é botão grande.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "8")]
+    public void OsSuspensosAbremComItensPequenos()
+    {
+        var menus = RibbonLayout.Tabs.SelectMany(t => t.Panels).SelectMany(p => p.Items).OfType<RibbonMenuSpec>().ToList();
+
+        Assert.Contains(menus, m => m.Text == "Edição");
+        Assert.Contains(menus, m => m.Text == "Objetos");
+
+        foreach (var menu in menus)
+        {
+            Assert.True(menu.SmallList, $"o suspenso {menu.Text} abre com itens grandes");
+            Assert.DoesNotContain(menu.Items, b => b.Large);
+        }
+    }
+
     [Fact]
     [Trait("Etapa", "8")]
     public void NenhumBotaoRepetidoNoMesmoPainel()

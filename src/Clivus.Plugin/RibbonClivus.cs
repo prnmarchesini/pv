@@ -296,6 +296,15 @@ internal static class RibbonClivus
             ToolTip = Tr.T(menu.Tooltip),
         }, menu.Icon);
 
+        // A lista como um menu comum (item 13 de 10/10/2026): sem isto a
+        // ribbon abre cada item com o ícone de 32 px numa linha alta e o
+        // submenu cobre a tela.
+        if (menu.SmallList)
+        {
+            botao.ListStyle = RibbonSplitButtonListStyle.List;
+            botao.ListImageSize = RibbonImageSize.Standard;
+        }
+
         foreach (var item in menu.Items) botao.Items.Add(BotaoPequeno(item));
 
         return botao;

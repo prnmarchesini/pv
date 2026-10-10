@@ -4,7 +4,15 @@ namespace Clivus.Core;
 public sealed record RibbonButtonSpec(string Text, string Command, string Tooltip, string Icon, bool Large = false);
 
 /// <summary>Um botão de menu: abre a lista dos botões dele (a "Edição" compacta).</summary>
-public sealed record RibbonMenuSpec(string Text, string Tooltip, string Icon, IReadOnlyList<RibbonButtonSpec> Items);
+public sealed record RibbonMenuSpec(string Text, string Tooltip, string Icon, IReadOnlyList<RibbonButtonSpec> Items)
+{
+    /// <summary>
+    /// A lista abre como um menu comum do AutoCAD: ícone de 16 px e o texto
+    /// numa linha ao lado. Renan, 10/10/2026, item 13: com o padrão da ribbon
+    /// (ícone de 32 px e linha alta) "o submenu explodiu" e cobriu a tela.
+    /// </summary>
+    public bool SmallList { get; init; } = true;
+}
 
 /// <summary>Um painel: título e os itens (botões e menus), na ordem.</summary>
 public sealed record RibbonPanelSpec(string Title, IReadOnlyList<object> Items)
