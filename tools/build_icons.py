@@ -176,6 +176,9 @@ def icones():
                      [t('M18,3 L8,18 H16 L13,29 L24,13 H16 Z')]),
         'resumo_eletrico': ([T('M4,8 H15 M4,16 H15 M4,24 H15'), ambar_cheio('M24,4 L18,16 H23 L21,28 L28,14 H23 Z')],
                             [t('M4,9 H14 M4,17 H14 M4,25 H14'), ambar_cheio('M24,4 L18,16 H23 L21,28 L28,14 H23 Z')]),
+        # Roteamento (17.1): a vala em corte e o cabo, em âmbar, descendo até o fundo dela.
+        'rota_cabos': ([T('M3,8 H9 V24 H23 V8 H29'), ambar_traco('M3,4 H13 V20 H19 V4 H29', L)],
+                       [t('M2,9 H8 V27 H24 V9 H30'), ambar_traco('M2,4 H13 V22 H19 V4 H30', S)]),
         # Edição > Apagar (05/10/2026): a lixeira, com a tampa em âmbar (a ação).
         'apagar': ([T('M8,10 L10,28 H22 L24,10'), T('M13.5,14 V24 M18.5,14 V24'), ambar_traco('M5,9 H27 M13,9 V5 H19 V9', L)],
                    [t('M8,11 L10,28 H22 L24,11'), ambar_traco('M5,9 H27 M13,9 V5 H19 V9', S)]),

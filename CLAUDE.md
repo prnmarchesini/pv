@@ -19,6 +19,14 @@ tem plano próprio em `plano/eletrica/`: comece por `plano/eletrica/LEIA-PRIMEIR
 e siga o `plano/eletrica/PROGRESSO.md`. Lá vale **um passo por vez, parando
 para o Renan validar**, com revisão por subagente em cada passo.
 
+## Roteamento de cabo (desde 10/10/2026)
+
+As rotas de cabo (CC, combiner, CA, MT), as bibliotecas de cabo e de módulo
+(PAN) e o memorial de cálculo têm plano próprio em `plano/roteamento/`
+(etapas 17 a 24): comece por `plano/roteamento/LEIA-PRIMEIRO.md` e siga o
+`plano/roteamento/PROGRESSO.md`. Mesmo ritual: um passo por vez, parando para
+o Renan validar.
+
 ## Regra de ouro
 
 **Um passo por vez. Ao terminar um passo, PARE e espere o Renan validar.** Não comece o passo seguinte, não "adiante" código, não faça nada fora do escopo do passo. Se achar algo que precisa ser feito fora do escopo, anote em `plano/PROGRESSO.md` na seção "Observações" e siga.

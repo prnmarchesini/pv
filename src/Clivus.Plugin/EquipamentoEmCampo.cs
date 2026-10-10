@@ -207,6 +207,7 @@ internal static class EquipamentoEmCampo
     {
         EquipmentKind.ConsumerUnit => Color.FromRgb(170, 60, 170),
         EquipmentKind.Transformer => Color.FromRgb(230, 140, 30),
+        EquipmentKind.Combiner => Color.FromRgb(0, 160, 120),
         _ => Color.FromRgb(40, 110, 200),
     };
 }

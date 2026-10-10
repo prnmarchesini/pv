@@ -132,4 +132,21 @@ internal static class ElectricalStore
 
     internal static void SaveSkids(Database db, IReadOnlyList<Skid> itens) =>
         PluginRecords.Save(db, "SKIDS", 1, Skid.FieldCount, itens, i => i.ToFields());
+
+    /// <summary>As combiner boxes (roteamento, 19.1).</summary>
+    internal static RecordTableResult<Combiner> Combiners(Database db) =>
+        PluginRecords.Load<Combiner>(db, "COMBINERS", 1, Combiner.FieldCount, Combiner.Parse, OQueCombiners);
+
+    internal static void SaveCombiners(Database db, IReadOnlyList<Combiner> itens) =>
+        PluginRecords.Save(db, "COMBINERS", 1, Combiner.FieldCount, itens, i => i.ToFields());
+
+    /// <summary>Que string está em que combiner (19.2).</summary>
+    internal static RecordTableResult<CombinerString> CombinerStrings(Database db) =>
+        PluginRecords.Load<CombinerString>(db, "COMBINER_STRINGS", 1, CombinerString.FieldCount, CombinerString.Parse, OQueCombinerStrings);
+
+    internal static void SaveCombinerStrings(Database db, IReadOnlyList<CombinerString> itens) =>
+        PluginRecords.Save(db, "COMBINER_STRINGS", 1, CombinerString.FieldCount, itens, i => i.ToFields());
+
+    private static readonly string OQueCombiners = Tr.N("de combiner boxes");
+    private static readonly string OQueCombinerStrings = Tr.N("das strings nas combiners");
 }

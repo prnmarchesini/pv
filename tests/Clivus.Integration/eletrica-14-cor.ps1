@@ -65,7 +65,7 @@ function Testar-Eletrica14Cor {
     if ($antigo -notmatch 'ELETRICA CORES formato_inversores=1 automaticas=3') { $erros += 'o formato 1 dos inversores nao foi lido com 3 cores automaticas' }
     if ((Rgb $antigo 'Inversor 1') -ne '15761920') { $erros += 'no formato 1 o Inversor 1 nao ganhou a primeira cor da paleta' }
     $final = $t.Substring($marca)
-    if ($final -notmatch 'ELETRICA CORES formato_inversores=2 automaticas=0') { $erros += 'a gravacao nao passou os inversores ao formato 2' }
+    if ($final -notmatch 'ELETRICA CORES formato_inversores=3 automaticas=0') { $erros += 'a gravacao nao passou os inversores ao formato atual (3)' }
     if ((Rgb $final 'Inversor 4') -ne '12490240') { $erros += 'o Inversor 4 nao ganhou a quarta cor (ouro)' }
 
     if ($erros.Count -gt 0) {

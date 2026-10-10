@@ -19,10 +19,11 @@ internal static class ConfiguracaoEletricaStore
         var modelos = ElectricalStore.InverterModels(database);
         var skids = ElectricalStore.Skids(database);
         var blocos = ElectricalStore.Substations(database);
+        var combiners = ElectricalStore.Combiners(database);
 
-        var problemas = new[] { ucs.Problem, blocos.Problem, trafos.Problem, modelos.Problem, inversores.Problem, skids.Problem }.Where(p => p is not null).ToList();
+        var problemas = new[] { ucs.Problem, blocos.Problem, trafos.Problem, modelos.Problem, inversores.Problem, skids.Problem, combiners.Problem }.Where(p => p is not null).ToList();
 
-        return (new ElectricalSetup(trafos.Items, inversores.Items, ucs.Items, modelos.Items, skids.Items, blocos.Items), problemas.Count == 0 ? null : string.Join("; ", problemas));
+        return (new ElectricalSetup(trafos.Items, inversores.Items, ucs.Items, modelos.Items, skids.Items, blocos.Items, combiners.Items), problemas.Count == 0 ? null : string.Join("; ", problemas));
     }
 
     internal static void Gravar(Database database, ElectricalSetup setup)
@@ -33,6 +34,7 @@ internal static class ConfiguracaoEletricaStore
         ElectricalStore.SaveInverterModels(database, setup.Models);
         ElectricalStore.SaveInverters(database, setup.Inverters);
         ElectricalStore.SaveSkids(database, setup.Skids);
+        ElectricalStore.SaveCombiners(database, setup.Combiners);
     }
 
     /// <summary>

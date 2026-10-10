@@ -112,11 +112,12 @@ public static class RibbonLayout
                 B(Tr.N("String"), PluginInfo.ComandoString, Tr.N("Os tipos de string (a biblioteca) e a geração do traçado das strings sobre os módulos."), "string", grande: true),
                 B(Tr.N("Configuração elétrica"), PluginInfo.ComandoEletrica, Tr.N("Subestação, transformadores, inversores (com a alocação das strings) e a numeração das strings."), "eletrica", grande: true),
                 B(Tr.N("Resumo"), PluginInfo.ComandoEletricaResumo, Tr.N("O sistema inteiro pela cadeia de vínculo: subestações, trafos, inversores, strings, módulos e potência."), "resumo_eletrico", grande: true),
+                B(Tr.N("Rota de cabos"), PluginInfo.ComandoRotaCabos, Tr.N("Os cabos de cada trecho pelas valas desenhadas: abas CC, Combiner, CA e MT. Cada aba só abre quando os dois lados do trecho estão no desenho."), "rota_cabos", grande: true),
             ]),
             new(Tr.N("Saída"),
             [
                 B(Tr.N("PVsyst"), PluginInfo.ComandoExportar, Tr.N("Exporta as faces dos módulos escolhidos para o PVsyst (DAE)."), "pvsyst", grande: true),
-                B(Tr.N("Excel"), PluginInfo.ComandoExportarExcel, Tr.N("Exporta para o Excel o resumo, as quantificações das análises e os pilares."), "excel", grande: true),
+                B(Tr.N("Exportar"), PluginInfo.ComandoExportarExcel, Tr.N("Escolha o que vai para o Excel, num arquivo só: resumo, análises, pilares, compra de pilares, resumo elétrico e cabos com totalização."), "excel", grande: true),
                 B(Tr.N("3D"), PluginInfo.ComandoVer3D, Tr.N("Abre no navegador um modelo 3D para girar e dar zoom: terreno, mesas com as cores dos tipos, pilares e árvores. Funciona sem internet."), "ver3d", grande: true),
             ]),
         ]),
