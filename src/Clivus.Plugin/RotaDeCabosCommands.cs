@@ -798,11 +798,12 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
     /// <summary>Uma linha da grade: um grupo (UC, trafo, inversor) com o subtotal, ou um circuito.</summary>
     private sealed class Linha
     {
-        internal Linha(CableReport.CircuitGroup grupo, bool aberto)
+        internal Linha(CableReport.CircuitGroup grupo, bool aberto, bool total = false)
         {
             Grupo = grupo;
             Nivel = grupo.Level;
             Aberto = aberto;
+            EhTotal = total;
             Vias = string.Empty;
         }
 
@@ -821,8 +822,11 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
         public bool Aberto { get; }
         public bool EhGrupo => Grupo is not null;
 
+        /// <summary>A linha do total da usina (item 7 da segunda rodada de 10/10/2026): sempre no fim, sem abrir nem fechar.</summary>
+        public bool EhTotal { get; }
+
         public Thickness Recuo => new(Nivel * 18 + (EhGrupo ? 0 : 18), 0, 0, 0);
-        public Visibility DeGrupo => EhGrupo ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility DeGrupo => EhGrupo && !EhTotal ? Visibility.Visible : Visibility.Collapsed;
         public string Seta => Aberto ? "▾" : "▸";
 
         public string Nome => Grupo is { } g ? Tr.F("{0} ({1} circuito(s))", g.Name, g.CircuitCount) : CableReport.DePara(Circuito!.FromName, Circuito.ToName);
@@ -844,7 +848,9 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
         public string Vmp => Numero(Conta?.Vmp);
         public string Isc => Numero(Conta?.Isc);
         public string Imp => Numero(Conta?.Imp);
-        public string Capacidade => Numero(Conta?.Ampacity);
+        public string Maxima => Numero(Conta?.Ampacity);
+        public string Fator => Numero(Conta?.CorrectionFactor);
+        public string Corrigida => Numero(Conta?.CorrectedAmpacity);
         public string Suporta => Conta?.Supports is { } s ? (s ? Tr.T("Sim") : Tr.T("Não")) : string.Empty;
 
         private static string Numero(double? v) => v is { } x && double.IsFinite(x) ? x.ToString("0.##", Tr.Culture) : string.Empty;
@@ -869,6 +875,11 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
         gatilho.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
         gatilho.Setters.Add(new Setter(Control.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0xEE, 0xF2, 0xF7))));
         estilo.Triggers.Add(gatilho);
+        // O total da usina, mais forte que os grupos (item 7 da segunda rodada de 10/10/2026).
+        var doTotal = new DataTrigger { Binding = new System.Windows.Data.Binding(nameof(Linha.EhTotal)), Value = true };
+        doTotal.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.Bold));
+        doTotal.Setters.Add(new Setter(Control.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0xDC, 0xE6, 0xF0))));
+        estilo.Triggers.Add(doTotal);
         grade.RowStyle = estilo;
 
         // A primeira coluna: o recuo do nível, a seta (abre e fecha), ⊞ (abre tudo abaixo), ⊟ (fecha tudo abaixo) e o nome.
@@ -928,7 +939,7 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
         if (dc)
         {
             var titulos = StringCheck.Headers();
-            string[] campos = [nameof(Linha.Voc), nameof(Linha.Vmp), nameof(Linha.Isc), nameof(Linha.Imp), nameof(Linha.Capacidade), nameof(Linha.Suporta)];
+            string[] campos = [nameof(Linha.Voc), nameof(Linha.Vmp), nameof(Linha.Isc), nameof(Linha.Imp), nameof(Linha.Maxima), nameof(Linha.Fator), nameof(Linha.Corrigida), nameof(Linha.Suporta)];
             for (var i = 0; i < campos.Length; i++) Coluna(titulos[i], campos[i], numero: i < campos.Length - 1);
         }
 
@@ -1001,6 +1012,9 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
         }
 
         foreach (var g in resumo.Grupos) Grupo(g);
+
+        // O total da usina sempre no fim, com os grupos abertos ou fechados.
+        if (resumo.Grupos.Count > 0) linhas.Add(new Linha(CableReport.PlantTotal(resumo.Grupos), aberto: false, total: true));
 
         // Uma edição que ficou aberta (saiu da célula com Tab) não pode estar no meio quando a lista troca.
         grade.CancelEdit(DataGridEditingUnit.Row);

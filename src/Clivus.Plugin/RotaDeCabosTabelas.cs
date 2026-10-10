@@ -271,9 +271,14 @@ internal static class RotaDeCabosTabelas
             else if (semPan > 0)
                 notas.Add(Tr.F("{0} string(s) sem módulo com PAN: as colunas de cálculo ficam vazias (carregue o .PAN na estrutura, em Configurações > Estruturas > Editar).", semPan));
             if (contas.Values.Any(k => k.Ampacity is null))
-                notas.Add(Tr.T("Cabo sem capacidade de condução para o método da aba (biblioteca de cabos): a capacidade e o Suporta ficam vazios."));
-            notas.Add(Tr.F("Cálculo simples, sem fatores de agrupamento nem de temperatura: suporta se Isc × {0:0.00} ≤ capacidade do cabo no método da aba. Voc na mínima de {1} °C (Configurações).",
-                StringCheck.SafetyFactor, projeto.MinTemperature));
+            {
+                var semMaxima = string.Join(", ", circuitos.Where(c => contas.TryGetValue(c.From, out var k) && k.Ampacity is null)
+                    .Select(c => Tr.F("{0} no método {1}", c.Cable?.Name ?? Tr.T("(sem cabo escolhido)"), string.IsNullOrWhiteSpace(c.Method) ? "?" : c.Method)).Distinct());
+                notas.Add(Tr.F("A biblioteca de cabos não tem a corrente máxima de {0}: a corrente máxima, a corrigida e o Suporta ficam vazios (informe a corrente desse método no cabo, no botão Biblioteca de cabos... da aba).", semMaxima));
+            }
+
+            notas.Add(Tr.F("Cálculo simples: corrente corrigida = corrente máxima do cabo no método da aba × fator de correção ({0:0.00}, por enquanto sem agrupamento nem temperatura); suporta se Isc × {1:0.00} ≤ corrente corrigida. Voc na mínima de {2} °C (Configurações).",
+                StringCheck.DefaultCorrectionFactor, StringCheck.SafetyFactor, projeto.MinTemperature));
         }
 
         var tabela = CableReport.GroupedCircuits(Tr.F("Resumo de cabos {0}", Tr.T(titulo)), grupos, dc, rotas.Length > 1, contas, notas);

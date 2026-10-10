@@ -125,6 +125,7 @@ public static class RotaDeCabosConferir
             // Item 10: cada lance CC (com o destino e o handle) e, por mesa, se todos os
             // cabos das strings dela passam por um ponto comum fora dela, e de que lado.
             Lances(editor, db, t, inv);
+            Acessos(editor, db, inv);
 
             editor.WriteMessage("\nROTA_CONFERIR_FIM\n");
         }
@@ -203,6 +204,55 @@ public static class RotaDeCabosConferir
     }
 
     /// <summary>
+    /// ROTA_ACESSO (item 6 da segunda rodada de 10/10/2026): por inversor em
+    /// campo, de onde vem o contorno que o motor CC usa (area ou caixa), o
+    /// registro do local dele, a área do desenho onde ele está (em planta),
+    /// quantas valas CC entram no contorno e quantas passam no raio, e quantos
+    /// lances CC dele chegam pela vala de DENTRO da área (ou do contorno, sem
+    /// área): o último vértice do cabo em cima de uma vala, antes do trecho
+    /// reto até o inversor, cai dentro dela.
+    /// </summary>
+    private static void Acessos(Autodesk.AutoCAD.EditorInput.Editor editor, Database db, System.Globalization.CultureInfo inv)
+    {
+        var leitura = LeituraDaRota.Ler(db);
+        var valas = RotaDeCabosStore.Valas(db)[CableRoute.DirectCurrent];
+        if (valas.Count == 0) return;
+        var rede = new TrenchNetwork(valas);
+        var config = RotaDeCabosStore.Configuracoes(db, out _)[CableRoute.DirectCurrent];
+        var lances = RotaDeCabosStore.Lances(db).Where(l => l.Lance.Route == CableRoute.DirectCurrent).ToList();
+        var areas = LocalDosInversores.Areas(db);
+        var locais = LocalDosInversores.Ler(db, out _);
+
+        using var t = db.TransactionManager.StartOpenCloseTransaction();
+        foreach (var i in leitura.Setup.Inverters)
+        {
+            if (leitura.Ponto(EquipmentKind.Inverter, i.Id) is not { } ponto) continue;
+            var contorno = leitura.Contorno(EquipmentKind.Inverter, i.Id);
+            var entram = contorno is { Count: >= 3 } ? rede.Entering(contorno, ponto) : [];
+            var raio = rede.Within(ponto, config.Radius);
+            var (marca, area) = areas.Values.FirstOrDefault(a => Polygons.Contains(a.Contorno, ponto.X, ponto.Y));
+            var alvo = area ?? contorno;
+
+            int deDentro = 0, deFora = 0;
+            foreach (var l in lances.Where(l => l.Lance.To.Id == i.Id))
+            {
+                if (t.GetObject(l.Id, OpenMode.ForRead) is not Polyline3d p3) continue;
+                var naVala = p3.Cast<ObjectId>().Where(v => !v.IsErased)
+                    .Select(v => ((PolylineVertex3d)t.GetObject(v, OpenMode.ForRead)).Position)
+                    .Select(p => (Point3?)new Point3(p.X, p.Y, 0))
+                    .LastOrDefault(p => rede.Nearest(p!.Value, 0.01) is not null);
+                if (alvo is { Count: >= 3 } && naVala is { } v0 && Polygons.Contains(alvo, v0.X, v0.Y)) deDentro++;
+                else deFora++;
+            }
+
+            var local = locais.FirstOrDefault(x => x.Inverter == i.Id);
+            editor.WriteMessage(string.Format(inv, "\nROTA_ACESSO inversor={0} contorno={1} local={2} na_area={3} entram={4} raio={5} chegam_de_dentro={6} chegam_de_fora={7} fim\n",
+                i.Name.Replace(' ', '_'), leitura.OrigemDoContorno(i.Id), local?.Mode.ToString() ?? "-", (marca?.Name ?? "-").Replace(' ', '_'),
+                entram.Count, raio.Count, deDentro, deFora));
+        }
+    }
+
+    /// <summary>
     /// Só no build de teste: o "Atualizar (reconta)" da aba Resumo, pelo mesmo
     /// caminho (<see cref="RotaDeCabosTabelas.Usina"/>), escrito para o nível 2:
     /// por tipo de cabo, os circuitos, os cabos, os metros, o aviso de fora de
@@ -238,6 +288,11 @@ public static class RotaDeCabosConferir
                 }
 
                 foreach (var g in r.Grupos) Grupo(g);
+
+                // A linha do total da usina da grade (item 7 da segunda rodada) e o rodapé da tabela do Excel.
+                var total = CableReport.PlantTotal(r.Grupos);
+                editor.WriteMessage(string.Format(inv, "\nROTA_RESUMO_TOTAL tipo={0} circuitos={1} lances={2} cabos={3} metros={4:0.00} excel={5} fim\n",
+                    tipo, total.CircuitCount, total.Runs, total.Cables, total.CableLength, (r.Tabela.Total.FirstOrDefault() as string ?? "-").Replace(' ', '_')));
             }
 
             // A tabela CC como vai para o Excel: o cabeçalho e as linhas de circuito com a tag.
@@ -245,6 +300,10 @@ public static class RotaDeCabosConferir
             editor.WriteMessage("\nROTA_RESUMO_CABECALHO " + string.Join("|", cc.Header) + "\n");
             foreach (var linha in cc.Rows.Where(l => l[1] is string tag && tag.Length > 0).Take(3))
                 editor.WriteMessage("\nROTA_RESUMO_LINHA " + string.Join("|", linha.Select(TabelaNaTela.Texto)) + "\n");
+
+            // A última linha do CSV do Exportar de cada tipo: o total da usina.
+            foreach (var r in usina.Tipos)
+                editor.WriteMessage("\nROTA_RESUMO_CSV_FIM " + r.Tabela.ToCsv(Tr.Culture).TrimEnd('\r', '\n').Split("\r\n")[^1] + "\n");
 
             editor.WriteMessage("\nROTA_RESUMO_FIM\n");
         }
