@@ -133,6 +133,9 @@ internal static class NumeracaoDesenho
         var orfaos = Aplicar(transacao, database, strings, vazias, modulos, apagarOrfaos: alcance.Kind == NumberingScopeKind.All, TagScheme.Default);
         transacao.Commit();
 
+        // Sem a tag de verdade, a string que continua num inversor volta a ter a pré-tag dele.
+        PreTagDasStrings.Atualizar(database, soEstas: vazias.Keys.ToList());
+
         var frase = Tr.F("{0} tag(s) apagada(s) de {1} string(s).", tinham, vazias.Count);
         if (orfaos > 0) frase += " " + Tr.F("{0} texto(s) de tag de string que não existe mais foram apagados.", orfaos);
         if (problema is not null) frase += " " + Tr.F("ATENÇÃO: {0}.", problema);
@@ -158,9 +161,12 @@ internal static class NumeracaoDesenho
         var textos = Textos(transacao, database);
         var orfaos = 0;
 
-        // A pré-tag do inversor (item 8 de 10/10/2026) sai de toda string que
-        // passa por aqui: ganhou a tag de verdade, ou foi solta.
-        PreTagDasStrings.Apagar(transacao, PreTagDasStrings.Textos(transacao, database), strings.Select(s => s.String.Id).Where(tags.ContainsKey).Distinct().ToList());
+        // A pré-tag do inversor (item 8 de 10/10/2026) sai da string que ganhou
+        // a tag de verdade ou que ficou livre (solta). A que só teve a tag
+        // apagada e continua num inversor fica com a dela.
+        PreTagDasStrings.Apagar(transacao, PreTagDasStrings.Textos(transacao, database), strings
+            .Where(s => tags.TryGetValue(s.String.Id, out var nova) && (nova.Length > 0 || s.String.Inverter == Guid.Empty))
+            .Select(s => s.String.Id).Distinct().ToList());
 
         if (apagarOrfaos)
         {

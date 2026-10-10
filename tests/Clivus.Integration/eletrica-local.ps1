@@ -157,7 +157,8 @@ function Testar-EletricaLocal {
     foreach ($n in 'Inversor_2', 'Inversor_3', 'Inversor_4') {
         if (-not $l5[$n] -or $l5[$n].Local -ne 'Skid_norte' -or $l5[$n].Botao -ne 'Move' -or $l5[$n].Ver -ne 'True') { $erros += "${n}: a linha nao mostra a area renomeada com Mover e Ver em campo" }
     }
-    if (-not $l5['Inversor_1'] -or $l5['Inversor_1'].Botao -ne 'Automatic') { $erros += 'Inversor 1 (automatico) nao mostra Alocacao automatica no lugar do botao' }
+    # Item 19: o automatico ja posto pela rota pode ser movido (Mover e Ver em campo); a coluna continua Auto.
+    if (-not $l5['Inversor_1'] -or $l5['Inversor_1'].Local -ne 'Auto' -or $l5['Inversor_1'].Botao -ne 'Move' -or $l5['Inversor_1'].Ver -ne 'True') { $erros += 'Inversor 1 (automatico, em campo) nao mostra Auto com Mover e Ver em campo' }
 
     # (6) item 2 e 3: 9 numa area em pe (comeca pelo lado curto) em grade, o 10o sozinho na vaga livre
     if ($t -notmatch 'LOCAL 9 de 9 inversor\(es\) postos na Sala 2') { $erros += 'os 9 nao couberam todos na Sala 2' }
@@ -233,6 +234,10 @@ function Testar-EletricaLocal {
     if ($doUm -eq 0 -or @($solto | Where-Object { $_.Texto -eq 'I1' }).Count -ne 0 -or $solto.Count -ne $dist.Count - $doUm) { $erros += 'o Soltar do Inversor 1 nao apagou so as pre-tags dele' }
     if (@(Pretags 'numerado').Count -ne 0) { $erros += 'a Numeracao nao apagou as pre-tags' }
     if (([regex]::Matches($t, 'CLIVUS_TAGREAL etapa=numerado fim')).Count -eq 0) { $erros += 'a Numeracao nao desenhou as tags de verdade' }
+    # Apagar as tags (a tag nova vazia) nao deixa sem pre-tag a string que continua num inversor; a do I1 (solta) nao volta.
+    $apagadas = @(Pretags 'tagsapagadas')
+    if ($apagadas.Count -ne $solto.Count -or @($apagadas | Where-Object { $_.Texto -eq 'I1' }).Count -ne 0) { $erros += "apagadas as tags, esperava $($solto.Count) pre-tags (as strings que continuam nos inversores), achei $($apagadas.Count)" }
+    if (([regex]::Matches($t, 'CLIVUS_TAGREAL etapa=tagsapagadas fim')).Count -ne 0) { $erros += 'o Apagar tags deixou tag de verdade' }
 
     if ($erros.Count -gt 0) {
         $problemas.Add("${rotulo}: $($erros -join '; '). Veja $($r.Saida)")

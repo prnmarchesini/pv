@@ -119,10 +119,11 @@ public class InverterMelhoriasTests
         Assert.Equal(new InverterSiteView(null, Guid.Empty, InverterFieldButton.Place, false), InverterSiteView.Of(naArea, emCampo: false, areaExiste: true));
         Assert.Equal(new InverterSiteView(null, Guid.Empty, InverterFieldButton.Move, true), InverterSiteView.Of(naArea, emCampo: true, areaExiste: false));
 
-        // Automático: o texto no lugar do botão; Ver em campo só se a rota já o pôs.
-        Assert.Equal(InverterFieldButton.Automatic, InverterSiteView.Of(auto, emCampo: false, areaExiste: false).Button);
-        Assert.False(InverterSiteView.Of(auto, emCampo: false, areaExiste: false).CanSee);
-        Assert.True(InverterSiteView.Of(auto, emCampo: true, areaExiste: false).CanSee);
+        // Automático fora de campo: o texto no lugar do botão, sem Ver em campo.
+        Assert.Equal(new InverterSiteView(InverterPlacementMode.Automatic, Guid.Empty, InverterFieldButton.Automatic, false), InverterSiteView.Of(auto, emCampo: false, areaExiste: false));
+
+        // Automático já posto pela rota: Mover e Ver em campo (item 19, "eu quero ter a liberdade de mover o inversor"); a coluna continua Auto.
+        Assert.Equal(new InverterSiteView(InverterPlacementMode.Automatic, Guid.Empty, InverterFieldButton.Move, true), InverterSiteView.Of(auto, emCampo: true, areaExiste: false));
 
         // À mão.
         Assert.Equal(InverterFieldButton.Place, InverterSiteView.Of(null, emCampo: false, areaExiste: false).Button);

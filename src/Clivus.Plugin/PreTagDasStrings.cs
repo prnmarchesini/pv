@@ -64,9 +64,11 @@ internal static class PreTagDasStrings
     /// (livres, com tag, de inversor que sumiu) e as de string que sumiu
     /// ficam sem. Com <paramref name="soAsQueJaTem"/> (renomear ou trocar a
     /// cor do inversor), só as strings que já têm pré-tag são refeitas: a
-    /// alocação à mão não ganha pré-tag por tabela. Quantas pré-tags há no fim.
+    /// alocação à mão não ganha pré-tag por tabela. Com <paramref name="soEstas"/>
+    /// (o Apagar tags da numeração), só essas strings são acertadas; as
+    /// outras ficam como estão. Quantas pré-tags há no fim (entre as acertadas).
     /// </summary>
-    internal static int Atualizar(Database database, bool soAsQueJaTem = false)
+    internal static int Atualizar(Database database, bool soAsQueJaTem = false, IReadOnlyCollection<Guid>? soEstas = null)
     {
         var setup = ConfiguracaoEletricaStore.Ler(database).Setup;
         using var transacao = database.TransactionManager.StartTransaction();
@@ -74,6 +76,13 @@ internal static class PreTagDasStrings
         var strings = ElectricalStore.Strings(transacao, database).GroupBy(x => x.String.Id).Where(g => g.Count() == 1).Select(g => g.First()).ToList();
         var esperadas = StringPreTag.Expected(setup.Inverters, strings.Select(x => x.String));
         var textos = Textos(transacao, database);
+        var alvo = soEstas?.ToHashSet();
+        if (alvo is not null)
+        {
+            strings = strings.Where(x => alvo.Contains(x.String.Id)).ToList();
+            esperadas = esperadas.Where(x => alvo.Contains(x.Key)).ToDictionary(x => x.Key, x => x.Value);
+        }
+
         if (soAsQueJaTem)
         {
             if (textos.Count == 0) return 0;
@@ -81,7 +90,7 @@ internal static class PreTagDasStrings
         }
 
         // As que não devem ter (ou cuja string sumiu) saem.
-        Apagar(transacao, textos, textos.Select(g => g.Key).Where(s => !esperadas.ContainsKey(s)).ToList());
+        Apagar(transacao, textos, textos.Select(g => g.Key).Where(s => (alvo is null || alvo.Contains(s)) && !esperadas.ContainsKey(s)).ToList());
 
         var modulos = esperadas.Count > 0 ? NumeracaoDesenho.Modulos(transacao, database) : new Dictionary<Guid, NumeracaoDesenho.Lugar>();
         BlockTableRecord? espaco = null;

@@ -237,8 +237,15 @@ internal static class RotaDeCabosTabelas
     internal static ResumoDoTipo Resumo(Database db, LeituraDaRota leitura, int tipo)
     {
         var (titulo, rotas) = TiposDeCabo[tipo];
-        var (circuitos, faltam) = Circuitos(db, leitura, rotas);
-        var foraDeCampo = CableReport.MissingMessage(faltam, NomeDaPonta(leitura), circuitos.Count == 0);
+        var (circuitos, faltamDosCabos) = Circuitos(db, leitura, rotas);
+
+        // Item 18 inteiro: o equipamento que devia ter cabo e saiu de campo junto com
+        // os cabos também é avisado; o automático ainda não posto, com aviso próprio.
+        var automaticos = LocalDosInversores.Ler(db, out _).Where(l => l.Mode == InverterPlacementMode.Automatic).Select(l => l.Inverter).ToHashSet();
+        var (faltam, pendentes) = CableReport.Expected(faltamDosCabos, Esperadas(leitura, rotas), leitura.EmCampo, automaticos);
+        var nome = NomeDaPonta(leitura);
+        var avisos = new[] { CableReport.MissingMessage(faltam, nome, circuitos.Count == 0), CableReport.NotYetPlacedMessage(pendentes, nome) }.OfType<string>().ToList();
+        var foraDeCampo = avisos.Count == 0 ? null : string.Join(" ", avisos);
         var grupos = CableReport.Group(circuitos, c => CableReport.GroupPath(leitura.Setup, c));
 
         var dc = rotas.Contains(CableRoute.DirectCurrent);
@@ -259,7 +266,10 @@ internal static class RotaDeCabosTabelas
                 else semPan++;
             }
 
-            if (semPan > 0) notas.Add(Tr.F("{0} string(s) sem módulo com PAN: as colunas de cálculo ficam vazias (carregue o PAN na aba CC).", semPan));
+            // Com a potência trocada pela área (item 14) o motivo é ela, não falta de PAN.
+            if (FonteDoModulo.Simulada(db) is { } simulada) notas.Add(simulada.Reason());
+            else if (semPan > 0)
+                notas.Add(Tr.F("{0} string(s) sem módulo com PAN: as colunas de cálculo ficam vazias (carregue o .PAN na estrutura, em Configurações > Estruturas > Editar).", semPan));
             if (contas.Values.Any(k => k.Ampacity is null))
                 notas.Add(Tr.T("Cabo sem capacidade de condução para o método da aba (biblioteca de cabos): a capacidade e o Suporta ficam vazios."));
             notas.Add(Tr.F("Cálculo simples, sem fatores de agrupamento nem de temperatura: suporta se Isc × {0:0.00} ≤ capacidade do cabo no método da aba. Voc na mínima de {1} °C (Configurações).",
@@ -268,6 +278,35 @@ internal static class RotaDeCabosTabelas
 
         var tabela = CableReport.GroupedCircuits(Tr.F("Resumo de cabos {0}", Tr.T(titulo)), grupos, dc, rotas.Length > 1, contas, notas);
         return new ResumoDoTipo(circuitos, grupos, contas, tabela, foraDeCampo);
+    }
+
+    /// <summary>
+    /// Quem devia estar em campo para as rotas do tipo: no CC, os inversores
+    /// e as combiners com strings alocadas; no CA e na MT, as pontas da cadeia
+    /// de vínculo (inversor no trafo dele, trafo na subestação da UC).
+    /// </summary>
+    private static IEnumerable<CableEnd> Esperadas(LeituraDaRota leitura, IReadOnlyCollection<CableRoute> rotas)
+    {
+        if (rotas.Contains(CableRoute.DirectCurrent))
+        {
+            foreach (var (s, _) in leitura.Strings())
+                if (leitura.Setup.FindInverter(s.Inverter) is not null) yield return new CableEnd(CableEndKind.Inverter, s.Inverter);
+        }
+
+        if (rotas.Contains(CableRoute.Combiner))
+        {
+            foreach (var cb in leitura.CombinerDaString.Values.Distinct().Where(c => leitura.Setup.FindCombiner(c) is not null))
+                yield return new CableEnd(CableEndKind.Combiner, cb);
+        }
+
+        var cadeias = new List<ChainLink>();
+        if (rotas.Contains(CableRoute.AlternatingCurrent)) cadeias.AddRange(CableChain.AlternatingCurrent(leitura.Setup));
+        if (rotas.Contains(CableRoute.MediumVoltage)) cadeias.AddRange(CableChain.MediumVoltage(leitura.Setup));
+        foreach (var l in cadeias.Where(l => l.From.Id != Guid.Empty && l.To.Id != Guid.Empty))
+        {
+            yield return l.From;
+            yield return l.To;
+        }
     }
 
     /// <summary>O resumo da usina inteira, como a aba Resumo monta: as recontagens de todas as rotas, os resumos por tipo de cabo e os lances medidos.</summary>

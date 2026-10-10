@@ -315,6 +315,37 @@ public class CableRouteMelhoriasTests
         Assert.Null(CableReport.MissingMessage([], Nome, false));
     }
 
+    /// <summary>
+    /// O resto do item 18 (revisão de 10/10/2026): o inversor saiu de campo e
+    /// os cabos dele também foram apagados; o resumo saía vazio, sem aviso.
+    /// O que devia estar em campo é avisado; o automático ainda não posto tem
+    /// aviso próprio (o Gerar CC o põe); o que já tem cabo órfão não repete.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "24")]
+    public void InversorSemCaboForaDeCampoTambemEAvisado()
+    {
+        var (_, inv, _) = Usina();
+        string Nome(CableEnd p) => inv.First(i => i.Id == p.Id).Name;
+        var ponta = inv.Select(i => new CableEnd(CableEndKind.Inverter, i.Id)).ToList();
+
+        // Inversor 1 à mão, fora de campo, sem cabo; Inversor 2 automático, ainda não posto; nenhum circuito.
+        var (faltam, pendentes) = CableReport.Expected([], [ponta[0], ponta[1], ponta[0]], _ => false, new HashSet<Guid> { inv[1].Id });
+        Assert.Equal([ponta[0]], faltam);
+        Assert.Equal([ponta[1]], pendentes);
+        Assert.StartsWith("Inversor não está em campo: não é possível mostrar o resumo (Inversor 1)", CableReport.MissingMessage(faltam, Nome, true));
+        Assert.Equal("Ainda não postos em campo (alocação automática): Inversor 2. Gere a rota CC para pô-los.", CableReport.NotYetPlacedMessage(pendentes, Nome));
+
+        // O que já faltava pelos cabos órfãos fica onde estava (mesmo automático); o que está em campo não entra.
+        var (faltam2, pendentes2) = CableReport.Expected([ponta[1]], [ponta[0], ponta[1]], p => p == ponta[0], new HashSet<Guid> { inv[1].Id });
+        Assert.Equal([ponta[1]], faltam2);
+        Assert.Empty(pendentes2);
+        Assert.Null(CableReport.NotYetPlacedMessage(pendentes2, Nome));
+
+        // Ponta vazia (inversor sem trafo, na cadeia do CA) não é cobrada.
+        Assert.Empty(CableReport.Expected([], [new CableEnd(CableEndKind.Transformer, Guid.Empty)], _ => false, new HashSet<Guid>()).Missing);
+    }
+
     // ---- item 16: as contas por string
 
     private static readonly PanModule Modulo = new("X", "M", 720, 50, 18, 42, 17, -0.125, 0.007, null);

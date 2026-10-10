@@ -10,7 +10,7 @@
 ; pe que comeca pelo lado curto (o erro da image2) e o 10o sozinho na vaga
 ; livre; (7) area pequena; (8) automatico apaga o retangulo e trava o Por em
 ; campo; (9) Ver em campo; (10) Repartir pela fila e a soma dos limites; (11)
-; pre-tag no Distribuir, apagada no Soltar e na Numeracao.
+; pre-tag no Distribuir, apagada no Soltar e na Numeracao; de volta ao apagar as tags.
 (setq clivus:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
 (command "_.NETLOAD" "{{DLL}}")
@@ -144,6 +144,9 @@
 (clivus:pretags "solto")
 (command "CLIVUS_NUMERACAO_AUTO" "Gerar")
 (clivus:pretags "numerado")
+; Apagar as tags pela aba Numeracao (o botao): a string que continua num inversor volta a ter a pre-tag.
+(command "CLIVUS_NUMERACAO_TELA_AUTO" "Apagar" "Usina")
+(clivus:pretags "tagsapagadas")
 (setvar "OSMODE" clivus:osmode)
 (princ "\nCLIVUS_LOCAL_FIM")
 (setvar "SECURELOAD" clivus:secureload)

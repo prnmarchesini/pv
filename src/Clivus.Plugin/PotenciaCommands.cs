@@ -42,9 +42,9 @@ public static class PotenciaCommands
 
             editor.WriteMessage(atual is null
                 ? Tr.T("\nTROCAR POTÊNCIA: simulação para a usina inteira. O tamanho das mesas não muda; o kWp e os resumos passam a usar a potência digitada, e os cálculos elétricos ficam desligados.\n")
-                : Tr.F("\nTROCAR POTÊNCIA: hoje a usina está simulada com {0:0.#} Wp por módulo. Digite outra potência, ou {1} para voltar à configuração da mesa.\n", atual.Watts, Mesa));
+                : Tr.F("\nTROCAR POTÊNCIA: hoje a usina está simulada com {0:0.#} Wp por módulo. Digite outra potência, ou {1} para voltar à configuração da mesa.\n", atual.Watts, Tr.T(Mesa)));
 
-            var opcoes = new PromptDoubleOptions(Tr.F("\nPotência do módulo, em Wp, ou [{0}]: ", Mesa))
+            var opcoes = new PromptDoubleOptions(Tr.F("\nPotência do módulo, em Wp, ou [{0}]: ", Tr.T(Mesa)))
             {
                 AllowNegative = false,
                 AllowZero = false,
@@ -52,6 +52,8 @@ public static class PotenciaCommands
                 AppendKeywordsToMessage = false,
             };
             opcoes.Keywords.Add(Mesa);
+            // A do idioma da tela também vale (Table, em inglês); a portuguesa fica para os scripts.
+            if (!string.Equals(Tr.T(Mesa), Mesa, StringComparison.OrdinalIgnoreCase)) opcoes.Keywords.Add(Tr.T(Mesa));
 
             var resposta = editor.GetDouble(opcoes);
 

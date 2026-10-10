@@ -14,7 +14,11 @@
         lances do Inversor 2 ficam os mesmos (handles iguais), os do 1 sao
         novos e chegam na posicao nova;
       - item 18: o Inversor 2 apagado sai do resumo com o aviso; os dois
-        apagados: "Inversor nao esta em campo: nao e possivel mostrar o resumo".
+        apagados: "Inversor nao esta em campo: nao e possivel mostrar o resumo";
+        com os cabos apagados tambem, o resumo ainda avisa: os automaticos
+        "ainda nao postos" (o Gerar CC os poe) e o posto a mao "nao esta em campo";
+      - item 1 (revisao): o Inversor 1 levado com o MOVE do AutoCAD fica com
+        a cota do lugar velho; o Recalcular reassenta a base no TIN + 0,80.
     A usina tem 60 x 60 m no centro do terreno; a vala CC corre norte-sul 5 m
     a leste dela (como no caso do local dos inversores).
 #>
@@ -37,7 +41,7 @@ function Testar-EletricaRotaCc {
         '{{V1}}' = (P 35 -35); '{{V2}}' = (P 35 35)
         '{{X1}}' = (P 40 -25); '{{X2}}' = (P 40 -15); '{{X1XY}}' = (Q 40 -25)
         '{{Y1}}' = (P 45 10); '{{Y2}}' = (P 45 20); '{{Y1XY}}' = (Q 45 10)
-        '{{M}}' = (P 40 5)
+        '{{M}}' = (P 40 5); '{{M0}}' = (P 40 -12)
     }
 
     $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo $rotulo -Script (Join-Path $PSScriptRoot 'clivus-rota-cc.scr') -Substituicoes $sub
@@ -124,22 +128,32 @@ function Testar-EletricaRotaCc {
         if ([math]::Abs($x - ($cx + 40)) -gt 0.01 -or [math]::Abs($y - ($cy + 5)) -gt 0.01) { $erros += 'um lance do Inversor 1 nao chega na posicao nova dele'; break }
     }
     if ((Trecho 'CLIVUS_ROTACC RECALCULAR' 'CLIVUS_ROTACC CONFERIR2') -notmatch 'Recalculados 1 inversor\(es\): Inversor 1') { $erros += 'o Recalcular nao disse que recalculou so o Inversor 1' }
+    # Levado com o MOVE do AutoCAD: o Recalcular pos a base no TIN + 0,80 do lugar novo.
+    if ($conf2 -notmatch 'ROTA_EQUIP tag=Inversor_1 desvio=([\d.]+) ' -or [double]::Parse($Matches[1], $inv) -gt 0.001) { $erros += 'o Inversor 1 movido com o MOVE nao foi reassentado no TIN + 0,80 pelo Recalcular' }
 
     # ---- (18) inversor apagado ----------------------------------------------------
     $res2 = Trecho 'CLIVUS_ROTACC RESUMO2' 'CLIVUS_ROTACC RESUMO3'
     if ($res2 -notmatch 'ROTA_RESUMO_TIPO tipo=CC circuitos=6 cabos=12 ') { $erros += 'com o Inversor 2 apagado, o resumo CC ainda conta os cabos dele' }
     if ($res2 -notmatch 'ROTA_RESUMO_FORA tipo=CC Fora de campo: Inversor 2\.') { $erros += 'com o Inversor 2 apagado, o resumo CC nao avisou' }
     if ($res2 -notmatch 'ROTA_RESUMO sumidos=0 orfaos=12') { $erros += 'os 12 cabos do Inversor 2 nao foram contados como orfaos' }
-    $res3 = Trecho 'CLIVUS_ROTACC RESUMO3' 'CLIVUS_ROTACC_FIM'
+    $res3 = Trecho 'CLIVUS_ROTACC RESUMO3' 'CLIVUS_ROTACC RESUMO4'
     if ($res3 -notmatch 'ROTA_RESUMO_TIPO tipo=CC circuitos=0 cabos=0 ') { $erros += 'com os dois inversores apagados, o resumo CC ainda mostra cabo' }
     if ($res3 -notmatch 'ROTA_RESUMO_FORA tipo=CC Inversor n\S+o est\S+ em campo: n\S+o \S+ poss\S+vel mostrar o resumo \(Inversor 1, Inversor 2\)') { $erros += 'com os dois apagados, o resumo nao disse que nao da para mostrar' }
+
+    # Cabos apagados tambem: o resumo nao sai vazio sem aviso.
+    $res4 = Trecho 'CLIVUS_ROTACC RESUMO4' 'CLIVUS_ROTACC RESUMO5'
+    if ($res4 -notmatch 'ROTA_RESUMO_TIPO tipo=CC circuitos=0 cabos=0 ') { $erros += 'com os cabos apagados, o resumo CC ainda mostra cabo' }
+    if ($res4 -notmatch 'ROTA_RESUMO_FORA tipo=CC Ainda n\S+o postos em campo \(aloca\S+ autom\S+tica\): Inversor 1, Inversor 2\. Gere a rota CC') { $erros += 'sem cabos e sem os automaticos em campo, o resumo CC nao avisou que falta gerar a rota CC' }
+    if ($res4 -match 'ROTA_RESUMO_FORA tipo=CC [^\r\n]*n\S+o est\S+ em campo') { $erros += 'os automaticos ainda nao postos foram avisados como fora de campo' }
+    $res5 = Trecho 'CLIVUS_ROTACC RESUMO5' 'CLIVUS_ROTACC_FIM'
+    if ($res5 -notmatch 'ROTA_RESUMO_FORA tipo=CC Inversor n\S+o est\S+ em campo: n\S+o \S+ poss\S+vel mostrar o resumo \(Inversor 2\)\. Ainda n\S+o postos em campo \(aloca\S+ autom\S+tica\): Inversor 1\.') { $erros += 'com o Inversor 2 a mao fora de campo e sem cabos, o resumo CC nao avisou os dois casos' }
 
     if ($erros.Count -gt 0) {
         $problemas.Add("${rotulo}: $($erros -join '; '). Veja $($r.Saida)")
         return $false
     }
 
-    Write-Host "  (rota CC: aba liberada pelos automaticos; valas atualizada e solta; $($entradas.Count) mesas com entrada unica do lado alto; resumo U1 > T1 > inversores; recalcular so do Inversor 1; inversor apagado sai do resumo)" -ForegroundColor DarkGray
+    Write-Host "  (rota CC: aba liberada pelos automaticos; valas atualizada e solta; $($entradas.Count) mesas com entrada unica do lado alto; resumo U1 > T1 > inversores; recalcular so do Inversor 1 com a base reassentada; inversor apagado sai do resumo; sem cabos, o resumo ainda avisa)" -ForegroundColor DarkGray
     return $true
 }
 

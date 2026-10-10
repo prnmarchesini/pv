@@ -289,11 +289,14 @@ public static class RotaDeCabosCampo
             var texto = r.StringResult.Trim();
             var escolhidos = new HashSet<Guid>();
 
-            if (string.Equals(texto, "Todos", StringComparison.OrdinalIgnoreCase) || texto == "*")
+            // As palavras valem em português (a dos scripts e da janela) e no idioma da tela.
+            bool Eh(string palavra) => string.Equals(texto, palavra, StringComparison.OrdinalIgnoreCase) || string.Equals(texto, Tr.T(palavra), StringComparison.CurrentCultureIgnoreCase);
+
+            if (Eh("Todos") || texto == "*")
             {
                 escolhidos.UnionWith(setup.Inverters.Select(i => i.Id));
             }
-            else if (string.Equals(texto, "Selecionar", StringComparison.OrdinalIgnoreCase))
+            else if (Eh("Selecionar"))
             {
                 var filtro = new SelectionFilter([new TypedValue((int)DxfCode.Start, "INSERT")]);
                 var s = editor.GetSelection(new PromptSelectionOptions { MessageForAdding = Tr.T("\nInversores em campo a recalcular (Enter termina): ") }, filtro);
@@ -447,8 +450,10 @@ public static class RotaDeCabosCampo
                 .Concat(runs.Select(r => r.Run)).ToList();
             RotaDeCabosStore.GravarLancesGerados(db, gerados);
 
-            // No recalcular de alguns, a pintura dos outros fica (soma).
-            RotaDeCabosStore.Pintar(db, rota, leitura.ParaPintar(falhas), somar: soInversores is not null);
+            // No recalcular de alguns, a pintura dos outros fica (soma); a antiga dos
+            // escolhidos sai antes, para a falha que a conta nova não acha mais não ficar pintada.
+            RotaDeCabosStore.Pintar(db, rota, leitura.ParaPintar(falhas), somar: soInversores is not null,
+                refazer: soInversores is null ? null : leitura.PintaveisDosInversores(soInversores));
 
             if (soInversores is not null)
                 linhas.Insert(0, Tr.F("Recalculados {0} inversor(es): {1}. Os cabos dos outros não foram tocados.", soInversores.Count,
@@ -853,6 +858,38 @@ internal sealed class LeituraDaRota
             }
         }
 
+        return ids;
+    }
+
+    /// <summary>
+    /// O que a falha antiga dos inversores pode ter pintado e o recalcular
+    /// deles refaz: as strings deles, a caixa de cada um e as mesas onde só
+    /// há strings deles (a mesa que tem string de outro inversor fica: a
+    /// pintura dela pode ser do outro, que não foi recalculado).
+    /// </summary>
+    internal List<ObjectId> PintaveisDosInversores(IReadOnlySet<Guid> inversores)
+    {
+        var ids = new List<ObjectId>();
+        foreach (var i in inversores) ids.AddRange(Pintaveis(new CableEnd(CableEndKind.Inverter, i)));
+
+        var dosOutros = new HashSet<Guid>();
+        var dosEscolhidos = new HashSet<Guid>();
+        foreach (var (id, s, _, _) in _strings)
+        {
+            var mesas = s.Modules.Select(m => _mesaDoModulo.TryGetValue(m, out var mesa) ? mesa : Guid.Empty).Where(m => m != Guid.Empty);
+            if (inversores.Contains(s.Inverter))
+            {
+                ids.Add(id);
+                dosEscolhidos.UnionWith(mesas);
+            }
+            else
+            {
+                dosOutros.UnionWith(mesas);
+            }
+        }
+
+        foreach (var mesa in dosEscolhidos.Except(dosOutros))
+            if (_mesas.TryGetValue(mesa, out var m)) ids.Add(m.Contorno);
         return ids;
     }
 

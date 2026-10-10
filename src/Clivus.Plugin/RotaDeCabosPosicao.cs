@@ -30,6 +30,12 @@ internal static class PosicaoAutomatica
             return frases;
         }
 
+        // O automático em campo que o usuário moveu com o MOVE do AutoCAD fica com a cota
+        // do lugar velho: antes de rotear, a base volta ao terreno + 0,80 do lugar novo
+        // ("todo desenho respeita o TIN"). O Recolocar põe todos de novo, sem precisar disso.
+        if (!todos)
+            frases.AddRange(Reassentar(db, terreno, leitura, locais, soEstes));
+
         var automaticos = locais.Where(l => l.Mode == InverterPlacementMode.Automatic)
             .Select(l => leitura.Setup.FindInverter(l.Inverter))
             .OfType<Inverter>()
@@ -90,6 +96,31 @@ internal static class PosicaoAutomatica
                 frases.Add(Tr.F("ATENÇÃO: em volta desse ponto não há lado livre (mesa, equipamento ou outra vala): {0} ficou em cima de algo. Mova à mão e Gere de novo.", inversor.Name));
             if (melhor.Reached < strings.Count)
                 frases.Add(Tr.F("ATENÇÃO: {0} string(s) de {1} chegam a valas que não se ligam às das outras: elas ficam sem rota (avisadas abaixo).", strings.Count - melhor.Reached, inversor.Name));
+        }
+
+        return frases;
+    }
+
+    /// <summary>
+    /// Os automáticos em campo (só entre <paramref name="soEstes"/>, se houver)
+    /// cuja base não está no terreno + 0,80 do centro de agora: a base volta
+    /// para lá, no mesmo X e Y. As frases dos que mudaram.
+    /// </summary>
+    private static List<string> Reassentar(Database db, ProcessedTerrain terreno, LeituraDaRota leitura, IReadOnlyList<InverterPlacement> locais, IReadOnlySet<Guid>? soEstes)
+    {
+        var frases = new List<string>();
+        foreach (var local in locais.Where(l => l.Mode == InverterPlacementMode.Automatic && (soEstes is null || soEstes.Contains(l.Inverter))))
+        {
+            if (leitura.Ponto(EquipmentKind.Inverter, local.Inverter) is not { } p
+                || leitura.Setup.FindEquipment(EquipmentKind.Inverter, local.Inverter) is not { } equipamento
+                || !terreno.Mesh.TryGetZ(p.X, p.Y, out var chao))
+                continue;
+
+            var baseZ = EquipmentFootprint.BaseElevation(chao);
+            if (Math.Abs(p.Z - baseZ) <= 0.001) continue;
+
+            EquipamentoEmCampo.Posicionar(db, equipamento, new Autodesk.AutoCAD.Geometry.Point3d(p.X, p.Y, baseZ));
+            frases.Add(Tr.F("{0} foi movido à mão: a base voltou ao terreno + 0,80 m do lugar novo ({1:0.000} m).", equipamento.Tag, baseZ));
         }
 
         return frases;

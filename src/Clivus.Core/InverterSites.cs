@@ -90,7 +90,7 @@ public enum InverterFieldButton
     /// <summary>"Mover": já está no desenho.</summary>
     Move,
 
-    /// <summary>O texto "Alocação automática", sem clique: a rota CC põe o inversor.</summary>
+    /// <summary>O texto "Alocação automática", sem clique: a rota CC põe o inversor (o automático fora de campo).</summary>
     Automatic,
 }
 
@@ -100,14 +100,15 @@ public enum InverterFieldButton
 /// botão saem da mesma conta. Área só vale com o inversor em campo e a área
 /// no desenho (o registro de uma área que o inversor não ocupa mais, porque
 /// não coube, foi apagado ou a área sumiu, vale como à mão). Automático
-/// vale sempre: quem põe é a rota.
+/// vale sempre: fora de campo quem põe é a rota (só o texto); em campo, o
+/// usuário pode mover (item 19: "eu quero ter a liberdade de mover o inversor").
 /// </summary>
 public sealed record InverterSiteView(InverterPlacementMode? Mode, Guid Site, InverterFieldButton Button, bool CanSee)
 {
     public static InverterSiteView Of(InverterPlacement? local, bool emCampo, bool areaExiste)
     {
         if (local is { Mode: InverterPlacementMode.Automatic })
-            return new InverterSiteView(InverterPlacementMode.Automatic, Guid.Empty, InverterFieldButton.Automatic, emCampo);
+            return new InverterSiteView(InverterPlacementMode.Automatic, Guid.Empty, emCampo ? InverterFieldButton.Move : InverterFieldButton.Automatic, emCampo);
 
         if (local is { Mode: InverterPlacementMode.Area } && emCampo && areaExiste)
             return new InverterSiteView(InverterPlacementMode.Area, local.Site, InverterFieldButton.Move, true);

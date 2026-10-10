@@ -515,6 +515,47 @@ public static class CableReport
             : Tr.F("Fora de campo: {0}. Os cabos ligados a eles ficaram fora do resumo: gere a rota de novo ou apague esses cabos.", nomes);
     }
 
+    /// <summary>
+    /// O resto do item 18: o equipamento que devia ter cabo (no CC, o
+    /// inversor com strings) e não está em campo, mas cujos cabos também
+    /// foram apagados, não aparece em <see cref="InField{T}"/>; sem isto o
+    /// resumo saía vazio, sem aviso. Separa os que faltam (somados a
+    /// <paramref name="jaFaltam"/>, para o <see cref="MissingMessage"/>) dos
+    /// automáticos ainda não postos (quem os põe é o Gerar da rota CC: aviso
+    /// próprio, <see cref="NotYetPlacedMessage"/>). O automático com cabo
+    /// órfão já está em <paramref name="jaFaltam"/> e lá fica.
+    /// </summary>
+    public static (List<CableEnd> Missing, List<CableEnd> NotYetPlaced) Expected(
+        IReadOnlyCollection<CableEnd> jaFaltam, IEnumerable<CableEnd> esperadas, Func<CableEnd, bool> emCampo, IReadOnlySet<Guid> automaticos)
+    {
+        ArgumentNullException.ThrowIfNull(jaFaltam);
+        ArgumentNullException.ThrowIfNull(esperadas);
+        ArgumentNullException.ThrowIfNull(emCampo);
+        ArgumentNullException.ThrowIfNull(automaticos);
+
+        var faltam = jaFaltam.ToList();
+        var pendentes = new List<CableEnd>();
+        foreach (var ponta in esperadas.Distinct())
+        {
+            if (ponta.Id == Guid.Empty || emCampo(ponta) || faltam.Contains(ponta)) continue;
+            if (ponta.Kind == CableEndKind.Inverter && automaticos.Contains(ponta.Id)) pendentes.Add(ponta);
+            else faltam.Add(ponta);
+        }
+
+        return (faltam, pendentes);
+    }
+
+    /// <summary>O aviso dos inversores automáticos que a rota CC ainda não pôs em campo; null se não há.</summary>
+    public static string? NotYetPlacedMessage(IReadOnlyCollection<CableEnd> pendentes, Func<CableEnd, string> nome)
+    {
+        ArgumentNullException.ThrowIfNull(pendentes);
+        ArgumentNullException.ThrowIfNull(nome);
+        if (pendentes.Count == 0) return null;
+
+        var nomes = string.Join(", ", pendentes.Select(nome).Distinct().OrderBy(n => n, NaturalStringComparer.Instance));
+        return Tr.F("Ainda não postos em campo (alocação automática): {0}. Gere a rota CC para pô-los.", nomes);
+    }
+
     /// <summary>O nome do tipo de ponta, para o aviso.</summary>
     public static string KindName(CableEndKind k) => k switch
     {

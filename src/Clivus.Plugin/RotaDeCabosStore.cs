@@ -457,11 +457,15 @@ internal static class RotaDeCabosStore
     /// <summary>
     /// Pinta de aviso (regra 4): desfaz a pintura anterior desta rota e
     /// pinta estas, guardando a cor que cada uma tinha para voltar depois.
-    /// Com <paramref name="somar"/>, mantém a pintura que já havia e soma estas.
+    /// Com <paramref name="somar"/>, mantém a pintura que já havia e soma estas;
+    /// antes, as peças de <paramref name="refazer"/> (as dos inversores
+    /// recalculados) voltam à cor de antes, para a falha antiga delas não
+    /// ficar pintada se a conta nova não a achou mais.
     /// </summary>
-    internal static void Pintar(Database db, CableRoute rota, IReadOnlyCollection<ObjectId> ids, bool somar = false)
+    internal static void Pintar(Database db, CableRoute rota, IReadOnlyCollection<ObjectId> ids, bool somar = false, IReadOnlyCollection<ObjectId>? refazer = null)
     {
         var chave = ChavePintadas + "_" + CableLayers.Code(rota);
+        if (somar && refazer is { Count: > 0 }) Despintar(db, rota, refazer.ToHashSet());
         var pintadas = somar ? Pintadas(db, chave) : [];
         if (!somar) Despintar(db, rota);
         var ja = pintadas.Select(p => p.Id).ToHashSet();
@@ -503,17 +507,27 @@ internal static class RotaDeCabosStore
         return pecas;
     }
 
-    /// <summary>Volta as peças pintadas de aviso à cor de antes (só as que ainda estão com a cor do aviso).</summary>
-    internal static void Despintar(Database db, CableRoute rota)
+    /// <summary>
+    /// Volta as peças pintadas de aviso à cor de antes (só as que ainda estão
+    /// com a cor do aviso). Com <paramref name="so"/>, só essas: as outras
+    /// continuam pintadas e no registro.
+    /// </summary>
+    internal static void Despintar(Database db, CableRoute rota, IReadOnlySet<ObjectId>? so = null)
     {
         var chave = ChavePintadas + "_" + CableLayers.Code(rota);
-        var pecas = Pintadas(db, chave);
+        var todas = Pintadas(db, chave);
+        var pecas = so is null ? todas : todas.Where(p => so.Contains(p.Id)).ToList();
         if (pecas.Count == 0) return;
 
         // Peça que outra rota também pintou continua com o aviso dela.
         var dasOutras = CableRoutes.All.Where(r => r != rota)
             .SelectMany(r => Pintadas(db, ChavePintadas + "_" + CableLayers.Code(r))).Select(p => p.Id).ToHashSet();
         pecas.RemoveAll(p => dasOutras.Contains(p.Id));
+
+        // No parcial, o resto fica no registro (e a peça que outra rota também
+        // pintou, com a cor de antes guardada, para não virar "antes" o laranja).
+        var voltam = pecas.Select(p => p.Id).ToHashSet();
+        List<(ObjectId Id, Color Antes)> ficam = so is null ? [] : todas.Where(p => !voltam.Contains(p.Id)).ToList();
 
         using (var transacao = db.TransactionManager.StartTransaction())
         {
@@ -527,6 +541,8 @@ internal static class RotaDeCabosStore
             transacao.Commit();
         }
 
-        PluginDictionary.Save(db, chave, new ResultBuffer(new TypedValue((int)DxfCode.Text, "V1")));
+        var registro = new List<TypedValue> { new((int)DxfCode.Text, "V1") };
+        registro.AddRange(ficam.Select(a => new TypedValue((int)DxfCode.Text, a.Id.Handle + "=" + PecasPintadas.Texto(a.Antes))));
+        PluginDictionary.Save(db, chave, new ResultBuffer([.. registro]));
     }
 }

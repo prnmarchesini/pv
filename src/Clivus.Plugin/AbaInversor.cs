@@ -918,7 +918,7 @@ internal sealed class AbaInversor : AbaEletrica
 
         if (estado.Button == InverterFieldButton.Automatic)
         {
-            // Item 19: o inversor automático é posto pela rota CC; aqui só o aviso, sem clique.
+            // Item 19: o inversor automático fora de campo é posto pela rota CC; aqui só o aviso, sem clique.
             acoes.Children.Add(new TextBlock
             {
                 Text = Tr.T("Alocação automática"),
@@ -930,10 +930,14 @@ internal sealed class AbaInversor : AbaEletrica
         }
         else
         {
+            // O automático já posto pela rota também se move (item 19): pelo mesmo
+            // comando do Pôr em campo, que assenta a base no terreno + 0,80.
             botoes.Add(Botao(acoes, estado.Button == InverterFieldButton.Move ? Tr.T("Mover") : Tr.T("Pôr em campo"),
-                estado.Button == InverterFieldButton.Move
-                    ? Tr.T("O retângulo do inversor já está no desenho: a janela some e você clica o novo centro dele. O vínculo não muda.")
-                    : Tr.T("Põe o retângulo do inversor no desenho: a janela some e você clica o centro dele."),
+                estado.Mode == InverterPlacementMode.Automatic
+                    ? Tr.T("A rota CC pôs este inversor ao lado da vala: a janela some e você clica o novo centro dele. Depois, Recalcular rota (ou Gerar) refaz os cabos dele da posição nova.")
+                    : estado.Button == InverterFieldButton.Move
+                        ? Tr.T("O retângulo do inversor já está no desenho: a janela some e você clica o novo centro dele. O vínculo não muda.")
+                        : Tr.T("Põe o retângulo do inversor no desenho: a janela some e você clica o centro dele."),
                 () => AlocarEmCampo(id)));
         }
 
@@ -1533,6 +1537,9 @@ internal sealed class AbaInversor : AbaEletrica
         List<ElectricalString> disponiveis;
         Dictionary<Guid, ModuleSpot> lugares;
         var potencia = new Dictionary<Guid, double>();
+
+        // Com a potência trocada pela área (item 14), ela vale para todos os módulos, como no Resumo.
+        var simulada = FonteDoModulo.Simulada(database)?.Watts;
         using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
         {
             var todas = ElectricalStore.Strings(transacao, database).Select(x => x.String).ToList();
@@ -1545,7 +1552,7 @@ internal sealed class AbaInversor : AbaEletrica
             var daMesa = new Dictionary<Guid, double?>();
             foreach (var (mesa, pecas) in LayoutScan.Tables(transacao, database)) daMesa[mesa] = pecas.Identity?.ModulePowerWatts;
             foreach (var (modulo, lugar) in modulos)
-                if (daMesa.GetValueOrDefault(lugar.Mesa) is { } w && w > 0) potencia[modulo] = w;
+                if ((simulada ?? daMesa.GetValueOrDefault(lugar.Mesa)) is { } w && w > 0) potencia[modulo] = w;
         }
 
         var fila = StringAutoAllocation.Queue(disponiveis, lugares, varredura);

@@ -10,7 +10,9 @@
 ;  (19) o Inversor 1 movido a mao e o Recalcular rota so dele: os cabos do 2
 ;       ficam os mesmos (handles), os do 1 chegam na posicao nova;
 ;  (18) o Inversor 2 apagado: o resumo tira os cabos dele e avisa; os dois
-;       apagados: "Inversor nao esta em campo: nao e possivel mostrar o resumo".
+;       apagados: "Inversor nao esta em campo: nao e possivel mostrar o resumo";
+;       com os cabos apagados tambem, os automaticos "ainda nao postos" e o
+;       Inversor 2, posto a mao, "nao esta em campo".
 (setq clivus:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
 (command "_.NETLOAD" "{{DLL}}")
@@ -92,7 +94,10 @@
 (princ "\nCLIVUS_ROTACC RESUMO1")
 (command "CLIVUS_ROTA_RESUMO_AUTO")
 ; ---- (19) movido e recalculado so ele --------------------------------------
-(command "CLIVUS_ELETRICA_POSICIONAR" "Inversor 1" "{{M}}")
+; Posto em M0 pelo plugin e levado a M com o MOVE do AutoCAD: a base fica com a
+; cota de M0; o Recalcular reassenta no terreno + 0,80 de M antes de rotear.
+(command "CLIVUS_ELETRICA_POSICIONAR" "Inversor 1" "{{M0}}")
+(command "_.MOVE" (clivus:bloco "Inversor 1") "" "{{M0}}" "{{M}}")
 (princ "\nCLIVUS_ROTACC RECALCULAR")
 (command "CLIVUS_ROTA_RECALCULAR" "Inversor 1")
 (clivus:equip "recalculado")
@@ -104,6 +109,13 @@
 (command "CLIVUS_ROTA_RESUMO_AUTO")
 (command "_.ERASE" (clivus:bloco "Inversor 1") "")
 (princ "\nCLIVUS_ROTACC RESUMO3")
+(command "CLIVUS_ROTA_RESUMO_AUTO")
+; ---- (18) inversores e cabos apagados: o resumo avisa assim mesmo ----------
+(command "CLIVUS_ROTA_APAGAR" "CC" "Tudo")
+(princ "\nCLIVUS_ROTACC RESUMO4")
+(command "CLIVUS_ROTA_RESUMO_AUTO")
+(command "CLIVUS_ELETRICA_LOCAL" "Manual" "Inversor 2")
+(princ "\nCLIVUS_ROTACC RESUMO5")
 (command "CLIVUS_ROTA_RESUMO_AUTO")
 (setvar "OSMODE" clivus:osmode)
 (princ "\nCLIVUS_ROTACC_FIM")
