@@ -258,6 +258,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_ELECTRICA_ASIGNAR")]
     public static void CLIVUS_ELECTRICA_ASIGNAR() => AlocacaoDeStringsCommands.Alocar();
 
+    [CommandMethod("CLIVUS_ELECTRICAL_AREA_RENAME", CommandFlags.Modal | CommandFlags.UsePickSet)]
+    public static void CLIVUS_ELECTRICAL_AREA_RENAME() => LocalDosInversores.RenomearAreaPeloDesenho();
+
+    [CommandMethod("CLIVUS_ELECTRICA_AREA_RENOMBRAR", CommandFlags.Modal | CommandFlags.UsePickSet)]
+    public static void CLIVUS_ELECTRICA_AREA_RENOMBRAR() => LocalDosInversores.RenomearAreaPeloDesenho();
+
     [CommandMethod("CLIVUS_ELECTRICAL_COMBINER")]
     public static void CLIVUS_ELECTRICAL_COMBINER() => CombinerCommands.Strings();
 

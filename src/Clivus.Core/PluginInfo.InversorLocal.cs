@@ -6,6 +6,9 @@ public static partial class PluginInfo
     /// <summary>"Ver em campo" da linha do inversor (item 4): o GUID; o retângulo fica selecionado, com zoom nele, até o Esc, e a janela volta.</summary>
     public const string ComandoEletricaVer = "CLIVUS_ELETRICA_VER";
 
+    /// <summary>"Renomear área de inversores…" do botão direito na polilinha da área (item 3 da segunda rodada): a área (seleção ou clique) e o nome novo.</summary>
+    public const string ComandoEletricaAreaRenomear = "CLIVUS_ELETRICA_AREA_RENOMEAR";
+
     /// <summary>Só no build de teste: o local dos inversores pela aba (Automático, À mão, renomear a área, Repartir, a soma dos limites e o estado da linha).</summary>
     public const string ComandoEletricaJanelaLocalAutomatico = "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO";
 }

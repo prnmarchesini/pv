@@ -20,6 +20,7 @@ internal sealed class JanelaEletrica : Window
     private static readonly Dictionary<Document, JanelaEletrica> Abertas = [];
 
     private readonly List<AbaEletrica> _abas = [];
+    private readonly TabControl _abasDaJanela;
 
     private JanelaEletrica(Document documento)
     {
@@ -32,6 +33,7 @@ internal sealed class JanelaEletrica : Window
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         var abas = new TabControl { Margin = new Thickness(8) };
+        _abasDaJanela = abas;
 
         void Aba(string titulo, string dica, UIElement conteudo)
         {
@@ -113,15 +115,21 @@ internal sealed class JanelaEletrica : Window
     /// Depois de um comando de campo: a janela (se existe) volta e relê o
     /// desenho. Sem janela aberta (comando digitado), nada.
     /// </summary>
-    internal static void Voltar(Document documento)
+    internal static void Voltar(Document documento, string? recado = null, bool erro = false)
     {
         try
         {
-            if (Abertas.TryGetValue(documento, out var janela)) janela.Mostrar();
+            if (!Abertas.TryGetValue(documento, out var janela)) return;
+            janela.Mostrar();
+
+            // O resultado do comando no rodapé da aba de onde ele saiu (item 2 da
+            // segunda rodada de 10/10/2026: o "0 de 2" do Escolher área ficava só
+            // na linha de comando, atrás da janela que voltava, e nada parecia acontecer).
+            if (!string.IsNullOrWhiteSpace(recado) && janela._abasDaJanela.SelectedContent is AbaEletrica aba) aba.Recado(recado, erro);
         }
-        catch (Exception erro)
+        catch (Exception falha)
         {
-            RegistroDeDiagnostico.Registrar("Falha ao devolver a janela da configuração elétrica.", erro);
+            RegistroDeDiagnostico.Registrar("Falha ao devolver a janela da configuração elétrica.", falha);
         }
     }
 
@@ -245,6 +253,9 @@ internal abstract class AbaEletrica : DockPanel
     protected Action<string, bool>? EcoDoRecado { get; set; }
 
     protected void Limpar() => _recado.Text = string.Empty;
+
+    /// <summary>O recado de um comando de campo que voltou à janela (<see cref="JanelaEletrica.Voltar"/>).</summary>
+    internal void Recado(string texto, bool erro) => Avisar(texto, erro);
 
     /// <summary>
     /// Escreve no desenho fora de comando (trava e vigia calado), relê e mostra

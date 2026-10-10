@@ -54,6 +54,7 @@ public static class ConfiguracaoEletricaCommands
         if (documento is null) return;
 
         var editor = documento.Editor;
+        string? recado = null;
 
         try
         {
@@ -100,11 +101,24 @@ public static class ConfiguracaoEletricaCommands
             var mundo = ponto.Value.TransformBy(editor.CurrentUserCoordinateSystem);
             if (!NoTerreno(editor, documento.Database, terreno, equipamento, mundo.X, mundo.Y)) return;
 
-            // Inversor de área posto fora dela volta a ser à mão (a coluna Local não mente, item 4).
-            if (local is { Mode: InverterPlacementMode.Area } && LocalDosInversores.Areas(documento.Database).TryGetValue(local.Site, out var area)
-                && !Polygons.Contains(area.Contorno, mundo.X, mundo.Y)
-                && LocalDosInversores.Mudar(documento.Database, [equipamento.Id], null) is null)
-                editor.WriteMessage(Tr.F("  {0} saiu da {1}: agora é posto à mão.\n", equipamento.Tag, area.Marca.Name));
+            // O local segue a geometria (item 2 da segunda rodada de 10/10/2026): posto
+            // com o centro dentro de uma área, é dela; posto fora, deixa de ser.
+            if (equipamento.Kind == EquipmentKind.Inverter)
+            {
+                LocalDosInversores.Sincronizar(documento.Database, out _);
+                var agora = LocalDosInversores.Ler(documento.Database, out _).FirstOrDefault(l => l.Inverter == equipamento.Id);
+                var areas = LocalDosInversores.Areas(documento.Database);
+                if (agora is { Mode: InverterPlacementMode.Area } && areas.TryGetValue(agora.Site, out var dentro))
+                {
+                    recado = Tr.F("{0} posto na {1} (o centro dele está dentro dela).", equipamento.Tag, dentro.Marca.Name);
+                    editor.WriteMessage("  " + recado + "\n");
+                }
+                else if (local is { Mode: InverterPlacementMode.Area } && areas.TryGetValue(local.Site, out var antes))
+                {
+                    recado = Tr.F("{0} saiu da {1}: agora é posto à mão.", equipamento.Tag, antes.Marca.Name);
+                    editor.WriteMessage("  " + recado + "\n");
+                }
+            }
         }
         catch (System.Exception erro)
         {
@@ -113,7 +127,7 @@ public static class ConfiguracaoEletricaCommands
         }
         finally
         {
-            JanelaEletrica.Voltar(documento);
+            JanelaEletrica.Voltar(documento, recado);
         }
     }
 

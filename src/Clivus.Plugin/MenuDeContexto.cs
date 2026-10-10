@@ -32,6 +32,7 @@ internal static class MenuDeContexto
     private static MenuItem? _raiz;
     private static readonly List<MenuItem> ItensDaArea = [];
     private static readonly List<MenuItem> ItensDaMesa = [];
+    private static readonly List<MenuItem> ItensDaAreaDeInversores = [];
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static void Instalar()
@@ -59,7 +60,11 @@ internal static class MenuDeContexto
         ItensDaMesa.Add(Item(Tr.T("Trocar a estrutura…"), PluginInfo.ComandoTrocarMesa));
         ItensDaMesa.Add(Item(Tr.T("Refazer a fileira inteira"), PluginInfo.ComandoRegerarFileira));
 
-        foreach (var item in ItensDaArea.Concat(ItensDaMesa)) _raiz.MenuItems.Add(item);
+        // Item 3 da segunda rodada de 10/10/2026: renomear a área de inversores
+        // clicando nela ("o sistema deu o nome de área 1 mas não sei como mudar").
+        ItensDaAreaDeInversores.Add(Item(Tr.T("Renomear área de inversores…"), PluginInfo.ComandoEletricaAreaRenomear));
+
+        foreach (var item in ItensDaArea.Concat(ItensDaMesa).Concat(ItensDaAreaDeInversores)) _raiz.MenuItems.Add(item);
 
         menu.MenuItems.Add(_raiz);
         menu.Popup += AoAbrir;
@@ -88,6 +93,7 @@ internal static class MenuDeContexto
         Menus.Clear();
         ItensDaArea.Clear();
         ItensDaMesa.Clear();
+        ItensDaAreaDeInversores.Clear();
         _raiz = null;
     }
 
@@ -115,12 +121,13 @@ internal static class MenuDeContexto
     {
         try
         {
-            var (temArea, temMesa) = OQueHaNaSelecao();
+            var (temArea, temMesa, temAreaDeInversores) = OQueHaNaSelecao();
 
             foreach (var item in ItensDaArea) item.Visible = temArea;
             foreach (var item in ItensDaMesa) item.Visible = temMesa;
+            foreach (var item in ItensDaAreaDeInversores) item.Visible = temAreaDeInversores;
 
-            if (_raiz is not null) _raiz.Visible = temArea || temMesa;
+            if (_raiz is not null) _raiz.Visible = temArea || temMesa || temAreaDeInversores;
         }
         catch (System.Exception erro)
         {
@@ -128,22 +135,23 @@ internal static class MenuDeContexto
 
             // Sem saber o que há na seleção, mostra tudo: os comandos
             // conferem o que receberam.
-            foreach (var item in ItensDaArea.Concat(ItensDaMesa)) item.Visible = true;
+            foreach (var item in ItensDaArea.Concat(ItensDaMesa).Concat(ItensDaAreaDeInversores)) item.Visible = true;
             if (_raiz is not null) _raiz.Visible = true;
         }
     }
 
-    /// <summary>Se a seleção tem uma área nossa, e se tem alguma peça de mesa (contorno, pilar, módulo, face).</summary>
-    private static (bool Area, bool Mesa) OQueHaNaSelecao()
+    /// <summary>Se a seleção tem uma área nossa, se tem alguma peça de mesa (contorno, pilar, módulo, face) e se tem uma área de inversores.</summary>
+    private static (bool Area, bool Mesa, bool AreaDeInversores) OQueHaNaSelecao()
     {
         var documento = AcadApp.DocumentManager.MdiActiveDocument;
-        if (documento is null) return (false, false);
+        if (documento is null) return (false, false, false);
 
         var selecao = documento.Editor.SelectImplied();
-        if (selecao.Status != PromptStatus.OK || selecao.Value is null) return (false, false);
+        if (selecao.Status != PromptStatus.OK || selecao.Value is null) return (false, false, false);
 
         var area = false;
         var mesa = false;
+        var deInversores = false;
 
         using var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction();
 
@@ -152,11 +160,12 @@ internal static class MenuDeContexto
             if (transacao.GetObject(id, OpenMode.ForRead) is not Entity entidade) continue;
 
             if (!area && entidade is Polyline3d && AreaXData.Load(entidade) is not null) area = true;
+            else if (!deInversores && entidade is Curve && LocalDosInversores.Marca(entidade) is not null) deInversores = true;
             else if (!mesa && LayoutScan.TableOf(entidade) is not null) mesa = true;
 
-            if (area && mesa) break;
+            if (area && mesa && deInversores) break;
         }
 
-        return (area, mesa);
+        return (area, mesa, deInversores);
     }
 }

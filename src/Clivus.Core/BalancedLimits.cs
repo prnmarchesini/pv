@@ -78,6 +78,17 @@ public static class BalancedLimits
         return inverters.DistinctBy(i => i.Id).Sum(i => entradas.TryGetValue(i.Model, out var n) ? i.Limit(n) : 0);
     }
 
+    /// <summary>
+    /// A célula Limite da linha Total da tabela (item 1 da segunda rodada de
+    /// 10/10/2026: "ainda falta o total de strings limite"): "278" quando a
+    /// soma bate com as strings úteis; "278/480 úteis" quando não (a tela
+    /// pinta de vermelho). Se bate.
+    /// </summary>
+    public static (string Text, bool Matches) TotalCell(int limites, int uteis) =>
+        limites == uteis
+            ? (limites.ToString(System.Globalization.CultureInfo.CurrentCulture), true)
+            : (Tr.F("{0}/{1} úteis", limites, uteis), false);
+
     /// <summary>"Limites: 480 de 480 strings úteis", e o aviso quando não bate (faltam vagas ou sobram). Se bate.</summary>
     public static (string Text, bool Matches) Describe(int limites, int uteis)
     {

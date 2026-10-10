@@ -264,11 +264,14 @@ internal static class NumeracaoDesenho
     /// desliga conforme a composição. Nenhuma entidade a mais: apagar o texto
     /// leva os dois.
     /// </summary>
-    internal static void Emoldurar(MText texto, TagScheme esquema)
+    internal static void Emoldurar(MText texto, TagScheme esquema) => Emoldurar(texto, esquema.Background, esquema.Border);
+
+    /// <summary>O mesmo, com o fundo e a moldura escolhidos à parte (a pré-tag, item 5 da segunda rodada de 10/10/2026).</summary>
+    internal static void Emoldurar(MText texto, bool fundo, bool moldura)
     {
         // A folga liga o fundo no AutoCAD: só com fundo. Para desligar, a cor
         // da tela sai antes (senão o fundo volta) — conferido no nível 2.
-        if (esquema.Background)
+        if (fundo)
         {
             texto.BackgroundFill = true;
             texto.UseBackgroundColor = true;
@@ -280,7 +283,7 @@ internal static class NumeracaoDesenho
             texto.BackgroundFill = false;
         }
 
-        texto.ShowBorders = esquema.Border;
+        texto.ShowBorders = moldura;
     }
 
     /// <summary>

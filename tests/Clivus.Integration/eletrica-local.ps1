@@ -32,6 +32,9 @@ function Testar-EletricaLocal {
         '{{M}}' = (P 40 5)
         '{{T1}}' = (P 42 2); '{{T2}}' = (P 46.2 2); '{{T3}}' = (P 46.2 8); '{{T4}}' = (P 42 8)
         '{{P1}}' = (P 48 -3); '{{P2}}' = (P 50 -3); '{{P3}}' = (P 50 -2); '{{P4}}' = (P 48 -2)
+        # Segunda rodada: a Area 1 do Itatiba do Renan (3,7717 x 5,1538 m), o Por em campo e o MOVE.
+        '{{I1}}' = (P 42 12); '{{I2}}' = (P 45.7717 12); '{{I3}}' = (P 45.7717 17.1538); '{{I4}}' = (P 42 17.1538)
+        '{{J1}}' = (P 50 -8); '{{J2}}' = (P 40 20); '{{DJ}}' = '8,-28'
     }
 
     $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo $rotulo -Script (Join-Path $PSScriptRoot 'clivus-eletrica-local.scr') -Substituicoes $sub
@@ -239,12 +242,77 @@ function Testar-EletricaLocal {
     if ($apagadas.Count -ne $solto.Count -or @($apagadas | Where-Object { $_.Texto -eq 'I1' }).Count -ne 0) { $erros += "apagadas as tags, esperava $($solto.Count) pre-tags (as strings que continuam nos inversores), achei $($apagadas.Count)" }
     if (([regex]::Matches($t, 'CLIVUS_TAGREAL etapa=tagsapagadas fim')).Count -ne 0) { $erros += 'o Apagar tags deixou tag de verdade' }
 
+    # ---- (12) segunda rodada de 10/10/2026, item 2 (reincidencia) --------------
+    # (a) a Area 1 do Itatiba: 8 pelo Escolher area, depois o 9 e o 10 pelo Escolher area na mesma area.
+    if ((Trecho 'CLIVUS_LOCAL G_OITO' 'CLIVUS_LOCAL G_NOVE_DEZ') -notmatch 'LOCAL 8 de 8 inversor\(es\) postos na Area Itatiba') { $erros += '(a) os 8 nao entraram na area do Itatiba' }
+    if ((Trecho 'CLIVUS_LOCAL G_NOVE_DEZ' 'CLIVUS_LOCAL G_CONFERIR') -notmatch 'LOCAL 2 de 2 inversor\(es\) postos na Area Itatiba') { $erros += '(a) o 9 e o 10 nao entraram na mesma area pelo Escolher area (a reincidencia do item 2)' }
+    $confG = Trecho 'CLIVUS_LOCAL G_CONFERIR' 'ROTA_CONFERIR_FIM'
+    $itat = @([regex]::Matches($confG, 'ROTA_EQUIP tag=Inversor_(\d+) desvio=([\d.]+) minx=(-?[\d.]+) miny=(-?[\d.]+) maxx=(-?[\d.]+) maxy=(-?[\d.]+) fim') | Where-Object { [int]$_.Groups[1].Value -ge 15 -and [int]$_.Groups[1].Value -le 24 } | ForEach-Object {
+        [pscustomobject]@{ Tag = "Inversor_$($_.Groups[1].Value)"; Desvio = [double]::Parse($_.Groups[2].Value, $inv)
+            MinX = [double]::Parse($_.Groups[3].Value, $inv); MinY = [double]::Parse($_.Groups[4].Value, $inv)
+            MaxX = [double]::Parse($_.Groups[5].Value, $inv); MaxY = [double]::Parse($_.Groups[6].Value, $inv) }
+    })
+    if ($itat.Count -ne 10) { $erros += "(a) esperava as 10 caixas na area do Itatiba, achei $($itat.Count)" }
+    foreach ($c in $itat) {
+        if ($c.MinX -lt $cx + 42 - 0.001 -or $c.MaxX -gt $cx + 45.7717 + 0.001 -or $c.MinY -lt $cy + 12 - 0.001 -or $c.MaxY -gt $cy + 17.1538 + 0.001) { $erros += "(a) $($c.Tag): a caixa sai da area do Itatiba" }
+        if ($c.Desvio -gt 0.001) { $erros += "(a) $($c.Tag): a base nao esta no TIN + 0,80 (desvio $($c.Desvio) m)" }
+    }
+    for ($i = 0; $i -lt $itat.Count; $i++) {
+        for ($j = $i + 1; $j -lt $itat.Count; $j++) {
+            $a = $itat[$i]; $b = $itat[$j]
+            if ($a.MinX -lt $b.MaxX + 0.05 -and $b.MinX -lt $a.MaxX + 0.05 -and $a.MinY -lt $b.MaxY + 0.05 -and $b.MinY -lt $a.MaxY + 0.05) { $erros += "(a) $($a.Tag) e $($b.Tag) se sobrepoem (ou ficam a menos de 5 cm)" }
+        }
+    }
+    $lG = Linhas (Trecho 'CLIVUS_LOCAL G_CONFERIR' 'CLIVUS_LOCAL G_MAO')
+    foreach ($k in 15..24) { if (-not $lG["Inversor_$k"] -or $lG["Inversor_$k"].Local -ne 'Area_Itatiba') { $erros += "(a) Inversor ${k}: a coluna Local nao mostra a area do Itatiba" } }
+
+    # (b) Por em campo a mao dentro da Skid norte: a coluna Local mostra a area; fora de area, "A mao" (item 4).
+    $mao = Trecho 'CLIVUS_LOCAL G_MAO' 'CLIVUS_LOCAL G_MOVE_DENTRO'
+    $lM = Linhas $mao
+    if (-not $lM['Inversor_25'] -or $lM['Inversor_25'].Local -ne 'Skid_norte') { $erros += '(b) o Inversor 25, posto a mao dentro da Skid norte, nao mostra a area na coluna Local' }
+    if ($mao -notmatch 'Inversor 25 posto na Skid norte') { $erros += '(b) o Por em campo nao disse que o Inversor 25 ficou na Skid norte' }
+    if (-not $lM['Inversor_26'] -or $lM['Inversor_26'].Local -notmatch '^.{1,2}_m.o$') { $erros += "(b) o Inversor 26, a mao fora de area, nao mostra 'A mao' (mostra $($lM['Inversor_26'].Local))" }
+
+    # (c) o MOVE do AutoCAD para dentro da area e depois para fora: a area aparece e some.
+    $lD = Linhas (Trecho 'CLIVUS_LOCAL G_MOVE_DENTRO' 'CLIVUS_LOCAL G_MOVE_FORA')
+    if (-not $lD['Inversor_26'] -or $lD['Inversor_26'].Local -ne 'Skid_norte') { $erros += '(c) movido com o MOVE para dentro da Skid norte, o Inversor 26 nao mostra a area' }
+    $lF = Linhas (Trecho 'CLIVUS_LOCAL G_MOVE_FORA' 'CLIVUS_LOCAL G_AREAS')
+    if (-not $lF['Inversor_26'] -or $lF['Inversor_26'].Local -notmatch '^.{1,2}_m.o$') { $erros += '(c) movido com o MOVE para fora, o Inversor 26 nao voltou a A mao' }
+
+    # (d) renomear pela lista do botao Areas...: a lista diz quantos; a coluna mostra o nome novo.
+    $ar = Trecho 'CLIVUS_LOCAL G_AREAS' 'CLIVUS_LOCAL G_FIM'
+    if ($ar -notmatch 'LOCAL_AREA nome=Area_Itatiba inversores=10 fim') { $erros += '(d) a lista de areas nao mostra a area do Itatiba com 10 inversores' }
+    if ($ar -notmatch 'LOCAL_AREA nome=Skid_norte inversores=2 fim') { $erros += '(d) a lista de areas nao mostra a Skid norte com 2 (o 3 e o 25)' }
+    if ($ar -notmatch 'janela local renomear: Area Itatiba agora se chama Sala Itatiba') { $erros += '(d) o Renomear da lista nao renomeou' }
+    if ($ar -notmatch 'LOCAL_AREA nome=Sala_Itatiba inversores=10 fim') { $erros += '(d) a lista nao mostra o nome novo' }
+    if ($ar -notmatch 'AREA Sala Itatiba agora se chama Sala Itatiba B' -or $ar -notmatch 'LOCAL_AREA nome=Sala_Itatiba_B inversores=10 fim') { $erros += '(d) o Renomear do botao direito (CLIVUS_ELETRICA_AREA_RENOMEAR) nao renomeou' }
+    $lA = Linhas $ar
+    foreach ($k in 15..24) { if (-not $lA["Inversor_$k"] -or $lA["Inversor_$k"].Local -ne 'Sala_Itatiba') { $erros += "(d) Inversor ${k}: a coluna Local nao mostra o nome novo" } }
+
+    # (f) item 1: o total da coluna Limite (depois do Repartir bate; com 12 inversores novos sem limite, nao bate e fica vermelho).
+    $totRep = @([regex]::Matches($rep, 'LOCAL_TOTAL_LIMITE texto=(\S+) vermelho=(\S+) fim'))
+    if ($totRep.Count -ne 2 -or $somas.Count -ne 2 -or $totRep[1].Groups[2].Value -ne 'False' -or $totRep[1].Groups[1].Value -ne "$($somas[1].Soma)") { $erros += '(f) depois do Repartir, o total do Limite nao mostra a soma (sem vermelho)' }
+    $totG = [regex]::Match($ar, 'LOCAL_TOTAL_LIMITE texto=(\d+)/(\d+)_\S+ vermelho=True fim')
+    $somaG = [regex]::Match($ar, 'LOCAL_SOMA bate=False \[Limites: (\d+) de (\d+) strings')
+    if (-not $totG.Success -or -not $somaG.Success -or $totG.Groups[1].Value -ne $somaG.Groups[1].Value -or $totG.Groups[2].Value -ne $somaG.Groups[2].Value) { $erros += '(f) com os inversores novos, o total do Limite nao mostra soma/uteis em vermelho' }
+
+    # ---- (13) item 5: a pre-tag com fundo e moldura, sem eles, e nenhuma sem "Inserir nome" ----
+    function PretagF([string] $etapa) {
+        $m = [regex]::Match($t, "CLIVUS_PRETAGF etapa=$etapa n=(\d+) fundo=(\d+) moldura=(\d+) fim")
+        if (-not $m.Success) { return $null }
+        [pscustomobject]@{ N = [int]$m.Groups[1].Value; Fundo = [int]$m.Groups[2].Value; Moldura = [int]$m.Groups[3].Value }
+    }
+    $pt = PretagF 'tudo'; $pn = PretagF 'nua'; $ps = PretagF 'sem'
+    if (-not $pt -or $pt.N -eq 0 -or $pt.Fundo -ne $pt.N -or $pt.Moldura -ne $pt.N) { $erros += '(e) com fundo e moldura marcados, a pre-tag nao saiu com os dois' }
+    if (-not $pn -or $pn.N -eq 0 -or $pn.Fundo -ne 0 -or $pn.Moldura -ne 0) { $erros += '(e) com fundo e moldura desmarcados, a pre-tag saiu com eles (ou nao saiu)' }
+    if (-not $ps -or $ps.N -ne 0) { $erros += '(e) com Inserir nome desmarcado, o Distribuir desenhou pre-tag' }
+
     if ($erros.Count -gt 0) {
         $problemas.Add("${rotulo}: $($erros -join '; '). Veja $($r.Saida)")
         return $false
     }
 
-    Write-Host '  (local: 3 inversores na area, no TIN + 0,80; automatico ao lado da vala com 12 lances no TIN; movido fica; recolocar volta; 9 + 1 em grade na area em pe; area pequena avisada; automatico apaga e trava; Ver em campo; Repartir bate a soma; pre-tag)' -ForegroundColor DarkGray
+    Write-Host '  (local: 3 inversores na area, no TIN + 0,80; automatico ao lado da vala com 12 lances no TIN; movido fica; recolocar volta; 9 + 1 em grade na area em pe; area pequena avisada; automatico apaga e trava; Ver em campo; Repartir bate a soma; pre-tag; Itatiba 8 + 9 e 10 na mesma area; local pela geometria (Por em campo e MOVE); A mao; Areas... e botao direito; total do Limite; pre-tag com fundo e moldura)' -ForegroundColor DarkGray
     return $true
 }
 

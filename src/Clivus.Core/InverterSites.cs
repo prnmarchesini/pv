@@ -115,6 +115,34 @@ public sealed record InverterSiteView(InverterPlacementMode? Mode, Guid Site, In
 
         return new InverterSiteView(null, Guid.Empty, emCampo ? InverterFieldButton.Move : InverterFieldButton.Place, emCampo);
     }
+
+    /// <summary>
+    /// O texto da coluna Local (item 4 da segunda rodada de 10/10/2026): o
+    /// nome da área; "Auto" para o automático; "À mão" para o que está em
+    /// campo fora de qualquer área e sem automático; vazio fora de campo.
+    /// </summary>
+    public string LocalText(string? nomeDaArea) => Mode switch
+    {
+        InverterPlacementMode.Area => nomeDaArea ?? string.Empty,
+        InverterPlacementMode.Automatic => Tr.T("Auto"),
+        _ => CanSee ? Tr.T("À mão") : string.Empty,
+    };
+}
+
+/// <summary>O resultado de encher uma área: o centro de cada um (null: não coube) e a folga com que entrou.</summary>
+public sealed record AreaFill(IReadOnlyList<Point3?> Centers, IReadOnlyList<double?> Gaps)
+{
+    public int Placed => Centers.Count(c => c is not null);
+
+    /// <summary>A menor folga usada (null se nenhum entrou).</summary>
+    public double? SmallestGap
+    {
+        get
+        {
+            var usadas = Gaps.OfType<double>().ToList();
+            return usadas.Count > 0 ? usadas.Min() : null;
+        }
+    }
 }
 
 /// <summary>
@@ -196,6 +224,255 @@ public static class InverterSites
 
         return saida;
     }
+
+    /// <summary>
+    /// As folgas que o Encher tenta, da desejada (<see cref="Gap"/>) à mínima
+    /// (<see cref="MinGap"/>): quem não cabe com 0,50 m entra com a maior
+    /// que couber.
+    /// </summary>
+    public static readonly IReadOnlyList<double> Gaps = [0.5, 0.4, 0.3, 0.2, 0.1];
+
+    /// <summary>A menor folga entre inversores (e entre o inversor e o que já está na área), em metro.</summary>
+    public const double MinGap = 0.1;
+
+    /// <summary>
+    /// Enche a área com os inversores (item 2 da segunda rodada de
+    /// 10/10/2026, reincidência: "escolhi o 9 e o 10, cliquei em escolher
+    /// área na mesma área, e o sistema NÃO coloca"). Primeiro a grade de
+    /// sempre (<see cref="InArea"/>, folga de 0,50 m), fora dos
+    /// <paramref name="obstaculos"/> (os inversores que já estão na área, as
+    /// mesas, os outros equipamentos). Quem não coube na grade procura vaga
+    /// livre fora dela: encostada (com a folga) nas caixas que já estão lá e
+    /// nas bordas, de cima para baixo e da esquerda para a direita, com a
+    /// folga de 0,50 m e, se não houver, com 0,40, 0,30, 0,20 e 0,10 m. A
+    /// caixa fica inteira dentro do contorno e a pelo menos a folga de
+    /// qualquer obstáculo e dos postos agora.
+    /// </summary>
+    /// <remarks>
+    /// A causa do erro no Itatiba: a Área 1 tinha 3,77 × 5,15 m e o inversor
+    /// 1,10 × 0,70 m. A grade com 0,50 m entre caixas põe 2 × 4 = 8; a faixa
+    /// livre em cima (0,84 m) e a do lado (1,06 m) não cabiam outra caixa com
+    /// 0,50 m de folga. Os 9 e 10 voltavam "0 de 2", e o aviso só ia para a
+    /// linha de comando, atrás da janela que voltava.
+    /// </remarks>
+    public static AreaFill Fill(IReadOnlyList<Point3> poligono, IReadOnlyList<(double Width, double Length)> tamanhos, IReadOnlyList<IReadOnlyList<Point3>> obstaculos)
+    {
+        ArgumentNullException.ThrowIfNull(poligono);
+        ArgumentNullException.ThrowIfNull(tamanhos);
+        ArgumentNullException.ThrowIfNull(obstaculos);
+        var centros = new Point3?[tamanhos.Count];
+        var folgas = new double?[tamanhos.Count];
+        if (poligono.Count < 3 || tamanhos.Count == 0) return new AreaFill(centros, folgas);
+
+        // Só os obstáculos perto da área contam (o desenho tem milhares de mesas).
+        var (minX, minY, maxX, maxY) = Caixa(poligono);
+        var margem = Gaps.Max();
+        var perto = obstaculos.Where(o => o.Count >= 3)
+            .Where(o => { var (a, b, c, d) = Caixa(o); return a <= maxX + margem && c >= minX - margem && b <= maxY + margem && d >= minY - margem; })
+            .ToList();
+
+        // 1) A grade de sempre, com a folga cheia.
+        // A grade também guarda a folga cheia até o que já está lá (outro modelo, mesa encostada na área).
+        var grade = InArea(poligono, tamanhos, Gap, cantos => !perto.Any(o => Overlaps(Crescer(cantos, Gap - 1e-6), o)));
+        var postos = new List<IReadOnlyList<Point3>>();
+        for (var i = 0; i < tamanhos.Count; i++)
+        {
+            if (grade[i] is not { } p) continue;
+            centros[i] = p;
+            folgas[i] = Gap;
+            postos.Add(Retangulo(p.X, p.Y, tamanhos[i].Width, tamanhos[i].Length, 0));
+        }
+
+        // 2) Quem não coube: a vaga livre fora da grade, com a maior folga que couber.
+        // A caixa que não achou vaga nem com a folga mínima não acha depois (os
+        // obstáculos só crescem): as do mesmo tamanho nem procuram de novo.
+        var semVaga = new HashSet<(double, double)>();
+        for (var i = 0; i < tamanhos.Count; i++)
+        {
+            if (centros[i] is not null) continue;
+            var (w, l) = tamanhos[i];
+            if (semVaga.Contains((w, l))) continue;
+            semVaga.Add((w, l));
+            foreach (var folga in Gaps)
+            {
+                if (Vaga(poligono, w, l, folga, [.. perto, .. postos]) is not { } p) continue;
+                centros[i] = p;
+                folgas[i] = folga;
+                postos.Add(Retangulo(p.X, p.Y, w, l, 0));
+                semVaga.Remove((w, l));
+                break;
+            }
+        }
+
+        return new AreaFill(centros, folgas);
+    }
+
+    /// <summary>
+    /// A primeira vaga (de cima para baixo, da esquerda para a direita) para
+    /// a caixa w × l inteira dentro do polígono e a pelo menos
+    /// <paramref name="folga"/> de cada obstáculo. Os candidatos: encostada
+    /// nas bordas (1 cm) e nos obstáculos (com a folga), e uma varredura
+    /// regular entre eles (área girada ou côncava). Null se não há.
+    /// </summary>
+    private static Point3? Vaga(IReadOnlyList<Point3> poligono, double w, double l, double folga, IReadOnlyList<IReadOnlyList<Point3>> obstaculos)
+    {
+        const double borda = 0.01;
+        var (minX, minY, maxX, maxY) = Caixa(poligono);
+        if (maxX - minX < w || maxY - minY < l) return null;
+
+        var xs = new List<double> { minX + borda + w / 2, maxX - borda - w / 2 };
+        var ys = new List<double> { maxY - borda - l / 2, minY + borda + l / 2 };
+        foreach (var v in poligono)
+        {
+            xs.Add(v.X + borda + w / 2);
+            xs.Add(v.X - borda - w / 2);
+            ys.Add(v.Y - borda - l / 2);
+            ys.Add(v.Y + borda + l / 2);
+        }
+
+        foreach (var o in obstaculos)
+        {
+            var (a, b, c, d) = Caixa(o);
+            xs.Add(c + folga + w / 2);
+            xs.Add(a - folga - w / 2);
+            ys.Add(b - folga - l / 2);
+            ys.Add(d + folga + l / 2);
+        }
+
+        // A varredura regular: no máximo uns 200 passos no lado comprido.
+        var passo = Math.Max(Math.Min(w, l) / 4, Math.Max(maxX - minX, maxY - minY) / 200);
+        for (var x = minX + borda + w / 2; x <= maxX - borda - w / 2 + 1e-9; x += passo) xs.Add(x);
+        for (var y = maxY - borda - l / 2; y >= minY + borda + l / 2 - 1e-9; y -= passo) ys.Add(y);
+
+        var colunas = xs.Where(x => x - w / 2 >= minX - 1e-9 && x + w / 2 <= maxX + 1e-9).Select(x => Math.Round(x, 6)).Distinct().Order().ToList();
+        var linhas = ys.Where(y => y - l / 2 >= minY - 1e-9 && y + l / 2 <= maxY + 1e-9).Select(y => Math.Round(y, 6)).Distinct().OrderDescending().ToList();
+
+        // A folga vale entre caixas: a caixa crescida da folga (menos um fio, encostar na folga vale) não toca nenhum obstáculo.
+        var crescer = Math.Max(0, folga - 1e-6);
+
+        // A caixa envolvente de cada obstáculo: o candidato longe dela nem chega ao Overlaps (área grande com muitas mesas).
+        var caixas = obstaculos.Select(o => (Obstaculo: o, Caixa: Caixa(o))).ToList();
+        foreach (var y in linhas)
+            foreach (var x in colunas)
+            {
+                var (ax, ay, bx, by) = (x - w / 2 - crescer, y - l / 2 - crescer, x + w / 2 + crescer, y + l / 2 + crescer);
+                var crescida = EquipmentFootprint.Corners(x, y, w + 2 * crescer, l + 2 * crescer);
+                if (caixas.Any(c => c.Caixa.MinX <= bx && c.Caixa.MaxX >= ax && c.Caixa.MinY <= by && c.Caixa.MaxY >= ay && Overlaps(crescida, c.Obstaculo))) continue;
+                if (!Dentro(poligono, EquipmentFootprint.Corners(x, y, w, l))) continue;
+                return new Point3(x, y, 0);
+            }
+
+        return null;
+    }
+
+    private static (double MinX, double MinY, double MaxX, double MaxY) Caixa(IReadOnlyList<Point3> pontos) =>
+        (pontos.Min(p => p.X), pontos.Min(p => p.Y), pontos.Max(p => p.X), pontos.Max(p => p.Y));
+
+    /// <summary>O retângulo (alinhado a X e Y) crescido de <paramref name="d"/> para cada lado.</summary>
+    private static IReadOnlyList<(double X, double Y)> Crescer(IReadOnlyList<(double X, double Y)> cantos, double d)
+    {
+        var (minX, maxX, minY, maxY) = (cantos.Min(c => c.X), cantos.Max(c => c.X), cantos.Min(c => c.Y), cantos.Max(c => c.Y));
+        return [(minX - d, minY - d), (maxX + d, minY - d), (maxX + d, maxY + d), (minX - d, maxY + d)];
+    }
+
+    private static IReadOnlyList<Point3> Retangulo(double x, double y, double w, double l, double z) =>
+        EquipmentFootprint.Corners(x, y, w, l).Select(c => new Point3(c.X, c.Y, z)).ToList();
+
+    /// <summary>As medidas da área (o lado comprido e o curto do menor retângulo que a contém), para o aviso.</summary>
+    public static (double Long, double Short) Measures(IReadOnlyList<Point3> poligono)
+    {
+        ArgumentNullException.ThrowIfNull(poligono);
+        if (poligono.Count < 3) return (0, 0);
+        var (_, _, _, mu, mv) = MenorRetangulo(poligono);
+        return (2 * mu, 2 * mv);
+    }
+
+    /// <summary>
+    /// A área de inversores onde está o ponto (o centro do bloco do inversor):
+    /// a regra única de "o inversor é desta área" (item 2 da segunda rodada
+    /// de 10/10/2026: "a área 1 é um objeto que recebe coisas dentro dela").
+    /// Vale o CENTRO, não a pegada inteira: o Renan pôs o 9 e o 10 à mão
+    /// dentro da Área 1 com 6,5 cm da caixa passando da borda, e eles são da
+    /// área. Num ponto dentro de duas (uma dentro da outra), a menor. Null se
+    /// em nenhuma.
+    /// </summary>
+    public static Guid? AreaOf(double x, double y, IEnumerable<(Guid Id, IReadOnlyList<Point3> Contour)> areas)
+    {
+        ArgumentNullException.ThrowIfNull(areas);
+        Guid? melhor = null;
+        var menor = double.PositiveInfinity;
+        foreach (var (id, contorno) in areas)
+        {
+            if (contorno.Count < 3 || !Polygons.Contains(contorno, x, y)) continue;
+            var area = Math.Abs(AreaDe(contorno));
+            if (area < menor || (area == menor && melhor is { } m && id.CompareTo(m) < 0))
+            {
+                menor = area;
+                melhor = id;
+            }
+        }
+
+        return melhor;
+    }
+
+    private static double AreaDe(IReadOnlyList<Point3> p)
+    {
+        var s = 0.0;
+        for (var i = 0; i < p.Count; i++)
+        {
+            var a = p[i];
+            var b = p[(i + 1) % p.Count];
+            s += a.X * b.Y - b.X * a.Y;
+        }
+
+        return s / 2;
+    }
+
+    /// <summary>
+    /// O local de cada inversor pela GEOMETRIA, não pelo caminho (item 2 da
+    /// segunda rodada): em campo com o centro numa área, é dessa área (posto
+    /// pelo Escolher área, pelo Pôr em campo, pelo Mover ou pelo MOVE/COPY do
+    /// AutoCAD); em campo fora de qualquer área, a área que o registro dizia
+    /// cai (à mão) e o automático fica automático; fora de campo, o registro
+    /// de área cai (não há caixa para estar dentro) e o automático fica. O
+    /// registro de inversor que não está em <paramref name="inversores"/>
+    /// (outro cadastro) fica como está. A lista nova (os de fora do cadastro
+    /// primeiro, depois na ordem do cadastro).
+    /// </summary>
+    public static List<InverterPlacement> Reconcile(IReadOnlyList<InverterPlacement> registro, IEnumerable<Guid> inversores,
+        IReadOnlyDictionary<Guid, (double X, double Y)> emCampo, IReadOnlyList<(Guid Id, IReadOnlyList<Point3> Contour)> areas)
+    {
+        ArgumentNullException.ThrowIfNull(registro);
+        ArgumentNullException.ThrowIfNull(inversores);
+        ArgumentNullException.ThrowIfNull(emCampo);
+        ArgumentNullException.ThrowIfNull(areas);
+
+        var doCadastro = inversores.Distinct().ToList();
+        var noCadastro = doCadastro.ToHashSet();
+        var porInversor = registro.GroupBy(r => r.Inverter).ToDictionary(g => g.Key, g => g.First());
+        var saida = registro.Where(r => !noCadastro.Contains(r.Inverter)).ToList();
+
+        foreach (var id in doCadastro)
+        {
+            var atual = porInversor.GetValueOrDefault(id);
+            InverterPlacement? novo;
+            if (emCampo.TryGetValue(id, out var c))
+            {
+                novo = AreaOf(c.X, c.Y, areas) is { } area
+                    ? new InverterPlacement(id, InverterPlacementMode.Area, area)
+                    : atual is { Mode: InverterPlacementMode.Automatic } ? atual : null;
+            }
+            else novo = atual is { Mode: InverterPlacementMode.Automatic } ? atual : null;
+
+            if (novo is not null) saida.Add(novo);
+        }
+
+        return saida;
+    }
+
+    /// <summary>Se as duas listas de local dizem o mesmo (a ordem não importa).</summary>
+    public static bool SamePlacements(IReadOnlyList<InverterPlacement> a, IReadOnlyList<InverterPlacement> b) =>
+        a.Count == b.Count && a.ToHashSet().SetEquals(b);
 
     /// <summary>Se o retângulo está inteiro dentro do polígono: os cantos dentro e nenhum lado do polígono cortando os dele.</summary>
     public static bool Dentro(IReadOnlyList<Point3> poligono, IReadOnlyList<(double X, double Y)> cantos)

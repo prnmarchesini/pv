@@ -53,3 +53,27 @@ public sealed record StringPreTag(Guid String, string Text)
         return saida;
     }
 }
+
+/// <summary>
+/// As opções da pré-tag no Distribuir (item 5 da segunda rodada de
+/// 10/10/2026: "Inserir nome do inversor? Sim / Não. Moldura () Fundo ().
+/// Como padrão coloque tudo sim"). Sem <see cref="Insert"/>, o Distribuir não
+/// desenha pré-tag (e apaga as que havia). Moldura e fundo como os das tags
+/// da Numeração.
+/// </summary>
+public sealed record PreTagOptions(bool Insert, bool Border, bool Background)
+{
+    public const int FieldCount = 3;
+
+    /// <summary>O padrão: tudo sim.</summary>
+    public static PreTagOptions Default { get; } = new(true, true, true);
+
+    public IReadOnlyList<string> ToFields() => [Insert ? "1" : "0", Border ? "1" : "0", Background ? "1" : "0"];
+
+    public static PreTagOptions? Parse(IReadOnlyList<string> c)
+    {
+        ArgumentNullException.ThrowIfNull(c);
+        if (c.Count < FieldCount || c.Take(FieldCount).Any(x => x is not ("0" or "1"))) return null;
+        return new PreTagOptions(c[0] == "1", c[1] == "1", c[2] == "1");
+    }
+}

@@ -90,6 +90,12 @@ internal sealed class AbaInversor : AbaEletrica
     // A atribuição automática: o sentido que avança e o sentido na faixa (a varredura própria dela).
     private readonly ComboBox _sentidoDaAtribuicao = new() { Height = 26, MinWidth = 150, Margin = new Thickness(0, 0, 6, 6) };
     private readonly ComboBox _faixaDaAtribuicao = new() { Height = 26, MinWidth = 150, Margin = new Thickness(0, 0, 6, 6) };
+
+    // As opções da pré-tag no Distribuir (item 5 da segunda rodada de 10/10/2026), tudo marcado por padrão.
+    private readonly CheckBox _preTagNome = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 6) };
+    private readonly CheckBox _preTagMoldura = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 6) };
+    private readonly CheckBox _preTagFundo = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 6) };
+    private bool _mostrandoAPreTag;
     private bool _mostrandoVarredura;
 
     private ElectricalSetup _setup = new();
@@ -210,6 +216,21 @@ internal sealed class AbaInversor : AbaEletrica
         atribuir.Children.Add(_faixaDaAtribuicao);
         Botao(atribuir, Tr.T("Distribuir"), Tr.T("As strings livres, na ordem desta varredura, enchem os inversores na ordem da tabela, cada um até o limite dele (coluna Limite; vazia: o total de entradas). As já alocadas não mudam (e contam); inversor cheio é pulado; as que sobrarem são avisadas. Para redistribuir do zero, use antes Soltar todas da usina."), AtribuirStrings);
         Botao(atribuir, Tr.T("Soltar todas da usina"), Tr.T("Solta as strings de todos os inversores: ficam livres e continuam no desenho; as tags de numeração delas são apagadas. Depois, Distribuir redistribui do zero."), SoltarTodasDaUsina);
+        // Item 5 da segunda rodada: "Inserir nome do inversor? Sim / Não. Moldura () Fundo ()".
+        atribuir.Children.Add(Rotulo(Tr.T("Pré-tag:"), 4));
+        _preTagNome.Content = Tr.T("Inserir nome do inversor");
+        _preTagNome.ToolTip = Tr.T("No Distribuir, cada string ganha por cima o nome curto do inversor (I1, I2...) até a Numeração pôr a tag de verdade. Desmarcado, não desenha pré-tag (e apaga as que havia no próximo Distribuir).");
+        _preTagMoldura.Content = Tr.T("Moldura");
+        _preTagMoldura.ToolTip = Tr.T("O quadro em volta da pré-tag, como o das tags da Numeração.");
+        _preTagFundo.Content = Tr.T("Fundo");
+        _preTagFundo.ToolTip = Tr.T("O fundo na cor da tela atrás da pré-tag (esconde o módulo atrás do texto), como o das tags da Numeração.");
+        foreach (var caixa in new[] { _preTagNome, _preTagMoldura, _preTagFundo })
+        {
+            atribuir.Children.Add(caixa);
+            caixa.Checked += (_, _) => MudouAPreTag();
+            caixa.Unchecked += (_, _) => MudouAPreTag();
+        }
+
         _sentidoDaAtribuicao.ToolTip = Tr.T("O sentido em que a distribuição percorre a usina (é só da distribuição; a numeração tem o seu).");
         _faixaDaAtribuicao.ToolTip = Tr.T("Dentro da mesma faixa (linha ou coluna), em que sentido as strings são tomadas.");
         foreach (var sentido in Enum.GetValues<ScanDirection>()) _sentidoDaAtribuicao.Items.Add(new ComboBoxItem { Content = ScanOrder.Describe(sentido), Tag = sentido });
@@ -231,6 +252,8 @@ internal sealed class AbaInversor : AbaEletrica
         Botao(local, Tr.T("Automático pelas strings"), Tr.T("O Gerar da rota CC põe cada um ao lado da vala, no ponto de menor cabo CC das strings dele. Depois você pode mover à mão e Gerar de novo: a rota sai da posição nova."),
             () => MudarOLocal(InverterPlacementMode.Automatic));
         Botao(local, Tr.T("À mão"), Tr.T("Volta ao Pôr em campo de sempre (a posição de agora fica)."), () => MudarOLocal(null));
+        var botaoAreas = Botao(local, Tr.T("Áreas…"), Tr.T("A lista das áreas de inversores do desenho: o nome de cada uma (para renomear), quantos inversores estão nela e Renomear. Um inversor é da área quando o centro dele está dentro do retângulo, não importa como foi posto."), AbrirAreas);
+        botaoAreas.Margin = new Thickness(18, 0, 6, 4);
 
         // A soma dos limites contra as strings úteis (item 5): "Limites: 480 de 480 strings úteis".
         _somaDosLimites.ToolTip = Tr.T("A soma dos limites de todos os inversores (sem limite: todas as entradas do modelo) contra as strings da usina. Se não bate, sobra string sem inversor ou sobra vaga.");
@@ -364,6 +387,7 @@ internal sealed class AbaInversor : AbaEletrica
         MontarInversores();
         MostrarSomaDosLimites();
         MostrarVarredura(AtribuicaoAutomatica.Varredura(Documento.Database).Varredura);
+        MostrarAPreTag(PreTagDasStrings.Opcoes(Documento.Database, out _));
 
         MontarTrafos(_trafoDasEscolhidas, setup, comSemTrafo: true);
 
@@ -383,6 +407,55 @@ internal sealed class AbaInversor : AbaEletrica
         using var transacao = database.TransactionManager.StartOpenCloseTransaction();
         var strings = ElectricalStore.Strings(transacao, database).Select(x => x.String).ToList();
         return (StringAllocation.CountByInverter(strings), strings.Select(s => s.Id).Distinct().Count());
+    }
+
+    /// <summary>As caixas da pré-tag como estão gravadas (sem gravar de volta).</summary>
+    private void MostrarAPreTag(PreTagOptions opcoes)
+    {
+        _mostrandoAPreTag = true;
+        try
+        {
+            _preTagNome.IsChecked = opcoes.Insert;
+            _preTagMoldura.IsChecked = opcoes.Border;
+            _preTagFundo.IsChecked = opcoes.Background;
+            _preTagMoldura.IsEnabled = _preTagFundo.IsEnabled = opcoes.Insert;
+        }
+        finally
+        {
+            _mostrandoAPreTag = false;
+        }
+    }
+
+    /// <summary>Marcou ou desmarcou uma caixa da pré-tag: grava na hora (vale no próximo Distribuir).</summary>
+    private void MudouAPreTag()
+    {
+        if (_mostrandoAPreTag || !DesenhoAberto()) return;
+        try
+        {
+            var opcoes = new PreTagOptions(_preTagNome.IsChecked == true, _preTagMoldura.IsChecked == true, _preTagFundo.IsChecked == true);
+            _preTagMoldura.IsEnabled = _preTagFundo.IsEnabled = opcoes.Insert;
+            var frase = EscritaForaDeComando.Fazer(Documento, () => GravarAPreTag(Documento.Database, opcoes));
+            Avisar(frase);
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao gravar as opções da pré-tag.", erro);
+            Avisar(Tr.F("Não consegui: {0}", erro.Message), erro: true);
+        }
+    }
+
+    /// <summary>Grava as opções da pré-tag (o caminho da tela, também do nível 2) e diz o que vale. Quem chama trava o documento.</summary>
+    internal static string GravarAPreTag(Database database, PreTagOptions opcoes)
+    {
+        PreTagDasStrings.GravarOpcoes(database, opcoes);
+        if (!opcoes.Insert) return Tr.T("Pré-tag desligada: o próximo Distribuir não escreve o nome do inversor nas strings.");
+        return (opcoes.Border, opcoes.Background) switch
+        {
+            (true, true) => Tr.T("Pré-tag com o nome do inversor, moldura e fundo, no próximo Distribuir."),
+            (true, false) => Tr.T("Pré-tag com o nome do inversor e moldura, sem fundo, no próximo Distribuir."),
+            (false, true) => Tr.T("Pré-tag com o nome do inversor e fundo, sem moldura, no próximo Distribuir."),
+            _ => Tr.T("Pré-tag com o nome do inversor, sem moldura nem fundo, no próximo Distribuir."),
+        };
     }
 
     /// <summary>A soma dos limites contra as strings úteis, em vermelho se não bate (item 5).</summary>
@@ -441,6 +514,131 @@ internal sealed class AbaInversor : AbaEletrica
             EcoDoRecado = null;
             rolagem.Content = null;   // o painel fica livre para a próxima vez
         }
+    }
+
+    /// <summary>
+    /// As áreas de inversores do desenho para a lista do "Áreas…": o nome e
+    /// quantos inversores estão nela (pela geometria), em ordem de nome.
+    /// </summary>
+    internal static List<(Guid Id, string Name, int Inverters)> ListaDeAreas(Database database)
+    {
+        var porArea = LocalDosInversores.Ler(database, out _).Where(l => l.Mode == InverterPlacementMode.Area).GroupBy(l => l.Site).ToDictionary(g => g.Key, g => g.Count());
+        return LocalDosInversores.Areas(database).Values
+            .Select(a => (a.Marca.Id, a.Marca.Name, porArea.GetValueOrDefault(a.Marca.Id)))
+            .OrderBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>O Renomear da lista de áreas e da coluna Local (o caminho da tela, também do nível 2). Quem chama trava o documento.</summary>
+    internal static (string? Frase, string? Problema) RenomearArea(Database database, Guid area, string? nome) =>
+        LocalDosInversores.RenomearArea(database, area, nome);
+
+    /// <summary>
+    /// "Áreas…" (item 3 da segunda rodada de 10/10/2026: "o sistema deu o nome
+    /// de área 1 mas não sei como mudar"): a lista das áreas de inversores,
+    /// cada uma com o nome editável, quantos inversores tem e Renomear. Enter
+    /// no nome também renomeia.
+    /// </summary>
+    private void AbrirAreas()
+    {
+        var lista = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+        lista.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 160 });
+        lista.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        lista.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var recado = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+
+        void Recado(string texto, bool erro)
+        {
+            recado.Text = texto;
+            recado.Foreground = erro ? System.Windows.Media.Brushes.Firebrick : System.Windows.Media.Brushes.ForestGreen;
+        }
+
+        void Montar()
+        {
+            lista.Children.Clear();
+            lista.RowDefinitions.Clear();
+            var areas = ListaDeAreas(Documento.Database);
+            if (areas.Count == 0)
+            {
+                lista.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                lista.Children.Add(new TextBlock { Text = Tr.T("Nenhuma área de inversores no desenho: escolha os inversores na tabela e use Escolher área…"), TextWrapping = TextWrapping.Wrap });
+                return;
+            }
+
+            foreach (var (id, nomeAtual, quantos) in areas)
+            {
+                var linha = lista.RowDefinitions.Count;
+                lista.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                var nome = new TextBox { Text = nomeAtual, MaxLength = SiteMark.MaxNameLength, Height = 22, VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 2, 8, 2), ToolTip = Tr.T("O nome da área: digite o novo e clique em Renomear (ou Enter).") };
+                var conta = new TextBlock { Text = Tr.F("{0} inversor(es)", quantos), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+                var renomear = new Button { Content = Tr.T("Renomear"), Height = 22, Padding = new Thickness(8, 0, 8, 0), Margin = new Thickness(0, 2, 0, 2), ToolTip = Tr.T("Grava o nome novo na área (vale para todos os inversores dela).") };
+
+                void Renomear()
+                {
+                    try
+                    {
+                        if (!DesenhoAberto()) return;
+                        var (frase, problema) = EscritaForaDeComando.Fazer(Documento, () => RenomearArea(Documento.Database, id, nome.Text));
+                        if (problema is not null)
+                        {
+                            Recado(Tr.F("Não renomeei a área: {0}.", problema), true);
+                            return;
+                        }
+
+                        (AoMudar ?? Atualizar)();
+                        Montar();
+                        if (frase is not null) Recado(frase, false);
+                    }
+                    catch (Exception erro)
+                    {
+                        RegistroDeDiagnostico.Registrar("Falha ao renomear a área pela lista de áreas.", erro);
+                        Recado(Tr.F("Não consegui: {0}", erro.Message), true);
+                    }
+                }
+
+                renomear.Click += (_, _) => Renomear();
+                nome.KeyDown += (_, e) =>
+                {
+                    if (e.Key != System.Windows.Input.Key.Enter) return;
+                    e.Handled = true;
+                    Renomear();
+                };
+
+                Grid.SetRow(nome, linha);
+                Grid.SetRow(conta, linha);
+                Grid.SetColumn(conta, 1);
+                Grid.SetRow(renomear, linha);
+                Grid.SetColumn(renomear, 2);
+                lista.Children.Add(nome);
+                lista.Children.Add(conta);
+                lista.Children.Add(renomear);
+            }
+        }
+
+        var fechar = new Button { Content = Tr.T("Fechar"), Height = 24, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Right, IsCancel = true };
+        var corpo = new DockPanel { Margin = new Thickness(10), LastChildFill = true };
+        DockPanel.SetDock(fechar, Dock.Bottom);
+        DockPanel.SetDock(recado, Dock.Bottom);
+        corpo.Children.Add(fechar);
+        corpo.Children.Add(recado);
+        corpo.Children.Add(new ScrollViewer { Content = lista, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+
+        var janela = new Window
+        {
+            Title = Tr.T("Áreas de inversores"),
+            Content = corpo,
+            Width = 420,
+            SizeToContent = SizeToContent.Height,
+            MaxHeight = 520,
+            ShowInTaskbar = false,
+            ResizeMode = ResizeMode.CanResizeWithGrip,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = Window.GetWindow(this),
+        };
+        fechar.Click += (_, _) => janela.Close();
+
+        Montar();
+        janela.ShowDialog();
     }
 
     /// <summary>Os trafos do cadastro na caixa (com "sem trafo" na frente, se pedido), mantendo a escolha.</summary>
@@ -681,15 +879,52 @@ internal sealed class AbaInversor : AbaEletrica
         return InverterTable.Rows(setup.Inverters, setup.Models, contagem, resumo);
     }
 
+    /// <summary>
+    /// O local de cada inversor como a coluna Local mostra (o caminho da tela,
+    /// também do nível 2): primeiro o registro acompanha a geometria (item 2
+    /// da segunda rodada de 10/10/2026: o inversor com o centro dentro de uma
+    /// área é dela, não importa como chegou lá; fora, deixa de ser), gravado
+    /// só se mudou; depois a leitura. A área de cada um, as áreas e quem está em campo.
+    /// </summary>
+    internal static (Dictionary<Guid, InverterPlacement> Locais, Dictionary<Guid, SiteMark> Areas, HashSet<(EquipmentKind Kind, Guid Id)> EmCampo, string? Problema) LerOsLocais(Document documento)
+    {
+        var db = documento.Database;
+        var c = LocalDosInversores.Conferir(db);
+        if (c.Problema is null && !InverterSites.SamePlacements(c.Gravado, c.Certo))
+        {
+            try
+            {
+                EscritaForaDeComando.Fazer(documento, () => LocalDosInversores.Gravar(db, c.Certo));
+            }
+            catch (Exception erro)
+            {
+                // Não gravar não muda o que a tabela mostra: a leitura já segue a geometria.
+                RegistroDeDiagnostico.Registrar("Não consegui gravar o local dos inversores pela geometria.", erro);
+            }
+        }
+
+        var locais = c.Certo.GroupBy(l => l.Inverter).ToDictionary(g => g.Key, g => g.First());
+        var areas = c.Areas.ToDictionary(a => a.Key, a => a.Value.Marca);
+        return (locais, areas, EquipamentoEmCampo.EmCampo(db), c.Problema);
+    }
+
+    /// <summary>A linha de um inversor: o estado (botão, Ver em campo) e o texto da coluna Local.</summary>
+    internal static (InverterSiteView Estado, string Local) EstadoDoLocal(Guid inversor, IReadOnlyDictionary<Guid, InverterPlacement> locais, IReadOnlyDictionary<Guid, SiteMark> areas, bool emCampo)
+    {
+        var local = locais.GetValueOrDefault(inversor);
+        var estado = InverterSiteView.Of(local, emCampo, local is not null && areas.ContainsKey(local.Site));
+        return (estado, estado.LocalText(areas.GetValueOrDefault(estado.Site)?.Name));
+    }
+
     /// <summary>A tabela dos inversores: uma linha por inversor e o total.</summary>
     private void MontarInversores()
     {
         var escolhidos = Escolhidos().Select(i => i.Id).ToHashSet();
         var foco = OndeEstaOFoco();
-        var emCampo = EquipamentoEmCampo.EmCampo(Documento.Database);
-        _locais = LocalDosInversores.Ler(Documento.Database, out var problemaDoLocal).GroupBy(l => l.Inverter).ToDictionary(g => g.Key, g => g.First());
-        _areas = LocalDosInversores.Areas(Documento.Database).ToDictionary(a => a.Key, a => a.Value.Marca);
-        if (problemaDoLocal is not null) Avisar(Tr.F("ATENÇÃO: o local dos inversores não se lê ({0}); a coluna Local fica vazia.", problemaDoLocal), erro: true);
+        var (locais, areas, emCampo, problemaDoLocal) = LerOsLocais(Documento);
+        _locais = locais;
+        _areas = areas;
+        if (problemaDoLocal is not null) Avisar(Tr.F("ATENÇÃO: o local dos inversores não se lê ({0}); a coluna Local mostra só as áreas pela geometria (os automáticos não aparecem) e nada é gravado.", problemaDoLocal), erro: true);
         var linhas = LinhasDaTabela(Documento, _setup, _contagem);
         _inversores.Items.Clear();
         _marcas.Clear();
@@ -710,8 +945,16 @@ internal sealed class AbaInversor : AbaEletrica
         var total = InverterTable.Total(linhas);
         var rodape = LinhaDaTabela();
         rodape.Margin = new Thickness(4, 3, 2, 0);
+
+        // Item 1 da segunda rodada: a soma dos limites na coluna Limite, em vermelho se não bate com as strings úteis.
+        var (somaDosLimites, bate) = BalancedLimits.TotalCell(BalancedLimits.Sum(_setup.Inverters, _setup.Models), _stringsUteis);
+        var limiteTotal = Celula(somaDosLimites, numero: true);
+        limiteTotal.ToolTip = BalancedLimits.Describe(BalancedLimits.Sum(_setup.Inverters, _setup.Models), _stringsUteis).Text;
+        if (!bate) limiteTotal.Foreground = System.Windows.Media.Brushes.Firebrick;
+
         foreach (var t in new[]
         {
+            Por(rodape, limiteTotal, ColunaMeta),
             Por(rodape, Celula(Tr.F("Total ({0})", total.Inverters)), ColunaNome),
             Por(rodape, Celula(Strings(total.Strings, total.Capacity, comModelo: true), numero: true), ColunaStrings),
             Por(rodape, Celula(Kwp(total.PowerKwp), numero: true), ColunaKwp),
@@ -893,13 +1136,9 @@ internal sealed class AbaInversor : AbaEletrica
         Por(g, Celula(linha.PowerKw > 0 ? Kw(linha.PowerKw) : "—", numero: true), ColunaKw);
         Por(g, Celula(Razao(linha.DcAcRatio), numero: true), ColunaRazao);
         // A coluna Local e o botão de campo saem da mesma conta (item 4 de 10/10/2026).
-        var estado = InverterSiteView.Of(_locais.GetValueOrDefault(inversor.Id), emCampo, _locais.GetValueOrDefault(inversor.Id) is { } l && _areas.ContainsKey(l.Site));
-        Por<UIElement>(g, estado.Mode switch
-        {
-            InverterPlacementMode.Area when _areas.TryGetValue(estado.Site, out var area) => CaixaDaArea(area),
-            InverterPlacementMode.Automatic => Celula(Tr.T("Auto")),
-            _ => Celula(string.Empty),
-        }, ColunaLocal);
+        // Item 4 da segunda rodada: posto à mão em campo, fora de qualquer área, diz "À mão".
+        var (estado, textoDoLocal) = EstadoDoLocal(inversor.Id, _locais, _areas, emCampo);
+        Por<UIElement>(g, estado.Mode == InverterPlacementMode.Area && _areas.TryGetValue(estado.Site, out var area) ? CaixaDaArea(area) : Celula(textoDoLocal), ColunaLocal);
 
         var acoes = Por(g, new StackPanel { Orientation = Orientation.Horizontal }, ColunaAcoes);
         var id = inversor.Id;
@@ -1273,7 +1512,11 @@ internal sealed class AbaInversor : AbaEletrica
             Padding = new Thickness(0),
             VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 10, 0),
-            ToolTip = Tr.T("A área (o retângulo) onde o inversor está. Clique para renomear a área: Enter (ou sair da caixa) grava, Esc desfaz."),
+            ToolTip = Tr.T("A área (o retângulo) onde o inversor está. Clique para renomear a área: Enter (ou sair da caixa) grava, Esc desfaz. Também pelo botão Áreas… do quadro Local dos inversores."),
+
+            // Item 3 da segunda rodada: o Renan não achou como renomear. Cara de link: cor e mãozinha.
+            Cursor = System.Windows.Input.Cursors.Hand,
+            Foreground = System.Windows.SystemColors.HotTrackBrush,
         };
 
         var enviado = false;
@@ -1284,7 +1527,7 @@ internal sealed class AbaInversor : AbaEletrica
             var texto = caixa.Text;
             Dispatcher.BeginInvoke(() =>
             {
-                try { if (DesenhoAberto()) GravarNaLinha(() => LocalDosInversores.RenomearArea(Documento.Database, area.Id, texto), p => Tr.F("Não renomeei a área: {0}.", p)); }
+                try { if (DesenhoAberto()) GravarNaLinha(() => RenomearArea(Documento.Database, area.Id, texto), p => Tr.F("Não renomeei a área: {0}.", p)); }
                 catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao renomear a área dos inversores.", erro); }
             });
         }

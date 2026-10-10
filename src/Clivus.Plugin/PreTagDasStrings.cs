@@ -23,6 +23,23 @@ internal static class PreTagDasStrings
     /// <summary>Quanto o texto fica acima do módulo mais alto da string, em metro.</summary>
     private const double AcimaDosModulos = 0.15;
 
+    // As opções do Distribuir (item 5 da segunda rodada de 10/10/2026): registro
+    // próprio, versão 1. Sem registro (desenho de antes), o padrão: tudo sim.
+    private const string ChaveDasOpcoes = "PRETAG_OPCOES";
+    private const int VersaoDasOpcoes = 1;
+    private static readonly string OQueOpcoes = Tr.N("das opções da pré-tag");
+
+    /// <summary>As opções gravadas, ou o padrão (tudo sim); o problema do registro, se havia.</summary>
+    internal static PreTagOptions Opcoes(Database database, out string? problema)
+    {
+        var lido = PluginRecords.Load<PreTagOptions>(database, ChaveDasOpcoes, VersaoDasOpcoes, PreTagOptions.FieldCount, PreTagOptions.Parse, OQueOpcoes);
+        problema = lido.Problem;
+        return lido.Items.Count > 0 ? lido.Items[0] : PreTagOptions.Default;
+    }
+
+    internal static void GravarOpcoes(Database database, PreTagOptions opcoes) =>
+        PluginRecords.Save(database, ChaveDasOpcoes, VersaoDasOpcoes, PreTagOptions.FieldCount, [opcoes], o => o.ToFields());
+
     /// <summary>Os textos de pré-tag do desenho, pela string de cada um.</summary>
     internal static ILookup<Guid, ObjectId> Textos(Transaction transacao, Database database)
     {
@@ -75,6 +92,10 @@ internal static class PreTagDasStrings
 
         var strings = ElectricalStore.Strings(transacao, database).GroupBy(x => x.String.Id).Where(g => g.Count() == 1).Select(g => g.First()).ToList();
         var esperadas = StringPreTag.Expected(setup.Inverters, strings.Select(x => x.String));
+
+        // "Inserir nome do inversor" desmarcado: nenhuma string deve ter pré-tag (as que havia saem).
+        var opcoes = Opcoes(database, out _);
+        if (!opcoes.Insert) esperadas = new Dictionary<Guid, string>();
         var textos = Textos(transacao, database);
         var alvo = soEstas?.ToHashSet();
         if (alvo is not null)
@@ -110,6 +131,7 @@ internal static class PreTagDasStrings
             {
                 atual.UpgradeOpen();
                 atual.Color = CorDasStrings.Cor(cor);
+                NumeracaoDesenho.Emoldurar(atual, opcoes.Background, opcoes.Border);
                 total++;
                 continue;
             }
@@ -144,7 +166,10 @@ internal static class PreTagDasStrings
             transacao.AddNewlyCreatedDBObject(mtexto, true);
             estilo(mtexto);
 
-            var altura = StringTagLayout.FitHeight(Altura, mtexto.ActualWidth, comprimento);
+            // Moldura e fundo como os das tags da Numeração (item 5 da segunda rodada); com eles, o texto ocupa um pouco mais.
+            NumeracaoDesenho.Emoldurar(mtexto, opcoes.Background, opcoes.Border);
+            var largura = mtexto.ActualWidth * (opcoes.Background || opcoes.Border ? 1.15 : 1);
+            var altura = StringTagLayout.FitHeight(Altura, largura, comprimento);
             if (altura < Altura) mtexto.TextHeight = altura;
             PluginXData.Save(transacao, mtexto, StringPreTag.Tipo, Versao, [.. new StringPreTag(s.Id, texto).ToFields()]);
             novos.Add(mtexto.ObjectId);

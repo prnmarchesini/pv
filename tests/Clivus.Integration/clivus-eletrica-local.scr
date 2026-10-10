@@ -11,6 +11,10 @@
 ; livre; (7) area pequena; (8) automatico apaga o retangulo e trava o Por em
 ; campo; (9) Ver em campo; (10) Repartir pela fila e a soma dos limites; (11)
 ; pre-tag no Distribuir, apagada no Soltar e na Numeracao; de volta ao apagar as tags.
+; Segunda rodada de 10/10/2026: (12) a area do Itatiba com 8 e depois o 9 e o
+; 10 pelo Escolher area; Por em campo e MOVE dentro e fora da area (o local pela
+; geometria, "A mao" fora); renomear pela lista Areas...; o total do Limite;
+; (13) a pre-tag com fundo e moldura, sem eles e nenhuma com Inserir nome desmarcado.
 (setq clivus:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
 (command "_.NETLOAD" "{{DLL}}")
@@ -147,6 +151,66 @@
 ; Apagar as tags pela aba Numeracao (o botao): a string que continua num inversor volta a ter a pre-tag.
 (command "CLIVUS_NUMERACAO_TELA_AUTO" "Apagar" "Usina")
 (clivus:pretags "tagsapagadas")
+; ---- (12) segunda rodada de 10/10/2026, item 2 (reincidencia) --------------
+; (a) a Area 1 do Itatiba do Renan (3,7717 x 5,1538 m): 8 pelo Escolher area,
+; depois o 9 e o 10 pelo Escolher area na MESMA area (antes: "0 de 2", calado).
+(defun clivus:inv (tag / ss i e achado)
+  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_EQUIPAMENTO_*"))) i 0)
+  (while (and ss (< i (sslength ss)) (not achado))
+    (setq e (ssname ss i) i (1+ i))
+    (if (= (clivus:etiqueta (cdr (assoc 2 (entget e)))) tag) (setq achado e)))
+  achado)
+(command "CLIVUS_ELETRICA_AUTO" "Inversores" "Huawei 250" "12")
+(command "_.PLINE" "{{I1}}" "{{I2}}" "{{I3}}" "{{I4}}" "_C")
+(princ "\nCLIVUS_LOCAL G_OITO")
+(command "CLIVUS_ELETRICA_LOCAL" "Area" "Inversor 15;Inversor 16;Inversor 17;Inversor 18;Inversor 19;Inversor 20;Inversor 21;Inversor 22" (entlast) "Area Itatiba")
+(princ "\nCLIVUS_LOCAL G_NOVE_DEZ")
+(command "CLIVUS_ELETRICA_LOCAL" "Area" "Inversor 23;Inversor 24" (clivus:areapor "Area Itatiba"))
+(princ "\nCLIVUS_LOCAL G_CONFERIR")
+(command "CLIVUS_ROTA_CONFERIR_AUTO")
+(command "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO" "Linhas" "*" ".")
+; (b) Por em campo a mao, num ponto dentro da Skid norte: a coluna Local mostra a area.
+(princ "\nCLIVUS_LOCAL G_MAO")
+(command "CLIVUS_ELETRICA_POSICIONAR" "Inversor 25" "{{J1}}")
+(command "CLIVUS_ELETRICA_POSICIONAR" "Inversor 26" "{{J2}}")
+(command "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO" "Linhas" "*" ".")
+; (c) o MOVE do AutoCAD leva o Inversor 26 para dentro da Skid norte e depois para fora.
+(princ "\nCLIVUS_LOCAL G_MOVE_DENTRO")
+(command "_.MOVE" (clivus:inv "Inversor 26") "" "0,0" "{{DJ}}")
+(command "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO" "Linhas" "*" ".")
+(princ "\nCLIVUS_LOCAL G_MOVE_FORA")
+(command "_.MOVE" (clivus:inv "Inversor 26") "" "{{DJ}}" "0,0")
+(command "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO" "Linhas" "*" ".")
+; (d) renomear pela lista do botao Areas...
+(princ "\nCLIVUS_LOCAL G_AREAS")
+(command "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO" "Areas" "*" ".")
+(command "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO" "Renomear" "Area Itatiba" "Sala Itatiba")
+(command "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO" "Areas" "*" ".")
+(command "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO" "Linhas" "*" ".")
+; e pelo botao direito na polilinha da area (o comando do menu).
+(command "CLIVUS_ELETRICA_AREA_RENOMEAR" (clivus:areapor "Sala Itatiba") "Sala Itatiba B")
+(command "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO" "Areas" "*" ".")
+(princ "\nCLIVUS_LOCAL G_FIM")
+; ---- (13) item 5: pre-tag com fundo e moldura; sem nada com Inserir nome desmarcado
+(defun clivus:pretagf (etapa / ss i d f n fundo moldura)
+  (setq ss (ssget "_X" (list (cons 0 "MTEXT") (cons 8 "CLIVUS_STRING_PRETAG"))) i 0 n 0 fundo 0 moldura 0)
+  (while (and ss (< i (sslength ss)))
+    (setq d (entget (ssname ss i)) i (1+ i) n (1+ n) f (if (assoc 90 d) (cdr (assoc 90 d)) 0))
+    (if (= 1 (logand f 1)) (setq fundo (1+ fundo)))
+    (if (= 16 (logand f 16)) (setq moldura (1+ moldura))))
+  (princ (strcat "\nCLIVUS_PRETAGF etapa=" etapa " n=" (itoa n) " fundo=" (itoa fundo) " moldura=" (itoa moldura) " fim")))
+(command "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO" "PreTag" "*" "1;1;1")
+(command "CLIVUS_ELETRICA_JANELA_LINHA_AUTO" "*" "SoltarUsina" ".")
+(command "CLIVUS_ELETRICA_AUTO" "Atribuir")
+(clivus:pretagf "tudo")
+(command "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO" "PreTag" "*" "1;0;0")
+(command "CLIVUS_ELETRICA_JANELA_LINHA_AUTO" "*" "SoltarUsina" ".")
+(command "CLIVUS_ELETRICA_AUTO" "Atribuir")
+(clivus:pretagf "nua")
+(command "CLIVUS_ELETRICA_JANELA_LOCAL_AUTO" "PreTag" "*" "0;1;1")
+(command "CLIVUS_ELETRICA_JANELA_LINHA_AUTO" "*" "SoltarUsina" ".")
+(command "CLIVUS_ELETRICA_AUTO" "Atribuir")
+(clivus:pretagf "sem")
 (setvar "OSMODE" clivus:osmode)
 (princ "\nCLIVUS_LOCAL_FIM")
 (setvar "SECURELOAD" clivus:secureload)

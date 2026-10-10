@@ -287,32 +287,48 @@ public static class AbaInversorAutoCommands
                 var area = LocalDosInversores.Areas(db).Values.FirstOrDefault(a => string.Equals(a.Marca.Name, nomes.StringResult.Trim(), StringComparison.CurrentCultureIgnoreCase));
                 var (frase, problema) = area.Marca is null
                     ? (null, "area nao existe")
-                    : EscritaForaDeComando.Fazer(documento, () => LocalDosInversores.RenomearArea(db, area.Marca.Id, texto));
+                    : EscritaForaDeComando.Fazer(documento, () => AbaInversor.RenomearArea(db, area.Marca.Id, texto));
                 editor.WriteMessage(problema is null ? $"\nELETRICA janela local renomear: {frase}\n" : $"\nELETRICA janela local recusado: {problema}\n");
+                return;
+            }
+
+            if (op == "AREAS")
+            {
+                // A lista do botão "Áreas…" (item 3 da segunda rodada): o nome e quantos inversores.
+                foreach (var (_, nome, quantos) in AbaInversor.ListaDeAreas(db))
+                    editor.WriteMessage($"\nELETRICA LOCAL_AREA nome={nome.Replace(' ', '_')} inversores={quantos} fim\n");
+                return;
+            }
+
+            if (op == "PRETAG")
+            {
+                // As caixas da pré-tag na seção de distribuição (item 5): "1;1;0" = inserir, moldura, fundo.
+                var c = texto.Split(';');
+                var opcoes = PreTagOptions.Parse(c);
+                var frase = opcoes is null ? null : EscritaForaDeComando.Fazer(documento, () => AbaInversor.GravarAPreTag(db, opcoes));
+                editor.WriteMessage(frase is null ? $"\nELETRICA janela local recusado: pretag [{texto}]\n" : $"\nELETRICA janela local pretag: {frase}\n");
                 return;
             }
 
             if (op == "LINHAS")
             {
-                var emCampo = EquipamentoEmCampo.EmCampo(db);
-                var locais = LocalDosInversores.Ler(db, out _).GroupBy(l => l.Inverter).ToDictionary(g => g.Key, g => g.First());
-                var areas = LocalDosInversores.Areas(db);
+                // O mesmo caminho da tabela: o registro acompanha a geometria e a coluna Local sai da mesma conta.
+                var (locais, areas, emCampo, _) = AbaInversor.LerOsLocais(documento);
                 foreach (var i in setup.Inverters)
                 {
-                    var local = locais.GetValueOrDefault(i.Id);
-                    var v = InverterSiteView.Of(local, emCampo.Contains((EquipmentKind.Inverter, i.Id)), local is not null && areas.ContainsKey(local.Site));
-                    var coluna = v.Mode switch
-                    {
-                        InverterPlacementMode.Area => areas[v.Site].Marca.Name,
-                        InverterPlacementMode.Automatic => "Auto",
-                        _ => "-",
-                    };
+                    var (v, coluna) = AbaInversor.EstadoDoLocal(i.Id, locais, areas, emCampo.Contains((EquipmentKind.Inverter, i.Id)));
+                    if (coluna.Length == 0) coluna = "-";
                     editor.WriteMessage($"\nELETRICA LOCAL_LINHA nome={i.Name.Replace(' ', '_')} local={coluna.Replace(' ', '_')} botao={v.Button} ver={v.CanSee} limite={i.Target?.ToString(Inv) ?? "-"} fim\n");
                 }
 
                 var (_, uteis) = AbaInversor.ContarTudo(db);
-                var (soma, bate) = BalancedLimits.Describe(BalancedLimits.Sum(setup.Inverters, setup.Models), uteis);
+                var somaDosLimites = BalancedLimits.Sum(setup.Inverters, setup.Models);
+                var (soma, bate) = BalancedLimits.Describe(somaDosLimites, uteis);
                 editor.WriteMessage($"ELETRICA LOCAL_SOMA bate={bate} [{soma}] fim\n");
+
+                // A célula Limite da linha Total (item 1 da segunda rodada), como a tabela monta.
+                var (celula, bateNoTotal) = BalancedLimits.TotalCell(somaDosLimites, uteis);
+                editor.WriteMessage($"ELETRICA LOCAL_TOTAL_LIMITE texto={celula.Replace(' ', '_')} vermelho={!bateNoTotal} fim\n");
                 return;
             }
 
