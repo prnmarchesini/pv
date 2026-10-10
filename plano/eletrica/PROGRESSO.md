@@ -300,6 +300,48 @@ Roteiro de tela:
 6. "Apagar todos": a pergunta diz quantos são; Sim: a tabela fica vazia, as
    strings livres e as tags delas somem.
 
+## Local dos inversores: área desenhada e automático pelas strings (10/10/2026): AGUARDANDO VALIDAÇÃO
+
+Pedido do Renan: "quero selecionar os inversores, aí tem um botão de escolher
+área, eu clico no retângulo que eu fiz em campo (sala, skid)"; e "alocação
+automática conforme strings: quando eu fizer a rota de cabos, o sistema calcula
+o menor trajeto de cabos CC para aquele inversor e aloca ao lado da vala; quero
+mover o inversor e ter um botão de refazer a rota".
+
+- Aba Inversor, quadro "Local dos inversores": com linhas escolhidas,
+  **Escolher área…** (a janela some, clique na polilinha fechada: os inversores
+  entram nela um ao lado do outro, 0,5 m entre eles, na cota do terreno + 0,80;
+  a polilinha vira Polyline3d fechada no TIN e ganha a marca de área),
+  **Automático pelas strings** e **À mão**. Coluna "Local" na tabela (Área,
+  Auto ou vazio). Comando `CLIVUS_ELETRICA_LOCAL`.
+- Rota de cabos, aba CC: o **Gerar** põe cada inversor automático que não está
+  em campo ao lado da vala, no ponto da rede de menor cabo CC das strings dele
+  (a mesma conta do Gerar: saída da mesa pelo lado mais curto, + e −, pela
+  vala), do lado livre de mesa e de outro equipamento. Moveu à mão? **Gerar**
+  de novo refaz a rota da posição nova (não recoloca). **Recolocar
+  automáticos** (`CLIVUS_ROTA_RECOLOCAR`) volta todos ao ponto de menor cabo.
+- Inversor numa área: a vala que entra na ÁREA vale como a que entra no
+  inversor (o rabicho até a sala).
+- Assumido: o ponto de menor cabo é um nó da rede ou uma batida de string (a
+  soma é côncava entre eles); o inversor fica a meia caixa + 0,5 m da vala;
+  área: a caixa encosta até 1 cm da borda; o que não cabe é avisado pelo nome.
+
+Testes: nível 1 (`InverterSitesTests`: área retangular, girada, em L e pequena;
+mediana das batidas; lado mais curto por string; lado livre da vala; registro).
+Nível 2 `eletrica-local.ps1`: 3 inversores na área (dentro, sem sobrepor, base
+= terreno + 0,80 lida da entidade), automático ao lado da vala com 12 lances
+medidos contra o TIN, movido fica, recolocado volta.
+
+Roteiro de tela:
+1. Desenhe um retângulo (PLINE fechada) onde fica a sala. Configuração
+   elétrica > Inversor: escolha 3 linhas (Ctrl) > Escolher área… > clique no
+   retângulo: os 3 aparecem dentro dele, no chão; a coluna Local diz Área.
+2. Escolha outro inversor > Automático pelas strings (Local: Auto).
+3. Rota de cabos > CC: Selecionar vala, Gerar: o inversor Auto aparece ao lado
+   da vala, perto das strings dele, e os cabos chegam nele.
+4. Mova o inversor à mão (Mover na linha) e Gerar: os cabos saem da posição
+   nova. Recolocar automáticos: ele volta ao ponto de menor cabo.
+
 ## Observações
 - Mesa recalculada troca os GUIDs dos módulos: as strings dela ficam soltas e
   regerar não as reconhece (desenha as novas sem apagar as velhas). Precisa de

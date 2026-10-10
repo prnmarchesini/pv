@@ -210,7 +210,15 @@ internal sealed class AbaInversor : AbaEletrica
             catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao mudar o sentido na faixa da atribuição.", erro); }
         };
 
-        foreach (var painel in new[] { criar, trafo, limite, atribuir })
+        // Seção Local (10/10/2026): onde os escolhidos vão em campo.
+        var local = new WrapPanel();
+        local.Children.Add(Rotulo(Tr.T("Os escolhidos na tabela:"), 4));
+        Botao(local, Tr.T("Escolher área…"), Tr.T("A janela some; clique no retângulo (polilinha fechada) que você desenhou em campo para a sala ou o skid: os inversores escolhidos vão para dentro dele, um ao lado do outro, na cota do terreno."), EscolherArea);
+        Botao(local, Tr.T("Automático pelas strings"), Tr.T("O Gerar da rota CC põe cada um ao lado da vala, no ponto de menor cabo CC das strings dele. Depois você pode mover à mão e Gerar de novo: a rota sai da posição nova."),
+            () => MudarOLocal(InverterPlacementMode.Automatic));
+        Botao(local, Tr.T("À mão"), Tr.T("Volta ao Pôr em campo de sempre (a posição de agora fica)."), () => MudarOLocal(null));
+
+        foreach (var painel in new[] { criar, trafo, limite, atribuir, local })
             foreach (var b in painel.Children.OfType<Button>())
             {
                 b.Height = 24;
@@ -250,6 +258,7 @@ internal sealed class AbaInversor : AbaEletrica
         topo.Children.Add(Secao(Tr.T("Inversores da usina"), criar));
         topo.Children.Add(Secao(Tr.T("Trafo dos inversores"), trafo));
         topo.Children.Add(Secao(Tr.T("Strings por inversor"), limite, atribuir));
+        topo.Children.Add(Secao(Tr.T("Local dos inversores"), local));
         DockPanel.SetDock(topo, Dock.Top);
         inversores.Children.Add(topo);
         inversores.Children.Add(tabela);
@@ -496,9 +505,12 @@ internal sealed class AbaInversor : AbaEletrica
     // ------------------------------------------------------------ a tabela
 
     /// <summary>As colunas da tabela, na ordem (o cabeçalho, as linhas e o total usam as mesmas).</summary>
-    private static readonly string[] Colunas = ["Alca", "Cor", "Nome", "Modelo", "Trafo", "Meta", "Strings", "Kwp", "Kw", "Razao", "Acoes"];
+    private static readonly string[] Colunas = ["Alca", "Cor", "Nome", "Modelo", "Trafo", "Meta", "Strings", "Kwp", "Kw", "Razao", "Local", "Acoes"];
 
-    private const int ColunaAlca = 0, ColunaCor = 1, ColunaNome = 2, ColunaModelo = 3, ColunaTrafo = 4, ColunaMeta = 5, ColunaStrings = 6, ColunaKwp = 7, ColunaKw = 8, ColunaRazao = 9, ColunaAcoes = 10;
+    private const int ColunaAlca = 0, ColunaCor = 1, ColunaNome = 2, ColunaModelo = 3, ColunaTrafo = 4, ColunaMeta = 5, ColunaStrings = 6, ColunaKwp = 7, ColunaKw = 8, ColunaRazao = 9, ColunaLocal = 10, ColunaAcoes = 11;
+
+    /// <summary>O local de cada inversor que tem um (área ou automático), lido a cada montagem da tabela.</summary>
+    private Dictionary<Guid, InverterPlacementMode> _locais = [];
 
     /// <summary>Uma linha da tabela: as colunas com a largura repartida (a maior de cada uma) e uma sobra no fim.</summary>
     private static Grid LinhaDaTabela()
@@ -549,6 +561,7 @@ internal sealed class AbaInversor : AbaEletrica
         Titulo(ColunaKwp, "kWp", Tr.T("Potência CC: a soma da potência dos módulos das strings alocadas (a mesma conta do Resumo elétrico)."), numero: true);
         Titulo(ColunaKw, "kW", Tr.T("Potência nominal CA do modelo."), numero: true);
         Titulo(ColunaRazao, Tr.T("CC/CA"), Tr.T("kWp ÷ kW: só com a potência do modelo informada."), numero: true);
+        Titulo(ColunaLocal, Tr.T("Local"), Tr.T("Onde o inversor vai em campo: Área (dentro do retângulo escolhido), Auto (a rota CC põe ao lado da vala, no ponto de menor cabo) ou vazio (à mão, Pôr em campo)."));
         return g;
     }
 
@@ -591,6 +604,7 @@ internal sealed class AbaInversor : AbaEletrica
         var escolhidos = Escolhidos().Select(i => i.Id).ToHashSet();
         var foco = OndeEstaOFoco();
         var emCampo = EquipamentoEmCampo.EmCampo(Documento.Database);
+        _locais = LocalDosInversores.Ler(Documento.Database, out _).GroupBy(l => l.Inverter).ToDictionary(g => g.Key, g => g.First().Mode);
         var linhas = LinhasDaTabela(Documento, _setup, _contagem);
         _inversores.Items.Clear();
         _marcas.Clear();
@@ -793,6 +807,7 @@ internal sealed class AbaInversor : AbaEletrica
         Por(g, Celula(Kwp(linha.PowerKwp), numero: true), ColunaKwp);
         Por(g, Celula(linha.PowerKw > 0 ? Kw(linha.PowerKw) : "—", numero: true), ColunaKw);
         Por(g, Celula(Razao(linha.DcAcRatio), numero: true), ColunaRazao);
+        Por(g, Celula(_locais.TryGetValue(inversor.Id, out var local) ? local == InverterPlacementMode.Area ? Tr.T("Área") : Tr.T("Auto") : string.Empty), ColunaLocal);
 
         var acoes = Por(g, new StackPanel { Orientation = Orientation.Horizontal }, ColunaAcoes);
         var id = inversor.Id;
@@ -1490,6 +1505,36 @@ internal sealed class AbaInversor : AbaEletrica
     }
 
     private void ApagarAsEscolhidas() => Apagar(Escolhidos());
+
+    /// <summary>"Escolher área…": a janela some e o comando pede o retângulo; os escolhidos vão para dentro dele.</summary>
+    private void EscolherArea()
+    {
+        var escolhidos = Escolhidos();
+        if (escolhidos.Count == 0)
+        {
+            Avisar(Tr.T("Escolha antes as linhas dos inversores (clique, Ctrl ou Shift + clique)."), erro: true);
+            return;
+        }
+
+        JanelaEletrica.Campo(Documento, PluginInfo.ComandoEletricaLocal, "Area " + string.Join(";", escolhidos.Select(i => i.Id.ToString("D"))));
+    }
+
+    /// <summary>Automático pelas strings ou à mão, para os escolhidos (grava na hora; nada muda em campo agora).</summary>
+    private void MudarOLocal(InverterPlacementMode? modo)
+    {
+        var escolhidos = Escolhidos();
+        if (escolhidos.Count == 0)
+        {
+            Avisar(Tr.T("Escolha antes as linhas dos inversores (clique, Ctrl ou Shift + clique)."), erro: true);
+            return;
+        }
+
+        Fazer(() => LocalDosInversores.Mudar(Documento.Database, escolhidos.Select(i => i.Id).ToList(), modo) is { } problema
+            ? throw new InvalidOperationException(problema)
+            : modo is null
+                ? Tr.F("{0} inversor(es) à mão: use Pôr em campo (a posição de agora fica).", escolhidos.Count)
+                : Tr.F("{0} inversor(es) automáticos: o Gerar da rota CC põe cada um ao lado da vala, no ponto de menor cabo das strings dele.", escolhidos.Count));
+    }
 
     /// <summary>O "Apagar todos" (10/10/2026: "quero ter a opção de apagar TODOS os inversores da usina").</summary>
     private void ApagarTodos()
