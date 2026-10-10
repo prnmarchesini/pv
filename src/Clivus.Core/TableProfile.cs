@@ -70,6 +70,23 @@ public sealed record TableProfile(
     public const int VersaoDoFormato = 2;
 
     /// <summary>
+    /// A versão do formato do perfil que traz os dados elétricos do módulo
+    /// (Melhorias de 10/10/2026, item 15: "uma fonte única, na estrutura").
+    /// O perfil sem eles continua saindo na versão 2, igual ao de antes, e
+    /// abre em qualquer plugin; o que tem sai na 3, que plugin antigo recusa
+    /// com o motivo em vez de abrir sem o PAN.
+    /// </summary>
+    public const int VersaoComEletrica = 3;
+
+    /// <summary>
+    /// Os dados elétricos do módulo desta estrutura (lidos do .PAN do PVsyst
+    /// ou digitados no cadastro), ou null quando a estrutura ainda não os
+    /// tem: aí as tensões e correntes da rota ficam em branco. É a fonte
+    /// única do módulo para a parte elétrica (ver <see cref="ModuleSource"/>).
+    /// </summary>
+    public PanModule? ModuleElectrical { get; init; }
+
+    /// <summary>
     /// Casas decimais do grau gravado no arquivo.
     ///
     /// Sem arredondar, a volta grau → radiano → grau não fecha: 37,5° saía
@@ -117,6 +134,9 @@ public sealed record TableProfile(
             if (!double.IsFinite(TiltRadians) || TiltRadians < 0 || TiltRadians > PillarSizing.MaiorInclinacao)
                 return Tr.T("a inclinação está fora da faixa de uma mesa");
 
+            if (ModuleElectrical?.WhyInvalid() is { } porCausaDaEletrica)
+                return Tr.F("os dados elétricos do módulo não servem: {0}", porCausaDaEletrica);
+
             // A mesma conferência que a geometria faz, e do mesmo lugar: sem
             // ela aqui, um perfil errado só explodiria na hora de desenhar,
             // com o projetista já tendo escolhido a área. Chamar a de lá, em
@@ -129,6 +149,21 @@ public sealed record TableProfile(
     /// A inclinação em graus, como ela vai para o arquivo e para a tela.
     /// </summary>
     public double TiltDegrees => TiltRadians * 180 / Math.PI;
+
+    /// <summary>
+    /// O perfil com os dados elétricos do .PAN e a potência do módulo passada
+    /// para a do PAN (item 15). Nada mais muda: medidas, quantidade, arranjo e
+    /// estrutura ficam como estavam.
+    /// </summary>
+    public TableProfile WithPan(PanModule pan)
+    {
+        ArgumentNullException.ThrowIfNull(pan);
+        return WithModulePower(pan.Pmax) with { ModuleElectrical = pan };
+    }
+
+    /// <summary>O perfil com outra potência de módulo, e só isso.</summary>
+    public TableProfile WithModulePower(double watts) =>
+        this with { Layout = Layout with { Module = Layout.Module with { PowerWatts = watts } } };
 
     /// <summary>
     /// O perfil como texto JSON.
@@ -145,7 +180,7 @@ public sealed record TableProfile(
 
         var arquivo = new Arquivo
         {
-            FormatVersion = VersaoDoFormato,
+            FormatVersion = ModuleElectrical is null ? VersaoDoFormato : VersaoComEletrica,
             // Sem Trim: trimar só na gravação faria o perfil voltar diferente
             // do que entrou, que é exatamente o que este arquivo existe para
             // evitar. Nome só de espaço já foi recusado pela validação.
@@ -177,6 +212,22 @@ public sealed record TableProfile(
                 PillarSpans = Frame.PillarSpans?.ToArray(),
                 MinEmbedment = Frame.MinEmbedment,
             },
+            ModuleElectrical = ModuleElectrical is { } e
+                ? new EletricaNoArquivo
+                {
+                    Manufacturer = e.Manufacturer,
+                    Model = e.Model,
+                    Pmax = e.Pmax,
+                    Voc = e.Voc,
+                    Isc = e.Isc,
+                    Vmp = e.Vmp,
+                    Imp = e.Imp,
+                    VocCoefficient = e.VocCoefficient,
+                    IscCoefficient = e.IscCoefficient,
+                    Noct = e.Noct,
+                    PowerCoefficient = e.PowerCoefficient,
+                }
+                : null,
         };
 
         return JsonSerializer.Serialize(arquivo, Opcoes);
@@ -213,11 +264,19 @@ public sealed record TableProfile(
         if (arquivo.FormatVersion is not { } versao)
             throw new InvalidOperationException(Tr.T("O perfil de mesa não diz de que versão do formato é."));
 
-        if (versao != VersaoDoFormato)
+        if (versao != VersaoDoFormato && versao != VersaoComEletrica)
         {
             throw new InvalidOperationException(
-                Tr.F("O perfil de mesa é da versão {0} do formato, e este plugin lê a versão {1}.", versao, VersaoDoFormato));
+                Tr.F("O perfil de mesa é da versão {0} do formato, e este plugin lê a versão {1}.", versao, VersaoComEletrica));
         }
+
+        // Os dados elétricos entraram na versão 3: um perfil que diz ser da 2
+        // e os traz foi mexido à mão, e não é lido pela metade.
+        if (versao == VersaoDoFormato && arquivo.ModuleElectrical is not null)
+            throw new InvalidOperationException(Tr.T("O perfil de mesa é da versão 2 do formato e traz os dados elétricos do módulo, que só existem na versão 3."));
+
+        if (versao == VersaoComEletrica && arquivo.ModuleElectrical is null)
+            throw new InvalidOperationException(Tr.F("O perfil de mesa não traz o campo \"{0}\".", "moduleElectrical"));
 
         if (arquivo.Layout is null) throw new InvalidOperationException(Tr.T("O perfil de mesa não traz a mesa."));
         if (arquivo.Frame is null) throw new InvalidOperationException(Tr.T("O perfil de mesa não traz a estrutura."));
@@ -261,7 +320,23 @@ public sealed record TableProfile(
                 PillarSpans = arquivo.Frame.PillarSpans,
                 MinEmbedment = arquivo.Frame.MinEmbedment,
             },
-            Exigir(arquivo.TiltDegrees, "tiltDegrees") * Math.PI / 180);
+            Exigir(arquivo.TiltDegrees, "tiltDegrees") * Math.PI / 180)
+        {
+            ModuleElectrical = arquivo.ModuleElectrical is { } e
+                ? new PanModule(
+                    e.Manufacturer ?? string.Empty,
+                    e.Model ?? string.Empty,
+                    Exigir(e.Pmax, "moduleElectrical.pmax"),
+                    Exigir(e.Voc, "moduleElectrical.voc"),
+                    Exigir(e.Isc, "moduleElectrical.isc"),
+                    Exigir(e.Vmp, "moduleElectrical.vmp"),
+                    Exigir(e.Imp, "moduleElectrical.imp"),
+                    Exigir(e.VocCoefficient, "moduleElectrical.vocCoefficient"),
+                    Exigir(e.IscCoefficient, "moduleElectrical.iscCoefficient"),
+                    e.Noct,
+                    e.PowerCoefficient)
+                : null,
+        };
 
         if (perfil.WhyInvalid is { } motivo)
             throw new InvalidOperationException(Tr.F("O perfil de mesa não descreve uma mesa: {0}.", motivo));
@@ -307,6 +382,29 @@ public sealed record TableProfile(
         public double? TiltDegrees { get; init; }
         public LayoutNoArquivo? Layout { get; init; }
         public FrameNoArquivo? Frame { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public EletricaNoArquivo? ModuleElectrical { get; init; }
+    }
+
+    /// <summary>Os dados elétricos do módulo como estão no arquivo (versão 3). Unidades do <see cref="PanModule"/>.</summary>
+    private sealed class EletricaNoArquivo
+    {
+        public string? Manufacturer { get; init; }
+        public string? Model { get; init; }
+        public double? Pmax { get; init; }
+        public double? Voc { get; init; }
+        public double? Isc { get; init; }
+        public double? Vmp { get; init; }
+        public double? Imp { get; init; }
+        public double? VocCoefficient { get; init; }
+        public double? IscCoefficient { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double? Noct { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double? PowerCoefficient { get; init; }
     }
 
     private sealed class LayoutNoArquivo

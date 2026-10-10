@@ -306,6 +306,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_STYLES")]
     public static void CLIVUS_STYLES() => EstilosCommands.Estilos();
 
+    [CommandMethod("CLIVUS_STRUCTURE_PAN")]
+    public static void CLIVUS_STRUCTURE_PAN() => PotenciaCommands.EstruturaPan();
+
+    [CommandMethod("CLIVUS_ESTRUCTURA_PAN")]
+    public static void CLIVUS_ESTRUCTURA_PAN() => PotenciaCommands.EstruturaPan();
+
     [CommandMethod("CLIVUS_EXPORT", CommandFlags.UsePickSet)]
     public static void CLIVUS_EXPORT() => ExportCommands.Exportar();
 
@@ -407,6 +413,12 @@ public static class ComandosTraduzidos
 
     [CommandMethod("CLIVUS_EXTREMOS", CommandFlags.UsePickSet)]
     public static void CLIVUS_EXTREMOS() => PontasCommands.Pontas();
+
+    [CommandMethod("CLIVUS_POWER_FROM_PAN")]
+    public static void CLIVUS_POWER_FROM_PAN() => PotenciaCommands.PotenciaPeloPan();
+
+    [CommandMethod("CLIVUS_POTENCIA_DEL_PAN")]
+    public static void CLIVUS_POTENCIA_DEL_PAN() => PotenciaCommands.PotenciaPeloPan();
 
     [CommandMethod("CLIVUS_RECALCULATE", CommandFlags.UsePickSet)]
     public static void CLIVUS_RECALCULATE() => RecalcularCommands.Recalcular();
@@ -581,6 +593,12 @@ public static class ComandosTraduzidos
 
     [CommandMethod("CLIVUS_CAMBIAR_MESA", CommandFlags.UsePickSet)]
     public static void CLIVUS_CAMBIAR_MESA() => TrocarMesaCommands.Trocar();
+
+    [CommandMethod("CLIVUS_CHANGE_MODULE_POWER", CommandFlags.Modal | CommandFlags.UsePickSet)]
+    public static void CLIVUS_CHANGE_MODULE_POWER() => PotenciaCommands.TrocarPotencia();
+
+    [CommandMethod("CLIVUS_CAMBIAR_POTENCIA", CommandFlags.Modal | CommandFlags.UsePickSet)]
+    public static void CLIVUS_CAMBIAR_POTENCIA() => PotenciaCommands.TrocarPotencia();
 
     [CommandMethod("CLIVUS_PLANT")]
     public static void CLIVUS_PLANT() => UsinaCommands.Usina();

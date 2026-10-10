@@ -90,7 +90,7 @@ public static class ResumoEletricoCommands
     }
 
     /// <summary>O resumo e os problemas de leitura dos cadastros.</summary>
-    internal sealed record Lido(SystemSummary Resumo, IReadOnlyList<string> Problemas);
+    internal sealed record Lido(SystemSummary Resumo, IReadOnlyList<string> Problemas, SimulatedModulePower? Simulada = null);
 
     private static void Escrever(Editor editor, Lido lido)
     {
@@ -98,6 +98,7 @@ public static class ResumoEletricoCommands
         editor.WriteMessage(Tr.F("\nRESUMO {0}\n", linhas[0]));
         foreach (var linha in linhas.Skip(1)) editor.WriteMessage(linha + "\n");
         foreach (var problema in lido.Problemas) editor.WriteMessage(Tr.F("  ATENÇÃO: {0}.\n", problema));
+        if (lido.Simulada is { } simulada) editor.WriteMessage("  " + simulada.Reason() + "\n");
     }
 
     /// <summary>
@@ -134,6 +135,16 @@ public static class ResumoEletricoCommands
             }
         }
 
+        // A potência trocada pela área (item 14 de 10/10/2026) vale para todo
+        // módulo, inclusive o de mesa que não está mais no desenho.
+        var simulada = FonteDoModulo.Simulada(database);
+        if (simulada is not null)
+        {
+            foreach (var m in potencia.Keys.ToList()) potencia[m] = simulada.Watts;
+            foreach (var m in semMesa) potencia[m] = simulada.Watts;
+            semMesa.Clear();
+        }
+
         // Só um perfil SALVO dá a reserva: sem ele, a mesa de exemplo não é o
         // "perfil atual", e esses módulos ficam fora do kWp, contados.
         double? reserva = null;
@@ -157,7 +168,7 @@ public static class ResumoEletricoCommands
 
         var resumo = ElectricalSummary.Build(cadastro.Units, trafos.Items, modelos.Items, inversores.Items, strings, potencia, reserva, semMesa, cadastro.Substations);
         var problemas = new[] { ucs.Problem, blocos.Problem, trafos.Problem, modelos.Problem, inversores.Problem }.OfType<string>().ToList();
-        return new Lido(resumo, problemas);
+        return new Lido(resumo, problemas, simulada);
     }
 }
 
@@ -170,6 +181,7 @@ internal sealed class JanelaDeResumoEletrico : Window
     private readonly ListView _tabela = new();
     private readonly TextBlock _total = new() { FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) };
     private readonly TextBlock _pendencias = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+    private readonly AvisoDePotenciaSimulada _potenciaSimulada;
     private IReadOnlyList<string> _texto = [];
 
     /// <summary>Uma linha da tabela, como o WPF mostra.</summary>
@@ -214,7 +226,13 @@ internal sealed class JanelaDeResumoEletrico : Window
         botoes.Children.Add(atualizar);
         botoes.Children.Add(copiar);
 
+        // Item 14 (10/10/2026): com a potência trocada pela área, o porquê e o
+        // botão de voltar à configuração da mesa.
+        _potenciaSimulada = new AvisoDePotenciaSimulada(documento) { AoMudar = Atualizar, Margin = new Thickness(0, 0, 0, 6) };
+
         var raiz = new DockPanel { Margin = new Thickness(10) };
+        DockPanel.SetDock(_potenciaSimulada, Dock.Top);
+        raiz.Children.Add(_potenciaSimulada);
         DockPanel.SetDock(_total, Dock.Top);
         raiz.Children.Add(_total);
         DockPanel.SetDock(botoes, Dock.Bottom);
@@ -237,6 +255,7 @@ internal sealed class JanelaDeResumoEletrico : Window
         {
             var lido = ResumoEletricoCommands.Ler(_documento);
             var r = lido.Resumo;
+            _potenciaSimulada.Atualizar();
 
             _tabela.ItemsSource = r.Rows()
                 .Select(l => new Linha(

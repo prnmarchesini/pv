@@ -41,18 +41,14 @@ internal static class RotaDeCabosTabelas
 
         var config = RotaDeCabosStore.Configuracao(db, rota);
         var projeto = SettingsStore.Load(db).Settings ?? ProjectSettings.Default;
-        var pans = RotaDeCabosStore.ModulosPan(db);
         var titulo = Tr.F("Cabos {0}", CableRoutes.Title(rota));
 
         if (rota is CableRoute.DirectCurrent or CableRoute.Combiner)
         {
-            var mesas = MesasDoDesenho.Ler(db);
-            PanModule? Modulo(string? perfil)
-            {
-                var modelo = DrawingTables.Find(mesas, perfil)?.Profile.Layout.Module.Model;
-                return pans.FirstOrDefault(p => modelo is not null && string.Equals(p.Model.Trim(), modelo.Trim(), StringComparison.OrdinalIgnoreCase))
-                       ?? (pans.Count == 1 ? pans[0] : null);
-            }
+            // A fonte única do módulo (item 15): a estrutura da mesa da string;
+            // com a potência trocada pela área (item 14), nenhum (cálculos desligados).
+            var fonte = FonteDoModulo.Ler(db);
+            PanModule? Modulo(string? perfil) => fonte.ElectricalFor(perfil);
 
             var porString = recontagem.Lances.Where(l => l.Lance.From.Kind == CableEndKind.String)
                 .GroupBy(l => l.Lance.From.Id)
@@ -75,6 +71,10 @@ internal static class RotaDeCabosTabelas
             {
                 dc with { Notes = [.. dc.Notes, Tr.F("Temperaturas usadas (Configurações): mínima {0} °C, máxima {1} °C, aplicadas como estão.", projeto.MinTemperature, projeto.MaxTemperature)] },
             };
+
+            // Por que as tensões e correntes estão em branco, quando é pela potência trocada pela área.
+            if (fonte.Simulated is { } simulada)
+                tabelas[0] = tabelas[0] with { Notes = [simulada.Reason(), .. tabelas[0].Notes] };
 
             if (rota == CableRoute.Combiner)
             {

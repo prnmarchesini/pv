@@ -28,6 +28,12 @@ internal sealed class JanelaDeConfiguracoes : Window
     private readonly StackPanel _escolha = new();
     private readonly TextBlock _recado = new() { Foreground = Brushes.Firebrick, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
 
+    // Item 15 (10/10/2026): as divergências entre o PAN, a estrutura e as
+    // mesas desenhadas, e o "Atualizar a potência das mesas desenhadas".
+    private readonly Func<IReadOnlyList<DrawingTable>, IReadOnlyList<string>>? _divergencias;
+    private readonly Func<List<DrawingTable>, DrawingTable, (int Mesas, double Watts, string Frase)>? _atualizarPotencia;
+    private readonly TextBlock _avisosDoModulo = new() { Foreground = Brushes.Firebrick, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+
     /// <summary>
     /// Se a lista de mesas mudou desde que a janela abriu. Fechar com ela
     /// mudada pergunta antes (05/10/2026: a mesa editada sumia ao fechar sem
@@ -44,16 +50,22 @@ internal sealed class JanelaDeConfiguracoes : Window
     /// <param name="estilos">Os estilos do desenho (texto, cota, chamada) e os escolhidos.</param>
     /// <param name="editarMesa">Abre a janela de Mesa com o perfil dado; o perfil confirmado, ou null.</param>
     /// <param name="abaInicial">A aba que abre na frente (0 a 3).</param>
+    /// <param name="divergencias">As divergências do módulo (PAN, estrutura, mesas desenhadas) para a lista de mesas dada, ou null.</param>
+    /// <param name="atualizarPotencia">"Atualizar a potência das mesas desenhadas" da estrutura dada (grava no desenho na hora), ou null.</param>
     internal JanelaDeConfiguracoes(
         IReadOnlyList<DrawingTable> mesas,
         ProjectSettings parametros,
         string? aviso,
         (IReadOnlyList<string> Textos, IReadOnlyList<string> Cotas, IReadOnlyList<string> Chamadas, ProjectStyles Atuais) estilos,
         Func<TableProfile, TableProfile?> editarMesa,
-        int abaInicial = 0)
+        int abaInicial = 0,
+        Func<IReadOnlyList<DrawingTable>, IReadOnlyList<string>>? divergencias = null,
+        Func<List<DrawingTable>, DrawingTable, (int Mesas, double Watts, string Frase)>? atualizarPotencia = null)
     {
         _mesas = [.. mesas];
         _editarMesa = editarMesa;
+        _divergencias = divergencias;
+        _atualizarPotencia = atualizarPotencia;
 
         Title = Tr.T("Clivus Solar — Configurações");
         Width = 900;
@@ -127,6 +139,15 @@ internal sealed class JanelaDeConfiguracoes : Window
         Botao(Tr.T("▲ Subir"), Tr.T("Sobe a mesa escolhida na lista: mais prioridade para o motor."), () => Mover(_lista.SelectedIndex, -1));
         Botao(Tr.T("▼ Descer"), Tr.T("Desce a mesa escolhida na lista: menos prioridade para o motor."), () => Mover(_lista.SelectedIndex, +1));
 
+        if (_atualizarPotencia is not null)
+        {
+            var atualizar = Botao(Tr.T("Atualizar a potência das mesas desenhadas"),
+                Tr.T("As mesas já desenhadas com a estrutura escolhida passam à potência do PAN dela (ou à do módulo, sem PAN). Só a potência muda: geometria, posição e mesas ficam como estão. Grava no desenho na hora."),
+                AtualizarPotencia);
+            atualizar.Height = double.NaN;
+            atualizar.Content = new TextBlock { Text = Tr.T("Atualizar a potência das mesas desenhadas"), TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Margin = new Thickness(2) };
+        }
+
         botoes.Children.Add(new TextBlock
         {
             Text = Prioridade,
@@ -147,6 +168,8 @@ internal sealed class JanelaDeConfiguracoes : Window
 
         DockPanel.SetDock(botoes, Dock.Right);
         painel.Children.Add(botoes);
+        DockPanel.SetDock(_avisosDoModulo, Dock.Bottom);
+        painel.Children.Add(_avisosDoModulo);
 
         _lista.MouseDoubleClick += (_, _) => Tentar(Editar);
         painel.Children.Add(_lista);
@@ -269,6 +292,46 @@ internal sealed class JanelaDeConfiguracoes : Window
         }
 
         if (escolhida >= 0 && escolhida < _mesas.Count) _lista.SelectedIndex = escolhida;
+
+        MostrarDivergencias();
+    }
+
+    /// <summary>As divergências do módulo (item 15), embaixo da lista de estruturas.</summary>
+    private void MostrarDivergencias()
+    {
+        try
+        {
+            var avisos = _divergencias?.Invoke(_mesas) ?? [];
+            _avisosDoModulo.Text = string.Join("\n", avisos.Select(a => "• " + a));
+            _avisosDoModulo.Visibility = avisos.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao conferir as divergências do módulo.", erro);
+            _avisosDoModulo.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>"Atualizar a potência das mesas desenhadas" (item 15) da estrutura escolhida.</summary>
+    private void AtualizarPotencia()
+    {
+        if (_atualizarPotencia is null) return;
+
+        if (Selecionada() is not { } mesa)
+        {
+            _recado.Text = Tr.T("Escolha uma mesa na lista.");
+            return;
+        }
+
+        var antes = mesa.Profile;
+        var indice = _lista.SelectedIndex;
+        var (_, _, frase) = _atualizarPotencia(_mesas, mesa);
+
+        var mudou = !Equals(_mesas[indice].Profile, antes);
+        if (mudou) _mesasMudaram = true;
+        Atualizar();
+
+        _recado.Text = frase + (mudou ? " " + Tr.T("A potência da estrutura também mudou: clique em \"Salvar no desenho\" para gravá-la.") : string.Empty);
     }
 
     /// <summary>A linha da mesa na aba Estruturas, com a prioridade quando em uso.</summary>
@@ -281,7 +344,8 @@ internal sealed class JanelaDeConfiguracoes : Window
             + Tr.F(
                 "{0} — {1} módulos, {2:0.###} m, {3:0.#}°",
                 mesa.Name, mesa.Profile.Layout.ModuleCount, mesa.Profile.Layout.Length, mesa.Profile.TiltDegrees)
-            + (mesa.Use ? Tr.T("  (em uso)") : "");
+            + (mesa.Use ? Tr.T("  (em uso)") : "")
+            + (ModuleSource.ProfileDivergence(mesa.Profile) is null ? "" : Tr.T("  (PAN diferente da potência do módulo)"));
     }
 
     /// <summary>

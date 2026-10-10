@@ -386,8 +386,9 @@ public static class GrupoCommands
 
         var mesas = LayoutScan.Tables(transacao, documento.Database);
         var reserva = Reserva(documento, mesas);
+        var simulada = FonteDoModulo.Simulada(documento.Database)?.Watts;
 
-        return grupos.Select(g => Resumir(transacao, mesas, g, reserva)).ToList();
+        return grupos.Select(g => Resumir(transacao, mesas, g, reserva, simulada)).ToList();
     }
 
     internal static GroupSummary Resumir(Document documento, TableGroup grupo)
@@ -397,7 +398,7 @@ public static class GrupoCommands
         var mesas = LayoutScan.Tables(transacao, documento.Database);
         var reserva = Reserva(documento, mesas);
 
-        return Resumir(transacao, mesas, grupo, reserva);
+        return Resumir(transacao, mesas, grupo, reserva, FonteDoModulo.Simulada(documento.Database)?.Watts);
     }
 
     /// <summary>
@@ -413,7 +414,7 @@ public static class GrupoCommands
             : identidades.Select(i => i?.ModulePowerWatts).FirstOrDefault(p => p is > 0) ?? 1;
     }
 
-    private static GroupSummary Resumir(Transaction transacao, IReadOnlyDictionary<Guid, TableParts> mesas, TableGroup grupo, double reserva)
+    private static GroupSummary Resumir(Transaction transacao, IReadOnlyDictionary<Guid, TableParts> mesas, TableGroup grupo, double reserva, double? simulada)
     {
         var contadas = new List<CountedTable>();
         var faltando = 0;
@@ -429,7 +430,7 @@ public static class GrupoCommands
             contadas.Add(RecontarCommands.Contar(transacao, partes));
         }
 
-        return new GroupSummary(grupo, LayoutCensus.Count(contadas, reserva), faltando);
+        return new GroupSummary(grupo, LayoutCensus.Count(contadas, reserva, simulada), faltando);
     }
 
     /// <summary>Os cantos dos contornos das mesas do grupo (para a casca da marca).</summary>

@@ -56,6 +56,34 @@ internal sealed class JanelaDeMesa : Window
     private readonly TextBox _largura = Campo();
     private readonly TextBox _espessura = Campo();
     private readonly TextBox _potencia = Campo();
+
+    // Os dados elétricos do módulo (item 15 de 10/10/2026): do .PAN ou à mão.
+    private readonly TextBox _voc = Campo();
+    private readonly TextBox _isc = Campo();
+    private readonly TextBox _vmp = Campo();
+    private readonly TextBox _imp = Campo();
+    private readonly TextBox _betaVoc = Campo();
+    private readonly TextBox _gamaPmax = Campo();
+    private readonly TextBox _alfaIsc = Campo();
+    private readonly TextBlock _origemEletrica = new() { FontSize = 11, Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap };
+    private readonly Button _carregarPan = new()
+    {
+        Content = Tr.T("Carregar .PAN..."),
+        Height = 24,
+        Margin = new Thickness(0, 2, 6, 2),
+        ToolTip = Tr.T("Lê o arquivo PAN do PVsyst: fabricante, modelo, Pmáx, Voc, Isc, Vmp, Imp e os coeficientes de temperatura. A potência do módulo passa a ser a do PAN; as medidas não mudam. É a fonte única do módulo para a parte elétrica."),
+    };
+    private readonly Button _limparEletrica = new()
+    {
+        Content = Tr.T("Limpar"),
+        Height = 24,
+        Margin = new Thickness(0, 2, 0, 2),
+        ToolTip = Tr.T("Tira os dados elétricos do módulo desta estrutura: as tensões e correntes da rota ficam em branco."),
+    };
+
+    /// <summary>O PAN lido (ou o que veio do perfil) e os textos com que ele encheu os campos: mudou um campo, os valores passam a ser à mão.</summary>
+    private PanModule? _panLido;
+    private string[] _textosDoPan = [];
     private readonly TextBox _quantidade = Campo();
     private readonly ComboBox _arranjo = new() { Margin = new Thickness(0, 2, 0, 6) };
     private readonly TextBox _espacamentoH = Campo();
@@ -329,6 +357,23 @@ internal sealed class JanelaDeMesa : Window
         Linha(Tr.T("Espessura (m)"), _espessura);
         Linha(Tr.T("Potência (Wp)"), _potencia);
 
+        // Item 15 (10/10/2026): "adicione lá na estrutura a opção de carregar
+        // o arquivo PAN ... uma fonte única, na estrutura"; sem PAN, os
+        // valores à mão.
+        Secao(Tr.T("Módulo: dados elétricos"));
+        var botoesDoPan = new WrapPanel();
+        botoesDoPan.Children.Add(_carregarPan);
+        botoesDoPan.Children.Add(_limparEletrica);
+        pilha.Children.Add(botoesDoPan);
+        pilha.Children.Add(_origemEletrica);
+        Linha(Tr.T("Voc (V)"), _voc, Tr.T("Tensão de circuito aberto (STC)."));
+        Linha(Tr.T("Isc (A)"), _isc, Tr.T("Corrente de curto-circuito (STC)."));
+        Linha(Tr.T("Vmp (V)"), _vmp, Tr.T("Tensão de máxima potência (STC)."));
+        Linha(Tr.T("Imp (A)"), _imp, Tr.T("Corrente de máxima potência (STC)."));
+        Linha(Tr.T("β Voc (%/°C)"), _betaVoc, Tr.T("Coeficiente de temperatura da Voc, como no datasheet (ex.: -0,25)."));
+        Linha(Tr.T("γ Pmáx (%/°C, opcional)"), _gamaPmax, Tr.T("Coeficiente de temperatura da potência. Com ele (e o da Isc), a Vmp no calor sai mais exata; em branco, usa o da Voc."));
+        Linha(Tr.T("α Isc (%/°C, opcional)"), _alfaIsc, Tr.T("Coeficiente de temperatura da Isc. Em branco, zero."));
+
         Secao(Tr.T("Mesa"));
         Linha(Tr.T("Módulos"), _quantidade);
         Linha(Tr.T("Arranjo"), _arranjo);
@@ -357,6 +402,10 @@ internal sealed class JanelaDeMesa : Window
         _enterro.TextChanged += (_, _) => Recalcular();
         _botaoDosVaos.Click += (_, _) => EscreverVaos();
         _cadastrarModulo.Click += (_, _) => CadastrarModulo();
+        _carregarPan.Click += (_, _) => CarregarPan();
+        _limparEletrica.Click += (_, _) => LimparEletrica();
+
+        foreach (var campo in CamposEletricos()) campo.TextChanged += (_, _) => Recalcular();
 
         return pilha;
     }
@@ -473,6 +522,7 @@ internal sealed class JanelaDeMesa : Window
         _vaosEscritos = perfil.Frame.PillarSpans;
 
         Selecionar(_arranjo, perfil.Layout.Arrangement);
+        PreencherEletrica(perfil.ModuleElectrical);
 
         var daBiblioteca = ModuleLibrary.Find(_modulos, perfil.Layout.Module.Model);
 
@@ -542,6 +592,12 @@ internal sealed class JanelaDeMesa : Window
 
         var (marca, modelo) = Modulo();
 
+        if (!LerEletrica(marca, modelo, potencia, out var eletrica, out var porQueEletrica))
+        {
+            motivo = porQueEletrica;
+            return null;
+        }
+
         var perfil = new TableProfile(
             _nome.Text,
             new TableLayout(
@@ -554,7 +610,10 @@ internal sealed class JanelaDeMesa : Window
                 PillarSpans = _vaosEscritos,
                 MinEmbedment = enterro,
             },
-            graus * Math.PI / 180);
+            graus * Math.PI / 180)
+        {
+            ModuleElectrical = eletrica,
+        };
 
         if (perfil.WhyInvalid is { } porQue)
         {
@@ -615,6 +674,7 @@ internal sealed class JanelaDeMesa : Window
         if (_preenchendo) return;
 
         MostrarOrigemDosVaos();
+        MostrarOrigemEletrica();
 
         try
         {
@@ -650,7 +710,8 @@ internal sealed class JanelaDeMesa : Window
                     : Tr.T(", com o pilar na ponta da estrutura"))
                 + "\n"
                 + Tr.F("O pilar encosta na mesa a {0} m da ponta baixa do módulo (sobra da tesoura {1} m), e sobe {2} m acima dela.",
-                    Numero(geometria.PillarRow), Numero(geometria.RafterOffset), Numero(subida));
+                    Numero(geometria.PillarRow), Numero(geometria.RafterOffset), Numero(subida))
+                + (ModuleSource.ProfileDivergence(perfil) is { } divergencia ? "\n" + Tr.F("ATENÇÃO: {0}", divergencia) : string.Empty);
 
             _usar.IsEnabled = true;
             _salvar.IsEnabled = true;
@@ -725,6 +786,163 @@ internal sealed class JanelaDeMesa : Window
             RegistroDeDiagnostico.Registrar("Falha ao cadastrar módulo pela janela de Mesa.", erro);
             Avisar(Tr.F("Não consegui cadastrar o módulo: {0}", erro.Message));
         }
+    }
+
+    // ------------------------------------------------- dados elétricos (item 15)
+
+    private IEnumerable<TextBox> CamposEletricos() => [_voc, _isc, _vmp, _imp, _betaVoc, _gamaPmax, _alfaIsc];
+
+    private string[] TextosEletricos() => CamposEletricos().Select(c => c.Text.Trim()).ToArray();
+
+    /// <summary>Enche os campos elétricos (null: em branco) e guarda de onde vieram.</summary>
+    private void PreencherEletrica(PanModule? eletrica)
+    {
+        var antes = _preenchendo;
+        _preenchendo = true;
+
+        _voc.Text = eletrica is null ? string.Empty : eletrica.Voc.ToString("0.###", Tr.Culture);
+        _isc.Text = eletrica is null ? string.Empty : eletrica.Isc.ToString("0.###", Tr.Culture);
+        _vmp.Text = eletrica is null ? string.Empty : eletrica.Vmp.ToString("0.###", Tr.Culture);
+        _imp.Text = eletrica is null ? string.Empty : eletrica.Imp.ToString("0.###", Tr.Culture);
+        _betaVoc.Text = eletrica is null ? string.Empty : eletrica.VocCoefficientPercent.ToString("0.####", Tr.Culture);
+        _gamaPmax.Text = eletrica?.PowerCoefficient is { } g ? g.ToString("0.####", Tr.Culture) : string.Empty;
+        _alfaIsc.Text = eletrica is null || eletrica.IscCoefficient == 0 ? string.Empty : eletrica.IscCoefficientPercent.ToString("0.####", Tr.Culture);
+
+        _panLido = eletrica;
+        _textosDoPan = TextosEletricos();
+        _preenchendo = antes;
+        MostrarOrigemEletrica();
+    }
+
+    private void MostrarOrigemEletrica()
+    {
+        if (_panLido is not null && TextosEletricos().SequenceEqual(_textosDoPan))
+            _origemEletrica.Text = Tr.F("Gravado na estrutura: {0}", _panLido.Describe());
+        else if (TextosEletricos().All(t => t.Length == 0))
+            _origemEletrica.Text = Tr.T("Sem dados elétricos: carregue o .PAN ou digite Voc, Isc, Vmp, Imp e β Voc. Sem eles, a rota não calcula tensões e correntes.");
+        else
+            _origemEletrica.Text = Tr.T("Valores à mão (a Pmáx é a potência do módulo).");
+    }
+
+    /// <summary>
+    /// Os dados elétricos que os campos descrevem: o PAN como foi lido, se os
+    /// campos não mudaram; os valores à mão, se mudaram (a Pmáx é a potência
+    /// do módulo); null, se estão todos em branco. False, com o motivo, se
+    /// estão pela metade ou não se leem.
+    /// </summary>
+    private bool LerEletrica(string marca, string modelo, double potencia, out PanModule? eletrica, out string motivo)
+    {
+        eletrica = null;
+        motivo = string.Empty;
+        var textos = TextosEletricos();
+
+        if (textos.All(t => t.Length == 0)) return true;
+
+        if (_panLido is not null && textos.SequenceEqual(_textosDoPan))
+        {
+            eletrica = _panLido;
+            return true;
+        }
+
+        var obrigatorios = new (TextBox Campo, string Nome)[] { (_voc, "Voc"), (_isc, "Isc"), (_vmp, "Vmp"), (_imp, "Imp"), (_betaVoc, "β Voc") };
+        var valores = new double[obrigatorios.Length];
+
+        for (var i = 0; i < obrigatorios.Length; i++)
+        {
+            if (NumberInput.TryParseMeasure(obrigatorios[i].Campo.Text, out valores[i])) continue;
+
+            motivo = string.IsNullOrWhiteSpace(obrigatorios[i].Campo.Text)
+                ? Tr.F("dados elétricos pela metade: falta {0}. Preencha Voc, Isc, Vmp, Imp e β Voc, ou deixe todos em branco.", obrigatorios[i].Nome)
+                : Tr.F("não consigo ler o número do campo \"{0}\".", obrigatorios[i].Nome);
+            return false;
+        }
+
+        double? gama = null;
+        if (!string.IsNullOrWhiteSpace(_gamaPmax.Text))
+        {
+            if (!NumberInput.TryParseMeasure(_gamaPmax.Text, out var g))
+            {
+                motivo = Tr.F("não consigo ler o número do campo \"{0}\".", "γ Pmáx");
+                return false;
+            }
+
+            gama = g;
+        }
+
+        var alfa = 0.0;
+        if (!string.IsNullOrWhiteSpace(_alfaIsc.Text) && !NumberInput.TryParseMeasure(_alfaIsc.Text, out alfa))
+        {
+            motivo = Tr.F("não consigo ler o número do campo \"{0}\".", "α Isc");
+            return false;
+        }
+
+        var (voc, isc, vmp, imp, beta) = (valores[0], valores[1], valores[2], valores[3], valores[4]);
+        var manual = new PanModule(marca, modelo, potencia, voc, isc, vmp, imp, beta / 100 * voc, alfa / 100 * isc, null, gama);
+
+        if (manual.WhyInvalid() is { } porque)
+        {
+            motivo = Tr.F("os dados elétricos do módulo não servem: {0}.", porque);
+            return false;
+        }
+
+        eletrica = manual;
+        return true;
+    }
+
+    /// <summary>
+    /// "Carregar .PAN..." (item 15): lê o PAN e põe na estrutura os dados
+    /// elétricos e a potência dele (<see cref="TableProfile.WithPan"/>, o
+    /// mesmo do CLIVUS_ESTRUTURA_PAN). As medidas não mudam.
+    /// </summary>
+    private void CarregarPan()
+    {
+        try
+        {
+            var caminho = DialogoDeArquivo.Abrir(Tr.T("Arquivo PAN do módulo"), Tr.T("Módulo do PVsyst (*.pan)|*.pan|Todos os arquivos (*.*)|*.*"), null);
+            if (caminho is null) return;
+
+            if (PotenciaCommands.LerPan(caminho, out var porque) is not { } pan)
+            {
+                Avisar(porque);
+                return;
+            }
+
+            NumberInput.TryParseLarge(_potencia.Text, out var antes);
+            var atual = Ler(out _);
+
+            _preenchendo = true;
+            if (atual is not null)
+            {
+                Preencher(atual.WithPan(pan));
+            }
+            else
+            {
+                // A mesa ainda não fecha: só os campos do módulo mudam.
+                PreencherEletrica(pan);
+                _potencia.Text = NumeroGrande(pan.Pmax);
+            }
+
+            _preenchendo = false;
+            Recalcular();
+
+            var recado = Tr.F("PAN lido: {0}.", pan.Describe());
+            if (Math.Abs(antes - pan.Pmax) > ModuleSource.Tolerance)
+                recado += "\n\n" + Tr.F("A potência do módulo passou de {0:0.#} para {1:0.#} Wp. As mesas já desenhadas continuam como estavam: depois de gravar a estrutura no desenho, use \"Atualizar a potência das mesas desenhadas\" nas Configurações.", antes, pan.Pmax);
+
+            Avisar(recado);
+        }
+        catch (Exception erro)
+        {
+            _preenchendo = false;
+            RegistroDeDiagnostico.Registrar("Falha ao carregar o PAN na janela de Mesa.", erro);
+            Avisar(Tr.F("Não consegui carregar o PAN: {0}", erro.Message));
+        }
+    }
+
+    private void LimparEletrica()
+    {
+        PreencherEletrica(null);
+        Recalcular();
     }
 
     /// <summary>A linha embaixo do botão: de onde sai a tabela de pilares.</summary>

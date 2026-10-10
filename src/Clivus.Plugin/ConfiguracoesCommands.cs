@@ -58,7 +58,24 @@ public static class ConfiguracoesCommands
             return mesa.Resultado;
         }
 
-        janela = new JanelaDeConfiguracoes(mesas, parametros, aviso, estilos, EditarMesa);
+        // Item 15 (10/10/2026): as divergências PAN × estrutura × mesas
+        // desenhadas, com a lista da janela (o que ainda não foi gravado
+        // também conta), e o "Atualizar a potência das mesas desenhadas".
+        var pans = RotaDeCabosStore.ModulosPan(database);
+        var simulada = FonteDoModulo.Simulada(database);
+        var desenhadas = FonteDoModulo.MesasDesenhadas(database);
+
+        IReadOnlyList<string> Divergencias(IReadOnlyList<DrawingTable> lista) =>
+            new ModuleSource(lista, pans, simulada).Divergences(desenhadas);
+
+        (int, double, string) AtualizarPotencia(List<DrawingTable> lista, DrawingTable mesa)
+        {
+            var feito = PotenciaCommands.AtualizarPotencia(database, lista, mesa);
+            desenhadas = FonteDoModulo.MesasDesenhadas(database);
+            return feito;
+        }
+
+        janela = new JanelaDeConfiguracoes(mesas, parametros, aviso, estilos, EditarMesa, divergencias: Divergencias, atualizarPotencia: AtualizarPotencia);
 
         if (AcadApp.ShowModalWindow(janela) != true || janela.Salvo is not { } salvo)
         {

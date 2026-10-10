@@ -88,6 +88,7 @@ internal sealed class JanelaDeRotaDeCabos : Window
     private readonly Dictionary<CableRoute, TabItem> _itens = [];
     private readonly Dictionary<CableRoute, AbaDeRota> _paginas = [];
     private readonly AbaResumoDeCabos _resumo;
+    private readonly AvisoDePotenciaSimulada _potenciaSimulada;
     private readonly TextBlock _recado = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(8, 0, 8, 8) };
 
     // Da última leitura: o que falta para cada rota e o problema do registro.
@@ -120,7 +121,13 @@ internal sealed class JanelaDeRotaDeCabos : Window
         _resumo = new AbaResumoDeCabos(documento);
         _abas.Items.Add(new TabItem { Header = Tr.T("Resumo"), ToolTip = Tr.T("Os cabos da usina inteira: metros por rota, por cabo e por polaridade, e a lista de material."), Content = _resumo });
 
+        // Item 14 (10/10/2026): com a potência trocada pela área, a faixa diz
+        // por que os cálculos sumiram e devolve a configuração da mesa.
+        _potenciaSimulada = new AvisoDePotenciaSimulada(documento) { AoMudar = Atualizar };
+
         var raiz = new DockPanel();
+        DockPanel.SetDock(_potenciaSimulada, Dock.Top);
+        raiz.Children.Add(_potenciaSimulada);
         DockPanel.SetDock(_recado, Dock.Bottom);
         raiz.Children.Add(_recado);
         raiz.Children.Add(_abas);
@@ -146,6 +153,7 @@ internal sealed class JanelaDeRotaDeCabos : Window
         {
             var (desenho, problema) = RotaDeCabosCommands.Ler(_documento);
             _problemaDeLeitura = problema;
+            _potenciaSimulada.Atualizar();
 
             foreach (var rota in CableRoutes.All)
             {
@@ -157,6 +165,7 @@ internal sealed class JanelaDeRotaDeCabos : Window
                 item.IsEnabled = livre;
                 item.ToolTip = livre ? CableRoutes.Description(rota) : Tr.F("Falta: {0}.", string.Join("; ", falta));
                 if (livre && paginas) _paginas[rota].Atualizar();
+                else if (livre) _paginas[rota].AtualizarModulo();
             }
 
             // A aba aberta não pode ficar numa desabilitada: vai para a primeira livre.
@@ -319,6 +328,8 @@ internal sealed class AbaDeRota : AbaEletrica
     private bool _preenchendo;
     private readonly TextBlock _valas = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 6) };
     private readonly TextBlock _modulos = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) };
+    private readonly TextBlock _divergencias = new() { TextWrapping = TextWrapping.Wrap, Foreground = Brushes.Firebrick, Margin = new Thickness(0, 0, 0, 6), Visibility = Visibility.Collapsed };
+    private Button? _tirarPanAntigo;
     private readonly StackPanel _tabelas = new();
     private List<CableTable> _ultimas = [];
 
@@ -384,11 +395,16 @@ internal sealed class AbaDeRota : AbaEletrica
 
         if (rota == CableRoute.DirectCurrent)
         {
-            Titulo(pilha, Tr.T("Módulo (arquivo PAN do PVsyst) e temperaturas"));
+            // Item 15 (10/10/2026): o módulo vem da estrutura (fonte única);
+            // aqui só se mostra e se avisa a divergência. O PAN antigo da
+            // rota fica como reserva, com o botão para tirá-lo.
+            Titulo(pilha, Tr.T("Módulo (da estrutura) e temperaturas"));
             pilha.Children.Add(_modulos);
+            pilha.Children.Add(_divergencias);
             var pan = new WrapPanel();
-            Botao(pan, Tr.T("Carregar .PAN..."), Tr.T("Lê Voc, Isc, Vmp, Imp, potência e os coeficientes de temperatura. Se faltar campo, diz qual; nunca inventa valor."), CarregarPan);
-            Botao(pan, Tr.T("Tirar os PAN"), Tr.T("Tira do desenho os módulos lidos de PAN."), TirarPan);
+            Botao(pan, Tr.T("Estruturas..."), Tr.T("Abre as Configurações: em Estruturas > Editar, carregue o .PAN do módulo ou digite os valores. É a fonte única do módulo."),
+                () => Documento.SendStringToExecute($"\x03\x03_{PluginInfo.ComandoConfiguracoes} ", true, false, false));
+            _tirarPanAntigo = Botao(pan, Tr.T("Tirar o PAN antigo da rota"), Tr.T("Tira do desenho os módulos lidos de PAN pela rota (antes da fonte única na estrutura). As estruturas sem dados elétricos ficam sem tensões e correntes."), TirarPan);
             pilha.Children.Add(pan);
         }
 
@@ -438,15 +454,7 @@ internal sealed class AbaDeRota : AbaEletrica
 
         _valas.Text = Tr.F("{0} vala(s) desta rota no desenho.", RotaDeCabosStore.QuantasValas(db)[_rota]);
 
-        if (_rota == CableRoute.DirectCurrent)
-        {
-            var pans = RotaDeCabosStore.ModulosPan(db);
-            var projeto = SettingsStore.Load(db).Settings ?? ProjectSettings.Default;
-            _modulos.Text = (pans.Count == 0
-                    ? Tr.T("Nenhum módulo lido de PAN: as tensões, correntes e quedas ficam em branco.")
-                    : string.Join("\n", pans.Select(p => Tr.F("{0} {1}: Voc {2} V, Isc {3} A, Vmp {4} V, Imp {5} A, β Voc {6} V/°C", p.Manufacturer, p.Model, p.Voc, p.Isc, p.Vmp, p.Imp, p.VocCoefficient))))
-                + "\n" + Tr.F("Temperaturas (em Configurações): mínima {0} °C, máxima {1} °C.", projeto.MinTemperature, projeto.MaxTemperature);
-        }
+        AtualizarModulo();
 
         if (RotaDeCabosCampo.Relatorios.Remove((Documento, _rota), out var relatorio))
         {
@@ -457,6 +465,28 @@ internal sealed class AbaDeRota : AbaEletrica
         {
             Avisar(Tr.F("ATENÇÃO: {0}", problema), erro: true);
         }
+    }
+
+    /// <summary>
+    /// O módulo da aba CC (item 15): de onde vem o módulo de cada estrutura,
+    /// as temperaturas e as divergências. Só relê isto (sem tocar no
+    /// formulário), e por isso também roda quando a janela volta à frente
+    /// (o usuário pode ter carregado o PAN na estrutura).
+    /// </summary>
+    internal void AtualizarModulo()
+    {
+        if (_rota != CableRoute.DirectCurrent) return;
+
+        var db = Documento.Database;
+        var projeto = SettingsStore.Load(db).Settings ?? ProjectSettings.Default;
+        var fonte = FonteDoModulo.Ler(db);
+        _modulos.Text = string.Join("\n", fonte.Describe())
+            + "\n" + Tr.F("Temperaturas (em Configurações): mínima {0} °C, máxima {1} °C.", projeto.MinTemperature, projeto.MaxTemperature);
+
+        var divergencias = fonte.Divergences(FonteDoModulo.MesasDesenhadas(db));
+        _divergencias.Text = string.Join("\n", divergencias.Select(d => Tr.F("ATENÇÃO: {0}", d)));
+        _divergencias.Visibility = divergencias.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        if (_tirarPanAntigo is not null) _tirarPanAntigo.Visibility = fonte.LegacyPans.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
     /// <summary>
@@ -559,32 +589,14 @@ internal sealed class AbaDeRota : AbaEletrica
         Atualizar();
     }
 
-    private void CarregarPan()
-    {
-        var caminho = DialogoDeArquivo.Abrir(Tr.T("Arquivo PAN do módulo"), Tr.T("Módulo do PVsyst (*.pan)|*.pan|Todos os arquivos (*.*)|*.*"), null);
-        if (caminho is null) return;
-
-        var texto = System.IO.File.ReadAllText(caminho, System.Text.Encoding.Latin1);
-        if (PanModule.Parse(texto, out var faltam) is not { } modulo)
-        {
-            Avisar(Tr.F("Não li o PAN {0}: faltou ou está ilegível {1}. Nenhum valor foi inventado.", System.IO.Path.GetFileName(caminho), string.Join(", ", faltam)), erro: true);
-            return;
-        }
-
-        Fazer(() =>
-        {
-            var lista = RotaDeCabosStore.ModulosPan(Documento.Database);
-            lista.RemoveAll(p => string.Equals(p.Model, modulo.Model, StringComparison.OrdinalIgnoreCase));
-            lista.Add(modulo);
-            RotaDeCabosStore.GravarModulosPan(Documento.Database, lista);
-            return Tr.F("PAN lido: {0} {1}.", modulo.Manufacturer, modulo.Model);
-        });
-    }
-
+    /// <summary>
+    /// Tira o PAN antigo, lido pela rota antes da fonte única (item 15). O
+    /// "Carregar .PAN..." saiu daqui: o PAN se carrega na estrutura.
+    /// </summary>
     private void TirarPan() => Fazer(() =>
     {
         RotaDeCabosStore.GravarModulosPan(Documento.Database, []);
-        return Tr.T("Módulos de PAN tirados do desenho.");
+        return Tr.T("PAN antigo da rota tirado do desenho. Os dados elétricos do módulo vêm só da estrutura.");
     });
 
     private void VerCabos()

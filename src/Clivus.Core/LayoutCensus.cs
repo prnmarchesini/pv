@@ -29,6 +29,10 @@ public sealed record CountedTable(TableIdentity? Identity, int Contours, int Mod
 /// <param name="PowerKwp">A potência instalada, em kWp: a soma, mesa a mesa, de módulos × potência do módulo da mesa.</param>
 /// <param name="TablesWithoutPower">Mesas sem potência gravada (de antes do 7.6), que usaram a potência do perfil atual.</param>
 /// <param name="FallbackPowerWatts">A potência do perfil atual, em W, usada nessas mesas.</param>
+/// <param name="SimulatedPowerWatts">
+/// A potência do módulo trocada pela área (item 14 de 10/10/2026), em W, que
+/// vale para todas as mesas no lugar da gravada; null quando não há.
+/// </param>
 public sealed record LayoutCensus(
     int Tables,
     int Duplicated,
@@ -42,12 +46,14 @@ public sealed record LayoutCensus(
     IReadOnlyList<double> PillarLengths,
     double PowerKwp,
     int TablesWithoutPower,
-    double FallbackPowerWatts)
+    double FallbackPowerWatts,
+    double? SimulatedPowerWatts = null)
 {
     /// <summary>Conta.</summary>
     /// <param name="fallbackPowerWatts">A potência do módulo do perfil atual, para as mesas que não têm a sua gravada.</param>
     /// <exception cref="ArgumentOutOfRangeException">Potência de reserva que não é um número positivo.</exception>
-    public static LayoutCensus Count(IReadOnlyList<CountedTable> tables, double fallbackPowerWatts)
+    /// <param name="simulatedPowerWatts">A potência trocada pela área, que vale para todas as mesas; null: a de cada mesa.</param>
+    public static LayoutCensus Count(IReadOnlyList<CountedTable> tables, double fallbackPowerWatts, double? simulatedPowerWatts = null)
     {
         ArgumentNullException.ThrowIfNull(tables);
 
@@ -62,7 +68,7 @@ public sealed record LayoutCensus(
 
         foreach (var t in tables)
         {
-            var potencia = t.Identity?.ModulePowerWatts;
+            var potencia = simulatedPowerWatts ?? t.Identity?.ModulePowerWatts;
 
             if (potencia is null && t.Identity is not null) semPotencia++;
 
@@ -82,7 +88,8 @@ public sealed record LayoutCensus(
             comprimentos,
             watts / 1000.0,
             semPotencia,
-            fallbackPowerWatts);
+            fallbackPowerWatts,
+            simulatedPowerWatts);
     }
 
     /// <summary>As linhas do relatório, em português.</summary>
@@ -107,6 +114,9 @@ public sealed record LayoutCensus(
 
         if (Duplicated > 0)
             linhas.Add(Tr.F("ATENÇÃO: {0} mesa(s) com mais de um contorno na mesma identidade (cópia sem identidade própria): use o Regerar área", Duplicated));
+
+        if (SimulatedPowerWatts is { } simulada)
+            linhas.Add(Tr.F("ATENÇÃO: potência do módulo trocada pela área para {0:0.#} Wp (simulação): o kWp acima usa essa potência em todas as mesas", simulada));
 
         if (TablesWithoutPower > 0)
             linhas.Add(Tr.F("ATENÇÃO: {0} mesa(s) sem potência gravada (desenhadas antes do 7.6): usaram {1:N0} W do perfil atual", TablesWithoutPower, FallbackPowerWatts));
