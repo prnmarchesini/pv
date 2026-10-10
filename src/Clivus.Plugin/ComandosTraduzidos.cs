@@ -483,6 +483,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_RUTA_CABLES_LADO")]
     public static void CLIVUS_RUTA_CABLES_LADO() => RotaDeCabosCampo.Lado();
 
+    [CommandMethod("CLIVUS_CABLE_ROUTES_RECALCULATE")]
+    public static void CLIVUS_CABLE_ROUTES_RECALCULATE() => RotaDeCabosCampo.Recalcular();
+
+    [CommandMethod("CLIVUS_RUTA_CABLES_RECALCULAR")]
+    public static void CLIVUS_RUTA_CABLES_RECALCULAR() => RotaDeCabosCampo.Recalcular();
+
     [CommandMethod("CLIVUS_CABLE_ROUTES_REPLACE")]
     public static void CLIVUS_CABLE_ROUTES_REPLACE() => RotaDeCabosCampo.Recolocar();
 
@@ -494,6 +500,18 @@ public static class ComandosTraduzidos
 
     [CommandMethod("CLIVUS_RUTA_CABLES_ZANJA")]
     public static void CLIVUS_RUTA_CABLES_ZANJA() => RotaDeCabosCampo.Vala();
+
+    [CommandMethod("CLIVUS_CABLE_ROUTES_TRENCH_REFRESH")]
+    public static void CLIVUS_CABLE_ROUTES_TRENCH_REFRESH() => RotaDeCabosCampo.ValaAtualizar();
+
+    [CommandMethod("CLIVUS_RUTA_CABLES_ZANJA_ACTUALIZAR")]
+    public static void CLIVUS_RUTA_CABLES_ZANJA_ACTUALIZAR() => RotaDeCabosCampo.ValaAtualizar();
+
+    [CommandMethod("CLIVUS_CABLE_ROUTES_TRENCH_RELEASE")]
+    public static void CLIVUS_CABLE_ROUTES_TRENCH_RELEASE() => RotaDeCabosCampo.ValaSoltar();
+
+    [CommandMethod("CLIVUS_RUTA_CABLES_ZANJA_SOLTAR")]
+    public static void CLIVUS_RUTA_CABLES_ZANJA_SOLTAR() => RotaDeCabosCampo.ValaSoltar();
 
     [CommandMethod("CLIVUS_ABOUT")]
     public static void CLIVUS_ABOUT() => SobreCommands.Sobre();

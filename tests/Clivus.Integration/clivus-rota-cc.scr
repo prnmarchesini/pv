@@ -1,0 +1,111 @@
+; Nivel 2 da rota CC (rodada de tela de 10/10/2026, itens 10, 11, 12, 16, 18
+; e 19). Usina pelo motor, strings de teste (uma por fileira de modulos: a mesa
+; de duas fileiras tem duas strings, como na imagem do item 10), UC U1 com o
+; trafo T1 e os inversores 1 e 2 (6 strings cada), os dois automaticos.
+;  (19) sem inversor em campo, a aba CC fica liberada (os automaticos);
+;  (11) tres linhas viram vala; uma e apagada e o Atualizar valas tira; outra
+;       e solta (fica no desenho, Polyline3d, sem a marca);
+;  (10) Gerar CC: cada mesa com uma entrada so, pelo lado alto;
+;  (12, 16) o resumo agrupado UC > trafo > inversor e as contas da string;
+;  (19) o Inversor 1 movido a mao e o Recalcular rota so dele: os cabos do 2
+;       ficam os mesmos (handles), os do 1 chegam na posicao nova;
+;  (18) o Inversor 2 apagado: o resumo tira os cabos dele e avisa; os dois
+;       apagados: "Inversor nao esta em campo: nao e possivel mostrar o resumo".
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area rota cc")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento rota cc")
+(command "CLIVUS_MESAS_EXEMPLO_AUTO")
+(command "CLIVUS_USINA_AUTO")
+(command "CLIVUS_STRINGS_TESTE_AUTO")
+(command "CLIVUS_ELETRICA_AUTO" "Uc" "Unitarias" "1")
+(command "CLIVUS_ELETRICA_AUTO" "Trafo" "2")
+(command "CLIVUS_ELETRICA_AUTO" "Vincular" "U1" "T1")
+(command "CLIVUS_ELETRICA_AUTO" "Modelo" "Huawei 250" "5" "4")
+(command "CLIVUS_ELETRICA_AUTO" "Inversores" "Huawei 250" "2")
+(command "CLIVUS_ELETRICA_AUTO" "Alocar" "Inversor 1" "6")
+(command "CLIVUS_ELETRICA_AUTO" "Alocar" "Inversor 2" "6")
+(command "CLIVUS_ELETRICA_AUTO" "Skid" "T1" "Skid 1" "Inversor 1;Inversor 2")
+(defun clivus:etiqueta (bloco / e d txt)
+  (setq e (tblobjname "BLOCK" bloco) txt "?")
+  (while (setq e (entnext e))
+    (setq d (entget e))
+    (if (= (cdr (assoc 0 d)) "MTEXT") (setq txt (cdr (assoc 1 d)))))
+  txt)
+(defun clivus:bloco (tag / ss i e achado)
+  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_EQUIPAMENTO_*"))) i 0)
+  (while (and ss (< i (sslength ss)) (not achado))
+    (setq e (ssname ss i) i (1+ i))
+    (if (= (clivus:etiqueta (cdr (assoc 2 (entget e)))) tag) (setq achado e)))
+  achado)
+(defun clivus:equip (etapa / ss i e d p)
+  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_EQUIPAMENTO_*"))) i 0)
+  (while (and ss (< i (sslength ss)))
+    (setq e (ssname ss i) d (entget e) p (cdr (assoc 10 d)) i (1+ i))
+    (princ (strcat "\nCLIVUS_ROTACC_EQUIP etapa=" etapa " tag=" (vl-string-translate " " "_" (clivus:etiqueta (cdr (assoc 2 d))))
+                   " x=" (rtos (car p) 2 3) " y=" (rtos (cadr p) 2 3) " fim")))
+  (princ))
+; A vala (do Clivus) cujo primeiro vertice cai perto de pt, em planta.
+(defun clivus:vala (pt / ss i e d v achada)
+  (setq ss (ssget "_X" (list (list -3 (list "CLIVUS")))) i 0)
+  (while (and ss (< i (sslength ss)) (not achada))
+    (setq e (ssname ss i) i (1+ i) d (entget e (list "CLIVUS")))
+    (if (and (= (cdr (cadr (cadr (assoc -3 d)))) "Vala") (= (cdr (assoc 0 d)) "POLYLINE"))
+      (progn
+        (setq v (cdr (assoc 10 (entget (entnext e)))))
+        (if (< (distance (list (car v) (cadr v)) (list (car pt) (cadr pt))) 0.01) (setq achada e)))))
+  achada)
+; ---- (19) automaticos: a aba CC sem inversor em campo ---------------------
+(command "CLIVUS_ELETRICA_LOCAL" "Strings" "Inversor 1;Inversor 2")
+(princ "\nCLIVUS_ROTACC ABAS")
+(command "CLIVUS_ROTA_CABOS")
+; ---- (11) valas: atualizar e soltar ---------------------------------------
+(command "_.PLINE" "{{V1}}" "{{V2}}" "")
+(setq clivus:sel (ssadd (entlast)))
+(command "_.LINE" "{{X1}}" "{{X2}}" "")
+(ssadd (entlast) clivus:sel)
+(command "_.LINE" "{{Y1}}" "{{Y2}}" "")
+(ssadd (entlast) clivus:sel)
+(command "CLIVUS_ROTA_VALA" "CC" clivus:sel "")
+(setq clivus:apagar (clivus:vala (list {{X1XY}})))
+(princ (strcat "\nCLIVUS_ROTACC APAGAR achada=" (if clivus:apagar "1" "0")))
+(command "_.ERASE" clivus:apagar "")
+(princ "\nCLIVUS_ROTACC ATUALIZAR")
+(command "CLIVUS_ROTA_VALA_ATUALIZAR" "CC")
+(setq clivus:solta (clivus:vala (list {{Y1XY}})))
+(princ (strcat "\nCLIVUS_ROTACC SOLTAR achada=" (if clivus:solta "1" "0")))
+(command "CLIVUS_ROTA_VALA_SOLTAR" "CC" clivus:solta "")
+(setq clivus:d (entget clivus:solta (list "CLIVUS")))
+(princ (strcat "\nCLIVUS_ROTACC_SOLTA tipo=" (cdr (assoc 0 clivus:d)) " flags=" (itoa (cdr (assoc 70 clivus:d)))
+               " xdata=" (if (assoc -3 clivus:d) "1" "0") " camada=" (cdr (assoc 8 clivus:d)) " fim"))
+; ---- (10) gerar: uma entrada por mesa -------------------------------------
+(princ "\nCLIVUS_ROTACC GERAR")
+(command "CLIVUS_ROTA_GERAR" "CC")
+(clivus:equip "gerado")
+(princ "\nCLIVUS_ROTACC CONFERIR1")
+(command "CLIVUS_ROTA_CONFERIR_AUTO")
+; ---- (12, 16) o resumo ----------------------------------------------------
+(princ "\nCLIVUS_ROTACC RESUMO1")
+(command "CLIVUS_ROTA_RESUMO_AUTO")
+; ---- (19) movido e recalculado so ele --------------------------------------
+(command "CLIVUS_ELETRICA_POSICIONAR" "Inversor 1" "{{M}}")
+(princ "\nCLIVUS_ROTACC RECALCULAR")
+(command "CLIVUS_ROTA_RECALCULAR" "Inversor 1")
+(clivus:equip "recalculado")
+(princ "\nCLIVUS_ROTACC CONFERIR2")
+(command "CLIVUS_ROTA_CONFERIR_AUTO")
+; ---- (18) inversor apagado ------------------------------------------------
+(command "_.ERASE" (clivus:bloco "Inversor 2") "")
+(princ "\nCLIVUS_ROTACC RESUMO2")
+(command "CLIVUS_ROTA_RESUMO_AUTO")
+(command "_.ERASE" (clivus:bloco "Inversor 1") "")
+(princ "\nCLIVUS_ROTACC RESUMO3")
+(command "CLIVUS_ROTA_RESUMO_AUTO")
+(setvar "OSMODE" clivus:osmode)
+(princ "\nCLIVUS_ROTACC_FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ)

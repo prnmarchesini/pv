@@ -272,6 +272,259 @@ public static class CableReport
             notas);
     }
 
+    /// <summary>
+    /// Um grupo do resumo (Renan, 10/10/2026, item 12): UC, trafo ou inversor,
+    /// com os grupos de baixo e os circuitos do último nível. Os subtotais são
+    /// somados dos circuitos na hora (as vias trocadas mudam os totais).
+    /// </summary>
+    public sealed class CircuitGroup
+    {
+        internal CircuitGroup(string name, int level, string key)
+        {
+            Name = name;
+            Level = level;
+            Key = key;
+        }
+
+        /// <summary>O nome na tela: "UC1", "T1", "Inversor 1".</summary>
+        public string Name { get; }
+
+        /// <summary>0 = o de cima (UC).</summary>
+        public int Level { get; }
+
+        /// <summary>O caminho do grupo (os nomes de cima até ele), único na tabela: para lembrar o que está aberto.</summary>
+        public string Key { get; }
+
+        public List<CircuitGroup> Children { get; } = [];
+
+        public List<CircuitRun> Circuits { get; } = [];
+
+        /// <summary>Todos os circuitos abaixo dele.</summary>
+        public IEnumerable<CircuitRun> AllCircuits => Circuits.Concat(Children.SelectMany(g => g.AllCircuits));
+
+        /// <summary>Todos os grupos abaixo dele (ele não).</summary>
+        public IEnumerable<CircuitGroup> Descendants => Children.SelectMany(g => g.Descendants.Prepend(g));
+
+        public int CircuitCount => AllCircuits.Count();
+
+        public int Runs => AllCircuits.Sum(c => c.Runs);
+
+        public double Length => AllCircuits.Sum(c => c.Length);
+
+        /// <summary>Os cabos do grupo (lances vezes vias).</summary>
+        public int Cables => AllCircuits.Sum(c => c.Cables);
+
+        /// <summary>Os metros de cabo do grupo (com as vias).</summary>
+        public double CableLength => AllCircuits.Sum(c => c.CableLength);
+    }
+
+    /// <summary>"(sem UC)", "(sem trafo)"... para o elo que falta na cadeia.</summary>
+    private static string Sem(string oQue) => Tr.F("(sem {0})", oQue);
+
+    /// <summary>
+    /// Onde o circuito entra na hierarquia do resumo (item 12), de cima para
+    /// baixo, pela cadeia de vínculo: no CC (string -> inversor, string ->
+    /// combiner e combiner -> inversor) UC, trafo e inversor; no CA (inversor
+    /// -> trafo) UC e trafo; na MT (trafo -> subestação) a UC. O elo que falta
+    /// vira "(sem trafo)", "(sem UC)"...
+    /// </summary>
+    public static IReadOnlyList<string> GroupPath(ElectricalSetup setup, CircuitRun c)
+    {
+        ArgumentNullException.ThrowIfNull(setup);
+        ArgumentNullException.ThrowIfNull(c);
+
+        Guid trafo;
+        switch (c.Route)
+        {
+            case CableRoute.MediumVoltage:
+                return [Uc(setup.FindTransformer(c.From.Id)?.ConsumerUnit ?? Guid.Empty)];
+
+            case CableRoute.AlternatingCurrent:
+                trafo = c.To.Kind == CableEndKind.Transformer ? c.To.Id : setup.FindInverter(c.From.Id)?.Transformer ?? Guid.Empty;
+                return [Uc(setup.FindTransformer(trafo)?.ConsumerUnit ?? Guid.Empty), Trafo(trafo)];
+
+            default:
+                var inversor = c.To.Kind switch
+                {
+                    CableEndKind.Inverter => c.To.Id,
+                    CableEndKind.Combiner => setup.FindCombiner(c.To.Id)?.Inverter ?? Guid.Empty,
+                    _ => Guid.Empty,
+                };
+                trafo = setup.FindInverter(inversor)?.Transformer ?? Guid.Empty;
+                return [Uc(setup.FindTransformer(trafo)?.ConsumerUnit ?? Guid.Empty), Trafo(trafo), setup.FindInverter(inversor)?.Name ?? Sem(Tr.T("inversor"))];
+        }
+
+        string Trafo(Guid id) => setup.FindTransformer(id)?.Nickname ?? Sem(Tr.T("trafo"));
+
+        // A UC pelo código (U1, UC1): é a tag dela; o nome é livre ("Subestação U1").
+        string Uc(Guid id) => setup.FindUnit(id)?.Code ?? Sem(Tr.T("UC"));
+    }
+
+    /// <summary>
+    /// Agrupa os circuitos pela hierarquia (<paramref name="path"/>: os nomes
+    /// de cima para baixo), em ordem natural em cada nível; os circuitos de
+    /// cada grupo de baixo em ordem natural de De → Para. Uma UC com dois ou
+    /// mais trafos soma os trafos (o subtotal é dos circuitos abaixo).
+    /// </summary>
+    public static IReadOnlyList<CircuitGroup> Group(IEnumerable<CircuitRun> circuitos, Func<CircuitRun, IReadOnlyList<string>> path)
+    {
+        ArgumentNullException.ThrowIfNull(circuitos);
+        ArgumentNullException.ThrowIfNull(path);
+
+        var raiz = new CircuitGroup(string.Empty, -1, string.Empty);
+        foreach (var c in circuitos)
+        {
+            var grupo = raiz;
+            foreach (var nome in path(c))
+            {
+                var chave = grupo.Key + "/" + nome;
+                var filho = grupo.Children.FirstOrDefault(g => g.Key == chave);
+                if (filho is null) grupo.Children.Add(filho = new CircuitGroup(nome, grupo.Level + 1, chave));
+                grupo = filho;
+            }
+
+            grupo.Circuits.Add(c);
+        }
+
+        void Ordenar(CircuitGroup g)
+        {
+            g.Children.Sort((a, b) => NaturalStringComparer.Instance.Compare(a.Name, b.Name));
+            g.Circuits.Sort((a, b) =>
+            {
+                var r = a.Route.CompareTo(b.Route);
+                if (r == 0) r = NaturalStringComparer.Instance.Compare(a.FromName, b.FromName);
+                return r != 0 ? r : NaturalStringComparer.Instance.Compare(a.ToName, b.ToName);
+            });
+            foreach (var f in g.Children) Ordenar(f);
+        }
+
+        Ordenar(raiz);
+        return raiz.Children;
+    }
+
+    /// <summary>
+    /// O resumo agrupado de um tipo de cabo (itens 12 e 16), como vai para o
+    /// Excel: uma linha por grupo (o nome recuado pelo nível, com o subtotal
+    /// de lances, comprimento, cabos e metros de cabo) e, embaixo de cada
+    /// grupo do último nível, os circuitos dele; o total da usina no rodapé.
+    /// No CC (<paramref name="dc"/>), as colunas da tag da string e as contas
+    /// por string (<paramref name="checks"/>, pela ponta string do circuito).
+    /// </summary>
+    public static CableTable GroupedCircuits(string titulo, IReadOnlyList<CircuitGroup> grupos, bool dc, bool routeColumn,
+        IReadOnlyDictionary<CableEnd, StringCheck>? checks = null, IEnumerable<string>? notes = null)
+    {
+        ArgumentNullException.ThrowIfNull(grupos);
+
+        var vaziasDoCalculo = Enumerable.Repeat<object?>(null, StringCheck.Headers().Count).ToList();
+        var cabecalho = new List<string> { Tr.T("Agrupamento / circuito") };
+        if (dc) cabecalho.Add(Tr.T("Tag da string"));
+        if (routeColumn) cabecalho.Add(Tr.T("Rota"));
+        cabecalho.AddRange([Tr.T("Cabo"), Tr.T("Formação"), Tr.T("Seção (mm²)"), Tr.T("Condutor"), Tr.T("Isolação"), Tr.T("Método"),
+            Tr.T("Lances"), Tr.T("Comprimento (m)"), Tr.T("Vias"), Tr.T("Cabos"), Tr.T("Total de cabo (m)")]);
+        if (dc) cabecalho.AddRange(StringCheck.Headers());
+
+        var linhas = new List<IReadOnlyList<object?>>();
+
+        void Grupo(CircuitGroup g)
+        {
+            var linha = new List<object?> { new string(' ', g.Level * 4) + g.Name };
+            if (dc) linha.Add(null);
+            if (routeColumn) linha.Add(null);
+            linha.AddRange([null, null, null, null, null, null, (double)g.Runs, g.Length, null, (double)g.Cables, g.CableLength]);
+            if (dc) linha.AddRange(vaziasDoCalculo);
+            linhas.Add(linha);
+
+            foreach (var f in g.Children) Grupo(f);
+            foreach (var c in g.Circuits)
+            {
+                var l = new List<object?> { new string(' ', (g.Level + 1) * 4) + DePara(c.FromName, c.ToName) };
+                if (dc) l.Add(c.From.Kind == CableEndKind.String ? c.FromName : null);
+                if (routeColumn) l.Add(CableRoutes.Title(c.Route));
+                l.AddRange([c.Cable?.Name, c.Cable?.Formation, c.Cable?.SectionMm2, c.Cable?.Conductor, Isolacao(c.Cable), c.Method,
+                    (double)c.Runs, c.Length, (double)c.Wires, (double)c.Cables, c.CableLength]);
+                if (dc) l.AddRange(checks is not null && checks.TryGetValue(c.From, out var k) ? k.Cells() : vaziasDoCalculo);
+                linhas.Add(l);
+            }
+        }
+
+        foreach (var g in grupos) Grupo(g);
+
+        var todos = grupos.SelectMany(g => g.AllCircuits).ToList();
+        var total = new List<object?> { Tr.F("Total da usina ({0} circuito(s))", todos.Count) };
+        if (dc) total.Add(null);
+        if (routeColumn) total.Add(null);
+        total.AddRange([null, null, null, null, null, null, (double)todos.Sum(c => c.Runs), todos.Sum(c => c.Length), null, (double)todos.Sum(c => c.Cables), todos.Sum(c => c.CableLength)]);
+        if (dc) total.AddRange(vaziasDoCalculo);
+
+        var notas = new List<string>();
+        if (todos.Any(c => c.Cable is null)) notas.Add(Tr.T("Circuito sem cabo escolhido na aba da rota: a especificação fica em branco."));
+        if (notes is not null) notas.AddRange(notes);
+
+        return new CableTable(titulo, cabecalho, linhas, total, notas);
+    }
+
+    /// <summary>
+    /// Os itens cujas pontas existem em campo (item 18, erro grave de
+    /// 10/10/2026: o inversor apagado e o resumo ainda mostrando os cabos
+    /// dele): o resumo reflete o desenho de agora. Cabo cuja ponta (string,
+    /// combiner, inversor, trafo ou subestação) não está mais em campo não
+    /// entra; as pontas que faltam voltam para o aviso.
+    /// </summary>
+    public static (List<T> Kept, List<CableEnd> Missing) InField<T>(IEnumerable<T> itens, Func<T, CableEnd> from, Func<T, CableEnd> to, Func<CableEnd, bool> emCampo)
+    {
+        ArgumentNullException.ThrowIfNull(itens);
+        ArgumentNullException.ThrowIfNull(from);
+        ArgumentNullException.ThrowIfNull(to);
+        ArgumentNullException.ThrowIfNull(emCampo);
+
+        var ficam = new List<T>();
+        var faltam = new List<CableEnd>();
+        foreach (var i in itens)
+        {
+            var ok = true;
+            foreach (var ponta in new[] { from(i), to(i) })
+            {
+                if (emCampo(ponta)) continue;
+                ok = false;
+                if (!faltam.Contains(ponta)) faltam.Add(ponta);
+            }
+
+            if (ok) ficam.Add(i);
+        }
+
+        return (ficam, faltam);
+    }
+
+    /// <summary>
+    /// O aviso das pontas fora de campo (item 18): sem nada que fique,
+    /// "Inversor não está em campo: não é possível mostrar o resumo"; com
+    /// parte, quem sumiu e que os cabos dele ficaram de fora. Null se nada falta.
+    /// </summary>
+    public static string? MissingMessage(IReadOnlyCollection<CableEnd> faltam, Func<CableEnd, string> nome, bool nadaFica)
+    {
+        ArgumentNullException.ThrowIfNull(faltam);
+        ArgumentNullException.ThrowIfNull(nome);
+        if (faltam.Count == 0) return null;
+
+        var nomes = string.Join(", ", faltam.Select(nome).Distinct().OrderBy(n => n, NaturalStringComparer.Instance));
+        var tipos = faltam.Select(f => f.Kind).Distinct().ToList();
+        var quem = tipos.Count == 1 ? KindName(tipos[0]) : Tr.T("Equipamento");
+
+        return nadaFica
+            ? Tr.F("{0} não está em campo: não é possível mostrar o resumo ({1}).", quem, nomes)
+            : Tr.F("Fora de campo: {0}. Os cabos ligados a eles ficaram fora do resumo: gere a rota de novo ou apague esses cabos.", nomes);
+    }
+
+    /// <summary>O nome do tipo de ponta, para o aviso.</summary>
+    public static string KindName(CableEndKind k) => k switch
+    {
+        CableEndKind.String => Tr.T("String"),
+        CableEndKind.Combiner => Tr.T("Combiner box"),
+        CableEndKind.Inverter => Tr.T("Inversor"),
+        CableEndKind.Transformer => Tr.T("Transformador"),
+        _ => Tr.T("Subestação"),
+    };
+
     /// <summary>"T1 → UC1".</summary>
     public static string DePara(string de, string para) => Tr.F("{0} → {1}", de, para);
 

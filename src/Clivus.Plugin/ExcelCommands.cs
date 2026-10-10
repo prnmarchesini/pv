@@ -126,11 +126,13 @@ public static class ExcelCommands
             foreach (var rota in CableRoutes.All.Where(r => lances.Any(l => l.Lance.Route == r)))
                 tabelas.AddRange(RotaDeCabosTabelas.Montar(documento, rota, out _));
 
-            var medidos = RotaDeCabosTabelas.Medidos(documento.Database);
+            // Só os cabos de pontas em campo (item 18): o inversor apagado não deixa cabo na conta.
+            var leitura = LeituraDaRota.Ler(documento.Database);
+            var medidos = RotaDeCabosTabelas.Medidos(documento.Database, leitura);
             if (medidos.Count > 0)
             {
-                // Um resumo por tipo de cabo, um circuito por linha (10/10/2026), e a lista de material.
-                var leitura = LeituraDaRota.Ler(documento.Database);
+                // Um resumo por tipo de cabo, agrupado (UC > trafo > inversor, com os
+                // subtotais; itens 12 e 16), um circuito por linha, e a lista de material.
                 for (var i = 0; i < RotaDeCabosTabelas.TiposDeCabo.Length; i++)
                     if (RotaDeCabosTabelas.Resumo(documento.Database, leitura, i) is { Circuitos.Count: > 0 } resumo) tabelas.Add(resumo.Tabela);
                 var material = CableReport.Material(medidos, 0);

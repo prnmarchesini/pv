@@ -16,8 +16,11 @@ namespace Clivus.Plugin;
 /// </summary>
 internal static class PosicaoAutomatica
 {
-    /// <summary>Põe os automáticos (todos, com <paramref name="todos"/>; senão só os que não estão em campo). As frases do que fez.</summary>
-    internal static List<string> Colocar(Editor editor, Database db, ProcessedTerrain terreno, TrenchNetwork rede, RouteSettings config, LeituraDaRota leitura, bool todos)
+    /// <summary>
+    /// Põe os automáticos (todos, com <paramref name="todos"/>; senão só os que
+    /// não estão em campo; com <paramref name="soEstes"/>, só entre eles). As frases do que fez.
+    /// </summary>
+    internal static List<string> Colocar(Editor editor, Database db, ProcessedTerrain terreno, TrenchNetwork rede, RouteSettings config, LeituraDaRota leitura, bool todos, IReadOnlySet<Guid>? soEstes = null)
     {
         var frases = new List<string>();
         var locais = LocalDosInversores.Ler(db, out var problema);
@@ -31,11 +34,15 @@ internal static class PosicaoAutomatica
             .Select(l => leitura.Setup.FindInverter(l.Inverter))
             .OfType<Inverter>()
             .Where(i => todos || leitura.Ponto(EquipmentKind.Inverter, i.Id) is null)
+            .Where(i => soEstes is null || soEstes.Contains(i.Id))
             .ToList();
         if (automaticos.Count == 0) return frases;
 
-        // As strings do CC de cada inversor (as de combiner vão pela aba Combiner).
-        var porInversor = leitura.StringsCc().GroupBy(s => s.Destination.Id).ToDictionary(g => g.Key, g => g.ToList());
+        // As strings do CC de cada inversor (as de combiner vão pela aba Combiner), saindo
+        // como o Gerar as tira: pelo lado alto da usina, uma entrada por mesa (item 10).
+        var todasCc = leitura.StringsCc();
+        var padrao = ExitPattern.For(todasCc, leitura.LadoDaUsina);
+        var porInversor = todasCc.GroupBy(s => s.Destination.Id).ToDictionary(g => g.Key, g => g.ToList());
 
         // O que não pode ser coberto: mesas e equipamentos em campo (os que estão sendo
         // postos agora não contam no lugar velho) e os já postos nesta rodada.
@@ -50,7 +57,7 @@ internal static class PosicaoAutomatica
                 continue;
             }
 
-            var acessos = strings.Select(s => Acesso(s, rede, config)).ToList();
+            var acessos = strings.Select(s => Acesso(s, rede, config, padrao)).ToList();
             if (InverterSites.BestTrenchPoint(rede, acessos) is not { } melhor)
             {
                 frases.Add(Tr.F("{0}: nenhuma string dele chega a uma vala (alcance {1:0.#} m); não foi posto.", inversor.Name, config.Reach));
@@ -92,13 +99,13 @@ internal static class PosicaoAutomatica
     /// Por onde a string chega à rede em cada lado da fileira (ou só pelo
     /// forçado): as batidas do + e do − e o caminho em planta até elas.
     /// </summary>
-    private static InverterSites.StringAccess Acesso(StringRouteInput s, TrenchNetwork rede, RouteSettings config)
+    private static InverterSites.StringAccess Acesso(StringRouteInput s, TrenchNetwork rede, RouteSettings config, ExitPattern padrao)
     {
         var lados = new List<(TrenchPoint Hit, double Before)[]>();
         foreach (var lado in s.ForcedEnd is { } forcado ? new[] { forcado } : new[] { RowEnd.Start, RowEnd.End })
         {
-            if (CableRouter.StringExit(s.Positive, lado, rede, config, out _) is not { } mais
-                || CableRouter.StringExit(s.Negative, lado, rede, config, out _) is not { } menos)
+            if (CableRouter.StringExit(s.Positive, lado, rede, config, out _, padrao) is not { } mais
+                || CableRouter.StringExit(s.Negative, lado, rede, config, out _, padrao) is not { } menos)
                 continue;
 
             lados.Add([(mais.Hit, Antes(s.Positive.Point, mais)), (menos.Hit, Antes(s.Negative.Point, menos))]);

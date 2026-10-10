@@ -122,12 +122,136 @@ public static class RotaDeCabosConferir
                 }
             }
 
+            // Item 10: cada lance CC (com o destino e o handle) e, por mesa, se todos os
+            // cabos das strings dela passam por um ponto comum fora dela, e de que lado.
+            Lances(editor, db, t, inv);
+
             editor.WriteMessage("\nROTA_CONFERIR_FIM\n");
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao conferir a rota de cabos (teste).", erro);
             editor.WriteMessage($"\nROTA_CONFERIR_ERRO {erro.Message}\n");
+        }
+    }
+
+    /// <summary>
+    /// ROTA_LANCE: cada lance CC com o handle, a string, o destino e as pontas
+    /// em planta. ROTA_ENTRADA: por mesa com cabo CC, quantos cabos saem das
+    /// pontas de string dela, se há um ponto comum a todos fora dela (a entrada
+    /// única) e se ele fica do lado da borda mais alta da mesa.
+    /// </summary>
+    private static void Lances(Autodesk.AutoCAD.EditorInput.Editor editor, Database db, Transaction t, System.Globalization.CultureInfo inv)
+    {
+        var leitura = LeituraDaRota.Ler(db);
+        var setup = leitura.Setup;
+        var strings = leitura.StringsComPontas.ToDictionary(x => x.String.Id, x => x.String);
+        var porMesa = new Dictionary<Guid, (RowTable Mesa, List<HashSet<(double, double)>> Cabos)>();
+
+        foreach (var l in RotaDeCabosStore.Lances(db).Where(l => l.Lance.Route == CableRoute.DirectCurrent))
+        {
+            var pontos = new List<Point3>();
+            if (t.GetObject(l.Id, OpenMode.ForRead) is Polyline3d p3)
+                foreach (ObjectId v in p3.Cast<ObjectId>().Where(v => !v.IsErased))
+                {
+                    var p = ((PolylineVertex3d)t.GetObject(v, OpenMode.ForRead)).Position;
+                    pontos.Add(new Point3(p.X, p.Y, p.Z));
+                }
+
+            if (pontos.Count < 2) continue;
+            var s = strings.GetValueOrDefault(l.Lance.From.Id);
+            editor.WriteMessage(string.Format(inv, "\nROTA_LANCE handle={0} string={1} para={2} polaridade={3} de={4:0.###},{5:0.###} ate={6:0.###},{7:0.###} fim\n",
+                l.Id.Handle, (string.IsNullOrWhiteSpace(s?.Tag) ? "?" : s.Tag).Replace(' ', '_'), (setup.FindInverter(l.Lance.To.Id)?.Name ?? "?").Replace(' ', '_'), l.Lance.Polarity,
+                pontos[0].X, pontos[0].Y, pontos[^1].X, pontos[^1].Y));
+
+            if (s is null) continue;
+            var modulo = l.Lance.Polarity == CablePolarity.Negative ? s.Modules[^1] : s.Modules[0];
+            if (leitura.MesaDoModulo(modulo) is not { } mesa) continue;
+            if (!porMesa.TryGetValue(mesa.Id, out var dela)) porMesa[mesa.Id] = dela = (mesa, []);
+            dela.Cabos.Add(pontos.Where(p => !Polygons.Contains(mesa.Corners, p.X, p.Y)).Select(p => (Math.Round(p.X, 3), Math.Round(p.Y, 3))).ToHashSet());
+        }
+
+        foreach (var (mesa, cabos) in porMesa.Values)
+        {
+            var comuns = new HashSet<(double X, double Y)>(cabos[0]);
+            foreach (var c in cabos.Skip(1)) comuns.IntersectWith(c);
+
+            // O ponto comum mais perto da mesa é a entrada; o lado é o da borda comprida mais perto dele.
+            var c0 = mesa.Corners;
+            var cx = c0.Take(4).Average(p => p.X);
+            var cy = c0.Take(4).Average(p => p.Y);
+            var alto = "-";
+            var distancia = double.NaN;
+            if (comuns.Count > 0)
+            {
+                var (ex, ey) = comuns.MinBy(p => (p.X - cx) * (p.X - cx) + (p.Y - cy) * (p.Y - cy));
+                double Dist(Point3 a, Point3 b)
+                {
+                    var dx = b.X - a.X;
+                    var dy = b.Y - a.Y;
+                    return Math.Abs((ex - a.X) * dy - (ey - a.Y) * dx) / Math.Sqrt(dx * dx + dy * dy);
+                }
+
+                var pelaBaixa = Dist(c0[0], c0[1]) < Dist(c0[2], c0[3]);
+                distancia = Math.Min(Dist(c0[0], c0[1]), Dist(c0[2], c0[3]));
+                var baixaMaisAlta = (c0[0].Z + c0[1].Z) / 2 > (c0[2].Z + c0[3].Z) / 2;
+                alto = pelaBaixa == baixaMaisAlta ? "1" : "0";
+            }
+
+            editor.WriteMessage(string.Format(inv, "\nROTA_ENTRADA mesa={0} cabos={1} comum={2} alto={3} distancia={4:0.###} fim\n", mesa.Label.Replace(' ', '_'), cabos.Count, comuns.Count > 0 ? 1 : 0, alto, distancia));
+        }
+    }
+
+    /// <summary>
+    /// Só no build de teste: o "Atualizar (reconta)" da aba Resumo, pelo mesmo
+    /// caminho (<see cref="RotaDeCabosTabelas.Usina"/>), escrito para o nível 2:
+    /// por tipo de cabo, os circuitos, os cabos, os metros, o aviso de fora de
+    /// campo, os grupos (nível, nome, subtotal) e as primeiras linhas de
+    /// circuito do CC com a tag e as contas.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoRotaResumoAutomatico)]
+    public static void Resumo()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+        var editor = documento.Editor;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+
+        try
+        {
+            var usina = RotaDeCabosTabelas.Usina(documento);
+            editor.WriteMessage(string.Format(inv, "\nROTA_RESUMO sumidos={0} orfaos={1}\n", usina.Sumidos, usina.Orfaos));
+
+            for (var i = 0; i < usina.Tipos.Count; i++)
+            {
+                var r = usina.Tipos[i];
+                var tipo = RotaDeCabosTabelas.TiposDeCabo[i].Titulo;
+                editor.WriteMessage(string.Format(inv, "\nROTA_RESUMO_TIPO tipo={0} circuitos={1} cabos={2} metros={3:0.00} linhas={4} fim\n",
+                    tipo, r.Circuitos.Count, r.Circuitos.Sum(c => c.Cables), r.Circuitos.Sum(c => c.CableLength), r.Tabela.Rows.Count));
+                if (r.ForaDeCampo is { } fora) editor.WriteMessage($"\nROTA_RESUMO_FORA tipo={tipo} {fora}\n");
+
+                void Grupo(CableReport.CircuitGroup g)
+                {
+                    editor.WriteMessage(string.Format(inv, "\nROTA_RESUMO_GRUPO tipo={0} nivel={1} nome={2} circuitos={3} cabos={4} metros={5:0.00} fim\n",
+                        tipo, g.Level, g.Name.Replace(' ', '_'), g.CircuitCount, g.Cables, g.CableLength));
+                    foreach (var f in g.Children) Grupo(f);
+                }
+
+                foreach (var g in r.Grupos) Grupo(g);
+            }
+
+            // A tabela CC como vai para o Excel: o cabeçalho e as linhas de circuito com a tag.
+            var cc = usina.Tipos[0].Tabela;
+            editor.WriteMessage("\nROTA_RESUMO_CABECALHO " + string.Join("|", cc.Header) + "\n");
+            foreach (var linha in cc.Rows.Where(l => l[1] is string tag && tag.Length > 0).Take(3))
+                editor.WriteMessage("\nROTA_RESUMO_LINHA " + string.Join("|", linha.Select(TabelaNaTela.Texto)) + "\n");
+
+            editor.WriteMessage("\nROTA_RESUMO_FIM\n");
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no resumo de cabos (teste).", erro);
+            editor.WriteMessage($"\nROTA_RESUMO_ERRO {erro.Message}\n");
         }
     }
 }

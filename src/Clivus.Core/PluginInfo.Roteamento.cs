@@ -24,8 +24,20 @@ public static partial class PluginInfo
     /// <summary>"Recolocar automáticos" da aba CC: os inversores automáticos voltam ao ponto de menor cabo e a rota é refeita.</summary>
     public const string ComandoRotaRecolocar = "CLIVUS_ROTA_RECOLOCAR";
 
+    /// <summary>"Atualizar valas" da aba (item 11 de 10/10/2026): a rota; relê as valas, as apagadas saem, as outras voltam ao TIN.</summary>
+    public const string ComandoRotaValaAtualizar = "CLIVUS_ROTA_VALA_ATUALIZAR";
+
+    /// <summary>"Soltar valas" da aba (item 11): a rota e as linhas escolhidas, que deixam de ser vala dela (a linha fica).</summary>
+    public const string ComandoRotaValaSoltar = "CLIVUS_ROTA_VALA_SOLTAR";
+
+    /// <summary>"Recalcular rota" da aba CC (item 19): os inversores (nomes ou GUIDs separados por ";", Todos ou Selecionar); refaz só os cabos CC deles.</summary>
+    public const string ComandoRotaRecalcular = "CLIVUS_ROTA_RECALCULAR";
+
     /// <summary>Só no build de teste: confere cada vala e cada cabo contra o TIN e escreve os vértices dos cabos (nível 2).</summary>
     public const string ComandoRotaConferirAutomatico = "CLIVUS_ROTA_CONFERIR_AUTO";
+
+    /// <summary>Só no build de teste: o "Atualizar (reconta)" da aba Resumo pelo mesmo caminho, escrito na linha de comando (nível 2).</summary>
+    public const string ComandoRotaResumoAutomatico = "CLIVUS_ROTA_RESUMO_AUTO";
 
     /// <summary>"+ Strings" da combiner (19.2): a combiner (GUID ou nome) e a seleção das strings em campo, como a alocação no inversor.</summary>
     public const string ComandoEletricaCombiner = "CLIVUS_ELETRICA_COMBINER";
