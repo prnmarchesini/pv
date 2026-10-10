@@ -43,6 +43,69 @@ public static class LocalDosInversores
         return null;
     }
 
+    /// <summary>
+    /// "Automático pelas strings" (itens 17 e 19 de 10/10/2026): os inversores
+    /// passam a ser postos pela rota CC, e o retângulo de quem já estava em
+    /// campo sai do desenho ("se eu já tiver inserido e clicar aqui, o sistema
+    /// apaga os inversores em campo"). A frase, ou o problema se nada mudou.
+    /// Quem chama trava o documento (a aba pelo Fazer, o comando por si).
+    /// </summary>
+    internal static (string? Frase, string? Problema) TornarAutomaticos(Database db, IReadOnlyCollection<Guid> inversores)
+    {
+        if (Mudar(db, inversores, InverterPlacementMode.Automatic) is { } problema) return (null, problema);
+
+        var apagados = 0;
+        foreach (var id in inversores)
+            if (EquipamentoEmCampo.Apagar(db, EquipmentKind.Inverter, id) > 0) apagados++;
+
+        var frase = Tr.F("{0} inversor(es) com alocação automática: o Gerar da rota CC põe cada um ao lado da vala, no ponto de menor cabo CC das strings dele.", inversores.Count);
+        if (apagados > 0) frase += " " + Tr.F("{0} retângulo(s) que estavam em campo foram apagados.", apagados);
+        return (frase, null);
+    }
+
+    /// <summary>"À mão": os inversores voltam ao Pôr em campo de sempre (a posição de agora fica).</summary>
+    internal static (string? Frase, string? Problema) TornarManuais(Database db, IReadOnlyCollection<Guid> inversores) =>
+        Mudar(db, inversores, null) is { } problema
+            ? (null, problema)
+            : (Tr.F("{0} inversor(es) de volta ao Pôr em campo à mão (a posição de agora fica).", inversores.Count), null);
+
+    /// <summary>
+    /// Renomeia a área (item 6 de 10/10/2026): o nome novo vai na marca da
+    /// polilinha. A frase, ou o porquê de não mudar (nome vazio ou repetido,
+    /// área que sumiu). Quem chama trava o documento.
+    /// </summary>
+    internal static (string? Frase, string? Problema) RenomearArea(Database db, Guid area, string? nome)
+    {
+        var areas = Areas(db);
+        if (!areas.TryGetValue(area, out var atual)) return (null, Tr.T("essa área não está mais no desenho"));
+
+        var limpo = nome?.Trim() ?? string.Empty;
+        if (limpo == atual.Marca.Name) return (null, null);
+        if (SiteMark.NameProblem(limpo, areas.Values.Where(a => a.Marca.Id != area).Select(a => a.Marca.Name)) is { } porque) return (null, porque);
+
+        using var t = db.TransactionManager.StartTransaction();
+        var espaco = (BlockTableRecord)t.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
+        var classe = RXObject.GetClass(typeof(Curve));
+        var mudou = 0;
+        foreach (ObjectId id in espaco)
+        {
+            if (!id.ObjectClass.IsDerivedFrom(classe) || t.GetObject(id, OpenMode.ForRead) is not Curve c || Marca(c) is not { } marca || marca.Id != area) continue;
+            c.UpgradeOpen();
+            PluginXData.Save(t, c, SiteMark.Tipo, 1, [.. (marca with { Name = limpo }).ToFields()]);
+            mudou++;
+        }
+
+        t.Commit();
+        return mudou > 0 ? (Tr.F("{0} agora se chama {1}.", atual.Marca.Name, limpo), null) : (null, Tr.T("essa área não está mais no desenho"));
+    }
+
+    /// <summary>A marca de área da entidade, se ela tem uma.</summary>
+    private static SiteMark? MarcaDe(Database db, ObjectId id)
+    {
+        using var t = db.TransactionManager.StartOpenCloseTransaction();
+        return t.GetObject(id, OpenMode.ForRead) is Entity e ? Marca(e) : null;
+    }
+
     /// <summary>As áreas de inversores do desenho: a marca e o contorno em planta.</summary>
     internal static Dictionary<Guid, (SiteMark Marca, IReadOnlyList<Point3> Contorno)> Areas(Database db)
     {
@@ -163,16 +226,8 @@ public static class LocalDosInversores
 
             if (qual.StringResult != "Area")
             {
-                var novo = qual.StringResult == "Strings" ? InverterPlacementMode.Automatic : (InverterPlacementMode?)null;
-                if (Mudar(db, ids, novo) is { } problema)
-                {
-                    editor.WriteMessage(Tr.F("\nLOCAL Não gravei: {0}\n", problema));
-                    return;
-                }
-
-                editor.WriteMessage(novo is null
-                    ? Tr.F("\nLOCAL {0} inversor(es) de volta ao Pôr em campo à mão (a posição de agora fica).\n", ids.Count)
-                    : Tr.F("\nLOCAL {0} inversor(es) automáticos: o Gerar da rota CC põe ao lado da vala, no ponto de menor cabo, os que ainda não estão em campo; os que já estão vão com Recolocar automáticos.\n", ids.Count));
+                var (frase, problema) = qual.StringResult == "Strings" ? TornarAutomaticos(db, ids) : TornarManuais(db, ids);
+                editor.WriteMessage(problema is null ? "\nLOCAL " + frase + "\n" : Tr.F("\nLOCAL Não gravei: {0}\n", problema));
                 return;
             }
 
@@ -186,7 +241,37 @@ public static class LocalDosInversores
             var clicado = editor.GetEntity(opcoes);
             if (clicado.Status != PromptStatus.OK) return;
 
-            var area = MarcarArea(db, clicado.ObjectId, terreno.Mesh, out var recusa, out var pontosFora);
+            // Área nova: o nome (item 6 de 10/10/2026), com "Área N" de padrão (Enter aceita).
+            string? nomeDaArea = null;
+            if (MarcaDe(db, clicado.ObjectId) is null)
+            {
+                var existentes = Areas(db).Values.Select(a => a.Marca.Name).ToList();
+                var padrao = SiteMark.NextDefaultName(existentes);
+                while (true)
+                {
+                    var r = editor.GetString(new PromptStringOptions(Tr.F("\nNome da área <{0}>: ", padrao)) { AllowSpaces = true });
+                    if (r.Status != PromptStatus.OK) return;
+                    var digitado = string.IsNullOrWhiteSpace(r.StringResult) ? padrao : r.StringResult.Trim();
+                    if (SiteMark.NameProblem(digitado, existentes) is { } porque)
+                    {
+                        editor.WriteMessage(Tr.F("\nLOCAL {0}; digite outro.\n", porque));
+                        continue;
+                    }
+
+                    nomeDaArea = digitado;
+                    break;
+                }
+            }
+
+            // Antes de mexer no campo: o registro tem que se ler (senão o que for posto não fica gravado).
+            Ler(db, out var ilegivel);
+            if (ilegivel is not null)
+            {
+                editor.WriteMessage(Tr.F("\nLOCAL Não gravei: {0}\n", ilegivel));
+                return;
+            }
+
+            var area = MarcarArea(db, clicado.ObjectId, terreno.Mesh, nomeDaArea, out var recusa, out var pontosFora);
             if (area is null)
             {
                 editor.WriteMessage("\nLOCAL " + recusa + "\n");
@@ -196,26 +281,30 @@ public static class LocalDosInversores
             if (pontosFora > 0)
                 editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0} ponto(s) da área fora do terreno ficaram com a cota que tinham.\n", pontosFora));
 
-            if (Mudar(db, ids, InverterPlacementMode.Area, area.Value.Marca.Id) is { } erro)
+            // As vagas ocupadas (inversores que já estão em campo, mesas, outros equipamentos)
+            // ficam de fora; os que estão sendo postos agora não contam no lugar velho.
+            var obstaculos = LeituraDaRota.Ler(db).Obstaculos(ids.ToHashSet());
+            var centros = InverterSites.InArea(area.Value.Contorno, inversores.Select(i => Tamanho(setup, i)).ToList(),
+                livre: cantos => !obstaculos.Any(o => InverterSites.Overlaps(cantos, o)));
+            var postos = new List<Guid>();
+            for (var i = 0; i < inversores.Count; i++)
+                if (centros[i] is { } c && setup.FindEquipment(EquipmentKind.Inverter, inversores[i].Id) is { } equipamento
+                    && ConfiguracaoEletricaCommands.NoTerreno(editor, db, terreno, equipamento, c.X, c.Y))
+                    postos.Add(inversores[i].Id);
+
+            // Só quem entrou na área fica com ela (item 4: a coluna Local e o botão
+            // não podem divergir); quem não coube continua como estava.
+            if (postos.Count > 0 && Mudar(db, postos, InverterPlacementMode.Area, area.Value.Marca.Id) is { } erro)
             {
                 editor.WriteMessage(Tr.F("\nLOCAL Não gravei: {0}\n", erro));
                 return;
             }
 
-            // As vagas ocupadas (inversores que já estão na área, mesas, outros equipamentos) ficam de fora.
-            var obstaculos = LeituraDaRota.Ler(db).Obstaculos(ids.ToHashSet());
-            var centros = InverterSites.InArea(area.Value.Contorno, inversores.Select(i => Tamanho(setup, i)).ToList(),
-                livre: cantos => !obstaculos.Any(o => InverterSites.Overlaps(cantos, o)));
-            var postos = 0;
-            for (var i = 0; i < inversores.Count; i++)
-                if (centros[i] is { } c && setup.FindEquipment(EquipmentKind.Inverter, inversores[i].Id) is { } equipamento
-                    && ConfiguracaoEletricaCommands.NoTerreno(editor, db, terreno, equipamento, c.X, c.Y))
-                    postos++;
-
-            editor.WriteMessage(Tr.F("\nLOCAL {0} de {1} inversor(es) postos na {2}.\n", postos, inversores.Count, area.Value.Marca.Name));
-            var fora = inversores.Where((_, i) => centros[i] is null).Select(i => i.Name).ToList();
+            editor.WriteMessage(Tr.F("\nLOCAL {0} de {1} inversor(es) postos na {2}.\n", postos.Count, inversores.Count, area.Value.Marca.Name));
+            var fora = inversores.Where(i => !postos.Contains(i.Id)).Select(i => i.Name).ToList();
             if (fora.Count > 0)
-                editor.WriteMessage(Tr.F("  ATENÇÃO: não couberam na área: {0}. Aumente o retângulo ou ponha à mão.\n", string.Join(", ", fora)));
+                editor.WriteMessage(Tr.F("  ATENÇÃO: a área {0} é pequena: couberam {1} de {2}; ficaram de fora: {3}. Aumente o retângulo, escolha outra área ou ponha à mão.\n",
+                    area.Value.Marca.Name, postos.Count, inversores.Count, string.Join(", ", fora)));
         }
         catch (System.Exception erro)
         {
@@ -225,6 +314,141 @@ public static class LocalDosInversores
         finally
         {
             JanelaEletrica.Voltar(documento);
+        }
+    }
+
+    /// <summary>
+    /// CLIVUS_ELETRICA_VER, o "Ver em campo" da linha (item 4 de 10/10/2026:
+    /// "seleciona o inversor, o modal sai, e mostra o inversor selecionado, se
+    /// eu der esc, o modal volta"): o inversor (nome ou GUID); o retângulo dele
+    /// fica realçado, com zoom nele, até o Esc (ou Enter); depois fica
+    /// selecionado (seleção implícita) e a janela volta. Nada é gravado.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoEletricaVer, CommandFlags.Modal | CommandFlags.Redraw | CommandFlags.NoUndoMarker)]
+    public static void Ver()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+        var editor = documento.Editor;
+        var realcados = new List<ObjectId>();
+
+        try
+        {
+            var qual = editor.GetString(new PromptStringOptions(Tr.T("\nInversor (nome): ")) { AllowSpaces = true });
+            if (qual.Status != PromptStatus.OK) return;
+
+            var db = documento.Database;
+            var (setup, _) = ConfiguracaoEletricaStore.Ler(db);
+            if (setup.FindInverter(qual.StringResult) is not { } inversor)
+            {
+                editor.WriteMessage(Tr.F("\nINVERSOR Não há inversor \"{0}\" no cadastro.\n", qual.StringResult.Trim()));
+                return;
+            }
+
+            List<ObjectId> ids;
+            Extents3d? limites = null;
+            using (var t = db.TransactionManager.StartOpenCloseTransaction())
+            {
+                ids = EquipamentoEmCampo.Posicionados(t, db).GetValueOrDefault((EquipmentKind.Inverter, inversor.Id)) ?? [];
+                foreach (var id in ids)
+                {
+                    if (t.GetObject(id, OpenMode.ForRead) is not Entity e) continue;
+                    try
+                    {
+                        var x = e.GeometricExtents;
+                        limites = limites is { } atual ? Juntar(atual, x) : x;
+                    }
+                    catch (Autodesk.AutoCAD.Runtime.Exception erro)
+                    {
+                        RegistroDeDiagnostico.Registrar("Retângulo do inversor sem limites; o Ver em campo não dá zoom nele.", erro);
+                    }
+                }
+            }
+
+            if (ids.Count == 0)
+            {
+                editor.WriteMessage(Tr.F("\nINVERSOR {0} não está em campo.\n", inversor.Name));
+                return;
+            }
+
+            if (limites is { } caixa) Zoom(editor, caixa);
+
+            using (var t = db.TransactionManager.StartOpenCloseTransaction())
+                foreach (var id in ids)
+                    if (t.GetObject(id, OpenMode.ForRead) is Entity e)
+                    {
+                        e.Highlight();
+                        realcados.Add(id);
+                    }
+
+            editor.WriteMessage(Tr.F("\nINVERSOR {0} em campo, realçado.\n", inversor.Name));
+            editor.GetString(new PromptStringOptions(Tr.T("\nEsc (ou Enter) volta à janela: ")) { AllowSpaces = false });
+
+            Desrealcar(db, realcados);
+            realcados.Clear();
+            editor.SetImpliedSelection([.. ids]);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao mostrar o inversor em campo.", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui mostrar o inversor em campo: {0}\n", erro.Message));
+        }
+        finally
+        {
+            Desrealcar(documento.Database, realcados);
+            JanelaEletrica.Voltar(documento);
+        }
+    }
+
+    private static Extents3d Juntar(Extents3d a, Extents3d b) =>
+        new(new Point3d(Math.Min(a.MinPoint.X, b.MinPoint.X), Math.Min(a.MinPoint.Y, b.MinPoint.Y), Math.Min(a.MinPoint.Z, b.MinPoint.Z)),
+            new Point3d(Math.Max(a.MaxPoint.X, b.MaxPoint.X), Math.Max(a.MaxPoint.Y, b.MaxPoint.Y), Math.Max(a.MaxPoint.Z, b.MaxPoint.Z)));
+
+    private static void Desrealcar(Database db, IReadOnlyList<ObjectId> ids)
+    {
+        if (ids.Count == 0) return;
+        try
+        {
+            using var t = db.TransactionManager.StartOpenCloseTransaction();
+            foreach (var id in ids)
+                if (!id.IsErased && t.GetObject(id, OpenMode.ForRead) is Entity e) e.Unhighlight();
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao tirar o realce do inversor.", erro);
+        }
+    }
+
+    /// <summary>
+    /// Zoom na caixa (com folga: o retângulo ocupa um terço da tela, para ver
+    /// em volta). Só com interface (no Core Console não há vista).
+    /// </summary>
+    private static void Zoom(Editor editor, Extents3d caixa)
+    {
+        if (!ClivusExtension.TemInterface()) return;
+
+        try
+        {
+            using var vista = editor.GetCurrentView();
+            var paraTela = (Matrix3d.Rotation(-vista.ViewTwist, vista.ViewDirection, vista.Target)
+                * Matrix3d.Displacement(vista.Target - Point3d.Origin)
+                * Matrix3d.PlaneToWorld(vista.ViewDirection)).Inverse();
+            var a = caixa.MinPoint.TransformBy(paraTela);
+            var b = caixa.MaxPoint.TransformBy(paraTela);
+            var largura = Math.Max(Math.Abs(b.X - a.X), 1) * 3;
+            var altura = Math.Max(Math.Abs(b.Y - a.Y), 1) * 3;
+            var proporcao = vista.Width / Math.Max(vista.Height, 1e-9);
+            if (largura / altura < proporcao) largura = altura * proporcao;
+            else altura = largura / proporcao;
+
+            vista.CenterPoint = new Point2d((a.X + b.X) / 2, (a.Y + b.Y) / 2);
+            vista.Width = largura;
+            vista.Height = altura;
+            editor.SetCurrentView(vista);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no zoom do Ver em campo.", erro);
         }
     }
 
@@ -240,7 +464,7 @@ public static class LocalDosInversores
     /// não é fechada ou se é uma polilinha do próprio Clivus (mesa, área da
     /// usina, vala, string: não vira sala).
     /// </summary>
-    private static (SiteMark Marca, IReadOnlyList<Point3> Contorno)? MarcarArea(Database db, ObjectId id, Tin terreno, out string recusa, out int pontosFora)
+    private static (SiteMark Marca, IReadOnlyList<Point3> Contorno)? MarcarArea(Database db, ObjectId id, Tin terreno, string? nome, out string recusa, out int pontosFora)
     {
         recusa = string.Empty;
         pontosFora = 0;
@@ -265,10 +489,7 @@ public static class LocalDosInversores
             return null;
         }
 
-        var nomes = existentes.Values.Select(a => a.Marca.Name).ToHashSet();
-        var n = existentes.Count + 1;
-        while (nomes.Contains(Tr.F("Área {0}", n))) n++;
-        marca ??= new SiteMark(Guid.NewGuid(), Tr.F("Área {0}", n));
+        marca ??= new SiteMark(Guid.NewGuid(), nome ?? SiteMark.NextDefaultName(existentes.Values.Select(a => a.Marca.Name).ToList()));
 
         // Fechada: o primeiro vértice repetido no fim, para o drapeado fechar o último lado.
         var drapeada = Draping.Along(terreno, [.. contorno, contorno[0]]);

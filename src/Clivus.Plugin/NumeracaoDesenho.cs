@@ -158,6 +158,10 @@ internal static class NumeracaoDesenho
         var textos = Textos(transacao, database);
         var orfaos = 0;
 
+        // A pré-tag do inversor (item 8 de 10/10/2026) sai de toda string que
+        // passa por aqui: ganhou a tag de verdade, ou foi solta.
+        PreTagDasStrings.Apagar(transacao, PreTagDasStrings.Textos(transacao, database), strings.Select(s => s.String.Id).Where(tags.ContainsKey).Distinct().ToList());
+
         if (apagarOrfaos)
         {
             var existem = strings.Select(s => s.String.Id).ToHashSet();

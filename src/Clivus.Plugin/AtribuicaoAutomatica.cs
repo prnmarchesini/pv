@@ -60,7 +60,11 @@ internal static class AtribuicaoAutomatica
         progresso?.Invoke(40, Tr.T("Gravando o vínculo das strings..."));
         StringsDoDesenho.Gravar(database, r.Changed);
         progresso?.Invoke(60, Tr.T("Pintando as strings com a cor de cada inversor..."));
-        CorDasStrings.Repintar(database, null, p => progresso?.Invoke(60 + 40 * p, Tr.T("Pintando as strings com a cor de cada inversor...")));
+        CorDasStrings.Repintar(database, null, p => progresso?.Invoke(60 + 30 * p, Tr.T("Pintando as strings com a cor de cada inversor...")));
+
+        // A pré-tag do inversor em cada string (item 8 de 10/10/2026): a cor sozinha é ruim de ver.
+        progresso?.Invoke(90, Tr.T("Escrevendo a pré-tag do inversor nas strings..."));
+        var preTags = PreTagDasStrings.Atualizar(database);
         progresso?.Invoke(100, Tr.T("Pronto."));
 
         var linhas = new List<string>();
@@ -76,6 +80,7 @@ internal static class AtribuicaoAutomatica
             linhas.Add(Tr.F("{0} string(s) atribuída(s) ({1}): {2}.", r.Changed.Count, varredura.Describe(), string.Join(", ", porInversor)));
         }
 
+        if (preTags > 0) linhas.Add(Tr.F("{0} string(s) com a pré-tag do inversor (I1, I2...); a Numeração troca pela tag de verdade.", preTags));
         if (r.Changed.Count > 0 && r.Leftover > 0) linhas.Add(Tr.F("ATENÇÃO: {0} string(s) livre(s) sobraram: os inversores encheram. Crie mais inversores ou troque o modelo.", r.Leftover));
         if (r.Full.Count > 0) linhas.Add(Tr.F("{0} inversor(es) já cheio(s), pulado(s).", r.Full.Count));
         if (r.WithoutModel.Count > 0) linhas.Add(Tr.F("ATENÇÃO: {0} inversor(es) sem modelo, pulado(s) (sem modelo não há capacidade).", r.WithoutModel.Count));
