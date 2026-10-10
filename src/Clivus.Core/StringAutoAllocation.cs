@@ -94,11 +94,7 @@ public static class StringAutoAllocation
 
         var livres = strings.Where(s => Livre(s) && !repetidos.Contains(s.Id)).ToList();
         var porId = livres.ToDictionary(s => s.Id);
-        var aVarrer = new List<ScanItem>(livres.Count);
-        foreach (var s in livres)
-            if (s.Modules.Count > 0 && modules.TryGetValue(s.Modules[0], out var lugar)) aVarrer.Add(new ScanItem(s.Id, lugar.X, lugar.Y, lugar.Table));
-
-        var fila = ScanOrder.Order(aVarrer, scan.Direction, ScanOrder.Band, scan.Cross);
+        var fila = Queue(livres, modules, scan);
         var semPosicao = livres.Count - fila.Count;
 
         var capacidade = models.GroupBy(m => m.Id).ToDictionary(g => g.Key, g => g.First().TotalInputs);
@@ -131,5 +127,24 @@ public static class StringAutoAllocation
         }
 
         return new AutoAllocationResult(mudam, ganharam, fila.Count - proxima, semPosicao, copias, cheios, semModelo);
+    }
+
+    /// <summary>
+    /// A fila do Distribuir: as strings dadas na ordem da varredura, pela
+    /// posição do primeiro módulo (a que não tem o primeiro módulo no desenho
+    /// fica de fora). O "Repartir pelo kW" (item 5 de 10/10/2026) usa a mesma
+    /// fila para simular o Distribuir.
+    /// </summary>
+    public static IReadOnlyList<Guid> Queue(IEnumerable<ElectricalString> strings, IReadOnlyDictionary<Guid, ModuleSpot> modules, AllocationScan scan)
+    {
+        ArgumentNullException.ThrowIfNull(strings);
+        ArgumentNullException.ThrowIfNull(modules);
+        ArgumentNullException.ThrowIfNull(scan);
+
+        var aVarrer = new List<ScanItem>();
+        foreach (var s in strings)
+            if (s.Modules.Count > 0 && modules.TryGetValue(s.Modules[0], out var lugar)) aVarrer.Add(new ScanItem(s.Id, lugar.X, lugar.Y, lugar.Table));
+
+        return ScanOrder.Order(aVarrer, scan.Direction, ScanOrder.Band, scan.Cross);
     }
 }

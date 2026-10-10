@@ -227,7 +227,11 @@ internal abstract class AbaEletrica : DockPanel
     {
         _recado.Foreground = erro ? Brushes.Firebrick : Brushes.ForestGreen;
         _recado.Text = texto;
+        EcoDoRecado?.Invoke(texto, erro);
     }
+
+    /// <summary>Quem mais mostra o recado (o modal dos modelos de inversor, que cobre o rodapé da aba).</summary>
+    protected Action<string, bool>? EcoDoRecado { get; set; }
 
     protected void Limpar() => _recado.Text = string.Empty;
 

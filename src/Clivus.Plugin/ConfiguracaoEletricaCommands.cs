@@ -74,6 +74,22 @@ public static class ConfiguracaoEletricaCommands
 
             var equipamento = achados[0];
 
+            // O inversor automático (itens 17 e 19 de 10/10/2026) é posto pela rota CC:
+            // fora do campo, o Pôr em campo é recusado; em campo, mover pode (a rota sai da posição nova).
+            var local = equipamento.Kind == EquipmentKind.Inverter
+                ? LocalDosInversores.Ler(documento.Database, out _).FirstOrDefault(l => l.Inverter == equipamento.Id)
+                : null;
+            if (local is { Mode: InverterPlacementMode.Automatic })
+            {
+                if (!EquipamentoEmCampo.EmCampo(documento.Database).Contains((EquipmentKind.Inverter, equipamento.Id)))
+                {
+                    editor.WriteMessage(Tr.F("\nEQUIPAMENTO {0} tem alocação automática: quem o põe em campo é o Gerar da rota CC. Para pôr à mão, escolha antes À mão na aba Inversor.\n", equipamento.Tag));
+                    return;
+                }
+
+                editor.WriteMessage(Tr.F("\nEQUIPAMENTO {0} tem alocação automática: movido à mão, a rota CC sai da posição nova (Recolocar automáticos o devolve ao ponto de menor cabo).\n", equipamento.Tag));
+            }
+
             var terreno = FileiraCommands.ExigirTerreno(editor, documento);
             if (terreno is null) return;
 
@@ -82,7 +98,13 @@ public static class ConfiguracaoEletricaCommands
 
             // O clique é em coordenadas do usuário; a cota vem do terreno.
             var mundo = ponto.Value.TransformBy(editor.CurrentUserCoordinateSystem);
-            NoTerreno(editor, documento.Database, terreno, equipamento, mundo.X, mundo.Y);
+            if (!NoTerreno(editor, documento.Database, terreno, equipamento, mundo.X, mundo.Y)) return;
+
+            // Inversor de área posto fora dela volta a ser à mão (a coluna Local não mente, item 4).
+            if (local is { Mode: InverterPlacementMode.Area } && LocalDosInversores.Areas(documento.Database).TryGetValue(local.Site, out var area)
+                && !Polygons.Contains(area.Contorno, mundo.X, mundo.Y)
+                && LocalDosInversores.Mudar(documento.Database, [equipamento.Id], null) is null)
+                editor.WriteMessage(Tr.F("  {0} saiu da {1}: agora é posto à mão.\n", equipamento.Tag, area.Marca.Name));
         }
         catch (System.Exception erro)
         {

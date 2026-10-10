@@ -7,10 +7,11 @@ using Clivus.Core;
 namespace Clivus.Plugin;
 
 /// <summary>
-/// A aba Inversor (etapa 14): à esquerda os modelos de inversor (nome,
-/// potência, os MPPTs com as entradas de cada um, o total somado, a
-/// dimensão); à direita a tabela dos inversores da usina (cor, nome, modelo,
-/// trafo, strings, kWp, kW, CC/CA e as ações de cada um).
+/// A aba Inversor (etapa 14): a tabela dos inversores da usina (cor, nome,
+/// modelo, trafo, strings, kWp, kW, CC/CA, local e as ações de cada um) com
+/// as seções de lote em cima. Os modelos de inversor (nome, potência, os
+/// MPPTs com as entradas de cada um, o total somado, a dimensão) ficavam à
+/// esquerda; desde 10/10/2026 (item 7) ficam no modal "Modelos de inversor…".
 /// </summary>
 /// <remarks>
 /// 05/10/2026 (Renan: "eu queria uma forma mais fácil de dizer 'esse
@@ -42,6 +43,15 @@ internal sealed class AbaInversor : AbaEletrica
     private readonly WrapPanel _entradas = new() { Margin = new Thickness(0, 0, 0, 2) };
     private readonly List<TextBox> _caixasDasEntradas = [];
     private readonly TextBlock _total = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 4), FontWeight = FontWeights.SemiBold };
+
+    /// <summary>O cadastro dos modelos (lista, botões e formulário), mostrado no modal "Modelos de inversor…".</summary>
+    private readonly StackPanel _painelDosModelos;
+
+    /// <summary>"Limites: 480 de 480 strings úteis" (item 5 de 10/10/2026).</summary>
+    private readonly TextBlock _somaDosLimites = new() { Margin = new Thickness(0, 0, 0, 4), TextWrapping = TextWrapping.Wrap };
+
+    /// <summary>Quantas strings a usina tem (cada GUID uma vez), lido a cada Atualizar.</summary>
+    private int _stringsUteis;
 
     private readonly ComboBox _modeloParaCriar = new() { Height = 26, MinWidth = 160, Margin = new Thickness(0, 0, 6, 6) };
     private readonly TextBox _quantos = new() { Text = "1", Width = 50, Height = 26, Margin = new Thickness(0, 0, 6, 6), VerticalContentAlignment = VerticalAlignment.Center };
@@ -127,11 +137,14 @@ internal sealed class AbaInversor : AbaEletrica
         Botao(botoesDoModelo, Tr.T("Salvar modelo"), Tr.T("Grava o modelo escolhido no desenho."), SalvarModelo);
         Botao(botoesDoModelo, Tr.T("Apagar modelo"), Tr.T("Tira o modelo do cadastro (só se nenhum inversor é dele)."), ApagarModelo);
 
+        // O cadastro dos modelos vive num modal (item 7 de 10/10/2026: "a lateral
+        // é comida com a parte de cadastro de inversor, transforme isso em um
+        // modal"); a aba fica toda para os inversores da usina.
         var modelos = new StackPanel();
-        modelos.Children.Add(Titulo(Tr.T("Modelos de inversor")));
         modelos.Children.Add(_modelos);
         modelos.Children.Add(botoesDoModelo);
         modelos.Children.Add(grade);
+        _painelDosModelos = modelos;
 
         // ---------------------------------------------- inversores (14.2)
         // Seção Inversores: criar e apagar os escolhidos na tabela.
@@ -141,8 +154,9 @@ internal sealed class AbaInversor : AbaEletrica
         criar.Children.Add(Rotulo(Tr.T("inversor(es) do modelo"), 4));
         criar.Children.Add(_modeloParaCriar);
         _quantos.ToolTip = Tr.F("Quantos inversores criar de uma vez (1 a {0}).", ElectricalDefaults.MaxAtOnce);
-        _modeloParaCriar.ToolTip = Tr.T("O modelo dos inversores novos (os modelos são cadastrados à esquerda).");
+        _modeloParaCriar.ToolTip = Tr.T("O modelo dos inversores novos (os modelos são cadastrados em Modelos de inversor…).");
         Botao(criar, Tr.T("Criar"), Tr.T("Cria os inversores do modelo escolhido (Inversor 1, 2..., continuando a numeração). Depois escolha o trafo de cada um na tabela."), CriarInversores);
+        Botao(criar, Tr.T("Modelos de inversor…"), Tr.T("Abre o cadastro dos modelos de inversor (nome, potência, MPPTs e entradas, medidas): novo, salvar e apagar modelo."), AbrirModelos);
         _apagarAsEscolhidas = Botao(criar, Tr.T("Apagar os escolhidos"), Tr.T("Apaga do cadastro os inversores escolhidos na tabela (clique, Ctrl ou Shift + clique; pede confirmação): as strings deles ficam livres e os retângulos saem do campo."), ApagarAsEscolhidas);
         _apagarAsEscolhidas.Margin = new Thickness(18, 0, 6, 4);
         _apagarTodos = Botao(criar, Tr.T("Apagar todos"), Tr.T("Apaga do cadastro todos os inversores da usina (pede confirmação): as strings ficam livres no desenho, as tags delas saem e os retângulos saem do campo."), ApagarTodos);
@@ -181,7 +195,7 @@ internal sealed class AbaInversor : AbaEletrica
         limite.Children.Add(Rotulo(Tr.T("ao"), 4));
         limite.Children.Add(_limiteAo);
         Botao(limite, Tr.T("Todos"), Tr.T("Do primeiro ao último inversor da tabela."), () => Todos(_limiteDo, _limiteAo));
-        var repartir = Botao(limite, Tr.T("Repartir pelo kW"), Tr.T("Calcula o limite de cada um desses inversores para as strings da usina ficarem o mais iguais possível: na proporção do kW de cada um (kW iguais: o mesmo número, no máximo 1 a mais), sem passar das entradas. As strings já presas a inversores fora do trecho não entram na conta."), RepartirPeloKw);
+        var repartir = Botao(limite, Tr.T("Repartir pelo kW"), Tr.T("Simula o Distribuir (a mesma varredura e a ordem da tabela) e dá a cada um desses inversores o limite que deixa a potência das strings dele (kWp) na proporção do kW dele, sem passar das entradas. As strings já presas a inversores fora do trecho não entram na conta. Depois: Soltar todas da usina e Distribuir."), RepartirPeloKw);
         repartir.FontWeight = FontWeights.SemiBold;
         limite.Children.Add(Rotulo(Tr.T("ou"), 4));
         limite.Children.Add(_limiteDoLote);
@@ -217,6 +231,9 @@ internal sealed class AbaInversor : AbaEletrica
         Botao(local, Tr.T("Automático pelas strings"), Tr.T("O Gerar da rota CC põe cada um ao lado da vala, no ponto de menor cabo CC das strings dele. Depois você pode mover à mão e Gerar de novo: a rota sai da posição nova."),
             () => MudarOLocal(InverterPlacementMode.Automatic));
         Botao(local, Tr.T("À mão"), Tr.T("Volta ao Pôr em campo de sempre (a posição de agora fica)."), () => MudarOLocal(null));
+
+        // A soma dos limites contra as strings úteis (item 5): "Limites: 480 de 480 strings úteis".
+        _somaDosLimites.ToolTip = Tr.T("A soma dos limites de todos os inversores (sem limite: todas as entradas do modelo) contra as strings da usina. Se não bate, sobra string sem inversor ou sobra vaga.");
 
         foreach (var painel in new[] { criar, trafo, limite, atribuir, local })
             foreach (var b in painel.Children.OfType<Button>())
@@ -257,7 +274,13 @@ internal sealed class AbaInversor : AbaEletrica
         var topo = new StackPanel();
         topo.Children.Add(Secao(Tr.T("Inversores da usina"), criar));
         topo.Children.Add(Secao(Tr.T("Trafo dos inversores"), trafo));
-        topo.Children.Add(Secao(Tr.T("Strings por inversor"), limite, atribuir));
+        // Item 5 (10/10/2026): o limite e a distribuição são duas seções, lado a lado quando cabem.
+        var strings = new WrapPanel();
+        var maximo = Secao(Tr.T("Quantidade máxima de strings por inversor"), limite, _somaDosLimites);
+        maximo.Margin = new Thickness(0, 0, 6, 6);
+        strings.Children.Add(maximo);
+        strings.Children.Add(Secao(Tr.T("Distribuição das strings nos inversores"), atribuir));
+        topo.Children.Add(strings);
         topo.Children.Add(Secao(Tr.T("Local dos inversores"), local));
         DockPanel.SetDock(topo, Dock.Top);
         inversores.Children.Add(topo);
@@ -294,15 +317,7 @@ internal sealed class AbaInversor : AbaEletrica
             catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao soltar a linha de inversor.", erro); }
         };
 
-        // O editor do modelo é estreito; a tabela fica com o resto da largura.
-        var colunas = new Grid();
-        colunas.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(320) });
-        colunas.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var esquerda = new ScrollViewer { Content = modelos, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new Thickness(0, 0, 10, 0) };
-        Grid.SetColumn(inversores, 1);
-        colunas.Children.Add(esquerda);
-        colunas.Children.Add(inversores);
-        Children.Add(colunas);
+        Children.Add(inversores);
 
         _modelos.SelectionChanged += (_, _) =>
         {
@@ -310,8 +325,6 @@ internal sealed class AbaInversor : AbaEletrica
             catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao mostrar o modelo de inversor escolhido.", erro); }
         };
     }
-
-    private static TextBlock Titulo(string texto) => new() { Text = texto, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) };
 
     /// <summary>O rótulo ao lado de uma caixa, na mesma linha.</summary>
     private static TextBlock Rotulo(string texto, double baixo = 6) => new() { Text = texto, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, baixo) };
@@ -346,9 +359,10 @@ internal sealed class AbaInversor : AbaEletrica
 
         if (_modeloParaCriar.SelectedItem is null && _modeloParaCriar.Items.Count > 0) _modeloParaCriar.SelectedIndex = 0;
 
-        _contagem = ContarStrings(Documento.Database);
+        (_contagem, _stringsUteis) = ContarTudo(Documento.Database);
 
         MontarInversores();
+        MostrarSomaDosLimites();
         MostrarVarredura(AtribuicaoAutomatica.Varredura(Documento.Database).Varredura);
 
         MontarTrafos(_trafoDasEscolhidas, setup, comSemTrafo: true);
@@ -360,7 +374,73 @@ internal sealed class AbaInversor : AbaEletrica
         if (problema is null && excessos.Count > 0) Avisar(string.Join("\n", excessos), erro: true);
 
         if (problema is not null) Avisar(problema, erro: true);
-        else if (_modelos.Items.Count == 0) Avisar(Tr.T("Nenhum modelo de inversor ainda: use Novo modelo."));
+        else if (_modelos.Items.Count == 0) Avisar(Tr.T("Nenhum modelo de inversor ainda: abra Modelos de inversor… e use Novo modelo."));
+    }
+
+    /// <summary>As strings de cada inversor (a contagem do vínculo) e quantas strings a usina tem (cada GUID uma vez), numa leitura.</summary>
+    internal static (IReadOnlyDictionary<Guid, int> PorInversor, int Total) ContarTudo(Database database)
+    {
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        var strings = ElectricalStore.Strings(transacao, database).Select(x => x.String).ToList();
+        return (StringAllocation.CountByInverter(strings), strings.Select(s => s.Id).Distinct().Count());
+    }
+
+    /// <summary>A soma dos limites contra as strings úteis, em vermelho se não bate (item 5).</summary>
+    private void MostrarSomaDosLimites()
+    {
+        var soma = BalancedLimits.Sum(_setup.Inverters, _setup.Models);
+        var (texto, bate) = BalancedLimits.Describe(soma, _stringsUteis);
+        _somaDosLimites.Text = texto;
+        _somaDosLimites.Foreground = bate ? System.Windows.SystemColors.ControlTextBrush : System.Windows.Media.Brushes.Firebrick;
+        _somaDosLimites.FontWeight = bate ? FontWeights.Normal : FontWeights.SemiBold;
+    }
+
+    /// <summary>
+    /// "Modelos de inversor…" (item 7 de 10/10/2026): o cadastro dos modelos
+    /// num modal sobre a janela, com o recado dele embaixo. Fechar devolve o
+    /// painel para a aba (ele é o mesmo, só muda de dono).
+    /// </summary>
+    private void AbrirModelos()
+    {
+        var recado = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+        var rolagem = new ScrollViewer { Content = _painelDosModelos, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var corpo = new DockPanel { Margin = new Thickness(10), LastChildFill = true };
+        var fechar = new Button { Content = Tr.T("Fechar"), Height = 24, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Right, IsCancel = true };
+        DockPanel.SetDock(fechar, Dock.Bottom);
+        DockPanel.SetDock(recado, Dock.Bottom);
+        corpo.Children.Add(fechar);
+        corpo.Children.Add(recado);
+        corpo.Children.Add(rolagem);
+
+        var janela = new Window
+        {
+            Title = Tr.T("Modelos de inversor"),
+            Content = corpo,
+            Width = 440,
+            SizeToContent = SizeToContent.Height,
+            MaxHeight = 720,
+            ShowInTaskbar = false,
+            ResizeMode = ResizeMode.CanResizeWithGrip,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = Window.GetWindow(this),
+        };
+        fechar.Click += (_, _) => janela.Close();
+
+        EcoDoRecado = (texto, erro) =>
+        {
+            recado.Text = texto;
+            recado.Foreground = erro ? System.Windows.Media.Brushes.Firebrick : System.Windows.Media.Brushes.ForestGreen;
+        };
+
+        try
+        {
+            janela.ShowDialog();
+        }
+        finally
+        {
+            EcoDoRecado = null;
+            rolagem.Content = null;   // o painel fica livre para a próxima vez
+        }
     }
 
     /// <summary>Os trafos do cadastro na caixa (com "sem trafo" na frente, se pedido), mantendo a escolha.</summary>
@@ -510,7 +590,10 @@ internal sealed class AbaInversor : AbaEletrica
     private const int ColunaAlca = 0, ColunaCor = 1, ColunaNome = 2, ColunaModelo = 3, ColunaTrafo = 4, ColunaMeta = 5, ColunaStrings = 6, ColunaKwp = 7, ColunaKw = 8, ColunaRazao = 9, ColunaLocal = 10, ColunaAcoes = 11;
 
     /// <summary>O local de cada inversor que tem um (área ou automático), lido a cada montagem da tabela.</summary>
-    private Dictionary<Guid, InverterPlacementMode> _locais = [];
+    private Dictionary<Guid, InverterPlacement> _locais = [];
+
+    /// <summary>As áreas de inversores do desenho (o nome de cada uma), lidas a cada montagem da tabela.</summary>
+    private Dictionary<Guid, SiteMark> _areas = [];
 
     /// <summary>Uma linha da tabela: as colunas com a largura repartida (a maior de cada uma) e uma sobra no fim.</summary>
     private static Grid LinhaDaTabela()
@@ -554,14 +637,14 @@ internal sealed class AbaInversor : AbaEletrica
 
         Titulo(ColunaCor, Tr.T("Cor"), Tr.T("A cor das strings do inversor no desenho: clique no quadradinho para trocar."));
         Titulo(ColunaNome, Tr.T("Inversor"), Tr.T("O nome do inversor (a tag): clique no nome para renomear."));
-        Titulo(ColunaModelo, Tr.T("Modelo"), Tr.T("O modelo do inversor: escolher outro grava na hora (o cadastro dos modelos fica à esquerda)."));
+        Titulo(ColunaModelo, Tr.T("Modelo"), Tr.T("O modelo do inversor: escolher outro grava na hora (o cadastro dos modelos fica em Modelos de inversor…)."));
         Titulo(ColunaTrafo, Tr.T("Trafo"), Tr.T("O trafo do inversor. Escolher na linha grava na hora; é também o skid do trafo."));
         Titulo(ColunaMeta, Tr.T("Limite"), Tr.T("Limite de strings: quantas o Distribuir põe neste inversor (vazio: todas as entradas do modelo). Enter grava; com várias linhas escolhidas, vale para todas."), numero: true);
         Titulo(ColunaStrings, Tr.T("Strings"), Tr.T("Strings alocadas / total de entradas do modelo."), numero: true);
         Titulo(ColunaKwp, "kWp", Tr.T("Potência CC: a soma da potência dos módulos das strings alocadas (a mesma conta do Resumo elétrico)."), numero: true);
         Titulo(ColunaKw, "kW", Tr.T("Potência nominal CA do modelo."), numero: true);
         Titulo(ColunaRazao, Tr.T("CC/CA"), Tr.T("kWp ÷ kW: só com a potência do modelo informada."), numero: true);
-        Titulo(ColunaLocal, Tr.T("Local"), Tr.T("Onde o inversor vai em campo: Área (dentro do retângulo escolhido), Auto (a rota CC põe ao lado da vala, no ponto de menor cabo) ou vazio (à mão, Pôr em campo)."));
+        Titulo(ColunaLocal, Tr.T("Local"), Tr.T("Onde o inversor está em campo: o nome da área (dentro do retângulo escolhido; clique para renomear a área), Auto (a rota CC põe ao lado da vala, no ponto de menor cabo) ou vazio (à mão, Pôr em campo)."));
         return g;
     }
 
@@ -604,7 +687,8 @@ internal sealed class AbaInversor : AbaEletrica
         var escolhidos = Escolhidos().Select(i => i.Id).ToHashSet();
         var foco = OndeEstaOFoco();
         var emCampo = EquipamentoEmCampo.EmCampo(Documento.Database);
-        _locais = LocalDosInversores.Ler(Documento.Database, out var problemaDoLocal).GroupBy(l => l.Inverter).ToDictionary(g => g.Key, g => g.First().Mode);
+        _locais = LocalDosInversores.Ler(Documento.Database, out var problemaDoLocal).GroupBy(l => l.Inverter).ToDictionary(g => g.Key, g => g.First());
+        _areas = LocalDosInversores.Areas(Documento.Database).ToDictionary(a => a.Key, a => a.Value.Marca);
         if (problemaDoLocal is not null) Avisar(Tr.F("ATENÇÃO: o local dos inversores não se lê ({0}); a coluna Local fica vazia.", problemaDoLocal), erro: true);
         var linhas = LinhasDaTabela(Documento, _setup, _contagem);
         _inversores.Items.Clear();
@@ -808,14 +892,21 @@ internal sealed class AbaInversor : AbaEletrica
         Por(g, Celula(Kwp(linha.PowerKwp), numero: true), ColunaKwp);
         Por(g, Celula(linha.PowerKw > 0 ? Kw(linha.PowerKw) : "—", numero: true), ColunaKw);
         Por(g, Celula(Razao(linha.DcAcRatio), numero: true), ColunaRazao);
-        Por(g, Celula(_locais.TryGetValue(inversor.Id, out var local) ? local == InverterPlacementMode.Area ? Tr.T("Área") : Tr.T("Auto") : string.Empty), ColunaLocal);
+        // A coluna Local e o botão de campo saem da mesma conta (item 4 de 10/10/2026).
+        var estado = InverterSiteView.Of(_locais.GetValueOrDefault(inversor.Id), emCampo, _locais.GetValueOrDefault(inversor.Id) is { } l && _areas.ContainsKey(l.Site));
+        Por<UIElement>(g, estado.Mode switch
+        {
+            InverterPlacementMode.Area when _areas.TryGetValue(estado.Site, out var area) => CaixaDaArea(area),
+            InverterPlacementMode.Automatic => Celula(Tr.T("Auto")),
+            _ => Celula(string.Empty),
+        }, ColunaLocal);
 
         var acoes = Por(g, new StackPanel { Orientation = Orientation.Horizontal }, ColunaAcoes);
         var id = inversor.Id;
 
         // 10/10/2026 (Renan: "tem o botão três pontinhos, mas tem espaço para
         // mais colunas"): as ações do antigo "⋯" à vista, do mesmo tamanho.
-        var botoes = new[]
+        var botoes = new List<Button>
         {
             Botao(acoes, Tr.T("+ Strings"), Tr.T("Pôr strings neste inversor: a janela some; clique nas strings no desenho (Shift+clique tira) e Enter volta."),
                 () => JanelaEletrica.Campo(Documento, PluginInfo.ComandoEletricaAlocar, id.ToString("D"))),
@@ -823,14 +914,36 @@ internal sealed class AbaInversor : AbaEletrica
                 () => JanelaEletrica.SelecionarStrings(Documento, id)),
             Botao(acoes, Tr.T("Soltar"), Tr.T("Solta as strings deste inversor: ficam livres e continuam no desenho; as tags de numeração delas são apagadas."),
                 () => SoltarTodas(inversor)),
-            Botao(acoes, emCampo ? Tr.T("Mover") : Tr.T("Pôr em campo"),
-                emCampo
+        };
+
+        if (estado.Button == InverterFieldButton.Automatic)
+        {
+            // Item 19: o inversor automático é posto pela rota CC; aqui só o aviso, sem clique.
+            acoes.Children.Add(new TextBlock
+            {
+                Text = Tr.T("Alocação automática"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = System.Windows.SystemColors.GrayTextBrush,
+                Margin = new Thickness(2, 0, 8, 0),
+                ToolTip = Tr.T("O Gerar da rota CC põe este inversor ao lado da vala, no ponto de menor cabo CC das strings dele. Para pôr à mão, escolha a linha e À mão."),
+            });
+        }
+        else
+        {
+            botoes.Add(Botao(acoes, estado.Button == InverterFieldButton.Move ? Tr.T("Mover") : Tr.T("Pôr em campo"),
+                estado.Button == InverterFieldButton.Move
                     ? Tr.T("O retângulo do inversor já está no desenho: a janela some e você clica o novo centro dele. O vínculo não muda.")
                     : Tr.T("Põe o retângulo do inversor no desenho: a janela some e você clica o centro dele."),
-                () => AlocarEmCampo(id)),
-            Botao(acoes, Tr.T("Apagar"), Tr.T("Tira o inversor do cadastro (pede confirmação): as strings dele ficam livres, as tags delas saem e o retângulo sai do campo."),
-                () => Apagar([inversor])),
-        };
+                () => AlocarEmCampo(id)));
+        }
+
+        if (estado.CanSee)
+            botoes.Add(Botao(acoes, Tr.T("Ver em campo"), Tr.T("A janela some e o retângulo do inversor fica selecionado no desenho, com zoom nele. Esc volta à janela."),
+                () => JanelaEletrica.Campo(Documento, PluginInfo.ComandoEletricaVer, id.ToString("D"))));
+
+        botoes.Add(Botao(acoes, Tr.T("Apagar"), Tr.T("Tira o inversor do cadastro (pede confirmação): as strings dele ficam livres, as tags delas saem e o retângulo sai do campo."),
+            () => Apagar([inversor])));
+
         foreach (var b in botoes)
         {
             b.Height = 22;
@@ -1138,6 +1251,84 @@ internal sealed class AbaInversor : AbaEletrica
     }
 
     /// <summary>
+    /// O nome da área na coluna Local (item 6 de 10/10/2026): parece texto;
+    /// clicar edita, Enter ou sair grava (renomeia a área, para todos os
+    /// inversores dela), Esc desfaz.
+    /// </summary>
+    private TextBox CaixaDaArea(SiteMark area)
+    {
+        var caixa = new TextBox
+        {
+            Text = area.Name,
+            MinWidth = 50,
+            MaxWidth = 140,
+            Height = 22,
+            MaxLength = SiteMark.MaxNameLength,
+            BorderThickness = new Thickness(0),
+            Background = System.Windows.Media.Brushes.Transparent,
+            Padding = new Thickness(0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 10, 0),
+            ToolTip = Tr.T("A área (o retângulo) onde o inversor está. Clique para renomear a área: Enter (ou sair da caixa) grava, Esc desfaz."),
+        };
+
+        var enviado = false;
+        void Confirmar()
+        {
+            if (enviado || caixa.Text.Trim() == area.Name) return;
+            enviado = true;
+            var texto = caixa.Text;
+            Dispatcher.BeginInvoke(() =>
+            {
+                try { if (DesenhoAberto()) GravarNaLinha(() => LocalDosInversores.RenomearArea(Documento.Database, area.Id, texto), p => Tr.F("Não renomeei a área: {0}.", p)); }
+                catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao renomear a área dos inversores.", erro); }
+            });
+        }
+
+        caixa.GotKeyboardFocus += (_, _) =>
+        {
+            caixa.BorderThickness = new Thickness(1);
+            caixa.Background = System.Windows.SystemColors.WindowBrush;
+        };
+        caixa.LostKeyboardFocus += (_, _) =>
+        {
+            try
+            {
+                caixa.BorderThickness = new Thickness(0);
+                caixa.Background = System.Windows.Media.Brushes.Transparent;
+                Confirmar();
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao sair do nome da área.", erro);
+            }
+        };
+        caixa.PreviewKeyDown += (_, e) =>
+        {
+            try
+            {
+                if (e.Key == System.Windows.Input.Key.Enter)
+                {
+                    e.Handled = true;
+                    Confirmar();
+                }
+                else if (e.Key == System.Windows.Input.Key.Escape)
+                {
+                    e.Handled = true;
+                    caixa.Text = area.Name;
+                    caixa.SelectAll();
+                }
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha numa tecla do nome da área.", erro);
+            }
+        };
+
+        return caixa;
+    }
+
+    /// <summary>
     /// O modelo na linha: os modelos do cadastro (o vínculo para modelo que
     /// sumiu aparece como "sem modelo"). Escolher grava ao fechar a lista, com
     /// a conferência das strings já alocadas (<see cref="ElectricalSetup.ChangeInverterModel"/>).
@@ -1322,29 +1513,53 @@ internal sealed class AbaInversor : AbaEletrica
     }
 
     /// <summary>
-    /// Reparte as strings da usina nos limites dos inversores dados
-    /// (<see cref="BalancedLimits"/>): as strings do desenho menos as presas a
-    /// inversores de fora, na proporção do kW de cada um, sem passar das
-    /// entradas. Grava os limites e diz o resultado. Quem chama trava o documento.
+    /// "Repartir pelo kW" (item 5 de 10/10/2026): simula o Distribuir (a fila
+    /// das strings pela varredura gravada, os inversores na ordem da tabela)
+    /// e dá a cada inversor o limite que deixa a potência das strings dele na
+    /// proporção do kW dele (<see cref="BalancedLimits.SplitInOrder"/>), sem
+    /// passar das entradas. Entram as strings livres e as dos inversores do
+    /// trecho; as presas a inversores de fora ficam fora da conta. A potência
+    /// de cada string é a soma dos módulos dela pela mesa dona (a do Resumo);
+    /// módulo sem potência conhecida vale a média dos outros. Grava os limites
+    /// e diz o resultado. Quem chama trava o documento.
     /// </summary>
     internal static (string? Frase, string? Problema) Repartir(Database database, IReadOnlyCollection<Guid> inversores)
     {
-        List<ElectricalString> strings;
-        using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
-            strings = ElectricalStore.Strings(transacao, database).Select(x => x.String).DistinctBy(s => s.Id).ToList();
-
         var (setup, problema) = ConfiguracaoEletricaStore.Ler(database);
         if (problema is not null) return (null, problema);
+        var (varredura, _) = AtribuicaoAutomatica.Varredura(database);
 
         var alvo = inversores.ToHashSet();
-        var deFora = strings.Count(s => s.IsAllocated && !alvo.Contains(s.Inverter) && setup.FindInverter(s.Inverter) is not null);
-        var total = strings.Count - deFora;
-        if (total == 0) return (null, Tr.T("não há strings no desenho para repartir"));
+        List<ElectricalString> disponiveis;
+        Dictionary<Guid, ModuleSpot> lugares;
+        var potencia = new Dictionary<Guid, double>();
+        using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
+        {
+            var todas = ElectricalStore.Strings(transacao, database).Select(x => x.String).ToList();
+            var repetidas = todas.GroupBy(s => s.Id).Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet();
+            disponiveis = todas.Where(s => !repetidas.Contains(s.Id) && !(s.IsAllocated && !alvo.Contains(s.Inverter) && setup.FindInverter(s.Inverter) is not null)).ToList();
+
+            var modulos = NumeracaoDesenho.Modulos(transacao, database);
+            lugares = modulos.ToDictionary(m => m.Key, m => new ModuleSpot(m.Value.Mesa, m.Value.Centro.X, m.Value.Centro.Y));
+
+            var daMesa = new Dictionary<Guid, double?>();
+            foreach (var (mesa, pecas) in LayoutScan.Tables(transacao, database)) daMesa[mesa] = pecas.Identity?.ModulePowerWatts;
+            foreach (var (modulo, lugar) in modulos)
+                if (daMesa.GetValueOrDefault(lugar.Mesa) is { } w && w > 0) potencia[modulo] = w;
+        }
+
+        var fila = StringAutoAllocation.Queue(disponiveis, lugares, varredura);
+        if (fila.Count == 0) return (null, Tr.T("não há strings no desenho para repartir"));
+
+        // Módulo sem potência conhecida: a média dos outros (nenhum conhecido: todos iguais, a conta vira por quantidade).
+        var media = potencia.Count > 0 ? potencia.Values.Average() : 1;
+        var porId = disponiveis.ToDictionary(s => s.Id);
+        var kwp = fila.Select(id => porId[id].Modules.Sum(m => potencia.TryGetValue(m, out var w) ? w : media) / 1000).ToList();
 
         var partes = setup.Inverters.Where(i => alvo.Contains(i.Id))
             .Select(i => setup.FindModel(i.Model) is { } m ? new LimitShare(i.Id, m.PowerKw, m.TotalInputs) : new LimitShare(i.Id, 0, 0))
             .ToList();
-        var r = BalancedLimits.Split(partes, total);
+        var r = BalancedLimits.SplitInOrder(partes, kwp);
 
         string? recusa = null;
         ConfiguracaoEletricaStore.Mudar(database, s =>
@@ -1359,9 +1574,24 @@ internal sealed class AbaInversor : AbaEletrica
         });
         if (recusa is not null) return (null, recusa);
 
+        // O kWp de cada inversor na simulação: os trechos seguidos da fila.
+        var porInversor = new List<double>();
+        var k = 0;
+        foreach (var p in partes)
+        {
+            var n = r.Limits.GetValueOrDefault(p.Inverter);
+            if (n > 0) porInversor.Add(kwp.Skip(k).Take(n).Sum());
+            k += n;
+        }
+
         var resumo = string.Join(", ", r.Limits.Values.Where(v => v > 0).GroupBy(v => v).OrderByDescending(g => g.Key).Select(g => Tr.F("{0} com {1}", g.Count(), g.Key)));
-        var frase = Tr.F("{0} string(s) repartidas em {1} inversor(es): {2}. Agora Soltar todas da usina e Distribuir.", total - r.Leftover, partes.Count, resumo);
+        var frase = Tr.F("{0} string(s) repartidas em {1} inversor(es) na ordem do Distribuir ({2}): {3}.", fila.Count - r.Leftover, partes.Count, varredura.Describe(), resumo);
+        if (porInversor.Count > 0)
+            frase += " " + Tr.F("kWp por inversor de {0} a {1}.", porInversor.Min().ToString("#,0.00", Tr.Culture), porInversor.Max().ToString("#,0.00", Tr.Culture));
+        frase += " " + Tr.T("Agora Soltar todas da usina e Distribuir.");
         if (r.Leftover > 0) frase += " " + Tr.F("ATENÇÃO: {0} string(s) não cabem nas entradas desses inversores.", r.Leftover);
+        var semPosicao = disponiveis.Count - fila.Count;
+        if (semPosicao > 0) frase += " " + Tr.F("ATENÇÃO: {0} string(s) sem o primeiro módulo no desenho ficam fora da conta (o Distribuir também as pula).", semPosicao);
         return (frase, null);
     }
 
@@ -1468,7 +1698,12 @@ internal sealed class AbaInversor : AbaEletrica
     internal static string? RenomearNaLinha(Database database, Guid inversor, string? nome)
     {
         var porque = ConfiguracaoEletricaStore.Mudar(database, s => s.RenameInverter(inversor, nome));
-        if (porque is null) EquipamentoEmCampo.Redesenhar(database, EquipmentKind.Inverter, inversor);
+        if (porque is null)
+        {
+            EquipamentoEmCampo.Redesenhar(database, EquipmentKind.Inverter, inversor);
+            PreTagDasStrings.Atualizar(database, soAsQueJaTem: true);   // "I3" segue o nome
+        }
+
         return porque;
     }
 
@@ -1520,7 +1755,11 @@ internal sealed class AbaInversor : AbaEletrica
         JanelaEletrica.Campo(Documento, PluginInfo.ComandoEletricaLocal, "Area " + string.Join(";", escolhidos.Select(i => i.Id.ToString("D"))));
     }
 
-    /// <summary>Automático pelas strings ou à mão, para os escolhidos (grava na hora; nada muda em campo agora).</summary>
+    /// <summary>
+    /// Automático pelas strings ou à mão, para os escolhidos (grava na hora).
+    /// Automático apaga o retângulo de quem já estava em campo (item 17 de
+    /// 10/10/2026): a rota CC é quem põe.
+    /// </summary>
     private void MudarOLocal(InverterPlacementMode? modo)
     {
         var escolhidos = Escolhidos();
@@ -1530,12 +1769,15 @@ internal sealed class AbaInversor : AbaEletrica
             return;
         }
 
-        Fazer(() => LocalDosInversores.Mudar(Documento.Database, escolhidos.Select(i => i.Id).ToList(), modo) is { } problema
-            ? throw new InvalidOperationException(problema)
-            : modo is null
-                ? Tr.F("{0} inversor(es) à mão: use Pôr em campo (a posição de agora fica).", escolhidos.Count)
-                : Tr.F("{0} inversor(es) automáticos: o Gerar da rota CC põe ao lado da vala, no ponto de menor cabo, os que ainda não estão em campo; os que já estão vão com Recolocar automáticos.", escolhidos.Count));
+        GravarNaLinha(() => MudarOLocal(Documento.Database, escolhidos.Select(i => i.Id).ToList(), modo), p => Tr.F("Não mudei o local: {0}.", p));
+        RedesenharODesenho();
     }
+
+    /// <summary>O "Automático pelas strings" e o "À mão" da aba (o caminho da tela, também do nível 2). Quem chama trava o documento.</summary>
+    internal static (string? Frase, string? Problema) MudarOLocal(Database database, IReadOnlyCollection<Guid> inversores, InverterPlacementMode? modo) =>
+        modo == InverterPlacementMode.Automatic
+            ? LocalDosInversores.TornarAutomaticos(database, inversores)
+            : LocalDosInversores.TornarManuais(database, inversores);
 
     /// <summary>O "Apagar todos" (10/10/2026: "quero ter a opção de apagar TODOS os inversores da usina").</summary>
     private void ApagarTodos()
@@ -1664,6 +1906,7 @@ internal sealed class AbaInversor : AbaEletrica
         {
             if (!ConfiguracaoEletricaStore.Mudar(Documento.Database, s => s.SetInverterColor(id, cor))) return Tr.T("Esse inversor não está mais no cadastro.");
             var n = CorDasStrings.Repintar(Documento.Database, id);
+            PreTagDasStrings.Atualizar(Documento.Database, soAsQueJaTem: true);
             return Tr.F("{0}: cor trocada para {1}; {2} string(s) repintada(s).", inversor.Name, cor.ToHex(), n);
         });
         RedesenharODesenho();
@@ -1767,7 +2010,7 @@ internal sealed class AbaInversor : AbaEletrica
     {
         if ((_modeloParaCriar.SelectedItem as ComboBoxItem)?.Tag is not Guid modelo)
         {
-            Avisar(Tr.T("Escolha o modelo (cadastre um à esquerda, se não há)."), erro: true);
+            Avisar(Tr.T("Escolha o modelo (cadastre um em Modelos de inversor…, se não há)."), erro: true);
             return;
         }
 

@@ -175,7 +175,7 @@ public static class Cleanup
     public static CleanupTarget Classify(string? xdataType, bool isText) => xdataType switch
     {
         NoteIdentity.Tipo or AnalysisTextIdentity.Tipo or TagIdentity.Tipo => CleanupTarget.Annotation,
-        StringTagText.Tipo => CleanupTarget.StringTag,
+        StringTagText.Tipo or StringPreTag.Tipo => CleanupTarget.StringTag,   // a pré-tag do inversor (10/10/2026) sai como a tag
         StringSign.Tipo => CleanupTarget.StringSign,
         ElectricalString.Tipo => CleanupTarget.StringPath,
         ShadowType => isText ? CleanupTarget.ShadowLabel : CleanupTarget.ShadowOutline,

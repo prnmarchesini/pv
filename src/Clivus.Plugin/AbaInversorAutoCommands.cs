@@ -254,6 +254,100 @@ public static class AbaInversorAutoCommands
         }
     }
 
+    /// <summary>
+    /// CLIVUS_ELETRICA_JANELA_LOCAL_AUTO &lt;Automatico|Manual|Repartir|Renomear|Linhas&gt;
+    /// &lt;inversores separados por ;, * para todos (Renomear: o nome da área)&gt; &lt;valor (Renomear: o nome novo; . = vazio)&gt;:
+    /// os botões "Automático pelas strings" e "À mão", o "Repartir pelo kW",
+    /// a caixa do nome da área na coluna Local e o estado de cada linha
+    /// (coluna Local, botão de campo, Ver em campo) com a soma dos limites,
+    /// pelo mesmo caminho da aba (melhorias de 10/10/2026).
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoEletricaJanelaLocalAutomatico, CommandFlags.Session)]
+    public static void Local()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+        try
+        {
+            var oQue = editor.GetString(new PromptStringOptions("\nAutomatico, Manual, Repartir, Renomear ou Linhas: ") { AllowSpaces = false });
+            if (oQue.Status != PromptStatus.OK) return;
+            var nomes = editor.GetString(new PromptStringOptions("\nInversores (nomes separados por ;) ou area: ") { AllowSpaces = true });
+            if (nomes.Status != PromptStatus.OK) return;
+            var valor = editor.GetString(new PromptStringOptions("\nValor (. = vazio): ") { AllowSpaces = true });
+            if (valor.Status != PromptStatus.OK) return;
+            var texto = valor.StringResult == "." ? string.Empty : valor.StringResult;
+            var db = documento.Database;
+            var setup = ConfiguracaoEletricaStore.Ler(db).Setup;
+
+            var op = oQue.StringResult.Trim().ToUpperInvariant();
+            if (op == "RENOMEAR")
+            {
+                var area = LocalDosInversores.Areas(db).Values.FirstOrDefault(a => string.Equals(a.Marca.Name, nomes.StringResult.Trim(), StringComparison.CurrentCultureIgnoreCase));
+                var (frase, problema) = area.Marca is null
+                    ? (null, "area nao existe")
+                    : EscritaForaDeComando.Fazer(documento, () => LocalDosInversores.RenomearArea(db, area.Marca.Id, texto));
+                editor.WriteMessage(problema is null ? $"\nELETRICA janela local renomear: {frase}\n" : $"\nELETRICA janela local recusado: {problema}\n");
+                return;
+            }
+
+            if (op == "LINHAS")
+            {
+                var emCampo = EquipamentoEmCampo.EmCampo(db);
+                var locais = LocalDosInversores.Ler(db, out _).GroupBy(l => l.Inverter).ToDictionary(g => g.Key, g => g.First());
+                var areas = LocalDosInversores.Areas(db);
+                foreach (var i in setup.Inverters)
+                {
+                    var local = locais.GetValueOrDefault(i.Id);
+                    var v = InverterSiteView.Of(local, emCampo.Contains((EquipmentKind.Inverter, i.Id)), local is not null && areas.ContainsKey(local.Site));
+                    var coluna = v.Mode switch
+                    {
+                        InverterPlacementMode.Area => areas[v.Site].Marca.Name,
+                        InverterPlacementMode.Automatic => "Auto",
+                        _ => "-",
+                    };
+                    editor.WriteMessage($"\nELETRICA LOCAL_LINHA nome={i.Name.Replace(' ', '_')} local={coluna.Replace(' ', '_')} botao={v.Button} ver={v.CanSee} limite={i.Target?.ToString(Inv) ?? "-"} fim\n");
+                }
+
+                var (_, uteis) = AbaInversor.ContarTudo(db);
+                var (soma, bate) = BalancedLimits.Describe(BalancedLimits.Sum(setup.Inverters, setup.Models), uteis);
+                editor.WriteMessage($"ELETRICA LOCAL_SOMA bate={bate} [{soma}] fim\n");
+                return;
+            }
+
+            var ids = new List<Guid>();
+            if (nomes.StringResult.Trim() == "*") ids.AddRange(setup.Inverters.Select(i => i.Id));
+            else
+            {
+                foreach (var nome in nomes.StringResult.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (setup.FindInverter(nome) is not { } i)
+                    {
+                        editor.WriteMessage($"\nELETRICA janela local recusado: inversor {nome} nao existe\n");
+                        return;
+                    }
+
+                    ids.Add(i.Id);
+                }
+            }
+
+            (string? Frase, string? Problema) r = op switch
+            {
+                "AUTOMATICO" => EscritaForaDeComando.Fazer(documento, () => AbaInversor.MudarOLocal(db, ids, InverterPlacementMode.Automatic)),
+                "MANUAL" => EscritaForaDeComando.Fazer(documento, () => AbaInversor.MudarOLocal(db, ids, null)),
+                "REPARTIR" => EscritaForaDeComando.Fazer(documento, () => AbaInversor.Repartir(db, ids)),
+                _ => (null, $"[{oQue.StringResult}]"),
+            };
+            editor.WriteMessage(r.Problema is null ? $"\nELETRICA janela local {op.ToLowerInvariant()}: {r.Frase}\n" : $"\nELETRICA janela local recusado: {r.Problema}\n");
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no CLIVUS_ELETRICA_JANELA_LOCAL_AUTO.", erro);
+            editor.WriteMessage($"\nELETRICA ERRO {erro.Message}\n");
+        }
+    }
+
     /// <summary>CLIVUS_ELETRICA_JANELA_TABELA_AUTO: as linhas e o total da tabela, montados como a aba monta.</summary>
     [CommandMethod(PluginInfo.ComandoEletricaJanelaTabelaAutomatico, CommandFlags.Session)]
     public static void Tabela()

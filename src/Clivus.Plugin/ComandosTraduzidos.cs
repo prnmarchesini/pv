@@ -264,6 +264,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_ELECTRICA_COMBINER")]
     public static void CLIVUS_ELECTRICA_COMBINER() => CombinerCommands.Strings();
 
+    [CommandMethod("CLIVUS_ELECTRICAL_SITE")]
+    public static void CLIVUS_ELECTRICAL_SITE() => LocalDosInversores.Local();
+
+    [CommandMethod("CLIVUS_ELECTRICA_LUGAR")]
+    public static void CLIVUS_ELECTRICA_LUGAR() => LocalDosInversores.Local();
+
     [CommandMethod("CLIVUS_ELECTRICAL_PLACE")]
     public static void CLIVUS_ELECTRICAL_PLACE() => ConfiguracaoEletricaCommands.Posicionar();
 
@@ -287,6 +293,12 @@ public static class ComandosTraduzidos
 
     [CommandMethod("CLIVUS_ELECTRICA_SKID")]
     public static void CLIVUS_ELECTRICA_SKID() => SkidCommands.Agrupar();
+
+    [CommandMethod("CLIVUS_ELECTRICAL_SHOW", CommandFlags.Modal | CommandFlags.Redraw | CommandFlags.NoUndoMarker)]
+    public static void CLIVUS_ELECTRICAL_SHOW() => LocalDosInversores.Ver();
+
+    [CommandMethod("CLIVUS_ELECTRICA_VER", CommandFlags.Modal | CommandFlags.Redraw | CommandFlags.NoUndoMarker)]
+    public static void CLIVUS_ELECTRICA_VER() => LocalDosInversores.Ver();
 
     [CommandMethod("CLIVUS_STATUS", CommandFlags.Modal | CommandFlags.NoUndoMarker)]
     public static void CLIVUS_STATUS() => EstadoCommands.Estado();
@@ -447,18 +459,6 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_RUTA_CABLES")]
     public static void CLIVUS_RUTA_CABLES() => RotaDeCabosCommands.RotaCabos();
 
-    [CommandMethod("CLIVUS_ELECTRICAL_SITE")]
-    public static void CLIVUS_ELECTRICAL_SITE() => LocalDosInversores.Local();
-
-    [CommandMethod("CLIVUS_ELECTRICA_LUGAR")]
-    public static void CLIVUS_ELECTRICA_LUGAR() => LocalDosInversores.Local();
-
-    [CommandMethod("CLIVUS_CABLE_ROUTES_REPLACE")]
-    public static void CLIVUS_CABLE_ROUTES_REPLACE() => RotaDeCabosCampo.Recolocar();
-
-    [CommandMethod("CLIVUS_RUTA_CABLES_RECOLOCAR")]
-    public static void CLIVUS_RUTA_CABLES_RECOLOCAR() => RotaDeCabosCampo.Recolocar();
-
     [CommandMethod("CLIVUS_CABLE_ROUTES_GENERATE")]
     public static void CLIVUS_CABLE_ROUTES_GENERATE() => RotaDeCabosCampo.Gerar();
 
@@ -470,6 +470,12 @@ public static class ComandosTraduzidos
 
     [CommandMethod("CLIVUS_RUTA_CABLES_LADO")]
     public static void CLIVUS_RUTA_CABLES_LADO() => RotaDeCabosCampo.Lado();
+
+    [CommandMethod("CLIVUS_CABLE_ROUTES_REPLACE")]
+    public static void CLIVUS_CABLE_ROUTES_REPLACE() => RotaDeCabosCampo.Recolocar();
+
+    [CommandMethod("CLIVUS_RUTA_CABLES_RECOLOCAR")]
+    public static void CLIVUS_RUTA_CABLES_RECOLOCAR() => RotaDeCabosCampo.Recolocar();
 
     [CommandMethod("CLIVUS_CABLE_ROUTES_TRENCH")]
     public static void CLIVUS_CABLE_ROUTES_TRENCH() => RotaDeCabosCampo.Vala();

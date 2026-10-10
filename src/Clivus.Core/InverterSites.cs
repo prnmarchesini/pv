@@ -46,10 +46,74 @@ public sealed record SiteMark(Guid Id, string Name)
     public const string Tipo = "AreaInversores";
     public const int FieldCount = 2;
 
+    /// <summary>O nome mais comprido de uma área.</summary>
+    public const int MaxNameLength = 40;
+
     public IReadOnlyList<string> ToFields() => [Id.ToString("D"), Name];
 
     public static SiteMark? Parse(IReadOnlyList<string> c) =>
         c.Count >= FieldCount && Guid.TryParse(c[0], out var id) && id != Guid.Empty ? new SiteMark(id, c[1]) : null;
+
+    /// <summary>O primeiro "Área N" que ainda não é nome de nenhuma (N a partir de quantas há + 1).</summary>
+    public static string NextDefaultName(IReadOnlyCollection<string> existentes)
+    {
+        ArgumentNullException.ThrowIfNull(existentes);
+        var nomes = existentes.Select(n => n.Trim()).ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+        var n = existentes.Count + 1;
+        while (nomes.Contains(Tr.F("Área {0}", n))) n++;
+        return Tr.F("Área {0}", n);
+    }
+
+    /// <summary>
+    /// Por que o nome não serve para a área (item 6 de 10/10/2026): vazio,
+    /// comprido demais, com caractere de controle ou repetido de outra área
+    /// (sem diferença de maiúscula). Null se serve.
+    /// </summary>
+    public static string? NameProblem(string? nome, IEnumerable<string> outras)
+    {
+        ArgumentNullException.ThrowIfNull(outras);
+        var limpo = nome?.Trim() ?? string.Empty;
+        if (limpo.Length == 0) return Tr.T("o nome da área não pode ficar vazio");
+        if (limpo.Length > MaxNameLength) return Tr.F("o nome da área tem no máximo {0} caracteres", MaxNameLength);
+        if (limpo.Any(char.IsControl)) return Tr.T("o nome da área não pode ter caractere de controle");
+        if (outras.Any(o => string.Equals(o.Trim(), limpo, StringComparison.CurrentCultureIgnoreCase))) return Tr.F("já há uma área chamada {0}", limpo);
+        return null;
+    }
+}
+
+/// <summary>O que a linha do inversor mostra no lugar do botão de campo (item 4 e 19 de 10/10/2026).</summary>
+public enum InverterFieldButton
+{
+    /// <summary>"Pôr em campo": não está no desenho.</summary>
+    Place,
+
+    /// <summary>"Mover": já está no desenho.</summary>
+    Move,
+
+    /// <summary>O texto "Alocação automática", sem clique: a rota CC põe o inversor.</summary>
+    Automatic,
+}
+
+/// <summary>
+/// O estado coerente da linha do inversor (item 4 de 10/10/2026: "é marcado
+/// área e também é marcado pôr em campo, erro grave"): a coluna Local e o
+/// botão saem da mesma conta. Área só vale com o inversor em campo e a área
+/// no desenho (o registro de uma área que o inversor não ocupa mais, porque
+/// não coube, foi apagado ou a área sumiu, vale como à mão). Automático
+/// vale sempre: quem põe é a rota.
+/// </summary>
+public sealed record InverterSiteView(InverterPlacementMode? Mode, Guid Site, InverterFieldButton Button, bool CanSee)
+{
+    public static InverterSiteView Of(InverterPlacement? local, bool emCampo, bool areaExiste)
+    {
+        if (local is { Mode: InverterPlacementMode.Automatic })
+            return new InverterSiteView(InverterPlacementMode.Automatic, Guid.Empty, InverterFieldButton.Automatic, emCampo);
+
+        if (local is { Mode: InverterPlacementMode.Area } && emCampo && areaExiste)
+            return new InverterSiteView(InverterPlacementMode.Area, local.Site, InverterFieldButton.Move, true);
+
+        return new InverterSiteView(null, Guid.Empty, emCampo ? InverterFieldButton.Move : InverterFieldButton.Place, emCampo);
+    }
 }
 
 /// <summary>
@@ -181,7 +245,11 @@ public static class InverterSites
             var cv = (sv.Max() + sv.Min()) / 2;
             var centro = new Point3(u.X * cu + v.X * cv, u.Y * cu + v.Y * cv, 0);
             var (mu, mv) = ((su.Max() - su.Min()) / 2, (sv.Max() - sv.Min()) / 2);
-            melhor = mu >= mv ? (centro, u, v, mu, mv) : (centro, v, new Point3(-v.X, -v.Y, 0), mv, mu);
+            // O lado comprido vira u; v é sempre o perpendicular a ele. Até
+            // 10/10/2026 o v do caso "primeiro lado é o curto" saía -v (paralelo
+            // ao novo u): as fileiras andavam na mesma reta e os inversores
+            // caíam um em cima do outro numa coluna no meio da área (Renan, item 2).
+            melhor = mu >= mv ? (centro, u, v, mu, mv) : (centro, v, new Point3(-u.X, -u.Y, 0), mv, mu);
         }
 
         return melhor ?? throw new ArgumentException("o polígono não tem lado", nameof(poligono));
