@@ -26,7 +26,7 @@ namespace Clivus.Plugin;
 public static class TrocarMesaCommands
 {
     /// <summary>O que a janela (ou a linha de comando) escolheu.</summary>
-    internal sealed record Escolha(int Tipo, int Quantas, SwapAnchor Lado, bool Reespacar);
+    internal sealed record Escolha(int Tipo, int Quantas, RowSide Lado, bool Reespacar);
 
     // ------------------------------------------------------------ trocar
 
@@ -135,7 +135,7 @@ public static class TrocarMesaCommands
         var quantas = editor.GetInteger(new PromptIntegerOptions(Tr.T("\nQuantas no lugar (1 a 5): ")) { LowerLimit = 1, UpperLimit = 5, DefaultValue = 1, UseDefaultValue = true });
         if (quantas.Status != PromptStatus.OK) return null;
 
-        var lado = new PromptKeywordOptions(Tr.T("\nLado travado [Inicio/Fim]: "), "Inicio Fim") { AllowNone = false };
+        var lado = new PromptKeywordOptions(Tr.T("\nLado travado, com o norte para cima [Esquerda/Direita]: "), "Esquerda Direita") { AllowNone = false };
         var respostaLado = editor.GetKeywords(lado);
         if (respostaLado.Status != PromptStatus.OK) return null;
 
@@ -145,17 +145,18 @@ public static class TrocarMesaCommands
 
         return new Escolha(
             tipo.Value - 1, quantas.Value,
-            respostaLado.StringResult == "Fim" ? SwapAnchor.End : SwapAnchor.Start,
+            respostaLado.StringResult == "Direita" ? RowSide.Right : RowSide.Left,
             respostaReespacar.StringResult == "Sim");
     }
 
     /// <summary>
-    /// Troca a mesa: as novas no lugar dela, encostadas no lado travado,
-    /// assentadas no terreno; a antiga sai. Diz quanto passou da vizinha e,
-    /// se pedido, reespaça a fileira mantendo as mesas.
+    /// Troca a mesa: as novas no lugar dela, encostadas no lado travado
+    /// (esquerda ou direita pelo norte do desenho), assentadas no terreno; a
+    /// antiga sai. Diz quanto passou da vizinha e, se pedido, reespaça a
+    /// fileira mantendo as mesas, com a ponta do mesmo lado parada.
     /// </summary>
     internal static bool Executar(
-        Editor editor, Document documento, ProcessedTerrain terreno, Guid guid, DrawingTable nova, int quantas, SwapAnchor lado, bool reespacar)
+        Editor editor, Document documento, ProcessedTerrain terreno, Guid guid, DrawingTable nova, int quantas, RowSide lado, bool reespacar)
     {
         var database = documento.Database;
         var lida = Ler(documento);
@@ -179,8 +180,11 @@ public static class TrocarMesaCommands
             return false;
         }
 
+        // Esquerda e direita pelo norte; início e fim pelo sentido em que a
+        // mesa foi desenhada.
+        var ancora = TableSwap.AnchorOf(lado, celula.DirectionRadians);
         var outras = lida.Cantos.Where(c => c.Key != guid).Select(c => (IReadOnlyList<Point3>)c.Value);
-        var vao = TableSwap.RoomBeyond(celula, outras, lado);
+        var vao = TableSwap.RoomBeyond(celula, outras, ancora);
 
         var perfil = nova.Profile;
         var geometria = FileiraCommands.GeometriaDe(perfil);
@@ -189,7 +193,7 @@ public static class TrocarMesaCommands
         var settings = doProjeto.ForTable(perfil.Frame);
 
         var pegada = new TableFootprint(geometria.Length, geometria.Depth * Math.Cos(perfil.TiltRadians));
-        var troca = TableSwap.Plan(celula, pegada, kind: 0, quantas, settings.Configuration.TableGap, lado, vao);
+        var troca = TableSwap.Plan(celula, pegada, kind: 0, quantas, settings.Configuration.TableGap, ancora, vao);
 
         var fileira = RowPipeline.ProcessRow(new PlanRow(celula.Row, troca.Tables), geometria, perfil.TiltRadians, terreno.Mesh, settings);
 
@@ -209,9 +213,9 @@ public static class TrocarMesaCommands
         var magenta = desenho.Marked > 0 ? Tr.F(", {0} com módulo dentro da terra (magenta)", desenho.Marked) : string.Empty;
         var novas = string.Join(", ", troca.Tables.Select(t => t.Label));
 
-        editor.WriteMessage(lado == SwapAnchor.Start
-            ? Tr.F("\nTROCAR {0} virou {1} × {2} ({3}), travada no início: {4} mesa(s), {5} módulo(s){6}.\n", mesa.Identity.Label, quantas, nova.Name, novas, desenho.Tables, desenho.Modules, magenta)
-            : Tr.F("\nTROCAR {0} virou {1} × {2} ({3}), travada no fim: {4} mesa(s), {5} módulo(s){6}.\n", mesa.Identity.Label, quantas, nova.Name, novas, desenho.Tables, desenho.Modules, magenta));
+        editor.WriteMessage(lado == RowSide.Left
+            ? Tr.F("\nTROCAR {0} virou {1} × {2} ({3}), travada à esquerda: {4} mesa(s), {5} módulo(s){6}.\n", mesa.Identity.Label, quantas, nova.Name, novas, desenho.Tables, desenho.Modules, magenta)
+            : Tr.F("\nTROCAR {0} virou {1} × {2} ({3}), travada à direita: {4} mesa(s), {5} módulo(s){6}.\n", mesa.Identity.Label, quantas, nova.Name, novas, desenho.Tables, desenho.Modules, magenta));
 
         AvisarForaDaArea(editor, database, troca.Tables, Tr.T("TROCAR"));
 
@@ -221,7 +225,8 @@ public static class TrocarMesaCommands
                 Tr.F("  ATENÇÃO: as mesas novas passam {0:0.00} m do espaço até a vizinha (com o espaçamento de {1:0.00} m). Use Regerar fileira > Manter para acertar.\n", troca.Overflow, settings.Configuration.TableGap));
         }
 
-        if (reespacar) Regerar(editor, documento, terreno, troca.Tables[0].Label, troca.Tables[0].Corners, manter: true, alinhamento: null);
+        // A ponta da fileira do lado travado fica parada (Renan, 10/10/2026).
+        if (reespacar) Regerar(editor, documento, terreno, troca.Tables[0].Label, troca.Tables[0].Corners, manter: true, alinhamento: null, lado);
 
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
         return true;
@@ -313,11 +318,13 @@ public static class TrocarMesaCommands
     /// Regera a fileira da mesa de cantos <paramref name="cantosDaMesa"/>.
     /// Manter: as mesas da fileira (a faixa dela, dentro da mesma área)
     /// reespaçadas, cada uma com o tipo dela. Motor: a área é planejada de
-    /// novo e só a fileira que passa pela mesa é desenhada.
+    /// novo e só a fileira que passa pela mesa é desenhada. Com
+    /// <paramref name="lado"/> (só Manter), a ponta de cada trecho desse lado
+    /// fica parada; sem ele, o início de cada trecho.
     /// </summary>
     private static void Regerar(
         Editor editor, Document documento, ProcessedTerrain terreno, string letreiro, IReadOnlyList<Point3> cantosDaMesa, bool manter,
-        (IReadOnlyList<Point3> Vertices, AlignmentIdentity Identidade)? alinhamento)
+        (IReadOnlyList<Point3> Vertices, AlignmentIdentity Identidade)? alinhamento, RowSide? lado = null)
     {
         var database = documento.Database;
         var centro = new Point3(cantosDaMesa.Average(p => p.X), cantosDaMesa.Average(p => p.Y), 0);
@@ -361,7 +368,7 @@ public static class TrocarMesaCommands
 
         if (manter)
         {
-            Reespacar(editor, documento, terreno, lida, daFileira, letreiro);
+            Reespacar(editor, documento, terreno, lida, daFileira, letreiro, lado);
         }
         else
         {
@@ -374,8 +381,8 @@ public static class TrocarMesaCommands
         }
     }
 
-    /// <summary>Reespaça as mesas da fileira, cada uma com o tipo dela.</summary>
-    private static void Reespacar(Editor editor, Document documento, ProcessedTerrain terreno, Leitura lida, IReadOnlyList<Guid> daFileira, string letreiro)
+    /// <summary>Reespaça as mesas da fileira, cada uma com o tipo dela; com <paramref name="lado"/>, a ponta desse lado fica parada.</summary>
+    private static void Reespacar(Editor editor, Document documento, ProcessedTerrain terreno, Leitura lida, IReadOnlyList<Guid> daFileira, string letreiro, RowSide? lado)
     {
         var database = documento.Database;
         var doDesenho = MesasDoDesenho.Ler(database);
@@ -439,7 +446,7 @@ public static class TrocarMesaCommands
         var settings = doProjeto.ForTable(tipos[0].Profile.Frame);
         var tilt = tipos[0].Profile.TiltRadians;
 
-        var reespacadas = TableSwap.Respace(celulas, pegadas, settings.Configuration.TableGap, settings.Configuration.MaxGapBeforeBreak);
+        var reespacadas = TableSwap.Respace(celulas, pegadas, settings.Configuration.TableGap, settings.Configuration.MaxGapBeforeBreak, lado);
         var fileira = RowPipeline.ProcessRow(
             new PlanRow(reespacadas[0].Row, reespacadas), reespacadas.Select(c => desenhoDosTipos.Geometrias[c.Kind]).ToList(), tilt, terreno.Mesh, settings);
 

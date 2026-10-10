@@ -1,6 +1,9 @@
 ; Teste de nivel 2 de trocar mesa (9.2) e regerar fileira (9.3): usina mista
-; (28 e 14 em uso), a F1.2 trocada por duas de 14 travando o inicio; depois a
-; fileira 1 reespacada mantendo as mesas, e a fileira 2 regerada pelo motor.
+; (28 e 14 em uso), a F1.2 trocada por duas de 14 travando a esquerda; depois
+; a fileira 1 reespacada mantendo as mesas; a F1.2b (14, no meio da fileira)
+; trocada por uma de 28 travando a direita e refazendo a fileira, que deve
+; deixar parada a ponta direita da fileira (pedido de 10/10/2026); e a
+; fileira 2 regerada pelo motor.
 ; Em LISP: letreiros e perfis pelo XData do contorno (campo 1 = letreiro,
 ; campo 15 = perfil), o menor vao em planta entre mesas vizinhas da fileira 1
 ; (antes, depois da troca e depois de reespacar) e a cota dos contornos
@@ -55,9 +58,17 @@
     (setq menor (min menor (- (car (cadr lst)) (cadr (car lst)))) lst (cdr lst)))
   menor)
 
+; As pontas em planta da fileira (padrao): "xmin xmax ymin ymax" de todos os
+; vertices dos contornos.
+(defun clivus:pontas (padrao / xs ys)
+  (foreach m (clivus:mesas)
+    (if (wcmatch (car m) padrao)
+      (foreach p (clivus:verts (caddr m)) (setq xs (cons (car p) xs) ys (cons (cadr p) ys)))))
+  (strcat (rtos (apply 'min xs) 2 3) " " (rtos (apply 'max xs) 2 3) " " (rtos (apply 'min ys) 2 3) " " (rtos (apply 'max ys) 2 3)))
+
 (setq clivus:total0 (length (clivus:mesas)) clivus:f1antes (clivus:da "F1`.*") clivus:perfil12 (clivus:perfil "F1.2") clivus:vao0 (clivus:menorvao "F1`.*"))
 
-(command "CLIVUS_TROCAR_MESA_AUTO" "F1.2" 2 2 "Inicio" "Nao")
+(command "CLIVUS_TROCAR_MESA_AUTO" "F1.2" 2 2 "Esquerda" "Nao")
 (setq clivus:total1 (length (clivus:mesas)) clivus:f1troca (clivus:da "F1`.*")
       clivus:p2a (clivus:perfil "F1.2a") clivus:p2b (clivus:perfil "F1.2b") clivus:sem12 (clivus:perfil "F1.2")
       clivus:vaotroca (clivus:menorvao "F1`.*"))
@@ -69,6 +80,13 @@
 (command "CLIVUS_REGERAR_FILEIRA_AUTO" "F1.1" "Manter")
 (setq clivus:f1manter (clivus:da "F1`.*") clivus:vaomanter (clivus:menorvao "F1`.*") clivus:p2amanter (clivus:perfil "F1.2a"))
 
+; Troca no meio da fileira travando a direita e refazendo a fileira: a ponta
+; direita da fileira fica parada; a fileira cresce para a esquerda.
+(setq clivus:pontasantes (clivus:pontas "F1`.*"))
+(command "CLIVUS_TROCAR_MESA_AUTO" "F1.2b" 1 1 "Direita" "Sim")
+(setq clivus:pontasdireita (clivus:pontas "F1`.*") clivus:f1direita (clivus:da "F1`.*") clivus:p2bdireita (clivus:perfil "F1.2b")
+      clivus:vaodireita (clivus:menorvao "F1`.*"))
+
 (setq clivus:f2antes (clivus:da "F2`.*"))
 (command "CLIVUS_REGERAR_FILEIRA_AUTO" "F2.1" "Motor")
 (setq clivus:f2motor (clivus:da "F2`.*") clivus:total2 (length (clivus:mesas)))
@@ -78,6 +96,8 @@
                " f2antes=" (itoa clivus:f2antes) " f2motor=" (itoa clivus:f2motor)
                " perfil12=" clivus:perfil12 " p2a=" clivus:p2a " p2b=" clivus:p2b " sem12=" clivus:sem12 " p2amanter=" clivus:p2amanter
                " vao0=" (rtos clivus:vao0 2 3) " vaotroca=" (rtos clivus:vaotroca 2 3) " vaomanter=" (rtos clivus:vaomanter 2 3)
-               " zmin=" (rtos clivus:zmin 2 3) " zmax=" (rtos clivus:zmax 2 3)))
+               " zmin=" (rtos clivus:zmin 2 3) " zmax=" (rtos clivus:zmax 2 3)
+               " f1direita=" (itoa clivus:f1direita) " p2bdireita=" clivus:p2bdireita " vaodireita=" (rtos clivus:vaodireita 2 3)
+               " pontasantes=" clivus:pontasantes " pontasdireita=" clivus:pontasdireita))
 (setvar "SECURELOAD" clivus:secureload)
 (princ)
