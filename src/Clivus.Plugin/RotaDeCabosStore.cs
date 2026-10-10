@@ -20,18 +20,25 @@ internal static class RotaDeCabosStore
     private const string ChaveLances = "ROTA_LANCES";
     private const string ChavePan = "ROTA_MODULOS_PAN";
     private const string ChavePintadas = "ROTA_PINTADAS";
+    private const string ChaveVias = "ROTA_VIAS";
 
     private static readonly string OQueConfig = Tr.N("das configurações da rota de cabos");
     private static readonly string OQueLados = Tr.N("dos lados forçados das strings");
     private static readonly string OQueLances = Tr.N("dos lances gerados");
     private static readonly string OQuePan = Tr.N("dos módulos lidos de PAN");
+    private static readonly string OQueVias = Tr.N("das vias trocadas no resumo");
+
+    // Formato 2 da configuração (10/10/2026): as vias no fim. O 1 é lido com as vias da formação do cabo.
+    private const int VersaoDaConfig = 2;
 
     // ------------------------------------------------------------- registros
 
     /// <summary>A configuração de cada aba (a de partida para a que nunca foi gravada).</summary>
     internal static Dictionary<CableRoute, RouteSettings> Configuracoes(Database db, out string? problema)
     {
-        var lido = PluginRecords.Load(db, ChaveConfig, 1, RouteSettings.FieldCount, RouteSettings.Parse, OQueConfig);
+        var lido = PluginRecords.Version(db, ChaveConfig) == 1
+            ? PluginRecords.Load(db, ChaveConfig, 1, RouteSettings.FieldCountV1, RouteSettings.ParseV1, OQueConfig)
+            : PluginRecords.Load(db, ChaveConfig, VersaoDaConfig, RouteSettings.FieldCount, RouteSettings.Parse, OQueConfig);
         problema = lido.Problem;
         var mapa = CableRoutes.All.ToDictionary(r => r, RouteSettings.Default);
         foreach (var c in lido.Items) mapa[c.Route] = c;
@@ -47,7 +54,30 @@ internal static class RotaDeCabosStore
         if (problema is not null) return problema;
 
         todas[nova.Route] = nova;
-        PluginRecords.Save(db, ChaveConfig, 1, RouteSettings.FieldCount, CableRoutes.All.Select(r => todas[r]).ToList(), c => c.ToFields());
+        PluginRecords.Save(db, ChaveConfig, VersaoDaConfig, RouteSettings.FieldCount, CableRoutes.All.Select(r => todas[r]).ToList(), c => c.ToFields());
+        return null;
+    }
+
+    /// <summary>As vias trocadas à mão no resumo, por circuito.</summary>
+    internal static List<CircuitWires> Vias(Database db, out string? problema)
+    {
+        var lido = PluginRecords.Load(db, ChaveVias, 1, CircuitWires.FieldCount, CircuitWires.Parse, OQueVias);
+        problema = lido.Problem;
+        return [.. lido.Items];
+    }
+
+    /// <summary>
+    /// Troca as vias de um circuito (null = volta às da aba). Recusa, com o
+    /// motivo, se o registro estava ilegível (gravar por cima perderia o resto).
+    /// </summary>
+    internal static string? GravarVias(Database db, CableRoute rota, CableEnd de, CableEnd para, int? vias)
+    {
+        var lista = Vias(db, out var problema);
+        if (problema is not null) return problema;
+
+        lista.RemoveAll(v => v.Route == rota && v.From == de && v.To == para);
+        if (vias is { } n) lista.Add(new CircuitWires(rota, de, para, n));
+        PluginRecords.Save(db, ChaveVias, 1, CircuitWires.FieldCount, lista, v => v.ToFields());
         return null;
     }
 
@@ -77,7 +107,7 @@ internal static class RotaDeCabosStore
 
     // ------------------------------------------------------------- valas
 
-    /// <summary>Marca as entidades como vala da rota (XData) e põe na camada da vala dela (17.4). A geometria não muda. Quantas.</summary>
+    /// <summary>Marca as entidades como vala da rota (XData) e põe na camada da vala dela (17.4). Quantas. Quem assenta no terreno é <see cref="AssentarValas"/>.</summary>
     internal static int MarcarValas(Database db, IReadOnlyList<ObjectId> ids, CableRoute rota)
     {
         using var transacao = db.TransactionManager.StartTransaction();
@@ -94,6 +124,86 @@ internal static class RotaDeCabosStore
 
         transacao.Commit();
         return n;
+    }
+
+    /// <summary>
+    /// Assenta as valas da rota no terreno, na profundidade da aba: cada uma
+    /// vira uma Polyline3d com o traçado em planta de antes e a cota do
+    /// terreno menos a profundidade, com vértice onde cruza aresta do TIN
+    /// (Renan, 10/10/2026: "TODO desenho respeita o TIN"). A nova fica com a
+    /// camada, a cor e o XData da antiga, que é apagada; a que já está assim
+    /// fica. Só as de <paramref name="quais"/> (null = todas da rota).
+    /// Devolve quantas foram assentadas e quantos pontos ficaram fora do
+    /// terreno (com a cota que tinham, para quem chamou avisar).
+    /// </summary>
+    internal static (int Valas, int PontosFora) AssentarValas(Database db, CableRoute rota, double profundidade, Tin terreno, IReadOnlyCollection<ObjectId>? quais = null)
+    {
+        using var transacao = db.TransactionManager.StartTransaction();
+        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForWrite);
+        var classeCurva = RXObject.GetClass(typeof(Curve));
+        var alvo = quais?.ToHashSet();
+        var ids = alvo is not null ? alvo.ToList() : espaco.Cast<ObjectId>().Where(id => id.ObjectClass.IsDerivedFrom(classeCurva)).ToList();
+        int valas = 0, fora = 0;
+
+        foreach (var id in ids)
+        {
+            if (id.IsErased || transacao.GetObject(id, OpenMode.ForRead) is not Curve curva || Vala(curva) is not { } marca || marca.Route != rota) continue;
+
+            var planta = Pontos(curva, transacao);
+            if (planta.Count < 2) continue;
+
+            var vala = Draping.Below(terreno, planta, profundidade);
+            fora += vala.OutsideCount;
+
+            valas++;
+
+            // Já assentada assim (o Gerar de novo, sem mudar a profundidade): fica como está.
+            if (curva is Polyline3d && Iguais(Pontos3d(curva, transacao), vala.Vertices)) continue;
+
+            // Sempre uma linha nova no lugar da antiga, com as propriedades e o
+            // XData dela (de todos os aplicativos): trocar os vértices no lugar
+            // deixa os apagados na lista da Polyline3d, e quem a percorre depois
+            // tropeça neles (eWasErased).
+            var nova = new Polyline3d { Closed = false };
+            nova.SetPropertiesFrom(curva);
+            espaco.AppendEntity(nova);
+            transacao.AddNewlyCreatedDBObject(nova, true);
+            Vertices(transacao, nova, vala.Vertices);
+            using (var xdata = curva.XData) nova.XData = xdata;
+
+            curva.UpgradeOpen();
+            curva.Erase();
+        }
+
+        transacao.Commit();
+        return (valas, fora);
+    }
+
+    /// <summary>Os vértices de uma Polyline3d com a cota (os apagados ficam de fora).</summary>
+    private static List<Point3> Pontos3d(Curve curva, Transaction transacao)
+    {
+        var pontos = new List<Point3>();
+        foreach (ObjectId v in (Polyline3d)curva)
+        {
+            if (v.IsErased) continue;
+            var p = ((PolylineVertex3d)transacao.GetObject(v, OpenMode.ForRead)).Position;
+            pontos.Add(new Point3(p.X, p.Y, p.Z));
+        }
+
+        return pontos;
+    }
+
+    private static bool Iguais(IReadOnlyList<Point3> a, IReadOnlyList<Point3> b) =>
+        a.Count == b.Count && a.Zip(b).All(x => Math.Abs(x.First.X - x.Second.X) < 1e-6 && Math.Abs(x.First.Y - x.Second.Y) < 1e-6 && Math.Abs(x.First.Z - x.Second.Z) < 1e-6);
+
+    private static void Vertices(Transaction transacao, Polyline3d linha, IEnumerable<Point3> pontos)
+    {
+        foreach (var p in pontos)
+        {
+            var vertice = new PolylineVertex3d(new Point3d(p.X, p.Y, p.Z));
+            linha.AppendVertex(vertice);
+            transacao.AddNewlyCreatedDBObject(vertice, true);
+        }
     }
 
     /// <summary>A marca de vala da entidade (null se não é vala).</summary>
@@ -148,7 +258,8 @@ internal static class RotaDeCabosStore
                 break;
 
             case Polyline3d p3:
-                foreach (ObjectId v in p3) Somar(((PolylineVertex3d)transacao.GetObject(v, OpenMode.ForRead)).Position);
+                foreach (ObjectId v in p3)
+                    if (!v.IsErased) Somar(((PolylineVertex3d)transacao.GetObject(v, OpenMode.ForRead)).Position);
                 if (p3.Closed && pontos.Count > 0) pontos.Add(pontos[0]);
                 break;
 

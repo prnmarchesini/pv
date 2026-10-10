@@ -21,7 +21,7 @@ Primeira seção de cada aba: profundidade da vala daquela rota (ex. 60 cm, 80 c
 ### 17.4 Seleção da vala
 
 Segunda seção: botão de selecionar vala. Clica, o modal **fica oculto**, o cursor vira o quadradinho de seleção, o Renan vai clicando nas polylines que são vala daquela rota. Ctrl desseleciona. Uma caixa mostra ao vivo quantas linhas estão selecionadas. No Enter, o modal volta, informa quantas linhas foram selecionadas e **atribui automaticamente a layer de vala daquela rota** às polylines escolhidas.
-A vala é polyline comum, desenhada à mão pelo Renan antes de abrir o menu. O sistema nunca cria nem altera o traçado dela.
+A vala é polyline comum, desenhada à mão pelo Renan antes de abrir o menu. O sistema nunca cria nem altera o traçado dela em planta. Desde 10/10/2026 (Renan: "TODO desenho respeita o TIN") ela é assentada no terreno na profundidade da aba: vira Polyline3d com a cota do terreno menos a profundidade.
 **Validação do Renan:** seleciona um punhado de polylines, testa o Ctrl, confere a contagem na volta e a layer aplicada.
 
 ### 17.5 Percurso 3D e comprimento

@@ -129,7 +129,10 @@ public static class ExcelCommands
             var medidos = RotaDeCabosTabelas.Medidos(documento.Database);
             if (medidos.Count > 0)
             {
-                tabelas.Add(CableReport.Summary(medidos));
+                // Um resumo por tipo de cabo, um circuito por linha (10/10/2026), e a lista de material.
+                var leitura = LeituraDaRota.Ler(documento.Database);
+                for (var i = 0; i < RotaDeCabosTabelas.TiposDeCabo.Length; i++)
+                    if (RotaDeCabosTabelas.Resumo(documento.Database, leitura, i) is { Circuitos.Count: > 0 } resumo) tabelas.Add(resumo.Tabela);
                 tabelas.Add(CableReport.Material(medidos, 0));
             }
         }

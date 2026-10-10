@@ -6,10 +6,13 @@ namespace Clivus.Core;
 public sealed record StringEndInput(Point3 Point, Guid Table, IReadOnlyList<Point3> TableCorners, IReadOnlyList<Point3> RowCorners);
 
 /// <summary>Uma string a rotear (CC ou o trecho string -> combiner): as duas pontas e o destino (o ponto dele em campo, null se não está em campo).</summary>
-public sealed record StringRouteInput(Guid String, string Tag, StringEndInput Positive, StringEndInput Negative, CableEnd Destination, string DestinationName, Point3? DestinationPoint, RowEnd? ForcedEnd);
+/// <remarks><paramref name="DestinationOutline"/>: o contorno em planta do destino (ou da área onde ele está); vala que entra nele vale antes do raio.</remarks>
+public sealed record StringRouteInput(Guid String, string Tag, StringEndInput Positive, StringEndInput Negative, CableEnd Destination, string DestinationName, Point3? DestinationPoint, RowEnd? ForcedEnd, IReadOnlyList<Point3>? DestinationOutline = null);
 
 /// <summary>Um trecho entre dois equipamentos (CA, MT, combiner -> inversor): os pontos em campo (null = não está em campo).</summary>
-public sealed record EquipmentRouteInput(CableEnd From, string FromName, Point3? FromPoint, CableEnd To, string ToName, Point3? ToPoint);
+/// <remarks>Os contornos em planta (null = sem contorno): vala que entra no contorno vale antes do raio.</remarks>
+public sealed record EquipmentRouteInput(CableEnd From, string FromName, Point3? FromPoint, CableEnd To, string ToName, Point3? ToPoint,
+    IReadOnlyList<Point3>? FromOutline = null, IReadOnlyList<Point3>? ToOutline = null);
 
 /// <summary>Um lance planejado: o lance e o percurso 3D.</summary>
 public sealed record PlannedRun(CableRun Run, IReadOnlyList<Point3> Path)
@@ -65,9 +68,10 @@ public static class CableRouter
                 continue;
             }
 
-            // As valas que chegam no destino: todas dentro do raio (a mais perto pode estar solta).
+            // As valas que chegam no destino: as que entram no contorno dele; sem
+            // nenhuma, todas dentro do raio (a mais perto pode estar solta).
             if (!arvores.TryGetValue(s.Destination, out var chegadas))
-                arvores[s.Destination] = chegadas = valas.Within(destino, config.Radius).Select(valas.Tree).ToList();
+                arvores[s.Destination] = chegadas = TrenchAccess(valas, destino, s.DestinationOutline, config.Radius).Select(valas.Tree).ToList();
 
             if (chegadas.Count == 0)
             {
@@ -180,8 +184,8 @@ public static class CableRouter
                 continue;
             }
 
-            var saidas = valas.Within(de, config.Radius);
-            var chegadas = valas.Within(para, config.Radius);
+            var saidas = TrenchAccess(valas, de, t.FromOutline, config.Radius);
+            var chegadas = TrenchAccess(valas, para, t.ToOutline, config.Radius);
             if (saidas.Count == 0 || chegadas.Count == 0)
             {
                 var sem = new List<CableEnd>();
@@ -222,6 +226,19 @@ public static class CableRouter
         }
 
         return new RouteResult(lances, falhas);
+    }
+
+    /// <summary>
+    /// Por onde o cabo entra e sai da rede de valas num equipamento: primeiro
+    /// as valas que entram no contorno dele (o rabicho que o usuário desenhou
+    /// até ele, só em planta); sem nenhuma, as que passam dentro do raio
+    /// (Renan, 10/10/2026: "o motor deve procurar primeiro por valas que
+    /// entram e em seguida fazer a busca pelo raio").
+    /// </summary>
+    public static IReadOnlyList<TrenchPoint> TrenchAccess(TrenchNetwork valas, Point3 ponto, IReadOnlyList<Point3>? contorno, double raio)
+    {
+        if (contorno is { Count: >= 3 } && valas.Entering(contorno, ponto) is { Count: > 0 } entram) return entram;
+        return valas.Within(ponto, raio);
     }
 
     private static double Plano(Point3 a, Point3 b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));

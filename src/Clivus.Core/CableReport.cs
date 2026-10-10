@@ -172,12 +172,19 @@ public static class CableReport
             notas);
     }
 
-    /// <summary>Um lance medido, para o resumo e a lista de material (24.1, 24.2).</summary>
-    public sealed record MeasuredRun(CableRoute Route, CablePolarity Polarity, string Cable, double Length);
+    /// <summary>
+    /// Um lance medido, para o resumo e a lista de material (24.1, 24.2): o
+    /// comprimento é o do traçado; <paramref name="Wires"/> cabos iguais correm nele.
+    /// </summary>
+    public sealed record MeasuredRun(CableRoute Route, CablePolarity Polarity, string Cable, double Length, int Wires = 1)
+    {
+        /// <summary>Os metros de cabo: o traçado vezes as vias.</summary>
+        public double CableLength => Length * Wires;
+    }
 
     /// <summary>
     /// O resumo de cabos da usina (24.1): metros por rota, por cabo e, no CC,
-    /// por polaridade, com o total geral.
+    /// por polaridade, com o total geral (os metros de cabo já com as vias).
     /// </summary>
     public static CableTable Summary(IEnumerable<MeasuredRun> lances)
     {
@@ -185,19 +192,20 @@ public static class CableReport
         var linhas = lista
             .GroupBy(l => (l.Route, l.Cable, l.Polarity))
             .OrderBy(g => g.Key.Route).ThenBy(g => g.Key.Cable, StringComparer.CurrentCulture).ThenBy(g => g.Key.Polarity)
-            .Select(g => (IReadOnlyList<object?>)[CableRoutes.Title(g.Key.Route), Polaridade(g.Key.Polarity), g.Key.Cable, (double)g.Count(), g.Sum(l => l.Length)])
+            .Select(g => (IReadOnlyList<object?>)[CableRoutes.Title(g.Key.Route), Polaridade(g.Key.Polarity), g.Key.Cable, (double)g.Count(), g.Sum(l => l.CableLength)])
             .ToList();
 
         return new CableTable(Tr.T("Resumo de cabos"),
             [Tr.T("Rota"), Tr.T("Polaridade"), Tr.T("Cabo"), Tr.T("Lances"), Tr.T("Comprimento (m)")],
             linhas,
-            [Tr.T("Total"), null, null, (double)lista.Count, lista.Sum(l => l.Length)],
+            [Tr.T("Total"), null, null, (double)lista.Count, lista.Sum(l => l.CableLength)],
             []);
     }
 
     /// <summary>
-    /// A lista de material (24.2): cabo tal, tantos metros. A folga é opcional
-    /// e é do usuário (em %), nunca um número fixo do sistema.
+    /// A lista de material (24.2): cabo tal, tantos metros (o traçado vezes
+    /// as vias). A folga é opcional e é do usuário (em %), nunca um número
+    /// fixo do sistema.
     /// </summary>
     public static CableTable Material(IEnumerable<MeasuredRun> lances, double folgaPercentual)
     {
@@ -206,15 +214,69 @@ public static class CableReport
         var linhas = lista
             .GroupBy(l => l.Cable)
             .OrderBy(g => g.Key, StringComparer.CurrentCulture)
-            .Select(g => (IReadOnlyList<object?>)[g.Key, g.Sum(l => l.Length), g.Sum(l => l.Length) * fator])
+            .Select(g => (IReadOnlyList<object?>)[g.Key, g.Sum(l => l.CableLength), g.Sum(l => l.CableLength) * fator])
             .ToList();
 
         return new CableTable(Tr.T("Lista de material de cabo"),
             [Tr.T("Cabo"), Tr.T("Medido (m)"), Tr.F("Com folga de {0:0.#}% (m)", folgaPercentual)],
             linhas,
-            [Tr.T("Total"), lista.Sum(l => l.Length), lista.Sum(l => l.Length) * fator],
+            [Tr.T("Total"), lista.Sum(l => l.CableLength), lista.Sum(l => l.CableLength) * fator],
             []);
     }
+
+    /// <summary>
+    /// Um circuito do resumo por tipo de cabo (Renan, 10/10/2026: "cada
+    /// circuito seja uma linha ... e que mostre quantos cabos tem por
+    /// circuito"): a rota, as duas pontas (com o nome para a tela), quantos
+    /// lances desenhados (2 no CC: + e −), a soma dos comprimentos deles, as
+    /// vias (cabos iguais por lance), o cabo e o método da aba.
+    /// </summary>
+    public sealed record CircuitRun(
+        CableRoute Route, CableEnd From, CableEnd To, string FromName, string ToName, int Runs, double Length, int Wires, Cable? Cable, string Method)
+    {
+        /// <summary>Quantos cabos o circuito tem: os lances vezes as vias.</summary>
+        public int Cables => Runs * Wires;
+
+        /// <summary>Os metros de cabo do circuito: a soma dos lances vezes as vias.</summary>
+        public double CableLength => Length * Wires;
+    }
+
+    /// <summary>
+    /// O resumo de um tipo de cabo (CC, CA ou MT): uma linha por circuito com
+    /// De → Para, a especificação do cabo (formação, seção, condutor,
+    /// isolação), o método de instalação, os lances, o comprimento, as vias,
+    /// os cabos e os metros de cabo; os totais no rodapé.
+    /// </summary>
+    public static CableTable Circuits(string titulo, IEnumerable<CircuitRun> circuitos)
+    {
+        var lista = circuitos
+            .OrderBy(c => c.Route)
+            .ThenBy(c => c.FromName, NaturalStringComparer.Instance)
+            .ThenBy(c => c.ToName, NaturalStringComparer.Instance)
+            .ToList();
+        var notas = new List<string>();
+        if (lista.Any(c => c.Cable is null)) notas.Add(Tr.T("Circuito sem cabo escolhido na aba da rota: a especificação fica em branco."));
+
+        var linhas = lista.Select(c => (IReadOnlyList<object?>)
+        [
+            DePara(c.FromName, c.ToName), c.Cable?.Name, c.Cable?.Formation, c.Cable?.SectionMm2, c.Cable?.Conductor, Isolacao(c.Cable), c.Method,
+            (double)c.Runs, c.Length, (double)c.Wires, (double)c.Cables, c.CableLength,
+        ]).ToList();
+
+        return new CableTable(titulo,
+            [Tr.T("De → Para"), Tr.T("Cabo"), Tr.T("Formação"), Tr.T("Seção (mm²)"), Tr.T("Condutor"), Tr.T("Isolação"), Tr.T("Método"),
+             Tr.T("Lances"), Tr.T("Comprimento (m)"), Tr.T("Vias"), Tr.T("Cabos"), Tr.T("Total de cabo (m)")],
+            linhas,
+            [Tr.F("Total ({0})", lista.Count), null, null, null, null, null, null,
+             (double)lista.Sum(c => c.Runs), lista.Sum(c => c.Length), null, (double)lista.Sum(c => c.Cables), lista.Sum(c => c.CableLength)],
+            notas);
+    }
+
+    /// <summary>"T1 → UC1".</summary>
+    public static string DePara(string de, string para) => Tr.F("{0} → {1}", de, para);
+
+    private static string? Isolacao(Cable? c) =>
+        c is null ? null : string.Join(" ", new[] { c.InsulationMaterial, c.Insulation }.Where(x => !string.IsNullOrWhiteSpace(x)));
 
     private static string Polaridade(CablePolarity p) => p switch
     {
@@ -222,4 +284,45 @@ public static class CableReport
         CablePolarity.Negative => "−",
         _ => string.Empty,
     };
+}
+
+/// <summary>Ordem natural de nomes: "S2" antes de "S10", "T1 → UC1" antes de "T10 → UC1".</summary>
+public sealed class NaturalStringComparer : IComparer<string>
+{
+    public static readonly NaturalStringComparer Instance = new();
+
+    public int Compare(string? x, string? y)
+    {
+        if (ReferenceEquals(x, y)) return 0;
+        if (x is null) return -1;
+        if (y is null) return 1;
+
+        int i = 0, j = 0;
+        while (i < x.Length && j < y.Length)
+        {
+            if (char.IsDigit(x[i]) && char.IsDigit(y[j]))
+            {
+                var fimX = i;
+                while (fimX < x.Length && char.IsDigit(x[fimX])) fimX++;
+                var fimY = j;
+                while (fimY < y.Length && char.IsDigit(y[fimY])) fimY++;
+
+                // Compara os números pelo valor: sem zeros à esquerda, o mais comprido é o maior.
+                var a = x[i..fimX].TrimStart('0');
+                var b = y[j..fimY].TrimStart('0');
+                var c = a.Length != b.Length ? a.Length.CompareTo(b.Length) : string.CompareOrdinal(a, b);
+                if (c != 0) return c;
+                i = fimX;
+                j = fimY;
+                continue;
+            }
+
+            var d = string.Compare(x[i].ToString(), y[j].ToString(), StringComparison.CurrentCultureIgnoreCase);
+            if (d != 0) return d;
+            i++;
+            j++;
+        }
+
+        return (x.Length - i).CompareTo(y.Length - j);
+    }
 }

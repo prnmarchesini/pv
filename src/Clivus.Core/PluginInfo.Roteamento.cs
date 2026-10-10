@@ -18,6 +18,9 @@ public static partial class PluginInfo
     /// <summary>"Forçar lado" (18.3): a rota, as strings em campo e um clique do lado para onde os cabos delas vão (ou Automatico).</summary>
     public const string ComandoRotaLado = "CLIVUS_ROTA_LADO";
 
+    /// <summary>Só no build de teste: confere cada vala e cada cabo contra o TIN e escreve os vértices dos cabos (nível 2).</summary>
+    public const string ComandoRotaConferirAutomatico = "CLIVUS_ROTA_CONFERIR_AUTO";
+
     /// <summary>"+ Strings" da combiner (19.2): a combiner (GUID ou nome) e a seleção das strings em campo, como a alocação no inversor.</summary>
     public const string ComandoEletricaCombiner = "CLIVUS_ELETRICA_COMBINER";
 }

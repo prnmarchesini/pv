@@ -207,6 +207,57 @@ mais de 1° ou deslocadas mais de meia largura não entram na fileira.
 7. CA e MT idem. Resumo: totais e lista de material com folga.
 8. Exportar: escolher Cabos e Pilares; abrir no Excel.
 
+## Teste no CAD de 10/10/2026 (primeira rodada no Civil 3D): AGUARDANDO VALIDAÇÃO
+
+Pedidos do Renan depois de testar a rota MT no CAD, e o que foi feito:
+
+- **"O gerar cabo é EXCLUSIVO por aba"**: o rodapé da janela listava o que
+  faltava em TODAS as rotas (CC e CA apareciam testando a MT). Agora o rodapé
+  só fala da aba aberta; as abas desabilitadas continuam dizendo o que falta
+  na dica. O Gerar sempre foi só da rota da aba.
+- **Rabicho**: o cabo MT não usou o ramal que o Renan desenhou entrando no
+  trafo: pelo raio, cortava em diagonal até um vértice da principal. Agora
+  o motor procura primeiro as valas que ENTRAM no retângulo do equipamento
+  (só em planta, Z ignorado, encostar até 0,5 m conta) e só sem nenhuma usa o
+  raio (`TrenchNetwork.Entering`, `CableRouter.TrenchAccess`). Vale para
+  todos os equipamentos (inversor, combiner, trafo, subestação). O retângulo é
+  o da caixa 3D do bloco (sem a tag), na posição e rotação do bloco.
+- **Vala no TIN (erro grave)**: a vala desenhada em 2D ficava na cota zero.
+  Agora o Selecionar vala e todo Gerar assentam a vala no terreno menos a
+  profundidade da aba (`Draping.Below`, vértice em cada aresta do TIN); Salvar
+  a aba com outra profundidade reassenta (se o terreno está na memória). A
+  vala vira uma Polyline3d nova com a camada, a cor e o XData da antiga.
+  Ponto fora do terreno fica com a cota que tinha e é avisado.
+- **Resumo por circuito**: a aba Resumo tem abas CC (strings e combiners), CA,
+  MT e Material. Cada circuito é uma linha: De → Para (ex.: T1 → UC1), cabo,
+  formação, seção, condutor, isolação, método, lances, comprimento, vias,
+  cabos e total de cabo. O Excel (Exportar) sai igual.
+- **Vias**: campo "Vias (cabos iguais em cada lance)" em cada aba de rota
+  (escolher um cabo 3x1x... propõe 3); no Resumo, a coluna Vias se edita na
+  linha e a totalização muda na hora (vazio volta às da aba). Gravado por
+  circuito em `ROTA_VIAS`. `ROTA_CONFIG` foi ao formato 2 (vias no fim); o 1
+  é lido com as vias da formação do cabo.
+- **Ícones**: nenhum ícone mudou desde 05/10 (só entrou o da Rota de cabos).
+  O que mudou foi a largura: com "Rota de cabos" grande e "Excel" virando
+  "Exportar", a aba passou da tela do notebook e o AutoCAD encolheu os
+  painéis. Resumo e Rota de cabos viraram botões pequenos, numa coluna.
+
+Testes: nível 1 (rabicho no Geo e no roteador, vala abaixo do terreno, vias e
+formato 1, circuitos, ordem natural); nível 2 novo `eletrica-rota-mt.ps1`:
+vala 2D (principal na cota zero, rabicho com Z 9999) vira Polyline3d no TIN
+menos 1,00 m (cada vértice lido da entidade e medido contra o TIN), cabo
+entre o fundo da vala e a base do equipamento, e o cabo passa pela junção do
+rabicho (com a regra desligada, o teste reprova: conferido).
+
+Roteiro de tela:
+1. Rota de cabos, aba MT: o rodapé só fala da MT (nada se a MT está livre).
+2. Selecionar vala nas polilinhas 2D: no 3D elas descem para o terreno menos a
+   profundidade. Mude a profundidade, Salvar: as valas acompanham.
+3. Gerar MT com o rabicho entrando no trafo: o cabo vai pelo rabicho.
+4. Resumo > MT: uma linha por circuito (T1 → UC1, T2 → UC2) com a
+   especificação do cabo; duplo clique em Vias, digite 3: Cabos e Total mudam.
+5. A ribbon: Resumo e Rota de cabos pequenos, um em cima do outro.
+
 ## Observações
 
 - A combiner box tinha ficado fora do plano elétrico (etapas 11 a 16) por decisão do Renan. Entra agora, na etapa 19: a cadeia de `plano/eletrica/04-modelo-de-dados.md` (UC -> trafo -> inversor -> string) ganha o elo opcional inversor -> combiner -> string, e a alocação de strings no inversor que já existe (14.3 elétrica) continua valendo quando não há combiner.

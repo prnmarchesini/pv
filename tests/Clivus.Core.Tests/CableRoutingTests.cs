@@ -50,6 +50,36 @@ public class CableRoutingContractTests
         Assert.Null(RouteSettings.Parse((sem with { Depth = 0 }).ToFields()));
     }
 
+    /// <summary>
+    /// As vias (10/10/2026) entram no fim do registro (formato 2); o formato 1
+    /// é lido com as vias da formação do cabo (3x1x25 = 3) ou 1.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "24")]
+    public void ViasGravamEOFormatoAntigoLeDaFormacao()
+    {
+        var mt = CableLibrary.Default().First(c => c.Type == CableType.Mv) with { Formation = "3x1x25" };
+        var com = RouteSettings.Default(CableRoute.MediumVoltage) with { Cable = mt, Wires = 6 };
+
+        Assert.Equal(6, RouteSettings.Parse(com.ToFields())!.Wires);
+        Assert.Null(RouteSettings.Parse((com with { Wires = 0 }).ToFields()));
+
+        var v1 = com.ToFields().Take(RouteSettings.FieldCountV1).ToList();
+        Assert.Equal(3, RouteSettings.ParseV1(v1)!.Wires);
+        Assert.Equal(1, RouteSettings.ParseV1(RouteSettings.Default(CableRoute.DirectCurrent).ToFields().Take(RouteSettings.FieldCountV1).ToList())!.Wires);
+        Assert.Null(RouteSettings.Parse(v1));
+
+        Assert.Equal(3, CableLibrary.WiresFromFormation("3x1x95"));
+        Assert.Equal(3, CableLibrary.WiresFromFormation(" 3 × 1 × 95"));
+        Assert.Equal(1, CableLibrary.WiresFromFormation("1x6"));
+        Assert.Equal(1, CableLibrary.WiresFromFormation("1x(3x95)"));
+        Assert.Null(CableLibrary.WiresFromFormation("tripolar"));
+
+        var troca = new CircuitWires(CableRoute.MediumVoltage, new CableEnd(CableEndKind.Transformer, Guid.NewGuid()), new CableEnd(CableEndKind.Substation, Guid.NewGuid()), 4);
+        Assert.Equal(troca, CircuitWires.Parse(troca.ToFields()));
+        Assert.Null(CircuitWires.Parse((troca with { Wires = 0 }).ToFields()));
+    }
+
     /// <summary>Cada aba com o seu valor (17.3): as profundidades de partida são independentes.</summary>
     [Fact]
     [Trait("Etapa", "17")]
@@ -403,6 +433,36 @@ public class CableRouterTests
         Assert.Contains("T1", falha.Reason);
     }
 
+    /// <summary>
+    /// O rabicho (Renan, 10/10/2026): a vala principal desce ao lado do trafo
+    /// e ele desenhou um ramal que sai dela e entra no retângulo do trafo. Pelo
+    /// raio, o cabo cortava na diagonal até um vértice da principal mais ao
+    /// sul (mais curto); com o ramal entrando no trafo, o cabo vai por ele (o
+    /// raio só vale quando nenhuma vala entra no equipamento).
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "21")]
+    public void MtVaiPeloRabichoQueEntraNoTrafo()
+    {
+        var principal = new Point3[] { new(0, 50, 0), new(0, 5, 0), new(0, -100, 0) };
+        var rabicho = new Point3[] { new(0, 10, 0), new(7, 10, 0) };
+        var rede = new TrenchNetwork([principal, rabicho]);
+        Point3[] caixa = [new(6, 8, 0), new(10, 8, 0), new(10, 12, 0), new(6, 12, 0)];
+
+        var t = new EquipmentRouteInput(new CableEnd(CableEndKind.Transformer, Guid.NewGuid()), "T1", new Point3(8, 10, 100.8),
+            new CableEnd(CableEndKind.Substation, Guid.NewGuid()), "UC1", new Point3(5, -90, 100.8), FromOutline: caixa);
+        static bool Em(Point3 p, double x, double y) => Math.Abs(p.X - x) < 1e-6 && Math.Abs(p.Y - y) < 1e-6;
+
+        var lance = Assert.Single(CableRouter.Equipment([t], CableRoute.MediumVoltage, rede, RouteSettings.Default(CableRoute.MediumVoltage), Chao).Runs);
+
+        Assert.Contains(lance.Path, p => Em(p, 7, 10));
+        Assert.Contains(lance.Path, p => Em(p, 0, 10));
+
+        // Sem o contorno (como era), o raio acha o vértice (0; 5) a 9,4 m e o cabo corta na diagonal.
+        var semContorno = Assert.Single(CableRouter.Equipment([t with { FromOutline = null }], CableRoute.MediumVoltage, rede, RouteSettings.Default(CableRoute.MediumVoltage), Chao).Runs);
+        Assert.DoesNotContain(semContorno.Path, p => Em(p, 7, 10));
+    }
+
     [Fact]
     [Trait("Etapa", "21")]
     public void SemVinculoNaCadeiaAvisa()
@@ -513,6 +573,65 @@ public class CableReportTests
         Assert.Equal(2, material.Rows.Count);
         Assert.Equal(180 * 1.05, (double)material.Rows.Single(r => (string)r[0]! == "6")[2]!, 9);
         Assert.Equal(230.0, (double)CableReport.Material(l, 0).Total[2]!, 9);
+
+        // Com vias, os metros de cabo são o traçado vezes as vias.
+        CableReport.MeasuredRun[] mt = [new(CableRoute.MediumVoltage, CablePolarity.None, "25", 200, 3)];
+        Assert.Equal(600.0, (double)CableReport.Material(mt, 0).Total[1]!, 9);
+    }
+
+    /// <summary>
+    /// O resumo por tipo (Renan, 10/10/2026): cada circuito uma linha, com De
+    /// → Para, a especificação do cabo, o método, os lances, as vias, os cabos
+    /// e os metros de cabo; o total soma os cabos e os metros com as vias.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "24")]
+    public void ResumoPorCircuitoComViasEDePara()
+    {
+        var cabo = CableLibrary.Default().First(c => c.Type == CableType.Mv);
+        CableEnd T() => new(CableEndKind.Transformer, Guid.NewGuid());
+        CableEnd U() => new(CableEndKind.Substation, Guid.NewGuid());
+
+        var tabela = CableReport.Circuits("MT",
+        [
+            new(CableRoute.MediumVoltage, T(), U(), "T2", "UC2", 1, 150, 3, cabo, "D"),
+            new(CableRoute.MediumVoltage, T(), U(), "T1", "UC1", 1, 255.22, 1, cabo, "D"),
+        ]);
+
+        Assert.Equal(2, tabela.Rows.Count);
+        Assert.Equal("T1 → UC1", tabela.Rows[0][0]);
+        Assert.Equal(cabo.Name, tabela.Rows[0][1]);
+        Assert.Equal(cabo.SectionMm2, tabela.Rows[0][3]);
+        Assert.Equal(cabo.Conductor, tabela.Rows[0][4]);
+        Assert.Equal("D", tabela.Rows[0][6]);
+        Assert.Equal(3.0, tabela.Rows[1][9]);
+        Assert.Equal(3.0, tabela.Rows[1][10]);
+        Assert.Equal(450.0, (double)tabela.Rows[1][11]!, 9);
+
+        Assert.Equal(405.22, (double)tabela.Total[8]!, 9);
+        Assert.Equal(4.0, tabela.Total[10]);
+        Assert.Equal(255.22 + 450, (double)tabela.Total[11]!, 9);
+    }
+
+    /// <summary>No CC o circuito tem dois lances (+ e −): os cabos são 2 vezes as vias.</summary>
+    [Fact]
+    [Trait("Etapa", "24")]
+    public void CircuitoCcTemDoisLances()
+    {
+        var c = new CableReport.CircuitRun(CableRoute.DirectCurrent, new(CableEndKind.String, Guid.NewGuid()), new(CableEndKind.Inverter, Guid.NewGuid()),
+            "S1", "Inversor 1", 2, 180, 1, null, "D");
+
+        Assert.Equal(2, c.Cables);
+        Assert.Equal(180, c.CableLength, 9);
+        Assert.Contains(CableReport.Circuits("CC", [c]).Notes, n => n.Contains("sem cabo"));
+    }
+
+    [Fact]
+    [Trait("Etapa", "24")]
+    public void NomesEmOrdemNatural()
+    {
+        string[] nomes = ["S10", "S2", "Inversor 10", "Inversor 2", "S1"];
+        Assert.Equal(["Inversor 2", "Inversor 10", "S1", "S2", "S10"], nomes.Order(NaturalStringComparer.Instance));
     }
 }
 

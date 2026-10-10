@@ -106,6 +106,17 @@ public static class CableLibrary
     /// <summary>O nome do arquivo na pasta do usuário.</summary>
     public const string FileName = "cabos.json";
 
+    /// <summary>
+    /// As vias que a formação diz: "3x1x25" (três cabos de um condutor) = 3;
+    /// "1x6" ou "1x(3x95)" = 1. Null se a formação não começa com um número
+    /// de cabos.
+    /// </summary>
+    public static int? WiresFromFormation(string? formacao)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(formacao ?? string.Empty, @"^\s*(\d{1,2})\s*[xX×]");
+        return m.Success && int.TryParse(m.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var n) && n >= 1 ? n : null;
+    }
+
     /// <summary>Lê a biblioteca; arquivo que não existe = a de partida. Problema de leitura vai em <paramref name="problem"/> e volta a de partida.</summary>
     public static IReadOnlyList<Cable> Load(string caminho, out string? problem)
     {

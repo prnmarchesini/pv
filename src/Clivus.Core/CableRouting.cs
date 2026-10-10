@@ -113,11 +113,12 @@ public sealed record CableRun(Guid Id, CableRoute Route, CablePolarity Polarity,
         if (!Guid.TryParse(c[0], out var id) || id == Guid.Empty) return null;
         if (!Enum.TryParse<CableRoute>(c[1], out var rota) || !Enum.IsDefined(rota)) return null;
         if (!Enum.TryParse<CablePolarity>(c[2], out var pol) || !Enum.IsDefined(pol)) return null;
-        if (!Ponta(c[3], c[4], out var de) || !Ponta(c[5], c[6], out var para)) return null;
+        if (!TryEnd(c[3], c[4], out var de) || !TryEnd(c[5], c[6], out var para)) return null;
         return new CableRun(id, rota, pol, de, para);
     }
 
-    private static bool Ponta(string tipo, string guid, out CableEnd ponta)
+    /// <summary>Uma ponta gravada (tipo e GUID); falso se não se lê.</summary>
+    public static bool TryEnd(string tipo, string guid, out CableEnd ponta)
     {
         ponta = default;
         if (!Enum.TryParse<CableEndKind>(tipo, out var k) || !Enum.IsDefined(k) || !Guid.TryParse(guid, out var g) || g == Guid.Empty) return false;
@@ -143,20 +144,56 @@ public sealed record StringSide(Guid String, RowEnd End)
 }
 
 /// <summary>
+/// As vias de um circuito trocadas à mão no resumo (Renan, 10/10/2026: "quero
+/// que seja possível eu trocar nessa aba resumo; o que eu trocar vai
+/// alterando a totalização"). O circuito é a rota com as duas pontas; sem
+/// registro, vale o da aba (<see cref="RouteSettings.Wires"/>).
+/// </summary>
+public sealed record CircuitWires(CableRoute Route, CableEnd From, CableEnd To, int Wires)
+{
+    public const int FieldCount = 6;
+
+    public IReadOnlyList<string> ToFields() =>
+        [Route.ToString(), From.Kind.ToString(), From.Id.ToString("D"), To.Kind.ToString(), To.Id.ToString("D"), Wires.ToString(CultureInfo.InvariantCulture)];
+
+    public static CircuitWires? Parse(IReadOnlyList<string> c)
+    {
+        if (c.Count < FieldCount || !Enum.TryParse<CableRoute>(c[0], out var rota) || !Enum.IsDefined(rota)) return null;
+        if (!CableRun.TryEnd(c[1], c[2], out var de) || !CableRun.TryEnd(c[3], c[4], out var para)) return null;
+        if (!int.TryParse(c[5], NumberStyles.None, CultureInfo.InvariantCulture, out var vias) || vias < 1 || vias > RouteSettings.MaxWires) return null;
+        return new CircuitWires(rota, de, para, vias);
+    }
+}
+
+/// <summary>
 /// Os valores de uma aba da rota de cabos (17.3, 20.1, 22.2, 22.5), cada aba
 /// independente: profundidade da vala, raio de busca da vala em volta do
 /// equipamento, alcance da reta do fim da fileira até a vala (CC), fator de
 /// potência (CA e MT), método de instalação e o cabo escolhido (uma cópia
 /// do da biblioteca: o desenho não depende da biblioteca de quem abre).
 /// </summary>
-/// <remarks>Trifásico (<see cref="ThreePhase"/>) só conta no CA: o plano pede "se é trifásico"; a MT é sempre trifásica.</remarks>
-public sealed record RouteSettings(CableRoute Route, double Depth, double Radius, double Reach, double PowerFactor, string Method, Cable? Cable, bool ThreePhase = true)
+/// <remarks>
+/// Trifásico (<see cref="ThreePhase"/>) só conta no CA: o plano pede "se é
+/// trifásico"; a MT é sempre trifásica. <see cref="Wires"/>: as vias, quantos
+/// cabos iguais correm em cada lance desenhado (ex.: 3 na MT de 3x1x25);
+/// multiplica os metros do resumo e da lista de material (Renan, 10/10/2026:
+/// "a quantidade de vias, quero que venha no modal de gerar os cabos").
+/// </remarks>
+public sealed record RouteSettings(CableRoute Route, double Depth, double Radius, double Reach, double PowerFactor, string Method, Cable? Cable, bool ThreePhase = true, int Wires = 1)
 {
     public const int FixedFieldCount = 6;
-    public const int FieldCount = FixedFieldCount + Cable.FieldCount + 1;
+
+    /// <summary>Os campos do formato 1 (sem as vias).</summary>
+    public const int FieldCountV1 = FixedFieldCount + Cable.FieldCount + 1;
+
+    /// <summary>Os campos do formato 2 (com as vias).</summary>
+    public const int FieldCount = FieldCountV1 + 1;
 
     public const double MaxDepth = 10;
     public const double MaxRadius = 500;
+
+    /// <summary>O máximo de vias por lance.</summary>
+    public const int MaxWires = 99;
 
     /// <summary>O padrão de cada aba (valores de partida; o usuário muda).</summary>
     public static RouteSettings Default(CableRoute rota) => rota switch
@@ -174,24 +211,38 @@ public sealed record RouteSettings(CableRoute Route, double Depth, double Radius
         if (!double.IsFinite(Radius) || Radius <= 0 || Radius > MaxRadius) return Tr.F("o raio tem que ser maior que 0 e até {0} m", MaxRadius);
         if (!double.IsFinite(Reach) || Reach <= 0 || Reach > 10 * MaxRadius) return Tr.F("o alcance tem que ser maior que 0 e até {0} m", 10 * MaxRadius);
         if (!double.IsFinite(PowerFactor) || PowerFactor <= 0 || PowerFactor > 1) return Tr.T("o fator de potência tem que ser maior que 0 e até 1");
+        if (Wires < 1 || Wires > MaxWires) return Tr.F("as vias têm que ser de 1 a {0}", MaxWires);
         return null;
     }
 
     public IReadOnlyList<string> ToFields() =>
         [Route.ToString(), Num(Depth), Num(Radius), Num(Reach), Num(PowerFactor), Method ?? string.Empty,
-         .. Cable?.ToFields() ?? Enumerable.Repeat(string.Empty, Cable.FieldCount), ThreePhase ? "3" : "1"];
+         .. Cable?.ToFields() ?? Enumerable.Repeat(string.Empty, Cable.FieldCount), ThreePhase ? "3" : "1",
+         Wires.ToString(CultureInfo.InvariantCulture)];
 
+    /// <summary>O formato 2 (com as vias).</summary>
     public static RouteSettings? Parse(IReadOnlyList<string> c)
     {
-        if (c.Count < FieldCount || !Enum.TryParse<CableRoute>(c[0], out var rota) || !Enum.IsDefined(rota)) return null;
+        if (c.Count < FieldCount || !int.TryParse(c[FieldCount - 1], NumberStyles.None, CultureInfo.InvariantCulture, out var vias)) return null;
+        var s = ParseV1(c) is { } v1 ? v1 with { Wires = vias } : null;
+        return s?.WhyInvalid() is null ? s : null;
+    }
+
+    /// <summary>
+    /// O formato 1 (sem as vias): as vias vêm da formação do cabo escolhido
+    /// (3x1x25 = 3), ou 1.
+    /// </summary>
+    public static RouteSettings? ParseV1(IReadOnlyList<string> c)
+    {
+        if (c.Count < FieldCountV1 || !Enum.TryParse<CableRoute>(c[0], out var rota) || !Enum.IsDefined(rota)) return null;
         if (!Real(c[1], out var d) || !Real(c[2], out var r) || !Real(c[3], out var a) || !Real(c[4], out var fp)) return null;
 
         var resto = c.Skip(FixedFieldCount).Take(Cable.FieldCount).ToList();
         Cable? cabo = null;
         if (resto.Any(x => x.Length > 0) && (cabo = Cable.Parse(resto)) is null) return null;
 
-        if (c[FieldCount - 1] is not ("3" or "1")) return null;
-        var s = new RouteSettings(rota, d, r, a, fp, c[5], cabo, c[FieldCount - 1] == "3");
+        if (c[FieldCountV1 - 1] is not ("3" or "1")) return null;
+        var s = new RouteSettings(rota, d, r, a, fp, c[5], cabo, c[FieldCountV1 - 1] == "3", CableLibrary.WiresFromFormation(cabo?.Formation) ?? 1);
         return s.WhyInvalid() is null ? s : null;
     }
 

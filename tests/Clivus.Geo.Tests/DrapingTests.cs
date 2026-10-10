@@ -33,6 +33,31 @@ public class DrapingTests
         return new Tin(triangulos);
     }
 
+    /// <summary>
+    /// A vala (Renan, 10/10/2026): desenhada em 2D na cota zero, ela acompanha
+    /// o terreno na profundidade da aba, com vértice no alto do morro; o
+    /// pedaço fora do terreno fica com a cota que tinha e é avisado.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "17")]
+    public void AValaAcompanhaOTerrenoNaProfundidade()
+    {
+        var terreno = Morro();
+
+        var vala = Draping.Below(terreno, [new Point3(0, 50, 0), new Point3(100, 50, 0), new Point3(130, 50, 0)], 0.8);
+
+        foreach (var p in vala.Vertices.Where(p => p.X <= 100))
+        {
+            Assert.True(terreno.TryGetZ(p.X, p.Y, out var z));
+            Assert.Equal(z - 0.8, p.Z, 3);
+        }
+
+        Assert.Contains(vala.Vertices, p => Math.Abs(p.X - 50) < 0.001 && Math.Abs(p.Z - 109.2) < 0.001);
+        var fora = Assert.Single(vala.OutsideIndices);
+        Assert.Equal(130, vala.Vertices[fora].X, 3);
+        Assert.Equal(0, vala.Vertices[fora].Z, 3);
+    }
+
     [Fact]
     [Trait("Etapa", "2")]
     public void ALinhaSobreOMorroNaoAtravessaOMorro()

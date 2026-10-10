@@ -111,6 +111,23 @@ public static class Draping
     }
 
     /// <summary>
+    /// A linha drapejada e descida <paramref name="depth"/> abaixo do terreno:
+    /// o fundo de uma vala (roteamento; Renan, 10/10/2026: "deve seguir a
+    /// superfície TIN e deslocar a fundura especificada"). Os pontos fora do
+    /// terreno ficam como em <see cref="Along"/> (a cota que tinham, avisados
+    /// em <see cref="DrapedLine.OutsideIndices"/>), sem descer.
+    /// </summary>
+    public static DrapedLine Below(Tin tin, IReadOnlyList<Point3> vertices, double depth)
+    {
+        if (!double.IsFinite(depth) || depth < 0) throw new ArgumentOutOfRangeException(nameof(depth), depth, "a profundidade não pode ser negativa");
+
+        var noChao = Along(tin, vertices);
+        var fora = noChao.OutsideIndices.ToHashSet();
+        var descida = noChao.Vertices.Select((p, i) => fora.Contains(i) ? p : p with { Z = p.Z - depth }).ToList();
+        return noChao with { Vertices = descida };
+    }
+
+    /// <summary>
     /// Os parâmetros, entre 0 e 1, onde o segmento cruza alguma aresta de
     /// triângulo. Em ordem, sem repetir as pontas.
     /// </summary>

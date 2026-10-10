@@ -24,6 +24,54 @@ public class TrenchNetworkTests
         Assert.Equal(40 + 50, TrenchNetwork.PlanLength(caminho!), 1);
     }
 
+    // Retângulo do equipamento de x 98 a 102, y 6 a 10.
+    private static readonly Point3[] Caixa = [new(98, 6, 0), new(102, 6, 0), new(102, 10, 0), new(98, 10, 0)];
+
+    /// <summary>
+    /// A vala que entra no retângulo do equipamento (o rabicho) é achada só em
+    /// planta, com a cota do rabisco a centenas de metros do terreno (Renan,
+    /// 10/10/2026); a principal, que só passa perto, não conta.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "21")]
+    public void ValaQueEntraNoEquipamentoEAchadaSoEmPlanta()
+    {
+        var rabicho = new Point3[] { new(90, 0, -300), new(99, 7, 412) };
+        var rede = new TrenchNetwork([Principal.Select(p => p with { X = p.X * 2 }).ToArray(), rabicho]);
+
+        var entram = rede.Entering(Caixa, new Point3(100, 8, 500));
+
+        var ponto = Assert.Single(entram);
+        Assert.Equal(99, ponto.At.X, 6);
+        Assert.Equal(7, ponto.At.Y, 6);
+    }
+
+    /// <summary>Ponta que encosta na borda (até 0,5 m) conta; mais longe, não; nenhuma: vazio.</summary>
+    [Fact]
+    [Trait("Etapa", "21")]
+    public void ValaQueEncostaNaBordaContaEALongeNao()
+    {
+        var encosta = new TrenchNetwork([[new(90, 0, 0), new(97.7, 8, 0)]]);
+        var longe = new TrenchNetwork([[new(90, 0, 0), new(97, 8, 0)]]);
+
+        var p = Assert.Single(encosta.Entering(Caixa, new Point3(100, 8, 0)));
+        Assert.Equal(97.7, p.At.X, 6);
+        Assert.Empty(longe.Entering(Caixa, new Point3(100, 8, 0)));
+    }
+
+    /// <summary>Vala que atravessa o retângulo: o ponto de dentro mais perto do equipamento.</summary>
+    [Fact]
+    [Trait("Etapa", "21")]
+    public void ValaQueAtravessaDaOPontoDeDentroMaisPerto()
+    {
+        var rede = new TrenchNetwork([[new(80, 9, 0), new(120, 9, 0)]]);
+
+        var p = Assert.Single(rede.Entering(Caixa, new Point3(110, 8, 0)));
+
+        Assert.Equal(102, p.At.X, 6);
+        Assert.Equal(9, p.At.Y, 6);
+    }
+
     [Fact]
     [Trait("Etapa", "17")]
     public void ValasSoltasNaoTemCaminho()

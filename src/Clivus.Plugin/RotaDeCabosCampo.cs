@@ -39,9 +39,25 @@ public static class RotaDeCabosCampo
             var escolhidas = SelecionarCurvas(documento, rota);
             if (escolhidas is null) return;
 
-            var n = RotaDeCabosStore.MarcarValas(documento.Database, escolhidas, rota);
-            var total = RotaDeCabosStore.QuantasValas(documento.Database)[rota];
-            Relatar(documento, rota, Tr.F("{0} linha(s) selecionada(s) viraram vala {1}, na camada {2}. A rota tem {3} vala(s).", n, CableRoutes.Title(rota), CableLayers.Trench(rota), total));
+            var db = documento.Database;
+            var n = RotaDeCabosStore.MarcarValas(db, escolhidas, rota);
+            var linhas = new List<string>();
+
+            // A vala acompanha o terreno na profundidade da aba (regra universal: todo desenho respeita o TIN).
+            if (FileiraCommands.ExigirTerreno(editor, documento) is { } terreno)
+            {
+                var profundidade = RotaDeCabosStore.Configuracao(db, rota).Depth;
+                var (assentadas, fora) = RotaDeCabosStore.AssentarValas(db, rota, profundidade, terreno.Mesh, escolhidas);
+                linhas.Add(Tr.F("{0} linha(s) viraram vala {1}, na camada {2}, assentadas no terreno a {3:0.00} m de profundidade.", assentadas, CableRoutes.Title(rota), CableLayers.Trench(rota), profundidade));
+                if (fora > 0) linhas.Add(Tr.F("ATENÇÃO: {0} ponto(s) da vala fora do terreno ficaram com a cota que tinham.", fora));
+            }
+            else
+            {
+                linhas.Add(Tr.F("{0} linha(s) viraram vala {1}, na camada {2}, mas sem terreno processado não foram assentadas: o Gerar assenta.", n, CableRoutes.Title(rota), CableLayers.Trench(rota)));
+            }
+
+            linhas.Add(Tr.F("A rota tem {0} vala(s).", RotaDeCabosStore.QuantasValas(db)[rota]));
+            Relatar(documento, rota, string.Join("\n", linhas));
         }
         catch (System.Exception erro)
         {
@@ -163,6 +179,9 @@ public static class RotaDeCabosCampo
                 return;
             }
 
+            // A vala acompanha o terreno na profundidade de agora (ela pode ter mudado, ou a vala ter sido editada).
+            var (_, valaFora) = RotaDeCabosStore.AssentarValas(db, rota, config.Depth, terreno.Mesh);
+
             var valas = RotaDeCabosStore.Valas(db)[rota];
             if (valas.Count == 0)
             {
@@ -207,6 +226,7 @@ public static class RotaDeCabosCampo
                 Tr.F("{0}: {1} lance(s) desenhado(s), {2:0.0} m no total (3D, com as descidas da vala de {3:0.00} m).",
                     CableRoutes.Title(rota), resultado.Runs.Count, resultado.Runs.Sum(r => r.Length), config.Depth),
             };
+            if (valaFora > 0) linhas.Add(Tr.F("ATENÇÃO: {0} ponto(s) da vala fora do terreno ficaram com a cota que tinham.", valaFora));
             if (falhas.Count > 0) linhas.Add(Tr.F("{0} trecho(s) sem rota, pintado(s) de vermelho:", falhas.Count));
             linhas.AddRange(falhas.Select(f => "• " + f.What + ": " + f.Reason));
             Relatar(documento, rota, string.Join("\n", linhas));
@@ -379,6 +399,9 @@ internal sealed class LeituraDaRota
     private readonly Dictionary<Guid, (RowTable Mesa, ObjectId Contorno, string? Perfil)> _mesas = [];
     private readonly Dictionary<(EquipmentKind, Guid), (Point3 Ponto, ObjectId Id)> _emCampo = [];
 
+    // O contorno em planta de cada equipamento em campo (os limites do bloco): a vala que entra nele vale antes do raio.
+    private readonly Dictionary<(EquipmentKind, Guid), IReadOnlyList<Point3>> _contornos = [];
+
     // A caixa 3D dentro do bloco de cada equipamento: pintar a referência não aparece
     // (a caixa tem cor própria), e cada equipamento tem a sua definição de bloco.
     private readonly Dictionary<(EquipmentKind, Guid), List<ObjectId>> _caixas = [];
@@ -432,6 +455,7 @@ internal sealed class LeituraDaRota
             l._emCampo[(tipo, guid)] = (P(b.Position), ids[0]);
             var definicao = (BlockTableRecord)t.GetObject(b.BlockTableRecord, OpenMode.ForRead);
             l._caixas[(tipo, guid)] = definicao.Cast<ObjectId>().Where(id => id.ObjectClass.IsDerivedFrom(RXObject.GetClass(typeof(Solid3d)))).ToList();
+            if (Contorno(t, b, l._caixas[(tipo, guid)]) is { } contorno) l._contornos[(tipo, guid)] = contorno;
         }
 
         return l;
@@ -439,15 +463,51 @@ internal sealed class LeituraDaRota
 
     private static Point3 P(Point3d p) => new(p.X, p.Y, p.Z);
 
+    /// <summary>
+    /// O retângulo em planta do equipamento: os limites da caixa 3D do bloco
+    /// (sem a tag, que fica fora dela), levados para o desenho pela posição e
+    /// a rotação do bloco. Null se não há caixa legível.
+    /// </summary>
+    private static IReadOnlyList<Point3>? Contorno(Transaction t, BlockReference b, IReadOnlyList<ObjectId> caixas)
+    {
+        try
+        {
+            Extents3d? limites = null;
+            foreach (var id in caixas)
+            {
+                if (t.GetObject(id, OpenMode.ForRead) is not Entity e) continue;
+                var x = e.GeometricExtents;
+                limites = limites is { } m ? new Extents3d(
+                    new Point3d(Math.Min(m.MinPoint.X, x.MinPoint.X), Math.Min(m.MinPoint.Y, x.MinPoint.Y), 0),
+                    new Point3d(Math.Max(m.MaxPoint.X, x.MaxPoint.X), Math.Max(m.MaxPoint.Y, x.MaxPoint.Y), 0)) : x;
+            }
+
+            if (limites is not { } c) return null;
+            return new[]
+                {
+                    new Point3d(c.MinPoint.X, c.MinPoint.Y, 0), new Point3d(c.MaxPoint.X, c.MinPoint.Y, 0),
+                    new Point3d(c.MaxPoint.X, c.MaxPoint.Y, 0), new Point3d(c.MinPoint.X, c.MaxPoint.Y, 0),
+                }
+                .Select(p => p.TransformBy(b.BlockTransform))
+                .Select(p => new Point3(p.X, p.Y, 0))
+                .ToList();
+        }
+        catch (Autodesk.AutoCAD.Runtime.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Caixa do equipamento sem limites; a vala que entra nele não é procurada (vale o raio).", erro);
+            return null;
+        }
+    }
+
     /// <summary>As strings para o CC: as pontas, as mesas e o inversor de destino. As que estão numa combiner vão pela aba Combiner.</summary>
     internal List<StringRouteInput> StringsCc() =>
         _strings.Where(x => !_combinerDaString.ContainsKey(x.String.Id)).Select(x => Entrada(x.String, x.Mais, x.Menos, new CableEnd(CableEndKind.Inverter, x.String.Inverter),
-                Setup.FindInverter(x.String.Inverter)?.Name ?? "?", Ponto(EquipmentKind.Inverter, x.String.Inverter), CableRoute.DirectCurrent))
+                Setup.FindInverter(x.String.Inverter)?.Name ?? "?", Ponto(EquipmentKind.Inverter, x.String.Inverter), CableRoute.DirectCurrent, Contorno(EquipmentKind.Inverter, x.String.Inverter)))
             .OfType<StringRouteInput>()
             .ToList();
 
     /// <summary>A entrada de uma string; null (e a falha anotada) se as mesas das pontas não estão no desenho.</summary>
-    internal StringRouteInput? Entrada(ElectricalString s, Point3 mais, Point3 menos, CableEnd destino, string nomeDoDestino, Point3? ondeDestino, CableRoute rota)
+    internal StringRouteInput? Entrada(ElectricalString s, Point3 mais, Point3 menos, CableEnd destino, string nomeDoDestino, Point3? ondeDestino, CableRoute rota, IReadOnlyList<Point3>? contornoDoDestino)
     {
         var a = Ponta(s.Modules[0], mais);
         var b = Ponta(s.Modules[^1], menos);
@@ -459,7 +519,7 @@ internal sealed class LeituraDaRota
         }
 
         var lado = _lados.FirstOrDefault(x => x.String == s.Id)?.End;
-        return new StringRouteInput(s.Id, s.Tag, a, b, destino, nomeDoDestino, ondeDestino, lado);
+        return new StringRouteInput(s.Id, s.Tag, a, b, destino, nomeDoDestino, ondeDestino, lado, contornoDoDestino);
     }
 
     private StringEndInput? Ponta(Guid modulo, Point3 ponto)
@@ -470,9 +530,12 @@ internal sealed class LeituraDaRota
 
     /// <summary>Os trechos entre equipamentos com os pontos em campo.</summary>
     internal List<EquipmentRouteInput> Trechos(IEnumerable<ChainLink> ligacoes) =>
-        ligacoes.Select(l => new EquipmentRouteInput(l.From, l.FromName, Ponto(Tipo(l.From.Kind), l.From.Id), l.To, l.ToName, Ponto(Tipo(l.To.Kind), l.To.Id))).ToList();
+        ligacoes.Select(l => new EquipmentRouteInput(l.From, l.FromName, Ponto(Tipo(l.From.Kind), l.From.Id), l.To, l.ToName, Ponto(Tipo(l.To.Kind), l.To.Id),
+            Contorno(Tipo(l.From.Kind), l.From.Id), Contorno(Tipo(l.To.Kind), l.To.Id))).ToList();
 
     internal Point3? Ponto(EquipmentKind tipo, Guid id) => _emCampo.TryGetValue((tipo, id), out var e) ? e.Ponto : null;
+
+    internal IReadOnlyList<Point3>? Contorno(EquipmentKind tipo, Guid id) => _contornos.TryGetValue((tipo, id), out var c) ? c : null;
 
     internal static EquipmentKind Tipo(CableEndKind k) => k switch
     {
@@ -554,7 +617,7 @@ internal static class CombinerDaRota
             {
                 var cb = leitura.CombinerDaString[x.String.Id];
                 return leitura.Entrada(x.String, x.Mais, x.Menos, new CableEnd(CableEndKind.Combiner, cb),
-                    leitura.Setup.FindCombiner(cb)?.Name ?? "?", leitura.Ponto(EquipmentKind.Combiner, cb), CableRoute.Combiner);
+                    leitura.Setup.FindCombiner(cb)?.Name ?? "?", leitura.Ponto(EquipmentKind.Combiner, cb), CableRoute.Combiner, leitura.Contorno(EquipmentKind.Combiner, cb));
             })
             .OfType<StringRouteInput>()
             .ToList();

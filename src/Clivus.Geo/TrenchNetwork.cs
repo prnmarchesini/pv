@@ -10,7 +10,8 @@ public readonly record struct TrenchPoint(Point3 At, int Edge, double Distance);
 /// perguntas do roteamento: a vala mais perto de um ponto dentro de um raio,
 /// onde uma linha reta bate na primeira vala, e o caminho mais curto pela
 /// rede entre dois pontos dela. Só XY; a cota é de quem desenha o cabo.
-/// O sistema nunca cria nem altera vala: só lê o traçado.
+/// O traçado em planta é sempre o do usuário; a cota (a vala assentada no
+/// terreno, 10/10/2026) é de quem desenha.
 /// </summary>
 public sealed class TrenchNetwork
 {
@@ -155,6 +156,99 @@ public sealed class TrenchNetwork
         }
 
         return unicos;
+    }
+
+    /// <summary>
+    /// As valas que ENTRAM no contorno de um equipamento (o rabicho que o
+    /// usuário desenha até a porta dele), só em planta: de cada trecho que
+    /// tem um pedaço dentro do contorno (ou a até <paramref name="tolerance"/>
+    /// dele), o ponto desse pedaço mais perto de <paramref name="anchor"/>.
+    /// Do mais perto ao mais longe, sem repetir ponto. Vazio se nenhuma vala
+    /// chega ao contorno; aí quem roteia usa o raio (<see cref="Within"/>).
+    /// A cota não conta: o rabisco em 2D pode estar a centenas de metros do
+    /// terreno no 3D (Renan, 10/10/2026).
+    /// </summary>
+    public IReadOnlyList<TrenchPoint> Entering(IReadOnlyList<Point3> polygon, Point3 anchor, double tolerance = Snap)
+    {
+        ArgumentNullException.ThrowIfNull(polygon);
+        if (polygon.Count < 3) return [];
+
+        var contorno = polygon.Select(Plano).ToList();
+        var q = Plano(anchor);
+        var achados = new List<TrenchPoint>();
+
+        for (var e = 0; e < _arestas.Count; e++)
+        {
+            var a = _nos[_arestas[e].A];
+            var b = _nos[_arestas[e].B];
+            if (PertoDoContorno(a, b, contorno, q, tolerance) is { } p) achados.Add(new TrenchPoint(p, e, Dist(p, q)));
+        }
+
+        var unicos = new List<TrenchPoint>();
+        foreach (var a in achados.OrderBy(a => a.Distance))
+            if (!unicos.Any(u => Dist(u.At, a.At) < 1e-6)) unicos.Add(a);
+
+        return unicos;
+    }
+
+    /// <summary>
+    /// O ponto do segmento ab dentro do contorno mais perto de q; sem pedaço
+    /// dentro, o ponto do segmento mais perto da borda, se estiver a até a
+    /// tolerância dela; senão null.
+    /// </summary>
+    private static Point3? PertoDoContorno(Point3 a, Point3 b, IReadOnlyList<Point3> contorno, Point3 q, double tolerancia)
+    {
+        // Onde o segmento cruza a borda: os pedaços entre cortes estão todos dentro ou todos fora.
+        var cortes = new List<double> { 0, 1 };
+        for (var i = 0; i < contorno.Count; i++)
+            if (Cruzamento(a, b, contorno[i], contorno[(i + 1) % contorno.Count]) is { } c) cortes.Add(c.T);
+        cortes.Sort();
+
+        var (tq, _) = Projetar(a, b, q);
+        Point3? melhor = null;
+        for (var i = 0; i + 1 < cortes.Count; i++)
+        {
+            var (t0, t1) = (cortes[i], cortes[i + 1]);
+            if (t1 - t0 < Eps || !Dentro(Em(a, b, (t0 + t1) / 2), contorno)) continue;
+            var p = Em(a, b, Math.Clamp(tq, t0, t1));
+            if (melhor is null || Dist(p, q) < Dist(melhor.Value, q)) melhor = p;
+        }
+
+        if (melhor is not null || tolerancia <= 0) return melhor;
+
+        // Encosta sem entrar: o ponto do segmento mais perto da borda.
+        // Como os dois não se cruzam, a menor distância é de uma ponta do
+        // segmento a um lado do contorno, ou de um canto do contorno ao segmento.
+        (Point3 P, double D)? perto = null;
+        void Considerar(Point3 noSegmento, double d)
+        {
+            if (d <= tolerancia + Eps && (perto is null || d < perto.Value.D)) perto = (noSegmento, d);
+        }
+
+        for (var i = 0; i < contorno.Count; i++)
+        {
+            var c = contorno[i];
+            var d = contorno[(i + 1) % contorno.Count];
+            Considerar(a, Dist(Projetar(c, d, a).Pe, a));
+            Considerar(b, Dist(Projetar(c, d, b).Pe, b));
+            var pe = Projetar(a, b, c).Pe;
+            Considerar(pe, Dist(pe, c));
+        }
+
+        return perto?.P;
+    }
+
+    /// <summary>Se o ponto está dentro do polígono (paridade dos cruzamentos de um raio horizontal).</summary>
+    private static bool Dentro(Point3 p, IReadOnlyList<Point3> poligono)
+    {
+        var dentro = false;
+        for (int i = 0, j = poligono.Count - 1; i < poligono.Count; j = i++)
+        {
+            var (pi, pj) = (poligono[i], poligono[j]);
+            if ((pi.Y > p.Y) != (pj.Y > p.Y) && p.X < (pj.X - pi.X) * (p.Y - pi.Y) / (pj.Y - pi.Y) + pi.X) dentro = !dentro;
+        }
+
+        return dentro;
     }
 
     /// <summary>
