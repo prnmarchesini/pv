@@ -62,3 +62,25 @@ Ele não usou o número 9.
 18 – Erro grave: Eu apaguei os inversores das áreas, fui em resumo na rota de cabos, atualizei, e continuou mostrando os cabos CC. Isso é errado, se eu apaguei os inversores, o sistema deve falar "Inversor não esta em campo, não é possivel mostrar resumo" algo desse tipo, veja, print.
 
 19 – Mais um erro: que complementa a comentário 17. Eu tirei os inversroes então a aba CC é bloqueada, ok, porém, se eu cliquei em distribuição automática em campo dos inversores, a aba CC deve ser liberada, porque os inversores serão posicionados em campo através da rota de cabos, onde o sistema irá calcular a MENOR rota possivel dos cabos daquele inversor e inserir no desenho. Em seguida, eu posso ajustar a posição do inversor e clicar em recalcular a rota para um, vários ou todos inversores. Isso é por inversor, quando eu colocar que o inveersors sera inserido automático, na coluna dele deve sair o por em campo e entrar algo do tipo "Alocação automática" e bloquear o clique.
+
+## Segunda rodada (Melhorias.docx, 10/10/2026 à noite)
+
+Imagens em `C:\Dev\pv-m\imagens2`: image1 (item 1), image2 (item 4), image3
+(item 6), image4 (item 7). Frentes: `n-inversor` (itens 1 a 5) e `n-rota`
+(itens 6 a 8). O Renan pediu dupla validação por agentes no item 2.
+
+1 – Ainda falta o total de strings limite sugeridas
+
+2 – Erro gravíssimo e confissão de falta de teste. Eu coloquei do inversor 1 ao 8 e esqueci o 9 e 10 de colocar na área. Selecionei inversor 9 e 10 e cliquei em escolher área e o sistema NÃO colococa ele na área. Cliquei em alocar manualmente, coloquei a mão dentro da área e o sistema não reconhece que ele esta dentro da área, com isso dois erros que preciso de dupla validação de agentes porque é recorrência de erro grave. 1 – O sistema pela segunda vez não deixou colocar inversor dentro da área, mesmo fazendo o processo correto. 2 – E ainda mais grave, coloquei a mão dentro de uma área e o sistema não entendeu que estava dentro da área, o que claramente evidencia que não existe um check de áreas para objetos inseridos, ou seja, a área 1 é um objeto que recebe coisas dentro dela, e quando eu coloquei essa coisa inversor, o sistema não teve nenhum "webhook" para dizer, olha sistema, os inversores 9 e 10 estao dentro da área 1 entao vou preencher a tabela de posição dos inversores como área 1.
+
+3 – Erro tão grave quanto: O sistema deu o nome de área 1 mas não sei como mudar. Eu quero e devo poder mudar o nome das áreas.
+
+4 – Quando coloco a mão, na tabela não aparece nada, mas deveria ter na coluna local a escrita "A mão". Isso é um exemplo, nesse caso eu coloquei dentro da área e o sistema não entendeu e tudo o que eu disse acima é valido.
+
+5 – Na pre-tag falta colocar o fundo e moldura. Na vdd, quero opções ao distribuir chamadas: Inserir nome do inversor? Sim / Não. Modulo () Fundo (). Como padrão coloque tudo sim.
+
+6 – Erro grave no motor de cabos CC. Veja no print que o motor gerou dois cabos fora da vala. A vala esta abaixo, mas ele gerou fora. Eu acho que ele fez isso porque o raio de 10m era mais curto ali do que usar a vala que chegava direto dentro da área. Acrescente a regra: Sempre que chegar um vala DENTRO da área ou do inversor, a vala que chega tem prioridade, mesmo que o raio de 10m ao lado de outra vala tenha um trajeto menor.
+
+7 – falta a totalização da usina, so mostar o total da uc 1 e uc2
+
+8 – nos cálculos cc coloca a corrente máxima suportada pelo cabo também ai a gente brinca com a corrente corrigida
