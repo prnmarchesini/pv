@@ -308,6 +308,19 @@ public static class CableRouter
         return niveis;
     }
 
+    /// <summary>
+    /// O contorno pelo qual a vala chega a um inversor (Renan, 10/10/2026,
+    /// segunda rodada, item 6: "sempre que chegar uma vala DENTRO da área ou
+    /// do inversor, a vala que chega tem prioridade, mesmo que o raio de 10 m
+    /// ao lado de outra vala tenha um trajeto menor"): a área do desenho onde
+    /// o inversor está, em planta (pelo ponto dele, registrado nela ou não);
+    /// fora de toda área, a área em que ele está registrado; sem nenhuma, a
+    /// caixa dele. Assim todos os inversores de uma área chegam pela vala que
+    /// entra nela, mesmo o que ficou sem o registro da área.
+    /// </summary>
+    public static IReadOnlyList<Point3>? AccessOutline(Point3 point, IReadOnlyList<Point3>? box, IEnumerable<IReadOnlyList<Point3>> areas, IReadOnlyList<Point3>? registeredArea = null) =>
+        areas.FirstOrDefault(a => a.Count >= 3 && Polygons.Contains(a, point.X, point.Y)) ?? registeredArea ?? box;
+
     private static double Plano(Point3 a, Point3 b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
 }
 

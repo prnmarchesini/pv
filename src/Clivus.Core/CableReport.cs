@@ -318,6 +318,20 @@ public static class CableReport
         public double CableLength => AllCircuits.Sum(c => c.CableLength);
     }
 
+    /// <summary>
+    /// O total da usina de um tipo de cabo (Renan, segunda rodada de
+    /// 10/10/2026, item 7: "falta a totalização da usina, só mostra o total da
+    /// UC1 e UC2"): um grupo com todos os circuitos dos grupos, para a linha
+    /// que fica sempre no fim do resumo, com os grupos abertos ou fechados.
+    /// </summary>
+    public static CircuitGroup PlantTotal(IReadOnlyList<CircuitGroup> grupos)
+    {
+        ArgumentNullException.ThrowIfNull(grupos);
+        var total = new CircuitGroup(Tr.T("Total da usina"), 0, "\u0000total");
+        total.Circuits.AddRange(grupos.SelectMany(g => g.AllCircuits));
+        return total;
+    }
+
     /// <summary>"(sem UC)", "(sem trafo)"... para o elo que falta na cadeia.</summary>
     private static string Sem(string oQue) => Tr.F("(sem {0})", oQue);
 

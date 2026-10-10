@@ -69,26 +69,37 @@ public static class CableCalc
 /// As contas por string do resumo CC (Renan, 10/10/2026, item 16; "por
 /// enquanto não vamos considerar fatores de agrupamento"): a Voc da string
 /// na temperatura mínima, a Vmp e as correntes do módulo (Isc e Imp, as da
-/// string em série), a capacidade do cabo no método da aba e se ele suporta.
+/// string em série), a corrente máxima do cabo no método da aba, a corrigida
+/// (vezes o fator de correção) e se ele suporta.
 /// </summary>
 /// <remarks>
 /// O critério de "suporta" é o simples pedido para este teste:
-/// Isc × <see cref="SafetyFactor"/> (1,25) ≤ capacidade de condução do cabo
-/// no método de instalação da aba (da biblioteca de cabos), sem fator de
-/// agrupamento nem de temperatura. É a exceção pedida pelo Renan à regra 8
-/// (o sistema não aprova cabo): a parte 2, com os fatores da norma, vem depois.
-/// Sem capacidade para o método, a coluna fica vazia (null), nunca "Não".
+/// Isc × <see cref="SafetyFactor"/> (1,25) ≤ corrente corrigida, que é a
+/// corrente máxima do cabo no método de instalação da aba (a capacidade de
+/// condução da biblioteca de cabos) vezes <see cref="CorrectionFactor"/>.
+/// Por enquanto o fator é 1,0 (Renan, segunda rodada de 10/10/2026, item 8:
+/// "coloca a corrente máxima suportada pelo cabo também, aí a gente brinca
+/// com a corrente corrigida"), à vista na tabela, para depois entrarem o
+/// agrupamento e a temperatura da norma. É a exceção pedida pelo Renan à
+/// regra 8 (o sistema não aprova cabo). Sem corrente máxima para o método,
+/// as colunas dela ficam vazias (null), nunca "Não".
 /// </remarks>
-public sealed record StringCheck(double VocAtMin, double Vmp, double Isc, double Imp, double? Ampacity)
+public sealed record StringCheck(double VocAtMin, double Vmp, double Isc, double Imp, double? Ampacity, double CorrectionFactor = StringCheck.DefaultCorrectionFactor)
 {
     /// <summary>O fator sobre a Isc do critério simples (item 16).</summary>
     public const double SafetyFactor = 1.25;
 
+    /// <summary>O fator de correção da corrente máxima do cabo, por enquanto sem agrupamento nem temperatura.</summary>
+    public const double DefaultCorrectionFactor = 1.0;
+
     /// <summary>A corrente de projeto: Isc × 1,25.</summary>
     public double DesignCurrent => Isc * SafetyFactor;
 
-    /// <summary>Se o cabo suporta (Isc × 1,25 ≤ capacidade); null sem a capacidade.</summary>
-    public bool? Supports => Ampacity is { } a ? DesignCurrent <= a + 1e-9 : null;
+    /// <summary>A corrente corrigida: a máxima do cabo no método vezes o fator de correção; null sem a máxima.</summary>
+    public double? CorrectedAmpacity => Ampacity * CorrectionFactor;
+
+    /// <summary>Se o cabo suporta (Isc × 1,25 ≤ corrente corrigida); null sem a corrente máxima.</summary>
+    public bool? Supports => CorrectedAmpacity is { } a ? DesignCurrent <= a + 1e-9 : null;
 
     /// <summary>
     /// As contas de uma string: <paramref name="modulo"/> é o do PAN (null:
@@ -105,10 +116,10 @@ public sealed record StringCheck(double VocAtMin, double Vmp, double Isc, double
     public static IReadOnlyList<string> Headers() =>
     [
         Tr.T("Voc na mínima (V)"), Tr.T("Vmp, Vmppt (V)"), Tr.T("Isc (A)"), Tr.T("Imp, Imppt (A)"),
-        Tr.T("Capacidade do cabo (A)"), Tr.T("Suporta (Isc × 1,25)"),
+        Tr.T("Corrente máxima do cabo (A)"), Tr.T("Fator de correção"), Tr.T("Corrente corrigida (A)"), Tr.T("Suporta (Isc × 1,25)"),
     ];
 
     /// <summary>As células, na ordem de <see cref="Headers"/>.</summary>
     public IReadOnlyList<object?> Cells() =>
-        [VocAtMin, Vmp, Isc, Imp, Ampacity, Supports is { } s ? (s ? Tr.T("Sim") : Tr.T("Não")) : null];
+        [VocAtMin, Vmp, Isc, Imp, Ampacity, CorrectionFactor, CorrectedAmpacity, Supports is { } s ? (s ? Tr.T("Sim") : Tr.T("Não")) : null];
 }

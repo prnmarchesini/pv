@@ -1,0 +1,49 @@
+; Nivel 2 da vala que entra na area dos inversores (segunda rodada de 10/10/2026,
+; item 6). Usina pelo motor e strings de teste como no caso da rota CC; o
+; Inversor 1 posto numa area ao sul da usina pelo Local dos inversores e o
+; Inversor 2 posto a mao dentro da mesma area (sem o registro dela, como os
+; inversores 9 e 10 do desenho de Itatiba). Valas: a do leste (norte-sul), uma
+; que sai dela e entra na area pelo sul, e outra que sai dela e para a 6 m ao
+; norte da area (a 8 m do Inversor 2, dentro do raio de 10 m, e por ela o
+; caminho e menor). O Gerar CC tem que levar todos os cabos pela vala que
+; entra na area.
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area rota area")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento rota area")
+(command "CLIVUS_MESAS_EXEMPLO_AUTO")
+(command "CLIVUS_USINA_AUTO")
+(command "CLIVUS_STRINGS_TESTE_AUTO")
+(command "CLIVUS_ELETRICA_AUTO" "Uc" "Unitarias" "1")
+(command "CLIVUS_ELETRICA_AUTO" "Trafo" "2")
+(command "CLIVUS_ELETRICA_AUTO" "Vincular" "U1" "T1")
+(command "CLIVUS_ELETRICA_AUTO" "Modelo" "Huawei 250" "5" "4")
+(command "CLIVUS_ELETRICA_AUTO" "Inversores" "Huawei 250" "2")
+(command "CLIVUS_ELETRICA_AUTO" "Alocar" "Inversor 1" "6")
+(command "CLIVUS_ELETRICA_AUTO" "Alocar" "Inversor 2" "6")
+; ---- a area: o Inversor 1 pelo Local dos inversores, o 2 a mao dentro dela ----
+(command "_.PLINE" "{{S1}}" "{{S2}}" "{{S3}}" "{{S4}}" "_C")
+(setq clivus:sala (entlast))
+(command "CLIVUS_ELETRICA_LOCAL" "Area" "Inversor 1" clivus:sala "Sala rota")
+(command "CLIVUS_ELETRICA_POSICIONAR" "Inversor 2" "{{I2}}")
+; ---- as valas -------------------------------------------------------------
+(command "_.PLINE" "{{V1}}" "{{V2}}" "")
+(setq clivus:sel (ssadd (entlast)))
+(command "_.PLINE" "{{V1}}" "{{SUL1}}" "{{SUL2}}" "")
+(ssadd (entlast) clivus:sel)
+(command "_.PLINE" "{{N1}}" "{{N2}}" "")
+(ssadd (entlast) clivus:sel)
+(command "CLIVUS_ROTA_VALA" "CC" clivus:sel "")
+; ---- gerar e conferir ------------------------------------------------------
+(princ "\nCLIVUS_ROTAAREA GERAR")
+(command "CLIVUS_ROTA_GERAR" "CC")
+(princ "\nCLIVUS_ROTAAREA CONFERIR")
+(command "CLIVUS_ROTA_CONFERIR_AUTO")
+(setvar "OSMODE" clivus:osmode)
+(princ "\nCLIVUS_ROTAAREA_FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ)

@@ -693,12 +693,23 @@ internal sealed class LeituraDaRota
         }
 
         // Inversor numa área (sala, skid): a vala que entra na ÁREA é a que chega nele.
+        // Vale a área onde ele está em planta, registrado nela ou não (item 6 da segunda
+        // rodada de 10/10/2026: os inversores 9 e 10, postos à mão dentro da área sem o
+        // registro, ficavam com a caixa e o raio levava os cabos a outra vala).
         var areas = LocalDosInversores.Areas(db);
         var locais = LocalDosInversores.Ler(db, out var problemaDoLocal);
         l.ProblemaDoLocal = problemaDoLocal;
+        var registradas = new Dictionary<Guid, IReadOnlyList<Point3>>();
         foreach (var local in locais)
-            if (local.Mode == InverterPlacementMode.Area && areas.TryGetValue(local.Site, out var area) && l._emCampo.ContainsKey((EquipmentKind.Inverter, local.Inverter)))
-                l._contornos[(EquipmentKind.Inverter, local.Inverter)] = area.Contorno;
+            if (local.Mode == InverterPlacementMode.Area && areas.TryGetValue(local.Site, out var area)) registradas[local.Inverter] = area.Contorno;
+
+        var contornosDasAreas = areas.Values.Select(a => a.Contorno).ToList();
+        foreach (var ((tipo, guid), (ponto, _)) in l._emCampo)
+        {
+            if (tipo != EquipmentKind.Inverter) continue;
+            var caixa = l._contornos.GetValueOrDefault((tipo, guid));
+            if (CableRouter.AccessOutline(ponto, caixa, contornosDasAreas, registradas.GetValueOrDefault(guid)) is { } contorno) l._contornos[(tipo, guid)] = contorno;
+        }
 
         return l;
     }
@@ -814,6 +825,11 @@ internal sealed class LeituraDaRota
     internal RowTable? MesaDoModulo(Guid modulo) => _mesaDoModulo.TryGetValue(modulo, out var m) && _mesas.TryGetValue(m, out var t) ? t.Mesa : null;
 
     internal IReadOnlyList<Point3>? Contorno(EquipmentKind tipo, Guid id) => _contornos.TryGetValue((tipo, id), out var c) ? c : null;
+
+    /// <summary>Para a conferência do nível 2: de onde veio o contorno do inversor ("area", "caixa" ou "-").</summary>
+    internal string OrigemDoContorno(Guid inversor) =>
+        !_contornos.TryGetValue((EquipmentKind.Inverter, inversor), out var c) ? "-"
+        : Contornos.TryGetValue((EquipmentKind.Inverter, inversor), out var caixa) && ReferenceEquals(c, caixa) ? "caixa" : "area";
 
     internal static EquipmentKind Tipo(CableEndKind k) => k switch
     {
