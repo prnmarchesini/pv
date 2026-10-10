@@ -226,7 +226,8 @@ public static class TrocarMesaCommands
         }
 
         // A ponta da fileira do lado travado fica parada (Renan, 10/10/2026).
-        if (reespacar) Regerar(editor, documento, terreno, troca.Tables[0].Label, troca.Tables[0].Corners, manter: true, alinhamento: null, lado);
+        // O vão que a troca abriu (28 por 14) não é recorte: fecha (item 1).
+        if (reespacar) Regerar(editor, documento, terreno, troca.Tables[0].Label, troca.Tables[0].Corners, manter: true, alinhamento: null, lado, troca.Patch);
 
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
         return true;
@@ -320,11 +321,12 @@ public static class TrocarMesaCommands
     /// reespaçadas, cada uma com o tipo dela. Motor: a área é planejada de
     /// novo e só a fileira que passa pela mesa é desenhada. Com
     /// <paramref name="lado"/> (só Manter), a ponta de cada trecho desse lado
-    /// fica parada; sem ele, o início de cada trecho.
+    /// fica parada; sem ele, o início de cada trecho. Com
+    /// <paramref name="troca"/>, o vão que a troca abriu fecha.
     /// </summary>
     private static void Regerar(
         Editor editor, Document documento, ProcessedTerrain terreno, string letreiro, IReadOnlyList<Point3> cantosDaMesa, bool manter,
-        (IReadOnlyList<Point3> Vertices, AlignmentIdentity Identidade)? alinhamento, RowSide? lado = null)
+        (IReadOnlyList<Point3> Vertices, AlignmentIdentity Identidade)? alinhamento, RowSide? lado = null, SwapPatch? troca = null)
     {
         var database = documento.Database;
         var centro = new Point3(cantosDaMesa.Average(p => p.X), cantosDaMesa.Average(p => p.Y), 0);
@@ -368,7 +370,7 @@ public static class TrocarMesaCommands
 
         if (manter)
         {
-            Reespacar(editor, documento, terreno, lida, daFileira, letreiro, lado);
+            Reespacar(editor, documento, terreno, lida, daFileira, letreiro, lado, troca);
         }
         else
         {
@@ -382,7 +384,7 @@ public static class TrocarMesaCommands
     }
 
     /// <summary>Reespaça as mesas da fileira, cada uma com o tipo dela; com <paramref name="lado"/>, a ponta desse lado fica parada.</summary>
-    private static void Reespacar(Editor editor, Document documento, ProcessedTerrain terreno, Leitura lida, IReadOnlyList<Guid> daFileira, string letreiro, RowSide? lado)
+    private static void Reespacar(Editor editor, Document documento, ProcessedTerrain terreno, Leitura lida, IReadOnlyList<Guid> daFileira, string letreiro, RowSide? lado, SwapPatch? troca)
     {
         var database = documento.Database;
         var doDesenho = MesasDoDesenho.Ler(database);
@@ -446,7 +448,7 @@ public static class TrocarMesaCommands
         var settings = doProjeto.ForTable(tipos[0].Profile.Frame);
         var tilt = tipos[0].Profile.TiltRadians;
 
-        var reespacadas = TableSwap.Respace(celulas, pegadas, settings.Configuration.TableGap, settings.Configuration.MaxGapBeforeBreak, lado);
+        var reespacadas = TableSwap.Respace(celulas, pegadas, settings.Configuration.TableGap, settings.Configuration.MaxGapBeforeBreak, lado, troca);
         var fileira = RowPipeline.ProcessRow(
             new PlanRow(reespacadas[0].Row, reespacadas), reespacadas.Select(c => desenhoDosTipos.Geometrias[c.Kind]).ToList(), tilt, terreno.Mesh, settings);
 

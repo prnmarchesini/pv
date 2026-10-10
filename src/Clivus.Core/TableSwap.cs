@@ -37,11 +37,37 @@ public enum RowSide
 /// que sobra até a vizinha do lado solto, menos o espaçamento). Positivo:
 /// encostam ou entram na vizinha. Negativo: sobra espaço.
 /// </param>
-public sealed record SwapResult(IReadOnlyList<PlacedTable> Tables, double Overflow)
+/// <param name="Freed">
+/// Quanto a antiga era mais comprida que as novas juntas (com o espaçamento
+/// entre elas), em metro; zero quando as novas ocupam o mesmo ou mais. É o
+/// vão que a troca abre do lado solto.
+/// </param>
+public sealed record SwapResult(IReadOnlyList<PlacedTable> Tables, double Overflow, double Freed = 0)
 {
     /// <summary>Se as mesas novas passam do espaço livre (com um milímetro de folga para a conta).</summary>
     public bool Overflows => Overflow > 1e-3;
+
+    /// <summary>O que o reespaçar precisa saber desta troca para fechar o vão que ela abriu.</summary>
+    public SwapPatch Patch => new(Tables.Select(t => t.Label).ToList(), Freed, Anchor, Tables.Count > 0 ? Tables[0].DirectionRadians : 0);
+
+    /// <summary>O lado que ficou preso na troca (o vão aberto fica do outro).</summary>
+    public SwapAnchor Anchor { get; init; }
 }
+
+/// <summary>
+/// A troca que acabou de acontecer, para o reespaçar (10/10/2026, item 1):
+/// trocar uma de 28 por uma de 14 abre um vão do tamanho da diferença do lado
+/// solto, maior que o vão que quebra a fileira; sem isto o reespaçar via ali
+/// um recorte e deixava o buraco. O vão encostado nas mesas novas só quebra a
+/// fileira se, descontado o que a troca abriu, ainda passar do limite (já era
+/// um recorte antes da troca). Só o vão do lado solto é descontado: do lado
+/// travado a mesa nova está onde a antiga estava.
+/// </summary>
+/// <param name="Labels">Os letreiros das mesas novas.</param>
+/// <param name="Freed">O vão que a troca abriu, em metro (zero ou mais).</param>
+/// <param name="Anchor">O lado travado na troca, no sentido de <paramref name="DirectionRadians"/>.</param>
+/// <param name="DirectionRadians">A direção da mesa trocada (do início para o fim), a partir do +X.</param>
+public sealed record SwapPatch(IReadOnlyCollection<string> Labels, double Freed, SwapAnchor Anchor, double DirectionRadians);
 
 /// <summary>
 /// Trocar uma mesa por outra(s), em planta (passo 9.1). Renan, 03/10/2026:
@@ -142,7 +168,7 @@ public static class TableSwap
         var livre = roomBeyond is { } vao ? old.Length + vao - gap : double.PositiveInfinity;
         var passa = double.IsPositiveInfinity(livre) ? double.NegativeInfinity : total - livre;
 
-        return new SwapResult(mesas, passa);
+        return new SwapResult(mesas, passa, Math.Max(0, old.Length - total)) { Anchor = anchor };
     }
 
     /// <summary>
@@ -166,9 +192,15 @@ public static class TableSwap
     /// inteira"). Null: o início de cada trecho, no sentido do desenho
     /// (Regerar fileira > Manter).
     /// </param>
+    /// <param name="swap">
+    /// A troca que antecede o reespaçar (Trocar mesa com "Refazer a fileira
+    /// inteira"), ou null. O vão que ela abriu não quebra a fileira: as mesas
+    /// se encostam e o buraco fecha.
+    /// </param>
     /// <returns>As mesas reespaçadas, na ordem da fileira, com o mesmo letreiro e tipo.</returns>
     public static IReadOnlyList<PlacedTable> Respace(
-        IReadOnlyList<PlacedTable> tables, IReadOnlyList<TableFootprint> footprints, double gap, double maxGap, RowSide? side = null)
+        IReadOnlyList<PlacedTable> tables, IReadOnlyList<TableFootprint> footprints, double gap, double maxGap, RowSide? side = null,
+        SwapPatch? swap = null)
     {
         ArgumentNullException.ThrowIfNull(tables);
         ArgumentNullException.ThrowIfNull(footprints);
@@ -194,16 +226,37 @@ public static class TableSwap
             if (mesa.Kind < 0 || mesa.Kind >= footprints.Count) throw new ArgumentException($"a mesa {mesa.Label} é de um tipo que não está na lista", nameof(tables));
         }
 
-        // Os trechos: a fileira quebra onde o vão passa de maxGap.
+        // Os trechos: a fileira quebra onde o vão passa de maxGap. O vão
+        // encostado numa mesa recém-trocada desconta o que a troca abriu
+        // (28 por 14 deixa uns 9 m do lado solto, que não é recorte).
+        var trocadas = swap is null ? null : new HashSet<string>(swap.Labels, StringComparer.Ordinal);
+        var aberto = swap is null ? 0 : Math.Max(0, swap.Freed);
+        bool Trocada(PlacedTable m) => trocadas is not null && trocadas.Contains(m.Label);
+
+        // O lado solto da troca no sentido desta conta: travado o início, o
+        // vão aberto vem depois das mesas novas; travado o fim, antes.
+        var aberturaDepois = swap is not null
+            && (swap.Anchor == SwapAnchor.Start) == (Math.Cos(swap.DirectionRadians - referencia.DirectionRadians) >= 0);
+
         var trechos = new List<List<PlacedTable>>();
         var fimAnterior = double.NegativeInfinity;
+        PlacedTable? anterior = null;   // a mesa que acaba mais adiante até aqui
 
         foreach (var mesa in ordem)
         {
             var inicio = Estacao(mesa.Origin);
-            if (trechos.Count == 0 || inicio - fimAnterior > maxGap) trechos.Add([]);
+            var vao = inicio - fimAnterior;
+            if (anterior is not null && (aberturaDepois ? Trocada(anterior) && !Trocada(mesa) : Trocada(mesa) && !Trocada(anterior))) vao -= aberto;
+
+            if (trechos.Count == 0 || vao > maxGap) trechos.Add([]);
             trechos[^1].Add(mesa);
-            fimAnterior = Math.Max(fimAnterior, inicio + mesa.Length);   // uma mesa dentro de outra (troca sobreposta) não quebra o trecho
+
+            // Uma mesa dentro de outra (troca sobreposta) não quebra o trecho.
+            if (inicio + mesa.Length > fimAnterior)
+            {
+                fimAnterior = inicio + mesa.Length;
+                anterior = mesa;
+            }
         }
 
         var ancora = side is { } lado ? AnchorOf(lado, referencia.DirectionRadians) : SwapAnchor.Start;

@@ -349,6 +349,81 @@ public class TableSwapTests
         Assert.Equal(Gap, r[2].Origin.X - r[1].Corners[1].X, 9);
     }
 
+    /// <summary>
+    /// Item 1 de 10/10/2026: trocar uma de 28 por uma de 14 com "Refazer a
+    /// fileira inteira" deixava um buraco. A troca abre 9,2 m do lado solto
+    /// (mais o espaçamento, 10 m), acima do vão que quebra a fileira, e o
+    /// reespaçar tomava o buraco por um recorte. Com a troca informada, as
+    /// mesas se encostam a partir da ponta travada, sem vão; o recorte de
+    /// verdade (12 m, antes da troca) continua quebrando a fileira, mesmo
+    /// encostado na mesa trocada.
+    /// </summary>
+    [Theory]
+    [Trait("Etapa", "9")]
+    [InlineData(30.0, RowSide.Left, 2)]
+    [InlineData(30.0, RowSide.Right, 2)]
+    [InlineData(210.0, RowSide.Left, 2)]
+    [InlineData(210.0, RowSide.Right, 2)]
+    [InlineData(90.0, RowSide.Left, 3)]
+    [InlineData(270.0, RowSide.Right, 3)]
+    [InlineData(30.0, RowSide.Left, 4)]
+    [InlineData(30.0, RowSide.Right, 4)]
+    [InlineData(210.0, RowSide.Left, 4)]
+    [InlineData(210.0, RowSide.Right, 4)]
+    public void TrocarDe28Para14ERefazerFechaOVao(double graus, RowSide lado, int trocada)
+    {
+        const double Mesa28 = 18.7, Mesa14 = 9.5, Recorte = 12, Quebra = 6.5;
+        var pegadas = new[] { new TableFootprint(Mesa28, 4.6), new TableFootprint(Mesa14, 4.6) };
+
+        // F3.1 a F3.4 de 28 encostadas; F3.5 depois de um recorte de 12 m.
+        var fileira = Enumerable.Range(0, 4).Select(i => NaFileira(graus, i * (Mesa28 + Gap), Mesa28, 0, i + 1)).ToList();
+        fileira.Add(NaFileira(graus, 4 * (Mesa28 + Gap) - Gap + Recorte, Mesa28, 0, 5));
+
+        var antiga = fileira[trocada - 1];
+        var outras = fileira.Where(m => m != antiga).ToList();
+        var ancora = TableSwap.AnchorOf(lado, antiga.DirectionRadians);
+        var troca = TableSwap.Plan(antiga, pegadas[1], kind: 1, 1, Gap, ancora, TableSwap.RoomBeyond(antiga, outras.Select(m => m.Corners), ancora));
+
+        Assert.Equal(Mesa28 - Mesa14, troca.Freed, 9);
+        Assert.Equal(["F3." + trocada], troca.Patch.Labels);
+
+        var depois = outras.Concat(troca.Tables).Reverse().ToList();
+        var r = TableSwap.Respace(depois, pegadas, Gap, Quebra, lado, troca.Patch);
+
+        Assert.Equal(["F3.1", "F3.2", "F3.3", "F3.4", "F3.5"], r.Select(t => t.Label));
+        Assert.Equal(Mesa14, r[trocada - 1].Length, 9);
+
+        var rumo = graus * Math.PI / 180;
+        var d = (X: Math.Cos(rumo), Y: Math.Sin(rumo));
+        double Estacao(Point3 p) => (p.X - 1000) * d.X + (p.Y - 2000) * d.Y;
+
+        // Sem buraco: as quatro do trecho encostadas, com o espaçamento.
+        for (var i = 1; i < 4; i++)
+            Assert.Equal(Gap, Estacao(r[i].Origin) - Estacao(r[i - 1].Corners[1]), 9);
+
+        // A ponta travada do trecho fica parada; a solta recua os 9,2 m.
+        var ancoraDaFileira = TableSwap.AnchorOf(lado, rumo);
+        var comprimento = 4 * Mesa28 + 3 * Gap;
+        if (ancoraDaFileira == SwapAnchor.Start)
+        {
+            Assert.Equal(0, Estacao(r[0].Origin), 9);
+            Assert.Equal(comprimento - (Mesa28 - Mesa14), Estacao(r[3].Corners[1]), 9);
+        }
+        else
+        {
+            Assert.Equal(comprimento, Estacao(r[3].Corners[1]), 9);
+            Assert.Equal(Mesa28 - Mesa14, Estacao(r[0].Origin), 9);
+        }
+
+        // O recorte de verdade continua: a F3.5 não sai do lugar.
+        Assert.Equal(Estacao(fileira[4].Origin), Estacao(r[4].Origin), 9);
+
+        // Sem a troca informada (o defeito): o buraco ficava, maior que a quebra.
+        var semTroca = TableSwap.Respace(depois, pegadas, Gap, Quebra, lado);
+        var maior = Enumerable.Range(1, 3).Max(i => Estacao(semTroca[i].Origin) - Estacao(semTroca[i - 1].Corners[1]));
+        if (trocada < 4 || ancoraDaFileira == SwapAnchor.End) Assert.True(maior > Quebra, $"o defeito devia reaparecer sem a troca (maior vão {maior:0.00})");
+    }
+
     [Theory]
     [Trait("Etapa", "9")]
     [InlineData(0)]

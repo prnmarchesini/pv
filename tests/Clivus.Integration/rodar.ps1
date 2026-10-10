@@ -3662,7 +3662,9 @@ function Testar-Trocar {
     $padrao = 'CLIVUS_TROCAR total0=(\d+) total1=(\d+) total2=(\d+) f1antes=(\d+) f1troca=(\d+) f1manter=(\d+) f2antes=(\d+) f2motor=(\d+) ' +
               'perfil12=(.+?) p2a=(.+?) p2b=(.+?) sem12=(.+?) p2amanter=(.+?) vao0=(-?[\d.]+) vaotroca=(-?[\d.]+) vaomanter=(-?[\d.]+) zmin=(-?[\d.]+) zmax=(-?[\d.]+) ' +
               'f1direita=(\d+) p2bdireita=(.+?) vaodireita=(-?[\d.]+) ' +
-              'pontasantes=(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) pontasdireita=(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)'
+              'pontasantes=(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) pontasdireita=(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)' +
+              ' f1volta=(\d+) p2bvolta=(.+?) vaovolta=(-?[\d.]+) maiorvolta=(-?[\d.]+) zvmin=(-?[\d.]+) zvmax=(-?[\d.]+) ' +
+              'pontasvolta0=(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) pontasvolta=(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)'
 
     if ($r.Texto -notmatch $padrao) {
         $problemas.Add("clivus-trocar: nao consegui ler o LISP. Veja $($r.Saida)")
@@ -3724,12 +3726,38 @@ function Testar-Trocar {
         return $false
     }
 
+    # Item 1 de 10/10/2026: a F1.2b de 28 de volta a uma de 14 travando a
+    # Esquerda e refazendo a fileira. Antes do conserto sobrava um buraco de
+    # uns 10 m (a diferenca de 28 para 14 mais o espacamento), maior que o vao
+    # que quebra a fileira, e o reespacar o tomava por recorte. Agora: sem
+    # buraco (o maior vao e o do motor), a ponta esquerda parada e a cota da
+    # F1.2b no terreno.
+    $f1volta = [int] $m[30]
+    $vaoVolta = [double]::Parse($m[32], $invariante)
+    $maiorVolta = [double]::Parse($m[33], $invariante)
+    $zvmin = [double]::Parse($m[34], $invariante); $zvmax = [double]::Parse($m[35], $invariante)
+    $volta0 = @(36..39 | ForEach-Object { [double]::Parse($m[$_], $invariante) })
+    $volta = @(40..43 | ForEach-Object { [double]::Parse($m[$_], $invariante) })
+    $esquerdaVolta0 = if ($leste) { $volta0[0] } else { $volta0[2] }
+    $esquerdaVolta = if ($leste) { $volta[0] } else { $volta[2] }
+
+    if ($f1volta -ne $f1direita -or $m[31] -ne 'Mesa 2V14' -or [math]::Abs($esquerdaVolta - $esquerdaVolta0) -gt 0.05 -or
+        $vaoVolta -le 0 -or $vaoVolta -lt ($vao0 - 0.1) -or $maiorVolta -gt ($vao0 + 0.3)) {
+        $problemas.Add("clivus-trocar: trocar a F1.2b de 28 de volta por uma de 14 travando a Esquerda e refazendo a fileira deveria manter $f1direita mesas (deu $f1volta), a F1.2b de 14 (deu $($m[31])), a ponta esquerda parada (de $esquerdaVolta0 para $esquerdaVolta) e nenhum buraco: vaos entre $vaoVolta e $maiorVolta m, o do motor e $vao0 m. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($zvmin -lt ($minima - 0.01) -or $zvmax -gt ($maxima + 5)) {
+        $problemas.Add("clivus-trocar: o contorno da F1.2b de volta a 14 vai de $zvmin a $zvmax, fora da faixa do terreno ($minima a $maxima). Veja $($r.Saida)")
+        return $false
+    }
+
     if ($f2motor -ne $f2antes -or $total2 -ne $total1) {
         $problemas.Add("clivus-trocar: a fileira 2 pelo motor deveria voltar com $f2antes mesas (deu $f2motor; total $total1 -> $total2). Veja $($r.Saida)")
         return $false
     }
 
-    Write-Host "  (trocar: F1.2 ($($m[9])) virou 2 de 14, vao minimo $($m[15]) m (motor $vao0); reespacada com $vaoManter m; F1.2b de 28 travada a direita: ponta direita $direitaAntes -> $direitaDepois, esquerda $esquerdaAntes -> $esquerdaDepois; fileira 2 pelo motor com $f2motor mesas)" -ForegroundColor DarkGray
+    Write-Host "  (trocar: F1.2 ($($m[9])) virou 2 de 14, vao minimo $($m[15]) m (motor $vao0); reespacada com $vaoManter m; F1.2b de 28 travada a direita: ponta direita $direitaAntes -> $direitaDepois, esquerda $esquerdaAntes -> $esquerdaDepois; de volta a 14 travada a esquerda: vaos de $vaoVolta a $maiorVolta m, ponta esquerda $esquerdaVolta0 -> $esquerdaVolta; fileira 2 pelo motor com $f2motor mesas)" -ForegroundColor DarkGray
     return $true
 }
 

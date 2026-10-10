@@ -2,7 +2,8 @@
 ; (28 e 14 em uso), a F1.2 trocada por duas de 14 travando a esquerda; depois
 ; a fileira 1 reespacada mantendo as mesas; a F1.2b (14, no meio da fileira)
 ; trocada por uma de 28 travando a direita e refazendo a fileira, que deve
-; deixar parada a ponta direita da fileira (pedido de 10/10/2026); e a
+; deixar parada a ponta direita da fileira (pedido de 10/10/2026); de volta
+; a uma de 14 travando a esquerda, sem deixar buraco (item 1); e a
 ; fileira 2 regerada pelo motor.
 ; Em LISP: letreiros e perfis pelo XData do contorno (campo 1 = letreiro,
 ; campo 15 = perfil), o menor vao em planta entre mesas vizinhas da fileira 1
@@ -58,6 +59,20 @@
     (setq menor (min menor (- (car (cadr lst)) (cadr (car lst)))) lst (cdr lst)))
   menor)
 
+; O maior vao em planta entre mesas vizinhas da fileira (padrao), na mesma
+; direcao do clivus:menorvao.
+(defun clivus:maiorvao (padrao / ms v0 v1 dx dy n faixas s lst maior)
+  (setq ms (vl-remove-if-not '(lambda (m) (wcmatch (car m) padrao)) (clivus:mesas)))
+  (setq v0 (car (clivus:verts (caddr (car ms)))) v1 (cadr (clivus:verts (caddr (car ms)))))
+  (setq dx (- (car v1) (car v0)) dy (- (cadr v1) (cadr v0)) n (sqrt (+ (* dx dx) (* dy dy))) dx (/ dx n) dy (/ dy n))
+  (foreach m ms
+    (setq s (mapcar '(lambda (p) (+ (* (- (car p) (car v0)) dx) (* (- (cadr p) (cadr v0)) dy))) (clivus:verts (caddr m))))
+    (setq faixas (cons (list (apply 'min s) (apply 'max s)) faixas)))
+  (setq lst (vl-sort faixas '(lambda (a b) (< (car a) (car b)))) maior -1e99)
+  (while (cdr lst)
+    (setq maior (max maior (- (car (cadr lst)) (cadr (car lst)))) lst (cdr lst)))
+  maior)
+
 ; As pontas em planta da fileira (padrao): "xmin xmax ymin ymax" de todos os
 ; vertices dos contornos.
 (defun clivus:pontas (padrao / xs ys)
@@ -87,6 +102,16 @@
 (setq clivus:pontasdireita (clivus:pontas "F1`.*") clivus:f1direita (clivus:da "F1`.*") clivus:p2bdireita (clivus:perfil "F1.2b")
       clivus:vaodireita (clivus:menorvao "F1`.*"))
 
+; Item 1 de 10/10/2026: a F1.2b (agora de 28) de volta a uma de 14 travando
+; a Esquerda e refazendo a fileira: sem buraco (o maior vao entre vizinhas e
+; o espacamento), a ponta esquerda parada e a cota da F1.2b no terreno.
+(setq clivus:pontasvolta0 (clivus:pontas "F1`.*"))
+(command "CLIVUS_TROCAR_MESA_AUTO" "F1.2b" 2 1 "Esquerda" "Sim")
+(setq clivus:pontasvolta (clivus:pontas "F1`.*") clivus:f1volta (clivus:da "F1`.*") clivus:p2bvolta (clivus:perfil "F1.2b")
+      clivus:vaovolta (clivus:menorvao "F1`.*") clivus:maiorvolta (clivus:maiorvao "F1`.*"))
+(setq clivus:zvmin 1e99 clivus:zvmax -1e99)
+(foreach p (clivus:verts (clivus:ename "F1.2b")) (setq clivus:zvmin (min clivus:zvmin (caddr p)) clivus:zvmax (max clivus:zvmax (caddr p))))
+
 (setq clivus:f2antes (clivus:da "F2`.*"))
 (command "CLIVUS_REGERAR_FILEIRA_AUTO" "F2.1" "Motor")
 (setq clivus:f2motor (clivus:da "F2`.*") clivus:total2 (length (clivus:mesas)))
@@ -98,6 +123,9 @@
                " vao0=" (rtos clivus:vao0 2 3) " vaotroca=" (rtos clivus:vaotroca 2 3) " vaomanter=" (rtos clivus:vaomanter 2 3)
                " zmin=" (rtos clivus:zmin 2 3) " zmax=" (rtos clivus:zmax 2 3)
                " f1direita=" (itoa clivus:f1direita) " p2bdireita=" clivus:p2bdireita " vaodireita=" (rtos clivus:vaodireita 2 3)
-               " pontasantes=" clivus:pontasantes " pontasdireita=" clivus:pontasdireita))
+               " pontasantes=" clivus:pontasantes " pontasdireita=" clivus:pontasdireita
+               " f1volta=" (itoa clivus:f1volta) " p2bvolta=" clivus:p2bvolta " vaovolta=" (rtos clivus:vaovolta 2 3) " maiorvolta=" (rtos clivus:maiorvolta 2 3)
+               " zvmin=" (rtos clivus:zvmin 2 3) " zvmax=" (rtos clivus:zvmax 2 3)
+               " pontasvolta0=" clivus:pontasvolta0 " pontasvolta=" clivus:pontasvolta))
 (setvar "SECURELOAD" clivus:secureload)
 (princ)
