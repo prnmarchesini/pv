@@ -5,7 +5,9 @@ namespace Clivus.Core;
 /// o rodapé de totais. As células são número (double) ou texto; vazio (null)
 /// onde falta dado. As notas dizem o que faltou para preencher.
 /// </summary>
-public sealed record CableTable(string Title, IReadOnlyList<string> Header, IReadOnlyList<IReadOnlyList<object?>> Rows, IReadOnlyList<object?> Total, IReadOnlyList<string> Notes)
+/// <remarks><see cref="GroupRows"/>: os índices (em <see cref="Rows"/>) das linhas de grupo com subtotal, que o Excel destaca.</remarks>
+public sealed record CableTable(string Title, IReadOnlyList<string> Header, IReadOnlyList<IReadOnlyList<object?>> Rows, IReadOnlyList<object?> Total, IReadOnlyList<string> Notes,
+    IReadOnlyList<int>? GroupRows = null)
 {
     /// <summary>O texto para CSV (separador ";", vírgula decimal da cultura), cabeçalho, linhas e total.</summary>
     public string ToCsv(IFormatProvider cultura)
@@ -454,9 +456,11 @@ public static class CableReport
         if (dc) cabecalho.AddRange(StringCheck.Headers());
 
         var linhas = new List<IReadOnlyList<object?>>();
+        var deGrupo = new List<int>();
 
         void Grupo(CircuitGroup g)
         {
+            deGrupo.Add(linhas.Count);
             var linha = new List<object?> { new string(' ', g.Level * 4) + g.Name };
             if (dc) linha.Add(null);
             if (routeColumn) linha.Add(null);
@@ -493,7 +497,7 @@ public static class CableReport
         if (todos.Any(c => c.Cable is null)) notas.Add(Tr.T("Circuito sem cabo escolhido na aba da rota: a especificação fica em branco."));
         if (notes is not null) notas.AddRange(notes);
 
-        return new CableTable(titulo, cabecalho, linhas, total, notas);
+        return new CableTable(titulo, cabecalho, linhas, total, notas, deGrupo);
     }
 
     /// <summary>

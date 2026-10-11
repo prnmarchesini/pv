@@ -51,7 +51,7 @@ public static class ExcelCommands
                 return;
             }
 
-            Gravar(editor, documento, caminho, escolha.Abas);
+            Gravar(editor, documento, caminho, escolha.Abas, capa: true);
         }
         catch (System.Exception erro)
         {
@@ -84,7 +84,7 @@ public static class ExcelCommands
         }
     }
 
-    internal static void Gravar(Editor editor, Document documento, string caminho, ExportSheets abas)
+    internal static void Gravar(Editor editor, Document documento, string caminho, ExportSheets abas, bool capa = false)
     {
         var database = documento.Database;
         if (!caminho.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)) caminho += ".xlsx";
@@ -96,7 +96,10 @@ public static class ExcelCommands
             .OfType<AnalysisTally>()
             .ToList();
 
-        File.WriteAllBytes(caminho, QuantityReport.Build(mesas, modulos, kwp, pilares, quantificacoes, abas, Extras(documento, abas)).ToBytes());
+        var eletrico = abas.HasFlag(ExportSheets.ElectricalSummary) ? ResumoEletricoCommands.Ler(documento).Resumo : null;
+        var desenho = Path.GetFileNameWithoutExtension(documento.Name);
+        File.WriteAllBytes(caminho, QuantityReport.Build(mesas, modulos, kwp, pilares, quantificacoes, abas, Extras(documento, abas), eletrico,
+            capa ? (string.IsNullOrWhiteSpace(desenho) ? "usina" : desenho, DateTime.Now) : null).ToBytes());
 
         editor.WriteMessage(Tr.F(
             "\nEXCEL {0} mesa(s), {1} módulo(s), {2} pilar(es), {3} análise(s) quantificada(s) em {4}\n",
@@ -106,19 +109,10 @@ public static class ExcelCommands
             editor.WriteMessage(Tr.T("  Nenhuma análise quantificada ainda: use o Quantificar de cada análise para elas entrarem.\n"));
     }
 
-    /// <summary>As abas a mais: o resumo elétrico e, dos cabos, uma por rota que tem cabo (recontada antes, regra 7), o resumo e a lista de material.</summary>
+    /// <summary>As abas de cabos: uma por rota que tem cabo (recontada antes, regra 7), o resumo e a lista de material.</summary>
     private static List<CableTable> Extras(Document documento, ExportSheets abas)
     {
         var tabelas = new List<CableTable>();
-
-        if (abas.HasFlag(ExportSheets.ElectricalSummary))
-        {
-            var r = ResumoEletricoCommands.Ler(documento).Resumo;
-            tabelas.Add(new CableTable(Tr.T("Resumo elétrico"),
-                [Tr.T("Item"), Tr.T("Detalhe"), Tr.T("Strings"), Tr.T("Módulos"), "kWp", Tr.T("Observação")],
-                r.Rows().Select(l => (IReadOnlyList<object?>)[new string(' ', l.Level * 4) + l.Name, l.Detail, (double)l.Strings, (double)l.Modules, Math.Round(l.PowerKwp, 3), l.Note]).ToList(),
-                [], r.Pending()));
-        }
 
         if (abas.HasFlag(ExportSheets.Cables))
         {

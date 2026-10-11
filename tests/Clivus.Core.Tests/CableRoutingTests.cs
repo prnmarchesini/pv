@@ -895,3 +895,54 @@ public class CableRoutingReviewCoreTests
             RouteSettings.Parse((RouteSettings.Default(CableRoute.AlternatingCurrent) with { ThreePhase = false }).ToFields()));
     }
 }
+
+/// <summary>O Excel formatado (11/10/2026, "bem formatado, bem disposto"): cabeçalho, total, grupo, nota, larguras, congelar e impressão.</summary>
+public class XlsxFormatTests
+{
+    private static Dictionary<string, System.Xml.Linq.XDocument> Abrir(byte[] x)
+    {
+        using var zip = new System.IO.Compression.ZipArchive(new MemoryStream(x));
+        return zip.Entries.Where(e => e.FullName.EndsWith(".xml")).ToDictionary(e => e.FullName, e => System.Xml.Linq.XDocument.Load(e.Open()));
+    }
+
+    private static string? Estilo(System.Xml.Linq.XDocument aba, string referencia) =>
+        aba.Descendants().FirstOrDefault(e => e.Name.LocalName == "c" && (string?)e.Attribute("r") == referencia)?.Attribute("s")?.Value;
+
+    [Fact]
+    [Trait("Etapa", "23")]
+    public void CabecalhoTotalGrupoENotaTemEstiloProprio()
+    {
+        var t = new CableTable("Cabos", ["A", "B (m)"], [["G1", 10.0], ["  c1", 4.5], ["  c2", 5.5]], ["Total", 10.0], ["nota"], [0]);
+        var x = new XlsxWriter();
+        QuantityReport.Tabela(x, t);
+        var partes = Abrir(x.ToBytes());
+        var aba = partes["xl/worksheets/sheet1.xml"];
+
+        var cabecalho = Estilo(aba, "A1");
+        var grupo = Estilo(aba, "A2");
+        var dado = Estilo(aba, "A3");
+        var total = Estilo(aba, "A5");
+        var nota = Estilo(aba, "A7");
+        Assert.Equal(5, new[] { cabecalho, grupo, dado, total, nota }.Distinct().Count());
+
+        // A coluna B tem 4,5: o 10 do grupo e do total sai com casas (estilo de decimal, não de inteiro).
+        Assert.NotEqual(Estilo(aba, "B3"), Estilo(aba, "A3"));
+        Assert.Equal(Estilo(aba, "B3"), Estilo(aba, "B4"));
+
+        Assert.Contains(aba.Descendants(), e => e.Name.LocalName == "pane" && (string?)e.Attribute("state") == "frozen");
+        Assert.Contains(aba.Descendants(), e => e.Name.LocalName == "col");
+        Assert.Contains(aba.Descendants(), e => e.Name.LocalName == "pageSetup" && (string?)e.Attribute("orientation") == "landscape");
+        Assert.Contains(partes["xl/workbook.xml"].Descendants(), e => e.Name.LocalName == "definedName" && (string?)e.Attribute("name") == "_xlnm.Print_Titles");
+    }
+
+    [Fact]
+    [Trait("Etapa", "23")]
+    public void ComCapaOSumarioEAPrimeiraAba()
+    {
+        var x = QuantityReport.Build(1, 2, 3, [], [], ExportSheets.Pillars, null, null, ("Usina", new DateTime(2026, 10, 11)));
+        var livro = Abrir(x.ToBytes())["xl/workbook.xml"];
+        var abas = livro.Descendants().Where(e => e.Name.LocalName == "sheet").Select(e => (string)e.Attribute("name")!).ToList();
+
+        Assert.Equal(["Sumário", "Pilares"], abas);
+    }
+}
