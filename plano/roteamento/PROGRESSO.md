@@ -352,6 +352,19 @@ resumo com o aviso). Com a regra do item 10 desligada o nível 2 reprova
    possível mostrar o resumo". Os cabos desenhados dele ficam laranja.
 7. Exportar (Excel): o resumo de cabos sai agrupado, com as linhas de subtotal.
 
+## Resumo CC: Cabo + e Cabo − (10/10/2026, noite): AGUARDANDO VALIDAÇÃO
+
+Renan: "na tabela de resumo, falta incluir o cabo + e −, só está mostrando o
+circuito; + e − têm comprimentos diferentes". Commit b650233, instalado às 22:32.
+Colunas "Cabo + (m)" e "Cabo − (m)" logo depois de "Total de cabo (m)", nas
+linhas de circuito, nos subtotais (UC, trafo, inversor), no Total da usina e no
+Exportar. As vias multiplicam as duas; a soma fecha com o Total de cabo. CA e MT
+sem as colunas. Teste: CableReportPlantTotalTests.OMaisEOMenosTemColunasProprias;
+nível 2 EletricaRotaCc confere os cabeçalhos.
+
+Roteiro de tela: Rota de cabos > Resumo > CC > Atualizar; ver as duas colunas e
+conferir que somam o Total de cabo; Exportar e ver as duas no arquivo.
+
 ## Observações
 
 - A combiner box tinha ficado fora do plano elétrico (etapas 11 a 16) por decisão do Renan. Entra agora, na etapa 19: a cadeia de `plano/eletrica/04-modelo-de-dados.md` (UC -> trafo -> inversor -> string) ganha o elo opcional inversor -> combiner -> string, e a alocação de strings no inversor que já existe (14.3 elétrica) continua valendo quando não há combiner.
