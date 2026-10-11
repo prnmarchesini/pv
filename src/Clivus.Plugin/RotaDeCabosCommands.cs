@@ -843,6 +843,8 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
         public string Vias { get; set; }
         public int Cabos => Grupo?.Cables ?? Circuito!.Cables;
         public string Total => (Grupo?.CableLength ?? Circuito!.CableLength).ToString("0.00", Tr.Culture);
+        public string Mais => (Grupo?.PositiveCable ?? Circuito!.PositiveCable).ToString("0.00", Tr.Culture);
+        public string Menos => (Grupo?.NegativeCable ?? Circuito!.NegativeCable).ToString("0.00", Tr.Culture);
 
         public string Voc => Numero(Conta?.VocAtMin);
         public string Vmp => Numero(Conta?.Vmp);
@@ -938,6 +940,9 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
         Coluna(Tr.T("Total de cabo (m)"), nameof(Linha.Total), numero: true);
         if (dc)
         {
+            // O + e o − à parte: têm comprimentos diferentes (Renan, 10/10/2026).
+            Coluna(Tr.T("Cabo + (m)"), nameof(Linha.Mais), numero: true);
+            Coluna(Tr.T("Cabo − (m)"), nameof(Linha.Menos), numero: true);
             var titulos = StringCheck.Headers();
             string[] campos = [nameof(Linha.Voc), nameof(Linha.Vmp), nameof(Linha.Isc), nameof(Linha.Imp), nameof(Linha.Maxima), nameof(Linha.Fator), nameof(Linha.Corrigida), nameof(Linha.Suporta)];
             for (var i = 0; i < campos.Length; i++) Coluna(titulos[i], campos[i], numero: i < campos.Length - 1);

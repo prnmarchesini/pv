@@ -62,6 +62,39 @@ public class CableReportPlantTotalTests
         Assert.Contains(";230;", ultima);
     }
 
+    [Fact]
+    [Trait("Etapa", "24")]
+    public void OMaisEOMenosTemColunasProprias()
+    {
+        // Renan, 10/10/2026: "falta incluir o cabo + e −, só está mostrando o circuito; + e − têm comprimentos diferentes".
+        var (setup, inv) = Usina();
+        CableReport.CircuitRun Pm(Inverter i, string tag, double mais, double menos, int vias = 1) =>
+            new(CableRoute.DirectCurrent, new(CableEndKind.String, Guid.NewGuid()), new(CableEndKind.Inverter, i.Id), tag, i.Name, 2, mais + menos, vias, null, "D", mais, menos);
+        var circuitos = new[] { Pm(inv[0], "S1", 60, 40), Pm(inv[0], "S2", 30, 25, vias: 2), Pm(inv[1], "S3", 12, 18) };
+        var grupos = CableReport.Group(circuitos, c => CableReport.GroupPath(setup, c));
+
+        Assert.Equal(60 + 60, grupos[0].PositiveCable, 9);
+        Assert.Equal(40 + 50, grupos[0].NegativeCable, 9);
+
+        var tabela = CableReport.GroupedCircuits("Resumo CC", grupos, dc: true, routeColumn: false);
+        var h = tabela.Header.ToList();
+        int mais = h.IndexOf("Cabo + (m)"), menos = h.IndexOf("Cabo − (m)");
+        Assert.True(mais > 0 && menos == mais + 1);
+
+        // A linha do circuito S2 (2 vias): 30 e 25 viram 60 e 50; a soma fecha com o total de cabo.
+        var s2 = tabela.Rows.Single(r => (r[0] as string)?.Contains("S2") == true);
+        Assert.Equal(60, (double)s2[mais]!, 9);
+        Assert.Equal(50, (double)s2[menos]!, 9);
+        Assert.Equal((double)s2[h.IndexOf("Total de cabo (m)")]!, (double)s2[mais]! + (double)s2[menos]!, 9);
+
+        // O total da usina.
+        Assert.Equal(60 + 60 + 12, (double)tabela.Total[mais]!, 9);
+        Assert.Equal(40 + 50 + 18, (double)tabela.Total[menos]!, 9);
+
+        // Fora do CC, sem as colunas.
+        Assert.DoesNotContain("Cabo + (m)", CableReport.GroupedCircuits("Resumo CA", grupos, dc: false, routeColumn: false).Header);
+    }
+
     private static readonly PanModule Modulo = new("X", "M", 720, 50, 18, 42, 17, -0.125, 0.007, null);
 
     [Fact]

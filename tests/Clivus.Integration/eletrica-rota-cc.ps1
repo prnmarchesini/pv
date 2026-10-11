@@ -110,7 +110,7 @@ function Testar-EletricaRotaCc {
     if ($res1 -notmatch 'ROTA_RESUMO_GRUPO tipo=CC nivel=1 nome=T1 circuitos=12 ') { $erros += 'o resumo CC nao tem o T1 abaixo da U1' }
     foreach ($n in 1, 2) { if ($res1 -notmatch "ROTA_RESUMO_GRUPO tipo=CC nivel=2 nome=Inversor_$n circuitos=6 cabos=12 ") { $erros += "o resumo CC nao tem o Inversor $n com 6 circuitos" } }
     if ($res1 -match 'ROTA_RESUMO_FORA tipo=CC') { $erros += 'com os inversores em campo, o resumo CC nao podia avisar fora de campo' }
-    if ($res1 -notmatch 'ROTA_RESUMO_CABECALHO [^|]+\|Tag da string\|.*\|Voc na m[^|]+\|Vmp, Vmppt \(V\)\|Isc \(A\)\|Imp, Imppt \(A\)\|Corrente m\S+xima do cabo \(A\)\|Fator de corre\S+\|Corrente corrigida \(A\)\|Suporta') { $erros += 'o resumo CC nao tem a coluna da tag e as de calculo (com a corrente maxima, o fator e a corrigida)' }
+    if ($res1 -notmatch 'ROTA_RESUMO_CABECALHO [^|]+\|Tag da string\|.*\|Total de cabo \(m\)\|Cabo \+ \(m\)\|Cabo \S \(m\)\|Voc na m[^|]+\|Vmp, Vmppt \(V\)\|Isc \(A\)\|Imp, Imppt \(A\)\|Corrente m\S+xima do cabo \(A\)\|Fator de corre\S+\|Corrente corrigida \(A\)\|Suporta') { $erros += 'o resumo CC nao tem a coluna da tag, o cabo + e o cabo - e as de calculo (com a corrente maxima, o fator e a corrigida)' }
     # Segunda rodada de 10/10/2026, item 7: o total da usina na grade (sempre no fim) e no CSV do Exportar.
     if ($res1 -notmatch 'ROTA_RESUMO_TOTAL tipo=CC circuitos=12 lances=24 cabos=24 metros=[\d.]+ excel=Total_da_usina_\(12_circuito\(s\)\) fim') { $erros += 'o resumo CC nao tem a linha do total da usina (12 circuitos, 24 lances)' }
     if ($res1 -notmatch 'ROTA_RESUMO_CSV_FIM Total da usina \(12 circuito\(s\)\);') { $erros += 'o CSV do resumo CC nao termina com o total da usina' }

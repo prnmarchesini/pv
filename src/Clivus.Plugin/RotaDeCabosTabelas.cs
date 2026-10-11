@@ -211,7 +211,9 @@ internal static class RotaDeCabosTabelas
             .GroupBy(l => (l.Lance.Route, l.Lance.From, l.Lance.To))
             .Select(g => new CableReport.CircuitRun(
                 g.Key.Route, g.Key.From, g.Key.To, Nome(leitura.Setup, tags, g.Key.From), Nome(leitura.Setup, tags, g.Key.To),
-                g.Count(), g.Sum(l => l.Comprimento), vias(g.Key.Route, g.Key.From, g.Key.To), config[g.Key.Route].Cable, config[g.Key.Route].Method));
+                g.Count(), g.Sum(l => l.Comprimento), vias(g.Key.Route, g.Key.From, g.Key.To), config[g.Key.Route].Cable, config[g.Key.Route].Method,
+                g.Where(l => l.Lance.Polarity == CablePolarity.Positive).Sum(l => l.Comprimento),
+                g.Where(l => l.Lance.Polarity == CablePolarity.Negative).Sum(l => l.Comprimento)));
 
         return CableReport.InField(todos, c => c.From, c => c.To, leitura.EmCampo);
     }

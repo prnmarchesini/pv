@@ -229,11 +229,20 @@ public static class CableReport
     /// circuito seja uma linha ... e que mostre quantos cabos tem por
     /// circuito"): a rota, as duas pontas (com o nome para a tela), quantos
     /// lances desenhados (2 no CC: + e −), a soma dos comprimentos deles, as
-    /// vias (cabos iguais por lance), o cabo e o método da aba.
+    /// vias (cabos iguais por lance), o cabo e o método da aba. No CC, o
+    /// comprimento do lance + e o do − à parte (Renan, 10/10/2026: "+ e −
+    /// têm comprimentos diferentes"); fora do CC, zero.
     /// </summary>
     public sealed record CircuitRun(
-        CableRoute Route, CableEnd From, CableEnd To, string FromName, string ToName, int Runs, double Length, int Wires, Cable? Cable, string Method)
+        CableRoute Route, CableEnd From, CableEnd To, string FromName, string ToName, int Runs, double Length, int Wires, Cable? Cable, string Method,
+        double Positive = 0, double Negative = 0)
     {
+        /// <summary>Os metros de cabo + do circuito (o lance + vezes as vias).</summary>
+        public double PositiveCable => Positive * Wires;
+
+        /// <summary>Os metros de cabo − do circuito (o lance − vezes as vias).</summary>
+        public double NegativeCable => Negative * Wires;
+
         /// <summary>Quantos cabos o circuito tem: os lances vezes as vias.</summary>
         public int Cables => Runs * Wires;
 
@@ -316,6 +325,12 @@ public static class CableReport
 
         /// <summary>Os metros de cabo do grupo (com as vias).</summary>
         public double CableLength => AllCircuits.Sum(c => c.CableLength);
+
+        /// <summary>Os metros de cabo + do grupo (com as vias).</summary>
+        public double PositiveCable => AllCircuits.Sum(c => c.PositiveCable);
+
+        /// <summary>Os metros de cabo − do grupo (com as vias).</summary>
+        public double NegativeCable => AllCircuits.Sum(c => c.NegativeCable);
     }
 
     /// <summary>
@@ -435,6 +450,7 @@ public static class CableReport
         if (routeColumn) cabecalho.Add(Tr.T("Rota"));
         cabecalho.AddRange([Tr.T("Cabo"), Tr.T("Formação"), Tr.T("Seção (mm²)"), Tr.T("Condutor"), Tr.T("Isolação"), Tr.T("Método"),
             Tr.T("Lances"), Tr.T("Comprimento (m)"), Tr.T("Vias"), Tr.T("Cabos"), Tr.T("Total de cabo (m)")]);
+        if (dc) cabecalho.AddRange([Tr.T("Cabo + (m)"), Tr.T("Cabo − (m)")]);
         if (dc) cabecalho.AddRange(StringCheck.Headers());
 
         var linhas = new List<IReadOnlyList<object?>>();
@@ -445,6 +461,7 @@ public static class CableReport
             if (dc) linha.Add(null);
             if (routeColumn) linha.Add(null);
             linha.AddRange([null, null, null, null, null, null, (double)g.Runs, g.Length, null, (double)g.Cables, g.CableLength]);
+            if (dc) linha.AddRange([g.PositiveCable, g.NegativeCable]);
             if (dc) linha.AddRange(vaziasDoCalculo);
             linhas.Add(linha);
 
@@ -456,6 +473,7 @@ public static class CableReport
                 if (routeColumn) l.Add(CableRoutes.Title(c.Route));
                 l.AddRange([c.Cable?.Name, c.Cable?.Formation, c.Cable?.SectionMm2, c.Cable?.Conductor, Isolacao(c.Cable), c.Method,
                     (double)c.Runs, c.Length, (double)c.Wires, (double)c.Cables, c.CableLength]);
+                if (dc) l.AddRange([c.PositiveCable, c.NegativeCable]);
                 if (dc) l.AddRange(checks is not null && checks.TryGetValue(c.From, out var k) ? k.Cells() : vaziasDoCalculo);
                 linhas.Add(l);
             }
@@ -468,6 +486,7 @@ public static class CableReport
         if (dc) total.Add(null);
         if (routeColumn) total.Add(null);
         total.AddRange([null, null, null, null, null, null, (double)todos.Sum(c => c.Runs), todos.Sum(c => c.Length), null, (double)todos.Sum(c => c.Cables), todos.Sum(c => c.CableLength)]);
+        if (dc) total.AddRange([todos.Sum(c => c.PositiveCable), todos.Sum(c => c.NegativeCable)]);
         if (dc) total.AddRange(vaziasDoCalculo);
 
         var notas = new List<string>();
