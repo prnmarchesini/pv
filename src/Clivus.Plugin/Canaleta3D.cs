@@ -19,51 +19,26 @@ internal static class Canaleta3D
     internal const string Tipo3D = "DrnCanaleta3D";
     private const string TipoAlerta = "DrnAlerta";
 
-    private static readonly RXClass ClasseDoSolido = RXObject.GetClass(typeof(Solid3d));
-    private static readonly RXClass ClasseDaMalha = RXObject.GetClass(typeof(PolyFaceMesh));
-    private static readonly RXClass ClasseDaPolilinha3d = RXObject.GetClass(typeof(Polyline3d));
-
-    /// <summary>Apaga o 3D e a pintura da canaleta. Quantas entidades.</summary>
-    internal static int Apagar(Transaction transacao, Database database, Guid canaleta)
-    {
-        var guid = canaleta.ToString("D");
-        var apagadas = 0;
-        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
-
-        foreach (ObjectId id in espaco)
-        {
-            if (id.ObjectClass != ClasseDoSolido && id.ObjectClass != ClasseDaMalha && id.ObjectClass != ClasseDaPolilinha3d) continue;
-            if (transacao.GetObject(id, OpenMode.ForRead) is not Entity e) continue;
-            if (!string.Equals(e.Layer, LayoutLayers.DrenagemCanaleta3D, StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(e.Layer, LayoutLayers.DrenagemAlerta, StringComparison.OrdinalIgnoreCase)) continue;
-
-            var campos = PluginXData.Load(e, Tipo3D, 1, 1) ?? PluginXData.Load(e, TipoAlerta, 1, 1);
-            if (campos is null || campos[0] != guid) continue;
-
-            e.UpgradeOpen();
-            e.Erase();
-            apagadas++;
-        }
-
-        return apagadas;
-    }
-
     /// <summary>
-    /// Refaz o 3D e a pintura da canaleta (nada, se a linha não é canaleta:
-    /// só apaga o que houver). Devolve o resumo dos alertas, ou vazio.
+    /// Desenha o 3D e a pintura da canaleta (nada, se a linha não é canaleta).
+    /// O anterior já foi apagado por quem chama. Devolve o resumo dos
+    /// alertas, ou vazio.
     /// </summary>
     internal static string Desenhar(Transaction transacao, Database database, Tin terreno, DrainageSettings configuracao, ObjectId linhaId)
     {
         var polilinha = (Polyline3d)transacao.GetObject(linhaId, OpenMode.ForRead);
         var identidade = LinhasDeDrenagem.Identidade(polilinha) ?? throw new InvalidOperationException(Tr.T("A entidade não é uma linha da drenagem."));
 
-        Apagar(transacao, database, identidade.Id);
-
         if (identidade.Section is not { } secao) return string.Empty;
 
         var linha = new LinhaNoDesenho(linhaId, identidade, LinhasDeDrenagem.Vertices(transacao, polilinha));
-        var (_, canaleta) = LinhasDeDrenagem.Perfil(terreno, configuracao, linha);
+        var (terrenoDaLinha, canaleta) = LinhasDeDrenagem.Perfil(terreno, configuracao, linha);
         if (canaleta is null || canaleta.Points.Count < 2) return string.Empty;
+
+        // Trecho sem terreno embaixo: o 3D ligaria o buraco com uma reta
+        // inventada. Fica sem 3D, avisado (regra 4).
+        if (terrenoDaLinha.OutsideCount > 0)
+            return Tr.F("{0}: {1} ponto(s) fora do terreno; a canaleta ficou sem 3D até voltar inteira para dentro dele.", identidade.Name, terrenoDaLinha.OutsideCount);
 
         var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForWrite);
         var camada3D = LayoutLayers.GarantirDrenagem(transacao, database, LayoutLayers.DrenagemCanaleta3D);
@@ -113,9 +88,13 @@ internal static class Canaleta3D
             }
         }
 
-        if (baixos.Count == 0 && invertidos.Count == 0) return string.Empty;
+        var fundo = identidade.Mode == ChannelBottomMode.MinimumSlope && canaleta.MaxDepth > secao.UsefulHeight + 0.01
+            ? Tr.F("{0}: o fundo com declividade mínima aprofunda até {1:0.00} m abaixo do terreno (a seção tem {2:0.00} m).", identidade.Name, canaleta.MaxDepth, secao.UsefulHeight)
+            : string.Empty;
 
-        return Tr.F("{0}: {1} trecho(s) abaixo de {2:0.0}% (amarelo) e {3} plano(s) ou subindo (vermelho), pintados na camada {4}.",
+        if (baixos.Count == 0 && invertidos.Count == 0) return fundo;
+
+        return (fundo.Length > 0 ? fundo + " " : string.Empty) + Tr.F("{0}: {1} trecho(s) abaixo de {2:0.0}% (amarelo) e {3} plano(s) ou subindo (vermelho), pintados na camada {4}.",
             identidade.Name, baixos.Count, configuracao.Hydrology.MinimumSlope * 100, invertidos.Count, camadaAlerta);
     }
 
@@ -137,17 +116,26 @@ internal static class Canaleta3D
                 using var a = Anel(aneis[k]);
                 using var b = Anel(aneis[k + 1]);
 
+                // Solid3d fora do banco, deixado para o coletor, é causa
+                // conhecida de queda do AutoCAD: descartado em toda saída.
                 var pedaco = new Solid3d();
-                pedaco.CreateLoftedSolid([a, b], [], null, opcoes);
+                try
+                {
+                    pedaco.CreateLoftedSolid([a, b], [], null, opcoes);
 
-                if (total is null)
-                {
-                    total = pedaco;
+                    if (total is null)
+                    {
+                        total = pedaco;
+                        pedaco = null;
+                    }
+                    else
+                    {
+                        total.BooleanOperation(BooleanOperationType.BoolUnite, pedaco);
+                    }
                 }
-                else
+                finally
                 {
-                    total.BooleanOperation(BooleanOperationType.BoolUnite, pedaco);
-                    pedaco.Dispose();
+                    pedaco?.Dispose();
                 }
             }
 

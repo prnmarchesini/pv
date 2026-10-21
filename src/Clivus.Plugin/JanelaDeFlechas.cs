@@ -151,7 +151,7 @@ internal sealed class JanelaDeFlechas : Window
             {
                 // Gravar no desenho fora de comando pede o documento travado.
                 EscritaForaDeComando.Fazer(_documento, () => DrenagemStore.Mudar(_documento.Database, d => d with { Arrows = configuracao }));
-                _documento.SendStringToExecute($"_{PluginInfo.ComandoDrenagemFlechasGerar} _Janela ", true, false, false);
+                _documento.SendStringToExecute($"\x03\x03_{PluginInfo.ComandoDrenagemFlechasGerar} _Janela ", true, false, false);
                 return Tr.T("Escolha os dois cantos no desenho.");
             }
 

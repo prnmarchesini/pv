@@ -115,6 +115,31 @@ public class FlowTracerTests
     }
 
     [Fact]
+    [Trait("Etapa", "30")]
+    public void PatamarPlanoNoMeioDaRampaNaoViraFundo()
+    {
+        // Nível 2 das bacias em Itatiba (21/10/2026): TIN de curvas de nível tem
+        // triângulos planos, e a água "empoçava" num terreno de 10 a 15 %.
+        // Rampa de 5 % com um patamar plano de 6 m entre x = 40 e 46.
+        var tin = TerrenoDeDrenagem.Grade((x, _) => 100 - 0.05 * Math.Min(x, 40) - 0.05 * Math.Max(0, x - 46), 0, 0, 100, 2);
+
+        var caminho = FlowTracer.Trace(tin, 10, 77);
+
+        Assert.Equal(FlowStop.OutsideTerrain, caminho.Stop);
+        Assert.True(caminho.Points[^1].X > 199, $"parou em x = {caminho.Points[^1].X:0.#}");
+    }
+
+    [Fact]
+    [Trait("Etapa", "30")]
+    public void PlanicieDeVerdadeContinuaSendoFundo()
+    {
+        // Plano maior que o raio da sonda: aí a água empoça mesmo.
+        var caminho = FlowTracer.Trace(TerrenoDeDrenagem.Plano(), 100, 100);
+
+        Assert.Equal(FlowStop.Sink, caminho.Stop);
+    }
+
+    [Fact]
     [Trait("Etapa", "25")]
     public void PassoOuCelulaZeroSaoRecusadosEmVezDeTravar()
     {

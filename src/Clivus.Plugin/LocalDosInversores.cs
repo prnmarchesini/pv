@@ -669,7 +669,7 @@ public static class LocalDosInversores
     /// Zoom na caixa (com folga: o retângulo ocupa um terço da tela, para ver
     /// em volta). Só com interface (no Core Console não há vista).
     /// </summary>
-    private static void Zoom(Editor editor, Extents3d caixa)
+    internal static void Zoom(Editor editor, Extents3d caixa)
     {
         if (!ClivusExtension.TemInterface()) return;
 

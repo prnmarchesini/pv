@@ -1,0 +1,40 @@
+; Teste de nivel 2 do passo 30 (Memoria > Bacias): uma area de 100 x 100 m
+; no centro do terreno e uma canaleta atravessando a area; calcula as bacias
+; pelas areas de implantacao, confere o resultado gravado e o desenho (hatch
+; acima do terreno, borda no TIN + 5 cm, rotulo), faz um ajuste manual,
+; recusa uma polilinha que e do Clivus como ajuste e apaga.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area das bacias")
+(command "_.PLINE" "{{C1}}" "{{C2}}" "")
+(setq clivus:c (entlast))
+(command "CLIVUS_DRN_CANALETA_CONVERTER" "Trap 30/60" "Borda" clivus:c "")
+
+(princ "\nCLIVUS_DRNBAC ETAPA1")
+(command "CLIVUS_DRN_BACIAS_CALCULAR" "Areas")
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+
+(princ "\nCLIVUS_DRNBAC ETAPA2")
+(command "_.PLINE" "{{M1}}" "{{M2}}" "{{M3}}" "{{M4}}" "_C")
+(setq clivus:m (entlast))
+(setq clivus:can (ssname (ssget "_X" '((0 . "POLYLINE") (8 . "CLIVUS_DRN_CANALETA"))) 0))
+(command "CLIVUS_DRN_BACIA_MANUAL" clivus:m clivus:can)
+(setq clivus:area (ssname (ssget "_X" '((8 . "CLIVUS_AREA"))) 0))
+(command "CLIVUS_DRN_BACIA_MANUAL" clivus:area)
+(command "CLIVUS_DRN_BACIAS_CALCULAR" "Areas")
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+
+(princ "\nCLIVUS_DRNBAC ETAPA3")
+(command "CLIVUS_DRN_BACIAS_APAGAR")
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+
+(setvar "OSMODE" clivus:osmode)
+(princ "\nCLIVUS_DRNBAC FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

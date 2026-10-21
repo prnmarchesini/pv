@@ -64,7 +64,7 @@ public static class CanaletaCommands
                 ? ChannelBottomMode.MinimumSlope : ChannelBottomMode.FollowTerrain;
 
             var selecao = editor.GetSelection(new PromptSelectionOptions { MessageForAdding = Tr.T("\nEscolha as linhas (de análise, canaletas ou polilinhas): ") },
-                new SelectionFilter([new TypedValue((int)DxfCode.Start, "LINE,LWPOLYLINE,POLYLINE")]));
+                new SelectionFilter([new TypedValue((int)DxfCode.Start, "LINE,LWPOLYLINE,POLYLINE,ARC,SPLINE")]));
             if (selecao.Status != PromptStatus.OK) return;
 
             DrenagemStore.Mudar(documento.Database, d => d with { CurrentSection = secao.Name, CurrentMode = modo });
@@ -93,6 +93,7 @@ public static class CanaletaCommands
 
         var nomes = LinhasDeDrenagem.Todas(transacao, documento.Database).Select(l => l.Identidade.Name).ToList();
         var camada = LayoutLayers.GarantirDrenagem(transacao, documento.Database, LayoutLayers.DrenagemCanaleta);
+        var indice = IndiceDaDrenagem.Montar(transacao, documento.Database);
 
         foreach (var id in ids)
         {
@@ -129,7 +130,7 @@ public static class CanaletaCommands
                 transacao.GetObject(id, OpenMode.ForWrite).Erase();
             }
 
-            var (frase, alerta) = LinhasDeDrenagem.Refazer(transacao, documento.Database, terreno, configuracao, linhaId);
+            var (frase, alerta) = LinhasDeDrenagem.Refazer(transacao, documento.Database, terreno, configuracao, linhaId, indice);
             feitas.Add(frase);
             if (alerta.Length > 0) alertas.Add(alerta);
         }
@@ -169,17 +170,20 @@ public static class CanaletaCommands
             {
                 var nomes = LinhasDeDrenagem.Todas(transacao, documento.Database).Select(l => l.Identidade.Name).ToList();
                 var camada = LayoutLayers.GarantirDrenagem(transacao, documento.Database, LayoutLayers.DrenagemLinha);
+                var indice = IndiceDaDrenagem.Montar(transacao, documento.Database);
 
                 foreach (var id in selecao.Value.GetObjectIds())
                 {
-                    if (transacao.GetObject(id, OpenMode.ForWrite) is not Polyline3d p || LinhasDeDrenagem.Identidade(p) is not { IsChannel: true } identidade) continue;
+                    // Lê primeiro; só a canaleta é aberta para escrever (camada travada não derruba o resto).
+                    if (transacao.GetObject(id, OpenMode.ForRead) is not Polyline3d lida || LinhasDeDrenagem.Identidade(lida) is not { IsChannel: true } identidade) continue;
 
                     var nome = DrainageLineIdentity.NextName(Tr.T("Linha"), nomes);
                     nomes.Add(nome);
 
+                    var p = (Polyline3d)transacao.GetObject(id, OpenMode.ForWrite, false, true);
                     p.Layer = camada;
                     LinhasDeDrenagem.Gravar(transacao, p, identidade with { Name = nome, Section = null });
-                    LinhasDeDrenagem.Refazer(transacao, documento.Database, terreno.Mesh, configuracao, id);
+                    LinhasDeDrenagem.Refazer(transacao, documento.Database, terreno.Mesh, configuracao, id, indice);
                     voltaram++;
                 }
 

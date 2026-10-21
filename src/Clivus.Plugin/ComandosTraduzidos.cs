@@ -252,6 +252,24 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_DRN_CUENCAS")]
     public static void CLIVUS_DRN_CUENCAS() => DrenagemCommands.Bacias();
 
+    [CommandMethod("CLIVUS_DRN_BASINS_ERASE")]
+    public static void CLIVUS_DRN_BASINS_ERASE() => BaciasCommands.Apagar();
+
+    [CommandMethod("CLIVUS_DRN_CUENCAS_BORRAR")]
+    public static void CLIVUS_DRN_CUENCAS_BORRAR() => BaciasCommands.Apagar();
+
+    [CommandMethod("CLIVUS_DRN_BASINS_CALCULATE")]
+    public static void CLIVUS_DRN_BASINS_CALCULATE() => BaciasCommands.Calcular();
+
+    [CommandMethod("CLIVUS_DRN_CUENCAS_CALCULAR")]
+    public static void CLIVUS_DRN_CUENCAS_CALCULAR() => BaciasCommands.Calcular();
+
+    [CommandMethod("CLIVUS_DRN_BASIN_MANUAL")]
+    public static void CLIVUS_DRN_BASIN_MANUAL() => BaciasCommands.Manual();
+
+    [CommandMethod("CLIVUS_DRN_CUENCA_MANUAL")]
+    public static void CLIVUS_DRN_CUENCA_MANUAL() => BaciasCommands.Manual();
+
     [CommandMethod("CLIVUS_DRN_CHANNEL")]
     public static void CLIVUS_DRN_CHANNEL() => DrenagemCommands.Canaleta();
 

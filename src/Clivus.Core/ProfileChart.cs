@@ -46,8 +46,8 @@ public sealed record ChartInput
     /// <summary>Os trechos de declividade da série principal (o fundo na canaleta, o terreno na linha).</summary>
     public IReadOnlyList<SlopeSegment> Segments { get; init; } = [];
 
-    /// <summary>Declividade mínima (m/m): trecho abaixo dela é marcado. Zero na linha de análise.</summary>
-    public double MinimumSlope { get; init; }
+    /// <summary>Os trechos ruins do fundo (abaixo da mínima, planos ou subindo): ganham o traço de alerta.</summary>
+    public IReadOnlyList<SlopeSegment> Alerts { get; init; } = [];
 
     /// <summary>Exagero vertical; zero ou negativo = automático.</summary>
     public double VerticalExaggeration { get; init; }
@@ -100,7 +100,7 @@ public static class ProfileChart
         var zMax = cotas.Max();
         var relevo = Math.Max(zMax - zMin, 0.5);
 
-        var exagero = input.VerticalExaggeration > 0 ? input.VerticalExaggeration : AutoExaggeration(comprimento, relevo);
+        var exagero = input.VerticalExaggeration > 0 ? Math.Min(input.VerticalExaggeration, 100) : AutoExaggeration(comprimento, relevo);
         var passoZ = NiceStep(relevo / 6);
         var passoD = NiceStep(comprimento / 8);
         var th = Math.Clamp(comprimento / 90, 0.3, 5);
@@ -169,8 +169,7 @@ public static class ProfileChart
             linhas.Add(new ChartLine(ChartLineKind.WallTop, fundoDaSerie.Select(p => (p.D, Y(p.Z + input.WallHeight))).ToList()));
         }
 
-        // Sobre cada trecho: "% | grau" e a seta no sentido da água; trecho
-        // abaixo da mínima ganha o traço de alerta sobre a série principal.
+        // Sobre cada trecho: "% | grau" e a seta no sentido da água.
         var principal = input.Bottom is { Count: > 1 } b2 ? b2 : input.Terrain;
 
         foreach (var s in input.Segments)
@@ -193,12 +192,14 @@ public static class ProfileChart
                 linhas.Add(new ChartLine(ChartLineKind.Arrow, [(x1 - sentido * aba, yS + 0.35 * aba), (x1, yS), (x1 - sentido * aba, yS - 0.35 * aba)]));
             }
 
-            if (input.MinimumSlope > 0 && s.Slope < input.MinimumSlope - 1e-9)
-            {
-                var trecho = principal.Where(p => p.D >= s.From - 1e-9 && p.D <= s.To + 1e-9).Select(p => (p.D, Y(p.Z))).ToList();
-                if (trecho.Count < 2) trecho = [(s.From, Y(s.ZFrom)), (s.To, Y(s.ZTo))];
-                linhas.Add(new ChartLine(ChartLineKind.Alert, trecho));
-            }
+        }
+
+        // Os trechos ruins ganham o traço de alerta sobre a série principal.
+        foreach (var s in input.Alerts)
+        {
+            var trecho = principal.Where(p => p.D >= s.From - 1e-9 && p.D <= s.To + 1e-9).Select(p => (p.D, Y(p.Z))).ToList();
+            if (trecho.Count < 2) trecho = [(s.From, Y(s.ZFrom)), (s.To, Y(s.ZTo))];
+            linhas.Add(new ChartLine(ChartLineKind.Alert, trecho));
         }
 
         // O título, em duas linhas, em cima da moldura.

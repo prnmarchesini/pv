@@ -185,6 +185,68 @@ public static class DrenagemConferir
         }
 
         editor.WriteMessage(string.Format(Inv, "\nDRN_CANALETAS total={0} orfaos_3d={1} fim\n", canaletas, orfaos));
+
+        ConferirBacias(editor, transacao, database, tin);
+    }
+
+    /// <summary>
+    /// As bacias: o resultado gravado (área de cada uma, a sem destino e a
+    /// analisada), quantos hatches, bordas e rótulos, a borda na cota do TIN
+    /// mais 5 cm e o hatch acima do terreno da bacia.
+    /// </summary>
+    private static void ConferirBacias(Autodesk.AutoCAD.EditorInput.Editor editor, Transaction transacao, Database database, Tin tin)
+    {
+        var relatorio = DrenagemStore.LerBacias(database);
+        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
+        int hatches = 0, bordas = 0, rotulos = 0, ok = 0, fora = 0, semTerreno = 0, hatchEnterrado = 0;
+
+        foreach (ObjectId id in espaco)
+        {
+            if (transacao.GetObject(id, OpenMode.ForRead) is not Entity e) continue;
+            if (e.Layer != LayoutLayers.DrenagemBacia && e.Layer != LayoutLayers.DrenagemAlerta) continue;
+            if (PluginXData.Load(e, "DrnBacia", 1, 1) is null) continue;
+
+            switch (e)
+            {
+                case Hatch h:
+                    hatches++;
+                    // Acima do terreno em todos os vértices dos laços (nunca enterrado).
+                    for (var i = 0; i < h.NumberOfLoops; i++)
+                    {
+                        foreach (BulgeVertex v in h.GetLoopAt(i).Polyline)
+                        {
+                            if (tin.TryGetZ(v.Vertex.X, v.Vertex.Y, out var z) && h.Elevation < z - 0.001) { hatchEnterrado++; break; }
+                        }
+                    }
+                    break;
+
+                case Polyline3d p:
+                    bordas++;
+                    foreach (var v in LinhasDeDrenagem.Vertices(transacao, p))
+                    {
+                        if (!tin.TryGetZ(v.X, v.Y, out var z)) { semTerreno++; continue; }
+                        if (Math.Abs(v.Z - (z + 0.05)) <= 0.01) ok++; else fora++;
+                    }
+                    break;
+
+                case DBText:
+                    rotulos++;
+                    break;
+            }
+        }
+
+        if (relatorio is not null)
+        {
+            foreach (var b in relatorio.Basins)
+            {
+                editor.WriteMessage(string.Format(Inv, "\nDRN_BACIA canaleta={0} area={1:0.##} L={2:0.##} dh={3:0.###} manual={4} fim\n",
+                    b.ChannelName.Replace(' ', '_'), b.Area, b.Length, b.Drop, b.Manual ? 1 : 0));
+            }
+        }
+
+        editor.WriteMessage(string.Format(Inv,
+            "\nDRN_BACIAS bacias={0} sem_destino={1:0.##} analisada={2:0.##} hatches={3} bordas={4} rotulos={5} borda_ok={6} borda_fora={7} borda_sem_terreno={8} hatch_enterrado={9} fim\n",
+            relatorio?.Basins.Count ?? -1, relatorio?.NoDestinationArea ?? 0, relatorio?.AnalyzedArea ?? 0, hatches, bordas, rotulos, ok, fora, semTerreno, hatchEnterrado));
     }
 
     /// <summary>(clivus-drn-flechas-pela-janela "Areas"|"Tudo" espacamento): o botão Gerar da janela, fora de comando.</summary>

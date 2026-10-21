@@ -35,4 +35,13 @@ public static partial class PluginInfo
 
     /// <summary>"Pegar da canaleta" (28.5): clica numa canaleta e a seção dela vai para a janela.</summary>
     public const string ComandoDrenagemCanaletaLer = "CLIVUS_DRN_CANALETA_LER";
+
+    /// <summary>"Calcular" das bacias (30.1): [Areas/Tudo/Polilinha]; Polilinha pede a polilinha fechada da região.</summary>
+    public const string ComandoDrenagemBaciasCalcular = "CLIVUS_DRN_BACIAS_CALCULAR";
+
+    /// <summary>"Apagar" das bacias: o hatch, a borda e o rótulo (os ajustes manuais ficam).</summary>
+    public const string ComandoDrenagemBaciasApagar = "CLIVUS_DRN_BACIAS_APAGAR";
+
+    /// <summary>"Ajuste manual" (30.3): uma polilinha fechada e a canaleta para onde a área dela vai, ou [Soltar] o ajuste.</summary>
+    public const string ComandoDrenagemBaciaManual = "CLIVUS_DRN_BACIA_MANUAL";
 }

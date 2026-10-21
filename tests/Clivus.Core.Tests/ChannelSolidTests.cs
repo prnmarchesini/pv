@@ -50,6 +50,34 @@ public class ChannelSolidTests
 
     [Fact]
     [Trait("Etapa", "29")]
+    public void ArcoSuaveNaoViraCordaNoSolido()
+    {
+        // Revisão da etapa 29: arco de raio 200 m amostrado a cada metro (0,29° por vértice).
+        var pontos = Enumerable.Range(0, 101).Select(i =>
+        {
+            var a = i / 200.0;
+            return P(i, 200 * Math.Sin(a), 200 - 200 * Math.Cos(a), 100 - 0.01 * i);
+        }).ToList();
+
+        var simples = ChannelSolid.Simplify(pontos);
+
+        // Nenhum ponto do arco fica a mais de 5 cm da poligonal das seções.
+        for (var i = 0; i < pontos.Count; i++)
+        {
+            var p = pontos[i];
+            var a = simples.Last(s => s.Distance <= p.Distance);
+            var b = simples.First(s => s.Distance >= p.Distance);
+            var (dx, dy) = (b.X - a.X, b.Y - a.Y);
+            var corda = Math.Sqrt(dx * dx + dy * dy);
+            var erro = corda < 1e-9 ? 0 : Math.Abs((p.X - a.X) * dy - (p.Y - a.Y) * dx) / corda;
+            Assert.True(erro <= ChannelSolid.PlanTolerance + 1e-9, $"o ponto {i} ficou a {erro:0.###} m da corda");
+        }
+
+        Assert.True(simples.Count < pontos.Count / 3, $"{simples.Count} seções: simplificou pouco");
+    }
+
+    [Fact]
+    [Trait("Etapa", "29")]
     public void NaQuinaEmPlantaOAnelFicaNaBissetrizEsticado()
     {
         // Leste 50 m e depois norte 50 m: quina de 90° em (50, 0).

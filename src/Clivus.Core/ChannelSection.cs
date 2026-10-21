@@ -184,7 +184,7 @@ public sealed record ChannelSection
     public string? Problem()
     {
         if (string.IsNullOrWhiteSpace(Name)) return Tr.T("A seção precisa de um nome.");
-        if (!(Thickness >= 0) || !double.IsFinite(Thickness)) return Tr.T("A espessura não pode ser negativa.");
+        if (!(Thickness > 0) || !double.IsFinite(Thickness)) return Tr.T("A espessura da parede precisa ser maior que zero.");
         if (!(Manning > 0) || !double.IsFinite(Manning)) return Tr.T("O n de Manning precisa ser maior que zero.");
         if (!(MaxVelocity > 0) || !double.IsFinite(MaxVelocity)) return Tr.T("A velocidade máxima do revestimento precisa ser maior que zero.");
 

@@ -171,8 +171,17 @@ internal static class DrenagemVigia
         {
             if (Calado || e.DBObject is not Polyline3d p || p.OwnerId != _modelo) return;
 
-            if (e.Erased) _apagadas.Add(p.ObjectId);
-            else _apagadas.Remove(p.ObjectId);
+            // Apagada: o gráfico vai junto. Devolvida (OOPS, U de outro comando):
+            // conta como mexida, para o gráfico, que já tinha ido, voltar.
+            if (e.Erased)
+            {
+                _apagadas.Add(p.ObjectId);
+            }
+            else
+            {
+                _apagadas.Remove(p.ObjectId);
+                _mexidas.Add(p.ObjectId);
+            }
 
             AgendarFolgaSeSemComando();
         }
@@ -240,6 +249,7 @@ internal static class DrenagemVigia
             try
             {
                 using var transacao = _banco.TransactionManager.StartTransaction();
+                var indice = IndiceDaDrenagem.Montar(transacao, _banco);
 
                 // Apagadas: o gráfico (e o 3D) vão junto.
                 var sumidas = 0;
@@ -248,8 +258,7 @@ internal static class DrenagemVigia
                     if (transacao.GetObject(id, OpenMode.ForRead, true) is not Polyline3d p || !p.IsErased) continue;
                     if (LinhasDeDrenagem.Identidade(p) is not { } identidade) continue;
 
-                    LinhasDeDrenagem.ApagarPerfil(transacao, _banco, identidade.Id);
-                    Canaleta3D.Apagar(transacao, _banco, identidade.Id);
+                    indice.Apagar(transacao, identidade.Id);
                     sumidas++;
                 }
 
@@ -282,7 +291,8 @@ internal static class DrenagemVigia
 
                         foreach (var id in linhas)
                         {
-                            var polilinha = (Polyline3d)transacao.GetObject(id, OpenMode.ForWrite);
+                            // Camada travada não derruba a transação das outras linhas.
+                            var polilinha = (Polyline3d)transacao.GetObject(id, OpenMode.ForWrite, false, true);
                             var identidade = LinhasDeDrenagem.Identidade(polilinha)!;
 
                             // Cópia: o mesmo GUID de outra linha. Ganha identidade
@@ -303,7 +313,7 @@ internal static class DrenagemVigia
                             try
                             {
                                 LinhasDeDrenagem.Reassentar(transacao, polilinha, terreno.Mesh);
-                                var alerta = LinhasDeDrenagem.Refazer(transacao, _banco, terreno.Mesh, configuracao, id).Alerta;
+                                var alerta = LinhasDeDrenagem.Refazer(transacao, _banco, terreno.Mesh, configuracao, id, indice).Alerta;
                                 if (alerta.Length > 0) problemas.Add(alerta);
                                 refeitas++;
                             }

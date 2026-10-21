@@ -31,6 +31,17 @@ internal static class DrenagemStore
             new ResultBuffer(pedacos.Select(p => new TypedValue((int)DxfCode.Text, p)).ToArray()));
     }
 
+    /// <summary>O resultado das bacias gravado (30.4), ou null se nunca calculado.</summary>
+    internal static BasinReport? LerBacias(Database database)
+    {
+        using var dados = PluginDictionary.Load(database, BasinReport.StorageKey);
+        return BasinReport.Parse(dados is null ? null : string.Concat(dados.AsArray().Select(v => v.Value as string ?? string.Empty)));
+    }
+
+    internal static void GravarBacias(Database database, BasinReport relatorio) =>
+        PluginDictionary.Save(database, BasinReport.StorageKey,
+            new ResultBuffer(DrainageSettings.Chunks(relatorio.ToJson()).Select(p => new TypedValue((int)DxfCode.Text, p)).ToArray()));
+
     /// <summary>Lê, muda e grava.</summary>
     internal static DrainageSettings Mudar(Database database, Func<DrainageSettings, DrainageSettings> mudanca)
     {

@@ -54,6 +54,14 @@ internal static class LinhaCommands
                 var entidade = editor.GetEntity(escolha);
                 if (entidade.Status != PromptStatus.OK) return;
 
+                // Só curva solta do usuário: linha da drenagem, contorno de mesa,
+                // área, vala ou traço de gráfico nunca viram linha (nem somem).
+                if (EDoClivus(documento.Database, entidade.ObjectId))
+                {
+                    editor.WriteMessage(Tr.T("\nLINHA Essa entidade é do Clivus (linha, canaleta, mesa, área ou gráfico); escolha uma polilinha sua.\n"));
+                    return;
+                }
+
                 planta = Caminho(documento.Database, entidade.ObjectId);
                 original = entidade.ObjectId;
             }
@@ -129,13 +137,14 @@ internal static class LinhaCommands
         var problemas = new List<string>();
 
         using var transacao = documento.Database.TransactionManager.StartTransaction();
+        var indice = IndiceDaDrenagem.Montar(transacao, documento.Database);
 
         foreach (var linha in LinhasDeDrenagem.Todas(transacao, documento.Database))
         {
             try
             {
                 LinhasDeDrenagem.Reassentar(transacao, (Polyline3d)transacao.GetObject(linha.Id, OpenMode.ForWrite), terreno);
-                var alerta = LinhasDeDrenagem.Refazer(transacao, documento.Database, terreno, configuracao, linha.Id).Alerta;
+                var alerta = LinhasDeDrenagem.Refazer(transacao, documento.Database, terreno, configuracao, linha.Id, indice).Alerta;
                 if (alerta.Length > 0) problemas.Add(alerta);
                 feitas++;
             }
@@ -150,6 +159,15 @@ internal static class LinhaCommands
         return problemas.Count == 0
             ? Tr.F("LINHA {0} gráfico(s) refeito(s).", feitas)
             : Tr.F("LINHA {0} gráfico(s) refeito(s); {1} com problema: {2}", feitas, problemas.Count, string.Join("; ", problemas));
+    }
+
+    /// <summary>Se a entidade tem XData do Clivus (é de algum módulo do plugin).</summary>
+    internal static bool EDoClivus(Database database, ObjectId id)
+    {
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        if (transacao.GetObject(id, OpenMode.ForRead) is not Entity e) return false;
+        using var dados = e.GetXDataForApplication(PluginXData.Aplicativo);
+        return dados is not null;
     }
 
     /// <summary>

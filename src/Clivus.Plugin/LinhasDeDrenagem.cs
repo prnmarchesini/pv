@@ -22,8 +22,6 @@ internal static class LinhasDeDrenagem
     private const string TipoDoPerfil = "DrnPerfil";
 
     private static readonly RXClass ClasseDaPolilinha3d = RXObject.GetClass(typeof(Polyline3d));
-    private static readonly RXClass ClasseDaPolilinha = RXObject.GetClass(typeof(Polyline));
-    private static readonly RXClass ClasseDoTexto = RXObject.GetClass(typeof(DBText));
 
     /// <summary>A identidade da linha, ou null se a entidade não é linha da drenagem.</summary>
     internal static DrainageLineIdentity? Identidade(Entity entidade) =>
@@ -78,6 +76,12 @@ internal static class LinhasDeDrenagem
         var camada = LayoutLayers.GarantirDrenagem(transacao, database, identidade.IsChannel ? LayoutLayers.DrenagemCanaleta : LayoutLayers.DrenagemLinha);
 
         var drapeada = Draping.Along(terreno, planta);
+
+        // Ponto sem terreno embaixo ficaria com a cota do clique (zero):
+        // a linha nova tem que estar inteira dentro do terreno (regra 1).
+        if (drapeada.HasGaps)
+            throw new ArgumentException(Tr.F("A linha sai do terreno em {0} ponto(s); desenhe-a dentro do terreno.", drapeada.OutsideCount));
+
         var polilinha = new Polyline3d { Layer = camada };
 
         espaco.AppendEntity(polilinha);
@@ -128,28 +132,6 @@ internal static class LinhasDeDrenagem
         return drapeada.OutsideCount;
     }
 
-    /// <summary>Apaga o gráfico da linha (as entidades com o GUID dela). Quantas.</summary>
-    internal static int ApagarPerfil(Transaction transacao, Database database, Guid linha)
-    {
-        var apagadas = 0;
-        var guid = linha.ToString("D");
-        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
-
-        foreach (ObjectId id in espaco)
-        {
-            if (id.ObjectClass != ClasseDaPolilinha && id.ObjectClass != ClasseDoTexto) continue;
-            if (transacao.GetObject(id, OpenMode.ForRead) is not Entity e) continue;
-            if (!string.Equals(e.Layer, LayoutLayers.DrenagemPerfil, StringComparison.OrdinalIgnoreCase)) continue;
-            if (PluginXData.Load(e, TipoDoPerfil, 1, 1) is not { } campos || campos[0] != guid) continue;
-
-            e.UpgradeOpen();
-            e.Erase();
-            apagadas++;
-        }
-
-        return apagadas;
-    }
-
     /// <summary>
     /// O perfil da linha (terreno; na canaleta, também o fundo) com as
     /// configurações do desenho.
@@ -165,16 +147,15 @@ internal static class LinhasDeDrenagem
     }
 
     /// <summary>
-    /// Refaz o gráfico da linha: apaga o anterior e desenha no lugar gravado
-    /// (ou ao lado da linha, gravando o lugar). Devolve a frase do relato.
+    /// Desenha o gráfico da linha no lugar gravado (ou ao lado da linha,
+    /// gravando o lugar). O anterior já foi apagado por quem chama
+    /// (<see cref="Refazer"/>). Devolve a frase do relato.
     /// </summary>
     internal static string DesenharPerfil(Transaction transacao, Database database, Tin terreno, DrainageSettings configuracao, ObjectId linhaId, (double X, double Y)? onde = null)
     {
         var polilinha = (Polyline3d)transacao.GetObject(linhaId, OpenMode.ForRead);
         var identidade = Identidade(polilinha) ?? throw new InvalidOperationException(Tr.T("A entidade não é uma linha da drenagem."));
         var linha = new LinhaNoDesenho(linhaId, identidade, Vertices(transacao, polilinha));
-
-        ApagarPerfil(transacao, database, identidade.Id);
 
         var (perfil, canaleta) = Perfil(terreno, configuracao, linha);
         if (perfil.Points.Count < 2 || perfil.Length <= 0) throw new ArgumentException(Tr.F("{0}: a linha tem comprimento zero.", identidade.Name));
@@ -194,7 +175,7 @@ internal static class LinhasDeDrenagem
                 Bottom = canaleta.Points.Select(p => (p.Distance, p.Bottom)).ToList(),
                 WallHeight = identidade.Section.UsefulHeight,
                 Segments = canaleta.Segments,
-                MinimumSlope = configuracao.Hydrology.MinimumSlope,
+                Alerts = [.. canaleta.LowSegments, .. canaleta.InvertedSegments],
                 VerticalExaggeration = configuracao.Profile.VerticalExaggeration,
             };
 
@@ -204,7 +185,7 @@ internal static class LinhasDeDrenagem
         var origem = onde ?? identidade.Chart ?? AoLado(linha.Vertices, grafico);
         if (identidade.Chart != origem)
         {
-            polilinha.UpgradeOpen();
+            if (!polilinha.IsWriteEnabled) polilinha.UpgradeOpen();
             Gravar(transacao, polilinha, identidade with { Chart = origem });
         }
 
@@ -223,8 +204,11 @@ internal static class LinhasDeDrenagem
     /// Refaz tudo o que a linha desenha: o gráfico e, na canaleta, o 3D e a
     /// pintura dos trechos ruins. A frase do gráfico e a dos alertas.
     /// </summary>
-    internal static (string Frase, string Alerta) Refazer(Transaction transacao, Database database, Tin terreno, DrainageSettings configuracao, ObjectId linhaId, (double X, double Y)? onde = null)
+    /// <param name="indice">O que já está desenhado, montado uma vez por operação (<see cref="IndiceDaDrenagem"/>).</param>
+    internal static (string Frase, string Alerta) Refazer(Transaction transacao, Database database, Tin terreno, DrainageSettings configuracao, ObjectId linhaId, IndiceDaDrenagem indice, (double X, double Y)? onde = null)
     {
+        if (Identidade((Entity)transacao.GetObject(linhaId, OpenMode.ForRead)) is { } identidade) indice.Apagar(transacao, identidade.Id);
+
         var frase = DesenharPerfil(transacao, database, terreno, configuracao, linhaId, onde);
         var alerta = Canaleta3D.Desenhar(transacao, database, terreno, configuracao, linhaId);
         return (frase, alerta);

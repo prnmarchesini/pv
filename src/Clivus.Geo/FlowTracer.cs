@@ -14,6 +14,9 @@ public enum FlowStop
 
     /// <summary>Andou o comprimento máximo sem chegar a lugar nenhum. Guarda contra travar.</summary>
     LengthLimit,
+
+    /// <summary>Entrou num lugar cujo destino já se sabe (o cálculo das bacias aproveita o caminho já feito).</summary>
+    Joined,
 }
 
 /// <summary>Os parâmetros do caminho da água.</summary>
@@ -25,8 +28,16 @@ public sealed class FlowOptions
     /// <summary>O comprimento máximo em planta, em metros.</summary>
     public double MaxLength { get; init; } = 5000;
 
-    /// <summary>Abaixo desta declividade (m/m) o terreno é plano: a água para.</summary>
+    /// <summary>Abaixo desta declividade (m/m) o triângulo é plano: a água só sai sondando em volta.</summary>
     public double FlatRatio { get; init; } = 0.0005;
+
+    /// <summary>
+    /// Até que distância (m) a água sonda em volta quando o gradiente não acha
+    /// saída (triângulo plano, talvegue torto). Nada mais baixo dentro dele: é
+    /// fundo. 50 m: em Itatiba (curvas de metro em metro) há patamares planos
+    /// de mais de 20 m entre duas curvas, e a água ainda desce depois deles.
+    /// </summary>
+    public double ProbeRadius { get; init; } = 50;
 }
 
 /// <summary>
@@ -200,7 +211,11 @@ public sealed class FlowTargets
 public static class FlowTracer
 {
     /// <summary>O caminho da água a partir de (x, y).</summary>
-    public static FlowPath Trace(Tin tin, double x, double y, FlowTargets? targets = null, FlowOptions? options = null)
+    /// <param name="joined">
+    /// Se o passo terminar num ponto para o qual isto diz sim, o caminho para
+    /// com <see cref="FlowStop.Joined"/>: o resto dele já é conhecido.
+    /// </param>
+    public static FlowPath Trace(Tin tin, double x, double y, FlowTargets? targets = null, FlowOptions? options = null, Func<double, double, bool>? joined = null)
     {
         ArgumentNullException.ThrowIfNull(tin);
 
@@ -222,49 +237,53 @@ public static class FlowTracer
             var p = pontos[^1];
 
             if (!tin.TryGetSlope(p.X, p.Y, out var aqui)) return Fim(FlowStop.OutsideTerrain);
-            if (aqui.IsFlat(options.FlatRatio)) return Fim(FlowStop.Sink);
 
             var restante = options.MaxLength - em2d;
             if (restante <= 1e-9) return Fim(FlowStop.LengthLimit);
 
             var passo = Math.Min(options.Step, restante);
-            var (dx, dy) = (aqui.DownhillX, aqui.DownhillY);
-
-            // Olha a face de onde o passo cai: se ela manda de volta, é
-            // talvegue, e a água segue a soma das duas direções.
-            if (tin.TryGetSlope(p.X + dx * passo, p.Y + dy * passo, out var la)
-                && !la.IsFlat(options.FlatRatio)
-                && dx * la.DownhillX + dy * la.DownhillY < 0)
-            {
-                var (sx, sy) = (dx + la.DownhillX, dy + la.DownhillY);
-                var norma = Math.Sqrt(sx * sx + sy * sy);
-
-                if (norma < 1e-6) return Fim(FlowStop.Sink);
-
-                (dx, dy) = (sx / norma, sy / norma);
-            }
-
-            // Anda o passo; se não desce, tenta passos menores. Sem descida
-            // nenhuma é fundo: a água empoça ali.
             Point3? proximo = null;
             var foraDoTerreno = false;
 
-            for (var tentativa = passo; tentativa >= passo / 16; tentativa /= 2)
+            if (!aqui.IsFlat(options.FlatRatio))
             {
-                var (qx, qy) = (p.X + dx * tentativa, p.Y + dy * tentativa);
+                var (dx, dy) = (aqui.DownhillX, aqui.DownhillY);
 
-                if (!tin.TryGetZ(qx, qy, out var qz))
+                // Olha a face de onde o passo cai: se ela manda de volta, é
+                // talvegue, e a água segue a soma das duas direções.
+                if (tin.TryGetSlope(p.X + dx * passo, p.Y + dy * passo, out var la)
+                    && !la.IsFlat(options.FlatRatio)
+                    && dx * la.DownhillX + dy * la.DownhillY < 0)
                 {
-                    foraDoTerreno = true;
-                    continue;
+                    var (sx, sy) = (dx + la.DownhillX, dy + la.DownhillY);
+                    var norma = Math.Sqrt(sx * sx + sy * sy);
+                    if (norma >= 1e-6) (dx, dy) = (sx / norma, sy / norma);
                 }
 
-                if (qz < p.Z - 1e-9)
+                // Anda o passo; se não desce, tenta passos menores.
+                for (var tentativa = passo; tentativa >= passo / 16; tentativa /= 2)
                 {
-                    proximo = new Point3(qx, qy, qz);
-                    break;
+                    var (qx, qy) = (p.X + dx * tentativa, p.Y + dy * tentativa);
+
+                    if (!tin.TryGetZ(qx, qy, out var qz))
+                    {
+                        foraDoTerreno = true;
+                        continue;
+                    }
+
+                    if (qz < p.Z - 1e-9)
+                    {
+                        proximo = new Point3(qx, qy, qz);
+                        break;
+                    }
                 }
             }
+
+            // Triângulo plano (comum em TIN feito de curvas de nível: os três
+            // vértices na mesma curva) ou talvegue torto da triangulação: o
+            // gradiente não acha a saída, mas o terreno em volta desce. Sonda
+            // em volta, em raios crescentes, antes de dizer que a água empoça.
+            proximo ??= Sondar(tin, p, Math.Min(passo, restante), Math.Min(options.ProbeRadius, restante), ref foraDoTerreno);
 
             if (proximo is not { } q) return Fim(foraDoTerreno ? FlowStop.OutsideTerrain : FlowStop.Sink);
 
@@ -279,6 +298,35 @@ public static class FlowTracer
             }
 
             Andar(q);
+
+            if (joined is not null && joined(q.X, q.Y)) return Fim(FlowStop.Joined);
+        }
+
+        static Point3? Sondar(Tin tin, Point3 p, double passo, double raioMaximo, ref bool foraDoTerreno)
+        {
+            for (var raio = passo; raio <= raioMaximo + 1e-9; raio = raio * 2 >= raioMaximo && raio < raioMaximo ? raioMaximo : raio * 2)
+            {
+                Point3? melhor = null;
+
+                for (var k = 0; k < 16; k++)
+                {
+                    var a = k * Math.PI / 8;
+                    var (qx, qy) = (p.X + raio * Math.Cos(a), p.Y + raio * Math.Sin(a));
+
+                    if (!tin.TryGetZ(qx, qy, out var qz))
+                    {
+                        foraDoTerreno = true;
+                        continue;
+                    }
+
+                    if (qz < p.Z - 1e-6 && (melhor is null || qz < melhor.Value.Z)) melhor = new Point3(qx, qy, qz);
+                }
+
+                if (melhor is not null) return melhor;
+                if (raio >= raioMaximo) break;
+            }
+
+            return null;
         }
 
         void Andar(Point3 q)

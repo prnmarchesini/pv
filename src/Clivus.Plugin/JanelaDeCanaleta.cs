@@ -316,9 +316,10 @@ internal sealed class JanelaDeCanaleta : Window
             EscritaForaDeComando.Fazer(_documento, () => DrenagemStore.Mudar(_documento.Database, d => d.WithSection(secao) with { CurrentSection = secao.Name, CurrentMode = Modo }));
             PreencherLista(DrenagemStore.Ler(_documento.Database));
 
-            // A seleção é no desenho: vai como comando, com a seção e o
-            // assentamento como padrão (os dois Enter).
-            _documento.SendStringToExecute($"_{PluginInfo.ComandoDrenagemCanaletaConverter}\n\n", true, false, false);
+            // A seleção é no desenho: vai como comando (cancelando o que
+            // estiver em curso), com a seção e o assentamento como padrão: um
+            // Enter fecha o nome do comando, os outros dois aceitam os padrões.
+            _documento.SendStringToExecute($"\x03\x03_{PluginInfo.ComandoDrenagemCanaletaConverter}\n\n\n", true, false, false);
             Recado(Tr.F("Escolha no desenho as linhas que viram canaleta {0}.", secao.Name), false);
         }
         catch (Exception erro)
@@ -331,7 +332,7 @@ internal sealed class JanelaDeCanaleta : Window
     {
         try
         {
-            _documento.SendStringToExecute($"_{comando} ", true, false, false);
+            _documento.SendStringToExecute($"\x03\x03_{comando} ", true, false, false);
         }
         catch (Exception erro)
         {

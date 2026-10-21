@@ -83,11 +83,66 @@ public sealed record ChannelProfileResult(
     /// <summary>A maior declividade de trecho do fundo (m/m), a que dá a velocidade mais alta.</summary>
     public double MaxSlope => Segments.Count == 0 ? 0 : Segments.Max(s => s.Slope);
 
-    /// <summary>Os trechos que descem menos que a mínima, mas descem.</summary>
-    public IEnumerable<SlopeSegment> LowSegments => Segments.Where(s => s.Slope > 0 && s.Slope < MinimumSlopeRule - 1e-9);
+    /// <summary>Menor que isto (m) não é contrapendente: é o arredondamento da cota.</summary>
+    public const double RiseTolerance = 0.005;
 
-    /// <summary>Os trechos planos ou que sobem: a água para ali.</summary>
-    public IEnumerable<SlopeSegment> InvertedSegments => Segments.Where(s => s.Slope <= 0);
+    /// <summary>Trecho baixo mais curto que isto (m) não é avisado: é o vértice de uma aresta do terreno.</summary>
+    public const double ShortestLowRun = 2;
+
+    /// <summary>
+    /// Os trechos que descem menos que a mínima, mas descem, ponto a ponto do
+    /// fundo (não pela média do trecho de 20 m: uma contrapendente curta
+    /// dentro de um trecho que desce na média passaria calada, regra 4).
+    /// </summary>
+    public IReadOnlyList<SlopeSegment> LowSegments => Corridas(false);
+
+    /// <summary>Os trechos planos ou que sobem, ponto a ponto: a água para ali.</summary>
+    public IReadOnlyList<SlopeSegment> InvertedSegments => Corridas(true);
+
+    /// <summary>
+    /// As corridas de intervalos vizinhos do fundo na mesma situação: subindo
+    /// ou plano (<paramref name="invertidas"/>), ou descendo menos que a mínima.
+    /// Corrida invertida que sobe menos que <see cref="RiseTolerance"/> no
+    /// total e é curta, ou corrida baixa mais curta que
+    /// <see cref="ShortestLowRun"/>, não conta.
+    /// </summary>
+    private List<SlopeSegment> Corridas(bool invertidas)
+    {
+        var corridas = new List<SlopeSegment>();
+        int? inicio = null;
+
+        bool Ruim(int i)
+        {
+            var (a, b) = (Points[i - 1], Points[i]);
+            var dl = b.Distance - a.Distance;
+            if (dl <= 1e-9) return false;
+            var s = (a.Bottom - b.Bottom) / dl;
+            return invertidas ? s <= 0 : s > 0 && s < MinimumSlopeRule - 1e-9;
+        }
+
+        void Fechar(int fim)
+        {
+            if (inicio is not { } i0) return;
+            var (a, b) = (Points[i0 - 1], Points[fim]);
+            var corrida = new SlopeSegment(a.Distance, b.Distance, a.Bottom, b.Bottom);
+
+            var conta = invertidas
+                ? -corrida.Drop >= RiseTolerance || corrida.Length >= ShortestLowRun
+                : corrida.Length >= ShortestLowRun;
+
+            if (conta) corridas.Add(corrida);
+            inicio = null;
+        }
+
+        for (var i = 1; i < Points.Count; i++)
+        {
+            if (Ruim(i)) inicio ??= i;
+            else Fechar(i - 1);
+        }
+
+        Fechar(Points.Count - 1);
+        return corridas;
+    }
 
     /// <summary>Declividade média do fundo, da montante à jusante (m/m).</summary>
     public double AverageSlope => Length > 0 ? (Points[0].Bottom - Points[^1].Bottom) / Length : 0;

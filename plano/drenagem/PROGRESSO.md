@@ -42,10 +42,10 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
 
 ## Etapa 30: Memória › Bacias
 
-- 30.1 Cálculo das bacias: PENDENTE
-- 30.2 Desenho das bacias: PENDENTE
-- 30.3 Ajuste manual: PENDENTE
-- 30.4 Lista canaleta × bacia: PENDENTE
+- 30.1 Cálculo das bacias: VALIDADO (automático)
+- 30.2 Desenho das bacias: AGUARDANDO VALIDAÇÃO
+- 30.3 Ajuste manual: AGUARDANDO VALIDAÇÃO
+- 30.4 Lista canaleta × bacia: AGUARDANDO VALIDAÇÃO
 
 ## Etapa 31: Memória › cálculo
 
@@ -71,3 +71,12 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
 
 - Interseções de canaletas: fora de escopo por decisão do Renan ("depois a gente bola").
 - A Kerby do memorial não é a de livro; seguimos o memorial (regra 6).
+- Revisão por subagente feita por etapa (25–26, 27–29, 30–31), não por passo: os passos
+  de uma etapa dividem os mesmos arquivos. Os bugs que ela achou foram corrigidos com teste.
+- TIN de curvas de nível (Itatiba) tem triângulos planos e patamares de mais de 20 m entre
+  duas curvas: o caminho da água sonda em volta até 50 m antes de dizer que empoça.
+- A canaleta não guarda o sentido: a montante é a ponta mais alta do terreno, lida a cada
+  vez. Canaleta com as duas pontas quase na mesma cota pode virar de sentido com um grip.
+  Fica para o Renan dizer se quer o sentido gravado.
+- 30.3: o ajuste manual é uma polilinha fechada marcada com a canaleta (não o grip no
+  hatch, que é refeito a cada cálculo).

@@ -27,7 +27,7 @@ public static class DrenagemCommands
 
     /// <summary>CLIVUS_DRN_BACIAS: a janela das bacias (30).</summary>
     [CommandMethod(PluginInfo.ComandoDrenagemBacias)]
-    public static void Bacias() => EmConstrucao(Tr.T("Bacias"));
+    public static void Bacias() => AbrirJanela(Tr.T("Bacias"), JanelaDeBacias.Abrir, PluginInfo.ComandoDrenagemBaciasCalcular);
 
     /// <summary>CLIVUS_DRN_MEMORIA: a janela do cálculo (31).</summary>
     [CommandMethod(PluginInfo.ComandoDrenagemMemoria)]

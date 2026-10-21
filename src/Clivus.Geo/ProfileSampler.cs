@@ -88,6 +88,16 @@ public static class ProfileSampler
 
         if (quebras.Count < 2) return new TerrainProfile([], invertida, fora.Count);
 
+        // Começo sem terreno embaixo: o perfil conta do primeiro ponto com
+        // terreno. Contar do zero inventaria um patamar plano até ele.
+        var deslocamento = quebras[0].Ponto.Distance;
+        if (deslocamento > 0)
+        {
+            for (var i = 0; i < quebras.Count; i++)
+                quebras[i] = (quebras[i].Ponto with { Distance = quebras[i].Ponto.Distance - deslocamento }, quebras[i].Indice);
+            distancia -= deslocamento;
+        }
+
         // As estacas, interpoladas entre quebras vizinhas (o terreno é reto
         // entre elas); estaca que cai num trecho sem terreno não existe.
         var pontos = new List<ProfilePoint>(quebras.Count + (int)(distancia / stationSpacing) + 2);

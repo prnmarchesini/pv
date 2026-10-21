@@ -46,8 +46,11 @@ public class DrainageProfileTests
         Assert.Equal(4, canaleta.Segments.Count);
         Assert.Equal(0.02, canaleta.MaxSlope, 9);
         Assert.Equal(-0.01, canaleta.MinSlope, 9);
-        Assert.Single(canaleta.LowSegments);
-        Assert.Equal(2, canaleta.InvertedSegments.Count());
+        // Ponto a ponto: o plano de 20 a 40 e a subida de 40 a 60 são uma corrida só.
+        var baixo = Assert.Single(canaleta.LowSegments);
+        Assert.Equal((60.0, 80.0), (baixo.From, baixo.To));
+        var invertido = Assert.Single(canaleta.InvertedSegments);
+        Assert.Equal((20.0, 60.0), (invertido.From, invertido.To));
     }
 
     [Fact]
@@ -131,12 +134,12 @@ public class DrainageProfileTests
             Bottom = canaleta.Points.Select(p => (p.Distance, p.Bottom)).ToList(),
             WallHeight = 0.35,
             Segments = canaleta.Segments,
-            MinimumSlope = 0.005,
+            Alerts = [.. canaleta.LowSegments, .. canaleta.InvertedSegments],
         });
 
         Assert.Single(g.Lines, l => l.Kind == ChartLineKind.Bottom);
         Assert.Single(g.Lines, l => l.Kind == ChartLineKind.WallTop);
-        Assert.Equal(3, g.Lines.Count(l => l.Kind == ChartLineKind.Alert));
+        Assert.Equal(2, g.Lines.Count(l => l.Kind == ChartLineKind.Alert));
         Assert.Contains(g.Texts, t => t.Text == "Fundo (m)");
     }
 
@@ -146,5 +149,29 @@ public class DrainageProfileTests
     {
         // O ChartText não tem rotação: o tipo garante a regra de 07/10/2026.
         Assert.DoesNotContain(typeof(ChartText).GetProperties(), p => p.Name.Contains("Rotation", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    [Trait("Etapa", "28")]
+    public void ContrapendenteCurtaDentroDeTrechoQueDesceEAvisada()
+    {
+        // Revisão da etapa 29: desce 2 % na média dos 20 m, mas sobe 3 cm entre 8 e 12 m.
+        var terreno = Perfil((0, 100), (8, 99.84), (12, 99.87), (20, 99.6));
+        var canaleta = ChannelProfile.Build(terreno, 0.35, ChannelBottomMode.FollowTerrain, 0.005, 20);
+
+        Assert.True(Assert.Single(canaleta.Segments).Slope > 0.005);
+        var contra = Assert.Single(canaleta.InvertedSegments);
+        Assert.Equal((8.0, 12.0), (contra.From, contra.To));
+    }
+
+    [Fact]
+    [Trait("Etapa", "28")]
+    public void SubidinhaDeArredondamentoNaoEAlerta()
+    {
+        // 2 mm em 0,5 m: abaixo da tolerância e curta.
+        var terreno = Perfil((0, 100), (10, 99.8), (10.5, 99.802), (20, 99.6));
+        var canaleta = ChannelProfile.Build(terreno, 0.35, ChannelBottomMode.FollowTerrain, 0.005, 20);
+
+        Assert.Empty(canaleta.InvertedSegments);
     }
 }

@@ -130,6 +130,12 @@ public sealed record BasinSettings
 {
     /// <summary>Lado da célula da grade, em m.</summary>
     public double CellSize { get; init; } = 2;
+
+    /// <summary>A região analisada: "Areas" (as áreas de implantação), "Tudo" (o terreno) ou "Polilinha".</summary>
+    public string Region { get; init; } = "Areas";
+
+    /// <summary>O handle da polilinha fechada, quando a região é "Polilinha".</summary>
+    public string RegionHandle { get; init; } = string.Empty;
 }
 
 /// <summary>

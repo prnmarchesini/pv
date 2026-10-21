@@ -93,16 +93,49 @@ public static class ChannelSolid
             if (a.X * b.X + a.Y * b.Y < limite) manter[i] = true;
         }
 
+        // Douglas-Peucker em planta: um arco suave (amostrado a cada metro) não
+        // tem quebra de 0,5° em vértice nenhum, e viraria corda no sólido.
+        Entre(manter, (a, b) => DouglasEmPlanta(points, a, b, manter));
+
         // Douglas-Peucker do fundo (distância × cota) entre as quebras mantidas.
-        var inicio = 0;
-        for (var i = 1; i < points.Count; i++)
-        {
-            if (!manter[i]) continue;
-            Douglas(points, inicio, i, manter);
-            inicio = i;
-        }
+        Entre(manter, (a, b) => Douglas(points, a, b, manter));
 
         return points.Where((_, i) => manter[i]).ToList();
+    }
+
+    /// <summary>Tolerância da simplificação em planta, em m.</summary>
+    public const double PlanTolerance = 0.05;
+
+    /// <summary>Roda a simplificação entre cada par de pontos já mantidos.</summary>
+    private static void Entre(bool[] manter, Action<int, int> simplificar)
+    {
+        var mantidos = Enumerable.Range(0, manter.Length).Where(i => manter[i]).ToList();
+        for (var k = 1; k < mantidos.Count; k++) simplificar(mantidos[k - 1], mantidos[k]);
+    }
+
+    private static void DouglasEmPlanta(IReadOnlyList<ChannelProfilePoint> p, int a, int b, bool[] manter)
+    {
+        if (b - a < 2) return;
+
+        var (ax, ay, bx, by) = (p[a].X, p[a].Y, p[b].X, p[b].Y);
+        var (dx, dy) = (bx - ax, by - ay);
+        var corda = Math.Sqrt(dx * dx + dy * dy);
+        var pior = -1;
+        var maior = PlanTolerance;
+
+        for (var i = a + 1; i < b; i++)
+        {
+            var erro = corda < 1e-9
+                ? Math.Sqrt((p[i].X - ax) * (p[i].X - ax) + (p[i].Y - ay) * (p[i].Y - ay))
+                : Math.Abs((p[i].X - ax) * dy - (p[i].Y - ay) * dx) / corda;
+            if (erro > maior) (maior, pior) = (erro, i);
+        }
+
+        if (pior < 0) return;
+
+        manter[pior] = true;
+        DouglasEmPlanta(p, a, pior, manter);
+        DouglasEmPlanta(p, pior, b, manter);
     }
 
     private static void Douglas(IReadOnlyList<ChannelProfilePoint> p, int a, int b, bool[] manter)
