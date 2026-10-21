@@ -20,7 +20,16 @@ public sealed record ChannelCalculation
 
     // Tabela 5: vazão.
     public double Intensity { get; init; } = double.NaN;
+
+    /// <summary>
+    /// A vazão de projeto, em l/s: a da estaca por onde passa mais água,
+    /// andando pelo fundo como ele está. Com o fundo descendo até a saída, é
+    /// a da bacia inteira; com barriga, a água de um lado não chega ao outro.
+    /// </summary>
     public double FlowLitersPerSecond { get; init; }
+
+    /// <summary>A água dentro da canaleta, estaca a estaca; null sem a curva da bacia (área toda na saída).</summary>
+    public ChannelFlowRouting? Routing { get; init; }
     public double Flow => FlowLitersPerSecond / 1000;
 
     // Tabela 8: hidráulica.
@@ -90,6 +99,7 @@ public static class DrainageMemory
 
         // Tabela 1 e 5: a bacia dá o tempo de concentração, a chuva e a vazão.
         double kerby = double.NaN, kirpich = double.NaN, tc = double.NaN, v = double.NaN, i = double.NaN, q = 0;
+        ChannelFlowRouting? roteado = null;
 
         if (c.Basin is not { } bacia)
         {
@@ -108,7 +118,25 @@ public static class DrainageMemory
                 alertas.Add(Tr.F("escoamento superficial de {0:0.00} m/s passa da máxima da cobertura ({1}: {2:0.00} m/s): risco de erosão.", v, p.Cover, p.CoverMaxVelocity));
 
             i = p.Intensity(tc);
-            q = Rainfall.RationalFlowLitersPerSecond(p.RunoffC, i, bacia.Area);
+
+            // A água anda pelo fundo como ele está (pedido de 21/10/2026): a vazão
+            // de projeto é a da estaca com mais água, não a da bacia somada.
+            var areaDeProjeto = bacia.Area;
+            if (bacia.Accumulation.Count > 0 && c.Profile.Points.Count >= 2)
+            {
+                roteado = ChannelFlowRouting.Route(c.Profile.Points.Select(x => (x.Distance, x.Bottom)).ToList(), secao.UsefulHeight, bacia.Accumulation);
+                areaDeProjeto = roteado.Peak.Area;
+
+                foreach (var o in roteado.Outlets.Where(o => o.Kind == ChannelOutletKind.Overflow))
+                    alertas.Add(Tr.F("a água não tem saída na estaca {0:0.0} m: o fundo faz uma barriga de {1:0.00} m, mais que a parede ({2:0.00} m); chegam {3:0.0} l/s e transbordam ali.",
+                        o.Station, o.Depth, secao.UsefulHeight, Rainfall.RationalFlowLitersPerSecond(p.RunoffC, i, o.Area)));
+
+                var pontas = roteado.Outlets.Count(o => o.Kind == ChannelOutletKind.End);
+                if (pontas > 1)
+                    alertas.Add(Tr.T("a água sai pelas duas pontas da canaleta: o fundo sobe no meio."));
+            }
+
+            q = Rainfall.RationalFlowLitersPerSecond(p.RunoffC, i, areaDeProjeto);
             if (bacia.Area > Rainfall.RationalMaxAreaSquareMeters)
                 alertas.Add(Tr.F("bacia de {0:0.0} ha: o método racional vale até 50 ha.", bacia.Area / 10_000));
         }
@@ -204,6 +232,7 @@ public static class DrainageMemory
             SurfaceVelocity = v,
             Intensity = i,
             FlowLitersPerSecond = q,
+            Routing = roteado,
             MinSlope = imin,
             MaxSlope = perfil.MaxSlope,
             SlopeForDepth = iLamina,
@@ -222,11 +251,28 @@ public static class DrainageMemory
     }
 
     /// <summary>
-    /// A vazão num ponto da canaleta (32.8): o método racional com a área que
-    /// entrou até a estaca, com o tc e a chuva da bacia inteira (a favor da
-    /// segurança). A área em m² e a vazão em l/s.
+    /// A vazão num ponto da canaleta (32.8): o método racional com a área
+    /// cuja água passa pela estaca, andando pelo fundo como ele está, com o tc
+    /// e a chuva da bacia inteira (a favor da segurança). A área em m² e a
+    /// vazão em l/s.
     /// </summary>
     public static (double Area, double FlowLitersPerSecond) FlowAt(HydrologyParameters p, ChannelCalculation calculo, double station)
+    {
+        ArgumentNullException.ThrowIfNull(p);
+        ArgumentNullException.ThrowIfNull(calculo);
+
+        if (calculo.Input.Basin is not { } bacia || !double.IsFinite(calculo.Intensity)) return (0, 0);
+
+        var area = calculo.Routing?.AreaAt(station) ?? bacia.AreaUpTo(station);
+        return (area, Rainfall.RationalFlowLitersPerSecond(p.RunoffC, calculo.Intensity, area));
+    }
+
+    /// <summary>
+    /// A vazão no ponto se o fundo descesse sempre da montante para a saída (a
+    /// canaleta "boa"): toda a água que entrou antes da estaca. Para comparar
+    /// com a real, na condição da canaleta.
+    /// </summary>
+    public static (double Area, double FlowLitersPerSecond) FlowAtIfDrained(HydrologyParameters p, ChannelCalculation calculo, double station)
     {
         ArgumentNullException.ThrowIfNull(p);
         ArgumentNullException.ThrowIfNull(calculo);

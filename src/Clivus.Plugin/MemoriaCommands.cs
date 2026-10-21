@@ -138,8 +138,24 @@ public static class MemoriaCommands
                 return melhor;
             }
 
-            string Frase(ChannelCalculation c, TrackHit h, double q) =>
-                Tr.F("{0} · {1:0.0} m · Q {2:0.0} l/s (fim {3:0.0})", c.Input.Name, h.Distance, q, c.FlowLitersPerSecond);
+            // Para onde a água daquele ponto vai, andando pelo fundo como ele está.
+            string Destino(ChannelCalculation c, double estaca) => c.Routing?.OutletFrom(estaca) switch
+            {
+                { Kind: ChannelOutletKind.Overflow } o => Tr.F("a barriga em {0:0.0} m (transborda)", o.Station),
+                { } o => Tr.F("a saída em {0:0.0} m", o.Station),
+                null => Tr.T("a saída"),
+            };
+
+            string Frase(ChannelCalculation c, TrackHit h, double q)
+            {
+                var frase = Tr.F("{0} · {1:0.0} m · Q {2:0.0} l/s → {3}", c.Input.Name, h.Distance, q, Destino(c, h.Distance));
+
+                // A conta da canaleta "boa" (fundo descendo sempre até a ponta), quando dá diferente.
+                var (_, seDescesse) = DrainageMemory.FlowAtIfDrained(hidrologia, c, h.Distance);
+                return Math.Abs(seDescesse - q) > 0.05 * Math.Max(q, 1)
+                    ? frase + "\n" + Tr.F("com o fundo descendo até a ponta: {0:0.0} l/s", seDescesse)
+                    : frase;
+            }
 
             aoMover = (_, e) =>
             {
@@ -182,8 +198,8 @@ public static class MemoriaCommands
                 var h = a.Ponto;
                 ultimo = Tr.F("Vazão: {0}", Frase(a.Calculo, h, a.Q));
                 Placar(ultimo);
-                editor.WriteMessage(Tr.F("\nVAZÃO {0}, a {1:0.0} m da ponta de cima (de {2:0.0} m): chegam {3:N0} m² de {4:N0} m²; Q = {5:0.0} l/s ({6:0.0000} m³/s). No fim: {7:0.0} l/s.\n",
-                    a.Calculo.Input.Name, h.Distance, a.Calculo.Input.Profile.Length, a.Area, a.Calculo.Input.Basin!.Area, a.Q, a.Q / 1000, a.Calculo.FlowLitersPerSecond));
+                editor.WriteMessage(Tr.F("\nVAZÃO {0}, a {1:0.0} m da ponta de cima (de {2:0.0} m): passa a água de {3:N0} m² de {4:N0} m²; Q = {5:0.0} l/s ({6:0.0000} m³/s), corre para {7}. Maior da canaleta: {8:0.0} l/s.\n",
+                    a.Calculo.Input.Name, h.Distance, a.Calculo.Input.Profile.Length, a.Area, a.Calculo.Input.Basin!.Area, a.Q, a.Q / 1000, Destino(a.Calculo, h.Distance), a.Calculo.FlowLitersPerSecond));
 
                 // O valor fica escrito ao lado do ponto até sair do comando.
                 var altura = RastreioDoPerfil.Pixels(12);

@@ -69,6 +69,7 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
 - 32.9 Plúvio (Memória › Cálculo: Estado e Local, já carregado pela coordenada): AGUARDANDO VALIDAÇÃO
 - 32.10 Gráfico em grupo, Recriar gráfico e Apagar gráfico: AGUARDANDO VALIDAÇÃO
 - 32.11 Vazão no ponto com a cruz e o placar na tela: AGUARDANDO VALIDAÇÃO
+- 32.12 Água andando pelo fundo real (barriga, transbordo, duas saídas): AGUARDANDO VALIDAÇÃO
 
 ## Decisões tomadas sem resposta (ficam para o Renan confirmar)
 
@@ -112,6 +113,13 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
 - Recriar e Apagar gráfico ficam na ribbon (Análise) e na janela da Canaleta; na ribbon só uma vez
   (regra dos botões sem repetição).
 
+- 32.12 (tela do Renan, canaleta 3 de Itatiba com barriga): a vazão no ponto crescia em linha reta
+  da montante até a ponta, como se o fundo descesse sempre. Agora a água que as bacias põem em
+  cada estaca anda pelo fundo como ele está (ChannelFlowRouting): barriga até a altura da parede
+  enche e passa; mais funda que a parede, a água junta no fundo dela e transborda (alerta). A vazão
+  de projeto da memória é a da estaca com mais água (igual à da bacia quando o fundo desce até a
+  saída: o memorial de Valparaiso não muda). O tc e a chuva continuam os da bacia inteira.
+
 ## Roteiro de tela das mudanças de 21/10/2026 (tarde)
 
 1. Memória › Cálculo num desenho com localização: a linha "Plúvio 2.1" já vem com o estado e
@@ -125,6 +133,10 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
 4. Memória › Vazão no ponto: a cruz (não o quadradinho); passando o mouse na canaleta, o placar grande
    mostra "Vazão: Canaleta 1 · 35,2 m · Q 12,3 l/s (fim 24,8)"; clique: o valor fica escrito ao lado
    do ponto até sair. Dissipador e Pegar da canaleta também com a cruz.
+5. Na canaleta com barriga (Canaleta 3 de Itatiba): Bacias e Cálculo de novo; Vazão no ponto perto da
+   ponta da direita mostra pouca água "→ a barriga em ~120 m (transborda)" e, embaixo, quanto seria com
+   o fundo descendo até a ponta; no fundo da barriga, a maior. Memória › Alertas: "a água não tem
+   saída na estaca …".
 
 ## Roteiro de tela da etapa 32
 

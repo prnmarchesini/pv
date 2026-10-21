@@ -74,7 +74,7 @@ function Testar-DrenagemDesenhos {
 
     # 4: a vazao em tres pontos: cresce (ou fica igual) para jusante e no fim bate com a do calculo.
     $vazoes = @()
-    foreach ($m in [regex]::Matches((Etapa 4), 'VAZ.O Canaleta 1, a ([\d,]+) m da ponta de cima \(de ([\d,]+) m\): chegam ([\d.]+) m. de ([\d.]+) m.; Q = ([\d,]+) l/s \([\d,]+ m./s\)\. No fim: ([\d,]+) l/s')) {
+    foreach ($m in [regex]::Matches((Etapa 4), 'VAZ.O Canaleta 1, a ([\d,]+) m da ponta de cima \(de ([\d,]+) m\): passa a .gua de ([\d.]+) m. de ([\d.]+) m.; Q = ([\d,]+) l/s \([\d,]+ m./s\), corre para [^.]+\. Maior da canaleta: ([\d,]+) l/s')) {
         $vazoes += [pscustomobject]@{
             D = [double]::Parse($m.Groups[1].Value.Replace(',', '.'), $inv)
             Q = [double]::Parse($m.Groups[5].Value.Replace(',', '.'), $inv)
