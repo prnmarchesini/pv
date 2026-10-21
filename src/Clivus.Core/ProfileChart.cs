@@ -26,6 +26,9 @@ public enum ChartTextAlign
 /// <summary>Um texto do gráfico, sempre na horizontal (regra de 07/10/2026: texto nunca virado nem em pé).</summary>
 public sealed record ChartText(double X, double Y, double Height, string Text, ChartTextAlign Align);
 
+/// <summary>Uma nota sob um trecho da série principal (o que a água faz num trecho ruim do fundo), uma linha de texto por item.</summary>
+public sealed record ChartNote(double From, double To, IReadOnlyList<string> Lines);
+
 /// <summary>O gráfico pronto para desenhar.</summary>
 /// <param name="ZBase">A cota do pé da moldura (y = 0): com o exagero, leva cota a y do gráfico e de volta (o rastreio, 32.2).</param>
 public sealed record ChartDrawing(IReadOnlyList<ChartLine> Lines, IReadOnlyList<ChartText> Texts, double Width, double Height, double Exaggeration, double ZBase = 0)
@@ -65,6 +68,9 @@ public sealed record ChartInput
 
     /// <summary>Os trechos ruins do fundo (abaixo da mínima, planos ou subindo): ganham o traço de alerta.</summary>
     public IReadOnlyList<SlopeSegment> Alerts { get; init; } = [];
+
+    /// <summary>As notas sob os trechos ruins: o que a água faz e quanto cavar (pedido de 21/10/2026).</summary>
+    public IReadOnlyList<ChartNote> Notes { get; init; } = [];
 
     /// <summary>Exagero vertical; zero ou negativo = automático.</summary>
     public double VerticalExaggeration { get; init; }
@@ -241,6 +247,28 @@ public static class ProfileChart
             var trecho = principal.Where(p => p.D >= s.From - 1e-9 && p.D <= s.To + 1e-9).Select(p => (p.D, Y(p.Z))).ToList();
             if (trecho.Count < 2) trecho = [(s.From, Y(s.ZFrom)), (s.To, Y(s.ZTo))];
             linhas.Add(new ChartLine(ChartLineKind.Alert, trecho));
+        }
+
+        // As notas embaixo da série, no meio do trecho. A fonte cabe no espaço
+        // até a nota vizinha (regra de 07/10/2026: diminui, nunca encosta).
+        var notas = input.Notes.Where(nt => nt.Lines.Any(l => l.Length > 0)).OrderBy(nt => nt.From).ToList();
+        for (var k = 0; k < notas.Count; k++)
+        {
+            var nota = notas[k];
+            var linhasDaNota = nota.Lines.Where(l => l.Length > 0).ToList();
+            var meio = (nota.From + nota.To) / 2;
+            var antes = k > 0 ? meio - (notas[k - 1].From + notas[k - 1].To) / 2 : 2 * meio;
+            var depois = k < notas.Count - 1 ? (notas[k + 1].From + notas[k + 1].To) / 2 - meio : 2 * (comprimento - meio);
+            var largura = 0.9 * Math.Min(antes, depois);
+            var h = Math.Min(0.7 * th, largura / (linhasDaNota.Max(l => l.Length) * LarguraDaLetra));
+
+            var pe = principal.Where(q => q.D >= nota.From - 1e-9 && q.D <= nota.To + 1e-9).Select(q => q.Z).DefaultIfEmpty(Interpolar(principal, meio)).Min();
+            var y = Y(pe) - 0.8 * th - h;
+            foreach (var linha in linhasDaNota)
+            {
+                textos.Add(new ChartText(meio, y, h, linha, ChartTextAlign.Center));
+                y -= 1.3 * h;
+            }
         }
 
         // O título do eixo das cotas, em cima dos números (deitado: texto nunca em pé).

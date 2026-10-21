@@ -163,10 +163,15 @@ public static class DrainageMemory
 
         // O fundo ponto a ponto: uma contrapendente curta dentro de um trecho de
         // 20 m que desce na média não aparece na Imin (revisão da etapa 31).
-        foreach (var t in perfil.InvertedSegments)
-            alertas.Add(Tr.F("o fundo fica plano ou sobe de {0:0.0} a {1:0.0} m: a água para ali.", t.From, t.To));
-        foreach (var t in perfil.LowSegments)
-            alertas.Add(Tr.F("o fundo desce {0:0.00}% de {1:0.0} a {2:0.0} m, abaixo da mínima ({3:0.0}%).", t.Percent, t.From, t.To, p.MinimumSlope * 100));
+        // Com o que a água faz ali e quanto cavar (pedido de 21/10/2026).
+        string Conserto(BottomAdvice a) => a.Fix.Length > 0 ? "; " + a.Fix : string.Empty;
+        foreach (var conselho in ChannelBottomAdvice.Of(perfil, secao.UsefulHeight))
+        {
+            var t = conselho.Run;
+            alertas.Add(conselho.Problem == BottomProblem.Slow
+                ? Tr.F("o fundo desce {0:0.00}% de {1:0.0} a {2:0.0} m, abaixo da mínima ({3:0.0}%){4}.", t.Percent, t.From, t.To, p.MinimumSlope * 100, Conserto(conselho))
+                : Tr.F("o fundo fica plano ou sobe de {0:0.0} a {1:0.0} m: {2}{3}.", t.From, t.To, conselho.What(perfil.MinimumSlopeRule, secao.UsefulHeight), Conserto(conselho)));
+        }
 
         double hmax = 0, vmax = 0, vmin = 0;
         if (vazao > 0)

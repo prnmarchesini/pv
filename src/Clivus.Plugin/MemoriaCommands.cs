@@ -118,10 +118,24 @@ public static class MemoriaCommands
                 return;
             }
 
-            // A canaleta mais perto do ponto, dentro da tolerância.
-            (ChannelCalculation Calculo, TrackHit Ponto, double Area, double Q)? Achar(double x, double y, double tolerancia)
+            // Os gráficos das canaletas com bacia: o mouse no gráfico também dá a vazão (pedido de 21/10/2026).
+            var porId = canaletas.ToDictionary(c => c.Calculo.Input.Id, c => c.Calculo);
+            var graficos = RastreioDoPerfil.GraficosDoDesenho(documento).Where(g => porId.ContainsKey(g.Id)).ToList();
+
+            // O ponto da canaleta sob o mouse: dentro de um gráfico, a estaca da
+            // vertical; senão, a canaleta mais perto em planta, dentro da tolerância.
+            (ChannelCalculation Calculo, TrackHit Ponto, TrackHit? NoGrafico, double Area, double Q)? Achar(double x, double y, double tolerancia)
             {
-                (ChannelCalculation, TrackHit, double, double)? melhor = null;
+                foreach (var g in graficos)
+                {
+                    if (ProfileTracker.FromChart(g, x, y) is not { } hg) continue;
+
+                    var calculoDoGrafico = porId[g.Id];
+                    var (areaG, qG) = DrainageMemory.FlowAt(hidrologia, calculoDoGrafico, hg.Distance);
+                    return (calculoDoGrafico, hg, hg, areaG, qG);
+                }
+
+                (ChannelCalculation, TrackHit, TrackHit?, double, double)? melhor = null;
                 var menor = double.MaxValue;
 
                 foreach (var (calculo, caminho) in canaletas)
@@ -132,7 +146,8 @@ public static class MemoriaCommands
                     if (d >= menor) continue;
 
                     var (area, q) = DrainageMemory.FlowAt(hidrologia, calculo, h.Distance);
-                    (menor, melhor) = (d, (calculo, h, area, q));
+                    TrackHit? noGrafico = graficos.FirstOrDefault(g => g.Id == calculo.Input.Id) is { } grafico ? ProfileTracker.Hit(grafico, h.Distance) : null;
+                    (menor, melhor) = (d, (calculo, h, noGrafico, area, q));
                 }
 
                 return melhor;
@@ -166,13 +181,14 @@ public static class MemoriaCommands
                     var t = RastreioDoPerfil.Pixels(15);
                     if (Achar(p.X, p.Y, t) is not { } a)
                     {
-                        Placar(ultimo.Length > 0 ? ultimo : Tr.T("Vazão: passe o mouse na canaleta"));
+                        Placar(ultimo.Length > 0 ? ultimo : Tr.T("Vazão: passe o mouse na canaleta ou no gráfico dela"));
                         return;
                     }
 
                     Placar(Tr.F("Vazão: {0}", Frase(a.Calculo, a.Ponto, a.Q)));
 
                     Pôr(marcas, new Circle(new Point3d(a.Ponto.PlanX, a.Ponto.PlanY, a.Ponto.Terrain + 0.1), Vector3d.ZAxis, t));
+                    if (a.NoGrafico is { } ng) Pôr(marcas, new Circle(new Point3d(ng.ChartX, ng.ChartY, ng.Terrain + 0.1), Vector3d.ZAxis, t));
                     e.AppendToolTipText(Frase(a.Calculo, a.Ponto, a.Q));
                 }
                 catch (System.Exception erro)
@@ -181,17 +197,17 @@ public static class MemoriaCommands
                 }
             };
             editor.PointMonitor += aoMover;
-            Placar(Tr.T("Vazão: passe o mouse na canaleta"));
+            Placar(Tr.T("Vazão: passe o mouse na canaleta ou no gráfico dela"));
 
             while (true)
             {
-                var r = editor.GetPoint(new PromptPointOptions(Tr.T("\nClique no ponto da canaleta (Enter sai): ")) { AllowNone = true });
+                var r = editor.GetPoint(new PromptPointOptions(Tr.T("\nClique no ponto da canaleta ou do gráfico dela (Enter sai): ")) { AllowNone = true });
                 if (r.Status != PromptStatus.OK) return;
 
                 var clique = r.Value.TransformBy(editor.CurrentUserCoordinateSystem);
                 if (Achar(clique.X, clique.Y, RastreioDoPerfil.Pixels(30)) is not { } a)
                 {
-                    editor.WriteMessage(Tr.T("\nVAZÃO Nenhuma canaleta perto do clique.\n"));
+                    editor.WriteMessage(Tr.T("\nVAZÃO Nenhuma canaleta nem gráfico de canaleta perto do clique.\n"));
                     continue;
                 }
 
@@ -201,16 +217,21 @@ public static class MemoriaCommands
                 editor.WriteMessage(Tr.F("\nVAZÃO {0}, a {1:0.0} m da ponta de cima (de {2:0.0} m): passa a água de {3:N0} m² de {4:N0} m²; Q = {5:0.0} l/s ({6:0.0000} m³/s), corre para {7}. Maior da canaleta: {8:0.0} l/s.\n",
                     a.Calculo.Input.Name, h.Distance, a.Calculo.Input.Profile.Length, a.Area, a.Calculo.Input.Basin!.Area, a.Q, a.Q / 1000, Destino(a.Calculo, h.Distance), a.Calculo.FlowLitersPerSecond));
 
-                // O valor fica escrito ao lado do ponto até sair do comando.
+                // O valor fica escrito ao lado do ponto até sair do comando, na planta e no gráfico.
                 var altura = RastreioDoPerfil.Pixels(12);
-                var z = h.Terrain + 0.1;
-                Pôr(soltas, new Circle(new Point3d(h.PlanX, h.PlanY, z), Vector3d.ZAxis, 0.5 * altura));
-                Pôr(soltas, new DBText
+                void Escrever(double x, double y, double z)
                 {
-                    Position = new Point3d(h.PlanX + altura, h.PlanY + altura, z),
-                    Height = altura,
-                    TextString = Tr.F("Q {0:0.0} l/s · {1:0.0} m", a.Q, h.Distance),
-                });
+                    Pôr(soltas, new Circle(new Point3d(x, y, z), Vector3d.ZAxis, 0.5 * altura));
+                    Pôr(soltas, new DBText
+                    {
+                        Position = new Point3d(x + altura, y + altura, z),
+                        Height = altura,
+                        TextString = Tr.F("Q {0:0.0} l/s · {1:0.0} m", a.Q, h.Distance),
+                    });
+                }
+
+                Escrever(h.PlanX, h.PlanY, h.Terrain + 0.1);
+                if (a.NoGrafico is { } ng) Escrever(ng.ChartX, ng.ChartY, ng.Terrain + 0.1);
             }
         }
         catch (ArgumentException erro)

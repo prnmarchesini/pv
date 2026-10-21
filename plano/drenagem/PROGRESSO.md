@@ -70,6 +70,7 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
 - 32.10 Gráfico em grupo, Recriar gráfico e Apagar gráfico: AGUARDANDO VALIDAÇÃO
 - 32.11 Vazão no ponto com a cruz e o placar na tela: AGUARDANDO VALIDAÇÃO
 - 32.12 Água andando pelo fundo real (barriga, transbordo, duas saídas): AGUARDANDO VALIDAÇÃO
+- 32.13 Vazão também no gráfico; trecho ruim do fundo explicado (o que a água faz e quanto cavar): AGUARDANDO VALIDAÇÃO
 
 ## Decisões tomadas sem resposta (ficam para o Renan confirmar)
 
@@ -119,6 +120,14 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
   enche e passa; mais funda que a parede, a água junta no fundo dela e transborda (alerta). A vazão
   de projeto da memória é a da estaca com mais água (igual à da bacia quando o fundo desce até a
   saída: o memorial de Valparaiso não muda). O tc e a chuva continuam os da bacia inteira.
+- 32.13: o traço grosso do gráfico não era "a água volta": é o trecho do fundo abaixo da mínima
+  (amarelo em planta) ou plano/subindo (vermelho). Agora cada um ganha uma nota embaixo do fundo,
+  no gráfico, e o alerta da memória diz o mesmo (ChannelBottomAdvice): "0,2% < 0,5%: água lenta",
+  "plano: água parada", "sobe: a água volta" (sobe sem barriga, sai pela ponta de cima),
+  "barriga de X m: enche e passa" ou "barriga de X m > parede Y m: transborda"; e "aprofundar Z m".
+  O Z é o máximo, no trecho (e na barriga dele), entre o fundo atual e o fundo que desce a mínima
+  desde a ponta de cima (o que o modo "Fundo com declividade mínima" faria). A barriga daqui é a
+  das duas pontas como saída; a da Vazão no ponto (32.12) também conta barrigas encadeadas.
 
 ## Roteiro de tela das mudanças de 21/10/2026 (tarde)
 
@@ -137,6 +146,10 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
    ponta da direita mostra pouca água "→ a barriga em ~120 m (transborda)" e, embaixo, quanto seria com
    o fundo descendo até a ponta; no fundo da barriga, a maior. Memória › Alertas: "a água não tem
    saída na estaca …".
+6. Vazão no ponto com o mouse dentro do gráfico de uma canaleta: o placar dá a vazão da estaca da
+   vertical (a mesma do rastreio) e um círculo marca o ponto no gráfico e na planta; clique no
+   gráfico: o "Q … l/s" fica escrito nos dois. Canaleta › Atualizar (ou Recriar gráfico) numa
+   canaleta com traço grosso: embaixo de cada trecho, o que a água faz e "aprofundar X m".
 
 ## Roteiro de tela da etapa 32
 

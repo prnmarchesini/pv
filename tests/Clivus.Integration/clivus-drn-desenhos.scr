@@ -1,6 +1,7 @@
 ; Teste de nivel 2 da etapa 32 (segunda rodada): a canaleta ganha dissipador
 ; na ponta clicada; uma caixa na ponta dela; o Exportar canaletas grava o
-; Excel; as bacias e a vazao no ponto (cresce da ponta de cima para a saida).
+; Excel; as bacias e a vazao no ponto (cresce da ponta de cima para a saida),
+; tambem clicando no grafico.
 
 (setq clivus:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
@@ -28,7 +29,10 @@
 
 (princ "\nCLIVUS_DRNDES ETAPA4")
 (command "CLIVUS_DRN_BACIAS_CALCULAR" "Areas")
-(command "CLIVUS_DRN_VAZAO" '{{P1L}} '{{P2L}} '{{P3L}} "")
+;; O quarto clique e dentro do grafico, a 10 m da ponta (a ancora e o canto de baixo da moldura).
+(setq clivus:anc (cdr (assoc 10 (entget (ssname (ssget "_X" '((0 . "POINT"))) 0)))))
+(setq clivus:nografico (list (+ (car clivus:anc) 10.0) (+ (cadr clivus:anc) 0.5) 0.0))
+(command "CLIVUS_DRN_VAZAO" '{{P1L}} '{{P2L}} '{{P3L}} clivus:nografico "")
 
 (setvar "OSMODE" clivus:osmode)
 (princ "\nCLIVUS_DRNDES FIM")

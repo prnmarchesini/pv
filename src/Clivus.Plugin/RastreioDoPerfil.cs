@@ -124,6 +124,45 @@ public static class RastreioDoPerfil
         return tela.Y > 0 ? pixels * altura / tela.Y : pixels * altura / 1000;
     }
 
+    /// <summary>Os gráficos do desenho, onde estão agora, com o caminho de cada linha (o rastreio e a Vazão no ponto).</summary>
+    internal static List<TrackedChart> GraficosDoDesenho(Document documento)
+    {
+        var graficos = new List<TrackedChart>();
+
+        var terreno = TerrainCache.Get(documento);
+        if (terreno is null) return graficos;
+
+        var database = documento.Database;
+        var configuracao = DrenagemStore.Ler(database);
+
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        var indice = IndiceDaDrenagem.Montar(transacao, database);
+
+        foreach (var linha in LinhasDeDrenagem.Todas(transacao, database))
+        {
+            if (linha.Identidade.ChartHidden) continue;
+
+            // Onde o gráfico está (o grupo pode ter sido arrastado), não onde foi desenhado.
+            if ((LinhasDeDrenagem.LugarDoGrafico(transacao, indice, linha.Identidade.Id) ?? linha.Identidade.Chart) is not { } origem) continue;
+
+            try
+            {
+                var (grafico, perfil, canaleta) = LinhasDeDrenagem.Grafico(terreno.Mesh, configuracao, linha);
+                var caminho = canaleta is not null
+                    ? canaleta.Points.Select(q => new TrackPoint(q.Distance, q.X, q.Y, q.Terrain, q.Bottom)).ToList()
+                    : perfil.Points.Select(q => new TrackPoint(q.Distance, q.X, q.Y, q.Z, double.NaN)).ToList();
+
+                graficos.Add(new TrackedChart(linha.Identidade.Id, linha.Identidade.Name, origem, grafico, caminho));
+            }
+            catch (ArgumentException)
+            {
+                // Linha sem perfil (fora do terreno): sem rastreio, como sem gráfico.
+            }
+        }
+
+        return graficos;
+    }
+
     private sealed class Escuta
     {
         private readonly Document _documento;
@@ -254,39 +293,7 @@ public static class RastreioDoPerfil
 
             _sujo = false;
             _versao = Versao;
-            _graficos = [];
-
-            var terreno = TerrainCache.Get(_documento);
-            if (terreno is null) return _graficos;
-
-            var database = _documento.Database;
-            var configuracao = DrenagemStore.Ler(database);
-
-            using var transacao = database.TransactionManager.StartOpenCloseTransaction();
-            var indice = IndiceDaDrenagem.Montar(transacao, database);
-
-            foreach (var linha in LinhasDeDrenagem.Todas(transacao, database))
-            {
-                if (linha.Identidade.ChartHidden) continue;
-
-                // Onde o gráfico está (o grupo pode ter sido arrastado), não onde foi desenhado.
-                if ((LinhasDeDrenagem.LugarDoGrafico(transacao, indice, linha.Identidade.Id) ?? linha.Identidade.Chart) is not { } origem) continue;
-
-                try
-                {
-                    var (grafico, perfil, canaleta) = LinhasDeDrenagem.Grafico(terreno.Mesh, configuracao, linha);
-                    var caminho = canaleta is not null
-                        ? canaleta.Points.Select(q => new TrackPoint(q.Distance, q.X, q.Y, q.Terrain, q.Bottom)).ToList()
-                        : perfil.Points.Select(q => new TrackPoint(q.Distance, q.X, q.Y, q.Z, double.NaN)).ToList();
-
-                    _graficos.Add(new TrackedChart(linha.Identidade.Id, linha.Identidade.Name, origem, grafico, caminho));
-                }
-                catch (ArgumentException)
-                {
-                    // Linha sem perfil (fora do terreno): sem rastreio, como sem gráfico.
-                }
-            }
-
+            _graficos = GraficosDoDesenho(_documento);
             return _graficos;
         }
     }

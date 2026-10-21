@@ -208,6 +208,9 @@ internal static class LinhasDeDrenagem
                 WallHeight = identidade.Section.UsefulHeight,
                 Segments = canaleta.Segments,
                 Alerts = [.. canaleta.LowSegments, .. canaleta.InvertedSegments],
+                Notes = ChannelBottomAdvice.Of(canaleta, identidade.Section.UsefulHeight)
+                    .Select(c => new ChartNote(c.Run.From, c.Run.To, [c.What(canaleta.MinimumSlopeRule, identidade.Section.UsefulHeight), c.Fix]))
+                    .ToList(),
                 VerticalExaggeration = configuracao.Profile.VerticalExaggeration,
             };
 

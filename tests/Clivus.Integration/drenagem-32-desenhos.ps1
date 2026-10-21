@@ -81,12 +81,16 @@ function Testar-DrenagemDesenhos {
             Fim = [double]::Parse($m.Groups[6].Value.Replace(',', '.'), $inv)
         }
     }
-    if ($vazoes.Count -ne 3) { $erros += "a vazao no ponto respondeu $($vazoes.Count) vez(es) (esperado 3)" }
+    # Tres cliques na canaleta e um no grafico (a 10 m da ponta de cima, pedido de 21/10/2026).
+    if ($vazoes.Count -ne 4) { $erros += "a vazao no ponto respondeu $($vazoes.Count) vez(es) (esperado 4: 3 na canaleta e 1 no grafico)" }
     else {
-        $ordem = $vazoes | Sort-Object D
-        if ($ordem[0].Q -gt $ordem[1].Q -or $ordem[1].Q -gt $ordem[2].Q) { $erros += 'a vazao nao cresce ao longo da canaleta' }
-        if ($ordem[2].Q -gt $ordem[2].Fim + 0.1) { $erros += 'a vazao no ponto passa da do fim' }
-        if ($ordem[2].Q -le 0) { $erros += 'a vazao no fim e zero' }
+        $ordem = @($vazoes | Sort-Object D)
+        for ($k = 1; $k -lt $ordem.Count; $k++) {
+            if ($ordem[$k - 1].Q -gt $ordem[$k].Q) { $erros += 'a vazao nao cresce ao longo da canaleta' }
+        }
+        if ($ordem[-1].Q -gt $ordem[-1].Fim + 0.1) { $erros += 'a vazao no ponto passa da do fim' }
+        if ($ordem[-1].Q -le 0) { $erros += 'a vazao no fim e zero' }
+        if (-not ($vazoes | Where-Object { [math]::Abs($_.D - 10) -lt 0.5 })) { $erros += 'o clique no grafico nao deu a vazao a 10 m da ponta' }
     }
 
     if ($erros.Count -gt 0) {
@@ -94,7 +98,7 @@ function Testar-DrenagemDesenhos {
         return $false
     }
 
-    Write-Host "  (drenagem desenhos: dissipador com 3 pecas, caixa com a canaleta chegando, Excel das canaletas, vazao de $($ordem[0].Q) a $($ordem[2].Q) l/s ao longo da canaleta)" -ForegroundColor DarkGray
+    Write-Host "  (drenagem desenhos: dissipador com 3 pecas, caixa com a canaleta chegando, Excel das canaletas, vazao de $($ordem[0].Q) a $($ordem[-1].Q) l/s ao longo da canaleta, tambem pelo grafico)" -ForegroundColor DarkGray
     return $true
 }
 
