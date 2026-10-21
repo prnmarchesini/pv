@@ -1,0 +1,57 @@
+; Teste de nivel 2 do passo 26 (Analise > Flechas da drenagem): traca uma
+; area de 100 x 100 m no centro do terreno, gera as flechas pelo mesmo caminho
+; do botao Gerar da janela (fora de comando, a cada 5 m) e confere:
+;   - quantas flechas (cada flecha sao tres LINE no bloco CLIVUS_DRN_FLECHAS);
+;   - toda ponta de LINE e todo pontinho dentro da faixa de cotas do terreno
+;     lida pelo Civil 3D (regra 1 da drenagem, lida em LISP, nao do plugin);
+;   - o conferir do plugin: cada ponta na cota do TIN mais 5 cm;
+;   - a legenda (5 faixas) e uma insercao so;
+;   - gerar de novo nao dobra; Tudo pelo comando; apagar zera.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area das flechas")
+(setvar "OSMODE" clivus:osmode)
+
+(defun clivus:bloco ( / def e d n l fora zmin zmax z)
+  (setq def (tblobjname "BLOCK" "CLIVUS_DRN_FLECHAS") n 0 l 0 fora 0 zmin {{ZMIN}} zmax (+ {{ZMAX}} 0.2))
+  (if def (setq e (entnext def)))
+  (while e
+    (setq d (entget e))
+    (cond
+      ((= (cdr (assoc 0 d)) "LINE")
+       (setq l (1+ l))
+       (foreach k '(10 11)
+         (setq z (caddr (cdr (assoc k d))))
+         (if (or (< z zmin) (> z zmax)) (setq fora (1+ fora)))))
+      ((= (cdr (assoc 0 d)) "CIRCLE")
+       (setq n (1+ n) z (caddr (cdr (assoc 10 d))))
+       (if (or (< z zmin) (> z zmax)) (setq fora (1+ fora)))))
+    (setq e (entnext e)))
+  (list l n fora))
+
+(defun clivus:insercoes ( / ss) (setq ss (ssget "_X" '((0 . "INSERT") (2 . "CLIVUS_DRN_FLECHAS")))) (if ss (sslength ss) 0))
+(defun clivus:legenda ( / ss) (setq ss (ssget "_X" '((0 . "SOLID") (8 . "CLIVUS_DRN_FLECHA")))) (if ss (sslength ss) 0))
+
+(clivus-drn-flechas-pela-janela "Areas" "5")
+(setq clivus:a (clivus:bloco) clivus:ia (clivus:insercoes) clivus:la (clivus:legenda))
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+(clivus-drn-flechas-pela-janela "Areas" "5")
+(setq clivus:b (clivus:bloco) clivus:ib (clivus:insercoes))
+(command "CLIVUS_DRN_FLECHAS_GERAR" "Tudo")
+(setq clivus:t (clivus:bloco))
+(command "CLIVUS_DRN_FLECHAS_APAGAR")
+(setq clivus:z (clivus:bloco) clivus:iz (clivus:insercoes) clivus:lz (clivus:legenda))
+
+(princ (strcat "\nCLIVUS_DRNFLECHAS linhas=" (itoa (nth 0 clivus:a)) " pontos=" (itoa (nth 1 clivus:a)) " fora=" (itoa (nth 2 clivus:a))
+               " insercoes=" (itoa clivus:ia) " legenda=" (itoa clivus:la)
+               " de_novo=" (itoa (nth 0 clivus:b)) " insercoes2=" (itoa clivus:ib)
+               " tudo=" (itoa (nth 0 clivus:t)) " fora_tudo=" (itoa (nth 2 clivus:t))
+               " apagado=" (itoa (+ (nth 0 clivus:z) (nth 1 clivus:z) clivus:iz clivus:lz)) " fim"))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

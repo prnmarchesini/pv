@@ -17,4 +17,13 @@ public static partial class PluginInfo
 
     /// <summary>Memória › Cálculo (31): parâmetros, tabelas do memorial e o Excel.</summary>
     public const string ComandoDrenagemMemoria = "CLIVUS_DRN_MEMORIA";
+
+    /// <summary>"Gerar flechas" (26.2): [Areas/Janela/Tudo], com a configuração gravada pela janela; Janela pede os dois cantos.</summary>
+    public const string ComandoDrenagemFlechasGerar = "CLIVUS_DRN_FLECHAS_GERAR";
+
+    /// <summary>"Apagar flechas" (26.2): as flechas e a legenda.</summary>
+    public const string ComandoDrenagemFlechasApagar = "CLIVUS_DRN_FLECHAS_APAGAR";
+
+    /// <summary>Só no build de teste: confere contra o TIN tudo o que a drenagem desenhou e escreve o placar (nível 2).</summary>
+    public const string ComandoDrenagemConferirAutomatico = "CLIVUS_DRN_CONFERIR_AUTO";
 }

@@ -36,6 +36,8 @@ param(
     # Só os casos da parte elétrica (eletrica-*.ps1), opcionalmente os que têm
     # este pedaço no nome da função: para quem trabalha num passo elétrico.
     [switch] $SoEletrica,
+    # Só os casos da drenagem (drenagem-*.ps1), com o mesmo filtro.
+    [switch] $SoDrenagem,
     [string] $Filtro = ''
 )
 
@@ -4456,6 +4458,10 @@ function Testar-Ativar {
 
 . (Join-Path $PSScriptRoot 'eletrica.ps1')
 
+# ---- a drenagem (plano/drenagem): os casos ficam em drenagem-*.ps1 ---------
+
+. (Join-Path $PSScriptRoot 'drenagem.ps1')
+
 # ---- a licenca da rodada ---------------------------------------------------
 
 # Com a chave publica de producao embutida, sem licenca todo comando do
@@ -4487,8 +4493,10 @@ $env:CLIVUS_LICENCA_ARQUIVO_TESTE = $licencaDaRodada
 $passaram = 0
 $total = 0
 
-if ($SoEletrica) {
-    foreach ($caso in $CasosEletricos | Where-Object { $_ -like "*$Filtro*" }) {
+if ($SoEletrica -or $SoDrenagem) {
+    $casos = if ($SoDrenagem) { $CasosDrenagem } else { $CasosEletricos }
+    $nomeDaParte = if ($SoDrenagem) { 'Drenagem' } else { 'Eletrica' }
+    foreach ($caso in $casos | Where-Object { $_ -like "*$Filtro*" }) {
         $total++
         if (& $caso -Desenho $desenhos[0]) { $passaram++ }
     }
@@ -4497,8 +4505,8 @@ if ($SoEletrica) {
     $env:CLIVUS_LICENCA_CHAVE_TESTE = $licencaAntes.C
     $env:CLIVUS_LICENCA_ARQUIVO_TESTE = $licencaAntes.A
 
-    if ($problemas.Count -eq 0 -and $passaram -eq $total) { Escrever-Linha 'Eletrica' "$passaram/$total" 'OK'; exit 0 }
-    Escrever-Linha 'Eletrica' "$passaram/$total" 'FALHOU'
+    if ($problemas.Count -eq 0 -and $passaram -eq $total) { Escrever-Linha $nomeDaParte "$passaram/$total" 'OK'; exit 0 }
+    Escrever-Linha $nomeDaParte "$passaram/$total" 'FALHOU'
     foreach ($p in $problemas) { Write-Host "  $p" -ForegroundColor Red }
     exit 1
 }
@@ -4710,6 +4718,12 @@ else {
 
     # A parte eletrica (plano/eletrica), um caso por passo.
     foreach ($caso in $CasosEletricos) {
+        $total++
+        if (& $caso -Desenho $desenhos[0]) { $passaram++ }
+    }
+
+    # A drenagem (plano/drenagem), um caso por passo.
+    foreach ($caso in $CasosDrenagem) {
         $total++
         if (& $caso -Desenho $desenhos[0]) { $passaram++ }
     }

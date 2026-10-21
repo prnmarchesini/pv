@@ -15,9 +15,9 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
 
 ## Etapa 26: Análise › Flechas
 
-- 26.1 Janela das flechas: PENDENTE
-- 26.2 Desenho das flechas: PENDENTE
-- 26.3 Legenda: PENDENTE
+- 26.1 Janela das flechas: AGUARDANDO VALIDAÇÃO
+- 26.2 Desenho das flechas: AGUARDANDO VALIDAÇÃO
+- 26.3 Legenda: AGUARDANDO VALIDAÇÃO
 
 ## Etapa 27: Análise › Linhas e perfil
 

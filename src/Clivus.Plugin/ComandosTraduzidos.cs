@@ -258,6 +258,18 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_DRN_ARROWS")]
     public static void CLIVUS_DRN_ARROWS() => DrenagemCommands.Flechas();
 
+    [CommandMethod("CLIVUS_DRN_ARROWS_ERASE")]
+    public static void CLIVUS_DRN_ARROWS_ERASE() => FlechasCommands.Apagar();
+
+    [CommandMethod("CLIVUS_DRN_FLECHAS_BORRAR")]
+    public static void CLIVUS_DRN_FLECHAS_BORRAR() => FlechasCommands.Apagar();
+
+    [CommandMethod("CLIVUS_DRN_ARROWS_GENERATE")]
+    public static void CLIVUS_DRN_ARROWS_GENERATE() => FlechasCommands.Gerar();
+
+    [CommandMethod("CLIVUS_DRN_FLECHAS_GENERAR")]
+    public static void CLIVUS_DRN_FLECHAS_GENERAR() => FlechasCommands.Gerar();
+
     [CommandMethod("CLIVUS_DRN_LINE")]
     public static void CLIVUS_DRN_LINE() => DrenagemCommands.Linha();
 
