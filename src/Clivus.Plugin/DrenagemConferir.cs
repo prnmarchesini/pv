@@ -75,6 +75,55 @@ public static class DrenagemConferir
         documento.Editor.WriteMessage(string.Format(Inv,
             "\nDRN_CONFERIR flechas_linhas={0} pontos={1} ok={2} fora={3} sem_terreno={4} fim\n",
             linhas, pontos, ok, fora, semTerreno));
+
+        ConferirLinhas(documento.Editor, database, tin);
+    }
+
+    /// <summary>
+    /// Cada linha da drenagem: vértices na cota do TIN (sem folga: a linha é o
+    /// chão), quantas entidades o gráfico dela tem e o texto do título, para o
+    /// teste ver o gráfico mudar quando a linha muda.
+    /// </summary>
+    private static void ConferirLinhas(Autodesk.AutoCAD.EditorInput.Editor editor, Database database, Tin tin)
+    {
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+
+        var linhas = LinhasDeDrenagem.Todas(transacao, database);
+        var perfis = new Dictionary<string, (int Entidades, string Titulo)>();
+        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
+
+        foreach (ObjectId id in espaco)
+        {
+            if (transacao.GetObject(id, OpenMode.ForRead) is not Entity e || e.Layer != LayoutLayers.DrenagemPerfil) continue;
+            if (PluginXData.Load(e, "DrnPerfil", 1, 1) is not { } campos) continue;
+
+            perfis.TryGetValue(campos[0], out var atual);
+            var titulo = e is DBText t && t.TextString.Contains('·') ? t.TextString : atual.Titulo;
+            perfis[campos[0]] = (atual.Entidades + 1, titulo ?? string.Empty);
+        }
+
+        foreach (var linha in linhas)
+        {
+            int ok = 0, fora = 0, semTerreno = 0;
+
+            foreach (var p in linha.Vertices)
+            {
+                if (!tin.TryGetZ(p.X, p.Y, out var z)) { semTerreno++; continue; }
+                if (Math.Abs(p.Z - z) <= 0.001) ok++; else fora++;
+            }
+
+            perfis.TryGetValue(linha.Identidade.Id.ToString("D"), out var perfil);
+
+            editor.WriteMessage(string.Format(Inv,
+                "\nDRN_LINHA nome={0} guid={1} canaleta={2} vertices={3} ok={4} fora={5} sem_terreno={6} perfil={7} titulo=[{8}] fim\n",
+                linha.Identidade.Name.Replace(' ', '_'), linha.Identidade.Id.ToString("N"), linha.Identidade.IsChannel ? 1 : 0,
+                linha.Vertices.Count, ok, fora, semTerreno, perfil.Entidades, perfil.Titulo));
+        }
+
+        var orfaos = perfis.Keys.Count(g => linhas.All(l => l.Identidade.Id.ToString("D") != g));
+        editor.WriteMessage(string.Format(Inv, "\nDRN_LINHAS total={0} perfis_orfaos={1} fim\n", linhas.Count, orfaos));
+
+        transacao.Commit();
     }
 
     /// <summary>(clivus-drn-flechas-pela-janela "Areas"|"Tudo" espacamento): o botão Gerar da janela, fora de comando.</summary>

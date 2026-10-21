@@ -1,0 +1,58 @@
+; Teste de nivel 2 do passo 27 (Analise > Linhas da drenagem): desenha a linha
+; com o comando do botao, move, copia, apaga a copia, transforma uma polilinha
+; em linha (Selecionar) e confere a cada passo, pelo conferir do plugin e em
+; LISP, que cada vertice esta na cota do terreno e que o grafico acompanha.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+
+; Os vertices da polilinha 3D da linha, em LISP: quantos fora da faixa de cotas.
+(defun clivus:fora (e / v n z)
+  (setq v (entnext e) n 0)
+  (while (and v (= (cdr (assoc 0 (entget v))) "VERTEX"))
+    (setq z (caddr (cdr (assoc 10 (entget v)))))
+    (if (or (< z {{ZMIN}}) (> z {{ZMAX}})) (setq n (1+ n)))
+    (setq v (entnext v)))
+  n)
+
+(princ "\nCLIVUS_DRNLINHA ETAPA1")
+(command "CLIVUS_DRN_LINHA" "{{P1}}" "{{P2}}" "{{P3}}" "" "{{G}}")
+(setq clivus:l1 (ssname (ssget "_X" '((0 . "POLYLINE") (8 . "CLIVUS_DRN_LINHA"))) 0))
+(princ (strcat "\nCLIVUS_DRNLINHA LISP fora1=" (itoa (clivus:fora clivus:l1))))
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+
+(princ "\nCLIVUS_DRNLINHA ETAPA2")
+(command "_.MOVE" clivus:l1 "" "0,0" "10,0")
+(princ (strcat "\nCLIVUS_DRNLINHA LISP fora2=" (itoa (clivus:fora clivus:l1))))
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+
+(princ "\nCLIVUS_DRNLINHA ETAPA3")
+(command "_.COPY" clivus:l1 "" "0,0" "0,8")
+; A copia: a outra polilinha da camada (o vigia desenha o grafico dela depois, entao nao e o entlast).
+(setq clivus:ss (ssget "_X" '((0 . "POLYLINE") (8 . "CLIVUS_DRN_LINHA"))) clivus:i 0 clivus:copia nil)
+(while (< clivus:i (sslength clivus:ss))
+  (if (not (eq (ssname clivus:ss clivus:i) clivus:l1)) (setq clivus:copia (ssname clivus:ss clivus:i)))
+  (setq clivus:i (1+ clivus:i)))
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+
+(princ "\nCLIVUS_DRNLINHA ETAPA4")
+(command "_.ERASE" clivus:copia "")
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+
+(princ "\nCLIVUS_DRNLINHA ETAPA5")
+(command "_.PLINE" "{{Q1}}" "{{Q2}}" "")
+(setq clivus:pl (entlast))
+(command "CLIVUS_DRN_LINHA" "Selecionar" clivus:pl "")
+(princ (strcat "\nCLIVUS_DRNLINHA original_existe=" (if (entget clivus:pl) "1" "0")))
+(command "CLIVUS_DRN_LINHA" "Atualizar")
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+
+(setvar "OSMODE" clivus:osmode)
+(princ "\nCLIVUS_DRNLINHA FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

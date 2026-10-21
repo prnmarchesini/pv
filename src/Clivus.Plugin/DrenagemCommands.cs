@@ -19,7 +19,7 @@ public static class DrenagemCommands
 
     /// <summary>CLIVUS_DRN_LINHA: a linha de análise e o perfil (27).</summary>
     [CommandMethod(PluginInfo.ComandoDrenagemLinha)]
-    public static void Linha() => EmConstrucao(Tr.T("Linhas"));
+    public static void Linha() => LinhaCommands.Executar();
 
     /// <summary>CLIVUS_DRN_CANALETA: a janela da canaleta (28).</summary>
     [CommandMethod(PluginInfo.ComandoDrenagemCanaleta)]

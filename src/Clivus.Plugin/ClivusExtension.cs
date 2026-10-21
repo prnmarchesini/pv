@@ -48,6 +48,7 @@ public sealed class ClivusExtension : IExtensionApplication
         {
             LayoutWatcher.Instalar();
             ArvoreVigia.Instalar();
+            DrenagemVigia.Instalar();
             Licenciamento.Instalar();
             ValidacaoAoAbrir.Instalar();
         }
@@ -84,6 +85,7 @@ public sealed class ClivusExtension : IExtensionApplication
         {
             ValidacaoAoAbrir.Desinstalar();
             ArvoreVigia.Desinstalar();
+            DrenagemVigia.Desinstalar();
             Licenciamento.Desinstalar();
             LayoutWatcher.Desinstalar();
         }

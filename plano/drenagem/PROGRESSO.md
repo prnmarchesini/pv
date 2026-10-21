@@ -21,10 +21,10 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
 
 ## Etapa 27: Análise › Linhas e perfil
 
-- 27.1 Linha de análise: PENDENTE
-- 27.2 Amostragem do perfil: PENDENTE
-- 27.3 Gráfico do perfil: PENDENTE
-- 27.4 Gráfico vivo: PENDENTE
+- 27.1 Linha de análise: AGUARDANDO VALIDAÇÃO
+- 27.2 Amostragem do perfil: VALIDADO (automático)
+- 27.3 Gráfico do perfil: AGUARDANDO VALIDAÇÃO
+- 27.4 Gráfico vivo: AGUARDANDO VALIDAÇÃO
 
 ## Etapa 28: Desenho › Canaleta
 

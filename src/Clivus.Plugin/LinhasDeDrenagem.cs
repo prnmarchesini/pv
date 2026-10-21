@@ -1,0 +1,282 @@
+using Autodesk.AutoCAD.Colors;
+using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.Geometry;
+using Autodesk.AutoCAD.Runtime;
+using Clivus.Core;
+using Clivus.Geo;
+
+namespace Clivus.Plugin;
+
+/// <summary>Uma linha da drenagem no desenho: a polilinha 3D, a identidade e os vértices.</summary>
+internal sealed record LinhaNoDesenho(ObjectId Id, DrainageLineIdentity Identidade, IReadOnlyList<Point3> Vertices);
+
+/// <summary>
+/// As linhas da drenagem (linha de análise, 27; canaleta, 28) e o gráfico do
+/// perfil de cada uma. A linha é polilinha 3D assentada no TIN (regra 1),
+/// com a identidade no XData; o gráfico é um punhado de polilinhas e textos
+/// na camada <see cref="LayoutLayers.DrenagemPerfil"/>, cada um com o GUID da
+/// linha no XData, refeito inteiro quando a linha muda.
+/// </summary>
+internal static class LinhasDeDrenagem
+{
+    private const string TipoDoPerfil = "DrnPerfil";
+
+    private static readonly RXClass ClasseDaPolilinha3d = RXObject.GetClass(typeof(Polyline3d));
+    private static readonly RXClass ClasseDaPolilinha = RXObject.GetClass(typeof(Polyline));
+    private static readonly RXClass ClasseDoTexto = RXObject.GetClass(typeof(DBText));
+
+    /// <summary>A identidade da linha, ou null se a entidade não é linha da drenagem.</summary>
+    internal static DrainageLineIdentity? Identidade(Entity entidade) =>
+        DrainageLineIdentity.FromFields(PluginXData.Load(entidade, DrainageLineIdentity.XDataType, DrainageLineIdentity.XDataVersion, DrainageLineIdentity.FieldCount));
+
+    internal static void Gravar(Transaction transacao, Entity entidade, DrainageLineIdentity identidade) =>
+        PluginXData.Save(transacao, entidade, DrainageLineIdentity.XDataType, DrainageLineIdentity.XDataVersion, identidade.ToFields());
+
+    /// <summary>Os vértices da polilinha 3D, na ordem.</summary>
+    internal static IReadOnlyList<Point3> Vertices(Transaction transacao, Polyline3d polilinha)
+    {
+        var pontos = new List<Point3>();
+
+        foreach (ObjectId v in polilinha)
+        {
+            // O vértice trocado pelo Reassentar fica apagado na lista até o
+            // fim da transação; abri-lo derrubava o AutoCAD.
+            if (v.IsErased) continue;
+
+            var p = ((PolylineVertex3d)transacao.GetObject(v, OpenMode.ForRead)).Position;
+            pontos.Add(new Point3(p.X, p.Y, p.Z));
+        }
+
+        return pontos;
+    }
+
+    /// <summary>Todas as linhas da drenagem do desenho (análise e canaleta).</summary>
+    internal static List<LinhaNoDesenho> Todas(Transaction transacao, Database database)
+    {
+        var linhas = new List<LinhaNoDesenho>();
+        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
+
+        foreach (ObjectId id in espaco)
+        {
+            if (id.ObjectClass != ClasseDaPolilinha3d) continue;
+            if (transacao.GetObject(id, OpenMode.ForRead) is not Polyline3d p || Identidade(p) is not { } identidade) continue;
+
+            linhas.Add(new LinhaNoDesenho(id, identidade, Vertices(transacao, p)));
+        }
+
+        return linhas;
+    }
+
+    /// <summary>
+    /// Cria a polilinha 3D assentada no terreno pelo caminho em planta
+    /// <paramref name="planta"/> (um vértice em cada aresta cruzada). Quantos
+    /// pontos ficaram fora do terreno: a linha é pintada de vermelho.
+    /// </summary>
+    internal static (ObjectId Id, int Fora) Criar(Transaction transacao, Database database, Tin terreno, IReadOnlyList<Point3> planta, DrainageLineIdentity identidade)
+    {
+        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForWrite);
+        var camada = LayoutLayers.GarantirDrenagem(transacao, database, identidade.IsChannel ? LayoutLayers.DrenagemCanaleta : LayoutLayers.DrenagemLinha);
+
+        var drapeada = Draping.Along(terreno, planta);
+        var polilinha = new Polyline3d { Layer = camada };
+
+        espaco.AppendEntity(polilinha);
+        transacao.AddNewlyCreatedDBObject(polilinha, true);
+
+        foreach (var p in drapeada.Vertices)
+        {
+            var v = new PolylineVertex3d(new Point3d(p.X, p.Y, p.Z));
+            polilinha.AppendVertex(v);
+            transacao.AddNewlyCreatedDBObject(v, true);
+        }
+
+        if (drapeada.HasGaps) polilinha.Color = Color.FromColorIndex(ColorMethod.ByAci, 1);
+
+        Gravar(transacao, polilinha, identidade);
+
+        return (polilinha.ObjectId, drapeada.OutsideCount);
+    }
+
+    /// <summary>
+    /// Assenta de novo no terreno a linha mexida (grip, move, propriedades): o
+    /// caminho em planta fica, a cota volta a ser a do TIN. Quantos pontos
+    /// ficaram fora do terreno; −1 se não precisou mexer.
+    /// </summary>
+    internal static int Reassentar(Transaction transacao, Polyline3d polilinha, Tin terreno)
+    {
+        var ids = polilinha.Cast<ObjectId>().Where(v => !v.IsErased).ToList();
+        var atuais = Vertices(transacao, polilinha);
+        if (atuais.Count < 2) return -1;
+
+        var drapeada = Draping.Along(terreno, atuais);
+
+        var iguais = drapeada.Vertices.Count == atuais.Count
+            && drapeada.Vertices.Zip(atuais).All(z => Math.Abs(z.First.X - z.Second.X) < 1e-6 && Math.Abs(z.First.Y - z.Second.Y) < 1e-6 && Math.Abs(z.First.Z - z.Second.Z) < 1e-4);
+        if (iguais) return -1;
+
+        if (!polilinha.IsWriteEnabled) polilinha.UpgradeOpen();
+        foreach (var v in ids) transacao.GetObject(v, OpenMode.ForWrite).Erase();
+
+        foreach (var p in drapeada.Vertices)
+        {
+            var v = new PolylineVertex3d(new Point3d(p.X, p.Y, p.Z));
+            polilinha.AppendVertex(v);
+            transacao.AddNewlyCreatedDBObject(v, true);
+        }
+
+        polilinha.Color = drapeada.HasGaps ? Color.FromColorIndex(ColorMethod.ByAci, 1) : Color.FromColorIndex(ColorMethod.ByLayer, 256);
+        return drapeada.OutsideCount;
+    }
+
+    /// <summary>Apaga o gráfico da linha (as entidades com o GUID dela). Quantas.</summary>
+    internal static int ApagarPerfil(Transaction transacao, Database database, Guid linha)
+    {
+        var apagadas = 0;
+        var guid = linha.ToString("D");
+        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
+
+        foreach (ObjectId id in espaco)
+        {
+            if (id.ObjectClass != ClasseDaPolilinha && id.ObjectClass != ClasseDoTexto) continue;
+            if (transacao.GetObject(id, OpenMode.ForRead) is not Entity e) continue;
+            if (!string.Equals(e.Layer, LayoutLayers.DrenagemPerfil, StringComparison.OrdinalIgnoreCase)) continue;
+            if (PluginXData.Load(e, TipoDoPerfil, 1, 1) is not { } campos || campos[0] != guid) continue;
+
+            e.UpgradeOpen();
+            e.Erase();
+            apagadas++;
+        }
+
+        return apagadas;
+    }
+
+    /// <summary>
+    /// O perfil da linha (terreno; na canaleta, também o fundo) com as
+    /// configurações do desenho.
+    /// </summary>
+    internal static (TerrainProfile Terreno, ChannelProfileResult? Canaleta) Perfil(Tin terreno, DrainageSettings configuracao, LinhaNoDesenho linha)
+    {
+        var perfil = ProfileSampler.Sample(terreno, linha.Vertices, configuracao.Profile.StationSpacing);
+
+        if (linha.Identidade.Section is not { } secao) return (perfil, null);
+
+        var canaleta = ChannelProfile.Build(perfil, secao.UsefulHeight, linha.Identidade.Mode, configuracao.Hydrology.MinimumSlope, configuracao.Profile.SegmentLength);
+        return (perfil, canaleta);
+    }
+
+    /// <summary>
+    /// Refaz o gráfico da linha: apaga o anterior e desenha no lugar gravado
+    /// (ou ao lado da linha, gravando o lugar). Devolve a frase do relato.
+    /// </summary>
+    internal static string DesenharPerfil(Transaction transacao, Database database, Tin terreno, DrainageSettings configuracao, ObjectId linhaId, (double X, double Y)? onde = null)
+    {
+        var polilinha = (Polyline3d)transacao.GetObject(linhaId, OpenMode.ForRead);
+        var identidade = Identidade(polilinha) ?? throw new InvalidOperationException(Tr.T("A entidade não é uma linha da drenagem."));
+        var linha = new LinhaNoDesenho(linhaId, identidade, Vertices(transacao, polilinha));
+
+        ApagarPerfil(transacao, database, identidade.Id);
+
+        var (perfil, canaleta) = Perfil(terreno, configuracao, linha);
+        if (perfil.Points.Count < 2 || perfil.Length <= 0) throw new ArgumentException(Tr.F("{0}: a linha tem comprimento zero.", identidade.Name));
+
+        var entrada = canaleta is null
+            ? new ChartInput
+            {
+                Title = identidade.Name,
+                Terrain = perfil.Points.Select(p => (p.Distance, p.Z)).ToList(),
+                Segments = ProfileSegments.Split(perfil.ZAt, perfil.Length, configuracao.Profile.SegmentLength),
+                VerticalExaggeration = configuracao.Profile.VerticalExaggeration,
+            }
+            : new ChartInput
+            {
+                Title = Tr.F("{0} — {1}", identidade.Name, identidade.Section!.Name),
+                Terrain = canaleta.Points.Select(p => (p.Distance, p.Terrain)).ToList(),
+                Bottom = canaleta.Points.Select(p => (p.Distance, p.Bottom)).ToList(),
+                WallHeight = identidade.Section.UsefulHeight,
+                Segments = canaleta.Segments,
+                MinimumSlope = configuracao.Hydrology.MinimumSlope,
+                VerticalExaggeration = configuracao.Profile.VerticalExaggeration,
+            };
+
+        var grafico = ProfileChart.Build(entrada);
+
+        // Onde: o pedido, o gravado, ou ao lado da linha (à direita, alinhado por baixo).
+        var origem = onde ?? identidade.Chart ?? AoLado(linha.Vertices, grafico);
+        if (identidade.Chart != origem)
+        {
+            polilinha.UpgradeOpen();
+            Gravar(transacao, polilinha, identidade with { Chart = origem });
+        }
+
+        var z = terreno.TryGetZ(origem.X, origem.Y, out var zz) ? zz : terreno.MinZ;
+
+        Desenhar(transacao, database, grafico, identidade.Id, origem, z);
+
+        var media = canaleta?.AverageSlope ?? (perfil.Points[0].Z - perfil.Points[^1].Z) / perfil.Length;
+        var fora = perfil.OutsideCount > 0 ? Tr.F(" ATENÇÃO: {0} ponto(s) fora do terreno, linha em vermelho.", perfil.OutsideCount) : string.Empty;
+
+        return Tr.F("{0}: {1:0.0} m, de {2:0.00} a {3:0.00} m, declividade média {4:0.0}%.{5}",
+            identidade.Name, perfil.Length, perfil.Points[0].Z, perfil.Points[^1].Z, media * 100, fora);
+    }
+
+    private static (double X, double Y) AoLado(IReadOnlyList<Point3> vertices, ChartDrawing grafico)
+    {
+        var maxX = vertices.Max(p => p.X);
+        var minY = vertices.Min(p => p.Y);
+        var folga = Math.Max(10, 0.1 * grafico.Width);
+        return (maxX + 2 * folga, minY + folga);
+    }
+
+    /// <summary>As cores de cada traço do gráfico.</summary>
+    private static Color Cor(ChartLineKind tipo) => tipo switch
+    {
+        ChartLineKind.Grid => Color.FromRgb(110, 110, 110),
+        ChartLineKind.Terrain => Color.FromRgb(0, 170, 0),
+        ChartLineKind.Bottom => Color.FromRgb(0, 110, 255),
+        ChartLineKind.WallTop => Color.FromRgb(120, 180, 255),
+        ChartLineKind.Alert => Color.FromRgb(255, 40, 40),
+        ChartLineKind.Arrow => Color.FromRgb(0, 200, 255),
+        _ => Color.FromColorIndex(ColorMethod.ByLayer, 256),
+    };
+
+    private static void Desenhar(Transaction transacao, Database database, ChartDrawing grafico, Guid linha, (double X, double Y) origem, double z)
+    {
+        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForWrite);
+        var camada = LayoutLayers.GarantirDrenagem(transacao, database, LayoutLayers.DrenagemPerfil);
+        var guid = linha.ToString("D");
+
+        void Marcar(Entity e)
+        {
+            espaco.AppendEntity(e);
+            transacao.AddNewlyCreatedDBObject(e, true);
+            PluginXData.Save(transacao, e, TipoDoPerfil, 1, guid);
+        }
+
+        foreach (var traco in grafico.Lines)
+        {
+            var polilinha = new Polyline { Layer = camada, Elevation = z, Color = Cor(traco.Kind) };
+            for (var i = 0; i < traco.Points.Count; i++)
+                polilinha.AddVertexAt(i, new Point2d(origem.X + traco.Points[i].X, origem.Y + traco.Points[i].Y), 0, 0, 0);
+
+            // O traço de alerta vem grosso, por cima da série.
+            if (traco.Kind == ChartLineKind.Alert) polilinha.ConstantWidth = 0.15 * Math.Max(0.3, grafico.Width / 90);
+
+            Marcar(polilinha);
+        }
+
+        foreach (var t in grafico.Texts)
+        {
+            var ponto = new Point3d(origem.X + t.X, origem.Y + t.Y, z);
+            var texto = new DBText { Layer = camada, Height = t.Height, TextString = t.Text, Position = ponto };
+
+            if (t.Align != ChartTextAlign.Left)
+            {
+                texto.HorizontalMode = t.Align == ChartTextAlign.Center ? TextHorizontalMode.TextCenter : TextHorizontalMode.TextRight;
+                texto.AlignmentPoint = ponto;
+            }
+
+            Marcar(texto);
+            if (t.Align != ChartTextAlign.Left) texto.AdjustAlignment(database);
+        }
+    }
+}
