@@ -1,0 +1,30 @@
+; Teste de nivel 2 do passo 31 (Memoria > Calculo): area, canaleta e bacias;
+; a memoria grava o Excel e escreve cada canaleta; a altura sugerida e
+; aplicada na canaleta e a memoria e refeita.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area da memoria")
+(command "_.PLINE" "{{C1}}" "{{C2}}" "")
+(setq clivus:c (entlast))
+(command "CLIVUS_DRN_CANALETA_CONVERTER" "Meia-cana 30" "Borda" clivus:c "")
+(command "CLIVUS_DRN_BACIAS_CALCULAR" "Areas")
+
+(princ "\nCLIVUS_DRNMEM ETAPA1")
+(command "CLIVUS_DRN_MEMORIA_AUTO" "{{XLSX}}")
+
+(princ "\nCLIVUS_DRNMEM ETAPA2")
+(setq clivus:can (ssname (ssget "_X" '((0 . "POLYLINE") (8 . "CLIVUS_DRN_CANALETA"))) 0))
+(command "CLIVUS_DRN_MEMORIA_ALTURA" clivus:can "")
+(command "CLIVUS_DRN_MEMORIA_AUTO" "{{XLSX}}")
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+
+(setvar "OSMODE" clivus:osmode)
+(princ "\nCLIVUS_DRNMEM FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

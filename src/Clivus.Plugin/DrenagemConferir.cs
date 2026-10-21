@@ -138,6 +138,7 @@ public static class DrenagemConferir
         var configuracao = DrenagemStore.Ler(database);
         var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
         var por = new Dictionary<string, List<Entity>>();
+        var pecas = new Dictionary<string, int>();
 
         foreach (ObjectId id in espaco)
         {
@@ -145,13 +146,19 @@ public static class DrenagemConferir
             if (e.Layer != LayoutLayers.DrenagemCanaleta3D && e.Layer != LayoutLayers.DrenagemAlerta) continue;
 
             var campos = PluginXData.Load(e, Canaleta3D.Tipo3D, 1, 1) ?? PluginXData.Load(e, "DrnAlerta", 1, 1);
+            if (PluginXData.Load(e, Canaleta3D.TipoPeca, 1, 1) is { } peca)
+            {
+                pecas[peca[0]] = pecas.GetValueOrDefault(peca[0]) + 1;
+                continue;
+            }
+
             if (campos is null) continue;
 
             if (!por.TryGetValue(campos[0], out var lista)) por[campos[0]] = lista = [];
             lista.Add(e);
         }
 
-        var orfaos = por.Keys.Count(g => linhas.All(l => l.Identidade.Id.ToString("D") != g || !l.Identidade.IsChannel));
+        var orfaos = por.Keys.Concat(pecas.Keys).Distinct().Count(g => linhas.All(l => l.Identidade.Id.ToString("D") != g || !l.Identidade.IsChannel));
         var canaletas = 0;
 
         foreach (var linha in linhas.Where(l => l.Identidade.IsChannel))
@@ -179,9 +186,9 @@ public static class DrenagemConferir
             var zmaxEsperado = perfil is null ? double.NaN : perfil.Points.Max(p => p.Bottom) + secao.UsefulHeight;
 
             editor.WriteMessage(string.Format(Inv,
-                "\nDRN_CANALETA nome={0} solidos={1} malhas={2} volume={3:0.####} esperado={4:0.####} zmin={5:0.###} zmin_esperado={6:0.###} zmax={7:0.###} zmax_esperado={8:0.###} alertas={9} baixos={10} invertidos={11} fim\n",
+                "\nDRN_CANALETA nome={0} solidos={1} malhas={2} volume={3:0.####} esperado={4:0.####} zmin={5:0.###} zmin_esperado={6:0.###} zmax={7:0.###} zmax_esperado={8:0.###} alertas={9} baixos={10} invertidos={11} pecas={12} fim\n",
                 linha.Identidade.Name.Replace(' ', '_'), solidos.Count, malhas, volume, esperado, zmin, zminEsperado, zmax, zmaxEsperado,
-                alertas, perfil?.LowSegments.Count() ?? 0, perfil?.InvertedSegments.Count() ?? 0));
+                alertas, perfil?.LowSegments.Count ?? 0, perfil?.InvertedSegments.Count ?? 0, pecas.GetValueOrDefault(linha.Identidade.Id.ToString("D"))));
         }
 
         editor.WriteMessage(string.Format(Inv, "\nDRN_CANALETAS total={0} orfaos_3d={1} fim\n", canaletas, orfaos));

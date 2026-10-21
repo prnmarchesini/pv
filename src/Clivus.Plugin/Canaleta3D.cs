@@ -17,6 +17,9 @@ namespace Clivus.Plugin;
 internal static class Canaleta3D
 {
     internal const string Tipo3D = "DrnCanaleta3D";
+
+    /// <summary>O dissipador e a laje da transposição (31.6), presos à canaleta como o sólido.</summary>
+    internal const string TipoPeca = "DrnPeca";
     private const string TipoAlerta = "DrnAlerta";
 
     /// <summary>
@@ -67,6 +70,10 @@ internal static class Canaleta3D
             PluginXData.Save(transacao, malha, Tipo3D, 1, guid);
         }
 
+        // 31.6: o dissipador no pé (jusante) e a laje da transposição onde a
+        // canaleta cruza via. Blocos simples, com as medidas do álbum do DNIT.
+        Pecas(transacao, database, terreno, configuracao, linha, canaleta, secao, camada3D, e => Marcar(e, TipoPeca));
+
         // A pintura dos trechos ruins, em planta, sobre o terreno.
         var camadaAlerta = LayoutLayers.GarantirDrenagem(transacao, database, LayoutLayers.DrenagemAlerta);
         var baixos = canaleta.LowSegments.ToList();
@@ -96,6 +103,52 @@ internal static class Canaleta3D
 
         return (fundo.Length > 0 ? fundo + " " : string.Empty) + Tr.F("{0}: {1} trecho(s) abaixo de {2:0.0}% (amarelo) e {3} plano(s) ou subindo (vermelho), pintados na camada {4}.",
             identidade.Name, baixos.Count, configuracao.Hydrology.MinimumSlope * 100, invertidos.Count, camadaAlerta);
+    }
+
+    /// <summary>
+    /// O dissipador de energia (DES: L2 de largura, comprimento 2·L1, 32 cm de
+    /// altura, o topo no terreno do pé) e, em cada cruzamento com via, a laje
+    /// da transposição (TSS: o comprimento do modelo atravessando a canaleta,
+    /// 50 cm ao longo dela, 21 cm de espessura, o topo no terreno).
+    /// </summary>
+    private static void Pecas(Transaction transacao, Database database, Tin terreno, DrainageSettings configuracao,
+        LinhaNoDesenho linha, ChannelProfileResult canaleta, ChannelSection secao, string camada, Action<Entity> marcar)
+    {
+        var (_, l2, comprimento) = EnergyDissipator.Size(secao.TopWidth);
+        var fim = canaleta.Points[^1];
+        var antes = canaleta.Points.Take(canaleta.Points.Count - 1).LastOrDefault(p => Math.Abs(p.X - fim.X) + Math.Abs(p.Y - fim.Y) > 1e-6);
+
+        if (antes.Distance < fim.Distance)
+        {
+            var (dx, dy) = (fim.X - antes.X, fim.Y - antes.Y);
+            var n = Math.Sqrt(dx * dx + dy * dy);
+            (dx, dy) = (dx / n, dy / n);
+
+            var (cx, cy) = (fim.X + dx * comprimento / 2, fim.Y + dy * comprimento / 2);
+            var topo = terreno.TryGetZ(cx, cy, out var zc) ? Math.Min(zc, fim.Terrain) : fim.Terrain;
+            marcar(Caixa(cx, cy, topo - 0.16, comprimento, l2, 0.32, Math.Atan2(dy, dx), camada));
+        }
+
+        var vias = MemoriaDeDrenagem.Vias(transacao, database, configuracao.Hydrology.RoadLayers);
+        if (vias.Count == 0) return;
+
+        var modelo = ChannelCrossing.Model(secao.TopWidth, configuracao.Hydrology.CrossingMargin);
+        var laje = modelo is not null && double.TryParse(modelo[4..], out var cm) ? cm / 100 : secao.TopWidth + configuracao.Hydrology.CrossingMargin;
+
+        foreach (var (x, y, dx, dy) in MemoriaDeDrenagem.Cruzamentos(linha.Vertices, vias))
+        {
+            if (!terreno.TryGetZ(x, y, out var z)) continue;
+            marcar(Caixa(x, y, z - 0.105, 0.50, laje, 0.21, Math.Atan2(dy, dx), camada));
+        }
+    }
+
+    /// <summary>Uma caixa centrada em (x, y, z), comprida ao longo do ângulo dado.</summary>
+    private static Solid3d Caixa(double x, double y, double z, double comprimento, double largura, double altura, double angulo, string camada)
+    {
+        var caixa = new Solid3d { Layer = camada };
+        caixa.CreateBox(comprimento, largura, altura);
+        caixa.TransformBy(Matrix3d.Displacement(new Vector3d(x, y, z)) * Matrix3d.Rotation(angulo, Vector3d.ZAxis, Point3d.Origin));
+        return caixa;
     }
 
     /// <summary>

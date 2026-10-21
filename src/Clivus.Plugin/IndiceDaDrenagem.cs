@@ -12,7 +12,7 @@ namespace Clivus.Plugin;
 internal sealed class IndiceDaDrenagem
 {
     /// <summary>Os tipos de XData das entidades que pertencem a uma linha.</summary>
-    internal static readonly string[] Tipos = ["DrnPerfil", Canaleta3D.Tipo3D, "DrnAlerta"];
+    internal static readonly string[] Tipos = ["DrnPerfil", Canaleta3D.Tipo3D, Canaleta3D.TipoPeca, "DrnAlerta"];
 
     private static readonly string[] Camadas =
     [

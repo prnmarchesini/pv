@@ -49,12 +49,12 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
 
 ## Etapa 31: Memória › cálculo
 
-- 31.1 Motor hidráulico: PENDENTE
-- 31.2 Parâmetros do projeto: PENDENTE
-- 31.3 Tabelas na tela: PENDENTE
-- 31.4 Exportar Excel: PENDENTE
-- 31.5 Seção a partir da conta: PENDENTE
-- 31.6 Dissipador e transposição: PENDENTE (pergunta aberta 3)
+- 31.1 Motor hidráulico: VALIDADO (automático)
+- 31.2 Parâmetros do projeto: AGUARDANDO VALIDAÇÃO
+- 31.3 Tabelas na tela: AGUARDANDO VALIDAÇÃO
+- 31.4 Exportar Excel: VALIDADO (automático)
+- 31.5 Seção a partir da conta: AGUARDANDO VALIDAÇÃO
+- 31.6 Dissipador e transposição: AGUARDANDO VALIDAÇÃO (decisão 3)
 
 ## Decisões tomadas sem resposta (ficam para o Renan confirmar)
 

@@ -315,6 +315,9 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_DRN_REPORT")]
     public static void CLIVUS_DRN_REPORT() => DrenagemCommands.Memoria();
 
+    [CommandMethod("CLIVUS_DRN_REPORT_HEIGHT", CommandFlags.UsePickSet)]
+    public static void CLIVUS_DRN_REPORT_HEIGHT() => MemoriaCommands.Altura();
+
     [CommandMethod("CLIVUS_ELECTRICAL")]
     public static void CLIVUS_ELECTRICAL() => ConfiguracaoEletricaCommands.Eletrica();
 

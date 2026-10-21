@@ -48,14 +48,14 @@ function Testar-DrenagemCanaleta {
 
     function Canaletas([string] $trecho) {
         $lista = @()
-        foreach ($m in [regex]::Matches($trecho, 'DRN_CANALETA nome=(\S+) solidos=(\d+) malhas=(\d+) volume=([\d.]+) esperado=([\d.]+) zmin=([-\d.]+) zmin_esperado=([-\d.]+) zmax=([-\d.]+) zmax_esperado=([-\d.]+) alertas=(\d+) baixos=(\d+) invertidos=(\d+) fim')) {
+        foreach ($m in [regex]::Matches($trecho, 'DRN_CANALETA nome=(\S+) solidos=(\d+) malhas=(\d+) volume=([\d.]+) esperado=([\d.]+) zmin=([-\d.]+) zmin_esperado=([-\d.]+) zmax=([-\d.]+) zmax_esperado=([-\d.]+) alertas=(\d+) baixos=(\d+) invertidos=(\d+) pecas=(\d+) fim')) {
             $g = $m.Groups
             $lista += [pscustomobject]@{
                 Nome = $g[1].Value; Solidos = [int] $g[2].Value; Malhas = [int] $g[3].Value
                 Volume = [double]::Parse($g[4].Value, $inv); Esperado = [double]::Parse($g[5].Value, $inv)
                 Zmin = [double]::Parse($g[6].Value, $inv); ZminE = [double]::Parse($g[7].Value, $inv)
                 Zmax = [double]::Parse($g[8].Value, $inv); ZmaxE = [double]::Parse($g[9].Value, $inv)
-                Alertas = [int] $g[10].Value; Baixos = [int] $g[11].Value; Invertidos = [int] $g[12].Value
+                Alertas = [int] $g[10].Value; Baixos = [int] $g[11].Value; Invertidos = [int] $g[12].Value; Pecas = [int] $g[13].Value
             }
         }
         return , $lista
@@ -81,6 +81,7 @@ function Testar-DrenagemCanaleta {
         if ([math]::Abs($c.Volume - $c.Esperado) -gt 0.03 * $c.Esperado) { $script:erros += "${quando}: $($c.Nome) volume $($c.Volume) m3, esperado $($c.Esperado) (area da parede x comprimento)" }
         if ([math]::Abs($c.Zmin - $c.ZminE) -gt 0.05) { $script:erros += "${quando}: $($c.Nome) fundo do 3D em $($c.Zmin), esperado $($c.ZminE)" }
         if ([math]::Abs($c.Zmax - $c.ZmaxE) -gt 0.05) { $script:erros += "${quando}: $($c.Nome) topo do 3D em $($c.Zmax), esperado $($c.ZmaxE)" }
+        if ($c.Pecas -ne 1) { $script:erros += "${quando}: $($c.Nome) com $($c.Pecas) peca(s) (esperado 1: o dissipador no pe)" }
         if ($c.Alertas -ne $c.Baixos + $c.Invertidos) { $script:erros += "${quando}: $($c.Nome) com $($c.Alertas) pintura(s) para $($c.Baixos + $c.Invertidos) trecho(s) ruim(ns)" }
     }
 

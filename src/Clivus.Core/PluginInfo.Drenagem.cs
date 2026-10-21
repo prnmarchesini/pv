@@ -44,4 +44,10 @@ public static partial class PluginInfo
 
     /// <summary>"Ajuste manual" (30.3): uma polilinha fechada e a canaleta para onde a área dela vai, ou [Soltar] o ajuste.</summary>
     public const string ComandoDrenagemBaciaManual = "CLIVUS_DRN_BACIA_MANUAL";
+
+    /// <summary>"Aplicar altura sugerida" da memória (31.5): as canaletas escolhidas ganham a altura (ou o raio) sugerido e o 3D é refeito.</summary>
+    public const string ComandoDrenagemMemoriaAltura = "CLIVUS_DRN_MEMORIA_ALTURA";
+
+    /// <summary>Só para o nível 2: o arquivo XLSX; calcula a memória, grava o Excel e escreve as linhas na linha de comando.</summary>
+    public const string ComandoDrenagemMemoriaAutomatico = "CLIVUS_DRN_MEMORIA_AUTO";
 }

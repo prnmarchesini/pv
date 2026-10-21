@@ -31,7 +31,7 @@ public static class DrenagemCommands
 
     /// <summary>CLIVUS_DRN_MEMORIA: a janela do cálculo (31).</summary>
     [CommandMethod(PluginInfo.ComandoDrenagemMemoria)]
-    public static void Memoria() => EmConstrucao(Tr.T("Cálculo"));
+    public static void Memoria() => AbrirJanela(Tr.T("Cálculo"), JanelaDeMemoria.Abrir, PluginInfo.ComandoDrenagemMemoriaAltura);
 
     /// <summary>
     /// Abre a janela do botão; sem interface (Core Console), diz qual comando
@@ -58,7 +58,4 @@ public static class DrenagemCommands
             documento.Editor.WriteMessage(Tr.F("\nNão consegui abrir {0}: {1}\n", nome, erro.Message));
         }
     }
-
-    private static void EmConstrucao(string nome) =>
-        AcadApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(Tr.F("\n{0}: em construção (drenagem, plano/drenagem).\n", nome));
 }
