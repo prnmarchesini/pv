@@ -28,17 +28,17 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
 
 ## Etapa 28: Desenho › Canaleta
 
-- 28.1 Biblioteca de seções: PENDENTE
-- 28.2 Janela da canaleta: PENDENTE
-- 28.3 Perfil da canaleta: PENDENTE
-- 28.4 Fundo com declividade mínima: PENDENTE (pergunta aberta 2)
-- 28.5 Editar e desfazer: PENDENTE
+- 28.1 Biblioteca de seções: VALIDADO (automático)
+- 28.2 Janela da canaleta: AGUARDANDO VALIDAÇÃO
+- 28.3 Perfil da canaleta: AGUARDANDO VALIDAÇÃO
+- 28.4 Fundo com declividade mínima: AGUARDANDO VALIDAÇÃO (decisão 2)
+- 28.5 Editar e desfazer: AGUARDANDO VALIDAÇÃO
 
 ## Etapa 29: canaleta em 3D
 
-- 29.1 Sólido da canaleta: PENDENTE
-- 29.2 Quantitativos: PENDENTE
-- 29.3 No Ver 3D: PENDENTE
+- 29.1 Sólido da canaleta: AGUARDANDO VALIDAÇÃO
+- 29.2 Quantitativos: VALIDADO (automático)
+- 29.3 No Ver 3D: AGUARDANDO VALIDAÇÃO
 
 ## Etapa 30: Memória › Bacias
 

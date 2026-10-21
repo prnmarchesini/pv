@@ -23,7 +23,7 @@ public static class DrenagemCommands
 
     /// <summary>CLIVUS_DRN_CANALETA: a janela da canaleta (28).</summary>
     [CommandMethod(PluginInfo.ComandoDrenagemCanaleta)]
-    public static void Canaleta() => EmConstrucao(Tr.T("Canaleta"));
+    public static void Canaleta() => AbrirJanela(Tr.T("Canaleta"), JanelaDeCanaleta.Abrir, PluginInfo.ComandoDrenagemCanaletaConverter);
 
     /// <summary>CLIVUS_DRN_BACIAS: a janela das bacias (30).</summary>
     [CommandMethod(PluginInfo.ComandoDrenagemBacias)]

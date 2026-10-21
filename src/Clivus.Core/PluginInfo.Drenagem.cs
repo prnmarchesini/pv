@@ -26,4 +26,13 @@ public static partial class PluginInfo
 
     /// <summary>Só no build de teste: confere contra o TIN tudo o que a drenagem desenhou e escreve o placar (nível 2).</summary>
     public const string ComandoDrenagemConferirAutomatico = "CLIVUS_DRN_CONFERIR_AUTO";
+
+    /// <summary>"Converter" da janela da canaleta (28.2): seção (nome da biblioteca), assentamento [Borda/Minima] e a seleção; linha ou polilinha vira canaleta, canaleta troca de seção.</summary>
+    public const string ComandoDrenagemCanaletaConverter = "CLIVUS_DRN_CANALETA_CONVERTER";
+
+    /// <summary>"Voltar a linha" (28.5): as canaletas escolhidas voltam a ser linha de análise (sai o 3D).</summary>
+    public const string ComandoDrenagemCanaletaDesfazer = "CLIVUS_DRN_CANALETA_DESFAZER";
+
+    /// <summary>"Pegar da canaleta" (28.5): clica numa canaleta e a seção dela vai para a janela.</summary>
+    public const string ComandoDrenagemCanaletaLer = "CLIVUS_DRN_CANALETA_LER";
 }

@@ -260,7 +260,28 @@ public static class Ver3DCommands
         }
 
         var titulo = Path.GetFileNameWithoutExtension(documento.Name);
-        return new Scene3D(string.IsNullOrWhiteSpace(titulo) ? Tr.T("Usina") : titulo, grade, faces, pilares, arvores, sombras);
+        return new Scene3D(string.IsNullOrWhiteSpace(titulo) ? Tr.T("Usina") : titulo, grade, faces, pilares, arvores, sombras, Canaletas(database, terreno));
+    }
+
+    /// <summary>As canaletas da drenagem (29.3): a mesma geometria do sólido do desenho, em triângulos cinza-concreto.</summary>
+    private static List<Scene3DFace> Canaletas(Database database, ProcessedTerrain terreno)
+    {
+        var faces = new List<Scene3DFace>();
+        var configuracao = DrenagemStore.Ler(database);
+        var concreto = new RgbColor(175, 175, 170);
+
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+
+        foreach (var linha in LinhasDeDrenagem.Todas(transacao, database).Where(l => l.Identidade.IsChannel))
+        {
+            var (_, canaleta) = LinhasDeDrenagem.Perfil(terreno.Mesh, configuracao, linha);
+            if (canaleta is null) continue;
+
+            foreach (var (a, b, c) in ChannelSolid.Triangles(ChannelSolid.Rings(canaleta.Points, linha.Identidade.Section!)))
+                faces.Add(new Scene3DFace([a, b, c], concreto));
+        }
+
+        return faces;
     }
 
     /// <summary>A cor que a peça mostra: a dela, ou a da camada quando é "por camada".</summary>

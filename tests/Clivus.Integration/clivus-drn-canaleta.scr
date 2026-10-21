@@ -1,0 +1,63 @@
+; Teste de nivel 2 dos passos 28 e 29 (Canaleta): a linha vira canaleta
+; trapezoidal com a borda no terreno, troca para meia-cana com fundo de
+; declividade minima, uma polilinha solta vira canaleta, uma canaleta volta a
+; linha, a canaleta e movida e apagada. A cada passo o conferir do plugin diz
+; o volume do solido contra secao x comprimento, as cotas do 3D contra o
+; perfil e as pinturas de alerta.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+
+(defun clivus:fora (e / v n z)
+  (setq v (entnext e) n 0)
+  (while (and v (= (cdr (assoc 0 (entget v))) "VERTEX"))
+    (setq z (caddr (cdr (assoc 10 (entget v)))))
+    (if (or (< z {{ZMIN}}) (> z {{ZMAX}})) (setq n (1+ n)))
+    (setq v (entnext v)))
+  n)
+(defun clivus:primeira (camada / ss) (setq ss (ssget "_X" (list '(0 . "POLYLINE") (cons 8 camada)))) (if ss (ssname ss 0)))
+
+(command "CLIVUS_DRN_LINHA" "{{P1}}" "{{P2}}" "{{P3}}" "" "{{G}}")
+(setq clivus:l1 (clivus:primeira "CLIVUS_DRN_LINHA"))
+
+(princ "\nCLIVUS_DRNCAN ETAPA1")
+(command "CLIVUS_DRN_CANALETA_CONVERTER" "Trap 30/60" "Borda" clivus:l1 "")
+(princ (strcat "\nCLIVUS_DRNCAN camada=" (cdr (assoc 8 (entget clivus:l1))) " fora=" (itoa (clivus:fora clivus:l1))))
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+
+(princ "\nCLIVUS_DRNCAN ETAPA2")
+(command "CLIVUS_DRN_CANALETA_CONVERTER" "Meia-cana 30" "Minima" clivus:l1 "")
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+
+(princ "\nCLIVUS_DRNCAN ETAPA3")
+(command "_.PLINE" "{{Q1}}" "{{Q2}}" "")
+(setq clivus:pl (entlast))
+(command "CLIVUS_DRN_CANALETA_CONVERTER" "Trap 30/60" "Borda" clivus:pl "")
+(princ (strcat "\nCLIVUS_DRNCAN original_existe=" (if (entget clivus:pl) "1" "0")))
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+
+(princ "\nCLIVUS_DRNCAN ETAPA4")
+(setq clivus:ss (ssget "_X" '((0 . "POLYLINE") (8 . "CLIVUS_DRN_CANALETA"))) clivus:i 0 clivus:c2 nil)
+(while (< clivus:i (sslength clivus:ss))
+  (if (not (eq (ssname clivus:ss clivus:i) clivus:l1)) (setq clivus:c2 (ssname clivus:ss clivus:i)))
+  (setq clivus:i (1+ clivus:i)))
+(command "CLIVUS_DRN_CANALETA_DESFAZER" clivus:c2 "")
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+
+(princ "\nCLIVUS_DRNCAN ETAPA5")
+(command "_.MOVE" clivus:l1 "" "0,0" "6,0")
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+
+(princ "\nCLIVUS_DRNCAN ETAPA6")
+(command "_.ERASE" clivus:l1 "")
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+
+(setvar "OSMODE" clivus:osmode)
+(princ "\nCLIVUS_DRNCAN FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

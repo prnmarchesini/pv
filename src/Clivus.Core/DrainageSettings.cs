@@ -145,6 +145,21 @@ public sealed record DrainageSettings
     public IReadOnlyList<ChannelSection> Sections { get; init; } = ChannelSection.Defaults;
     public BasinSettings Basins { get; init; } = new();
 
+    /// <summary>A seção escolhida por último na janela da canaleta (o padrão do Converter).</summary>
+    public string CurrentSection { get; init; } = ChannelSection.Defaults[0].Name;
+
+    /// <summary>O assentamento escolhido por último na janela da canaleta.</summary>
+    public ChannelBottomMode CurrentMode { get; init; } = ChannelBottomMode.FollowTerrain;
+
+    /// <summary>A biblioteca com a seção acrescentada, ou trocada se já há uma com o mesmo nome.</summary>
+    public DrainageSettings WithSection(ChannelSection section)
+    {
+        ArgumentNullException.ThrowIfNull(section);
+
+        var outras = Sections.Where(s => !string.Equals(s.Name, section.Name.Trim(), StringComparison.OrdinalIgnoreCase));
+        return this with { Sections = [.. outras, section with { Name = section.Name.Trim() }] };
+    }
+
     /// <summary>A chave no dicionário do desenho.</summary>
     public const string StorageKey = "DRENAGEM";
 

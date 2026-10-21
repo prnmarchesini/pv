@@ -39,12 +39,6 @@ internal static class DrenagemVigia
         }
     }
 
-    /// <summary>Mais um passo ligado ao gráfico vivo: o 3D da canaleta (29), chamado depois do perfil.</summary>
-    internal static Action<Transaction, Database, ObjectId>? DepoisDoPerfil { get; set; }
-
-    /// <summary>E quando a linha é apagada: o 3D e o que mais for dela.</summary>
-    internal static Action<Transaction, Database, Guid>? AoApagarALinha { get; set; }
-
     internal static void Instalar()
     {
         if (_aoCriar is not null) return;
@@ -255,7 +249,7 @@ internal static class DrenagemVigia
                     if (LinhasDeDrenagem.Identidade(p) is not { } identidade) continue;
 
                     LinhasDeDrenagem.ApagarPerfil(transacao, _banco, identidade.Id);
-                    AoApagarALinha?.Invoke(transacao, _banco, identidade.Id);
+                    Canaleta3D.Apagar(transacao, _banco, identidade.Id);
                     sumidas++;
                 }
 
@@ -309,8 +303,8 @@ internal static class DrenagemVigia
                             try
                             {
                                 LinhasDeDrenagem.Reassentar(transacao, polilinha, terreno.Mesh);
-                                LinhasDeDrenagem.DesenharPerfil(transacao, _banco, terreno.Mesh, configuracao, id);
-                                DepoisDoPerfil?.Invoke(transacao, _banco, id);
+                                var alerta = LinhasDeDrenagem.Refazer(transacao, _banco, terreno.Mesh, configuracao, id).Alerta;
+                                if (alerta.Length > 0) problemas.Add(alerta);
                                 refeitas++;
                             }
                             catch (ArgumentException erro)

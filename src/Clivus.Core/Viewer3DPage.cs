@@ -33,7 +33,8 @@ public sealed record Scene3D(
     IReadOnlyList<Scene3DFace> Faces,
     IReadOnlyList<Scene3DPillar> Pillars,
     IReadOnlyList<Scene3DTree> Trees,
-    IReadOnlyList<IReadOnlyList<Point3>> Shadows);
+    IReadOnlyList<IReadOnlyList<Point3>> Shadows,
+    IReadOnlyList<Scene3DFace>? Channels = null);
 
 /// <summary>
 /// A página 3D no navegador (9.9). Renan, 03/10/2026: "o PVcase tinha uma
@@ -178,6 +179,12 @@ public static class Viewer3DPage
 
         s.Append(",\"sombras\":[");
         s.Append(string.Join(',', scene.Shadows.Select(c => "[" + string.Join(',', c.Select(p => X(p.X) + "," + Y(p.Y) + "," + Z(p.Z))) + "]")));
+        s.Append(']');
+
+        // As canaletas da drenagem (29.3): triângulos, três cantos e a cor.
+        s.Append(",\"canaletas\":[");
+        s.Append(string.Join(',', (scene.Channels ?? []).Select(f =>
+            "[" + string.Join(',', f.Corners.Select(p => X(p.X) + "," + Y(p.Y) + "," + Z(p.Z))) + "," + ((f.Color.R << 16) | (f.Color.G << 8) | f.Color.B).ToString(Inv) + "]")));
         s.Append("]}");
 
         return s.ToString();
@@ -293,6 +300,7 @@ public static class Viewer3DPage
             .Replace("{{TXT_PILARES}}", H(Tr.T("Pilares")), StringComparison.Ordinal)
             .Replace("{{TXT_ARVORES}}", H(Tr.T("Árvores")), StringComparison.Ordinal)
             .Replace("{{TXT_SOMBRAS}}", H(Tr.T("Sombras")), StringComparison.Ordinal)
+            .Replace("{{TXT_CANALETAS}}", H(Tr.T("Canaletas")), StringComparison.Ordinal)
             .Replace("{{TXT_EXAGERO}}", H(Tr.T("Exagero vertical")), StringComparison.Ordinal)
             .Replace("{{TXT_ENQUADRAR}}", H(Tr.T("Enquadrar")), StringComparison.Ordinal)
             .Replace("{{TXT_DICA}}", H(Tr.T("Botão esquerdo gira, o direito arrasta, a roda dá zoom.")), StringComparison.Ordinal)
@@ -365,6 +373,7 @@ public static class Viewer3DPage
     <label><input type="checkbox" id="vPilares" checked> {{TXT_PILARES}}</label>
     <label><input type="checkbox" id="vArvores" checked> {{TXT_ARVORES}}</label>
     <label><input type="checkbox" id="vSombras" checked> {{TXT_SOMBRAS}}</label>
+    <label><input type="checkbox" id="vCanaletas" checked> {{TXT_CANALETAS}}</label>
   </div>
   <div>{{TXT_EXAGERO}} <select id="exagero"><option value="1">1×</option><option value="2">2×</option><option value="3">3×</option><option value="5">5×</option></select>
     <button id="enquadrar">{{TXT_ENQUADRAR}}</button></div>
@@ -471,6 +480,20 @@ if (D.terreno) {
   }
 }
 
+// Canaletas da drenagem: a parede de concreto em triângulos.
+{
+  const pos = [], cor = [];
+  for (const f of (D.canaletas || [])) {
+    const c = new THREE.Color(f[9]);
+    for (let k = 0; k < 3; k++) { pos.push(...P(f[3 * k], f[3 * k + 1], f[3 * k + 2])); cor.push(c.r, c.g, c.b); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(cor, 3));
+  g.computeVertexNormals();
+  camada('canaletas').add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 })));
+}
+
 const controles = new THREE.OrbitControls(camera, render.domElement);
 controles.enableDamping = true;
 
@@ -486,7 +509,7 @@ function enquadrar() {
   controles.target.copy(centro); controles.update();
 }
 
-for (const [id, nome] of [['vTerreno', 'terreno'], ['vMesas', 'mesas'], ['vPilares', 'pilares'], ['vArvores', 'arvores'], ['vSombras', 'sombras']]) {
+for (const [id, nome] of [['vTerreno', 'terreno'], ['vMesas', 'mesas'], ['vPilares', 'pilares'], ['vArvores', 'arvores'], ['vSombras', 'sombras'], ['vCanaletas', 'canaletas']]) {
   document.getElementById(id).onchange = e => { if (camadas[nome]) camadas[nome].visible = e.target.checked; };
 }
 document.getElementById('exagero').onchange = e => { mundo.scale.set(1, Number(e.target.value), 1); enquadrar(); };

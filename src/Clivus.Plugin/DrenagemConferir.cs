@@ -123,7 +123,68 @@ public static class DrenagemConferir
         var orfaos = perfis.Keys.Count(g => linhas.All(l => l.Identidade.Id.ToString("D") != g));
         editor.WriteMessage(string.Format(Inv, "\nDRN_LINHAS total={0} perfis_orfaos={1} fim\n", linhas.Count, orfaos));
 
+        ConferirCanaletas(editor, transacao, database, tin, linhas);
+
         transacao.Commit();
+    }
+
+    /// <summary>
+    /// Cada canaleta: o sólido (ou a malha) dela, o volume contra a área da
+    /// parede vezes o comprimento em planta, as cotas do 3D contra o fundo e
+    /// o terreno do perfil, e quantas pinturas de alerta.
+    /// </summary>
+    private static void ConferirCanaletas(Autodesk.AutoCAD.EditorInput.Editor editor, Transaction transacao, Database database, Tin tin, List<LinhaNoDesenho> linhas)
+    {
+        var configuracao = DrenagemStore.Ler(database);
+        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
+        var por = new Dictionary<string, List<Entity>>();
+
+        foreach (ObjectId id in espaco)
+        {
+            if (transacao.GetObject(id, OpenMode.ForRead) is not Entity e) continue;
+            if (e.Layer != LayoutLayers.DrenagemCanaleta3D && e.Layer != LayoutLayers.DrenagemAlerta) continue;
+
+            var campos = PluginXData.Load(e, Canaleta3D.Tipo3D, 1, 1) ?? PluginXData.Load(e, "DrnAlerta", 1, 1);
+            if (campos is null) continue;
+
+            if (!por.TryGetValue(campos[0], out var lista)) por[campos[0]] = lista = [];
+            lista.Add(e);
+        }
+
+        var orfaos = por.Keys.Count(g => linhas.All(l => l.Identidade.Id.ToString("D") != g || !l.Identidade.IsChannel));
+        var canaletas = 0;
+
+        foreach (var linha in linhas.Where(l => l.Identidade.IsChannel))
+        {
+            canaletas++;
+            var secao = linha.Identidade.Section!;
+            var (_, perfil) = LinhasDeDrenagem.Perfil(tin, configuracao, linha);
+            var entidades = por.GetValueOrDefault(linha.Identidade.Id.ToString("D")) ?? [];
+
+            var solidos = entidades.OfType<Solid3d>().ToList();
+            var malhas = entidades.OfType<PolyFaceMesh>().Count();
+            var alertas = entidades.Count(e => e.Layer == LayoutLayers.DrenagemAlerta);
+
+            double volume = 0, zmin = double.NaN, zmax = double.NaN;
+            foreach (var s in solidos)
+            {
+                volume += s.MassProperties.Volume;
+                var ext = s.GeometricExtents;
+                zmin = double.IsNaN(zmin) ? ext.MinPoint.Z : Math.Min(zmin, ext.MinPoint.Z);
+                zmax = double.IsNaN(zmax) ? ext.MaxPoint.Z : Math.Max(zmax, ext.MaxPoint.Z);
+            }
+
+            var esperado = secao.WallArea * (perfil?.Length ?? 0);
+            var zminEsperado = perfil is null ? double.NaN : perfil.Points.Min(p => p.Bottom) - secao.Thickness;
+            var zmaxEsperado = perfil is null ? double.NaN : perfil.Points.Max(p => p.Bottom) + secao.UsefulHeight;
+
+            editor.WriteMessage(string.Format(Inv,
+                "\nDRN_CANALETA nome={0} solidos={1} malhas={2} volume={3:0.####} esperado={4:0.####} zmin={5:0.###} zmin_esperado={6:0.###} zmax={7:0.###} zmax_esperado={8:0.###} alertas={9} baixos={10} invertidos={11} fim\n",
+                linha.Identidade.Name.Replace(' ', '_'), solidos.Count, malhas, volume, esperado, zmin, zminEsperado, zmax, zmaxEsperado,
+                alertas, perfil?.LowSegments.Count() ?? 0, perfil?.InvertedSegments.Count() ?? 0));
+        }
+
+        editor.WriteMessage(string.Format(Inv, "\nDRN_CANALETAS total={0} orfaos_3d={1} fim\n", canaletas, orfaos));
     }
 
     /// <summary>(clivus-drn-flechas-pela-janela "Areas"|"Tudo" espacamento): o botão Gerar da janela, fora de comando.</summary>

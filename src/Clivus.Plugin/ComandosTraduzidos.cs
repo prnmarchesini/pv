@@ -255,6 +255,24 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_DRN_CHANNEL")]
     public static void CLIVUS_DRN_CHANNEL() => DrenagemCommands.Canaleta();
 
+    [CommandMethod("CLIVUS_DRN_CHANNEL_CONVERT", CommandFlags.UsePickSet)]
+    public static void CLIVUS_DRN_CHANNEL_CONVERT() => CanaletaCommands.Converter();
+
+    [CommandMethod("CLIVUS_DRN_CANALETA_CONVERTIR", CommandFlags.UsePickSet)]
+    public static void CLIVUS_DRN_CANALETA_CONVERTIR() => CanaletaCommands.Converter();
+
+    [CommandMethod("CLIVUS_DRN_CHANNEL_UNDO", CommandFlags.UsePickSet)]
+    public static void CLIVUS_DRN_CHANNEL_UNDO() => CanaletaCommands.Desfazer();
+
+    [CommandMethod("CLIVUS_DRN_CANALETA_DESHACER", CommandFlags.UsePickSet)]
+    public static void CLIVUS_DRN_CANALETA_DESHACER() => CanaletaCommands.Desfazer();
+
+    [CommandMethod("CLIVUS_DRN_CHANNEL_READ")]
+    public static void CLIVUS_DRN_CHANNEL_READ() => CanaletaCommands.Ler();
+
+    [CommandMethod("CLIVUS_DRN_CANALETA_LEER")]
+    public static void CLIVUS_DRN_CANALETA_LEER() => CanaletaCommands.Ler();
+
     [CommandMethod("CLIVUS_DRN_ARROWS")]
     public static void CLIVUS_DRN_ARROWS() => DrenagemCommands.Flechas();
 

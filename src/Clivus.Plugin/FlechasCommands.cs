@@ -31,7 +31,7 @@ public static class FlechasCommands
             var terreno = FileiraCommands.ExigirTerreno(editor, documento);
             if (terreno is null) return;
 
-            var opcoes = new PromptKeywordOptions(Tr.T("\nFlechas onde?") + " [Areas/Janela/Tudo]");
+            var opcoes = new PromptKeywordOptions(Tr.T("\nFlechas onde?"));
             opcoes.Keywords.Add(Areas);
             opcoes.Keywords.Add(Janela);
             opcoes.Keywords.Add(Tudo);

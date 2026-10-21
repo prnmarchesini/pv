@@ -135,7 +135,8 @@ internal static class LinhaCommands
             try
             {
                 LinhasDeDrenagem.Reassentar(transacao, (Polyline3d)transacao.GetObject(linha.Id, OpenMode.ForWrite), terreno);
-                LinhasDeDrenagem.DesenharPerfil(transacao, documento.Database, terreno, configuracao, linha.Id);
+                var alerta = LinhasDeDrenagem.Refazer(transacao, documento.Database, terreno, configuracao, linha.Id).Alerta;
+                if (alerta.Length > 0) problemas.Add(alerta);
                 feitas++;
             }
             catch (ArgumentException erro)

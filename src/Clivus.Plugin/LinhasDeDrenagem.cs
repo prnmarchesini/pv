@@ -219,6 +219,17 @@ internal static class LinhasDeDrenagem
             identidade.Name, perfil.Length, perfil.Points[0].Z, perfil.Points[^1].Z, media * 100, fora);
     }
 
+    /// <summary>
+    /// Refaz tudo o que a linha desenha: o gráfico e, na canaleta, o 3D e a
+    /// pintura dos trechos ruins. A frase do gráfico e a dos alertas.
+    /// </summary>
+    internal static (string Frase, string Alerta) Refazer(Transaction transacao, Database database, Tin terreno, DrainageSettings configuracao, ObjectId linhaId, (double X, double Y)? onde = null)
+    {
+        var frase = DesenharPerfil(transacao, database, terreno, configuracao, linhaId, onde);
+        var alerta = Canaleta3D.Desenhar(transacao, database, terreno, configuracao, linhaId);
+        return (frase, alerta);
+    }
+
     private static (double X, double Y) AoLado(IReadOnlyList<Point3> vertices, ChartDrawing grafico)
     {
         var maxX = vertices.Max(p => p.X);
