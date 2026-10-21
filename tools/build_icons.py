@@ -182,6 +182,27 @@ def icones():
         # Edição > Apagar (05/10/2026): a lixeira, com a tampa em âmbar (a ação).
         'apagar': ([T('M8,10 L10,28 H22 L24,10'), T('M13.5,14 V24 M18.5,14 V24'), ambar_traco('M5,9 H27 M13,9 V5 H19 V9', L)],
                    [t('M8,11 L10,28 H22 L24,11'), ambar_traco('M5,9 H27 M13,9 V5 H19 V9', S)]),
+        # Drenagem (25.1, 21/10/2026). Análise: o terreno com a flecha da água.
+        'drn_analise': ([T('M3,24 C9,18 15,27 21,21 S27,16 29,18'), ambar_traco('M8,6 L17,15 M17,9 V15 H11', L)],
+                        [t('M3,25 C10,19 16,28 29,19'), ambar_traco('M8,5 L18,15 M18,8 V15 H11', S)]),
+        # Flechas: três flechas descendo, a do meio em âmbar.
+        'drn_flechas': ([T('M4,4 L10,10 M10,6 V10 H6'), ambar_traco('M12,12 L20,20 M20,15 V20 H15', L), T('M22,4 L28,10 M28,6 V10 H24'), T('M4,22 L10,28 M10,24 V28 H6')],
+                        [t('M4,4 L12,12 M12,6 V12 H6'), ambar_traco('M16,16 L27,27 M27,20 V27 H20', S)]),
+        # Linhas: o gráfico do perfil (eixos e o terreno), a linha em âmbar.
+        'drn_linha': ([T('M5,4 V27 H29'), ambar_traco('M8,9 C13,10 16,19 27,22', L), T('M11,27 V24 M17,27 V24 M23,27 V24')],
+                      [t('M5,4 V27 H29'), ambar_traco('M8,8 C13,10 16,19 28,22', S)]),
+        # Canaleta: a seção trapezoidal, a água em âmbar.
+        'drn_canaleta': ([T('M3,8 H8 L12,24 H20 L24,8 H29'), ambar_cheio('M10,17 H22 L20,23 H12 Z')],
+                         [t('M2,8 H8 L12,25 H20 L24,8 H30'), ambar_cheio('M10,17 H22 L20,24 H12 Z')]),
+        # Memória: a folha e a gota.
+        'drn_memoria': ([T(folha(4, 3, 17, 24)), T('M8,12 H15 M8,17 H15 M8,22 H13'), ambar_cheio('M24,13 C24,13 19,19 19,22.5 a5,5 0 0,0 10,0 C29,19 24,13 24,13 Z')],
+                        [t(folha(4, 3, 17, 24)), ambar_cheio('M24,12 C24,12 18,19 18,23 a6,6 0 0,0 12,0 C30,19 24,12 24,12 Z')]),
+        # Bacias: o contorno da bacia e a canaleta em âmbar no pé dela.
+        'drn_bacias': ([T('M4,8 L13,4 L27,8 L28,20 L5,22 Z'), T('M9,10 L13,15 M20,9 L18,15'), ambar_traco('M3,27 H29', L)],
+                       [t('M4,8 L14,4 L28,8 L28,21 L4,21 Z'), ambar_traco('M3,27 H29', S)]),
+        # Cálculo: a calculadora, a tecla de resultado em âmbar.
+        'drn_calculo': ([T('M7,3 H25 V29 H7 Z'), T('M11,7 H21 V12 H11 Z'), T('M12,17 H13 M16,17 H17 M12,21 H13 M16,21 H17 M12,25 H13 M16,25 H17'), ambar_traco('M21,17 V25', L)],
+                        [t('M7,3 H25 V29 H7 Z'), t('M11,7 H21 V12 H11 Z'), ambar_traco('M20,17 V25', S)]),
         # Elétrica (11.1): dois módulos ligados pelo cabo da string, + e -.
         'string': ([T(modulo(9, 10, 9, 6)), T(modulo(23, 10, 9, 6)), ambar_traco('M9,14 C9,24 23,24 23,14', L),
                     ambar_traco('M3,27 H9 M6,24 V30', L), T('M23,27 H29')],

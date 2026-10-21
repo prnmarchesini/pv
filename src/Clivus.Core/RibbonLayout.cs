@@ -124,6 +124,22 @@ public static class RibbonLayout
                 B(Tr.N("Resumo"), PluginInfo.ComandoEletricaResumo, Tr.N("O sistema inteiro pela cadeia de vínculo: subestações, trafos, inversores, strings, módulos e potência."), "resumo_eletrico"),
                 B(Tr.N("Rota de cabos"), PluginInfo.ComandoRotaCabos, Tr.N("Os cabos de cada trecho pelas valas desenhadas: abas CC, Combiner, CA e MT. Cada aba só abre quando os dois lados do trecho estão no desenho."), "rota_cabos"),
             ]),
+            // Drenagem (etapa 25, 21/10/2026): Análise e Memória em suspensos,
+            // a Canaleta grande; a aba já estava no limite da largura do notebook.
+            new(Tr.N("Drenagem"),
+            [
+                new RibbonMenuSpec(Tr.N("Análise"), Tr.N("Entender o terreno antes de desenhar a drenagem: flechas do sentido da água e linhas com o perfil."), "drn_analise",
+                [
+                    B(Tr.N("Flechas"), PluginInfo.ComandoDrenagemFlechas, Tr.N("Flechas no sentido em que a água corre sobre o terreno, coloridas pela faixa de declividade, com legenda."), "drn_flechas"),
+                    B(Tr.N("Linhas"), PluginInfo.ComandoDrenagemLinha, Tr.N("Desenhe uma linha no terreno e o gráfico do perfil aparece pronto: cotas, declividade em % e em graus e o sentido da água."), "drn_linha"),
+                ]),
+                B(Tr.N("Canaleta"), PluginInfo.ComandoDrenagemCanaleta, Tr.N("Transforma linhas em canaleta meia-cana ou trapezoidal: seção cotada, sólido 3D e perfil de caída com os trechos abaixo da declividade mínima pintados."), "drn_canaleta", grande: true),
+                new RibbonMenuSpec(Tr.N("Memória"), Tr.N("Bacias de contribuição de cada canaleta e o cálculo hidráulico do memorial, com o Excel."), "drn_memoria",
+                [
+                    B(Tr.N("Bacias"), PluginInfo.ComandoDrenagemBacias, Tr.N("Que pedaço do terreno manda água para qual canaleta: hatch de cada bacia, área, comprimento e desnível do escoamento."), "drn_bacias"),
+                    B(Tr.N("Cálculo"), PluginInfo.ComandoDrenagemMemoria, Tr.N("Chuva, vazão, lâmina, velocidade, bordo livre e altura de cada canaleta, dissipador e transposição, como no memorial; exporta para o Excel."), "drn_calculo"),
+                ]),
+            ]),
             new(Tr.N("Saída"),
             [
                 B(Tr.N("PVsyst"), PluginInfo.ComandoExportar, Tr.N("Exporta as faces dos módulos escolhidos para o PVsyst (DAE)."), "pvsyst", grande: true),

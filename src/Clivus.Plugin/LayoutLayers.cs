@@ -65,6 +65,43 @@ internal static class LayoutLayers
     /// <summary>Os módulos marcados pela sombra (9.7): a marca é cor na peça; a camada é a dos textos de sombra.</summary>
     internal const string SombraTexto = Prefixo + "SOMBRA_TEXTO";
 
+    /// <summary>Drenagem (25.2): as flechas do sentido da água e a legenda delas.</summary>
+    internal const string DrenagemFlecha = Prefixo + "DRN_FLECHA";
+
+    /// <summary>Drenagem: as linhas de análise.</summary>
+    internal const string DrenagemLinha = Prefixo + "DRN_LINHA";
+
+    /// <summary>Drenagem: os gráficos de perfil (das linhas e das canaletas).</summary>
+    internal const string DrenagemPerfil = Prefixo + "DRN_PERFIL";
+
+    /// <summary>Drenagem: o eixo das canaletas.</summary>
+    internal const string DrenagemCanaleta = Prefixo + "DRN_CANALETA";
+
+    /// <summary>Drenagem: o sólido 3D das canaletas, do dissipador e da transposição.</summary>
+    internal const string DrenagemCanaleta3D = Prefixo + "DRN_CANALETA_3D";
+
+    /// <summary>Drenagem: o hatch e o rótulo das bacias de contribuição.</summary>
+    internal const string DrenagemBacia = Prefixo + "DRN_BACIA";
+
+    /// <summary>Drenagem: o que não deu (trecho abaixo da mínima, área sem destino), pintado.</summary>
+    internal const string DrenagemAlerta = Prefixo + "DRN_ALERTA";
+
+    /// <summary>As cores das camadas da drenagem quando o plugin as cria.</summary>
+    internal static readonly IReadOnlyDictionary<string, RgbColor> CoresDaDrenagem = new Dictionary<string, RgbColor>
+    {
+        [DrenagemFlecha] = new(90, 160, 220),
+        [DrenagemLinha] = new(0, 190, 255),
+        [DrenagemPerfil] = new(200, 200, 200),
+        [DrenagemCanaleta] = new(0, 110, 255),
+        [DrenagemCanaleta3D] = new(150, 150, 150),
+        [DrenagemBacia] = new(80, 200, 120),
+        [DrenagemAlerta] = new(255, 40, 40),
+    };
+
+    /// <summary>Garante uma camada da drenagem com a cor dela. Devolve o nome.</summary>
+    internal static string GarantirDrenagem(Transaction transacao, Database database, string nome) =>
+        Garantir(transacao, database, nome, CoresDaDrenagem.TryGetValue(nome, out var cor) ? cor : null);
+
     /// <summary>Laranja do AutoCAD (ACI 30).</summary>
     internal const short CorDaArea = 30;
 

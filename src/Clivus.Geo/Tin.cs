@@ -187,6 +187,31 @@ public sealed class Tin
     }
 
     /// <summary>
+    /// Qual triângulo contém (x, y), pela posição em <see cref="Triangles"/>.
+    /// Falso fora do terreno. É o que a declividade (passo 25.3) precisa: a
+    /// cota sozinha não diz para onde a água corre, o plano do triângulo diz.
+    /// </summary>
+    public bool TryFindTriangle(double x, double y, out int index)
+    {
+        index = -1;
+
+        if (!double.IsFinite(x) || !double.IsFinite(y)) return false;
+        if (_grid is null) return false;
+
+        foreach (var i in _grid.Candidates(x, y))
+        {
+            if (TryInterpolate(_triangles[i], _denominators[i], x, y, out _)) { index = i; return true; }
+        }
+
+        foreach (var i in _grid.Oversized)
+        {
+            if (TryInterpolate(_triangles[i], _denominators[i], x, y, out _)) { index = i; return true; }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// A cota mais alta do terreno ao longo do segmento em planta de (x0, y0)
     /// a (x1, y1).
     ///

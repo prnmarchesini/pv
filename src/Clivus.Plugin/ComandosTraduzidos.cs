@@ -246,6 +246,27 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_INCLINACION")]
     public static void CLIVUS_INCLINACION() => DeclividadeCommands.Declividade();
 
+    [CommandMethod("CLIVUS_DRN_BASINS")]
+    public static void CLIVUS_DRN_BASINS() => DrenagemCommands.Bacias();
+
+    [CommandMethod("CLIVUS_DRN_CUENCAS")]
+    public static void CLIVUS_DRN_CUENCAS() => DrenagemCommands.Bacias();
+
+    [CommandMethod("CLIVUS_DRN_CHANNEL")]
+    public static void CLIVUS_DRN_CHANNEL() => DrenagemCommands.Canaleta();
+
+    [CommandMethod("CLIVUS_DRN_ARROWS")]
+    public static void CLIVUS_DRN_ARROWS() => DrenagemCommands.Flechas();
+
+    [CommandMethod("CLIVUS_DRN_LINE")]
+    public static void CLIVUS_DRN_LINE() => DrenagemCommands.Linha();
+
+    [CommandMethod("CLIVUS_DRN_LINEA")]
+    public static void CLIVUS_DRN_LINEA() => DrenagemCommands.Linha();
+
+    [CommandMethod("CLIVUS_DRN_REPORT")]
+    public static void CLIVUS_DRN_REPORT() => DrenagemCommands.Memoria();
+
     [CommandMethod("CLIVUS_ELECTRICAL")]
     public static void CLIVUS_ELECTRICAL() => ConfiguracaoEletricaCommands.Eletrica();
 

@@ -3,14 +3,15 @@
 Status possíveis: PENDENTE, AGUARDANDO VALIDAÇÃO, VALIDADO, REPROVADO.
 Só o Renan marca VALIDADO (exceto `VALIDADO (automático)`, ver `LEIA-PRIMEIRO.md`).
 
-**Plano aguardando o OK do Renan (21/10/2026). Nenhum código começa antes disso.**
+**Plano aprovado pelo Renan em 21/10/2026 ("pode fazer"). As três perguntas abertas
+ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan confirmar.**
 
 ## Etapa 25: base
 
-- 25.1 Painel Drenagem na ribbon: PENDENTE
-- 25.2 Layers da drenagem: PENDENTE
-- 25.3 Declividade e aspecto do TIN: PENDENTE
-- 25.4 Caminho de escoamento: PENDENTE
+- 25.1 Painel Drenagem na ribbon: AGUARDANDO VALIDAÇÃO
+- 25.2 Layers da drenagem: VALIDADO (automático)
+- 25.3 Declividade e aspecto do TIN: VALIDADO (automático)
+- 25.4 Caminho de escoamento: VALIDADO (automático)
 
 ## Etapa 26: Análise › Flechas
 
@@ -55,13 +56,16 @@ Só o Renan marca VALIDADO (exceto `VALIDADO (automático)`, ver `LEIA-PRIMEIRO.
 - 31.5 Seção a partir da conta: PENDENTE
 - 31.6 Dissipador e transposição: PENDENTE (pergunta aberta 3)
 
-## Perguntas abertas
+## Decisões tomadas sem resposta (ficam para o Renan confirmar)
 
-1. Altura adotada: o memorial arredonda a canaleta 2 de 0,427 para 0,50.
-   Regra para 0,05 m (daria 0,45) ou para 0,10 m?
-2. Fundo da canaleta: só copiar o terreno e alertar trecho abaixo de 0,5 %, ou
-   já oferecer "fundo com declividade mínima" (aprofunda onde precisa)?
-3. Dissipador e transposição: desenhar em 3D ou só listar na memória?
+1. Altura adotada: arredonda para cima de 0,05 m em 0,05 m, e o passo do
+   arredondamento é parâmetro da Memória (0,10 reproduz o 0,50 do memorial).
+   O y adotado é sempre editável.
+2. Fundo da canaleta: padrão "borda no terreno" (fundo = terreno − y) com
+   alerta e pintura do trecho abaixo de 0,5 % ou invertido; "fundo com
+   declividade mínima" existe como opção na janela (28.4).
+3. Dissipador e transposição: entram nas tabelas da Memória e são desenhados
+   como bloco 3D simples (31.6).
 
 ## Observações
 
