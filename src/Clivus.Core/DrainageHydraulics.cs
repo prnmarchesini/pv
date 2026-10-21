@@ -162,7 +162,9 @@ public static class Hydraulics
 
         if (!(slope > 0)) return double.NaN;
 
-        var r = RoundUp(Math.Max(section.Radius, step), step);
+        // Do menor raio para cima: a sugestão pode ser menor que o raio atual,
+        // como na trapezoidal (revisão da etapa 31).
+        var r = RoundUp(step, step);
 
         for (var i = 0; i < 400; i++, r = RoundUp(r + step, step))
         {

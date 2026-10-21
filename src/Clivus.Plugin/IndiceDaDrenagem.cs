@@ -1,5 +1,6 @@
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Runtime;
+using Clivus.Geo;
 
 namespace Clivus.Plugin;
 
@@ -71,6 +72,15 @@ internal sealed class IndiceDaDrenagem
 
         return apagadas;
     }
+
+    private List<IReadOnlyList<Point3>>? _vias;
+
+    /// <summary>
+    /// As vias (para a transposição), lidas uma vez por operação: varrer o
+    /// desenho para cada canaleta trazia de volta o O(N·M).
+    /// </summary>
+    internal List<IReadOnlyList<Point3>> Vias(Transaction transacao, Database database, string camadas) =>
+        _vias ??= MemoriaDeDrenagem.Vias(transacao, database, camadas);
 
     /// <summary>Os GUIDs que têm alguma coisa desenhada (para achar órfãos).</summary>
     internal IReadOnlyCollection<string> Guids => _porGuid.Keys;

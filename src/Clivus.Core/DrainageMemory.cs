@@ -49,9 +49,10 @@ public sealed record ChannelCalculation
 }
 
 /// <summary>A memória de cálculo inteira (31.3): uma linha por canaleta e as tabelas.</summary>
-public sealed record DrainageMemoryResult(HydrologyParameters Parameters, IReadOnlyList<ChannelCalculation> Channels)
+/// <param name="Problems">O que ficou fora da memória e por quê (canaleta sem perfil, por exemplo): nunca some calado.</param>
+public sealed record DrainageMemoryResult(HydrologyParameters Parameters, IReadOnlyList<ChannelCalculation> Channels, IReadOnlyList<string>? Problems = null)
 {
-    public IEnumerable<string> Alerts => Channels.SelectMany(c => c.Alerts.Select(a => $"{c.Input.Name}: {a}"));
+    public IEnumerable<string> Alerts => (Problems ?? []).Concat(Channels.SelectMany(c => c.Alerts.Select(a => $"{c.Input.Name}: {a}")));
 }
 
 /// <summary>
@@ -68,14 +69,14 @@ public static class DrainageMemory
     /// <summary>Os períodos de retorno da Tabela 3, em anos.</summary>
     public static readonly IReadOnlyList<double> ReturnPeriods = [15, 25, 50, 100];
 
-    public static DrainageMemoryResult Build(HydrologyParameters parameters, IReadOnlyList<ChannelInput> channels)
+    public static DrainageMemoryResult Build(HydrologyParameters parameters, IReadOnlyList<ChannelInput> channels, IReadOnlyList<string>? problems = null)
     {
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(channels);
 
         if (parameters.Problem() is { } problema) throw new ArgumentException(problema);
 
-        return new DrainageMemoryResult(parameters, channels.Select(c => Calculate(parameters, c)).ToList());
+        return new DrainageMemoryResult(parameters, channels.Select(c => Calculate(parameters, c)).ToList(), problems ?? []);
     }
 
     public static ChannelCalculation Calculate(HydrologyParameters p, ChannelInput c)
@@ -128,6 +129,13 @@ public static class DrainageMemory
 
         if (imax <= 0) imax = iLamina;
 
+        // O fundo ponto a ponto: uma contrapendente curta dentro de um trecho de
+        // 20 m que desce na média não aparece na Imin (revisão da etapa 31).
+        foreach (var t in perfil.InvertedSegments)
+            alertas.Add(Tr.F("o fundo fica plano ou sobe de {0:0.0} a {1:0.0} m: a água para ali.", t.From, t.To));
+        foreach (var t in perfil.LowSegments)
+            alertas.Add(Tr.F("o fundo desce {0:0.00}% de {1:0.0} a {2:0.0} m, abaixo da mínima ({3:0.0}%).", t.Percent, t.From, t.To, p.MinimumSlope * 100));
+
         double hmax = 0, vmax = 0, vmin = 0;
         if (vazao > 0)
         {
@@ -143,7 +151,9 @@ public static class DrainageMemory
         if (vazao > 0)
         {
             if (double.IsNaN(hmax))
-                alertas.Add(Tr.F("a meia-cana não leva {0:0.###} m³/s nem cheia: aumente o raio.", vazao));
+                alertas.Add(secao.Kind == ChannelKind.HalfPipe
+                    ? Tr.F("a meia-cana não leva {0:0.###} m³/s nem cheia: aumente o raio.", vazao)
+                    : Tr.F("a lâmina para {0:0.###} m³/s não foi calculada (seção ou declividade fora do alcance).", vazao));
             else if (hmax + f > secao.UsefulHeight + 1e-9)
                 alertas.Add(Tr.F("lâmina {0:0.000} m + bordo livre {1:0.00} m passa da altura da seção ({2:0.00} m); sugerida {3:0.00} m.", hmax, f, secao.UsefulHeight, sugerida));
 

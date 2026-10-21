@@ -115,7 +115,7 @@ internal sealed class JanelaDeMemoria : Window
 
         var botoes = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
         botoes.Children.Add(_bacias);
-        var calcular = Botao(Tr.T("Calcular"), Tr.T("Grava os parâmetros e calcula a memória das canaletas do desenho."), Calcular);
+        var calcular = Botao(Tr.T("Calcular"), Tr.T("Grava os parâmetros e calcula a memória das canaletas do desenho."), () => Calcular());
         calcular.IsDefault = true;
         botoes.Children.Add(calcular);
         botoes.Children.Add(Botao(Tr.T("Exportar Excel…"), Tr.T("Uma aba por tabela do memorial, mais parâmetros e alertas."), Exportar));
@@ -188,7 +188,11 @@ internal sealed class JanelaDeMemoria : Window
         return p;
     }
 
-    private void Calcular()
+    /// <param name="gravar">
+    /// Grava os parâmetros da tela no desenho antes. Ao abrir a janela não:
+    /// só abrir não pode deixar o desenho modificado.
+    /// </param>
+    private void Calcular(bool gravar = true)
     {
         try
         {
@@ -202,21 +206,35 @@ internal sealed class JanelaDeMemoria : Window
             {
                 memoria = EscritaForaDeComando.Fazer(_documento, () =>
                 {
-                    DrenagemStore.Mudar(_documento.Database, d => d with { Hydrology = parametros });
+                    if (gravar) DrenagemStore.Mudar(_documento.Database, d => d with { Hydrology = parametros });
 
                     if (_bacias.IsChecked == true)
                     {
+                        // As bacias podem demorar: com andamento e Cancelar, como na janela delas.
+                        var andamento = JanelaDeProgresso.Abrir(this, Tr.T("Bacias de contribuição"), podeCancelar: true);
                         try
                         {
-                            frases.Add(BaciasCommands.CalcularComARegiaoGravada(_documento, terreno.Mesh));
+                            frases.Add(BaciasCommands.CalcularComARegiaoGravada(_documento, terreno.Mesh, p =>
+                            {
+                                andamento.Avancar(p * 100, Tr.T("Descendo a água de cada célula…"));
+                                return !andamento.Cancelado;
+                            }));
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            frases.Add(Tr.T("BACIAS Cancelado; as bacias anteriores ficaram."));
                         }
                         catch (ArgumentException erro)
                         {
                             frases.Add(Tr.F("BACIAS {0}", erro.Message));
                         }
+                        finally
+                        {
+                            andamento.Fechar();
+                        }
                     }
 
-                    return MemoriaDeDrenagem.Montar(_documento.Database, terreno.Mesh);
+                    return MemoriaDeDrenagem.Montar(_documento.Database, terreno.Mesh, parametros);
                 });
             }
 
@@ -356,7 +374,7 @@ internal sealed class JanelaDeMemoria : Window
 
         // Sem bacias recalculadas na abertura (pode demorar): mostra a memória com as gravadas.
         janela._bacias.IsChecked = false;
-        janela.Calcular();
+        janela.Calcular(gravar: false);
         janela._bacias.IsChecked = true;
     }
 }

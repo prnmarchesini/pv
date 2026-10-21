@@ -302,8 +302,12 @@ public static class FlowTracer
             if (joined is not null && joined(q.X, q.Y)) return Fim(FlowStop.Joined);
         }
 
+        // Fora do terreno só quando nenhuma direção achou terreno: um fundo a
+        // menos do raio da borda continua sendo fundo, não "saiu do terreno".
         static Point3? Sondar(Tin tin, Point3 p, double passo, double raioMaximo, ref bool foraDoTerreno)
         {
+            var achouTerreno = false;
+
             for (var raio = passo; raio <= raioMaximo + 1e-9; raio = raio * 2 >= raioMaximo && raio < raioMaximo ? raioMaximo : raio * 2)
             {
                 Point3? melhor = null;
@@ -313,20 +317,35 @@ public static class FlowTracer
                     var a = k * Math.PI / 8;
                     var (qx, qy) = (p.X + raio * Math.Cos(a), p.Y + raio * Math.Sin(a));
 
-                    if (!tin.TryGetZ(qx, qy, out var qz))
-                    {
-                        foraDoTerreno = true;
-                        continue;
-                    }
+                    if (!tin.TryGetZ(qx, qy, out var qz)) continue;
+                    achouTerreno = true;
 
-                    if (qz < p.Z - 1e-6 && (melhor is null || qz < melhor.Value.Z)) melhor = new Point3(qx, qy, qz);
+                    if (qz < p.Z - 1e-6 && (melhor is null || qz < melhor.Value.Z) && SemDivisor(tin, p, qx, qy)) melhor = new Point3(qx, qy, qz);
                 }
 
                 if (melhor is not null) return melhor;
                 if (raio >= raioMaximo) break;
             }
 
+            if (!achouTerreno) foraDoTerreno = true;
             return null;
+        }
+
+        // O pulo da sonda é reto: sem isto, de um patamar atrás de uma leira
+        // ou de um aterro de via a água atravessaria o morro e cairia noutra
+        // bacia. Nenhum ponto do caminho pode ficar acima de onde ela está.
+        static bool SemDivisor(Tin tin, Point3 p, double qx, double qy)
+        {
+            var distancia = Math.Sqrt((qx - p.X) * (qx - p.X) + (qy - p.Y) * (qy - p.Y));
+            var amostras = Math.Max(2, (int)Math.Ceiling(distancia / 0.5));
+
+            for (var s = 1; s < amostras; s++)
+            {
+                var t = (double)s / amostras;
+                if (!tin.TryGetZ(p.X + (qx - p.X) * t, p.Y + (qy - p.Y) * t, out var z) || z > p.Z + 1e-6) return false;
+            }
+
+            return true;
         }
 
         void Andar(Point3 q)

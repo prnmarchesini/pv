@@ -131,6 +131,34 @@ public class FlowTracerTests
 
     [Fact]
     [Trait("Etapa", "30")]
+    public void ASondaNaoPulaOMorro()
+    {
+        // Revisão da etapa 31: patamar plano em 98 (x de 40 a 46), uma leira de
+        // 1 m logo depois (x = 48) e o terreno mais baixo além dela. A água
+        // empoça no patamar; a sonda em linha reta passaria por cima da leira.
+        double Z(double x) => x < 40 ? 100 - 0.05 * x : x <= 46 ? 98 : x <= 48 ? 98 + 0.5 * (x - 46) : x <= 50 ? 99 - 1.5 * (x - 48) : 96 - 0.05 * (x - 50);
+        var tin = TerrenoDeDrenagem.Grade((x, _) => Z(x), 0, 0, 100, 2);
+
+        var caminho = FlowTracer.Trace(tin, 10, 77);
+
+        Assert.Equal(FlowStop.Sink, caminho.Stop);
+        Assert.True(caminho.Points[^1].X <= 46.5, $"pulou a leira: parou em x = {caminho.Points[^1].X:0.#}");
+    }
+
+    [Fact]
+    [Trait("Etapa", "30")]
+    public void FundoPertoDaBordaContinuaSendoFundo()
+    {
+        // Funil com o fundo a 20 m da borda: a sonda acha borda, mas é fundo.
+        var tin = TerrenoDeDrenagem.Grade((x, y) => 50 + 0.03 * Math.Sqrt((x - 20) * (x - 20) + (y - 100) * (y - 100)), 0, 0, 40, 5);
+
+        var caminho = FlowTracer.Trace(tin, 60, 100);
+
+        Assert.Equal(FlowStop.Sink, caminho.Stop);
+    }
+
+    [Fact]
+    [Trait("Etapa", "30")]
     public void PlanicieDeVerdadeContinuaSendoFundo()
     {
         // Plano maior que o raio da sonda: aí a água empoça mesmo.

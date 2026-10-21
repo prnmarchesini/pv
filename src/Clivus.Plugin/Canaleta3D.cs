@@ -27,7 +27,8 @@ internal static class Canaleta3D
     /// O anterior já foi apagado por quem chama. Devolve o resumo dos
     /// alertas, ou vazio.
     /// </summary>
-    internal static string Desenhar(Transaction transacao, Database database, Tin terreno, DrainageSettings configuracao, ObjectId linhaId)
+    /// <param name="indice">O índice da operação: guarda as vias, lidas uma vez só para todas as canaletas.</param>
+    internal static string Desenhar(Transaction transacao, Database database, Tin terreno, DrainageSettings configuracao, ObjectId linhaId, IndiceDaDrenagem indice)
     {
         var polilinha = (Polyline3d)transacao.GetObject(linhaId, OpenMode.ForRead);
         var identidade = LinhasDeDrenagem.Identidade(polilinha) ?? throw new InvalidOperationException(Tr.T("A entidade não é uma linha da drenagem."));
@@ -72,7 +73,7 @@ internal static class Canaleta3D
 
         // 31.6: o dissipador no pé (jusante) e a laje da transposição onde a
         // canaleta cruza via. Blocos simples, com as medidas do álbum do DNIT.
-        Pecas(transacao, database, terreno, configuracao, linha, canaleta, secao, camada3D, e => Marcar(e, TipoPeca));
+        Pecas(terreno, configuracao, linha, canaleta, secao, camada3D, indice.Vias(transacao, database, configuracao.Hydrology.RoadLayers), e => Marcar(e, TipoPeca));
 
         // A pintura dos trechos ruins, em planta, sobre o terreno.
         var camadaAlerta = LayoutLayers.GarantirDrenagem(transacao, database, LayoutLayers.DrenagemAlerta);
@@ -111,8 +112,8 @@ internal static class Canaleta3D
     /// da transposição (TSS: o comprimento do modelo atravessando a canaleta,
     /// 50 cm ao longo dela, 21 cm de espessura, o topo no terreno).
     /// </summary>
-    private static void Pecas(Transaction transacao, Database database, Tin terreno, DrainageSettings configuracao,
-        LinhaNoDesenho linha, ChannelProfileResult canaleta, ChannelSection secao, string camada, Action<Entity> marcar)
+    private static void Pecas(Tin terreno, DrainageSettings configuracao,
+        LinhaNoDesenho linha, ChannelProfileResult canaleta, ChannelSection secao, string camada, List<IReadOnlyList<Point3>> vias, Action<Entity> marcar)
     {
         var (_, l2, comprimento) = EnergyDissipator.Size(secao.TopWidth);
         var fim = canaleta.Points[^1];
@@ -129,7 +130,6 @@ internal static class Canaleta3D
             marcar(Caixa(cx, cy, topo - 0.16, comprimento, l2, 0.32, Math.Atan2(dy, dx), camada));
         }
 
-        var vias = MemoriaDeDrenagem.Vias(transacao, database, configuracao.Hydrology.RoadLayers);
         if (vias.Count == 0) return;
 
         var modelo = ChannelCrossing.Model(secao.TopWidth, configuracao.Hydrology.CrossingMargin);
@@ -145,10 +145,19 @@ internal static class Canaleta3D
     /// <summary>Uma caixa centrada em (x, y, z), comprida ao longo do ângulo dado.</summary>
     private static Solid3d Caixa(double x, double y, double z, double comprimento, double largura, double altura, double angulo, string camada)
     {
+        // Solid3d fora do banco, largado para o coletor, derruba o AutoCAD.
         var caixa = new Solid3d { Layer = camada };
-        caixa.CreateBox(comprimento, largura, altura);
-        caixa.TransformBy(Matrix3d.Displacement(new Vector3d(x, y, z)) * Matrix3d.Rotation(angulo, Vector3d.ZAxis, Point3d.Origin));
-        return caixa;
+        try
+        {
+            caixa.CreateBox(comprimento, largura, altura);
+            caixa.TransformBy(Matrix3d.Displacement(new Vector3d(x, y, z)) * Matrix3d.Rotation(angulo, Vector3d.ZAxis, Point3d.Origin));
+            return caixa;
+        }
+        catch
+        {
+            caixa.Dispose();
+            throw;
+        }
     }
 
     /// <summary>

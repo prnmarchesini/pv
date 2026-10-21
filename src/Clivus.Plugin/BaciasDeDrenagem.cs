@@ -58,7 +58,8 @@ internal static class BaciasDeDrenagem
             throw new ArgumentException(Tr.T("Não há canaleta no desenho. Faça as canaletas antes (Desenho › Canaleta)."));
 
         var alvos = new FlowTargets(canaletas.Select(c => c.Vertices).ToList());
-        var indice = canaletas.Select((c, i) => (c.Identidade.Id, i)).ToDictionary(p => p.Id, p => p.i);
+        // Duas canaletas com o mesmo GUID (cópia feita sem o vigia): a primeira fica com o ajuste manual.
+        var indice = canaletas.Select((c, i) => (c.Identidade.Id, i)).GroupBy(p => p.Id).ToDictionary(g => g.Key, g => g.First().i);
 
         var semCanaleta = 0;
         var manuais = new List<(IReadOnlyList<Point3>, int)>();
@@ -207,9 +208,10 @@ internal static class BaciasDeDrenagem
                 Color = cor,
                 Height = alturaDoTexto,
                 TextString = texto,
-                Position = new Point3d(lx, ly, (terreno.TryGetZ(lx, ly, out var zr) ? zr : mancha.MaxZ) + 0.1),
+                // Acima do hatch (que fica na cota mais alta da bacia): em 3D o rótulo aparece.
+                Position = new Point3d(lx, ly, hachura.Elevation + 0.05),
                 HorizontalMode = TextHorizontalMode.TextCenter,
-                AlignmentPoint = new Point3d(lx, ly, (terreno.TryGetZ(lx, ly, out var za) ? za : mancha.MaxZ) + 0.1),
+                AlignmentPoint = new Point3d(lx, ly, hachura.Elevation + 0.05),
             };
             Marcar(rotulo, dono);
             rotulo.AdjustAlignment(database);

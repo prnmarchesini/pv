@@ -272,10 +272,20 @@ public static class Watershed
                 var (x, y) = grade.Center(k % grade.Columns, k / grade.Columns);
                 var caminho = FlowTracer.Trace(tin, x, y, targets, options);
 
-                if (caminho.Stop == FlowStop.Target && caminho.TargetIndex == alvo)
+                if (caminho.Stop == FlowStop.Target)
                 {
+                    // Sem atalho a água foi para outra canaleta: o atalho tinha
+                    // errado o dono. Fica o caminho de verdade.
+                    grade.Owner[k] = caminho.TargetIndex;
                     grade.Length[k] = caminho.Length2D;
                     grade.EndZ[k] = caminho.Points[^1].Z;
+                }
+                else
+                {
+                    grade.Owner[k] = NoDestination;
+                    grade.Reason[k] = caminho.Stop;
+                    grade.Length[k] = double.NaN;
+                    grade.EndZ[k] = double.NaN;
                 }
             }
         }

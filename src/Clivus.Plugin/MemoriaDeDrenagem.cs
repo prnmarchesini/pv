@@ -14,11 +14,14 @@ namespace Clivus.Plugin;
 internal static class MemoriaDeDrenagem
 {
     /// <summary>A memória das canaletas do desenho, recalculada agora.</summary>
-    internal static DrainageMemoryResult Montar(Database database, Tin terreno)
+    /// <param name="parametros">Os parâmetros a usar; sem eles, os gravados no desenho.</param>
+    internal static DrainageMemoryResult Montar(Database database, Tin terreno, HydrologyParameters? parametros = null)
     {
         var configuracao = DrenagemStore.Ler(database);
+        if (parametros is not null) configuracao = configuracao with { Hydrology = parametros };
         var bacias = DrenagemStore.LerBacias(database);
         var entradas = new List<ChannelInput>();
+        var fora = new List<string>();
 
         using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
         {
@@ -26,15 +29,23 @@ internal static class MemoriaDeDrenagem
 
             foreach (var linha in LinhasDeDrenagem.Todas(transacao, database).Where(l => l.Identidade.IsChannel).OrderBy(l => l.Identidade.Name, StringComparer.CurrentCultureIgnoreCase))
             {
-                var (_, perfil) = LinhasDeDrenagem.Perfil(terreno, configuracao, linha);
-                if (perfil is null || perfil.Points.Count < 2) continue;
+                var (terrenoDaLinha, perfil) = LinhasDeDrenagem.Perfil(terreno, configuracao, linha);
+                if (perfil is null || perfil.Points.Count < 2)
+                {
+                    // Nunca some calada da memória (regra 4).
+                    fora.Add(Tr.F("{0}: sem perfil (fora do terreno ou comprimento zero); ficou fora da memória.", linha.Identidade.Name));
+                    continue;
+                }
+
+                if (terrenoDaLinha.OutsideCount > 0)
+                    fora.Add(Tr.F("{0}: {1} ponto(s) fora do terreno; a memória usa só o trecho com terreno.", linha.Identidade.Name, terrenoDaLinha.OutsideCount));
 
                 entradas.Add(new ChannelInput(linha.Identidade.Id, linha.Identidade.Name, linha.Identidade.Section!, perfil,
                     bacias?.Of(linha.Identidade.Id), Cruzamentos(linha.Vertices, vias).Count));
             }
         }
 
-        return DrainageMemory.Build(configuracao.Hydrology, entradas);
+        return DrainageMemory.Build(configuracao.Hydrology, entradas, fora);
     }
 
     /// <summary>Os traçados em planta das vias (as curvas nas camadas informadas, separadas por ";").</summary>
@@ -47,40 +58,17 @@ internal static class MemoriaDeDrenagem
         var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
         foreach (ObjectId id in espaco)
         {
-            if (transacao.GetObject(id, OpenMode.ForRead) is not Curve c || !nomes.Contains(c.Layer)) continue;
+            // Xline e raio não têm fim: não são traçado de via.
+            if (transacao.GetObject(id, OpenMode.ForRead) is not Curve c || c is Xline or Ray || !nomes.Contains(c.Layer)) continue;
             vias.Add(LinhaCommands.Caminho(database, id));
         }
 
         return vias;
     }
 
-    /// <summary>Onde a canaleta cruza as vias, em planta, com a direção da canaleta ali.</summary>
-    internal static List<(double X, double Y, double DirX, double DirY)> Cruzamentos(IReadOnlyList<Point3> canaleta, List<IReadOnlyList<Point3>> vias)
-    {
-        var pontos = new List<(double, double, double, double)>();
-
-        for (var i = 1; i < canaleta.Count; i++)
-        {
-            var (a, b) = (canaleta[i - 1], canaleta[i]);
-
-            foreach (var via in vias)
-            {
-                for (var j = 1; j < via.Count; j++)
-                {
-                    if (!Polygons.SegmentsCross(a, b, via[j - 1], via[j])) continue;
-
-                    // O ponto do cruzamento, pela fração no trecho da canaleta.
-                    var (c, d) = (via[j - 1], via[j]);
-                    var den = (b.X - a.X) * (d.Y - c.Y) - (b.Y - a.Y) * (d.X - c.X);
-                    var t = Math.Abs(den) < 1e-12 ? 0.5 : ((c.X - a.X) * (d.Y - c.Y) - (c.Y - a.Y) * (d.X - c.X)) / den;
-                    var n = Math.Sqrt((b.X - a.X) * (b.X - a.X) + (b.Y - a.Y) * (b.Y - a.Y));
-                    pontos.Add((a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t, (b.X - a.X) / n, (b.Y - a.Y) / n));
-                }
-            }
-        }
-
-        return pontos;
-    }
+    /// <summary>Onde a canaleta cruza as vias, em planta, com a direção da canaleta ali (<see cref="RoadCrossings"/>).</summary>
+    internal static List<(double X, double Y, double DirX, double DirY)> Cruzamentos(IReadOnlyList<Point3> canaleta, List<IReadOnlyList<Point3>> vias) =>
+        RoadCrossings.Find(canaleta, vias);
 
     /// <summary>Grava o Excel da memória (uma aba por tabela). A frase do relato.</summary>
     internal static string Exportar(Document documento, Tin terreno, string caminho)

@@ -80,3 +80,44 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
   Fica para o Renan dizer se quer o sentido gravado.
 - 30.3: o ajuste manual é uma polilinha fechada marcada com a canaleta (não o grip no
   hatch, que é refeito a cada cálculo).
+- A vazão de cada canaleta vem só da bacia dela: canaleta que deságua em outra não soma
+  (interseções, fora de escopo).
+- Altura sugerida da meia-cana: o menor raio (no passo) em que lâmina + bordo livre cabem;
+  o bordo livre é o da Tabela 36 do DNIT (valetas), o mesmo da trapezoidal.
+
+## Roteiro de tela (o que o Renan confere no Civil 3D)
+
+Antes: `tools/publicar-bundle.ps1` e `tools/instalar.ps1` com o Civil 3D fechado. Abra um
+desenho com terreno (Terreno) e uma área de implantação.
+
+1. **25.1** Aba Clivus Solar › painel **Drenagem**: Análise (suspenso: Flechas, Linhas),
+   Canaleta (grande), Memória (suspenso: Bacias, Cálculo). Confira os ícones nos dois temas.
+2. **26** Análise › Flechas: Onde = Áreas de implantação, 5 m, Gerar. Flechas coloridas
+   pelas faixas (verde até 5 %, laranja até 10 %, vermelho até 15 %, roxo até 20 %, azul
+   acima), apontando morro abaixo; legenda à direita em cima. Teste Janela (dois cantos),
+   "Escrever a declividade", outras faixas, Apagar. Orbite: as flechas em cima do terreno.
+3. **27** Análise › Linhas: clique 3 ou 4 pontos no terreno, Enter, clique onde vai o
+   gráfico (ou Enter = ao lado). O gráfico: terreno verde, grade, banda com distância e
+   cotas, "% | grau" e seta da água em cada trecho de 20 m, título com comprimento, cotas,
+   declividade média e exagero. Arraste um vértice da linha (grip): ela volta ao terreno e o
+   gráfico muda sozinho. Copie a linha: a cópia ganha nome e gráfico. Apague: o gráfico some.
+   "Selecionar" numa polilinha sua: vira linha (a sua some).
+4. **28** Canaleta: confira o desenho cotado mudando ao digitar (trapezoidal e meia-cana),
+   salve uma seção sua, Converter linhas… e escolha a linha. O gráfico vira o da canaleta
+   (fundo azul, topo da parede); trecho que sobe ou desce menos de 0,5 % fica vermelho no
+   gráfico e pintado em planta (amarelo/vermelho). Mude para "Fundo com declividade mínima"
+   e converta de novo: a pintura some e a canaleta aprofunda onde precisa. Pegar da
+   canaleta…, Voltar a linha….
+5. **29** Orbite a canaleta: o sólido da parede seguindo o terreno, e o dissipador no pé
+   (a ponta mais baixa). Saída › 3D: as canaletas aparecem, com a caixa "Canaletas" para
+   ligar e desligar.
+6. **30** Memória › Bacias: Calcular bacias. Um hatch por canaleta (com a cor dela), a
+   borda no terreno, o rótulo com área, L e ΔH; a área cuja água não chega a canaleta
+   nenhuma em vermelho, com o motivo no relato. Clique numa linha da lista: zoom nela.
+   Ajuste manual…: polilinha fechada sua + canaleta; Calcular de novo: a lista diz "manual".
+7. **31** Memória › Cálculo: os parâmetros do memorial de Valparaiso; Calcular; abas
+   Bacias, Chuva, Vazão, Canaletas, Dimensões, Dissipadores, Transposições, Quantitativos,
+   Alertas. Ponha uma camada de via em "Camadas das vias" com uma linha cruzando a canaleta:
+   Calcular e conferir a transposição (tabela e laje 3D depois de Canaleta › Atualizar).
+   Exportar Excel…. Aplicar altura sugerida… numa canaleta com alerta de lâmina: a seção
+   cresce, o 3D e o perfil são refeitos e o alerta some.

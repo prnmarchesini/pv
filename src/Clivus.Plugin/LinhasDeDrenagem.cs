@@ -210,7 +210,7 @@ internal static class LinhasDeDrenagem
         if (Identidade((Entity)transacao.GetObject(linhaId, OpenMode.ForRead)) is { } identidade) indice.Apagar(transacao, identidade.Id);
 
         var frase = DesenharPerfil(transacao, database, terreno, configuracao, linhaId, onde);
-        var alerta = Canaleta3D.Desenhar(transacao, database, terreno, configuracao, linhaId);
+        var alerta = Canaleta3D.Desenhar(transacao, database, terreno, configuracao, linhaId, indice);
         return (frase, alerta);
     }
 
