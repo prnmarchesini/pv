@@ -132,6 +132,8 @@ public static class RibbonLayout
                 [
                     B(Tr.N("Flechas"), PluginInfo.ComandoDrenagemFlechas, Tr.N("Flechas no sentido em que a água corre sobre o terreno, coloridas pela faixa de declividade, com legenda."), "drn_flechas"),
                     B(Tr.N("Linhas"), PluginInfo.ComandoDrenagemLinha, Tr.N("Clique a linha no terreno (A, ..., B) e o gráfico do perfil aparece: distância × cota, quanto corre e quanto sobe em cada trecho, % e graus."), "drn_linha"),
+                    B(Tr.N("Recriar gráfico"), PluginInfo.ComandoDrenagemGraficoRecriar, Tr.N("Desenha de novo o gráfico das linhas e canaletas escolhidas (Enter = todas), onde ele está; traz de volta o que foi apagado."), "drn_grafico_recriar"),
+                    B(Tr.N("Apagar gráfico"), PluginInfo.ComandoDrenagemGraficoApagar, Tr.N("Tira o gráfico das linhas e canaletas escolhidas (Enter = todas); a linha fica, e mexer nela não traz o gráfico de volta."), "drn_grafico_apagar"),
                     B(Tr.N("Rastrear"), PluginInfo.ComandoDrenagemRastreio, Tr.N("Liga ou desliga o rastreio: mouse no gráfico mostra o ponto na planta, mouse na linha ou na canaleta mostra o ponto no gráfico."), "drn_rastrear"),
                 ]),
                 // 32.4 (Renan, 21/10/2026): o botão Canaleta virou o suspenso Desenhos.

@@ -23,7 +23,7 @@
 (command "_.PLINE" "{{M1}}" "{{M2}}" "{{M3}}" "{{M4}}" "_C")
 (setq clivus:m (entlast))
 (setq clivus:can (ssname (ssget "_X" '((0 . "POLYLINE") (8 . "CLIVUS_DRN_CANALETA"))) 0))
-(command "CLIVUS_DRN_BACIA_MANUAL" clivus:m clivus:can)
+(command "CLIVUS_DRN_BACIA_MANUAL" clivus:m (cdr (assoc 10 (entget (entnext clivus:can)))))
 (setq clivus:area (ssname (ssget "_X" '((8 . "CLIVUS_AREA"))) 0))
 (command "CLIVUS_DRN_BACIA_MANUAL" clivus:area)
 (command "CLIVUS_DRN_BACIAS_CALCULAR" "Areas")

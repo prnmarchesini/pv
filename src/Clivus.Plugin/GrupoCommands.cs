@@ -200,7 +200,7 @@ public static class GrupoCommands
     }
 
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-    private static CaixaDeSelecao NovoPlacar()
+    internal static CaixaDeSelecao NovoPlacar()
     {
         var caixa = new CaixaDeSelecao(tamanhoDaLetra: 26, largura: 560);
 

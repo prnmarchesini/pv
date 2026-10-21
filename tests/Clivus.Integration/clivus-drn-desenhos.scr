@@ -15,7 +15,7 @@
 (setq clivus:can (ssname (ssget "_X" '((0 . "POLYLINE") (8 . "CLIVUS_DRN_CANALETA"))) 0))
 
 (princ "\nCLIVUS_DRNDES ETAPA1")
-(command "CLIVUS_DRN_DISSIPADOR" (list clivus:can '{{P3L}}))
+(command "CLIVUS_DRN_DISSIPADOR" '{{P3L}})
 (command "CLIVUS_DRN_CONFERIR_AUTO")
 
 (princ "\nCLIVUS_DRNDES ETAPA2")
@@ -28,7 +28,7 @@
 
 (princ "\nCLIVUS_DRNDES ETAPA4")
 (command "CLIVUS_DRN_BACIAS_CALCULAR" "Areas")
-(command "CLIVUS_DRN_VAZAO" (list clivus:can '{{P1L}}) (list clivus:can '{{P2L}}) (list clivus:can '{{P3L}}) "")
+(command "CLIVUS_DRN_VAZAO" '{{P1L}} '{{P2L}} '{{P3L}} "")
 
 (setvar "OSMODE" clivus:osmode)
 (princ "\nCLIVUS_DRNDES FIM")

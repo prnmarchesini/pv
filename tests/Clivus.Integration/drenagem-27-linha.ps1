@@ -102,6 +102,19 @@ function Testar-DrenagemLinha {
     if ((Orfaos (Etapa 5)) -ne 0) { $script:erros += 'grafico orfao depois do Atualizar' }
     if ((Etapa 5) -notmatch 'LINHA 2 gr.fico\(s\) refeito\(s\)') { $script:erros += 'o Atualizar nao refez os 2 graficos' }
 
+    # Gráfico em grupo, arrastado e recriado no lugar; apagado e recriado (pedido de 21/10/2026).
+    $e6 = Etapa 6
+    $inv6 = [Globalization.CultureInfo]::InvariantCulture
+    if ($e6 -notmatch 'grupos=2 ancora_antes=(-?[\d.]+)') { $script:erros += 'os 2 graficos nao viraram 2 grupos (ou sem ancora)' }
+    else {
+        $antes = [double]::Parse($Matches[1], $inv6)
+        if ($e6 -notmatch 'recriado ancora_depois=(-?[\d.]+) grupos=2') { $script:erros += 'recriado, os graficos nao ficaram em 2 grupos' }
+        elseif ([math]::Abs([double]::Parse($Matches[1], $inv6) - ($antes + 40)) -gt 0.01) { $script:erros += "arrastado 40 m e recriado, o grafico voltou (ancora $($Matches[1]), esperado $($antes + 40))" }
+        if ($e6 -notmatch 'apagado perfis=0 grupos=0') { $script:erros += 'Apagar grafico deixou entidade ou grupo (ou mexer na linha trouxe o grafico de volta)' }
+        if ($e6 -notmatch 'devolvido perfis=([1-9]\d+) ancora_fim=(-?[\d.]+) grupos=2') { $script:erros += 'Recriar grafico nao trouxe os 2 graficos de volta' }
+        elseif ([math]::Abs([double]::Parse($Matches[2], $inv6) - ($antes + 40)) -gt 0.01) { $script:erros += 'Recriar depois de Apagar nao pos o grafico no lugar onde estava' }
+    }
+
     if ($script:erros.Count -gt 0) {
         $problemas.Add("${rotulo}: " + ($script:erros -join '; ') + ". Veja $($r.Saida)")
         return $false

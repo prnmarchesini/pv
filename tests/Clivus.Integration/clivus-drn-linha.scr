@@ -51,6 +51,34 @@
 (command "CLIVUS_DRN_LINHA" "Atualizar")
 (command "CLIVUS_DRN_CONFERIR_AUTO")
 
+; Os grupos do Clivus (um por grafico) e o Y da ancora mais baixa dos graficos.
+(defun clivus:grupos (/ d n g)
+  (setq d (dictsearch (namedobjdict) "ACAD_GROUP") n 0)
+  (foreach par d
+    (if (and (= (car par) 350) (setq g (entget (cdr par))) (cdr (assoc 300 g)) (wcmatch (cdr (assoc 300 g)) "Clivus Solar*")
+             (assoc 340 g))
+      (setq n (1+ n))))
+  n)
+(defun clivus:ancora (/ ss i y)
+  (setq ss (ssget "_X" '((0 . "POINT") (8 . "CLIVUS_DRN_PERFIL"))) i 0 y nil)
+  (if ss (while (< i (sslength ss))
+    (setq y (if y (min y (caddr (assoc 10 (entget (ssname ss i))))) (caddr (assoc 10 (entget (ssname ss i))))) i (1+ i))))
+  (if y (rtos y 2 3) "nenhuma"))
+(defun clivus:perfis (/ ss) (setq ss (ssget "_X" '((8 . "CLIVUS_DRN_PERFIL")))) (if ss (sslength ss) 0))
+
+(princ "\nCLIVUS_DRNLINHA ETAPA6")
+(princ (strcat "\nCLIVUS_DRNLINHA grupos=" (itoa (clivus:grupos)) " ancora_antes=" (clivus:ancora)))
+; Arrasta os graficos (o grupo) 40 m para cima e recria: ficam onde foram deixados.
+(command "_.MOVE" (ssget "_X" '((8 . "CLIVUS_DRN_PERFIL"))) "" "0,0" "0,40")
+(command "CLIVUS_DRN_GRAFICO_RECRIAR" "")
+(princ (strcat "\nCLIVUS_DRNLINHA recriado ancora_depois=" (clivus:ancora) " grupos=" (itoa (clivus:grupos))))
+; Apagar grafico: some, e mexer na linha nao traz de volta; Recriar traz, no mesmo lugar.
+(command "CLIVUS_DRN_GRAFICO_APAGAR" "")
+(command "_.MOVE" clivus:l1 "" "0,0" "1,0")
+(princ (strcat "\nCLIVUS_DRNLINHA apagado perfis=" (itoa (clivus:perfis)) " grupos=" (itoa (clivus:grupos))))
+(command "CLIVUS_DRN_GRAFICO_RECRIAR" "")
+(princ (strcat "\nCLIVUS_DRNLINHA devolvido perfis=" (itoa (clivus:perfis)) " ancora_fim=" (clivus:ancora) " grupos=" (itoa (clivus:grupos))))
+
 (setvar "OSMODE" clivus:osmode)
 (princ "\nCLIVUS_DRNLINHA FIM")
 (setvar "SECURELOAD" clivus:secureload)

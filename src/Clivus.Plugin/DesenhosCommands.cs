@@ -34,16 +34,11 @@ public static class DesenhosCommands
             if (terreno is null) return;
 
             var remover = false;
-            var pedido = new PromptEntityOptions(Tr.T("\nClique na canaleta, perto da ponta onde vai o dissipador"));
-            pedido.Keywords.Add(Remover);
-            pedido.SetRejectMessage(Tr.T("\nSó canaleta."));
-            pedido.AddAllowedClass(typeof(Polyline3d), true);
-
-            var r = editor.GetEntity(pedido);
+            var r = EscolhaDeCanaleta.Pedir(documento, Tr.T("\nClique na canaleta, perto da ponta onde vai o dissipador"), true, Remover);
             if (r.Status == PromptStatus.Keyword)
             {
                 remover = true;
-                r = editor.GetEntity(new PromptEntityOptions(Tr.T("\nClique na canaleta que perde o dissipador: ")));
+                r = EscolhaDeCanaleta.Pedir(documento, Tr.T("\nClique na canaleta que perde o dissipador: "), true);
             }
 
             if (r.Status != PromptStatus.OK) return;
@@ -53,7 +48,7 @@ public static class DesenhosCommands
 
             using (var transacao = documento.Database.TransactionManager.StartTransaction())
             {
-                if (transacao.GetObject(r.ObjectId, OpenMode.ForRead) is not Polyline3d p || LinhasDeDrenagem.Identidade(p) is not { IsChannel: true } identidade)
+                if (transacao.GetObject(r.Id, OpenMode.ForRead) is not Polyline3d p || LinhasDeDrenagem.Identidade(p) is not { IsChannel: true } identidade)
                 {
                     editor.WriteMessage(Tr.T("\nDISSIPADOR Isso não é uma canaleta.\n"));
                     return;
@@ -63,17 +58,17 @@ public static class DesenhosCommands
                 if (!remover)
                 {
                     // A ponta mais perto do clique, na ordem do perfil (montante → jusante).
-                    var linha = new LinhaNoDesenho(r.ObjectId, identidade, LinhasDeDrenagem.Vertices(transacao, p));
+                    var linha = new LinhaNoDesenho(r.Id, identidade, LinhasDeDrenagem.Vertices(transacao, p));
                     var perfil = LinhasDeDrenagem.Perfil(terreno.Mesh, configuracao, linha).Canaleta;
                     if (perfil is null || perfil.Points.Count < 2) throw new ArgumentException(Tr.T("A canaleta não tem perfil (fora do terreno)."));
 
-                    double D(ChannelProfilePoint q) => Math.Pow(q.X - r.PickedPoint.X, 2) + Math.Pow(q.Y - r.PickedPoint.Y, 2);
+                    double D(ChannelProfilePoint q) => Math.Pow(q.X - r.Ponto.X, 2) + Math.Pow(q.Y - r.Ponto.Y, 2);
                     ponta = D(perfil.Points[^1]) <= D(perfil.Points[0]) ? DissipatorEnd.Downstream : DissipatorEnd.Upstream;
                 }
 
-                var polilinha = (Polyline3d)transacao.GetObject(r.ObjectId, OpenMode.ForWrite, false, true);
+                var polilinha = (Polyline3d)transacao.GetObject(r.Id, OpenMode.ForWrite, false, true);
                 LinhasDeDrenagem.Gravar(transacao, polilinha, identidade with { Dissipator = ponta });
-                LinhasDeDrenagem.Refazer(transacao, documento.Database, terreno.Mesh, configuracao, r.ObjectId, IndiceDaDrenagem.Montar(transacao, documento.Database));
+                LinhasDeDrenagem.Refazer(transacao, documento.Database, terreno.Mesh, configuracao, r.Id, IndiceDaDrenagem.Montar(transacao, documento.Database));
                 transacao.Commit();
 
                 var modelo = EnergyDissipator.Model(identidade.Section!.TopWidth) ?? Tr.T("acima do álbum");

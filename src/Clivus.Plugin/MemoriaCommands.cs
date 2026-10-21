@@ -1,6 +1,8 @@
 using System.Globalization;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
+using Autodesk.AutoCAD.Geometry;
+using Autodesk.AutoCAD.GraphicsInterface;
 using Autodesk.AutoCAD.Runtime;
 using Clivus.Core;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
@@ -44,10 +46,11 @@ public static class MemoriaCommands
     }
 
     /// <summary>
-    /// CLIVUS_DRN_VAZAO (32.8): clique na canaleta; diz a estaca, a área que
-    /// entrou até ali e a vazão naquele ponto, com a do fim para comparar.
-    /// Clica de novo noutro ponto; Enter sai. Usa as bacias e os parâmetros
-    /// gravados (rode Bacias e Cálculo antes).
+    /// CLIVUS_DRN_VAZAO (32.8): clique num ponto da canaleta (com a cruz, não
+    /// o quadradinho de escolher objeto: em cima da canaleta estão o 3D e a
+    /// pintura dela, e o quadradinho pegava esses). Passando o mouse, a vazão
+    /// aparece ao lado da cruz; o clique deixa o valor escrito na tela até
+    /// sair. Enter sai. Usa as bacias e os parâmetros gravados.
     /// </summary>
     [CommandMethod(PluginInfo.ComandoDrenagemVazao)]
     public static void Vazao()
@@ -56,6 +59,37 @@ public static class MemoriaCommands
         if (documento is null) return;
 
         var editor = documento.Editor;
+        var marcas = new List<Entity>();
+        var soltas = new List<Entity>();
+        PointMonitorEventHandler? aoMover = null;
+        CaixaDeSelecao? placar = null;
+        var ultimo = string.Empty;
+
+        // O placar grande na tela, como o kWp do grupo de módulos (pedido de 21/10/2026).
+        void Placar(string texto)
+        {
+            placar ??= GrupoCommands.NovoPlacar();
+            placar.TextoLivre = texto;
+            if (!placar.IsVisible) placar.Show();
+        }
+
+        void Pôr(List<Entity> lista, Entity e)
+        {
+            e.ColorIndex = 6;
+            TransientManager.CurrentTransientManager.AddTransient(e, TransientDrawingMode.DirectTopmost, 128, []);
+            lista.Add(e);
+        }
+
+        void Tirar(List<Entity> lista)
+        {
+            foreach (var e in lista)
+            {
+                TransientManager.CurrentTransientManager.EraseTransient(e, []);
+                e.Dispose();
+            }
+
+            lista.Clear();
+        }
 
         try
         {
@@ -69,39 +103,98 @@ public static class MemoriaCommands
             }
 
             var memoria = MemoriaDeDrenagem.Montar(documento.Database, terreno.Mesh);
-            var configuracao = DrenagemStore.Ler(documento.Database);
+            var hidrologia = DrenagemStore.Ler(documento.Database).Hydrology;
+
+            // Cada canaleta com bacia, como um caminho do rastreio (sem gráfico).
+            var canaletas = memoria.Channels
+                .Where(c => c.Input.Basin is not null && c.Input.Profile.Points.Count >= 2)
+                .Select(c => (Calculo: c, Caminho: new TrackedChart(c.Input.Id, c.Input.Name, (0, 0), new ChartDrawing([], [], 0, 0, 1),
+                    c.Input.Profile.Points.Select(q => new TrackPoint(q.Distance, q.X, q.Y, q.Terrain, q.Bottom)).ToList())))
+                .ToList();
+
+            if (canaletas.Count == 0)
+            {
+                editor.WriteMessage(Tr.T("\nVAZÃO Nenhuma canaleta com bacia: calcule as bacias de novo (Memória › Bacias).\n"));
+                return;
+            }
+
+            // A canaleta mais perto do ponto, dentro da tolerância.
+            (ChannelCalculation Calculo, TrackHit Ponto, double Area, double Q)? Achar(double x, double y, double tolerancia)
+            {
+                (ChannelCalculation, TrackHit, double, double)? melhor = null;
+                var menor = double.MaxValue;
+
+                foreach (var (calculo, caminho) in canaletas)
+                {
+                    if (ProfileTracker.FromPlan(caminho, x, y, tolerancia) is not { } h) continue;
+
+                    var d = Math.Sqrt((h.PlanX - x) * (h.PlanX - x) + (h.PlanY - y) * (h.PlanY - y));
+                    if (d >= menor) continue;
+
+                    var (area, q) = DrainageMemory.FlowAt(hidrologia, calculo, h.Distance);
+                    (menor, melhor) = (d, (calculo, h, area, q));
+                }
+
+                return melhor;
+            }
+
+            string Frase(ChannelCalculation c, TrackHit h, double q) =>
+                Tr.F("{0} · {1:0.0} m · Q {2:0.0} l/s (fim {3:0.0})", c.Input.Name, h.Distance, q, c.FlowLitersPerSecond);
+
+            aoMover = (_, e) =>
+            {
+                try
+                {
+                    Tirar(marcas);
+                    var p = e.Context.ComputedPoint;
+                    var t = RastreioDoPerfil.Pixels(15);
+                    if (Achar(p.X, p.Y, t) is not { } a)
+                    {
+                        Placar(ultimo.Length > 0 ? ultimo : Tr.T("Vazão: passe o mouse na canaleta"));
+                        return;
+                    }
+
+                    Placar(Tr.F("Vazão: {0}", Frase(a.Calculo, a.Ponto, a.Q)));
+
+                    Pôr(marcas, new Circle(new Point3d(a.Ponto.PlanX, a.Ponto.PlanY, a.Ponto.Terrain + 0.1), Vector3d.ZAxis, t));
+                    e.AppendToolTipText(Frase(a.Calculo, a.Ponto, a.Q));
+                }
+                catch (System.Exception erro)
+                {
+                    RegistroDeDiagnostico.Registrar("Falha na vazão no ponto (mouse).", erro);
+                }
+            };
+            editor.PointMonitor += aoMover;
+            Placar(Tr.T("Vazão: passe o mouse na canaleta"));
 
             while (true)
             {
-                var pedido = new PromptEntityOptions(Tr.T("\nClique na canaleta, no ponto (Enter sai): ")) { AllowNone = true };
-                pedido.SetRejectMessage(Tr.T("\nSó canaleta."));
-                pedido.AddAllowedClass(typeof(Polyline3d), true);
-
-                var r = editor.GetEntity(pedido);
+                var r = editor.GetPoint(new PromptPointOptions(Tr.T("\nClique no ponto da canaleta (Enter sai): ")) { AllowNone = true });
                 if (r.Status != PromptStatus.OK) return;
 
-                using var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction();
-                if (transacao.GetObject(r.ObjectId, OpenMode.ForRead) is not Polyline3d p || LinhasDeDrenagem.Identidade(p) is not { IsChannel: true } identidade)
+                var clique = r.Value.TransformBy(editor.CurrentUserCoordinateSystem);
+                if (Achar(clique.X, clique.Y, RastreioDoPerfil.Pixels(30)) is not { } a)
                 {
-                    editor.WriteMessage(Tr.T("\nVAZÃO Isso não é uma canaleta.\n"));
+                    editor.WriteMessage(Tr.T("\nVAZÃO Nenhuma canaleta perto do clique.\n"));
                     continue;
                 }
 
-                var calculo = memoria.Channels.FirstOrDefault(c => c.Input.Id == identidade.Id);
-                if (calculo?.Input.Basin is null)
-                {
-                    editor.WriteMessage(Tr.F("\nVAZÃO {0} não tem bacia calculada: calcule as bacias de novo.\n", identidade.Name));
-                    continue;
-                }
-
-                // A estaca do clique, pelo perfil da canaleta (da montante).
-                var caminho = calculo.Input.Profile.Points.Select(q => new TrackPoint(q.Distance, q.X, q.Y, q.Terrain, q.Bottom)).ToList();
-                var grafico = new TrackedChart(identidade.Id, identidade.Name, (0, 0), new ChartDrawing([], [], 0, 0, 1), caminho);
-                if (ProfileTracker.FromPlan(grafico, r.PickedPoint.X, r.PickedPoint.Y, double.MaxValue) is not { } ponto) continue;
-
-                var (area, q) = DrainageMemory.FlowAt(configuracao.Hydrology, calculo, ponto.Distance);
+                var h = a.Ponto;
+                ultimo = Tr.F("Vazão: {0}", Frase(a.Calculo, h, a.Q));
+                Placar(ultimo);
                 editor.WriteMessage(Tr.F("\nVAZÃO {0}, a {1:0.0} m da ponta de cima (de {2:0.0} m): chegam {3:N0} m² de {4:N0} m²; Q = {5:0.0} l/s ({6:0.0000} m³/s). No fim: {7:0.0} l/s.\n",
-                    identidade.Name, ponto.Distance, calculo.Input.Profile.Length, area, calculo.Input.Basin.Area, q, q / 1000, calculo.FlowLitersPerSecond));
+                    a.Calculo.Input.Name, h.Distance, a.Calculo.Input.Profile.Length, a.Area, a.Calculo.Input.Basin!.Area, a.Q, a.Q / 1000, a.Calculo.FlowLitersPerSecond));
+
+                // O valor fica escrito ao lado do ponto até sair do comando.
+                var altura = RastreioDoPerfil.Pixels(12);
+                var z = h.Terrain + 0.1;
+                Pôr(soltas, new Circle(new Point3d(h.PlanX, h.PlanY, z), Vector3d.ZAxis, 0.5 * altura));
+                Pôr(soltas, new DBText
+                {
+                    Position = new Point3d(h.PlanX + altura, h.PlanY + altura, z),
+                    Height = altura,
+                    TextString = Tr.F("Q {0:0.0} l/s · {1:0.0} m", a.Q, h.Distance),
+                });
             }
         }
         catch (ArgumentException erro)
@@ -112,6 +205,13 @@ public static class MemoriaCommands
         {
             RegistroDeDiagnostico.Registrar("Falha na vazão no ponto.", erro);
             editor.WriteMessage(Tr.F("\nNão consegui calcular a vazão: {0}\n", erro.Message));
+        }
+        finally
+        {
+            if (aoMover is not null) editor.PointMonitor -= aoMover;
+            Tirar(marcas);
+            Tirar(soltas);
+            placar?.Close();
         }
     }
 

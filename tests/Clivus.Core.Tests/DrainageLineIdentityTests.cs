@@ -68,7 +68,22 @@ public class DrainageLineIdentityTests
         };
 
         Assert.All(longa.ToFields(), c => Assert.True(System.Text.Encoding.UTF8.GetByteCount(c) <= 255, $"campo de {c.Length} caracteres"));
-        Assert.Equal(DrainageLineIdentity.FieldCount + 1, longa.ToFields().Length);
+        Assert.Equal(DrainageLineIdentity.FieldCount + 2, longa.ToFields().Length);
+    }
+
+    [Fact]
+    [Trait("Etapa", "32")]
+    public void GraficoApagadoGuardaOLugarEVoltaDosCampos()
+    {
+        var linha = new DrainageLineIdentity { Name = "Linha 1", Chart = (10, 20), ChartHidden = true };
+
+        var lida = DrainageLineIdentity.FromFields(linha.ToFields())!;
+        Assert.True(lida.ChartHidden);
+        Assert.Equal((10.0, 20.0), lida.Chart);
+
+        // XData de antes (17 campos, sem o 18º): gráfico à vista.
+        var antiga = DrainageLineIdentity.FromFields(linha.ToFields().Take(DrainageLineIdentity.FieldCount + 1).ToArray())!;
+        Assert.False(antiga.ChartHidden);
     }
 
     [Fact]

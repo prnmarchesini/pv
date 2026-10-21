@@ -24,7 +24,7 @@ internal sealed class IndiceDaDrenagem
     private static readonly RXClass[] Classes =
     [
         RXObject.GetClass(typeof(Polyline)), RXObject.GetClass(typeof(DBText)), RXObject.GetClass(typeof(Solid3d)),
-        RXObject.GetClass(typeof(PolyFaceMesh)), RXObject.GetClass(typeof(Polyline3d)),
+        RXObject.GetClass(typeof(PolyFaceMesh)), RXObject.GetClass(typeof(Polyline3d)), RXObject.GetClass(typeof(DBPoint)),
     ];
 
     private readonly Dictionary<string, List<ObjectId>> _porGuid = [];
@@ -64,10 +64,21 @@ internal sealed class IndiceDaDrenagem
         if (!_porGuid.Remove(linha.ToString("D"), out var ids)) return 0;
 
         var apagadas = 0;
+        var grupo = RXObject.GetClass(typeof(Group));
+
         foreach (var id in ids)
         {
             if (id.IsErased) continue;
-            transacao.GetObject(id, OpenMode.ForWrite, false, true).Erase();
+            var e = transacao.GetObject(id, OpenMode.ForWrite, false, true);
+
+            // O grupo do gráfico vai junto: grupo vazio fica no desenho para sempre.
+            foreach (ObjectId r in e.GetPersistentReactorIds())
+            {
+                if (r.IsErased || r.ObjectClass != grupo) continue;
+                transacao.GetObject(r, OpenMode.ForWrite).Erase();
+            }
+
+            e.Erase();
             apagadas++;
         }
 

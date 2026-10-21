@@ -321,6 +321,18 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_DRN_FLECHAS_GENERAR")]
     public static void CLIVUS_DRN_FLECHAS_GENERAR() => FlechasCommands.Gerar();
 
+    [CommandMethod("CLIVUS_DRN_CHART_ERASE", CommandFlags.UsePickSet)]
+    public static void CLIVUS_DRN_CHART_ERASE() => GraficoCommands.Apagar();
+
+    [CommandMethod("CLIVUS_DRN_GRAFICO_BORRAR", CommandFlags.UsePickSet)]
+    public static void CLIVUS_DRN_GRAFICO_BORRAR() => GraficoCommands.Apagar();
+
+    [CommandMethod("CLIVUS_DRN_CHART_REBUILD", CommandFlags.UsePickSet)]
+    public static void CLIVUS_DRN_CHART_REBUILD() => GraficoCommands.Recriar();
+
+    [CommandMethod("CLIVUS_DRN_GRAFICO_REHACER", CommandFlags.UsePickSet)]
+    public static void CLIVUS_DRN_GRAFICO_REHACER() => GraficoCommands.Recriar();
+
     [CommandMethod("CLIVUS_DRN_LINE")]
     public static void CLIVUS_DRN_LINE() => DrenagemCommands.Linha();
 

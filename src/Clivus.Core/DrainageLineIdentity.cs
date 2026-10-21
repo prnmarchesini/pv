@@ -37,6 +37,12 @@ public sealed record DrainageLineIdentity
     /// <summary>O dissipador da canaleta (32.5): nenhum, na saída ou na ponta de cima.</summary>
     public DissipatorEnd Dissipator { get; init; }
 
+    /// <summary>
+    /// O gráfico foi apagado pelo usuário (Apagar gráfico): mexer na linha não
+    /// o traz de volta; só Recriar gráfico. O lugar fica guardado em <see cref="Chart"/>.
+    /// </summary>
+    public bool ChartHidden { get; init; }
+
     public bool IsChannel => Section is not null;
 
     /// <summary>O tipo do XData.</summary>
@@ -44,7 +50,7 @@ public sealed record DrainageLineIdentity
 
     public const int XDataVersion = 1;
 
-    /// <summary>Quantos campos o XData tem, no mínimo (o 17º, o dissipador, veio na etapa 32).</summary>
+    /// <summary>Quantos campos o XData tem, no mínimo (o 17º, o dissipador, e o 18º, gráfico apagado, vieram na etapa 32).</summary>
     public const int FieldCount = 16;
 
     /// <summary>Cada campo de texto do XData vai até 255 bytes; o nome é cortado bem antes.</summary>
@@ -84,6 +90,7 @@ public sealed record DrainageLineIdentity
             s is null ? string.Empty : N(s.Manning),
             s is null ? string.Empty : N(s.MaxVelocity),
             Dissipator.ToString(),
+            ChartHidden ? "1" : string.Empty,
         ];
     }
 
@@ -116,7 +123,9 @@ public sealed record DrainageLineIdentity
 
         var dissipador = fields.Count > FieldCount && Enum.TryParse<DissipatorEnd>(fields[FieldCount], out var d) ? d : DissipatorEnd.None;
 
-        return new DrainageLineIdentity { Id = id, Name = fields[1], Section = secao, Mode = modo, Chart = grafico, Dissipator = dissipador };
+        var escondido = fields.Count > FieldCount + 1 && fields[FieldCount + 1] == "1";
+
+        return new DrainageLineIdentity { Id = id, Name = fields[1], Section = secao, Mode = modo, Chart = grafico, Dissipator = dissipador, ChartHidden = escondido };
     }
 
     /// <summary>

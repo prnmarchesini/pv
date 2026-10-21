@@ -121,6 +121,8 @@ internal sealed class JanelaDeCanaleta : Window
         botoes.Children.Add(Botao(Tr.T("Converter linhas…"), Tr.T("Salva a seção e pede no desenho as linhas que viram canaleta (ou as canaletas que trocam de seção)."), Converter));
         botoes.Children.Add(Botao(Tr.T("Pegar da canaleta…"), Tr.T("Clique numa canaleta: a seção dela vem para esta janela."), () => Mandar(PluginInfo.ComandoDrenagemCanaletaLer)));
         botoes.Children.Add(Botao(Tr.T("Voltar a linha…"), Tr.T("As canaletas escolhidas voltam a ser linha de análise; o 3D sai."), () => Mandar(PluginInfo.ComandoDrenagemCanaletaDesfazer)));
+        botoes.Children.Add(Botao(Tr.T("Recriar gráfico…"), Tr.T("Escolha as canaletas (Enter = todas): o gráfico é desenhado de novo, onde está."), () => Mandar(PluginInfo.ComandoDrenagemGraficoRecriar)));
+        botoes.Children.Add(Botao(Tr.T("Apagar gráfico…"), Tr.T("Escolha as canaletas (Enter = todas): o gráfico sai; Recriar gráfico traz de volta."), () => Mandar(PluginInfo.ComandoDrenagemGraficoApagar)));
         botoes.Children.Add(Botao(Tr.T("Atualizar"), Tr.T("Refaz o perfil, o 3D e a pintura de todas as linhas e canaletas do desenho."), Atualizar));
         var fechar = Botao(Tr.T("Fechar"), Tr.T("Fecha a janela; as canaletas ficam."), Close);
         fechar.IsCancel = true;

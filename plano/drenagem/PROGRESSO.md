@@ -66,7 +66,9 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
 - 32.6 Caixa entre canaletas: AGUARDANDO VALIDAÇÃO
 - 32.7 Exportar canaletas: AGUARDANDO VALIDAÇÃO
 - 32.8 Vazão no ponto: AGUARDANDO VALIDAÇÃO
-- 32.9 Plúvio: respondido (sem integração possível hoje)
+- 32.9 Plúvio (Memória › Cálculo: Estado e Local, já carregado pela coordenada): AGUARDANDO VALIDAÇÃO
+- 32.10 Gráfico em grupo, Recriar gráfico e Apagar gráfico: AGUARDANDO VALIDAÇÃO
+- 32.11 Vazão no ponto com a cruz e o placar na tela: AGUARDANDO VALIDAÇÃO
 
 ## Decisões tomadas sem resposta (ficam para o Renan confirmar)
 
@@ -96,6 +98,33 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
   (interseções, fora de escopo).
 - Altura sugerida da meia-cana: o menor raio (no passo) em que lâmina + bordo livre cabem;
   o bordo livre é o da Tabela 36 do DNIT (valetas), o mesmo da trapezoidal.
+
+- Plúvio 2.1 (21/10/2026): o plugin lê a base instalada (`GPRH\Arquivos Comuns\Estados_Plu21.bin`,
+  549 estações, e `Localidades_Plu21.bin`, 4937 cidades de 8 estados), nunca leva cópia. A
+  interpolação é o inverso da distância à 10ª potência, distância em graus sem cosseno, sobre
+  todas as estações: a única que reproduz os quatro números de Valparaiso do memorial. O formato
+  dos dois arquivos foi lido do próprio arquivo (não é documentado).
+- A janela da memória só pré-carrega o Plúvio quando o desenho ainda não gravou a chuva (parâmetros
+  iguais aos do memorial); gravado, mostra o gravado.
+- Escolher canaleta (Vazão, Dissipador, Pegar da canaleta, Ajuste manual das bacias) agora é clique
+  em ponto, com a cruz: vale a linha mais perto do clique (30 pixels). O quadradinho pegava o 3D e
+  a pintura que ficam em cima da canaleta ("Isso não é uma canaleta", tela do Renan).
+- Recriar e Apagar gráfico ficam na ribbon (Análise) e na janela da Canaleta; na ribbon só uma vez
+  (regra dos botões sem repetição).
+
+## Roteiro de tela das mudanças de 21/10/2026 (tarde)
+
+1. Memória › Cálculo num desenho com localização: a linha "Plúvio 2.1" já vem com o estado e
+   "Local do desenho", e K, a, b, c preenchidos (o recado diz a estação mais perto). Troque o estado
+   e escolha uma cidade ou uma estação: os números e a "Chuva (IDF)" mudam. Calcular grava.
+2. Análise › Linhas: um clique no gráfico pega o gráfico inteiro (grupo); arraste. Passe o mouse no
+   gráfico: a seta anda na linha no lugar novo.
+3. Análise › Recriar gráfico (Enter = todos): o gráfico refeito fica onde você deixou. Análise ›
+   Apagar gráfico: some; mexa na linha: não volta; Recriar: volta no mesmo lugar. Na janela da
+   Canaleta, os mesmos dois botões.
+4. Memória › Vazão no ponto: a cruz (não o quadradinho); passando o mouse na canaleta, o placar grande
+   mostra "Vazão: Canaleta 1 · 35,2 m · Q 12,3 l/s (fim 24,8)"; clique: o valor fica escrito ao lado
+   do ponto até sair. Dissipador e Pegar da canaleta também com a cruz.
 
 ## Roteiro de tela da etapa 32
 

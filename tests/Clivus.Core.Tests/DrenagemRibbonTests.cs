@@ -16,7 +16,7 @@ public class DrenagemRibbonTests
 
         var analise = Assert.IsType<RibbonMenuSpec>(itens[0]);
         Assert.Equal("Análise", analise.Text);
-        Assert.Equal([PluginInfo.ComandoDrenagemFlechas, PluginInfo.ComandoDrenagemLinha, PluginInfo.ComandoDrenagemRastreio], analise.Items.Select(b => b.Command));
+        Assert.Equal([PluginInfo.ComandoDrenagemFlechas, PluginInfo.ComandoDrenagemLinha, PluginInfo.ComandoDrenagemGraficoRecriar, PluginInfo.ComandoDrenagemGraficoApagar, PluginInfo.ComandoDrenagemRastreio], analise.Items.Select(b => b.Command));
 
         // Renan, 21/10/2026: o botão Canaleta virou o suspenso Desenhos.
         var desenhos = Assert.IsType<RibbonMenuSpec>(itens[1]);

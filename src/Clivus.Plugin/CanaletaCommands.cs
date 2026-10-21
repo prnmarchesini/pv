@@ -207,16 +207,12 @@ public static class CanaletaCommands
         if (documento is null) return;
 
         var editor = documento.Editor;
-        var escolha = new PromptEntityOptions(Tr.T("\nClique na canaleta: "));
-        escolha.SetRejectMessage(Tr.T("\nSó canaleta."));
-        escolha.AddAllowedClass(typeof(Polyline3d), true);
-
-        var r = editor.GetEntity(escolha);
+        var r = EscolhaDeCanaleta.Pedir(documento, Tr.T("\nClique na canaleta: "), true);
         if (r.Status != PromptStatus.OK) return;
 
         using var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction();
 
-        if (transacao.GetObject(r.ObjectId, OpenMode.ForRead) is not Polyline3d p || LinhasDeDrenagem.Identidade(p) is not { Section: { } secao } identidade)
+        if (transacao.GetObject(r.Id, OpenMode.ForRead) is not Polyline3d p || LinhasDeDrenagem.Identidade(p) is not { Section: { } secao } identidade)
         {
             editor.WriteMessage(Tr.T("\nCANALETA Isso não é uma canaleta.\n"));
             return;

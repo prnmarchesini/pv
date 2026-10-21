@@ -19,7 +19,7 @@ internal sealed record LinhaNoDesenho(ObjectId Id, DrainageLineIdentity Identida
 /// </summary>
 internal static class LinhasDeDrenagem
 {
-    private const string TipoDoPerfil = "DrnPerfil";
+    internal const string TipoDoPerfil = "DrnPerfil";
 
     private static readonly RXClass ClasseDaPolilinha3d = RXObject.GetClass(typeof(Polyline3d));
 
@@ -169,7 +169,7 @@ internal static class LinhasDeDrenagem
             Gravar(transacao, polilinha, identidade with { Chart = origem });
         }
 
-        Desenhar(transacao, database, grafico, identidade.Id, origem, CotaDoGrafico(terreno, origem));
+        if (!identidade.ChartHidden) Desenhar(transacao, database, grafico, identidade.Id, origem, CotaDoGrafico(terreno, origem));
         RastreioDoPerfil.Versao++;
         Rotulos(transacao, database, terreno, linha, perfil);
 
@@ -284,11 +284,32 @@ internal static class LinhasDeDrenagem
     /// <param name="indice">O que já está desenhado, montado uma vez por operação (<see cref="IndiceDaDrenagem"/>).</param>
     internal static (string Frase, string Alerta) Refazer(Transaction transacao, Database database, Tin terreno, DrainageSettings configuracao, ObjectId linhaId, IndiceDaDrenagem indice, (double X, double Y)? onde = null)
     {
-        if (Identidade((Entity)transacao.GetObject(linhaId, OpenMode.ForRead)) is { } identidade) indice.Apagar(transacao, identidade.Id);
+        if (Identidade((Entity)transacao.GetObject(linhaId, OpenMode.ForRead)) is { } identidade)
+        {
+            // O gráfico arrastado (é um grupo) fica onde o usuário o deixou.
+            onde ??= LugarDoGrafico(transacao, indice, identidade.Id);
+            indice.Apagar(transacao, identidade.Id);
+        }
 
         var frase = DesenharPerfil(transacao, database, terreno, configuracao, linhaId, onde);
         var alerta = Canaleta3D.Desenhar(transacao, database, terreno, configuracao, linhaId, indice);
         return (frase, alerta);
+    }
+
+    /// <summary>
+    /// Onde o gráfico está agora: a âncora dele (um ponto no canto de baixo à
+    /// esquerda), que anda junto quando o grupo é arrastado. Null sem gráfico.
+    /// </summary>
+    internal static (double X, double Y)? LugarDoGrafico(Transaction transacao, IndiceDaDrenagem indice, Guid linha)
+    {
+        foreach (var id in indice.Ids(linha))
+        {
+            if (id.IsErased || id.ObjectClass != RXObject.GetClass(typeof(DBPoint))) continue;
+            if (transacao.GetObject(id, OpenMode.ForRead) is DBPoint ancora && PluginXData.Load(ancora, TipoDoPerfil, 1, 1) is not null)
+                return (ancora.Position.X, ancora.Position.Y);
+        }
+
+        return null;
     }
 
     private static (double X, double Y) AoLado(IReadOnlyList<Point3> vertices, ChartDrawing grafico)
@@ -316,13 +337,17 @@ internal static class LinhasDeDrenagem
         var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForWrite);
         var camada = LayoutLayers.GarantirDrenagem(transacao, database, LayoutLayers.DrenagemPerfil);
         var guid = linha.ToString("D");
+        var ids = new ObjectIdCollection();
 
         void Marcar(Entity e)
         {
-            espaco.AppendEntity(e);
+            ids.Add(espaco.AppendEntity(e));
             transacao.AddNewlyCreatedDBObject(e, true);
             PluginXData.Save(transacao, e, TipoDoPerfil, 1, guid);
         }
+
+        // A âncora: guarda onde o gráfico está depois de arrastado.
+        Marcar(new DBPoint(new Point3d(origem.X, origem.Y, z)) { Layer = camada });
 
         foreach (var traco in grafico.Lines)
         {
@@ -350,5 +375,12 @@ internal static class LinhasDeDrenagem
             Marcar(texto);
             if (t.Align != ChartTextAlign.Left) texto.AdjustAlignment(database);
         }
+
+        // Um grupo sem nome: um clique pega o gráfico inteiro para arrastar (pedido de 21/10/2026).
+        var grupos = (DBDictionary)transacao.GetObject(database.GroupDictionaryId, OpenMode.ForWrite);
+        var grupo = new Group(Tr.F("Clivus Solar: gráfico de {0}", guid), true);
+        grupos.SetAt("*", grupo);
+        transacao.AddNewlyCreatedDBObject(grupo, true);
+        grupo.Append(ids);
     }
 }

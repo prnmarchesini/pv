@@ -22,7 +22,12 @@ internal sealed class JanelaDeMemoria : Window
     private static readonly Dictionary<Document, JanelaDeMemoria> Abertas = [];
 
     private readonly Document _documento;
-    private readonly TextBox _fonte = Campo(Tr.T("De onde vêm K, a, b e c (ex. Plúvio 2.1, cidade)."), 190);
+    private readonly TextBox _fonte = Campo(Tr.T("De onde vêm K, a, b e c (ex. Plúvio 2.1, cidade)."), 290);
+    private readonly ComboBox _uf = new() { Width = 55, ToolTip = Tr.T("O estado, na base do Plúvio 2.1.") };
+    private readonly ComboBox _local = new() { Width = 205, IsEditable = true, ToolTip = Tr.T("O local da chuva: o do desenho (pela coordenada), uma cidade do Plúvio ou uma estação. Digite para procurar.") };
+    private PluvioDatabase? _pluvio;
+    private GeoLocation? _lugar;
+    private bool _carregando;
     private readonly TextBox _k = Campo("K");
     private readonly TextBox _a = Campo("a");
     private readonly TextBox _b = Campo("b");
@@ -82,6 +87,7 @@ internal sealed class JanelaDeMemoria : Window
 
         var esquerda = new StackPanel { Width = 420 };
         esquerda.Children.Add(Linha(R(Tr.T("Chuva (IDF)"), 120), _fonte));
+        esquerda.Children.Add(Linha(R(Tr.T("Plúvio 2.1"), 120), _uf, _local, Botao("…", Tr.T("Mostrar onde está a base do Plúvio (Estados_Plu21.bin), se ele não foi achado."), () => AbrirPluvio(perguntar: true))));
         esquerda.Children.Add(Linha(R("K · a", 120), _k, R(""), _a));
         esquerda.Children.Add(Linha(R("b · c", 120), _b, R(""), _c));
         esquerda.Children.Add(Linha(R(Tr.T("Retorno · tc mín."), 120), _t, R(Tr.T("anos")), _tc, R("min")));
@@ -131,7 +137,152 @@ internal sealed class JanelaDeMemoria : Window
 
         Content = pilha;
 
-        Mostrar(DrenagemStore.Ler(documento.Database).Hydrology);
+        var gravados = DrenagemStore.Ler(documento.Database).Hydrology;
+        Mostrar(gravados);
+
+        _uf.SelectionChanged += (_, _) => EncherLocais();
+        _local.SelectionChanged += (_, _) =>
+        {
+            if (!_carregando && _local.SelectedItem is OpcaoDoPluvio o) Aplicar(o);
+        };
+
+        // Desenho que ainda não gravou a chuva: já abre com a do local dele (pedido de 21/10/2026).
+        AbrirPluvio(perguntar: false, aplicarODoDesenho: gravados == new HydrologyParameters());
+    }
+
+    /// <summary>Uma linha da lista do Plúvio: o local do desenho, uma localidade ou uma estação.</summary>
+    private sealed record OpcaoDoPluvio(string Rotulo, PluvioLocality? Local = null, PluvioStation? Estacao = null)
+    {
+        public override string ToString() => Rotulo;
+    }
+
+    /// <summary>
+    /// Lê a base do Plúvio e o local do desenho e enche as listas. Sem a base
+    /// instalada, só pergunta onde está quando o usuário pede (o botão "…").
+    /// </summary>
+    private void AbrirPluvio(bool perguntar, bool aplicarODoDesenho = false)
+    {
+        try
+        {
+            var caminho = perguntar ? BaseDoPluvio.Caminho(this) : BaseDoPluvio.CaminhoInstalado();
+            if (caminho is null)
+            {
+                _uf.IsEnabled = _local.IsEnabled = false;
+                _local.Text = Tr.T("Plúvio não achado neste PC");
+                return;
+            }
+
+            _pluvio = BaseDoPluvio.Ler(caminho);
+            _uf.IsEnabled = _local.IsEnabled = true;
+
+            if (TerrainCache.Get(_documento) is { } terreno)
+                _lugar = GeoStore.Read(_documento.Database, TerrenoResumoCommands.Centro(terreno));
+
+            _carregando = true;
+            try
+            {
+                _uf.Items.Clear();
+                foreach (var uf in PluvioDatabase.States.Where(u => _pluvio.Stations.Any(e => e.State == u))) _uf.Items.Add(uf);
+                _uf.SelectedItem = _lugar is { } l ? _pluvio.NearestState(l.Latitude, l.Longitude) : "SP";
+            }
+            finally
+            {
+                _carregando = false;
+            }
+
+            if (aplicarODoDesenho && _lugar is not null && _local.Items.Count > 0)
+            {
+                _local.SelectedIndex = 0;
+            }
+        }
+        catch (Exception erro)
+        {
+            Falhou(erro);
+        }
+    }
+
+    /// <summary>A lista do estado: o local do desenho, as localidades e as estações.</summary>
+    private void EncherLocais()
+    {
+        if (_pluvio is null || _uf.SelectedItem is not string uf) return;
+
+        var anterior = _carregando;
+        _carregando = true;
+        try
+        {
+            _local.Items.Clear();
+            if (_lugar is { } l)
+                _local.Items.Add(new OpcaoDoPluvio(Tr.F("Local do desenho ({0}; {1})", l.Latitude.ToString("0.000", CultureInfo.CurrentCulture), l.Longitude.ToString("0.000", CultureInfo.CurrentCulture))));
+
+            foreach (var local in _pluvio.Localities.Where(x => x.State == uf).OrderBy(x => x.Name, StringComparer.CurrentCulture))
+                _local.Items.Add(new OpcaoDoPluvio(local.Name, Local: local));
+
+            foreach (var e in _pluvio.Stations.Where(x => x.State == uf).OrderBy(x => x.Name, StringComparer.CurrentCulture))
+                _local.Items.Add(new OpcaoDoPluvio(Tr.F("Estação {0}", e.Name), Estacao: e));
+        }
+        finally
+        {
+            _carregando = anterior;
+        }
+    }
+
+    /// <summary>
+    /// K, a, b e c da opção escolhida (32.9). Só preenche os campos: grava no
+    /// Calcular, como "Valores do memorial".
+    /// </summary>
+    private void Aplicar(OpcaoDoPluvio opcao)
+    {
+        try
+        {
+            if (_pluvio is null) return;
+
+            double k, a, b, c;
+            string fonte;
+            PluvioNeighbor? perto = null;
+
+            if (opcao.Estacao is { } e)
+            {
+                (k, a, b, c) = (e.K, e.A, e.B, e.C);
+                fonte = Tr.F("Plúvio 2.1, estação {0}-{1} ({2})", e.Name, e.State, e.Source);
+            }
+            else
+            {
+                PluvioEstimate v;
+                if (opcao.Local is { } l)
+                {
+                    v = _pluvio.Interpolate(l);
+                    fonte = v.Source(Tr.F("{0}-{1}", l.Name, l.State));
+                }
+                else if (_lugar is { } g)
+                {
+                    v = _pluvio.Interpolate(g.Latitude, g.Longitude);
+                    fonte = v.Source();
+                }
+                else
+                {
+                    return;
+                }
+
+                (k, a, b, c) = (v.K, v.A, v.B, v.C);
+                perto = v.Nearest[0];
+            }
+
+            _fonte.Text = fonte;
+            _k.Text = N(Math.Round(k, 3));
+            _a.Text = N(Math.Round(a, 3));
+            _b.Text = N(Math.Round(b, 3));
+            _c.Text = N(Math.Round(c, 3));
+
+            var longe = perto is { DistanceKm: > BaseDoPluvio.Longe };
+            _recado.Foreground = longe ? Brushes.DarkOrange : Brushes.ForestGreen;
+            _recado.Text = Tr.F("PLÚVIO {0}: K {1} · a {2} · b {3} · c {4}.{5} Confira e Calcular grava.",
+                opcao.Rotulo, _k.Text, _a.Text, _b.Text, _c.Text,
+                perto is { } p ? " " + Tr.F("Estação mais perto: {0}-{1}, a {2} km.", p.Station.Name, p.Station.State, p.DistanceKm.ToString("0", CultureInfo.CurrentCulture)) + (longe ? " " + Tr.T("Longe de toda estação: a chuva interpolada é pouco confiável.") : string.Empty) : string.Empty);
+        }
+        catch (Exception erro)
+        {
+            Falhou(erro);
+        }
     }
 
     private static string N(double v) => v.ToString("0.#####", CultureInfo.CurrentCulture);

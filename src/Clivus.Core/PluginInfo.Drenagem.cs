@@ -65,4 +65,10 @@ public static partial class PluginInfo
 
     /// <summary>Memória › Vazão no ponto (32.8): clique na canaleta e veja a área e a vazão até ali.</summary>
     public const string ComandoDrenagemVazao = "CLIVUS_DRN_VAZAO";
+
+    /// <summary>Recriar gráfico: desenha de novo o gráfico das linhas e canaletas escolhidas.</summary>
+    public const string ComandoDrenagemGraficoRecriar = "CLIVUS_DRN_GRAFICO_RECRIAR";
+
+    /// <summary>Apagar gráfico: tira o gráfico; a linha fica, e mexer nela não o traz de volta.</summary>
+    public const string ComandoDrenagemGraficoApagar = "CLIVUS_DRN_GRAFICO_APAGAR";
 }

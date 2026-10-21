@@ -198,12 +198,12 @@ public static class BaciasCommands
                 return;
             }
 
-            var canaleta = editor.GetEntity(new PromptEntityOptions(Tr.T("\nClique na canaleta para onde a água dessa área vai: ")));
+            var canaleta = EscolhaDeCanaleta.Pedir(documento, Tr.T("\nClique na canaleta para onde a água dessa área vai: "), true);
             if (canaleta.Status != PromptStatus.OK) return;
 
             using (var t = documento.Database.TransactionManager.StartTransaction())
             {
-                if (t.GetObject(canaleta.ObjectId, OpenMode.ForRead) is not Polyline3d p3 || LinhasDeDrenagem.Identidade(p3) is not { IsChannel: true } identidade)
+                if (t.GetObject(canaleta.Id, OpenMode.ForRead) is not Polyline3d p3 || LinhasDeDrenagem.Identidade(p3) is not { IsChannel: true } identidade)
                 {
                     editor.WriteMessage(Tr.T("\nBACIAS Isso não é uma canaleta.\n"));
                     return;

@@ -221,6 +221,12 @@ def icones():
         # Vazão no ponto: a canaleta e a gota no ponto clicado.
         'drn_vazao': ([T('M3,26 C11,24 19,18 29,8'), ambar_cheio('M17,5 C17,5 12,11 12,14.5 a5,5 0 0,0 10,0 C22,11 17,5 17,5 Z')],
                       [t('M3,27 C11,25 19,19 29,9'), ambar_cheio('M17,4 C17,4 11,11 11,15 a6,6 0 0,0 12,0 C23,11 17,4 17,4 Z')]),
+        # Recriar gráfico: o gráfico e a volta em âmbar.
+        'drn_grafico_recriar': ([T('M4,4 V20 H20'), T('M6,15 C9,12 12,16 17,9'), ambar_traco('M28,21 a5,5 0 1,1 -2,-4 M27,13 V17 H23', L)],
+                                [t('M4,4 V20 H20'), ambar_traco('M28,21 a5,5 0 1,1 -2,-4', S)]),
+        # Apagar gráfico: o gráfico e o X em âmbar.
+        'drn_grafico_apagar': ([T('M4,4 V20 H20'), T('M6,15 C9,12 12,16 17,9'), ambar_traco('M20,20 L28,28 M28,20 L20,28', L)],
+                               [t('M4,4 V20 H20'), ambar_traco('M20,20 L28,28 M28,20 L20,28', S)]),
         # Elétrica (11.1): dois módulos ligados pelo cabo da string, + e -.
         'string': ([T(modulo(9, 10, 9, 6)), T(modulo(23, 10, 9, 6)), ambar_traco('M9,14 C9,24 23,24 23,14', L),
                     ambar_traco('M3,27 H9 M6,24 V30', L), T('M23,27 H29')],

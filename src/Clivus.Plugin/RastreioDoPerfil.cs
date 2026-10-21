@@ -116,6 +116,14 @@ public static class RastreioDoPerfil
         }
     }
 
+    /// <summary>Tantos pixels em unidades do desenho, pela altura da vista.</summary>
+    internal static double Pixels(double pixels)
+    {
+        var altura = Convert.ToDouble(AcadApp.GetSystemVariable("VIEWSIZE"), System.Globalization.CultureInfo.InvariantCulture);
+        var tela = (Point2d)AcadApp.GetSystemVariable("SCREENSIZE");
+        return tela.Y > 0 ? pixels * altura / tela.Y : pixels * altura / 1000;
+    }
+
     private sealed class Escuta
     {
         private readonly Document _documento;
@@ -209,13 +217,8 @@ public static class RastreioDoPerfil
             }
         }
 
-        /// <summary>Dez pixels em unidades do desenho, pela altura da vista.</summary>
-        private static double Tolerancia()
-        {
-            var altura = Convert.ToDouble(AcadApp.GetSystemVariable("VIEWSIZE"), System.Globalization.CultureInfo.InvariantCulture);
-            var tela = (Point2d)AcadApp.GetSystemVariable("SCREENSIZE");
-            return tela.Y > 0 ? 10 * altura / tela.Y : altura / 100;
-        }
+        /// <summary>Dez pixels em unidades do desenho.</summary>
+        private static double Tolerancia() => Pixels(10);
 
         /// <summary>A seta em planta e a vertical no gráfico.</summary>
         private void Marcar(TrackHit h, double tamanho)
@@ -260,10 +263,14 @@ public static class RastreioDoPerfil
             var configuracao = DrenagemStore.Ler(database);
 
             using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+            var indice = IndiceDaDrenagem.Montar(transacao, database);
 
             foreach (var linha in LinhasDeDrenagem.Todas(transacao, database))
             {
-                if (linha.Identidade.Chart is not { } origem) continue;
+                if (linha.Identidade.ChartHidden) continue;
+
+                // Onde o gráfico está (o grupo pode ter sido arrastado), não onde foi desenhado.
+                if ((LinhasDeDrenagem.LugarDoGrafico(transacao, indice, linha.Identidade.Id) ?? linha.Identidade.Chart) is not { } origem) continue;
 
                 try
                 {
