@@ -15,8 +15,12 @@ public readonly record struct ArrowShape((double X, double Y) Tail, (double X, d
 /// </summary>
 public static class DrainageArrows
 {
-    /// <summary>Abaixo disto (em %) o ponto é plano: vira um pontinho, não flecha.</summary>
-    public const double FlatPercent = 0.1;
+    /// <summary>
+    /// Abaixo disto (em %) o ponto é plano: vira um pontinho, não flecha. O
+    /// mesmo limiar do caminho da água (<c>FlowOptions.FlatRatio</c>, 0,0005 m/m):
+    /// flecha e bacia concordam sobre onde a água para.
+    /// </summary>
+    public const double FlatPercent = 0.05;
 
     /// <summary>As cores da Figura 3 do memorial, uma por faixa: verde, laranja, vermelho, roxo, azul-escuro.</summary>
     public static readonly IReadOnlyList<RgbColor> BandColors =

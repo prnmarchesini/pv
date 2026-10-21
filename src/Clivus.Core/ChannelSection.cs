@@ -159,9 +159,9 @@ public sealed record ChannelSection
             return [(-topo, Height), (-bExt / 2, -Thickness), (bExt / 2, -Thickness), (topo, Height)];
         }
 
-        // O semicírculo externo, com o centro na borda: o fundo externo fica em −e.
-        var r = Radius + Thickness;
-        return Arco(r, segments).Select(p => (p.X, p.Y - Thickness)).ToList();
+        // O semicírculo externo, com o mesmo centro (na borda, em y = r): o
+        // fundo externo fica em r − (r + e) = −e.
+        return Arco(Radius + Thickness, segments);
     }
 
     /// <summary>O semicírculo de raio r com o centro em (0, r) do fundo interno.</summary>

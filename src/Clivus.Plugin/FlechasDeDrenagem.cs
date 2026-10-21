@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
+using Autodesk.AutoCAD.Runtime;
 using Clivus.Core;
 using Clivus.Geo;
 
@@ -76,8 +77,6 @@ internal static class FlechasDeDrenagem
         if (pontos.Count > MaximoDeFlechas)
             throw new ArgumentException(Tr.F("Com {0:0.#} m de espaçamento seriam {1:N0} flechas (máximo {2:N0}). Aumente o espaçamento.", espacamento, pontos.Count, MaximoDeFlechas));
 
-        Apagar(database);
-
         var porFaixa = new int[faixas.Count];
         var flechas = 0;
         var planos = 0;
@@ -85,8 +84,12 @@ internal static class FlechasDeDrenagem
 
         using var transacao = database.TransactionManager.StartTransaction();
 
+        // Apaga as anteriores na mesma transação: se a geração falhar, nada
+        // se perde (o U e o abortar devolvem as flechas de antes).
+        ApagarNa(transacao, database);
+
         var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForWrite);
-        var bloco = DefinicaoLimpa(transacao, tabela);
+        var bloco = Definicao(transacao, tabela);
         var cores = faixas.Select(f => Color.FromRgb(f.Color.R, f.Color.G, f.Color.B)).ToArray();
         var cinza = Color.FromRgb(160, 160, 160);
         var alturaDoTexto = Math.Max(0.1, 0.18 * espacamento);
@@ -175,18 +178,10 @@ internal static class FlechasDeDrenagem
             flechas, espacamento, resumo, planos, foraDoTerreno, relogio.Elapsed.TotalSeconds, camada);
     }
 
-    /// <summary>A definição do bloco, criada ou esvaziada.</summary>
-    private static BlockTableRecord DefinicaoLimpa(Transaction transacao, BlockTable tabela)
+    /// <summary>A definição do bloco (já esvaziada por <see cref="ApagarNa"/>), ou uma nova.</summary>
+    private static BlockTableRecord Definicao(Transaction transacao, BlockTable tabela)
     {
-        if (tabela.Has(NomeDoBloco))
-        {
-            var existente = (BlockTableRecord)transacao.GetObject(tabela[NomeDoBloco], OpenMode.ForWrite);
-
-            foreach (ObjectId id in existente)
-                transacao.GetObject(id, OpenMode.ForWrite).Erase();
-
-            return existente;
-        }
+        if (tabela.Has(NomeDoBloco)) return (BlockTableRecord)transacao.GetObject(tabela[NomeDoBloco], OpenMode.ForWrite);
 
         var nova = new BlockTableRecord { Name = NomeDoBloco, Origin = Point3d.Origin };
         tabela.Add(nova);
@@ -245,19 +240,33 @@ internal static class FlechasDeDrenagem
     /// <summary>Apaga as flechas (as inserções do bloco, a definição esvaziada) e a legenda. Quantas entidades.</summary>
     internal static int Apagar(Database database)
     {
-        var apagadas = 0;
-
         using var transacao = database.TransactionManager.StartTransaction();
+        var apagadas = ApagarNa(transacao, database);
+        transacao.Commit();
+        return apagadas;
+    }
+
+    /// <summary>O apagar dentro da transação de quem chama.</summary>
+    private static int ApagarNa(Transaction transacao, Database database)
+    {
+        var apagadas = 0;
 
         var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForRead);
         var espaco = (BlockTableRecord)transacao.GetObject(tabela[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+        var definicao = tabela.Has(NomeDoBloco) ? tabela[NomeDoBloco] : ObjectId.Null;
+        var classeDaInsercao = RXObject.GetClass(typeof(BlockReference));
+        var classeDoTexto = RXObject.GetClass(typeof(DBText));
+        var classeDoSolido = RXObject.GetClass(typeof(Solid));
 
         foreach (ObjectId id in espaco)
         {
+            // Só os tipos que a drenagem põe aqui: abrir cada mesa e cada
+            // módulo do desenho para ler o XData seria varrer a usina inteira.
+            if (id.ObjectClass != classeDaInsercao && id.ObjectClass != classeDoTexto && id.ObjectClass != classeDoSolido) continue;
             if (transacao.GetObject(id, OpenMode.ForRead) is not Entity e) continue;
 
-            var nossa = e is BlockReference r && r.BlockTableRecord == (tabela.Has(NomeDoBloco) ? tabela[NomeDoBloco] : ObjectId.Null)
-                || PluginXData.Load(e, TipoDaLegenda, 1, 0) is not null;
+            var nossa = e is BlockReference r ? r.BlockTableRecord == definicao
+                : string.Equals(e.Layer, LayoutLayers.DrenagemFlecha, StringComparison.OrdinalIgnoreCase) && PluginXData.Load(e, TipoDaLegenda, 1, 0) is not null;
 
             if (!nossa) continue;
 
@@ -266,13 +275,12 @@ internal static class FlechasDeDrenagem
             apagadas++;
         }
 
-        if (tabela.Has(NomeDoBloco))
+        if (!definicao.IsNull)
         {
-            var bloco = (BlockTableRecord)transacao.GetObject(tabela[NomeDoBloco], OpenMode.ForWrite);
+            var bloco = (BlockTableRecord)transacao.GetObject(definicao, OpenMode.ForWrite);
             foreach (ObjectId id in bloco) transacao.GetObject(id, OpenMode.ForWrite).Erase();
         }
 
-        transacao.Commit();
         return apagadas;
     }
 

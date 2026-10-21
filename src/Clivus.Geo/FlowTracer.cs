@@ -61,6 +61,8 @@ public sealed class FlowTargets
     {
         ArgumentNullException.ThrowIfNull(polylines);
 
+        if (!(celula > 0) || !double.IsFinite(celula)) throw new ArgumentOutOfRangeException(nameof(celula));
+
         _celula = celula;
         Count = polylines.Count;
 
@@ -73,7 +75,7 @@ public sealed class FlowTargets
                 var s = _segmentos.Count;
                 _segmentos.Add((linha[i - 1], linha[i], p));
 
-                foreach (var chave in Celulas(linha[i - 1].X, linha[i - 1].Y, linha[i].X, linha[i].Y))
+                foreach (var chave in CelulasAoLongo(linha[i - 1], linha[i]))
                 {
                     if (!_celulas.TryGetValue(chave, out var lista)) _celulas[chave] = lista = [];
                     lista.Add(s);
@@ -98,6 +100,33 @@ public sealed class FlowTargets
     }
 
     /// <summary>
+    /// As células por onde o segmento passa, com as vizinhas (folga para o
+    /// segmento que só raspa um canto). Não o retângulo envolvente: uma
+    /// canaleta diagonal de 2 km ocuparia dezenas de milhares de células.
+    /// </summary>
+    private HashSet<(long, long)> CelulasAoLongo(Point3 a, Point3 b)
+    {
+        var celulas = new HashSet<(long, long)>();
+        var comprimento = Math.Sqrt((b.X - a.X) * (b.X - a.X) + (b.Y - a.Y) * (b.Y - a.Y));
+        var passos = Math.Max(1, (int)Math.Ceiling(comprimento / (_celula / 4)));
+
+        for (var k = 0; k <= passos; k++)
+        {
+            var t = (double)k / passos;
+            var i = (long)Math.Floor((a.X + (b.X - a.X) * t) / _celula);
+            var j = (long)Math.Floor((a.Y + (b.Y - a.Y) * t) / _celula);
+
+            for (var di = -1; di <= 1; di++)
+            for (var dj = -1; dj <= 1; dj++)
+                celulas.Add((i + di, j + dj));
+        }
+
+        return celulas;
+    }
+
+    private readonly HashSet<int> _vistos = [];
+
+    /// <summary>
     /// O primeiro alvo que o segmento (x0, y0) → (x1, y1) toca, em planta: em
     /// qual polilinha e em que fração <paramref name="t"/> do segmento.
     /// </summary>
@@ -106,7 +135,10 @@ public sealed class FlowTargets
         index = -1;
         t = double.MaxValue;
 
-        var vistos = new HashSet<int>();
+        // Reaproveitado: um HashSet novo por passo pesava no cálculo das bacias.
+        // Por isso a consulta não é segura entre threads.
+        var vistos = _vistos;
+        vistos.Clear();
 
         foreach (var chave in Celulas(x0, y0, x1, y1))
         {
@@ -173,6 +205,10 @@ public static class FlowTracer
         ArgumentNullException.ThrowIfNull(tin);
 
         options ??= new FlowOptions();
+
+        // Passo zero prendia o laço das tentativas para sempre.
+        if (!(options.Step > 0) || !double.IsFinite(options.Step)) throw new ArgumentOutOfRangeException(nameof(options), "Step");
+        if (!(options.MaxLength > 0)) throw new ArgumentOutOfRangeException(nameof(options), "MaxLength");
 
         if (!tin.TryGetZ(x, y, out var z0)) return new FlowPath([], FlowStop.OutsideTerrain, -1, 0, 0);
 

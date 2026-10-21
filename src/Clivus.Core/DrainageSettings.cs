@@ -25,8 +25,8 @@ public sealed record ProfileSettings
     /// <summary>Trecho de declividade (o "% | grau" escrito sobre o perfil), em metros.</summary>
     public double SegmentLength { get; init; } = 20;
 
-    /// <summary>Exagero vertical do gráfico.</summary>
-    public double VerticalExaggeration { get; init; } = 10;
+    /// <summary>Exagero vertical do gráfico; zero = automático (a altura perto de um terço do comprimento).</summary>
+    public double VerticalExaggeration { get; init; }
 }
 
 /// <summary>Os parâmetros hidrológicos e hidráulicos do projeto (31.2). Padrão: o memorial de Valparaiso.</summary>
@@ -166,13 +166,28 @@ public sealed record DrainageSettings
         {
             var lido = JsonSerializer.Deserialize<DrainageSettings>(json, Opcoes) ?? new DrainageSettings();
 
-            // Lista nula no JSON vira a padrão: seção nenhuma travaria a janela.
+            // Lista nula ou torta no JSON vira a padrão, com o motivo: seção
+            // nenhuma ou faixa faltando travava a janela.
+            var flechas = lido.Arrows ?? new ArrowSettings();
+            if (flechas.Limits is not { Count: 4 } || flechas.Limits.Any(l => !double.IsFinite(l)))
+            {
+                problem = "limites das flechas ilegíveis";
+                flechas = flechas with { Limits = DrainageArrows.DefaultLimits };
+            }
+
+            var secoes = (lido.Sections ?? []).Where(s => s is not null).ToList();
+            if (secoes.Count == 0)
+            {
+                if (lido.Sections is { Count: > 0 }) problem = "seções ilegíveis";
+                secoes = [.. ChannelSection.Defaults];
+            }
+
             return lido with
             {
-                Arrows = lido.Arrows ?? new ArrowSettings(),
+                Arrows = flechas,
                 Profile = lido.Profile ?? new ProfileSettings(),
                 Hydrology = lido.Hydrology ?? new HydrologyParameters(),
-                Sections = lido.Sections is { Count: > 0 } ? lido.Sections : ChannelSection.Defaults,
+                Sections = secoes,
                 Basins = lido.Basins ?? new BasinSettings(),
             };
         }

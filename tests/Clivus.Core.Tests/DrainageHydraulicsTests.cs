@@ -226,4 +226,18 @@ public class DrainageHydraulicsTests
         Assert.NotNull(s.Problem());
         Assert.Null(Trap.Problem());
     }
+
+    [Fact]
+    [Trait("Etapa", "28")]
+    public void ContornoExternoFicaAEspessuraAbaixoDoFundo()
+    {
+        // Revisão da etapa 26: a meia-cana descontava a espessura duas vezes.
+        var mc = ChannelSection.Defaults[1];
+        Assert.Equal(-mc.Thickness, mc.OuterOutline().Min(p => p.Y), 9);
+        Assert.Equal(0, mc.InnerOutline().Min(p => p.Y), 9);
+        Assert.Equal(mc.Radius, mc.OuterOutline()[0].Y, 9);
+
+        Assert.Equal(-Trap.Thickness, Trap.OuterOutline().Min(p => p.Y), 9);
+        Assert.Equal(Trap.TopWidth / 2, Trap.InnerOutline()[^1].X, 9);
+    }
 }

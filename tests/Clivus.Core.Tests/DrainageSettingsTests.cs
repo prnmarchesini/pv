@@ -80,4 +80,20 @@ public class DrainageSettingsTests
         Assert.Equal("Meia-cana 30", s.Section(" meia-CANA 30 ")?.Name);
         Assert.Null(s.Section("não existe"));
     }
+
+    [Theory]
+    [InlineData("{\"Arrows\":{\"Limits\":null}}")]
+    [InlineData("{\"Arrows\":{\"Limits\":[1,2]}}")]
+    [InlineData("{\"Sections\":[null]}")]
+    [Trait("Etapa", "26")]
+    public void ListaTortaNoJsonVoltaOPadraoComOMotivo(string json)
+    {
+        // Revisão da etapa 26: com isso a janela das flechas não abria mais.
+        var lidas = DrainageSettings.Parse(json, out var problema);
+
+        Assert.NotNull(problema);
+        Assert.Equal(4, lidas.Arrows.Limits.Count);
+        Assert.NotEmpty(lidas.Sections);
+        Assert.All(lidas.Sections, s => Assert.NotNull(s));
+    }
 }

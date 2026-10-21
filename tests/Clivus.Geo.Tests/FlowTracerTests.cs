@@ -113,4 +113,28 @@ public class FlowTracerTests
         Assert.Equal(FlowStop.Target, caminho.Stop);
         Assert.Equal(100.25, caminho.Points[^1].X, 3);
     }
+
+    [Fact]
+    [Trait("Etapa", "25")]
+    public void PassoOuCelulaZeroSaoRecusadosEmVezDeTravar()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => FlowTracer.Trace(TerrenoDeDrenagem.Rampa(), 20, 77, options: new FlowOptions { Step = 0 }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new FlowTargets([[new Point3(0, 0, 0), new Point3(1, 1, 0)]], 0));
+    }
+
+    [Fact]
+    [Trait("Etapa", "25")]
+    public void CanaletaDiagonalLongaEAchadaEmQualquerPonto()
+    {
+        // O índice percorre as células do segmento (não o retângulo dele).
+        var alvos = new FlowTargets([[new Point3(-500, -480, 0), new Point3(700, 720, 0)]], 10);
+
+        foreach (var x in new[] { -300.0, 0.0, 123.4, 650.0 })
+        {
+            // Um passo curto que cruza a canaleta (y = x + 20) em x.
+            Assert.True(alvos.TryHit(x - 1, x + 21, x + 1, x + 19, out var i, out var t), $"perdeu a canaleta em x = {x}");
+            Assert.Equal(0, i);
+            Assert.Equal(0.5, t, 9);
+        }
+    }
 }
