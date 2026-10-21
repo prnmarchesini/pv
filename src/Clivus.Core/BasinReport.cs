@@ -13,6 +13,45 @@ public sealed record BasinEntry(Guid Channel, string ChannelName, double Area, d
 {
     /// <summary>Declividade média do caminho (S), em %.</summary>
     public double SlopePercent => Length > 0 ? Drop / Length * 100 : 0;
+
+    /// <summary>
+    /// A área que já entrou na canaleta até cada estaca (32.8): pares
+    /// [estaca desde a montante, área acumulada], crescentes. A área do ajuste
+    /// manual (que não tem ponto de entrada) entra na última estaca.
+    /// </summary>
+    public IReadOnlyList<double[]> Accumulation { get; init; } = [];
+
+    /// <summary>A área que chegou na canaleta até a estaca, em m²; sem a curva, a área inteira.</summary>
+    public double AreaUpTo(double station)
+    {
+        if (Accumulation.Count == 0) return Area;
+
+        var area = 0.0;
+        foreach (var par in Accumulation)
+        {
+            if (par[0] > station + 1e-9) break;
+            area = par[1];
+        }
+
+        return area;
+    }
+
+    /// <summary>
+    /// A curva acumulada a partir da estaca de entrada de cada célula: em
+    /// passos de <paramref name="step"/> m; a área sem estaca entra no fim.
+    /// </summary>
+    public static IReadOnlyList<double[]> Accumulate(IEnumerable<double> entryStations, double cellArea, double length, double step = 1)
+    {
+        var porPasso = new SortedDictionary<double, double>();
+        foreach (var e in entryStations)
+        {
+            var estaca = double.IsFinite(e) ? Math.Min(Math.Ceiling(Math.Max(e, 0) / step) * step, length) : length;
+            porPasso[estaca] = porPasso.GetValueOrDefault(estaca) + cellArea;
+        }
+
+        var soma = 0.0;
+        return porPasso.Select(p => new[] { p.Key, soma += p.Value }).ToList();
+    }
 }
 
 /// <summary>

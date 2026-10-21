@@ -14,6 +14,12 @@ public sealed record WatershedGrid(
     double X0, double Y0, double Cell, int Columns, int Rows,
     int[] Owner, FlowStop[] Reason, double[] Length, double[] StartZ, double[] EndZ, bool[] Manual)
 {
+    /// <summary>Por célula: onde a água dela entra na canaleta, em planta (NaN se não entra). Para a vazão no ponto (32.8).</summary>
+    public double[] HitX { get; init; } = [];
+
+    /// <summary>Por célula: a outra coordenada do ponto de entrada.</summary>
+    public double[] HitY { get; init; } = [];
+
     public int Index(int i, int j) => j * Columns + i;
 
     public (double X, double Y) Center(int i, int j) => (X0 + (i + 0.5) * Cell, Y0 + (j + 0.5) * Cell);
@@ -127,7 +133,12 @@ public static class Watershed
         var zFim = new double[n];
         var manualFlag = new bool[n];
 
-        var grade = new WatershedGrid(x0, y0, cell, colunas, linhas, dono, motivo, comprimento, zInicio, zFim, manualFlag);
+        var entradaX = new double[n];
+        var entradaY = new double[n];
+        Array.Fill(entradaX, double.NaN);
+        Array.Fill(entradaY, double.NaN);
+
+        var grade = new WatershedGrid(x0, y0, cell, colunas, linhas, dono, motivo, comprimento, zInicio, zFim, manualFlag) { HitX = entradaX, HitY = entradaY };
 
         // As células analisadas, da mais baixa para a mais alta.
         var fila = new List<(int Indice, double Z)>();
@@ -193,6 +204,7 @@ public static class Watershed
                     dono[k] = caminho.TargetIndex;
                     comprimento[k] = caminho.Length2D;
                     zFim[k] = caminho.Points[^1].Z;
+                    (entradaX[k], entradaY[k]) = (caminho.Points[^1].X, caminho.Points[^1].Y);
                     break;
 
                 case FlowStop.Joined:
@@ -201,6 +213,7 @@ public static class Watershed
                     dono[k] = dono[c];
                     motivo[k] = motivo[c];
                     zFim[k] = zFim[c];
+                    (entradaX[k], entradaY[k]) = (entradaX[c], entradaY[c]);
 
                     // O comprimento da célula de lá conta do centro dela; daqui
                     // a água entrou pela borda. Falta o trecho da entrada até o
@@ -228,6 +241,7 @@ public static class Watershed
                 {
                     comprimento[k] = double.NaN;
                     zFim[k] = double.NaN;
+                    (entradaX[k], entradaY[k]) = (double.NaN, double.NaN);
                 }
 
                 dono[k] = alvo;
@@ -279,6 +293,7 @@ public static class Watershed
                     grade.Owner[k] = caminho.TargetIndex;
                     grade.Length[k] = caminho.Length2D;
                     grade.EndZ[k] = caminho.Points[^1].Z;
+                    if (grade.HitX.Length > k) (grade.HitX[k], grade.HitY[k]) = (caminho.Points[^1].X, caminho.Points[^1].Y);
                 }
                 else
                 {
@@ -286,6 +301,7 @@ public static class Watershed
                     grade.Reason[k] = caminho.Stop;
                     grade.Length[k] = double.NaN;
                     grade.EndZ[k] = double.NaN;
+                    if (grade.HitX.Length > k) (grade.HitX[k], grade.HitY[k]) = (double.NaN, double.NaN);
                 }
             }
         }

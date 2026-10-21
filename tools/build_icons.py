@@ -203,6 +203,24 @@ def icones():
         # Cálculo: a calculadora, a tecla de resultado em âmbar.
         'drn_calculo': ([T('M7,3 H25 V29 H7 Z'), T('M11,7 H21 V12 H11 Z'), T('M12,17 H13 M16,17 H17 M12,21 H13 M16,21 H17 M12,25 H13 M16,25 H17'), ambar_traco('M21,17 V25', L)],
                         [t('M7,3 H25 V29 H7 Z'), t('M11,7 H21 V12 H11 Z'), ambar_traco('M20,17 V25', S)]),
+        # Drenagem, segunda rodada (32): rastrear (o gráfico e a seta em âmbar).
+        'drn_rastrear': ([T('M4,4 V20 H22'), T('M6,15 C10,12 13,17 20,10'), ambar_traco('M14,6 V18 M24,22 V29 M21,26 L24,29 L27,26', L)],
+                         [t('M4,4 V20 H22'), ambar_traco('M14,5 V19 M25,22 V29', S)]),
+        # Canaleta (item do menu Desenhos): a seção e a linha do eixo.
+        'drn_canaleta_item': ([T('M3,10 H8 L12,24 H20 L24,10 H29'), ambar_traco('M16,4 V8', L)],
+                              [t('M2,10 H8 L12,25 H20 L24,10 H30')]),
+        # Caixa: o quadrado de parede dupla com a canaleta chegando.
+        'drn_caixa': ([T('M9,9 H25 V25 H9 Z'), T('M13,13 H21 V21 H13 Z'), ambar_traco('M2,17 H9', L)],
+                      [t('M8,8 H26 V26 H8 Z'), ambar_traco('M2,17 H8', S)]),
+        # Dissipador: o trapézio abrindo, com as pedras.
+        'drn_dissipador': ([T('M3,13 H11 L29,5 V27 L11,19 H3'), ambar_cheio(circulo(17, 16, 1.6)), ambar_cheio(circulo(23, 12, 1.4)), ambar_cheio(circulo(23, 20, 1.4))],
+                           [t('M3,12 H11 L29,4 V28 L11,20 H3'), ambar_cheio(circulo(20, 16, 2.5))]),
+        # Exportar canaletas: a folha com a seção e a seta.
+        'drn_exportar': ([T(folha(4, 3, 17, 24)), T('M8,14 L10,21 H15 L17,14'), ambar_traco('M22,16 H29 M26,13 L29,16 L26,19', L)],
+                         [t(folha(4, 3, 17, 24)), ambar_traco('M22,16 H29 M26,13 L29,16 L26,19', S)]),
+        # Vazão no ponto: a canaleta e a gota no ponto clicado.
+        'drn_vazao': ([T('M3,26 C11,24 19,18 29,8'), ambar_cheio('M17,5 C17,5 12,11 12,14.5 a5,5 0 0,0 10,0 C22,11 17,5 17,5 Z')],
+                      [t('M3,27 C11,25 19,19 29,9'), ambar_cheio('M17,4 C17,4 11,11 11,15 a6,6 0 0,0 12,0 C23,11 17,4 17,4 Z')]),
         # Elétrica (11.1): dois módulos ligados pelo cabo da string, + e -.
         'string': ([T(modulo(9, 10, 9, 6)), T(modulo(23, 10, 9, 6)), ambar_traco('M9,14 C9,24 23,24 23,14', L),
                     ambar_traco('M3,27 H9 M6,24 V30', L), T('M23,27 H29')],

@@ -1,14 +1,14 @@
 namespace Clivus.Core.Tests;
 
-/// <summary>Passo 25.1: o painel Drenagem na ribbon, com Análise, Canaleta e Memória.</summary>
+/// <summary>Passos 25.1 e 32.4: o painel Drenagem na ribbon, com Análise, Desenhos e Memória.</summary>
 public class DrenagemRibbonTests
 {
     private static RibbonPanelSpec Painel() =>
         Assert.Single(RibbonLayout.Tabs.SelectMany(t => t.Panels), p => p.Title == "Drenagem");
 
     [Fact]
-    [Trait("Etapa", "25")]
-    public void OPainelTemAnaliseCanaletaEMemoriaNessaOrdem()
+    [Trait("Etapa", "32")]
+    public void OPainelTemAnaliseDesenhosEMemoriaNessaOrdem()
     {
         var itens = Painel().Items;
 
@@ -16,15 +16,17 @@ public class DrenagemRibbonTests
 
         var analise = Assert.IsType<RibbonMenuSpec>(itens[0]);
         Assert.Equal("Análise", analise.Text);
-        Assert.Equal([PluginInfo.ComandoDrenagemFlechas, PluginInfo.ComandoDrenagemLinha], analise.Items.Select(b => b.Command));
+        Assert.Equal([PluginInfo.ComandoDrenagemFlechas, PluginInfo.ComandoDrenagemLinha, PluginInfo.ComandoDrenagemRastreio], analise.Items.Select(b => b.Command));
 
-        var canaleta = Assert.IsType<RibbonButtonSpec>(itens[1]);
-        Assert.Equal(PluginInfo.ComandoDrenagemCanaleta, canaleta.Command);
-        Assert.True(canaleta.Large);
+        // Renan, 21/10/2026: o botão Canaleta virou o suspenso Desenhos.
+        var desenhos = Assert.IsType<RibbonMenuSpec>(itens[1]);
+        Assert.Equal("Desenhos", desenhos.Text);
+        Assert.Equal([PluginInfo.ComandoDrenagemCanaleta, PluginInfo.ComandoDrenagemCaixa, PluginInfo.ComandoDrenagemDissipador, PluginInfo.ComandoDrenagemExportar],
+            desenhos.Items.Select(b => b.Command));
 
         var memoria = Assert.IsType<RibbonMenuSpec>(itens[2]);
         Assert.Equal("Memória", memoria.Text);
-        Assert.Equal([PluginInfo.ComandoDrenagemBacias, PluginInfo.ComandoDrenagemMemoria], memoria.Items.Select(b => b.Command));
+        Assert.Equal([PluginInfo.ComandoDrenagemBacias, PluginInfo.ComandoDrenagemMemoria, PluginInfo.ComandoDrenagemVazao], memoria.Items.Select(b => b.Command));
     }
 
     [Fact]

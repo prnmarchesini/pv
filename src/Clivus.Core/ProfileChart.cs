@@ -27,7 +27,24 @@ public enum ChartTextAlign
 public sealed record ChartText(double X, double Y, double Height, string Text, ChartTextAlign Align);
 
 /// <summary>O gráfico pronto para desenhar.</summary>
-public sealed record ChartDrawing(IReadOnlyList<ChartLine> Lines, IReadOnlyList<ChartText> Texts, double Width, double Height, double Exaggeration);
+/// <param name="ZBase">A cota do pé da moldura (y = 0): com o exagero, leva cota a y do gráfico e de volta (o rastreio, 32.2).</param>
+public sealed record ChartDrawing(IReadOnlyList<ChartLine> Lines, IReadOnlyList<ChartText> Texts, double Width, double Height, double Exaggeration, double ZBase = 0)
+{
+    /// <summary>O y do gráfico para a cota.</summary>
+    public double YOf(double z) => (z - ZBase) * Exaggeration;
+
+    /// <summary>O retângulo que o gráfico ocupa (moldura, banda, título e textos), em coordenadas do gráfico.</summary>
+    public (double MinX, double MinY, double MaxX, double MaxY) Bounds
+    {
+        get
+        {
+            var xs = Lines.SelectMany(l => l.Points.Select(p => p.X)).Concat(Texts.Select(t => t.X)).ToList();
+            var ys = Lines.SelectMany(l => l.Points.Select(p => p.Y)).Concat(Texts.Select(t => t.Y + t.Height)).ToList();
+            var largura = Texts.Count == 0 ? 0 : Texts.Max(t => t.Height * t.Text.Length * 0.6);
+            return (xs.Min() - largura, ys.Min() - (Texts.Count == 0 ? 0 : Texts.Max(t => t.Height)), xs.Max() + largura, ys.Max());
+        }
+    }
+}
 
 /// <summary>O que vai no gráfico do perfil.</summary>
 public sealed record ChartInput
@@ -51,6 +68,13 @@ public sealed record ChartInput
 
     /// <summary>Exagero vertical; zero ou negativo = automático.</summary>
     public double VerticalExaggeration { get; init; }
+
+    /// <summary>
+    /// Linha de análise (32.1): em cada trecho, quanto corre (em planta) e
+    /// quanto sobe ou desce, no sentido em que foi desenhada; "A" e "B" nas
+    /// pontas. Na canaleta, o "% | grau" do fundo com a seta da água.
+    /// </summary>
+    public bool RunAndRise { get; init; }
 }
 
 /// <summary>
@@ -67,6 +91,9 @@ public static class ProfileChart
 {
     private static readonly double[] PassosBonitos = [0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000];
     private static readonly double[] ExagerosBonitos = [1, 2, 5, 10, 20, 50];
+
+    /// <summary>A largura média de uma letra, em alturas de texto (Arial, padrão do AutoCAD).</summary>
+    private const double LarguraDaLetra = 0.6;
 
     /// <summary>O menor passo "bonito" maior ou igual ao valor.</summary>
     public static double NiceStep(double value) => PassosBonitos.FirstOrDefault(p => p >= value - 1e-12, PassosBonitos[^1]);
@@ -178,7 +205,21 @@ public static class ProfileChart
             var topoDoTrecho = new[] { s.From, meio, s.To }.Max(d => Interpolar(input.Terrain, d));
             var yTexto = Y(topoDoTrecho) + 1.6 * th;
 
-            textos.Add(new ChartText(meio, yTexto, 0.8 * th, Tr.F("{0} | {1}°", N(s.Percent, "0.0") + "%", N(s.Degrees, "0.0")), ChartTextAlign.Center));
+            if (input.RunAndRise)
+            {
+                // Corre e sobe, no sentido do desenho: sem sinal, com a palavra.
+                var sobe = s.ZTo > s.ZFrom;
+                var corre = Tr.F("corre {0} m · {1} {2} m", N(s.Length, "0.0"), sobe ? Tr.T("sobe") : Tr.T("desce"), N(Math.Abs(s.ZTo - s.ZFrom), "0.00"));
+
+                // Não cabe no trecho: a fonte diminui (regra de 07/10/2026), nunca encosta no vizinho.
+                var h = Math.Min(0.8 * th, 0.9 * s.Length / (corre.Length * LarguraDaLetra));
+                textos.Add(new ChartText(meio, yTexto + 1.3 * h, h, corre, ChartTextAlign.Center));
+                textos.Add(new ChartText(meio, yTexto, h, Tr.F("{0} | {1}°", N(Math.Abs(s.Percent), "0.0") + "%", N(Math.Abs(s.Degrees), "0.0")), ChartTextAlign.Center));
+            }
+            else
+            {
+                textos.Add(new ChartText(meio, yTexto, 0.8 * th, Tr.F("{0} | {1}°", N(s.Percent, "0.0") + "%", N(s.Degrees, "0.0")), ChartTextAlign.Center));
+            }
 
             if (Math.Abs(s.Slope) > 1e-4)
             {
@@ -202,15 +243,28 @@ public static class ProfileChart
             linhas.Add(new ChartLine(ChartLineKind.Alert, trecho));
         }
 
+        // O título do eixo das cotas, em cima dos números (deitado: texto nunca em pé).
+        textos.Add(new ChartText(-0.5 * th, altura + 0.6 * th, 0.8 * th, Tr.T("Cota (m)"), ChartTextAlign.Right));
+
+        // A e B nas pontas da linha de análise (os mesmos da planta).
+        if (input.RunAndRise)
+        {
+            textos.Add(new ChartText(0.3 * th, Y(input.Terrain[0].Z) + 0.8 * th, 1.4 * th, "A", ChartTextAlign.Left));
+            textos.Add(new ChartText(comprimento - 0.3 * th, Y(input.Terrain[^1].Z) + 0.8 * th, 1.4 * th, "B", ChartTextAlign.Right));
+        }
+
         // O título, em duas linhas, em cima da moldura.
         var media = comprimento > 0 ? (principal[0].Z - principal[^1].Z) / comprimento : 0;
-        textos.Add(new ChartText(0, altura + 2.6 * th, 1.2 * th, input.Title, ChartTextAlign.Left));
-        textos.Add(new ChartText(0, altura + 1.0 * th, 0.8 * th,
-            Tr.F("Comprimento {0} m · cotas {1} a {2} m · declividade média {3}% · exagero vertical {4}×",
-                N(comprimento, "0.0"), N(zMin), N(zMax), N(media * 100, "0.0"), N(exagero, "0.#")),
-            ChartTextAlign.Left));
+        textos.Add(new ChartText(0, altura + 3.0 * th, 1.2 * th, input.Title, ChartTextAlign.Left));
+        var resumo = input.RunAndRise
+            ? Tr.F("De A a B: corre {0} m e {1} {2} m ({3}%) · cotas {4} a {5} m · exagero vertical {6}×",
+                N(comprimento, "0.0"), principal[^1].Z >= principal[0].Z ? Tr.T("sobe") : Tr.T("desce"),
+                N(Math.Abs(principal[^1].Z - principal[0].Z)), N(Math.Abs(media) * 100, "0.0"), N(zMin), N(zMax), N(exagero, "0.#"))
+            : Tr.F("Comprimento {0} m · cotas {1} a {2} m · declividade média {3}% · exagero vertical {4}×",
+                N(comprimento, "0.0"), N(zMin), N(zMax), N(media * 100, "0.0"), N(exagero, "0.#"));
+        textos.Add(new ChartText(0, altura + 1.6 * th, 0.8 * th, resumo, ChartTextAlign.Left));
 
-        return new ChartDrawing(linhas, textos, comprimento, altura, exagero);
+        return new ChartDrawing(linhas, textos, comprimento, altura, exagero, zBase);
     }
 
     private static double Interpolar(IReadOnlyList<(double D, double Z)> serie, double d)

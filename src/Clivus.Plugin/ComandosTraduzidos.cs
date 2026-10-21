@@ -270,6 +270,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_DRN_CUENCA_MANUAL")]
     public static void CLIVUS_DRN_CUENCA_MANUAL() => BaciasCommands.Manual();
 
+    [CommandMethod("CLIVUS_DRN_BOX")]
+    public static void CLIVUS_DRN_BOX() => DesenhosCommands.Caixa();
+
+    [CommandMethod("CLIVUS_DRN_CAJA")]
+    public static void CLIVUS_DRN_CAJA() => DesenhosCommands.Caixa();
+
     [CommandMethod("CLIVUS_DRN_CHANNEL")]
     public static void CLIVUS_DRN_CHANNEL() => DrenagemCommands.Canaleta();
 
@@ -290,6 +296,15 @@ public static class ComandosTraduzidos
 
     [CommandMethod("CLIVUS_DRN_CANALETA_LEER")]
     public static void CLIVUS_DRN_CANALETA_LEER() => CanaletaCommands.Ler();
+
+    [CommandMethod("CLIVUS_DRN_DISSIPATOR")]
+    public static void CLIVUS_DRN_DISSIPATOR() => DesenhosCommands.Dissipador();
+
+    [CommandMethod("CLIVUS_DRN_DISIPADOR")]
+    public static void CLIVUS_DRN_DISIPADOR() => DesenhosCommands.Dissipador();
+
+    [CommandMethod("CLIVUS_DRN_EXPORT")]
+    public static void CLIVUS_DRN_EXPORT() => DesenhosCommands.Exportar();
 
     [CommandMethod("CLIVUS_DRN_ARROWS")]
     public static void CLIVUS_DRN_ARROWS() => DrenagemCommands.Flechas();
@@ -317,6 +332,18 @@ public static class ComandosTraduzidos
 
     [CommandMethod("CLIVUS_DRN_REPORT_HEIGHT", CommandFlags.UsePickSet)]
     public static void CLIVUS_DRN_REPORT_HEIGHT() => MemoriaCommands.Altura();
+
+    [CommandMethod("CLIVUS_DRN_TRACKING")]
+    public static void CLIVUS_DRN_TRACKING() => RastreioDoPerfil.Comando();
+
+    [CommandMethod("CLIVUS_DRN_RASTREO")]
+    public static void CLIVUS_DRN_RASTREO() => RastreioDoPerfil.Comando();
+
+    [CommandMethod("CLIVUS_DRN_FLOW")]
+    public static void CLIVUS_DRN_FLOW() => MemoriaCommands.Vazao();
+
+    [CommandMethod("CLIVUS_DRN_CAUDAL")]
+    public static void CLIVUS_DRN_CAUDAL() => MemoriaCommands.Vazao();
 
     [CommandMethod("CLIVUS_ELECTRICAL")]
     public static void CLIVUS_ELECTRICAL() => ConfiguracaoEletricaCommands.Eletrica();

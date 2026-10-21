@@ -50,4 +50,19 @@ public static partial class PluginInfo
 
     /// <summary>Só para o nível 2: o arquivo XLSX; calcula a memória, grava o Excel e escreve as linhas na linha de comando.</summary>
     public const string ComandoDrenagemMemoriaAutomatico = "CLIVUS_DRN_MEMORIA_AUTO";
+
+    /// <summary>Análise › Rastrear (32.2): [Ligar/Desligar] o rastreio planta ↔ gráfico.</summary>
+    public const string ComandoDrenagemRastreio = "CLIVUS_DRN_RASTREIO";
+
+    /// <summary>Desenhos › Dissipador (32.5): clique perto da ponta da canaleta; [Remover] tira.</summary>
+    public const string ComandoDrenagemDissipador = "CLIVUS_DRN_DISSIPADOR";
+
+    /// <summary>Desenhos › Caixa (32.6): o ponto da caixa entre canaletas; [Remover] tira.</summary>
+    public const string ComandoDrenagemCaixa = "CLIVUS_DRN_CAIXA";
+
+    /// <summary>Desenhos › Exportar canaletas (32.7): o Excel dos metros de cada canaleta, por tipo, caixas e dissipadores.</summary>
+    public const string ComandoDrenagemExportar = "CLIVUS_DRN_EXPORTAR";
+
+    /// <summary>Memória › Vazão no ponto (32.8): clique na canaleta e veja a área e a vazão até ali.</summary>
+    public const string ComandoDrenagemVazao = "CLIVUS_DRN_VAZAO";
 }

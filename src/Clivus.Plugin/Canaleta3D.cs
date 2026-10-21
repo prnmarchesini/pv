@@ -115,20 +115,8 @@ internal static class Canaleta3D
     private static void Pecas(Tin terreno, DrainageSettings configuracao,
         LinhaNoDesenho linha, ChannelProfileResult canaleta, ChannelSection secao, string camada, List<IReadOnlyList<Point3>> vias, Action<Entity> marcar)
     {
-        var (_, l2, comprimento) = EnergyDissipator.Size(secao.TopWidth);
-        var fim = canaleta.Points[^1];
-        var antes = canaleta.Points.Take(canaleta.Points.Count - 1).LastOrDefault(p => Math.Abs(p.X - fim.X) + Math.Abs(p.Y - fim.Y) > 1e-6);
-
-        if (antes.Distance < fim.Distance)
-        {
-            var (dx, dy) = (fim.X - antes.X, fim.Y - antes.Y);
-            var n = Math.Sqrt(dx * dx + dy * dy);
-            (dx, dy) = (dx / n, dy / n);
-
-            var (cx, cy) = (fim.X + dx * comprimento / 2, fim.Y + dy * comprimento / 2);
-            var topo = terreno.TryGetZ(cx, cy, out var zc) ? Math.Min(zc, fim.Terrain) : fim.Terrain;
-            marcar(Caixa(cx, cy, topo - 0.16, comprimento, l2, 0.32, Math.Atan2(dy, dx), camada));
-        }
+        // O dissipador só onde o Renan pôs (32.5: "coloca opção de dissipador").
+        if (linha.Identidade.Dissipator != DissipatorEnd.None) Dissipador(terreno, linha.Identidade.Dissipator, canaleta, secao, camada, marcar);
 
         if (vias.Count == 0) return;
 
@@ -139,6 +127,97 @@ internal static class Canaleta3D
         {
             if (!terreno.TryGetZ(x, y, out var z)) continue;
             marcar(Caixa(x, y, z - 0.105, 0.50, laje, 0.21, Math.Atan2(dy, dx), camada));
+        }
+    }
+
+    /// <summary>
+    /// O dissipador de energia (DES do DNIT, IPR 736, desenho 1.19) na ponta
+    /// escolhida: em planta, o trapézio que abre de L1 (na canaleta) para L2 ao
+    /// longo do comprimento, com o nome do modelo; em 3D, o mesmo trapézio com
+    /// 32 cm de altura e o topo no terreno. Medidas do modelo do álbum que cobre
+    /// a abertura; acima do maior, pela conta (L1 = B, L2 = 3·L1, 2·L1).
+    /// </summary>
+    private static void Dissipador(Tin terreno, DissipatorEnd ponta, ChannelProfileResult canaleta, ChannelSection secao, string camada, Action<Entity> marcar)
+    {
+        var pontos = canaleta.Points;
+        var (l1, l2, comprimento) = EnergyDissipator.Size(secao.TopWidth);
+        var modelo = EnergyDissipator.Model(secao.TopWidth);
+        if (modelo is not null && int.TryParse(modelo[4..modelo.IndexOf('-')], out var cm))
+            (l1, l2, comprimento) = EnergyDissipator.Size(cm / 100.0);
+
+        // A ponta e a direção para fora da canaleta.
+        var fim = ponta == DissipatorEnd.Downstream ? pontos[^1] : pontos[0];
+        var vizinho = ponta == DissipatorEnd.Downstream
+            ? pontos.Take(pontos.Count - 1).LastOrDefault(q => Math.Abs(q.X - fim.X) + Math.Abs(q.Y - fim.Y) > 1e-6)
+            : pontos.Skip(1).FirstOrDefault(q => Math.Abs(q.X - fim.X) + Math.Abs(q.Y - fim.Y) > 1e-6);
+
+        var (dx, dy) = (fim.X - vizinho.X, fim.Y - vizinho.Y);
+        var n = Math.Sqrt(dx * dx + dy * dy);
+        if (n < 1e-9) return;
+        (dx, dy) = (dx / n, dy / n);
+        var (px, py) = (-dy, dx);
+
+        var (sx, sy) = (fim.X + dx * comprimento, fim.Y + dy * comprimento);
+        var topo = Math.Min(fim.Terrain, terreno.TryGetZ(sx, sy, out var zs) ? zs : fim.Terrain);
+
+        Point2d[] trapezio =
+        [
+            new(fim.X + px * l1 / 2, fim.Y + py * l1 / 2), new(sx + px * l2 / 2, sy + py * l2 / 2),
+            new(sx - px * l2 / 2, sy - py * l2 / 2), new(fim.X - px * l1 / 2, fim.Y - py * l1 / 2),
+        ];
+
+        Polyline Contorno(double z)
+        {
+            var c = new Polyline { Layer = camada, Elevation = z, Closed = true };
+            for (var i = 0; i < trapezio.Length; i++) c.AddVertexAt(i, trapezio[i], 0, 0, 0);
+            return c;
+        }
+
+        // Em planta: o contorno um pouco acima do terreno e o modelo no meio.
+        var planta = Contorno(topo + 0.02);
+        planta.ColorIndex = 30;
+        marcar(planta);
+
+        var (mx, my) = (fim.X + dx * comprimento / 2, fim.Y + dy * comprimento / 2);
+        var rumo = LayoutDrawer.RumoLegivel(dx, dy);
+        var rotulo = new DBText
+        {
+            Layer = camada,
+            ColorIndex = 30,
+            Height = Math.Max(0.25, 0.25 * l2),
+            TextString = modelo ?? Tr.T("Dissipador"),
+            Rotation = rumo,
+            Position = new Point3d(mx, my, topo + 0.05),
+            HorizontalMode = TextHorizontalMode.TextCenter,
+            VerticalMode = TextVerticalMode.TextVerticalMid,
+            AlignmentPoint = new Point3d(mx, my, topo + 0.05),
+        };
+        marcar(rotulo);
+        rotulo.AdjustAlignment(rotulo.Database ?? HostApplicationServices.WorkingDatabase);
+
+        // Em 3D: o trapézio com 32 cm de altura, o topo no terreno.
+        using var baseDoSolido = Contorno(topo - 0.32);
+        var regioes = Region.CreateFromCurves([baseDoSolido]);
+        try
+        {
+            if (regioes.Count == 0) return;
+
+            var solido = new Solid3d { Layer = camada };
+            try
+            {
+                solido.Extrude((Region)regioes[0], 0.32, 0);
+            }
+            catch
+            {
+                solido.Dispose();
+                throw;
+            }
+
+            marcar(solido);
+        }
+        finally
+        {
+            foreach (DBObject r in regioes) r.Dispose();
         }
     }
 

@@ -69,6 +69,7 @@ public sealed class ClivusExtension : IExtensionApplication
             AparenciaDasJanelas.Instalar();
             RibbonClivus.Instalar();
             MenuDeContexto.Instalar();
+            RastreioDoPerfil.Instalar();
             AutoSelecao.Instalar();
         }
         catch (System.Exception erro)
@@ -86,6 +87,7 @@ public sealed class ClivusExtension : IExtensionApplication
             ValidacaoAoAbrir.Desinstalar();
             ArvoreVigia.Desinstalar();
             DrenagemVigia.Desinstalar();
+            RastreioDoPerfil.Desinstalar();
             Licenciamento.Desinstalar();
             LayoutWatcher.Desinstalar();
         }

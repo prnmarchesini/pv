@@ -4,12 +4,13 @@ using System.Text.Json;
 namespace Clivus.Core;
 
 /// <summary>
-/// As preferências do usuário que não são do desenho (etapa 10): por enquanto
-/// o idioma ("auto", "pt", "en", "es"). Ficam em
+/// As preferências do usuário que não são do desenho (etapa 10): o idioma
+/// ("auto", "pt", "en", "es") e, desde 21/10/2026, se o rastreio planta ↔
+/// gráfico da drenagem está ligado (32.2). Ficam em
 /// <c>%LOCALAPPDATA%\Clivus Solar\preferencias.json</c>; arquivo que falta ou
 /// não se lê vale o padrão.
 /// </summary>
-public sealed record UserPreferences(string Language = "auto")
+public sealed record UserPreferences(string Language = "auto", bool ProfileTracking = true)
 {
     private static readonly JsonSerializerOptions Opcoes = new() { WriteIndented = true };
 
@@ -25,8 +26,9 @@ public sealed record UserPreferences(string Language = "auto")
 
             using var doc = JsonDocument.Parse(File.ReadAllText(caminho));
             var idioma = doc.RootElement.TryGetProperty("idioma", out var i) && i.ValueKind == JsonValueKind.String ? i.GetString() : null;
+            var rastreio = !doc.RootElement.TryGetProperty("rastreio", out var r) || r.ValueKind != JsonValueKind.False;
 
-            return new UserPreferences(LanguageChoices.Contains(idioma) ? idioma! : "auto");
+            return new UserPreferences(LanguageChoices.Contains(idioma) ? idioma! : "auto", rastreio);
         }
         catch (Exception erro) when (erro is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -38,7 +40,7 @@ public sealed record UserPreferences(string Language = "auto")
     public void Save(string caminho)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(caminho)!);
-        File.WriteAllText(caminho, JsonSerializer.Serialize(new Dictionary<string, string> { ["idioma"] = Language }, Opcoes));
+        File.WriteAllText(caminho, JsonSerializer.Serialize(new Dictionary<string, object> { ["idioma"] = Language, ["rastreio"] = ProfileTracking }, Opcoes));
     }
 
     /// <summary>

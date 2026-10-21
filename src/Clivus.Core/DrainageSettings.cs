@@ -151,6 +151,9 @@ public sealed record DrainageSettings
     public IReadOnlyList<ChannelSection> Sections { get; init; } = ChannelSection.Defaults;
     public BasinSettings Basins { get; init; } = new();
 
+    /// <summary>As medidas da caixa entre canaletas (32.6).</summary>
+    public BoxSettings Box { get; init; } = new();
+
     /// <summary>A seção escolhida por último na janela da canaleta (o padrão do Converter).</summary>
     public string CurrentSection { get; init; } = ChannelSection.Defaults[0].Name;
 
@@ -210,6 +213,7 @@ public sealed record DrainageSettings
                 Hydrology = lido.Hydrology ?? new HydrologyParameters(),
                 Sections = secoes,
                 Basins = lido.Basins ?? new BasinSettings(),
+                Box = lido.Box ?? new BoxSettings(),
             };
         }
         catch (JsonException erro)

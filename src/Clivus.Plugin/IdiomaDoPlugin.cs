@@ -47,7 +47,7 @@ internal static class IdiomaDoPlugin
     internal static bool Trocar(string escolha)
     {
         var antes = Tr.Current;
-        new UserPreferences(escolha).Save(Arquivo);
+        (UserPreferences.Load(Arquivo) with { Language = escolha }).Save(Arquivo);
         Aplicar();
 
         if (Tr.Current == antes) return false;

@@ -56,6 +56,18 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
 - 31.5 Seção a partir da conta: AGUARDANDO VALIDAÇÃO
 - 31.6 Dissipador e transposição: AGUARDANDO VALIDAÇÃO (decisão 3)
 
+## Etapa 32: segunda rodada (21/10/2026, depois da primeira tela)
+
+- 32.1 Linha no sentido desenhado, X × Y, corre e sobe: AGUARDANDO VALIDAÇÃO
+- 32.2 Rastreio planta ↔ gráfico, liga e desliga: AGUARDANDO VALIDAÇÃO
+- 32.3 Nome da canaleta em campo: AGUARDANDO VALIDAÇÃO
+- 32.4 Menu Desenhos: AGUARDANDO VALIDAÇÃO
+- 32.5 Dissipador como opção, nítido na memória: AGUARDANDO VALIDAÇÃO
+- 32.6 Caixa entre canaletas: AGUARDANDO VALIDAÇÃO
+- 32.7 Exportar canaletas: AGUARDANDO VALIDAÇÃO
+- 32.8 Vazão no ponto: AGUARDANDO VALIDAÇÃO
+- 32.9 Plúvio: respondido (sem integração possível hoje)
+
 ## Decisões tomadas sem resposta (ficam para o Renan confirmar)
 
 1. Altura adotada: arredonda para cima de 0,05 m em 0,05 m, e o passo do
@@ -84,6 +96,27 @@ ficaram sem resposta; segui com as decisões abaixo, que ficam para o Renan conf
   (interseções, fora de escopo).
 - Altura sugerida da meia-cana: o menor raio (no passo) em que lâmina + bordo livre cabem;
   o bordo livre é o da Tabela 36 do DNIT (valetas), o mesmo da trapezoidal.
+
+## Roteiro de tela da etapa 32
+
+1. Análise › Linhas: clique A, outros pontos e B (a linha aparece enquanto clica; Desfazer tira o
+   último), Enter. A linha nasce já com o gráfico; o quadro do gráfico segue o mouse: clique onde quer
+   (Enter ou Esc deixa ao lado). O gráfico começa no A, tem "Cota (m)" e, em cada trecho, "corre X m ·
+   sobe/desce Y m" com % e graus; em planta, "A", "B" e o nome da linha.
+2. Passe o mouse no gráfico: a seta magenta anda na linha em planta. Passe o mouse na linha ou na
+   canaleta: a vertical anda no gráfico, com a dica (estaca, terreno e fundo). Análise › Rastrear
+   desliga e liga.
+3. Cada canaleta com o nome escrito ao longo dela (Canaleta 1 · Trap 30/60).
+4. Desenhos (o antigo Canaleta) › Canaleta, Caixa, Dissipador, Exportar canaletas.
+5. Desenhos › Dissipador: clique perto da saída da canaleta: o trapézio com o modelo DES em planta e o
+   sólido em 3D. Memória › Cálculo › aba Dissipadores: a conta escrita (B, L1, L2, comprimento,
+   velocidade de saída). Canaleta com saída rápida e sem dissipador: alerta "sugere dissipador".
+6. Desenhos › Caixa: clique no encontro das canaletas: caixa oca, fundo 10 cm abaixo da canaleta mais
+   funda que chega, nome CX 1. Medidas muda a caixa; Remover tira.
+7. Desenhos › Exportar canaletas: Excel com Canaletas, Por tipo (metros e quantidade), Caixas e
+   Dissipadores.
+8. Memória › Vazão no ponto (depois das Bacias): clique em pontos da canaleta e veja a vazão crescer
+   até a do fim.
 
 ## Roteiro de tela (o que o Renan confere no Civil 3D)
 

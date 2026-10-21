@@ -4,7 +4,8 @@ namespace Clivus.Core;
 /// <param name="Profile">O perfil do fundo (declividades, comprimento).</param>
 /// <param name="Basin">A bacia dela (30), ou null se as bacias não foram calculadas com ela.</param>
 /// <param name="RoadCrossings">Quantas vezes ela cruza uma via (camadas das vias dos parâmetros).</param>
-public sealed record ChannelInput(Guid Id, string Name, ChannelSection Section, ChannelProfileResult Profile, BasinEntry? Basin, int RoadCrossings = 0);
+/// <param name="Dissipator">Se a canaleta tem dissipador e em que ponta (32.5).</param>
+public sealed record ChannelInput(Guid Id, string Name, ChannelSection Section, ChannelProfileResult Profile, BasinEntry? Basin, int RoadCrossings = 0, DissipatorEnd Dissipator = DissipatorEnd.None);
 
 /// <summary>O cálculo de uma canaleta: o que vai em cada tabela do memorial.</summary>
 public sealed record ChannelCalculation
@@ -36,6 +37,9 @@ public sealed record ChannelCalculation
 
     // Tabela 9: dimensões.
     public double SuggestedHeight { get; init; } = double.NaN;
+
+    /// <summary>A velocidade com que a água sai da canaleta (Manning no último trecho, com a vazão inteira), em m/s.</summary>
+    public double OutletVelocity { get; init; } = double.NaN;
 
     // Tabela 11 e transposição.
     public (double L1, double L2, double Length) Dissipator { get; init; }
@@ -164,11 +168,25 @@ public static class DrainageMemory
                 alertas.Add(Tr.F("velocidade {0:0.00} m/s abaixo da mínima de autolimpeza ({1:0.0} m/s): acúmulo de terra.", vmin, p.MinimumVelocity));
         }
 
+        // A saída: a velocidade no último trecho. Acima do que o terreno aguenta,
+        // a água sai rápida e erode: sugere dissipador (32.5).
+        var saida = double.NaN;
+        if (vazao > 0 && perfil.Segments.Count > 0)
+        {
+            var iSaida = Math.Max(perfil.Segments[^1].Slope, p.MinimumSlope);
+            var hSaida = Hydraulics.NormalDepth(secao, vazao, iSaida);
+            saida = double.IsNaN(hSaida) ? double.NaN : Hydraulics.Velocity(secao, hSaida, iSaida);
+
+            if (c.Dissipator == DissipatorEnd.None && saida > p.CoverMaxVelocity + 1e-9)
+                alertas.Add(Tr.F("a água sai a {0:0.00} m/s, acima do que o terreno aguenta ({1}: {2:0.00} m/s): sugere dissipador na saída (Desenhos › Dissipador).", saida, p.Cover, p.CoverMaxVelocity));
+        }
+
         // Tabela 11 e transposição pela abertura da seção.
         var abertura = secao.TopWidth;
         var dissipador = EnergyDissipator.Size(abertura);
         var modeloDes = EnergyDissipator.Model(abertura);
-        if (modeloDes is null) alertas.Add(Tr.F("abertura de {0:0.00} m passa do maior dissipador do álbum do DNIT (DES 160-480).", abertura));
+        if (c.Dissipator != DissipatorEnd.None && modeloDes is null)
+            alertas.Add(Tr.F("abertura de {0:0.00} m passa do maior dissipador do álbum do DNIT (DES 160-480).", abertura));
 
         string? modeloTss = null;
         if (c.RoadCrossings > 0)
@@ -194,12 +212,29 @@ public static class DrainageMemory
             MinVelocity = vmin,
             Freeboard = f,
             SuggestedHeight = sugerida,
+            OutletVelocity = saida,
             Dissipator = dissipador,
             DissipatorModel = modeloDes,
             CrossingModel = modeloTss,
             Quantities = ChannelQuantities.Of(perfil, secao),
             Alerts = alertas,
         };
+    }
+
+    /// <summary>
+    /// A vazão num ponto da canaleta (32.8): o método racional com a área que
+    /// entrou até a estaca, com o tc e a chuva da bacia inteira (a favor da
+    /// segurança). A área em m² e a vazão em l/s.
+    /// </summary>
+    public static (double Area, double FlowLitersPerSecond) FlowAt(HydrologyParameters p, ChannelCalculation calculo, double station)
+    {
+        ArgumentNullException.ThrowIfNull(p);
+        ArgumentNullException.ThrowIfNull(calculo);
+
+        if (calculo.Input.Basin is not { } bacia || !double.IsFinite(calculo.Intensity)) return (0, 0);
+
+        var area = bacia.AreaUpTo(station);
+        return (area, Rainfall.RationalFlowLitersPerSecond(p.RunoffC, calculo.Intensity, area));
     }
 
     /// <summary>As tabelas do memorial, prontas para a tela e o Excel.</summary>
@@ -266,10 +301,13 @@ public static class DrainageMemory
             }).ToList(),
             [], [Tr.F("Altura sugerida = lâmina + bordo livre, arredondada para cima de {0:0.00} em {0:0.00} m. A adotada é a da seção da canaleta: quem decide é o projetista.", p.HeightStep)]));
 
+        // Só os postos, com a conta escrita (Renan: "isso tem que ficar nítido").
         tabelas.Add(new CableTable(Tr.T("Dissipadores"),
-            [Tr.T("Canaleta"), "L1 (m)", "L2 (m)", Tr.T("Comprimento (m)"), Tr.T("Modelo DNIT")],
-            cs.Select(c => (IReadOnlyList<object?>)[c.Input.Name, Math.Round(c.Dissipator.L1, 3), Math.Round(c.Dissipator.L2, 3), Math.Round(c.Dissipator.Length, 3), c.DissipatorModel ?? "—"]).ToList(),
-            [], [Tr.T("DNIT IPR 736, desenho 1.19 (DES): L1 = abertura da canaleta, L2 = 3·L1, comprimento = 2·L1.")]));
+            [Tr.T("Canaleta"), Tr.T("Ponta"), Tr.T("Velocidade de saída (m/s)"), Tr.T("Abertura B (m)"), "L1 = B (m)", "L2 = 3·L1 (m)", Tr.T("Comprimento = 2·L1 (m)"), Tr.T("Modelo do álbum")],
+            cs.Where(c => c.Input.Dissipator != DissipatorEnd.None).Select(c => (IReadOnlyList<object?>)[c.Input.Name,
+                c.Input.Dissipator == DissipatorEnd.Downstream ? Tr.T("saída") : Tr.T("ponta de cima"), N(c.OutletVelocity, 2),
+                Math.Round(c.Input.Section.TopWidth, 3), Math.Round(c.Dissipator.L1, 3), Math.Round(c.Dissipator.L2, 3), Math.Round(c.Dissipator.Length, 3), c.DissipatorModel ?? "—"]).ToList(),
+            [], [Tr.T("Dissipador de energia: a água sai da canaleta rápida e cava o terreno; o dissipador (uma bacia de pedra de mão argamassada que abre em leque) quebra essa energia. Medidas do álbum do DNIT (IPR 736, desenho 1.19, DES): L1 = abertura da canaleta, L2 = 3·L1, comprimento = 2·L1; modelo do álbum com L1 que cobre a abertura. Ponha onde a velocidade de saída passa da que o terreno aguenta (alerta \"sugere dissipador\").")]));
 
         tabelas.Add(new CableTable(Tr.T("Transposições"),
             [Tr.T("Canaleta"), Tr.T("Cruzamentos com via"), "B (m)", Tr.T("Modelo DNIT")],

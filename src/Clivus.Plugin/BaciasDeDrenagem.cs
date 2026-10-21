@@ -91,7 +91,10 @@ internal static class BaciasDeDrenagem
         var semDestino = grade.Owner.Count(o => o == Watershed.NoDestination) * area;
         var relatorio = new BasinReport
         {
-            Basins = resumos.Select(r => new BasinEntry(canaletas[r.Target].Identidade.Id, canaletas[r.Target].Identidade.Name, r.Area, r.LongestPath, r.Drop, r.HasManual)).ToList(),
+            Basins = resumos.Select(r => new BasinEntry(canaletas[r.Target].Identidade.Id, canaletas[r.Target].Identidade.Name, r.Area, r.LongestPath, r.Drop, r.HasManual)
+            {
+                Accumulation = Acumulado(terreno, configuracao, canaletas[r.Target], grade, r.Target),
+            }).ToList(),
             NoDestinationArea = semDestino,
             AnalyzedArea = grade.AnalyzedCount * area,
             CellSize = celula,
@@ -117,6 +120,50 @@ internal static class BaciasDeDrenagem
         if (semCanaleta > 0) frase += " " + Tr.F("ATENÇÃO: {0} ajuste(s) manual(is) apontam para canaleta que não existe mais e foram ignorados.", semCanaleta);
 
         return frase;
+    }
+
+    /// <summary>
+    /// A área que entra na canaleta até cada estaca (32.8): a estaca de entrada
+    /// de cada célula dela é a projeção do ponto onde a água chega no eixo, na
+    /// ordem do perfil (da montante).
+    /// </summary>
+    private static IReadOnlyList<double[]> Acumulado(Tin terreno, DrainageSettings configuracao, LinhaNoDesenho canaleta, WatershedGrid grade, int alvo)
+    {
+        ChannelProfileResult? perfil;
+        try
+        {
+            perfil = LinhasDeDrenagem.Perfil(terreno, configuracao, canaleta).Canaleta;
+        }
+        catch (ArgumentException)
+        {
+            return [];
+        }
+
+        if (perfil is not { Points.Count: >= 2 } p) return [];
+
+        double Estaca(double x, double y)
+        {
+            if (!double.IsFinite(x)) return double.NaN;
+
+            double melhor = double.MaxValue, estaca = double.NaN;
+            for (var i = 1; i < p.Points.Count; i++)
+            {
+                var (a, b) = (p.Points[i - 1], p.Points[i]);
+                var (dx, dy) = (b.X - a.X, b.Y - a.Y);
+                var l2 = dx * dx + dy * dy;
+                var t = l2 < 1e-18 ? 0 : Math.Clamp(((x - a.X) * dx + (y - a.Y) * dy) / l2, 0, 1);
+                var e = Math.Pow(x - (a.X + dx * t), 2) + Math.Pow(y - (a.Y + dy * t), 2);
+                if (e < melhor) (melhor, estaca) = (e, a.Distance + (b.Distance - a.Distance) * t);
+            }
+
+            return estaca;
+        }
+
+        var estacas = Enumerable.Range(0, grade.Owner.Length)
+            .Where(k => grade.Owner[k] == alvo)
+            .Select(k => grade.HitX.Length > k ? Estaca(grade.HitX[k], grade.HitY[k]) : double.NaN);
+
+        return BasinEntry.Accumulate(estacas, grade.Cell * grade.Cell, p.Length);
     }
 
     private static void Desenhar(Transaction transacao, Database database, Tin terreno, WatershedGrid grade,

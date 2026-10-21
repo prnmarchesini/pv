@@ -114,4 +114,23 @@ public class WatershedTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => Watershed.Compute(TerrenoDeDrenagem.Rampa(), [], Canaletas(150), 0));
     }
+
+    [Fact]
+    [Trait("Etapa", "32")]
+    public void CadaCelulaSabeOndeEntraNaCanaleta()
+    {
+        // Rampa para o leste, canaleta norte-sul em x = 150: a água de cada
+        // célula entra na canaleta na altura (y) dela.
+        var grade = Watershed.Compute(TerrenoDeDrenagem.Rampa(), [], Canaletas(150), 4);
+
+        var dela = Enumerable.Range(0, grade.Owner.Length).Where(k => grade.Owner[k] == 0).ToList();
+        Assert.NotEmpty(dela);
+        Assert.All(dela, k =>
+        {
+            Assert.Equal(150, grade.HitX[k], 6);
+            Assert.Equal(grade.Center(k % grade.Columns, k / grade.Columns).Y, grade.HitY[k], 6);
+        });
+
+        Assert.All(Enumerable.Range(0, grade.Owner.Length).Where(k => grade.Owner[k] < 0), k => Assert.True(double.IsNaN(grade.HitX[k])));
+    }
 }

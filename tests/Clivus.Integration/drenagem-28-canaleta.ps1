@@ -81,7 +81,8 @@ function Testar-DrenagemCanaleta {
         if ([math]::Abs($c.Volume - $c.Esperado) -gt 0.03 * $c.Esperado) { $script:erros += "${quando}: $($c.Nome) volume $($c.Volume) m3, esperado $($c.Esperado) (area da parede x comprimento)" }
         if ([math]::Abs($c.Zmin - $c.ZminE) -gt 0.05) { $script:erros += "${quando}: $($c.Nome) fundo do 3D em $($c.Zmin), esperado $($c.ZminE)" }
         if ([math]::Abs($c.Zmax - $c.ZmaxE) -gt 0.05) { $script:erros += "${quando}: $($c.Nome) topo do 3D em $($c.Zmax), esperado $($c.ZmaxE)" }
-        if ($c.Pecas -ne 1) { $script:erros += "${quando}: $($c.Nome) com $($c.Pecas) peca(s) (esperado 1: o dissipador no pe)" }
+        # Desde 32.5 o dissipador so nasce quando o Renan pede (Desenhos > Dissipador).
+        if ($c.Pecas -ne 0) { $script:erros += "${quando}: $($c.Nome) com $($c.Pecas) peca(s) sem dissipador pedido" }
         if ($c.Alertas -ne $c.Baixos + $c.Invertidos) { $script:erros += "${quando}: $($c.Nome) com $($c.Alertas) pintura(s) para $($c.Baixos + $c.Invertidos) trecho(s) ruim(ns)" }
     }
 

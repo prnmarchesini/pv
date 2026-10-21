@@ -1,0 +1,37 @@
+; Teste de nivel 2 da etapa 32 (segunda rodada): a canaleta ganha dissipador
+; na ponta clicada; uma caixa na ponta dela; o Exportar canaletas grava o
+; Excel; as bacias e a vazao no ponto (cresce da ponta de cima para a saida).
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area dos desenhos")
+(command "_.PLINE" "{{P1}}" "{{P2}}" "{{P3}}" "")
+(setq clivus:pl (entlast))
+(command "CLIVUS_DRN_CANALETA_CONVERTER" "Trap 30/60" "Borda" clivus:pl "")
+(setq clivus:can (ssname (ssget "_X" '((0 . "POLYLINE") (8 . "CLIVUS_DRN_CANALETA"))) 0))
+
+(princ "\nCLIVUS_DRNDES ETAPA1")
+(command "CLIVUS_DRN_DISSIPADOR" (list clivus:can '{{P3L}}))
+(command "CLIVUS_DRN_CONFERIR_AUTO")
+
+(princ "\nCLIVUS_DRNDES ETAPA2")
+(command "CLIVUS_DRN_CAIXA" "{{P1}}" "")
+(setq clivus:cx (ssget "_X" '((0 . "3DSOLID") (8 . "CLIVUS_DRN_CANALETA_3D"))))
+(princ (strcat "\nCLIVUS_DRNDES solidos3d=" (itoa (if clivus:cx (sslength clivus:cx) 0))))
+
+(princ "\nCLIVUS_DRNDES ETAPA3")
+(command "CLIVUS_DRN_EXPORTAR" "{{XLSX}}")
+
+(princ "\nCLIVUS_DRNDES ETAPA4")
+(command "CLIVUS_DRN_BACIAS_CALCULAR" "Areas")
+(command "CLIVUS_DRN_VAZAO" (list clivus:can '{{P1L}}) (list clivus:can '{{P2L}}) (list clivus:can '{{P3L}}) "")
+
+(setvar "OSMODE" clivus:osmode)
+(princ "\nCLIVUS_DRNDES FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

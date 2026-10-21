@@ -13,11 +13,12 @@ namespace Clivus.Plugin;
 internal sealed class IndiceDaDrenagem
 {
     /// <summary>Os tipos de XData das entidades que pertencem a uma linha.</summary>
-    internal static readonly string[] Tipos = ["DrnPerfil", Canaleta3D.Tipo3D, Canaleta3D.TipoPeca, "DrnAlerta"];
+    internal static readonly string[] Tipos = ["DrnPerfil", Canaleta3D.Tipo3D, Canaleta3D.TipoPeca, "DrnAlerta", LinhasDeDrenagem.TipoDoRotulo];
 
     private static readonly string[] Camadas =
     [
         LayoutLayers.DrenagemPerfil, LayoutLayers.DrenagemCanaleta3D, LayoutLayers.DrenagemAlerta,
+        LayoutLayers.DrenagemLinha, LayoutLayers.DrenagemCanaleta,
     ];
 
     private static readonly RXClass[] Classes =
@@ -81,6 +82,9 @@ internal sealed class IndiceDaDrenagem
     /// </summary>
     internal List<IReadOnlyList<Point3>> Vias(Transaction transacao, Database database, string camadas) =>
         _vias ??= MemoriaDeDrenagem.Vias(transacao, database, camadas);
+
+    /// <summary>O que a linha desenhou (gráfico, 3D, rótulos, pintura).</summary>
+    internal IReadOnlyList<ObjectId> Ids(Guid linha) => _porGuid.TryGetValue(linha.ToString("D"), out var ids) ? ids : [];
 
     /// <summary>Os GUIDs que têm alguma coisa desenhada (para achar órfãos).</summary>
     internal IReadOnlyCollection<string> Guids => _porGuid.Keys;

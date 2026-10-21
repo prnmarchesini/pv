@@ -24,13 +24,14 @@ internal static class LinhaCommands
         if (documento is null) return;
 
         var editor = documento.Editor;
+        var previa = new PreviaDaLinha();
 
         try
         {
             var terreno = FileiraCommands.ExigirTerreno(editor, documento);
             if (terreno is null) return;
 
-            var primeiro = new PromptPointOptions(Tr.T("\nPrimeiro ponto da linha") + " [Selecionar/Atualizar]: ");
+            var primeiro = new PromptPointOptions(Tr.T("\nPrimeiro ponto da linha (A)") + " [Selecionar/Atualizar]: ");
             primeiro.Keywords.Add(Selecionar);
             primeiro.Keywords.Add(Atualizar);
             primeiro.AppendKeywordsToMessage = false;
@@ -71,22 +72,37 @@ internal static class LinhaCommands
 
                 planta = [new Point3(resposta.Value.X, resposta.Value.Y, 0)];
 
+                // Como no PLINE: o que já foi clicado fica na tela enquanto se
+                // clica o resto (Renan, 21/10/2026: "não vi sendo gerado linha").
                 while (true)
                 {
-                    var proximo = new PromptPointOptions(Tr.T("\nPróximo ponto (Enter termina): "))
+                    var proximo = new PromptPointOptions(planta.Count < 2
+                        ? Tr.T("\nPróximo ponto: ")
+                        : Tr.T("\nPróximo ponto (Enter termina, B no último)") + " [Desfazer]: ")
                     {
                         UseBasePoint = true,
                         BasePoint = new Point3d(planta[^1].X, planta[^1].Y, resposta.Value.Z),
-                        AllowNone = true,
+                        AllowNone = planta.Count >= 2,
                     };
+                    if (planta.Count >= 2) proximo.Keywords.Add("Desfazer");
+                    proximo.AppendKeywordsToMessage = false;
 
                     var r = editor.GetPoint(proximo);
                     if (r.Status == PromptStatus.None) break;
+                    if (r.Status == PromptStatus.Keyword)
+                    {
+                        planta.RemoveAt(planta.Count - 1);
+                        previa.Mostrar(planta, resposta.Value.Z);
+                        continue;
+                    }
                     if (r.Status != PromptStatus.OK) return;
 
                     planta.Add(new Point3(r.Value.X, r.Value.Y, 0));
+                    previa.Mostrar(planta, resposta.Value.Z);
                 }
             }
+
+            previa.Apagar();
 
             if (planta.Count < 2)
             {
@@ -94,21 +110,23 @@ internal static class LinhaCommands
                 return;
             }
 
-            var lugar = new PromptPointOptions(Tr.T("\nOnde fica o gráfico (canto de baixo à esquerda) <ao lado da linha>: ")) { AllowNone = true };
-            var ondeResposta = editor.GetPoint(lugar);
-            if (ondeResposta.Status is not (PromptStatus.OK or PromptStatus.None)) return;
-            (double, double)? onde = ondeResposta.Status == PromptStatus.OK ? (ondeResposta.Value.X, ondeResposta.Value.Y) : null;
-
             var configuracao = DrenagemStore.Ler(documento.Database);
+            ObjectId id;
             string frase;
+            ChartDrawing grafico;
 
+            // A linha e o gráfico nascem já, ao lado da linha: o lugar do
+            // gráfico escolhido depois só o muda de lugar (Esc não perde nada).
             using (var transacao = documento.Database.TransactionManager.StartTransaction())
             {
                 var nomes = LinhasDeDrenagem.Todas(transacao, documento.Database).Select(l => l.Identidade.Name);
                 var identidade = new DrainageLineIdentity { Name = DrainageLineIdentity.NextName(Tr.T("Linha"), nomes) };
 
-                var (id, _) = LinhasDeDrenagem.Criar(transacao, documento.Database, terreno.Mesh, planta, identidade);
-                frase = LinhasDeDrenagem.DesenharPerfil(transacao, documento.Database, terreno.Mesh, configuracao, id, onde);
+                (id, _) = LinhasDeDrenagem.Criar(transacao, documento.Database, terreno.Mesh, planta, identidade);
+                frase = LinhasDeDrenagem.DesenharPerfil(transacao, documento.Database, terreno.Mesh, configuracao, id);
+
+                var polilinha = (Polyline3d)transacao.GetObject(id, OpenMode.ForRead);
+                grafico = LinhasDeDrenagem.Grafico(terreno.Mesh, configuracao, new LinhaNoDesenho(id, LinhasDeDrenagem.Identidade(polilinha)!, LinhasDeDrenagem.Vertices(transacao, polilinha))).Grafico;
 
                 // A polilinha escolhida virou a linha de análise (pedido explícito): sai a original.
                 if (!original.IsNull) transacao.GetObject(original, OpenMode.ForWrite).Erase();
@@ -117,6 +135,16 @@ internal static class LinhaCommands
             }
 
             editor.WriteMessage(Tr.F("\nLINHA {0} Camada {1}; o gráfico, na {2}.\n", frase, LayoutLayers.DrenagemLinha, LayoutLayers.DrenagemPerfil));
+
+            // O quadro do gráfico segue o mouse; clique põe ali, Enter ou Esc deixa ao lado.
+            if (LugarDoGrafico(editor, grafico) is { } lugar)
+            {
+                using var transacao = documento.Database.TransactionManager.StartTransaction();
+                LinhasDeDrenagem.Refazer(transacao, documento.Database, terreno.Mesh, configuracao, id, IndiceDaDrenagem.Montar(transacao, documento.Database), lugar);
+                transacao.Commit();
+            }
+
+            Enquadrar(documento, id);
         }
         catch (ArgumentException erro)
         {
@@ -126,6 +154,143 @@ internal static class LinhaCommands
         {
             RegistroDeDiagnostico.Registrar("Falha na linha de análise da drenagem.", erro);
             editor.WriteMessage(Tr.F("\nNão consegui fazer a linha: {0}\n", erro.Message));
+        }
+        finally
+        {
+            previa.Apagar();
+        }
+    }
+
+    /// <summary>
+    /// Onde vai o gráfico: com interface, o quadro dele segue o mouse até o
+    /// clique; sem interface (Core Console), um ponto lido do script. Null =
+    /// fica ao lado da linha.
+    /// </summary>
+    private static (double X, double Y)? LugarDoGrafico(Editor editor, ChartDrawing grafico)
+    {
+        var mensagem = Tr.T("\nOnde fica o gráfico (clique) <Enter: ao lado da linha>: ");
+
+        if (!ClivusExtension.TemInterface())
+        {
+            var r = editor.GetPoint(new PromptPointOptions(mensagem) { AllowNone = true });
+            return r.Status == PromptStatus.OK ? (r.Value.X, r.Value.Y) : null;
+        }
+
+        var arrasto = new QuadroDoGrafico(grafico, mensagem);
+        var resultado = editor.Drag(arrasto);
+        return resultado.Status == PromptStatus.OK ? (arrasto.Ponto.X, arrasto.Ponto.Y) : null;
+    }
+
+    /// <summary>Mostra a linha e o gráfico dela na tela (o gráfico pode ter ido para longe da vista).</summary>
+    private static void Enquadrar(Document documento, ObjectId linha)
+    {
+        if (!ClivusExtension.TemInterface()) return;
+
+        try
+        {
+            using var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction();
+            var polilinha = (Polyline3d)transacao.GetObject(linha, OpenMode.ForRead);
+            var caixa = polilinha.GeometricExtents;
+
+            var indice = IndiceDaDrenagem.Montar(transacao, documento.Database);
+            foreach (var id in indice.Ids(LinhasDeDrenagem.Identidade(polilinha)!.Id))
+                if (transacao.GetObject(id, OpenMode.ForRead) is Entity e) caixa.AddExtents(e.GeometricExtents);
+
+            // Um terço de folga em volta: Zoom do Local dos inversores amplia 3x.
+            LocalDosInversores.Zoom(documento.Editor, caixa);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui enquadrar a linha nova.", erro);
+        }
+    }
+
+    /// <summary>A prévia da linha enquanto se clica: uma polilinha passageira, fora do desenho.</summary>
+    private sealed class PreviaDaLinha
+    {
+        private Polyline? _desenho;
+
+        internal void Mostrar(List<Point3> planta, double z)
+        {
+            if (!ClivusExtension.TemInterface()) return;
+
+            try
+            {
+                Apagar();
+                if (planta.Count < 2) return;
+
+                var p = new Polyline { Elevation = z, ColorIndex = 4 };
+                for (var i = 0; i < planta.Count; i++) p.AddVertexAt(i, new Point2d(planta[i].X, planta[i].Y), 0, 0, 0);
+
+                Autodesk.AutoCAD.GraphicsInterface.TransientManager.CurrentTransientManager.AddTransient(
+                    p, Autodesk.AutoCAD.GraphicsInterface.TransientDrawingMode.DirectShortTerm, 128, []);
+                _desenho = p;
+            }
+            catch (System.Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Não consegui mostrar a prévia da linha.", erro);
+            }
+        }
+
+        internal void Apagar()
+        {
+            if (_desenho is null) return;
+
+            try
+            {
+                Autodesk.AutoCAD.GraphicsInterface.TransientManager.CurrentTransientManager.EraseTransient(_desenho, []);
+            }
+            catch (System.Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Não consegui tirar a prévia da linha.", erro);
+            }
+
+            _desenho.Dispose();
+            _desenho = null;
+        }
+    }
+
+    /// <summary>O quadro do gráfico preso ao mouse (canto de baixo à esquerda da moldura no cursor).</summary>
+    private sealed class QuadroDoGrafico(ChartDrawing grafico, string mensagem) : DrawJig
+    {
+        private readonly (double MinX, double MinY, double MaxX, double MaxY) _caixa = grafico.Bounds;
+
+        internal Point3d Ponto { get; private set; }
+
+        protected override SamplerStatus Sampler(JigPrompts prompts)
+        {
+            var opcoes = new JigPromptPointOptions(mensagem) { UserInputControls = UserInputControls.NullResponseAccepted | UserInputControls.Accept3dCoordinates };
+            var r = prompts.AcquirePoint(opcoes);
+            if (r.Status != PromptStatus.OK) return SamplerStatus.Cancel;
+            if (r.Value.DistanceTo(Ponto) < 1e-6) return SamplerStatus.NoChange;
+
+            Ponto = r.Value;
+            return SamplerStatus.OK;
+        }
+
+        protected override bool WorldDraw(Autodesk.AutoCAD.GraphicsInterface.WorldDraw draw)
+        {
+            var (x0, y0, x1, y1) = _caixa;
+            var z = Ponto.Z;
+            var cantos = new Point3dCollection
+            {
+                new(Ponto.X + x0, Ponto.Y + y0, z), new(Ponto.X + x1, Ponto.Y + y0, z),
+                new(Ponto.X + x1, Ponto.Y + y1, z), new(Ponto.X + x0, Ponto.Y + y1, z), new(Ponto.X + x0, Ponto.Y + y0, z),
+            };
+            draw.Geometry.Polyline(cantos, Vector3d.ZAxis, IntPtr.Zero);
+
+            // A moldura de verdade (do zero à largura e à altura) dentro do quadro.
+            var moldura = new Point3dCollection
+            {
+                new(Ponto.X, Ponto.Y, z), new(Ponto.X + grafico.Width, Ponto.Y, z),
+                new(Ponto.X + grafico.Width, Ponto.Y + grafico.Height, z), new(Ponto.X, Ponto.Y + grafico.Height, z), new(Ponto.X, Ponto.Y, z),
+            };
+            draw.Geometry.Polyline(moldura, Vector3d.ZAxis, IntPtr.Zero);
+
+            foreach (var traco in grafico.Lines.Where(l => l.Kind == ChartLineKind.Terrain))
+                draw.Geometry.Polyline(new Point3dCollection(traco.Points.Select(q => new Point3d(Ponto.X + q.X, Ponto.Y + q.Y, z)).ToArray()), Vector3d.ZAxis, IntPtr.Zero);
+
+            return true;
         }
     }
 

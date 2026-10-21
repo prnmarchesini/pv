@@ -25,7 +25,7 @@ internal static class LinhasDeDrenagem
 
     /// <summary>A identidade da linha, ou null se a entidade não é linha da drenagem.</summary>
     internal static DrainageLineIdentity? Identidade(Entity entidade) =>
-        DrainageLineIdentity.FromFields(PluginXData.Load(entidade, DrainageLineIdentity.XDataType, DrainageLineIdentity.XDataVersion, DrainageLineIdentity.FieldCount));
+        DrainageLineIdentity.FromFields(PluginXData.LoadAll(entidade, DrainageLineIdentity.XDataType, DrainageLineIdentity.XDataVersion, DrainageLineIdentity.FieldCount));
 
     internal static void Gravar(Transaction transacao, Entity entidade, DrainageLineIdentity identidade) =>
         PluginXData.Save(transacao, entidade, DrainageLineIdentity.XDataType, DrainageLineIdentity.XDataVersion, identidade.ToFields());
@@ -138,7 +138,9 @@ internal static class LinhasDeDrenagem
     /// </summary>
     internal static (TerrainProfile Terreno, ChannelProfileResult? Canaleta) Perfil(Tin terreno, DrainageSettings configuracao, LinhaNoDesenho linha)
     {
-        var perfil = ProfileSampler.Sample(terreno, linha.Vertices, configuracao.Profile.StationSpacing);
+        // A linha de análise é lida no sentido em que foi desenhada (A → B,
+        // 32.1); a canaleta, da ponta mais alta (a montante) para a mais baixa.
+        var perfil = ProfileSampler.Sample(terreno, linha.Vertices, configuracao.Profile.StationSpacing, keepDirection: !linha.Identidade.IsChannel);
 
         if (linha.Identidade.Section is not { } secao) return (perfil, null);
 
@@ -157,6 +159,35 @@ internal static class LinhasDeDrenagem
         var identidade = Identidade(polilinha) ?? throw new InvalidOperationException(Tr.T("A entidade não é uma linha da drenagem."));
         var linha = new LinhaNoDesenho(linhaId, identidade, Vertices(transacao, polilinha));
 
+        var (grafico, perfil, canaleta) = Grafico(terreno, configuracao, linha);
+
+        // Onde: o pedido, o gravado, ou ao lado da linha (à direita, alinhado por baixo).
+        var origem = onde ?? identidade.Chart ?? AoLado(linha.Vertices, grafico);
+        if (identidade.Chart != origem)
+        {
+            if (!polilinha.IsWriteEnabled) polilinha.UpgradeOpen();
+            Gravar(transacao, polilinha, identidade with { Chart = origem });
+        }
+
+        Desenhar(transacao, database, grafico, identidade.Id, origem, CotaDoGrafico(terreno, origem));
+        RastreioDoPerfil.Versao++;
+        Rotulos(transacao, database, terreno, linha, perfil);
+
+        var media = canaleta?.AverageSlope ?? (perfil.Points[0].Z - perfil.Points[^1].Z) / perfil.Length;
+        var fora = perfil.OutsideCount > 0 ? Tr.F(" ATENÇÃO: {0} ponto(s) fora do terreno, linha em vermelho.", perfil.OutsideCount) : string.Empty;
+
+        return Tr.F("{0}: {1:0.0} m, de {2:0.00} a {3:0.00} m, declividade média {4:0.0}%.{5}",
+            identidade.Name, perfil.Length, perfil.Points[0].Z, perfil.Points[^1].Z, media * 100, fora);
+    }
+
+    /// <summary>A cota em que o gráfico é desenhado: a do terreno no canto dele, ou a mínima.</summary>
+    internal static double CotaDoGrafico(Tin terreno, (double X, double Y) origem) =>
+        terreno.TryGetZ(origem.X, origem.Y, out var z) ? z : terreno.MinZ;
+
+    /// <summary>O gráfico da linha (sem desenhar), o perfil do terreno e o da canaleta.</summary>
+    internal static (ChartDrawing Grafico, TerrainProfile Perfil, ChannelProfileResult? Canaleta) Grafico(Tin terreno, DrainageSettings configuracao, LinhaNoDesenho linha)
+    {
+        var identidade = linha.Identidade;
         var (perfil, canaleta) = Perfil(terreno, configuracao, linha);
         if (perfil.Points.Count < 2 || perfil.Length <= 0) throw new ArgumentException(Tr.F("{0}: a linha tem comprimento zero.", identidade.Name));
 
@@ -167,6 +198,7 @@ internal static class LinhasDeDrenagem
                 Terrain = perfil.Points.Select(p => (p.Distance, p.Z)).ToList(),
                 Segments = ProfileSegments.Split(perfil.ZAt, perfil.Length, configuracao.Profile.SegmentLength),
                 VerticalExaggeration = configuracao.Profile.VerticalExaggeration,
+                RunAndRise = true,
             }
             : new ChartInput
             {
@@ -179,25 +211,70 @@ internal static class LinhasDeDrenagem
                 VerticalExaggeration = configuracao.Profile.VerticalExaggeration,
             };
 
-        var grafico = ProfileChart.Build(entrada);
+        return (ProfileChart.Build(entrada), perfil, canaleta);
+    }
 
-        // Onde: o pedido, o gravado, ou ao lado da linha (à direita, alinhado por baixo).
-        var origem = onde ?? identidade.Chart ?? AoLado(linha.Vertices, grafico);
-        if (identidade.Chart != origem)
+    internal const string TipoDoRotulo = "DrnRotulo";
+
+    /// <summary>Altura do nome em campo, em m.</summary>
+    private const double AlturaDoNome = 1.0;
+
+    /// <summary>
+    /// O nome em campo (32.3): ao longo da linha, no meio dela, deitado e
+    /// sempre legível, um pouco acima do terreno. Na canaleta, com a seção; na
+    /// linha de análise, "A" e "B" nas pontas, os mesmos do gráfico.
+    /// </summary>
+    private static void Rotulos(Transaction transacao, Database database, Tin terreno, LinhaNoDesenho linha, TerrainProfile perfil)
+    {
+        var pontos = perfil.Points;
+        if (pontos.Count < 2) return;
+
+        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForWrite);
+        var camada = LayoutLayers.GarantirDrenagem(transacao, database, linha.Identidade.IsChannel ? LayoutLayers.DrenagemCanaleta : LayoutLayers.DrenagemLinha);
+        var guid = linha.Identidade.Id.ToString("D");
+
+        void Texto(string conteudo, double x, double y, double rumo, double altura, TextHorizontalMode modo)
         {
-            if (!polilinha.IsWriteEnabled) polilinha.UpgradeOpen();
-            Gravar(transacao, polilinha, identidade with { Chart = origem });
+            var z = (terreno.TryGetZ(x, y, out var zt) ? zt : pontos.Max(p => p.Z)) + 0.1;
+            var texto = new DBText
+            {
+                Layer = camada,
+                Height = altura,
+                TextString = conteudo,
+                Rotation = rumo,
+                Position = new Point3d(x, y, z),
+                HorizontalMode = modo,
+            };
+
+            // Texto à esquerda não tem ponto de alinhamento (eNotApplicable).
+            if (modo != TextHorizontalMode.TextLeft) texto.AlignmentPoint = new Point3d(x, y, z);
+
+            espaco.AppendEntity(texto);
+            transacao.AddNewlyCreatedDBObject(texto, true);
+            PluginXData.Save(transacao, texto, TipoDoRotulo, 1, guid);
+            if (modo != TextHorizontalMode.TextLeft) texto.AdjustAlignment(database);
         }
 
-        var z = terreno.TryGetZ(origem.X, origem.Y, out var zz) ? zz : terreno.MinZ;
+        // O nome no meio, ao longo do trecho de lá, afastado para a esquerda de quem lê.
+        var meio = perfil.Length / 2;
+        var k = Math.Max(1, pontos.ToList().FindIndex(p => p.Distance >= meio));
+        var (a, b) = (pontos[k - 1], pontos[k]);
+        var (dx, dy) = (b.X - a.X, b.Y - a.Y);
+        var n = Math.Sqrt(dx * dx + dy * dy);
+        if (n > 1e-9)
+        {
+            var t = b.Distance > a.Distance ? (meio - a.Distance) / (b.Distance - a.Distance) : 0;
+            var (mx, my) = (a.X + dx * t, a.Y + dy * t);
+            var rumo = LayoutDrawer.RumoLegivel(dx, dy);
+            var (nx, ny) = (-Math.Sin(rumo), Math.Cos(rumo));
+            var nome = linha.Identidade.Section is { } secao ? Tr.F("{0} · {1}", linha.Identidade.Name, secao.Name) : linha.Identidade.Name;
+            Texto(nome, mx + nx * 0.8 * AlturaDoNome, my + ny * 0.8 * AlturaDoNome, rumo, AlturaDoNome, TextHorizontalMode.TextCenter);
+        }
 
-        Desenhar(transacao, database, grafico, identidade.Id, origem, z);
+        if (linha.Identidade.IsChannel) return;
 
-        var media = canaleta?.AverageSlope ?? (perfil.Points[0].Z - perfil.Points[^1].Z) / perfil.Length;
-        var fora = perfil.OutsideCount > 0 ? Tr.F(" ATENÇÃO: {0} ponto(s) fora do terreno, linha em vermelho.", perfil.OutsideCount) : string.Empty;
-
-        return Tr.F("{0}: {1:0.0} m, de {2:0.00} a {3:0.00} m, declividade média {4:0.0}%.{5}",
-            identidade.Name, perfil.Length, perfil.Points[0].Z, perfil.Points[^1].Z, media * 100, fora);
+        Texto("A", pontos[0].X, pontos[0].Y, 0, 1.6 * AlturaDoNome, TextHorizontalMode.TextRight);
+        Texto("B", pontos[^1].X, pontos[^1].Y, 0, 1.6 * AlturaDoNome, TextHorizontalMode.TextLeft);
     }
 
     /// <summary>

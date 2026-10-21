@@ -68,7 +68,7 @@ public class DrainageLineIdentityTests
         };
 
         Assert.All(longa.ToFields(), c => Assert.True(System.Text.Encoding.UTF8.GetByteCount(c) <= 255, $"campo de {c.Length} caracteres"));
-        Assert.Equal(DrainageLineIdentity.FieldCount, longa.ToFields().Length);
+        Assert.Equal(DrainageLineIdentity.FieldCount + 1, longa.ToFields().Length);
     }
 
     [Fact]

@@ -2,6 +2,18 @@ using System.Globalization;
 
 namespace Clivus.Core;
 
+/// <summary>Em que ponta da canaleta vai o dissipador (32.5).</summary>
+public enum DissipatorEnd
+{
+    None,
+
+    /// <summary>Na saída da água (a ponta mais baixa).</summary>
+    Downstream,
+
+    /// <summary>Na ponta de cima.</summary>
+    Upstream,
+}
+
 /// <summary>
 /// O que uma linha da drenagem é (27.1, 28.2): a identidade (GUID e nome),
 /// se já virou canaleta e com qual seção e assentamento, e onde fica o
@@ -22,6 +34,9 @@ public sealed record DrainageLineIdentity
     /// <summary>O canto de baixo à esquerda da moldura do gráfico, em planta; null = ao lado da linha.</summary>
     public (double X, double Y)? Chart { get; init; }
 
+    /// <summary>O dissipador da canaleta (32.5): nenhum, na saída ou na ponta de cima.</summary>
+    public DissipatorEnd Dissipator { get; init; }
+
     public bool IsChannel => Section is not null;
 
     /// <summary>O tipo do XData.</summary>
@@ -29,7 +44,7 @@ public sealed record DrainageLineIdentity
 
     public const int XDataVersion = 1;
 
-    /// <summary>Quantos campos o XData tem.</summary>
+    /// <summary>Quantos campos o XData tem, no mínimo (o 17º, o dissipador, veio na etapa 32).</summary>
     public const int FieldCount = 16;
 
     /// <summary>Cada campo de texto do XData vai até 255 bytes; o nome é cortado bem antes.</summary>
@@ -68,6 +83,7 @@ public sealed record DrainageLineIdentity
             s is null ? string.Empty : Cortar(s.Lining),
             s is null ? string.Empty : N(s.Manning),
             s is null ? string.Empty : N(s.MaxVelocity),
+            Dissipator.ToString(),
         ];
     }
 
@@ -98,7 +114,9 @@ public sealed record DrainageLineIdentity
             };
         }
 
-        return new DrainageLineIdentity { Id = id, Name = fields[1], Section = secao, Mode = modo, Chart = grafico };
+        var dissipador = fields.Count > FieldCount && Enum.TryParse<DissipatorEnd>(fields[FieldCount], out var d) ? d : DissipatorEnd.None;
+
+        return new DrainageLineIdentity { Id = id, Name = fields[1], Section = secao, Mode = modo, Chart = grafico, Dissipator = dissipador };
     }
 
     /// <summary>

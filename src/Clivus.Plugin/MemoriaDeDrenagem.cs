@@ -41,7 +41,7 @@ internal static class MemoriaDeDrenagem
                     fora.Add(Tr.F("{0}: {1} ponto(s) fora do terreno; a memória usa só o trecho com terreno.", linha.Identidade.Name, terrenoDaLinha.OutsideCount));
 
                 entradas.Add(new ChannelInput(linha.Identidade.Id, linha.Identidade.Name, linha.Identidade.Section!, perfil,
-                    bacias?.Of(linha.Identidade.Id), Cruzamentos(linha.Vertices, vias).Count));
+                    bacias?.Of(linha.Identidade.Id), Cruzamentos(linha.Vertices, vias).Count, linha.Identidade.Dissipator));
             }
         }
 

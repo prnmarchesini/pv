@@ -61,7 +61,7 @@ public class DrainageMemoryTests
     {
         var bacia = new BasinEntry(Guid.NewGuid(), "Canaleta 2", 30120, 166.23, 8.70, false);
         var secao = Trap with { Height = 0.50 };
-        var c = DrainageMemory.Calculate(new HydrologyParameters(), new ChannelInput(Guid.NewGuid(), "Canaleta 2", secao, Perfil(273.38, 0.005, 0.0472, 0.50), bacia));
+        var c = DrainageMemory.Calculate(new HydrologyParameters(), new ChannelInput(Guid.NewGuid(), "Canaleta 2", secao, Perfil(273.38, 0.005, 0.0472, 0.50), bacia, Dissipator: DissipatorEnd.Downstream));
 
         Assert.Equal(234.35, c.FlowLitersPerSecond, 2);
         Assert.Equal(0.327, c.MaxDepth, 3);
@@ -145,5 +145,38 @@ public class DrainageMemoryTests
     public void ParametroRuimERecusado()
     {
         Assert.Throws<ArgumentException>(() => DrainageMemory.Build(new HydrologyParameters { RunoffC = 0 }, []));
+    }
+
+    [Fact]
+    [Trait("Etapa", "32")]
+    public void SaidaRapidaSemDissipadorGanhaASugestao()
+    {
+        // Canaleta 2 do memorial: sai a ~1,44 m/s, acima de 1,20 m/s (tufos de grama).
+        var bacia = new BasinEntry(Guid.NewGuid(), "Canaleta 2", 30120, 166.23, 8.70, false);
+        var secao = Trap with { Height = 0.50 };
+        var c = DrainageMemory.Calculate(new HydrologyParameters(), new ChannelInput(Guid.NewGuid(), "Canaleta 2", secao, Perfil(273.38, 0.005, 0.0472, 0.50), bacia));
+
+        Assert.True(c.OutletVelocity > 1.2);
+        Assert.Contains(c.Alerts, a => a.Contains("sugere dissipador", StringComparison.Ordinal));
+
+        // Só o dissipador posto aparece na tabela, com a conta.
+        var tabela = DrainageMemory.Tables(DrainageMemory.Build(new HydrologyParameters(), [c.Input])).Single(t => t.Title == "Dissipadores");
+        Assert.Empty(tabela.Rows);
+
+        var comDissipador = DrainageMemory.Tables(DrainageMemory.Build(new HydrologyParameters(), [c.Input with { Dissipator = DissipatorEnd.Downstream }])).Single(t => t.Title == "Dissipadores");
+        var linha = Assert.Single(comDissipador.Rows);
+        Assert.Equal("saída", linha[1]);
+        Assert.Equal("DES 90-270", linha[7]);
+    }
+
+    [Fact]
+    [Trait("Etapa", "32")]
+    public void ODissipadorVaiEVoltaNoXData()
+    {
+        var canaleta = new DrainageLineIdentity { Name = "C", Section = Trap, Dissipator = DissipatorEnd.Upstream };
+        Assert.Equal(DissipatorEnd.Upstream, DrainageLineIdentity.FromFields(canaleta.ToFields())!.Dissipator);
+
+        // XData antigo (16 campos): sem dissipador.
+        Assert.Equal(DissipatorEnd.None, DrainageLineIdentity.FromFields(canaleta.ToFields().Take(16).ToList())!.Dissipator);
     }
 }

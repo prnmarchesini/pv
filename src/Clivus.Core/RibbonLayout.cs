@@ -131,13 +131,22 @@ public static class RibbonLayout
                 new RibbonMenuSpec(Tr.N("Análise"), Tr.N("Entender o terreno antes de desenhar a drenagem: flechas do sentido da água e linhas com o perfil."), "drn_analise",
                 [
                     B(Tr.N("Flechas"), PluginInfo.ComandoDrenagemFlechas, Tr.N("Flechas no sentido em que a água corre sobre o terreno, coloridas pela faixa de declividade, com legenda."), "drn_flechas"),
-                    B(Tr.N("Linhas"), PluginInfo.ComandoDrenagemLinha, Tr.N("Desenhe uma linha no terreno e o gráfico do perfil aparece pronto: cotas, declividade em % e em graus e o sentido da água."), "drn_linha"),
+                    B(Tr.N("Linhas"), PluginInfo.ComandoDrenagemLinha, Tr.N("Clique a linha no terreno (A, ..., B) e o gráfico do perfil aparece: distância × cota, quanto corre e quanto sobe em cada trecho, % e graus."), "drn_linha"),
+                    B(Tr.N("Rastrear"), PluginInfo.ComandoDrenagemRastreio, Tr.N("Liga ou desliga o rastreio: mouse no gráfico mostra o ponto na planta, mouse na linha ou na canaleta mostra o ponto no gráfico."), "drn_rastrear"),
                 ]),
-                B(Tr.N("Canaleta"), PluginInfo.ComandoDrenagemCanaleta, Tr.N("Transforma linhas em canaleta meia-cana ou trapezoidal: seção cotada, sólido 3D e perfil de caída com os trechos abaixo da declividade mínima pintados."), "drn_canaleta", grande: true),
+                // 32.4 (Renan, 21/10/2026): o botão Canaleta virou o suspenso Desenhos.
+                new RibbonMenuSpec(Tr.N("Desenhos"), Tr.N("Canaleta, caixa entre canaletas, dissipador e a exportação dos metros de canaleta."), "drn_canaleta",
+                [
+                    B(Tr.N("Canaleta"), PluginInfo.ComandoDrenagemCanaleta, Tr.N("Transforma linhas em canaleta meia-cana ou trapezoidal: seção cotada, sólido 3D e perfil de caída com os trechos abaixo da declividade mínima pintados."), "drn_canaleta_item"),
+                    B(Tr.N("Caixa"), PluginInfo.ComandoDrenagemCaixa, Tr.N("Caixa de concreto entre canaletas: clique no encontro; o fundo fica abaixo da canaleta mais funda que chega nela."), "drn_caixa"),
+                    B(Tr.N("Dissipador"), PluginInfo.ComandoDrenagemDissipador, Tr.N("Dissipador de energia (DES do DNIT) na ponta da canaleta, com as medidas pela abertura dela."), "drn_dissipador"),
+                    B(Tr.N("Exportar canaletas"), PluginInfo.ComandoDrenagemExportar, Tr.N("Excel com os metros de cada canaleta e de cada tipo de seção, as caixas e os dissipadores."), "drn_exportar"),
+                ]),
                 new RibbonMenuSpec(Tr.N("Memória"), Tr.N("Bacias de contribuição de cada canaleta e o cálculo hidráulico do memorial, com o Excel."), "drn_memoria",
                 [
                     B(Tr.N("Bacias"), PluginInfo.ComandoDrenagemBacias, Tr.N("Que pedaço do terreno manda água para qual canaleta: hatch de cada bacia, área, comprimento e desnível do escoamento."), "drn_bacias"),
                     B(Tr.N("Cálculo"), PluginInfo.ComandoDrenagemMemoria, Tr.N("Chuva, vazão, lâmina, velocidade, bordo livre e altura de cada canaleta, dissipador e transposição, como no memorial; exporta para o Excel."), "drn_calculo"),
+                    B(Tr.N("Vazão no ponto"), PluginInfo.ComandoDrenagemVazao, Tr.N("Clique na canaleta e veja a área que chega até ali e a vazão naquele ponto (depois de calcular as bacias)."), "drn_vazao"),
                 ]),
             ]),
             new(Tr.N("Saída"),
