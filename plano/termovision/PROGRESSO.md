@@ -21,7 +21,14 @@ Nível 2 (`rodar.ps1 -SoTermoVision`): abre o pacote da Paradise sem rede num
 desenho vazio. Confere superfície, orto, árvores, área e árvore na cota do TIN.
 Depois põe uma fileira e confere o retorno: 3 mesas, borda baixa primeiro,
 cotas no terreno. O corpo gerado foi mandado à mão ao servidor de teste em
-26/10 e voltou 200 (`gravado: true`, 3 nasceram).
+26/10 e voltou 200 (`gravado: true`, 3 nasceram). A sessão do TermoVision
+conferiu do lado de lá:
+- 14 × 2 módulos de 1,303 × 2,384;
+- inclinação 20,0°, frente para o norte;
+- ponta baixa 0,33 a 0,36 m acima do terreno de lá;
+- 4,4995 m em planta (a rampa × cos 20°), 18,69 m de comprimento.
+
+Bate com o contrato; nada a mudar do lado deles.
 
 ## Roteiro de tela para o Renan
 
