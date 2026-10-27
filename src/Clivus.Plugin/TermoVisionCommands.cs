@@ -43,61 +43,116 @@ public static class TermoVisionCommands
             link ??= PedirEndereco(editor);
             if (link is null) return;
 
-            editor.WriteMessage(Tr.F("\nTermoVision: conferindo o envio {0}...\n", link.Shipment));
+            // A pergunta é uma janela; um endereço que chega enquanto ela está
+            // aberta (outro clique no navegador) toma o lugar e é perguntado.
+            while (true)
+            {
+                editor.WriteMessage(Tr.F("\nTermoVision: conferindo o envio {0}...\n", link.Shipment));
+                TermoVisionSummary? resumo;
+                string? erroResumo;
+                using (var consulta = new TermoVisionClient(link))
+                    (resumo, erroResumo) = Esperar(() => consulta.SummaryAsync());
+                if (resumo is null)
+                {
+                    RegistroDeDiagnostico.Registrar($"CLIVUS_TV_ABRIR: {link} falhou no resumo: {erroResumo}");
+                    Avisar(editor, erroResumo!);
+                    return;
+                }
+
+                // Um envio por desenho: o Exportar manda todas as mesas do desenho,
+                // e as de uma área trocariam as da outra lá no TermoVision.
+                if (TermoVisionStore.Load(documento.Database) is { } anterior)
+                {
+                    RegistroDeDiagnostico.Registrar($"CLIVUS_TV_ABRIR: {link} recusado: o desenho já tem o envio {anterior.Shipment}.");
+                    Avisar(editor, anterior.Shipment == link.Shipment
+                        ? Tr.F("A área \"{0}\" já está aberta neste desenho.", anterior.AreaName)
+                        : Tr.F("Este desenho já tem a área \"{0}\" da usina \"{1}\" do TermoVision. Abra a outra área num desenho novo.",
+                            anterior.AreaName, anterior.PlantName));
+                    return;
+                }
+
+                // O servidor na pergunta: um endereço clivus:// pode vir de qualquer página.
+                var pergunta = Tr.F("Abrir a área \"{0}\" da usina \"{1}\" (EPSG {2}, cerca de {3:0.0} MB), de {4}, neste desenho?",
+                    resumo.AreaName, resumo.PlantName, resumo.Epsg, resumo.EstimatedMb, new Uri(link.Server).Host);
+                var sim = Confirmar(editor, pergunta);
+
+                if (EntradaDoTermoVision.Tomar() is { } novo)
+                {
+                    RegistroDeDiagnostico.Registrar($"CLIVUS_TV_ABRIR: {link} substituído por {novo}, que chegou durante a pergunta.");
+                    link = novo;
+                    continue;
+                }
+
+                if (!sim)
+                {
+                    RegistroDeDiagnostico.Registrar($"CLIVUS_TV_ABRIR: {link} recusado pela pessoa.");
+                    return;
+                }
+
+                RegistroDeDiagnostico.Registrar($"CLIVUS_TV_ABRIR: {link} aceito; baixando.");
+                break;
+            }
+
             using var cliente = new TermoVisionClient(link);
-
-            var (resumo, erroResumo) = Esperar(() => cliente.SummaryAsync());
-            if (resumo is null)
-            {
-                editor.WriteMessage($"\n{erroResumo}\n");
-                return;
-            }
-
-            // Um envio por desenho: o Exportar manda todas as mesas do desenho,
-            // e as de uma área trocariam as da outra lá no TermoVision.
-            if (TermoVisionStore.Load(documento.Database) is { } anterior)
-            {
-                editor.WriteMessage(anterior.Shipment == link.Shipment
-                    ? Tr.F("\nA área \"{0}\" já está aberta neste desenho.\n", anterior.AreaName)
-                    : Tr.F("\nEste desenho já tem a área \"{0}\" da usina \"{1}\" do TermoVision. Abra a outra área num desenho novo.\n",
-                        anterior.AreaName, anterior.PlantName));
-                return;
-            }
-
-            // O servidor na pergunta: um endereço clivus:// pode vir de qualquer página.
-            var pergunta = Tr.F("Abrir a área \"{0}\" da usina \"{1}\" (EPSG {2}, cerca de {3:0.0} MB), de {4}, neste desenho?",
-                resumo.AreaName, resumo.PlantName, resumo.Epsg, resumo.EstimatedMb, new Uri(link.Server).Host);
-            if (!Confirmar(editor, pergunta)) return;
 
             editor.WriteMessage(Tr.T("\nTermoVision: baixando o pacote...\n"));
             var (zip, erroZip) = Esperar(() => cliente.PackageAsync());
             if (zip is null)
             {
-                editor.WriteMessage($"\n{erroZip}\n");
+                RegistroDeDiagnostico.Registrar($"CLIVUS_TV_ABRIR: {link} falhou no pacote: {erroZip}");
+                Avisar(editor, erroZip!);
                 return;
             }
 
             if (!TermoVisionPackage.TryRead(new MemoryStream(zip), out var pacote, out var erroPacote))
             {
-                editor.WriteMessage($"\n{erroPacote}\n");
+                RegistroDeDiagnostico.Registrar($"CLIVUS_TV_ABRIR: {link} pacote ilegível: {erroPacote}");
+                Avisar(editor, erroPacote!);
                 return;
             }
 
             if (pacote!.Shipment.Length > 0 && pacote.Shipment != link.Shipment)
             {
-                editor.WriteMessage(Tr.T("\nO pacote que chegou é de outro envio. Nada foi desenhado.\n"));
+                RegistroDeDiagnostico.Registrar($"CLIVUS_TV_ABRIR: {link} recebeu o pacote do envio {pacote.Shipment}.");
+                Avisar(editor, Tr.T("O pacote que chegou é de outro envio. Nada foi desenhado."));
                 return;
             }
 
             TermoVisionStore.SaveToken(link);
             Montar(documento, pacote, link.Server, link.Shipment);
+            RegistroDeDiagnostico.Registrar($"CLIVUS_TV_ABRIR: {link} aberto no desenho.");
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao abrir a área do TermoVision.", erro);
-            editor.WriteMessage(Tr.F("\nNão consegui abrir a área do TermoVision: {0}\n", erro.Message));
+            Avisar(editor, Tr.F("Não consegui abrir a área do TermoVision: {0}", erro.Message));
         }
     }
+
+    /// <summary>
+    /// Escreve na linha de comando e, com interface, mostra numa janela à vista:
+    /// quem veio do navegador não está olhando para a linha de comando.
+    /// </summary>
+    private static void Avisar(Editor editor, string texto)
+    {
+        editor.WriteMessage($"\n{texto}\n");
+        if (ClivusExtension.TemInterface()) Janela(texto, 0x40 /* MB_ICONINFORMATION */ | 0x0 /* MB_OK */);
+    }
+
+    // MessageBox do Windows dona da janela do AutoCAD, em primeiro plano:
+    // aparece por cima mesmo com o navegador na frente.
+    private static int Janela(string texto, uint tipo)
+    {
+        var dona = AcadApp.MainWindow.Handle;
+        SetForegroundWindow(dona);
+        return MessageBoxW(dona, texto, "Clivus Solar · TermoVision", tipo | 0x10000 /* MB_SETFOREGROUND */ | 0x40000 /* MB_TOPMOST */);
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int MessageBoxW(IntPtr dona, string texto, string titulo, uint tipo);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr janela);
 
     /// <summary>
     /// CLIVUS_TV_ABRIR_AUTO: o teste de nível 2. Monta a partir de um pacote
@@ -311,8 +366,20 @@ public static class TermoVisionCommands
         return link;
     }
 
+    /// <summary>
+    /// Sim ou não. Com interface, numa janela à vista (teste do Renan, 26/10:
+    /// a pergunta na linha de comando ninguém via, e o AutoCAD ficava parado
+    /// nela); no Core Console, na linha de comando, para o nível 2.
+    /// </summary>
     private static bool Confirmar(Editor editor, string pergunta, bool padraoSim = true)
     {
+        if (ClivusExtension.TemInterface())
+        {
+            // MB_YESNO | MB_ICONQUESTION; o botão padrão segue padraoSim (MB_DEFBUTTON2 = Não).
+            var tipo = 0x4u | 0x20u | (padraoSim ? 0x0u : 0x100u);
+            return Janela(pergunta, tipo) == 6 /* IDYES */;
+        }
+
         var sim = Tr.T("Sim");
         var nao = Tr.T("Não");
         var opcoes = new PromptKeywordOptions($"\n{pergunta} [{sim}/{nao}] <{(padraoSim ? sim : nao)}>: ", $"{sim} {nao}") { AllowNone = true };
