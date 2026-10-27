@@ -735,6 +735,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_CAMBIAR_POTENCIA", CommandFlags.Modal | CommandFlags.UsePickSet)]
     public static void CLIVUS_CAMBIAR_POTENCIA() => PotenciaCommands.TrocarPotencia();
 
+    [CommandMethod("CLIVUS_TV_OPEN")]
+    public static void CLIVUS_TV_OPEN() => TermoVisionCommands.Abrir();
+
+    [CommandMethod("CLIVUS_TV_EXPORT")]
+    public static void CLIVUS_TV_EXPORT() => TermoVisionCommands.Exportar();
+
     [CommandMethod("CLIVUS_PLANT")]
     public static void CLIVUS_PLANT() => UsinaCommands.Usina();
 

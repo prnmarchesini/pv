@@ -72,6 +72,21 @@ public static class TermoVisionReturn
         return memoria.ToArray();
     }
 
+    /// <summary>
+    /// Os quatro vértices do contorno da mesa na ordem do contrato: a borda
+    /// baixa primeiro. O contorno do Clivus já nasce assim ((0,0) → (L,0) →
+    /// (L,M2) → (0,M2)), mas uma mesa reconstruída pode vir com a borda alta no
+    /// começo; aí a lista gira dois vértices (o sentido em volta se mantém).
+    /// Mesa plana fica como veio. Nulo se não são quatro vértices.
+    /// </summary>
+    public static IReadOnlyList<(double E, double N, double Z)>? LowEdgeFirst(IReadOnlyList<(double E, double N, double Z)> v)
+    {
+        if (v.Count != 4) return null;
+        var primeira = (v[0].Z + v[1].Z) / 2;
+        var segunda = (v[2].Z + v[3].Z) / 2;
+        return primeira > segunda + 1e-6 ? [v[2], v[3], v[0], v[1]] : [v[0], v[1], v[2], v[3]];
+    }
+
     /// <summary>Por que a mesa não pode ir (nulo quando pode).</summary>
     public static string? WhyInvalid(TermoVisionTable m)
     {

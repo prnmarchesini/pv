@@ -64,9 +64,11 @@ trabalho segue; passo só de modelo fecha `VALIDADO (automático)`.
    copa com o diâmetro do círculo de mesma área do contorno, altura total =
    `altura_m`, tronco 40 %, copa 60 %, pé no `chao_m`. O contorno original fica
    desenhado na layer `CLIVUS_TV_OBJETO` para o Renan ver o formato real.
-3. **Terreno:** TIN nova `TV_<área>` a partir dos nós com dado (null fica fora),
-   dois triângulos por célula com os quatro cantos; células com algum null não
-   entram. Vira o terreno do Clivus (processado, como o Processar).
+3. **Terreno:** TIN nova `TV <área>` com os nós que têm cota (null fica fora).
+   O Civil 3D triangula; o lado máximo de triângulo (1,5 × o passo) impede que
+   ele cubra os buracos sem dado. Vira o terreno do Clivus (como o Processar).
+   O sistema de coordenadas do Civil não é mudado: o desenho fica em UTM puro
+   e a localização (lat/lon) vai para o Clivus, que é o que o sol usa.
 4. **Cantos da mesa no retorno:** os vértices do contorno da mesa
    (`CantosDaMesa`: (0,0) → (L,0) → (L,M2) → (0,M2)), que já são borda baixa
    do começo ao fim e alta voltando, como o contrato pede.

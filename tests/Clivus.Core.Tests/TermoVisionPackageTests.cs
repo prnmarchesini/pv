@@ -65,6 +65,17 @@ public class TermoVisionPackageTests
 
     [Fact]
     [Trait("Etapa", "33")]
+    public void Ponto_no_buraco_da_grade_pega_a_cota_do_no_mais_perto()
+    {
+        var p = Ler(Zip(("clivus.json", B(Json))));
+
+        Assert.Equal(11.0, p.Terrain.NearestZ(1001.8, 2001.6)); // o nó (1, 1) é null; o (1, 0) é o mais perto
+        Assert.Equal(22.0, p.Terrain.NearestZ(1004, 2002));
+        Assert.Equal(22.0, p.Terrain.NearestZ(1100, 2100)); // longe da grade: ainda o mais perto
+    }
+
+    [Fact]
+    [Trait("Etapa", "33")]
     public void Cabecalho_area_objetos_e_modulo_sao_lidos()
     {
         var p = Ler(Zip(("clivus.json", B(Json))));

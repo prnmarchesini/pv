@@ -19,7 +19,7 @@ import re
 import sys
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PASTAS = ['src/Clivus.Core', 'src/Clivus.Plugin', 'src/Clivus.Instalador']
+PASTAS = ['src/Clivus.Core', 'src/Clivus.Plugin', 'src/Clivus.Instalador', 'src/Clivus.Link']
 CHAMADA = re.compile(r'\bTr\.[TFN]\(\s*(\$?)"((?:[^"\\]|\\.)*)"')
 ESCAPES = {'n': '\n', 't': '\t', 'r': '\r', '0': '\0'}
 

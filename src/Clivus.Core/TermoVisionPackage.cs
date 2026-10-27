@@ -17,6 +17,23 @@ public sealed record TermoVisionObject(string Name, double GroundZ, double Heigh
     public (double E, double N) Centroid => TermoVisionPackage.Centroid(Outline);
 }
 
+/// <summary>
+/// Um objeto do TermoVision como árvore do Clivus (decisão 2 do plano): copa
+/// com o diâmetro do círculo de mesma área do contorno, altura total a do
+/// objeto, 40 % de tronco e 60 % de copa.
+/// </summary>
+public static class TermoVisionTrees
+{
+    public static TreeSpec FromObject(TermoVisionObject o)
+    {
+        // Medidas a 0,1 m: cada medida diferente vira um bloco de árvore.
+        static double D(double v) => Math.Max(0.1, Math.Round(v, 1));
+        var altura = Math.Clamp(o.Height, 1.0, 160.0);
+        var copa = Math.Clamp(2 * Math.Sqrt(o.PlanArea / Math.PI), 0.5, 60.0);
+        return new TreeSpec(D(altura * 0.4), D(Math.Clamp(copa / 6, 0.1, 2.0)), D(altura * 0.6), D(copa));
+    }
+}
+
 /// <summary>O módulo da Nova UFV (metro): largura ao longo da fileira, altura na rampa, espaço entre módulos.</summary>
 public sealed record TermoVisionModule(double Width, double Height, double Gap);
 
@@ -38,6 +55,33 @@ public sealed record TermoVisionGrid(string Source, double Step, double E0, doub
             for (var i = 0; i < Columns; i++)
                 if (Z[j * Columns + i] is { } z)
                     yield return (E0 + i * Step, N0 + j * Step, z);
+    }
+
+    /// <summary>
+    /// A cota do nó com dado mais perto de (e, n): o nó da célula e, sem ele,
+    /// os anéis em volta. É a cota de um ponto que caiu num buraco da grade (o
+    /// TIN não chega lá), para ele nunca ficar no zero. Nula sem nó nenhum.
+    /// </summary>
+    public double? NearestZ(double e, double n)
+    {
+        // Fora da grade, a busca parte da borda mais perto dela.
+        var ci = (int)Math.Clamp(Math.Round((e - E0) / Step), 0, Columns - 1);
+        var cj = (int)Math.Clamp(Math.Round((n - N0) / Step), 0, Rows - 1);
+        var raioMaximo = Math.Max(Columns, Rows);
+        for (var raio = 0; raio <= raioMaximo; raio++)
+        {
+            double? melhor = null;
+            var melhorDistancia = double.MaxValue;
+            for (var j = cj - raio; j <= cj + raio; j++)
+                for (var i = ci - raio; i <= ci + raio; i++)
+                {
+                    if (Math.Max(Math.Abs(i - ci), Math.Abs(j - cj)) != raio || At(i, j) is not { } z) continue;
+                    var d = Math.Pow(E0 + i * Step - e, 2) + Math.Pow(N0 + j * Step - n, 2);
+                    if (d < melhorDistancia) (melhor, melhorDistancia) = (z, d);
+                }
+            if (melhor is not null) return melhor;
+        }
+        return null;
     }
 
     /// <summary>Quantos nós têm dado.</summary>

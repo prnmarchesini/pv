@@ -38,6 +38,8 @@ param(
     [switch] $SoEletrica,
     # Só os casos da drenagem (drenagem-*.ps1), com o mesmo filtro.
     [switch] $SoDrenagem,
+    # Só o caso da ponte com o TermoVision (termovision.ps1, etapa 33).
+    [switch] $SoTermoVision,
     [string] $Filtro = ''
 )
 
@@ -4462,6 +4464,10 @@ function Testar-Ativar {
 
 . (Join-Path $PSScriptRoot 'drenagem.ps1')
 
+# ---- o TermoVision (plano/termovision): os casos ficam em termovision.ps1 ---
+
+. (Join-Path $PSScriptRoot 'termovision.ps1')
+
 # ---- a licenca da rodada ---------------------------------------------------
 
 # Com a chave publica de producao embutida, sem licenca todo comando do
@@ -4492,6 +4498,23 @@ $env:CLIVUS_LICENCA_ARQUIVO_TESTE = $licencaDaRodada
 
 $passaram = 0
 $total = 0
+
+# O TermoVision abre num desenho vazio: o pacote traz o próprio terreno.
+if ($SoTermoVision) {
+    foreach ($caso in $CasosTermoVision | Where-Object { $_ -like "*$Filtro*" }) {
+        $total++
+        if (& $caso -Desenho $desenhoVazio) { $passaram++ }
+    }
+
+    $env:CLIVUS_LICENCAS = $licencaAntes.L
+    $env:CLIVUS_LICENCA_CHAVE_TESTE = $licencaAntes.C
+    $env:CLIVUS_LICENCA_ARQUIVO_TESTE = $licencaAntes.A
+
+    if ($problemas.Count -eq 0 -and $passaram -eq $total) { Escrever-Linha 'TermoVision' "$passaram/$total" 'OK'; exit 0 }
+    Escrever-Linha 'TermoVision' "$passaram/$total" 'FALHOU'
+    foreach ($p in $problemas) { Write-Host "  $p" -ForegroundColor Red }
+    exit 1
+}
 
 if ($SoEletrica -or $SoDrenagem) {
     $casos = if ($SoDrenagem) { $CasosDrenagem } else { $CasosEletricos }
@@ -4726,6 +4749,12 @@ else {
     foreach ($caso in $CasosDrenagem) {
         $total++
         if (& $caso -Desenho $desenhos[0]) { $passaram++ }
+    }
+
+    # O TermoVision (plano/termovision), num desenho vazio.
+    foreach ($caso in $CasosTermoVision) {
+        $total++
+        if (& $caso -Desenho $desenhoVazio) { $passaram++ }
     }
 }
 

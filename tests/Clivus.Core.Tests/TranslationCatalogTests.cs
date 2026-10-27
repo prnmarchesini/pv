@@ -22,7 +22,7 @@ public partial class TranslationCatalogTests
     {
         var frases = new SortedSet<string>(StringComparer.Ordinal);
 
-        foreach (var pasta in new[] { "src/Clivus.Core", "src/Clivus.Plugin", "src/Clivus.Instalador" })
+        foreach (var pasta in new[] { "src/Clivus.Core", "src/Clivus.Plugin", "src/Clivus.Instalador", "src/Clivus.Link" })
         {
             var raiz = Path.Combine(Repositorio.Raiz, pasta);
             if (!Directory.Exists(raiz)) continue;

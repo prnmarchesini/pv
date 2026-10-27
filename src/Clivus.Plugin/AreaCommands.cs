@@ -139,7 +139,7 @@ public static class AreaCommands
     private static string? PerguntarNome(Editor editor) =>
         Perguntas.Nome(editor, Tr.T("área"), Tr.T("A área"));
 
-    private static void Criar(
+    internal static void Criar(
         Editor editor,
         Document documento,
         ProcessedTerrain terreno,

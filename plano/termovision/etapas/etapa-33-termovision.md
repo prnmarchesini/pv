@@ -65,11 +65,15 @@ lugar, contorno e árvores; orbita em 3D.
 Comando `CLIVUS_TV_EXPORTAR`: lê as mesas (`LayoutScan` + `MesasDoDesenho`),
 monta o retorno, manda com `X-Pedido` novo, mostra a resposta (mesas, saíram,
 fora da área, avisos) e oferece abrir a `url`. Sem envio no desenho: avisa e
-oferece colar um endereço. Mesa sem perfil conhecido: fica fora e é contada.
+oferece colar um endereço. Mesa sem perfil gravado (desenho sem mesas
+cadastradas): o perfil sai pelo comprimento, como nas análises. Mesa sem
+contorno de 4 vértices fica fora e é contada.
 **Validação do Renan:** desenha mesas, exporta e vê as mesas no TermoVision.
 
-### 33.8 Painel TermoVision na ribbon
+### 33.8 TermoVision na ribbon
 
-Painel **TermoVision** com Abrir e Exportar, ícones novos, nomes em inglês e
-espanhol. Teste em `RibbonLayoutTests`.
-**Validação do Renan:** confere o painel e os dois botões.
+Suspenso **TermoVision** no painel **Saída** (ao lado de PVsyst, Exportar e
+3D), com Abrir e Exportar; não um painel novo, pela regra de espaço da ribbon
+(02/10). Ícones novos (nuvem com setas), nomes em inglês e espanhol. Teste em
+`RibbonLayoutTests`.
+**Validação do Renan:** confere o suspenso e os dois itens.

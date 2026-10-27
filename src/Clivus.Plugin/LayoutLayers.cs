@@ -53,6 +53,12 @@ internal static class LayoutLayers
     /// <summary>As árvores e outros objetos que fazem sombra (9.4).</summary>
     internal const string Arvore = Prefixo + "ARVORE";
 
+    /// <summary>O orto que veio do TermoVision (etapa 33).</summary>
+    internal const string TermoVisionOrto = Prefixo + "TV_ORTO";
+
+    /// <summary>O contorno real das árvores e casas que vieram do TermoVision (etapa 33).</summary>
+    internal const string TermoVisionObjeto = Prefixo + "TV_OBJETO";
+
     /// <summary>A sombra desenhada no terreno (9.7).</summary>
     internal const string Sombra = Prefixo + "SOMBRA";
 

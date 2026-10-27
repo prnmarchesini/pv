@@ -115,3 +115,46 @@ public class TermoVisionReturnTests
         Assert.Single(recusadas);
     }
 }
+
+public class TermoVisionCornersAndTreesTests
+{
+    [Fact]
+    [Trait("Etapa", "33")]
+    public void Borda_baixa_vai_primeiro()
+    {
+        (double, double, double)[] certa = [(0, 0, 10), (5, 0, 10), (5, 2, 11), (0, 2, 11)];
+        Assert.Equal(certa, TermoVisionReturn.LowEdgeFirst(certa));
+
+        (double, double, double)[] invertida = [(5, 2, 11), (0, 2, 11), (0, 0, 10), (5, 0, 10)];
+        Assert.Equal([(0, 0, 10), (5, 0, 10), (5, 2, 11), (0, 2, 11)], TermoVisionReturn.LowEdgeFirst(invertida));
+
+        (double, double, double)[] plana = [(0, 0, 10), (5, 0, 10), (5, 2, 10), (0, 2, 10)];
+        Assert.Equal(plana, TermoVisionReturn.LowEdgeFirst(plana));
+
+        Assert.Null(TermoVisionReturn.LowEdgeFirst([(0, 0, 0), (1, 0, 0), (1, 1, 0)]));
+    }
+
+    [Fact]
+    [Trait("Etapa", "33")]
+    public void Objeto_vira_arvore_com_a_mesma_area_e_altura()
+    {
+        // Quadrado de 10 × 10 m e 9 m de altura.
+        var o = new TermoVisionObject("Orto 3", 600, 9, [(0, 0), (10, 0), (10, 10), (0, 10)]);
+        var arvore = TermoVisionTrees.FromObject(o);
+
+        Assert.Null(arvore.WhyInvalid());
+        Assert.Equal(9.0, arvore.TotalHeight, 9);
+        Assert.Equal(3.6, arvore.TrunkHeight, 9);
+        Assert.InRange(Math.PI * arvore.CrownWidth * arvore.CrownWidth / 4, 99.0, 101.0); // medidas a 0,1 m
+    }
+
+    [Fact]
+    [Trait("Etapa", "33")]
+    public void Objeto_gigante_ou_minusculo_ainda_vira_arvore_valida()
+    {
+        var enorme = new TermoVisionObject("galpão", 0, 300, [(0, 0), (500, 0), (500, 500), (0, 500)]);
+        var miudo = new TermoVisionObject("poste", 0, 1, [(0, 0), (0.01, 0), (0.01, 0.01)]);
+        Assert.Null(TermoVisionTrees.FromObject(enorme).WhyInvalid());
+        Assert.Null(TermoVisionTrees.FromObject(miudo).WhyInvalid());
+    }
+}

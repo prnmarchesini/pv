@@ -218,6 +218,13 @@ def icones():
         # Exportar canaletas: a folha com a seção e a seta.
         'drn_exportar': ([T(folha(4, 3, 17, 24)), T('M8,14 L10,21 H15 L17,14'), ambar_traco('M22,16 H29 M26,13 L29,16 L26,19', L)],
                          [t(folha(4, 3, 17, 24)), ambar_traco('M22,16 H29 M26,13 L29,16 L26,19', S)]),
+        # TermoVision (etapa 33): a nuvem do portal e as setas de ida e volta.
+        'termovision': ([T('M9,21 A5,5 0 0 1 8.5,11 A7.5,7.5 0 0 1 22.5,9.5 A5.5,5.5 0 0 1 24,21'), ambar_traco('M11,15 V28 M8,25 L11,28 L14,25 M21,28 V15 M18,18 L21,15 L24,18', L)],
+                        [t('M9,21 A5,5 0 0 1 8.5,11 A7.5,7.5 0 0 1 22.5,9.5 A5.5,5.5 0 0 1 24,21'), ambar_traco('M11,15 V28 M8,25 L11,28 L14,25 M21,28 V15 M18,18 L21,15 L24,18', S)]),
+        'tv_abrir': ([T('M9,21 A5,5 0 0 1 8.5,11 A7.5,7.5 0 0 1 22.5,9.5 A5.5,5.5 0 0 1 24,21'), ambar_traco('M16,14 V28 M12,24 L16,28 L20,24', L)],
+                     [t('M9,21 A5,5 0 0 1 8.5,11 A7.5,7.5 0 0 1 22.5,9.5 A5.5,5.5 0 0 1 24,21'), ambar_traco('M16,14 V28 M12,24 L16,28 L20,24', S)]),
+        'tv_exportar': ([T('M9,21 A5,5 0 0 1 8.5,11 A7.5,7.5 0 0 1 22.5,9.5 A5.5,5.5 0 0 1 24,21'), ambar_traco('M16,28 V14 M12,18 L16,14 L20,18', L)],
+                        [t('M9,21 A5,5 0 0 1 8.5,11 A7.5,7.5 0 0 1 22.5,9.5 A5.5,5.5 0 0 1 24,21'), ambar_traco('M16,28 V14 M12,18 L16,14 L20,18', S)]),
         # Vazão no ponto: a canaleta e a gota no ponto clicado.
         'drn_vazao': ([T('M3,26 C11,24 19,18 29,8'), ambar_cheio('M17,5 C17,5 12,11 12,14.5 a5,5 0 0,0 10,0 C22,11 17,5 17,5 Z')],
                       [t('M3,27 C11,25 19,19 29,9'), ambar_cheio('M17,4 C17,4 11,11 11,15 a6,6 0 0,0 12,0 C23,11 17,4 17,4 Z')]),

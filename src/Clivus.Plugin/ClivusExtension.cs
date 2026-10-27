@@ -78,6 +78,16 @@ public sealed class ClivusExtension : IExtensionApplication
             // que plugin sem barra: os comandos continuam valendo.
             RegistroDeDiagnostico.Registrar("Não foi possível montar a ribbon.", erro);
         }
+
+        // A porta do TermoVision num try próprio: ribbon quebrada não fecha a porta.
+        try
+        {
+            EntradaDoTermoVision.Instalar();
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não foi possível abrir a entrada do TermoVision.", erro);
+        }
     }
 
     public void Terminate()
@@ -99,6 +109,7 @@ public sealed class ClivusExtension : IExtensionApplication
         try
         {
             AutoSelecao.Desinstalar();
+            EntradaDoTermoVision.Desinstalar();
             MenuDeContexto.Desinstalar();
             if (TemInterface()) FecharPainelDeGrupos();
         }
