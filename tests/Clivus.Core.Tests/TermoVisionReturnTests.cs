@@ -105,4 +105,13 @@ public class TermoVisionReturnTests
     [InlineData("Internal Server Error", null)]
     public void Detalhe_do_erro_e_lido(string json, string? esperado) =>
         Assert.Equal(esperado, TermoVisionResult.Detail(json));
+
+    [Fact]
+    [Trait("Etapa", "33")]
+    public void Modulo_infinito_fica_fora_sem_derrubar()
+    {
+        var mesa = Mesa("inf") with { Module = new TermoVisionModule(double.PositiveInfinity, 2, 0) };
+        TermoVisionReturn.Build("x", "d.dwg", [mesa], out var recusadas);
+        Assert.Single(recusadas);
+    }
 }

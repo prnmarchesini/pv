@@ -144,6 +144,33 @@ public class TermoVisionPackageTests
 
     [Fact]
     [Trait("Etapa", "33")]
+    public void Objeto_mal_formado_fica_fora_e_o_pacote_segue()
+    {
+        var json = Json.Replace("\"objetos\":[", "\"objetos\":[{\"nome\":\"sem contorno\",\"altura_m\":3}, 7, {\"contorno\":[[\"a\",1]],\"altura_m\":2,\"chao_m\":1},");
+        var p = Ler(Zip(("clivus.json", B(json))));
+        Assert.Equal("Orto 3", Assert.Single(p.Objects).Name);
+    }
+
+    [Fact]
+    [Trait("Etapa", "33")]
+    public void Pacote_sem_epsg_e_recusado()
+    {
+        using var idioma = Tr.Use(UiLanguage.Portuguese);
+        Assert.False(TermoVisionPackage.TryRead(Zip(("clivus.json", B(Json.Replace("\"epsg\":31982,", "")))), out _, out var erro));
+        Assert.Contains("EPSG", erro);
+    }
+
+    [Fact]
+    [Trait("Etapa", "33")]
+    public void Centro_de_contorno_em_linha_em_UTM_fica_no_meio()
+    {
+        var o = new TermoVisionObject("linha", 0, 1, [(711900.1, 7664350.3), (711901.1, 7664351.3), (711902.1, 7664352.3)]);
+        Assert.Equal(711901.1, o.Centroid.E, 6);
+        Assert.Equal(7664351.3, o.Centroid.N, 6);
+    }
+
+    [Fact]
+    [Trait("Etapa", "33")]
     public void Orto_com_caminho_de_pasta_e_ignorado()
     {
         var json = Json.Replace("\"arquivo\":\"orto.jpg\"", "\"arquivo\":\"../fora.jpg\"");

@@ -156,6 +156,12 @@ public sealed class TermoVisionPackage
         }
 
         var crs = raiz.GetProperty("crs");
+        if (!(Numero(crs, "epsg") > 0))
+        {
+            erro = Tr.T("O pacote do TermoVision não diz o sistema de coordenadas (EPSG).");
+            return null;
+        }
+
         var terreno = raiz.GetProperty("terreno");
         var grade = Grade(terreno, out erro);
         if (grade is null) return null;
@@ -178,10 +184,14 @@ public sealed class TermoVisionPackage
         if (raiz.TryGetProperty("objetos", out var lista) && lista.ValueKind == JsonValueKind.Array)
             foreach (var o in lista.EnumerateArray())
             {
-                var contorno = Pontos(o.GetProperty("contorno"));
+                // Os objetos são extra: um mal formado fica fora, o pacote segue.
+                if (o.ValueKind != JsonValueKind.Object || !o.TryGetProperty("contorno", out var c) || c.ValueKind != JsonValueKind.Array) continue;
+                List<(double E, double N)> contorno;
+                try { contorno = Pontos(c); }
+                catch (InvalidOperationException) { continue; }
                 var altura = Numero(o, "altura_m");
                 var chao = Numero(o, "chao_m");
-                if (contorno.Count < 3 || !(altura > 0) || !double.IsFinite(chao)) continue;
+                if (contorno.Count < 3 || !(altura > 0) || !double.IsFinite(altura) || !double.IsFinite(chao)) continue;
                 objetos.Add(new TermoVisionObject(Texto(o, "nome"), chao, altura, contorno));
             }
 
@@ -249,6 +259,7 @@ public sealed class TermoVisionPackage
         var jgw = Entrada(arquivo, Texto(o, "mundo") is { Length: > 0 } w ? w : "orto.jgw");
         if (jpg is null || jgw is null) return null;
 
+        if (jgw.Length > 4096) return null;
         var mundo = WorldFile.TryParse(System.Text.Encoding.ASCII.GetString(Ler(jgw, 4096)));
         if (mundo is null) return null;
 
@@ -300,23 +311,26 @@ public sealed class TermoVisionPackage
     private static string Texto(JsonElement o, string nome) =>
         o.ValueKind == JsonValueKind.Object && o.TryGetProperty(nome, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
 
+    // Em relação ao primeiro vértice: coordenada UTM grande perde precisão no produto.
     internal static double SignedArea(IReadOnlyList<(double E, double N)> p)
     {
+        if (p.Count < 3) return 0;
+        var (e0, n0) = p[0];
         double s = 0;
         for (var k = 0; k < p.Count; k++)
         {
             var (a, b) = (p[k], p[(k + 1) % p.Count]);
-            s += a.E * b.N - b.E * a.N;
+            s += (a.E - e0) * (b.N - n0) - (b.E - e0) * (a.N - n0);
         }
         return s / 2;
     }
 
     internal static (double E, double N) Centroid(IReadOnlyList<(double E, double N)> p)
     {
+        if (p.Count == 0) return (double.NaN, double.NaN);
         var area = SignedArea(p);
         if (Math.Abs(area) < 1e-9) return (p.Average(q => q.E), p.Average(q => q.N));
 
-        // Em relação ao primeiro vértice: coordenada UTM grande perde precisão no produto.
         var (e0, n0) = p[0];
         double ce = 0, cn = 0;
         for (var k = 0; k < p.Count; k++)

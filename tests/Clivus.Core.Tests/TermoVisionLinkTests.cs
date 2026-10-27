@@ -71,4 +71,12 @@ public class TermoVisionLinkTests
         Assert.DoesNotContain("SeGrEdO", link.ToString());
         Assert.Contains("cv_abc123", link.ToString());
     }
+
+    [Theory]
+    [Trait("Etapa", "33")]
+    [InlineData("https://a.b?x=1")]
+    [InlineData("https://a.b#x")]
+    [InlineData("https://eu:senha@a.b")]
+    public void Servidor_com_consulta_fragmento_ou_senha_e_recusado(string servidor) =>
+        Assert.NotNull(TermoVisionLink.WhyServerUnsafe(servidor));
 }

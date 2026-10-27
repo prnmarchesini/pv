@@ -79,7 +79,8 @@ public static class TermoVisionReturn
         if (m.Corners.Any(c => !double.IsFinite(c.E) || !double.IsFinite(c.N) || !double.IsFinite(c.Z)))
             return Tr.T("um canto da mesa não tem coordenada.");
         if (m.Columns < 1 || m.Rows < 1) return Tr.T("a mesa não tem módulo.");
-        if (!(m.Module.Width > 0) || !(m.Module.Height > 0) || !(m.Module.Gap >= 0))
+        if (!(m.Module.Width > 0) || !(m.Module.Height > 0) || !(m.Module.Gap >= 0)
+            || !double.IsFinite(m.Module.Width) || !double.IsFinite(m.Module.Height) || !double.IsFinite(m.Module.Gap))
             return Tr.T("o módulo da mesa não tem medida.");
         return null;
     }

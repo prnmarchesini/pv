@@ -91,7 +91,7 @@ public sealed record TermoVisionLink(string Server, string Shipment, string Toke
     {
         if (!Uri.TryCreate(servidor, UriKind.Absolute, out var uri)
             || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)
-            || !string.IsNullOrEmpty(uri.UserInfo))
+            || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
             return Tr.T("O servidor do endereço do TermoVision não é um endereço web válido.");
 
         if (uri.Scheme == Uri.UriSchemeHttp && !uri.IsLoopback)
