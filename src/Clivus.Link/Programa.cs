@@ -35,12 +35,31 @@ internal static class Programa
             return 2;
         }
 
-        // Com o Civil 3D aberto o plugin pega na hora; fechado, a área espera.
-        if (!Process.GetProcessesByName("acad").Any())
+        // Com o Civil 3D aberto, ele vem para a frente (o Link nasceu de um clique,
+        // então pode passar o foco) e o plugin pega na folga; fechado, a área espera.
+        var acad = Process.GetProcessesByName("acad").FirstOrDefault(p => p.MainWindowHandle != IntPtr.Zero);
+        if (acad is null)
             Avisar(Tr.T("A área do TermoVision está guardada. Abra o Civil 3D: o Clivus pergunta se abre a área."), erro: false);
+        else
+            TrazerParaFrente(acad.MainWindowHandle);
 
         return 0;
     }
+
+    private static void TrazerParaFrente(IntPtr janela)
+    {
+        if (IsIconic(janela)) ShowWindow(janela, 9 /* SW_RESTORE */);
+        SetForegroundWindow(janela);
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr janela);
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr janela, int comando);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsIconic(IntPtr janela);
 
     private static void Avisar(string texto, bool erro) =>
         MessageBoxW(IntPtr.Zero, texto, "Clivus Solar", (erro ? 0x10u : 0x40u) | 0x10000u /* MB_SETFOREGROUND */);

@@ -35,7 +35,12 @@ public static class TermoVisionCommands
 
         try
         {
-            var link = EntradaDoTermoVision.TomarPendente() ?? PedirEndereco(editor);
+            // O que chegou pelo navegador vale antes de pedir o código colado.
+            var link = EntradaDoTermoVision.TomarPendente();
+            RegistroDeDiagnostico.Registrar(link is null
+                ? "CLIVUS_TV_ABRIR: nada na pasta de entrada; pedindo o código colado."
+                : $"CLIVUS_TV_ABRIR: {link} da pasta de entrada.");
+            link ??= PedirEndereco(editor);
             if (link is null) return;
 
             editor.WriteMessage(Tr.F("\nTermoVision: conferindo o envio {0}...\n", link.Shipment));

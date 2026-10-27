@@ -1,5 +1,4 @@
 using System.IO;
-using System.Windows.Threading;
 using Clivus.Core;
 using Microsoft.Win32;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
@@ -12,28 +11,35 @@ namespace Clivus.Plugin;
 /// 1. grava o protocolo <c>clivus:</c> no HKCU, apontando para o
 ///    <c>Clivus.Link.exe</c> da pasta do bundle (só se faltar ou apontar para
 ///    outro lugar);
-/// 2. vigia a pasta de entrada (<see cref="TermoVisionInbox"/>), onde o Link
-///    deixa o endereço de cada clique em "Exportar área para o Clivus";
+/// 2. fica de olho na pasta de entrada (<see cref="TermoVisionInbox"/>), onde o
+///    Link deixa o endereço de cada clique em "Abrir no AutoCAD";
 /// 3. na folga do AutoCAD, sem comando rodando, pega o endereço e chama o
 ///    comando Abrir do TermoVision com ele.
 ///
-/// O que chegou com o AutoCAD fechado é pego no carregamento seguinte.
+/// A folga fica sempre assinada (assinada na thread do AutoCAD, no carregamento)
+/// e olha a pasta quando o vigia avisou ou a cada poucos segundos. Não há
+/// Dispatcher no meio: a primeira versão agendava a folga pelo Dispatcher a
+/// partir da thread do vigia, e no AutoCAD o agendamento nunca rodava (teste
+/// do Renan, 26/10/2026: o arquivo ficou na pasta). O Link traz o AutoCAD para
+/// a frente, o que gera folga na hora.
 /// </summary>
 internal static class EntradaDoTermoVision
 {
     private const string ChaveDoProtocolo = @"Software\Classes\clivus";
 
+    /// <summary>De quanto em quanto tempo a folga olha a pasta mesmo sem aviso do vigia.</summary>
+    private static readonly TimeSpan Intervalo = TimeSpan.FromSeconds(2);
+
     private static FileSystemWatcher? _vigia;
-    private static Dispatcher? _principal;
-    private static bool _folgaAgendada;
+    private static volatile bool _chegou;
+    private static DateTime _ultimaOlhada = DateTime.MinValue;
+    private static bool _assinada;
 
     /// <summary>O endereço que o comando Abrir pega em vez de perguntar.</summary>
     internal static TermoVisionLink? Pendente { get; private set; }
 
     internal static void Instalar()
     {
-        _principal = Dispatcher.CurrentDispatcher;
-
         try
         {
             RegistrarProtocolo();
@@ -48,10 +54,10 @@ internal static class EntradaDoTermoVision
             var pasta = TermoVisionInbox.DefaultFolder;
             Directory.CreateDirectory(pasta);
             _vigia = new FileSystemWatcher(pasta) { IncludeSubdirectories = false, NotifyFilter = NotifyFilters.FileName };
-            _vigia.Created += (_, _) => Agendar();
-            _vigia.Renamed += (_, _) => Agendar();
-            // Buffer estourado: os nomes se perdem, mas os arquivos estão lá.
-            _vigia.Error += (_, _) => Agendar();
+            // O vigia avisa de outra thread: só levanta a bandeira; quem age é a folga.
+            _vigia.Created += (_, _) => _chegou = true;
+            _vigia.Renamed += (_, _) => _chegou = true;
+            _vigia.Error += (_, _) => _chegou = true;
             _vigia.EnableRaisingEvents = true;
         }
         catch (Exception erro) when (erro is IOException or UnauthorizedAccessException or ArgumentException)
@@ -59,16 +65,19 @@ internal static class EntradaDoTermoVision
             RegistroDeDiagnostico.Registrar("Não consegui vigiar a pasta de entrada do TermoVision.", erro);
         }
 
-        // O que chegou com o AutoCAD fechado.
-        Agendar();
+        // O que chegou com o AutoCAD fechado entra na primeira folga.
+        _chegou = true;
+        AcadApp.Idle += NaFolga;
+        _assinada = true;
+        RegistroDeDiagnostico.Registrar($"Entrada do TermoVision ligada em {TermoVisionInbox.DefaultFolder}.");
     }
 
     internal static void Desinstalar()
     {
         _vigia?.Dispose();
         _vigia = null;
-        if (_folgaAgendada) AcadApp.Idle -= NaFolga;
-        _folgaAgendada = false;
+        if (_assinada) AcadApp.Idle -= NaFolga;
+        _assinada = false;
     }
 
     /// <summary>
@@ -101,66 +110,79 @@ internal static class EntradaDoTermoVision
         RegistroDeDiagnostico.Registrar($"Protocolo clivus: gravado para {exe}.");
     }
 
-    // O vigia avisa de outra thread: a folga é agendada na thread do AutoCAD.
-    private static void Agendar()
-    {
-        var principal = _principal;
-        if (principal is null) return;
-
-        principal.BeginInvoke(() =>
-        {
-            if (_folgaAgendada) return;
-            AcadApp.Idle += NaFolga;
-            _folgaAgendada = true;
-        });
-    }
-
     private static void NaFolga(object? sender, EventArgs e)
     {
-        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        // Barato na maioria das folgas: sem aviso e dentro do intervalo, nada.
+        var agora = DateTime.UtcNow;
+        if (!_chegou && agora - _ultimaOlhada < Intervalo) return;
 
-        // Sem desenho aberto ou com comando rodando: espera a próxima folga.
-        if (documento is null || !string.IsNullOrEmpty(documento.CommandInProgress)) return;
-
-        AcadApp.Idle -= NaFolga;
-        _folgaAgendada = false;
-
-        List<TermoVisionLink> chegaram;
         try
         {
-            chegaram = new TermoVisionInbox(TermoVisionInbox.DefaultFolder).Take(DateTime.UtcNow, out var descartados);
+            var documento = AcadApp.DocumentManager.MdiActiveDocument;
+
+            // Sem desenho aberto ou com comando rodando: a bandeira fica para a próxima folga.
+            if (documento is null || !string.IsNullOrEmpty(documento.CommandInProgress)) return;
+
+            _ultimaOlhada = agora;
+            _chegou = false;
+
+            var link = Tomar();
+            if (link is null) return;
+
+            Pendente = link;
+            RegistroDeDiagnostico.Registrar($"TermoVision: chegou {link}; chamando o Abrir.");
+
+            try
+            {
+                if (AcadApp.MainWindow.WindowState == Autodesk.AutoCAD.Windows.Window.State.Minimized)
+                    AcadApp.MainWindow.WindowState = Autodesk.AutoCAD.Windows.Window.State.Normal;
+                AcadApp.MainWindow.Focus();
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Não consegui trazer o AutoCAD para a frente.", erro);
+            }
+
+            documento.SendStringToExecute($"\x03\x03_{PluginInfo.ComandoTermoVisionAbrir} ", true, false, false);
+        }
+        catch (Exception erro)
+        {
+            // Uma folga que lança derruba as seguintes: registra e segue.
+            RegistroDeDiagnostico.Registrar("Falha na folga da entrada do TermoVision.", erro);
+        }
+    }
+
+    /// <summary>
+    /// O último endereço da pasta de entrada (vários cliques seguidos: vale o
+    /// último), ou nulo. Os lidos saem da pasta.
+    /// </summary>
+    internal static TermoVisionLink? Tomar()
+    {
+        var pasta = TermoVisionInbox.DefaultFolder;
+        if (!Directory.Exists(pasta) || !Directory.EnumerateFiles(pasta, "*" + TermoVisionInbox.Extension).Any()) return null;
+
+        try
+        {
+            var chegaram = new TermoVisionInbox(pasta).Take(DateTime.UtcNow, out var descartados);
             if (descartados > 0)
                 RegistroDeDiagnostico.Registrar($"Pasta de entrada do TermoVision: {descartados} arquivo(s) vencido(s) ou inválido(s) descartado(s).");
+            return chegaram.Count == 0 ? null : chegaram[^1];
         }
         catch (Exception erro) when (erro is IOException or UnauthorizedAccessException)
         {
             RegistroDeDiagnostico.Registrar("Não consegui ler a pasta de entrada do TermoVision.", erro);
-            return;
+            return null;
         }
-
-        // Vários cliques seguidos: vale o último (os outros são a mesma pessoa mudando de ideia).
-        if (chegaram.Count == 0) return;
-        Pendente = chegaram[^1];
-
-        try
-        {
-            // O AutoCAD vem para a frente: a pessoa estava no navegador.
-            if (AcadApp.MainWindow.WindowState == Autodesk.AutoCAD.Windows.Window.State.Minimized)
-                AcadApp.MainWindow.WindowState = Autodesk.AutoCAD.Windows.Window.State.Normal;
-            AcadApp.MainWindow.Focus();
-        }
-        catch (Exception erro)
-        {
-            RegistroDeDiagnostico.Registrar("Não consegui trazer o AutoCAD para a frente.", erro);
-        }
-
-        documento.SendStringToExecute($"\x03\x03_{PluginInfo.ComandoTermoVisionAbrir} ", true, false, false);
     }
 
-    /// <summary>O comando pega o endereço pendente uma vez só.</summary>
+    /// <summary>
+    /// O endereço que o comando Abrir usa sem perguntar: o que a folga
+    /// separou ou, sem ele, o que estiver na pasta de entrada (o botão Abrir
+    /// apertado depois do clique no navegador).
+    /// </summary>
     internal static TermoVisionLink? TomarPendente()
     {
-        var link = Pendente;
+        var link = Pendente ?? Tomar();
         Pendente = null;
         return link;
     }
