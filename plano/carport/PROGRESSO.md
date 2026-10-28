@@ -12,7 +12,7 @@ mais um tipo em Configurações › Nova estrutura, e nada da fixa muda.**
 
 - 34.1 Perfil do carport: VALIDADO (automático) — `CarportProfile`
 - 34.2 Geometria de um pórtico e de um vão: VALIDADO (automático) — `CarportGeometry`, teste de ouro contra o `.glb`
-- 34.3 A fila: PENDENTE
+- 34.3 A fila: VALIDADO (automático) — `CarportRow`
 - 34.4 Lista de material: PENDENTE
 
 ## Etapa 35: no Civil 3D
@@ -58,3 +58,9 @@ mais um tipo em Configurações › Nova estrutura, e nada da fixa muda.**
   - Altura livre no pilar mais alto do pórtico; o outro pilar cresce o desnível.
     Entre dois pórticos com desnível, a cobertura do vão é um plano só.
   - Sem balanço nas pontas da fila: a cobertura termina no eixo do pórtico da ponta.
+- 34.3 (28/10/2026), o que assumi:
+  - O eixo clicado é a linha do meio da cobertura; o primeiro pórtico fica no
+    primeiro clique. Sem número de vãos, enche o eixo (folga de 1 mm para a medida
+    exata); com número, o segundo clique só dá o sentido.
+  - Desnível entre pórticos vizinhos acima de 5 % vira aviso, não recusa.
+  - Teto de 200 vãos por fila, contra clique errado.
