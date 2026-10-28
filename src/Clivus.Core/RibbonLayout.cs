@@ -164,11 +164,7 @@ public static class RibbonLayout
                 B(Tr.N("PVsyst"), PluginInfo.ComandoExportar, Tr.N("Exporta as faces dos módulos escolhidos para o PVsyst (DAE)."), "pvsyst", grande: true),
                 B(Tr.N("Exportar"), PluginInfo.ComandoExportarExcel, Tr.N("Escolha o que vai para o Excel, num arquivo só: resumo, análises, pilares, compra de pilares, resumo elétrico e cabos com totalização."), "excel", grande: true),
                 B(Tr.N("3D"), PluginInfo.ComandoVer3D, Tr.N("Abre no navegador um modelo 3D para girar e dar zoom: terreno, mesas com as cores dos tipos, pilares e árvores. Funciona sem internet."), "ver3d", grande: true),
-                new RibbonMenuSpec(Tr.N("TermoVision"), Tr.N("A ponte com o TermoVision: abrir aqui uma área exportada de lá e mandar as mesas de volta."), "termovision",
-                [
-                    B(Tr.N("Abrir do TermoVision"), PluginInfo.ComandoTermoVisionAbrir, Tr.N("Abre uma área do TermoVision neste desenho: terreno, orto, contorno, árvores e localização. Normalmente abre sozinho pelo \"Exportar área para o Clivus\" de lá; aqui, cole o código copiado da página."), "tv_abrir"),
-                    B(Tr.N("Exportar para o TermoVision"), PluginInfo.ComandoTermoVisionExportar, Tr.N("Manda as mesas do desenho para a área do TermoVision que este desenho abriu; lá elas trocam as mesas da área (o Desfazer de lá traz as de antes)."), "tv_exportar"),
-                ]),
+                B(Tr.N("TermoVision"), PluginInfo.ComandoTermoVision, Tr.N("Desenho que ainda não veio do TermoVision: abre a área (cole o código copiado da página; normalmente ela abre sozinha pelo \"Exportar área para o Clivus\" de lá). Desenho que veio de lá: manda as mesas e o carport para a área, onde trocam as de antes (o Desfazer de lá as traz)."), "termovision", grande: true),
             ]),
         ]),
     ];

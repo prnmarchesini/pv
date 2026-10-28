@@ -116,13 +116,17 @@ public class RibbonLayoutTests
             Assert.Equal(painel.Buttons.Count(), painel.Buttons.Select(b => b.Command).Distinct().Count());
     }
 
-    /// <summary>Etapa 33: o suspenso TermoVision, no painel Saída, com Abrir e Exportar.</summary>
+    /// <summary>
+    /// Etapa 33, desde 28/10/2026 um botão só no painel Saída: o TermoVision
+    /// abre ou manda conforme o desenho (pedido do Renan).
+    /// </summary>
     [Fact]
     [Trait("Etapa", "33")]
     public void TermoVisionNoPainelSaida()
     {
         var saida = RibbonLayout.Tabs[0].Panels.Single(p => p.Title == "Saída");
-        var menu = Assert.Single(saida.Items.OfType<RibbonMenuSpec>(), m => m.Text == "TermoVision");
-        Assert.Equal([PluginInfo.ComandoTermoVisionAbrir, PluginInfo.ComandoTermoVisionExportar], menu.Items.Select(b => b.Command));
+        var botao = Assert.Single(saida.Buttons, b => b.Text == "TermoVision");
+        Assert.Equal(PluginInfo.ComandoTermoVision, botao.Command);
+        Assert.DoesNotContain(saida.Items.OfType<RibbonMenuSpec>(), m => m.Text == "TermoVision");
     }
 }

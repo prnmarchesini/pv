@@ -41,10 +41,11 @@ Bate com o contrato; nada a mudar do lado deles.
    área, as árvores e o contorno real delas (layer CLIVUS_TV_OBJETO). Orbitar
    em 3D.
 4. Desenhar mesas como sempre.
-5. Na ribbon, Saída › TermoVision › Exportar para o TermoVision. Conferir as
-   mesas lá.
-6. Sem o protocolo: Saída › TermoVision › Abrir do TermoVision e colar o
-   "Copiar o código" da página.
+5. Na ribbon, Saída › TermoVision (botão único desde 28/10/2026: no desenho
+   que veio de lá, manda as mesas). Conferir as mesas lá.
+6. Sem o protocolo, num desenho que não veio do TermoVision: Saída ›
+   TermoVision e colar o "Copiar o código" da página (CLIVUS_TV_ABRIR
+   continua para abrir outra área num desenho que já veio de lá).
 
 ## Observações
 

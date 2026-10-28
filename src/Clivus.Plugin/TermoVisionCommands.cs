@@ -25,6 +25,23 @@ namespace Clivus.Plugin;
 /// </summary>
 public static class TermoVisionCommands
 {
+    /// <summary>
+    /// CLIVUS_TV, o botão único: chegou uma área pelo navegador, ou o desenho
+    /// ainda não veio do TermoVision, abre; senão manda as mesas. Abrir outra
+    /// área num desenho que já veio de lá continua no CLIVUS_TV_ABRIR.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoTermoVision)]
+    public static void TermoVision()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        if (EntradaDoTermoVision.Pendente is not null || TermoVisionStore.Load(documento.Database) is null)
+            Abrir();
+        else
+            Exportar();
+    }
+
     /// <summary>CLIVUS_TV_ABRIR: abre uma área do TermoVision neste desenho.</summary>
     [CommandMethod(PluginInfo.ComandoTermoVisionAbrir)]
     public static void Abrir()

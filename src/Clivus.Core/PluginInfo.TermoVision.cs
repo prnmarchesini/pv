@@ -3,6 +3,13 @@ namespace Clivus.Core;
 // Os comandos da ponte com o TermoVision (etapa 33).
 public static partial class PluginInfo
 {
+    /// <summary>
+    /// O botão único do TermoVision (28/10/2026, Renan: "não é melhor um botão
+    /// só?"): abre a área quando o desenho ainda não veio de lá (ou quando
+    /// chegou uma pelo navegador); senão manda as mesas.
+    /// </summary>
+    public const string ComandoTermoVision = "CLIVUS_TV";
+
     /// <summary>Abre uma área do TermoVision: o endereço clivus:// vindo da pasta de entrada ou colado.</summary>
     public const string ComandoTermoVisionAbrir = "CLIVUS_TV_ABRIR";
 
