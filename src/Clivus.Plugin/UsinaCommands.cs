@@ -163,6 +163,9 @@ public static class UsinaCommands
         TableProfile perfil,
         bool avisarSeJaHaMesas = true)
     {
+        // Com carport marcado na Escolha das estruturas, a área leva carport (28/10/2026).
+        if (CarportCommands.UsinaComCarport(editor, documento, terreno, area, alinhamento)) return;
+
         var plano = Planejar(editor, documento, terreno, area, alinhamento, perfil, avisarSeJaHaMesas);
         if (plano is null) return;
 

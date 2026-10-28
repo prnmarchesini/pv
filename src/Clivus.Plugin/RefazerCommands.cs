@@ -99,6 +99,9 @@ public static class RefazerCommands
         (IReadOnlyList<Point3> Vertices, AlignmentIdentity Identidade) alinhamento,
         TableProfile perfil)
     {
+        // A área de carport refaz as filas de carport dela (28/10/2026).
+        if (CarportCommands.UsinaComCarport(editor, documento, terreno, area, alinhamento)) return;
+
         // As pontas escolhidas à mão não sobrevivem ao Refazer: a
         // distribuição nasce de novo e não há como casar mesa velha com
         // mesa nova. Dito antes, com os letreiros.

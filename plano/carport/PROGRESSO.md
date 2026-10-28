@@ -156,3 +156,17 @@ mais um tipo em Configurações › Nova estrutura, e nada da fixa muda.**
 5. Saída › 3D: o carport no navegador e o link publicado.
 6. Saída › TermoVision › Exportar: os vãos chegam como mesas na área.
 7. Carport › Apagar fila: clicar uma peça; a fila some.
+- 28/10/2026 (fim da tarde), tela do Renan: "o gerar usina deveria funcionar, eu escolho
+  a area, o alinhamento e ele enche normal" e "padronizar IGUALZINHO as mesas".
+  - Usina e Regerar área: com carport marcado na Escolha das estruturas, a área enche
+    de filas de carport pela MESMA distribuição das mesas (RowDistributor: alinhamento,
+    lado, azimute e pitch do projeto; pegada = um vão, folga zero; pitch nunca menor que
+    a cobertura). Mesa e carport marcados juntos: pergunta qual vai. A fila guarda a área;
+    rodar de novo troca as filas daquela área. Conferido no Paradise do Renan: Área 2,
+    alinhamento "teste": 3 filas, 19 vãos, 285 módulos (205,2 kWp).
+  - Cada vão é grupo (um clique pega o vão, como a mesa) com contorno da cobertura na
+    camada CLIVUS_CARPORT_MESA, na cor do carport. Aço sempre galvanizado (CorDoAco).
+  - TermoVision: contrato combinado com a sessão de lá (aprovado pelo Renan): cada mesa
+    leva "tipo" ("fixa" | "carport") e o carport leva "estrutura.triangulos". Exemplo
+    mandado a eles (scratchpad/desenho/retorno-carport.json, 19 vãos). Lá ainda falta
+    guardar e desenhar.

@@ -9,6 +9,9 @@ namespace Clivus.Core;
 /// </summary>
 public sealed record CarportRowRecord(Guid Id, string Carport, double FromX, double FromY, double ToX, double ToY, bool FallsRight, int Bays)
 {
+    /// <summary>A área do Usina que fez esta fila (o nome dela), ou null para a fila desenhada à mão.</summary>
+    public string? Area { get; init; }
+
     /// <summary>Monta a fila de novo, com o perfil dado e o chão de agora.</summary>
     public CarportRowResult? Build(CarportProfile perfil, Func<double, double, double?> chao, out string? motivo) =>
         CarportRow.Build(perfil, FromX, FromY, ToX, ToY, FallsRight, Bays, chao, out motivo);
@@ -33,8 +36,9 @@ public static class CarportRows
         foreach (var f in filas)
         {
             if (f.Carport.Contains(Separador)) throw new ArgumentException(Tr.T("o nome do carport não pode ter a barra vertical"));
+            if (f.Area?.Contains(Separador) == true) throw new ArgumentException(Tr.T("o nome da área não pode ter a barra vertical"));
             campos.Add(string.Join(Separador, f.Id.ToString("D"), f.Carport,
-                N(f.FromX), N(f.FromY), N(f.ToX), N(f.ToY), f.FallsRight ? "1" : "0", f.Bays.ToString(CultureInfo.InvariantCulture)));
+                N(f.FromX), N(f.FromY), N(f.ToX), N(f.ToY), f.FallsRight ? "1" : "0", f.Bays.ToString(CultureInfo.InvariantCulture), f.Area ?? string.Empty));
         }
 
         return campos;
@@ -48,10 +52,11 @@ public static class CarportRows
         foreach (var linha in campos.Skip(2))
         {
             var p = linha.Split(Separador);
-            if (p.Length != 8 || !Guid.TryParse(p[0], out var id)) continue;
+            // 8 campos: a fila desenhada à mão antes da área (28/10/2026); 9: com a área.
+            if (p.Length is not (8 or 9) || !Guid.TryParse(p[0], out var id)) continue;
             if (!D(p[2], out var x1) || !D(p[3], out var y1) || !D(p[4], out var x2) || !D(p[5], out var y2)) continue;
             if (!int.TryParse(p[7], NumberStyles.None, CultureInfo.InvariantCulture, out var vaos)) continue;
-            lista.Add(new CarportRowRecord(id, p[1], x1, y1, x2, y2, p[6] == "1", vaos));
+            lista.Add(new CarportRowRecord(id, p[1], x1, y1, x2, y2, p[6] == "1", vaos) { Area = p.Length == 9 && p[8].Length > 0 ? p[8] : null });
         }
 
         return lista;
@@ -75,6 +80,13 @@ public static class CarportMesh
     /// <summary>A cor da base (concreto).</summary>
     public static readonly RgbColor CorDaBase = new(175, 175, 170);
 
+    /// <summary>
+    /// A cor do aço: galvanizado, sempre (28/10/2026: o aço na cor do carport
+    /// saía azul como os módulos e não parecia estrutura). A cor do carport fica
+    /// no contorno de cada vão, como a cor do tipo de mesa.
+    /// </summary>
+    public static readonly RgbColor CorDoAco = new(168, 176, 184);
+
     /// <summary>As faces da fila: aço na cor dada, módulos em azul com a espessura do módulo, bases em concreto.</summary>
     public static IReadOnlyList<Scene3DFace> Faces(CarportProfile perfil, CarportRowResult fila, RgbColor corDoAco)
     {
@@ -82,35 +94,56 @@ public static class CarportMesh
         ArgumentNullException.ThrowIfNull(fila);
 
         var faces = new List<Scene3DFace>();
-        foreach (var p in fila.Portals)
-        {
-            foreach (var b in p.Bars) faces.AddRange(Barra(b, corDoAco));
-            foreach (var bloco in p.Blocks)
-            {
-                var x = Unit(new Point3(bloco.Along.X, bloco.Along.Y, 0));
-                var y = new Point3(-x.Y, x.X, 0);
-                var c = bloco.BottomCenter;
-                var h = bloco.Size / 2;
-                var baixo = Retangulo(c, x, y, h, h);
-                faces.AddRange(Prisma(baixo, new Point3(0, 0, bloco.Height), bloco.Part == CarportPart.BasePlate ? corDoAco : CorDaBase));
-            }
-        }
-
-        var espessura = perfil.Array.Module.Thickness;
-        foreach (var v in fila.Bays)
-        {
-            foreach (var t in v.Purlins) faces.AddRange(Barra(t, corDoAco));
-            foreach (var m in v.Modules)
-            {
-                // A face de cima e a de baixo, a espessura do módulo abaixo dela.
-                var n = Unit(Cross(Sub(m.Corners[1], m.Corners[0]), Sub(m.Corners[3], m.Corners[0])));
-                if (n.Z < 0) n = Mul(n, -1);
-                var baixo = m.Corners.Select(q => Sub(q, Mul(n, espessura))).ToList();
-                faces.AddRange(Prisma(baixo, Mul(n, espessura), CorDoModulo));
-            }
-        }
-
+        foreach (var p in fila.Portals) faces.AddRange(Portico(p, corDoAco));
+        foreach (var v in fila.Bays) faces.AddRange(Vao(perfil, v, corDoAco));
         return faces;
+    }
+
+    /// <summary>
+    /// As faces de um vão como uma "mesa" (o retorno do TermoVision e o grupo
+    /// do desenho): o pórtico do começo, as terças e os módulos do vão; o
+    /// último vão leva também o pórtico do fim.
+    /// </summary>
+    public static IReadOnlyList<Scene3DFace> BayFaces(CarportProfile perfil, CarportRowResult fila, int vao, RgbColor corDoAco)
+    {
+        ArgumentNullException.ThrowIfNull(perfil);
+        ArgumentNullException.ThrowIfNull(fila);
+
+        var faces = new List<Scene3DFace>(Portico(fila.Portals[vao], corDoAco));
+        faces.AddRange(Vao(perfil, fila.Bays[vao], corDoAco));
+        if (vao == fila.Bays.Count - 1) faces.AddRange(Portico(fila.Portals[vao + 1], corDoAco));
+        return faces;
+    }
+
+    private static IEnumerable<Scene3DFace> Portico(CarportPortal p, RgbColor corDoAco)
+    {
+        foreach (var b in p.Bars)
+            foreach (var f in Barra(b, corDoAco)) yield return f;
+
+        foreach (var bloco in p.Blocks)
+        {
+            var x = Unit(new Point3(bloco.Along.X, bloco.Along.Y, 0));
+            var y = new Point3(-x.Y, x.X, 0);
+            var h = bloco.Size / 2;
+            var baixo = Retangulo(bloco.BottomCenter, x, y, h, h);
+            foreach (var f in Prisma(baixo, new Point3(0, 0, bloco.Height), bloco.Part == CarportPart.BasePlate ? corDoAco : CorDaBase)) yield return f;
+        }
+    }
+
+    private static IEnumerable<Scene3DFace> Vao(CarportProfile perfil, CarportBay v, RgbColor corDoAco)
+    {
+        var espessura = perfil.Array.Module.Thickness;
+        foreach (var t in v.Purlins)
+            foreach (var f in Barra(t, corDoAco)) yield return f;
+
+        foreach (var m in v.Modules)
+        {
+            // A face de cima e a de baixo, a espessura do módulo abaixo dela.
+            var n = Unit(Cross(Sub(m.Corners[1], m.Corners[0]), Sub(m.Corners[3], m.Corners[0])));
+            if (n.Z < 0) n = Mul(n, -1);
+            var baixo = m.Corners.Select(q => Sub(q, Mul(n, espessura))).ToList();
+            foreach (var f in Prisma(baixo, Mul(n, espessura), CorDoModulo)) yield return f;
+        }
     }
 
     private static IEnumerable<Scene3DFace> Barra(CarportBar b, RgbColor cor)
@@ -169,7 +202,7 @@ public static class CarportMesh
 /// </summary>
 public static class CarportReturn
 {
-    public static IEnumerable<TermoVisionTable> Tables(Guid fila, string nome, CarportProfile perfil, CarportRowResult montada)
+    public static IEnumerable<TermoVisionTable> Tables(Guid fila, string nome, CarportProfile perfil, CarportRowResult montada, RgbColor? corDoAco = null)
     {
         ArgumentNullException.ThrowIfNull(perfil);
         ArgumentNullException.ThrowIfNull(montada);
@@ -192,7 +225,11 @@ public static class CarportReturn
 
             yield return new TermoVisionTable(
                 IdDoVao(fila, v), Tr.F("{0} vão {1}", nome, v + 1), cantos, arranjo.ModulesAcross, arranjo.ModulesDown,
-                new TermoVisionModule(arranjo.ModuleAcross, arranjo.ModuleDown, arranjo.GapAcross));
+                new TermoVisionModule(arranjo.ModuleAcross, arranjo.ModuleDown, arranjo.GapAcross))
+            {
+                Kind = TermoVisionTable.TipoCarport,
+                Structure = CarportMesh.BayFaces(perfil, montada, v, corDoAco ?? CarportMesh.CorDoAco),
+            };
         }
     }
 
@@ -201,4 +238,73 @@ public static class CarportReturn
         var bytes = System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(fila.ToString("D") + "/" + vao.ToString(CultureInfo.InvariantCulture)));
         return new Guid(bytes);
     }
+}
+
+/// <summary>
+/// O carport no Usina (28/10/2026, Renan: "eu escolho a area, o alinhamento e
+/// ele enche normal"): a mesma distribuição da mesa fixa
+/// (<see cref="RowDistributor"/>), com a pegada de um vão e folga zero; cada
+/// sequência de vãos colados numa fileira vira uma fila de carport. A borda
+/// baixa da pegada (a voltada contra o azimute) é o lado para onde a água cai.
+/// </summary>
+public static class CarportLayout
+{
+    /// <summary>A pegada de um vão para a distribuição: o vão ao longo da fileira, a cobertura em planta no fundo.</summary>
+    public static TableFootprint Footprint(CarportProfile perfil)
+    {
+        ArgumentNullException.ThrowIfNull(perfil);
+        return new TableFootprint(perfil.Array.BayWidth, perfil.Array.SlopeLength * Math.Cos(perfil.TiltRadians));
+    }
+
+    /// <summary>O pitch das filas: o do projeto, mas nunca menos que a cobertura em planta (as filas não se sobrepõem).</summary>
+    public static double Pitch(CarportProfile perfil, double pitchDoProjeto) =>
+        Math.Max(pitchDoProjeto, Footprint(perfil).PlanDepth + FolgaMinima);
+
+    /// <summary>A folga mínima entre duas filas (o distribuidor quer o pitch maior que o fundo).</summary>
+    public const double FolgaMinima = 0.01;
+
+    /// <summary>As filas (sem id e sem carport) que a distribuição dá.</summary>
+    public static IReadOnlyList<CarportRowRecord> Rows(PlanLayout layout, string carport, string? area = null)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+
+        var filas = new List<CarportRowRecord>();
+        foreach (var fileira in layout.Rows)
+        {
+            var seq = new List<PlacedTable>();
+            void Fechar()
+            {
+                if (seq.Count == 0) return;
+                var primeira = seq[0];
+                var ultima = seq[^1];
+                var de = Meio(primeira.Corners[0], primeira.Corners[3]);
+                var ate = Meio(ultima.Corners[1], ultima.Corners[2]);
+
+                // A água cai para a borda baixa (canto 0) a partir do meio.
+                var ax = ate.X - de.X;
+                var ay = ate.Y - de.Y;
+                var dx = primeira.Corners[0].X - de.X;
+                var dy = primeira.Corners[0].Y - de.Y;
+                var direita = ax * dy - ay * dx < 0;
+
+                filas.Add(new CarportRowRecord(Guid.Empty, carport, de.X, de.Y, ate.X, ate.Y, direita, seq.Count) { Area = area });
+                seq.Clear();
+            }
+
+            foreach (var mesa in fileira.Tables)
+            {
+                // Colada na anterior (o fim de uma é o começo da outra, a 1 cm): mesma fila.
+                if (seq.Count > 0 && Distancia(seq[^1].Corners[1], mesa.Corners[0]) > 0.01) Fechar();
+                seq.Add(mesa);
+            }
+
+            Fechar();
+        }
+
+        return filas;
+    }
+
+    private static Point3 Meio(Point3 a, Point3 b) => new((a.X + b.X) / 2, (a.Y + b.Y) / 2, 0);
+
+    private static double Distancia(Point3 a, Point3 b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
 }

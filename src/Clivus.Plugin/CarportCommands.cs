@@ -37,6 +37,7 @@ public static class CarportCommands
     private const string CamadaAco = PluginInfo.PrefixoDeDados + "_CARPORT_ACO";
     private const string CamadaModulo = PluginInfo.PrefixoDeDados + "_CARPORT_MODULO";
     private const string CamadaBase = PluginInfo.PrefixoDeDados + "_CARPORT_BASE";
+    private const string CamadaMesa = PluginInfo.PrefixoDeDados + "_CARPORT_MESA";
 
     // ------------------------------------------------------------------ desenhar
 
@@ -112,6 +113,101 @@ public static class CarportCommands
             CarportsDoDesenho.Gravar(documento.Database, [new DrawingCarport(CarportProfile.Reference, DrawingCarports.DefaultColor)], MesasDoDesenho.Ler(documento.Database));
 
         Carport();
+    }
+
+    // ------------------------------------------------------------------ usina
+
+    /// <summary>
+    /// O Usina (e o Regerar área) com carport (28/10/2026, Renan: "se em
+    /// configuração eu já deixei que vou usar carport, eu faço o mesmo processo:
+    /// Usina, escolho a área, o alinhamento e pronto"). Com carport marcado na
+    /// Escolha das estruturas, enche a área de filas de carport pela mesma
+    /// distribuição das mesas (alinhamento, lado, azimute e pitch do projeto),
+    /// trocando as filas de carport que esta área já tinha. Devolve false
+    /// quando não é caso de carport (o Usina segue com as mesas).
+    /// </summary>
+    internal static bool UsinaComCarport(
+        Editor editor,
+        Document documento,
+        ProcessedTerrain terreno,
+        (IReadOnlyList<Clivus.Geo.Point3> Vertices, string Nome) area,
+        (IReadOnlyList<Clivus.Geo.Point3> Vertices, AlignmentIdentity Identidade) alinhamento)
+    {
+        var database = documento.Database;
+        var marcados = CarportsDoDesenho.Ler(database).Where(c => c.Use).ToList();
+        if (marcados.Count == 0) return false;
+
+        // Mesa e carport marcados juntos: pergunta qual vai nesta área.
+        if (MesasDoDesenho.Ler(database).Any(m => m.Use))
+        {
+            var carport = Tr.T("Carport");
+            var mesas = Tr.T("Mesas");
+            var opcoes = new PromptKeywordOptions(Tr.F("\nMesas e carport marcados. Esta área leva [{0}/{1}] <{0}>: ", carport, mesas), $"{carport} {mesas}") { AllowNone = true };
+            var resposta = editor.GetKeywords(opcoes);
+            if (resposta.Status == PromptStatus.Cancel) return true;
+            if (resposta.Status == PromptStatus.OK && resposta.StringResult == mesas) return false;
+        }
+
+        var escolhido = marcados[0];
+        var perfil = escolhido.Profile;
+        var config = ConfigCommands.Inicial(documento, out var aviso).Configuration;
+        if (aviso is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
+
+        editor.WriteMessage(Tr.F("\nUSINA Carport: {0}\nÁrea: {1}; alinhamento: {2}\n", perfil.Describe(), area.Nome, alinhamento.Identidade.Describe()));
+
+        PlanLayout layout;
+        try
+        {
+            layout = RowDistributor.Distribute(area.Vertices, alinhamento.Vertices, alinhamento.Identidade.Side,
+                CarportLayout.Pitch(perfil, config.Pitch), 0, CarportLayout.Footprint(perfil), config.UpslopeAzimuthRadians);
+        }
+        catch (ArgumentException erro)
+        {
+            editor.WriteMessage(Tr.F("\nUSINA {0}\n", erro.Message));
+            return true;
+        }
+
+        var novas = CarportLayout.Rows(layout, escolhido.Name, area.Nome);
+        if (novas.Count == 0)
+        {
+            editor.WriteMessage(Tr.T("\nUSINA Nenhuma fila de carport cabe: a área está do outro lado da linha, a linha não a atravessa, ou ela é pequena demais.\n"));
+            return true;
+        }
+
+        double? Chao(double x, double y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null;
+
+        // As filas de carport que esta área já tinha saem (como o Refazer faz com as mesas).
+        var registradas = Registradas(database);
+        var antigas = registradas.Where(r => r.Area == area.Nome).ToList();
+        foreach (var r in antigas) Apagar(database, r.Id);
+        if (antigas.Count > 0) editor.WriteMessage(Tr.F("  {0} fila(s) de carport que esta área tinha foram trocadas.\n", antigas.Count));
+
+        var feitas = new List<CarportRowRecord>();
+        int vaos = 0, modulos = 0, pecas = 0;
+        foreach (var nova in novas)
+        {
+            var registro = nova with { Id = Guid.NewGuid() };
+            var fila = registro.Build(perfil, Chao, out var motivo);
+            if (fila is null)
+            {
+                editor.WriteMessage(Tr.F("  ATENÇÃO: uma fila de {0} vão(s) não saiu: {1}.\n", nova.Bays, motivo));
+                continue;
+            }
+
+            pecas += Desenhar(database, escolhido, registro.Id, fila);
+            foreach (var w in fila.Warnings) editor.WriteMessage(Tr.F("  ATENÇÃO: {0}.\n", w));
+            feitas.Add(registro);
+            vaos += fila.Bays.Count;
+            modulos += fila.Bays.Sum(b => b.Modules.Count);
+        }
+
+        Gravar(database, [.. registradas.Where(r => r.Area != area.Nome), .. feitas]);
+
+        editor.WriteMessage(Tr.F("\nUSINA Carport \"{0}\": {1} fila(s), {2} vão(s), {3} módulos ({4:0.##} kWp); borda baixa a {5:0.###} m do chão em cada pórtico.\n",
+            escolhido.Name, feitas.Count, vaos, modulos, modulos * perfil.Array.Module.PowerWatts / 1000, perfil.ClearHeight));
+        editor.WriteMessage(FormattableString.Invariant($"CLIVUS_CARPORT USINA filas={feitas.Count} vaos={vaos} modulos={modulos} pecas={pecas}\n"));
+        GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
+        return true;
     }
 
     // ------------------------------------------------------------------ regerar
@@ -269,12 +365,12 @@ public static class CarportCommands
     {
         if (TerrainCache.Get(documento) is not { } terreno) return [];
         return Montadas(documento.Database, (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null)
-            .SelectMany(m => CarportReturn.Tables(m.Id, m.Carport.Name, m.Carport.Profile, m.Fila)).ToList();
+            .SelectMany(m => CarportReturn.Tables(m.Id, m.Carport.Name, m.Carport.Profile, m.Fila, CarportMesh.CorDoAco)).ToList();
     }
 
     /// <summary>As faces 3D de todas as filas do desenho (a página 3D do Clivus e o servidor).</summary>
     internal static List<Scene3DFace> Faces3D(Database database, Func<double, double, double?> chao) =>
-        Montadas(database, chao).SelectMany(m => CarportMesh.Faces(m.Carport.Profile, m.Fila, m.Carport.Color)).ToList();
+        Montadas(database, chao).SelectMany(m => CarportMesh.Faces(m.Carport.Profile, m.Fila, CarportMesh.CorDoAco)).ToList();
 
     // ------------------------------------------------------------------ miúdos
 
@@ -357,7 +453,7 @@ public static class CarportCommands
     /// <summary>Desenha a fila em sólidos: módulos com a espessura deles, aço na cor do carport, bases em concreto.</summary>
     private static int Desenhar(Database database, DrawingCarport carport, Guid idDaFila, CarportRowResult fila)
     {
-        var corDoAco = Color.FromRgb(carport.Color.R, carport.Color.G, carport.Color.B);
+        var corDoAco = Color.FromRgb(CarportMesh.CorDoAco.R, CarportMesh.CorDoAco.G, CarportMesh.CorDoAco.B);
         var corDoModulo = Color.FromRgb(CarportMesh.CorDoModulo.R, CarportMesh.CorDoModulo.G, CarportMesh.CorDoModulo.B);
         var espessura = carport.Profile.Array.Module.Thickness;
         var pecas = 0;
@@ -367,13 +463,21 @@ public static class CarportCommands
         var camadaAco = LayoutLayers.Garantir(transacao, database, CamadaAco, new RgbColor(150, 160, 170));
         var camadaModulo = LayoutLayers.Garantir(transacao, database, CamadaModulo, CarportMesh.CorDoModulo);
         var camadaBase = LayoutLayers.Garantir(transacao, database, CamadaBase, CarportMesh.CorDaBase);
+        var camadaMesa = LayoutLayers.Garantir(transacao, database, CamadaMesa, carport.Color);
 
-        void Por(Entity entidade, string oQue, int vaoOuPortico)
+        // Cada vão é uma "mesa" (28/10/2026, Renan: "padronizar IGUALZINHO as
+        // mesas"): um grupo com o pórtico do começo (o último vão leva também o
+        // do fim), as terças, os módulos e o contorno da cobertura; um clique
+        // pega o vão inteiro, como na fixa.
+        var pecasDoVao = Enumerable.Range(0, fila.Bays.Count).Select(_ => new List<ObjectId>()).ToList();
+        int VaoDoPortico(int k) => Math.Min(k, fila.Bays.Count - 1);
+
+        void Por(Entity entidade, string oQue, int vao)
         {
-            espaco.AppendEntity(entidade);
+            pecasDoVao[vao].Add(espaco.AppendEntity(entidade));
             transacao.AddNewlyCreatedDBObject(entidade, true);
             PluginXData.Save(transacao, entidade, TipoXData, VersaoXData, idDaFila.ToString("D"), carport.Name, oQue,
-                vaoOuPortico.ToString(CultureInfo.InvariantCulture));
+                (vao + 1).ToString(CultureInfo.InvariantCulture));
             pecas++;
         }
 
@@ -385,7 +489,7 @@ public static class CarportCommands
                 {
                     solido.Layer = camadaAco;
                     solido.Color = corDoAco;
-                    Por(solido, barra.Part.ToString(), k + 1);
+                    Por(solido, barra.Part.ToString(), VaoDoPortico(k));
                 }
 
             foreach (var bloco in portico.Blocks)
@@ -397,7 +501,7 @@ public static class CarportCommands
                     Point3d.Origin, Vector3d.XAxis, Vector3d.YAxis, Vector3d.ZAxis,
                     new Point3d(bloco.BottomCenter.X, bloco.BottomCenter.Y, bloco.BottomCenter.Z + bloco.Height / 2),
                     x, Vector3d.ZAxis.CrossProduct(x), Vector3d.ZAxis));
-                Por(caixa, bloco.Part.ToString(), k + 1);
+                Por(caixa, bloco.Part.ToString(), VaoDoPortico(k));
             }
         }
 
@@ -409,7 +513,7 @@ public static class CarportCommands
                 {
                     solido.Layer = camadaAco;
                     solido.Color = corDoAco;
-                    Por(solido, terca.Part.ToString(), v + 1);
+                    Por(solido, terca.Part.ToString(), v);
                 }
 
             foreach (var m in vao.Modules)
@@ -417,8 +521,24 @@ public static class CarportCommands
                 {
                     placa.Layer = camadaModulo;
                     placa.Color = corDoModulo;
-                    Por(placa, "Module", v + 1);
+                    Por(placa, "Module", v);
                 }
+        }
+
+        // O contorno da cobertura de cada vão (como o da mesa) e o grupo.
+        var vaos = CarportReturn.Tables(idDaFila, carport.Name, carport.Profile, fila).ToList();
+        for (var v = 0; v < vaos.Count && v < pecasDoVao.Count; v++)
+        {
+            var contorno = new Polyline3d { Closed = true, Layer = camadaMesa };
+            Por(contorno, "Contour", v);
+            foreach (var (e, n, z) in vaos[v].Corners)
+            {
+                var vertice = new PolylineVertex3d(new Point3d(e, n, z));
+                contorno.AppendVertex(vertice);
+                transacao.AddNewlyCreatedDBObject(vertice, true);
+            }
+
+            LayoutGroups.Criar(transacao, database, pecasDoVao[v]);
         }
 
         transacao.Commit();

@@ -12,7 +12,20 @@ namespace Clivus.Core;
 /// <param name="Columns">Módulos ao longo da fileira.</param>
 /// <param name="Rows">Módulos na rampa (1V = 1, 2V = 2).</param>
 public sealed record TermoVisionTable(
-    Guid Id, string Name, IReadOnlyList<(double E, double N, double Z)> Corners, int Columns, int Rows, TermoVisionModule Module);
+    Guid Id, string Name, IReadOnlyList<(double E, double N, double Z)> Corners, int Columns, int Rows, TermoVisionModule Module)
+{
+    /// <summary>
+    /// O tipo da estrutura no contrato (28/10/2026, aprovado pelo Renan:
+    /// "mesa é mesa e carport é carport"): <see cref="TipoFixa"/> ou <see cref="TipoCarport"/>.
+    /// </summary>
+    public string Kind { get; init; } = TipoFixa;
+
+    /// <summary>A estrutura em triângulos (UTM e cota absoluta), para o 3D de lá; null quando não vai.</summary>
+    public IReadOnlyList<Scene3DFace>? Structure { get; init; }
+
+    public const string TipoFixa = "fixa";
+    public const string TipoCarport = "carport";
+}
 
 /// <summary>O corpo do <c>POST /api/clivus/v1/retorno</c>.</summary>
 public static class TermoVisionReturn
@@ -63,6 +76,26 @@ public static class TermoVisionReturn
                 w.WriteNumber("altura_m", m.Module.Height);
                 w.WriteNumber("espaco_m", m.Module.Gap);
                 w.WriteEndObject();
+                w.WriteString("tipo", m.Kind);
+                if (m.Structure is { Count: > 0 } estrutura)
+                {
+                    w.WriteStartObject("estrutura");
+                    w.WriteStartArray("triangulos");
+                    foreach (var f in estrutura.Where(f => f.Corners.Count == 3))
+                    {
+                        w.WriteStartArray();
+                        foreach (var p in f.Corners)
+                        {
+                            w.WriteNumberValue(Math.Round(p.X, 3));
+                            w.WriteNumberValue(Math.Round(p.Y, 3));
+                            w.WriteNumberValue(Math.Round(p.Z, 3));
+                        }
+                        w.WriteNumberValue((f.Color.R << 16) | (f.Color.G << 8) | f.Color.B);
+                        w.WriteEndArray();
+                    }
+                    w.WriteEndArray();
+                    w.WriteEndObject();
+                }
                 w.WriteEndObject();
             }
 
