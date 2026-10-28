@@ -40,14 +40,25 @@ Fecha automático.
 
 ## Etapa 35: no Civil 3D
 
-### 35.1 Janela do carport
+### 35.1 Nova estrutura: Fixa ou Carport
+
+Configurações › Estruturas: "Nova mesa..." passa a "Nova estrutura..." e
+pergunta o tipo. Fixa → a janela de Mesa de hoje, sem mudança. Carport → a
+janela do carport. Os carports do desenho entram na mesma lista com
+"(carport)"; Editar, Duplicar e Remover valem para os dois tipos, cada um na
+sua janela. Carport fica fora da Escolha das estruturas (é do motor da fixa).
+Guardado à parte no desenho (`DrawingCarports`, chave própria), sem tocar no
+formato das mesas.
+
+### 35.2 Janela do carport
 
 Perfil do carport editável (seções em colunas, rótulo ao lado, sem rolagem à
 toa), salvar e abrir perfis, desenho de corte do pórtico ao vivo com as cotas
 (altura livre, ponto mais baixo).
-**Validação do Renan:** abrir pela ribbon, mudar altura e inclinação e ver o corte.
+**Validação do Renan:** Configurações › Estruturas › Nova estrutura… › Carport,
+mudar altura e inclinação e ver o corte; Salvar no desenho e reabrir.
 
-### 35.2 Desenhar a fila
+### 35.3 Desenhar a fila
 
 Comando `CLIVUS_CARPORT`: clicar início e fim do eixo, escolher o lado da
 caída, quantos vãos (ou encher). Desenha módulos (faces, como a mesa fixa),
@@ -56,13 +67,13 @@ pilares, vigas, terças, mãos francesas e bases em sólidos 3D nas camadas
 **Validação do Renan:** desenhar uma fila no estacionamento com desnível,
 orbitar e conferir que a borda baixa está a 2,35 m do chão em cada pórtico.
 
-### 35.3 Editar, regerar e apagar
+### 35.4 Editar, regerar e apagar
 
 Botão direito na fila: mudar vãos, trocar o perfil, regerar (relê o terreno),
 apagar a fila inteira. Nada muda sem comando.
 **Validação do Renan:** cada uma das quatro.
 
-### 35.4 Lista de material na tela
+### 35.5 Lista de material na tela
 
 Botão "Lista de material" do carport: a tabela na janela e o Excel.
 **Validação do Renan:** abrir o Excel e conferir com a fila desenhada.

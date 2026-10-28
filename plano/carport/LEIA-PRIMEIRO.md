@@ -33,6 +33,19 @@ trabalho segue; passo só de modelo fecha `VALIDADO (automático)`.
    francesas e bases em 3D, e a lista de peças com comprimentos. As medidas do
    `.glb` são o padrão; o Renan edita.
 
+4. **Mais um tipo de estrutura, sem mexer no que existe** (28/10/2026: *"nao
+   desfaça e nem mude nada do que existe, o carport será apenas mais UM tipo
+   de estrutura, entao, ele entra em configurações, em nova estrutura, ai
+   coloca que tem fixo e carport"*). Em Configurações › Estruturas, o botão
+   "Nova mesa..." vira "Nova estrutura..." e pergunta o tipo: **Fixa** abre a
+   janela de Mesa exatamente como hoje; **Carport** abre a janela do carport.
+   Os carports aparecem na mesma lista, marcados "(carport)".
+   **Nada da fixa muda:** o formato da mesa (`TableProfile`, `DrawingTable`,
+   `.ufvmesa.json`), o motor, a Escolha das estruturas, os comandos e os
+   testes da fixa ficam como estão. O carport é guardado à parte (chave
+   própria no dicionário do desenho) e não entra no motor de fileiras.
+   Teste de regressão: a bateria inteira de antes passa sem mudar uma linha.
+
 ## O que é o carport no Clivus
 
 Um tipo de estrutura novo, ao lado da mesa fixa. Ele não usa o motor de

@@ -4,8 +4,9 @@ Status possíveis: PENDENTE, AGUARDANDO VALIDAÇÃO, VALIDADO, REPROVADO.
 Só o Renan marca VALIDADO (exceto `VALIDADO (automático)`).
 
 **Plano escrito em 28/10/2026. Decisões do Renan no `LEIA-PRIMEIRO.md`
-(fila contínua, altura livre fixa, tudo com lista de material). Aguarda o
-Renan aprovar o plano para começar o 34.1.**
+(fila contínua, altura livre fixa, tudo com lista de material). O
+Renan aprovou o plano em 28/10/2026 ("esta ok"), com a regra 4: o carport é só
+mais um tipo em Configurações › Nova estrutura, e nada da fixa muda.**
 
 ## Etapa 34: o modelo
 
@@ -16,10 +17,11 @@ Renan aprovar o plano para começar o 34.1.**
 
 ## Etapa 35: no Civil 3D
 
-- 35.1 Janela do carport: PENDENTE
-- 35.2 Desenhar a fila: PENDENTE
-- 35.3 Editar, regerar e apagar: PENDENTE
-- 35.4 Lista de material na tela: PENDENTE
+- 35.1 Nova estrutura: Fixa ou Carport: PENDENTE
+- 35.2 Janela do carport: PENDENTE
+- 35.3 Desenhar a fila: PENDENTE
+- 35.4 Editar, regerar e apagar: PENDENTE
+- 35.5 Lista de material na tela: PENDENTE
 
 ## Etapa 36: o carport no resto do Clivus
 
