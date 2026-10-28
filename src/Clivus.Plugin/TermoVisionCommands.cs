@@ -59,22 +59,33 @@ public static class TermoVisionCommands
                     return;
                 }
 
-                // Um envio por desenho: o Exportar manda todas as mesas do desenho,
-                // e as de uma área trocariam as da outra lá no TermoVision.
-                if (TermoVisionStore.Load(documento.Database) is { } anterior)
-                {
-                    RegistroDeDiagnostico.Registrar($"CLIVUS_TV_ABRIR: {link} recusado: o desenho já tem o envio {anterior.Shipment}.");
-                    Avisar(editor, anterior.Shipment == link.Shipment
-                        ? Tr.F("A área \"{0}\" já está aberta neste desenho.", anterior.AreaName)
-                        : Tr.F("Este desenho já tem a área \"{0}\" da usina \"{1}\" do TermoVision. Abra a outra área num desenho novo.",
-                            anterior.AreaName, anterior.PlantName));
-                    return;
-                }
-
                 // O servidor na pergunta: um endereço clivus:// pode vir de qualquer página.
                 var pergunta = Tr.F("Abrir a área \"{0}\" da usina \"{1}\" (EPSG {2}, cerca de {3:0.0} MB), de {4}, neste desenho?",
                     resumo.AreaName, resumo.PlantName, resumo.Epsg, resumo.EstimatedMb, new Uri(link.Server).Host);
-                var sim = Confirmar(editor, pergunta);
+
+                // Um envio por desenho: o Exportar manda todas as mesas do desenho
+                // para o envio guardado nele. O desenho que já recebeu uma área
+                // pergunta antes de trocar; nunca trava (teste do Renan, 28/10:
+                // apagou o desenho sem querer e o Abrir recusava a mesma área).
+                var padraoSim = true;
+                if (TermoVisionStore.Load(documento.Database) is { } anterior)
+                {
+                    var mesmaArea = anterior.Shipment == link.Shipment
+                        || (string.Equals(anterior.PlantName, resumo.PlantName, StringComparison.Ordinal)
+                            && string.Equals(anterior.AreaName, resumo.AreaName, StringComparison.Ordinal));
+                    RegistroDeDiagnostico.Registrar($"CLIVUS_TV_ABRIR: {link} num desenho que já tem o envio {anterior.Shipment} (mesma área: {mesmaArea}).");
+                    if (mesmaArea)
+                        pergunta = Tr.F("Este desenho já recebeu a área \"{0}\". Desenhar de novo? O que ainda estiver no desenho fica; o terreno novo ganha outro nome.",
+                            anterior.AreaName) + "\n\n" + pergunta;
+                    else
+                    {
+                        pergunta = Tr.F("Este desenho é da área \"{0}\" da usina \"{1}\". Trocar? O Exportar passa a mandar todas as mesas do desenho para a área nova; para manter as duas, use um desenho novo.",
+                            anterior.AreaName, anterior.PlantName) + "\n\n" + pergunta;
+                        padraoSim = false;
+                    }
+                }
+
+                var sim = Confirmar(editor, pergunta, padraoSim);
 
                 if (EntradaDoTermoVision.Tomar() is { } novo)
                 {
