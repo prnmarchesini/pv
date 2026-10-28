@@ -60,10 +60,13 @@ public class CarportBillTests
         double Desenhado(CarportPart parte) =>
             fila.Portals.SelectMany(p => p.Bars).Concat(fila.Bays.SelectMany(b => b.Purlins)).Where(b => b.Part == parte).Sum(b => b.Length);
 
-        // O arredondamento ao centímetro do corte: até meio centímetro por peça.
-        Assert.Equal(Desenhado(CarportPart.Pillar), l.Lines.Where(x => x.Item == "Pilar").Sum(x => x.TotalLength!.Value), 10 * 0.005);
-        Assert.Equal(Desenhado(CarportPart.Purlin), l.Lines.Where(x => x.Item == "Terça").Sum(x => x.TotalLength!.Value), 24 * 0.005);
-        Assert.Equal(Desenhado(CarportPart.Beam), l.Lines.Where(x => x.Item == "Viga").Sum(x => x.TotalLength!.Value), 5 * 0.005);
+        // O corte arredondado para cima ao centímetro: a lista nunca fica abaixo do
+        // desenhado e passa dele menos de um centímetro por peça.
+        foreach (var (parte, nome, pecas) in new[] { (CarportPart.Pillar, "Pilar", 10), (CarportPart.Purlin, "Terça", 24), (CarportPart.Beam, "Viga", 5) })
+        {
+            var lista = l.Lines.Where(x => x.Item == nome).Sum(x => x.TotalLength!.Value);
+            Assert.InRange(lista - Desenhado(parte), -1e-6, pecas * 0.01);
+        }
     }
 
     [Fact]

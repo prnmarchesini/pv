@@ -132,4 +132,24 @@ public class CarportRowTests
         Assert.Null(CarportRow.Build(Padrao, 0, 0, 1, 0, true, CarportRow.MaiorNumeroDeVaos + 1, Plano(), out var motivo));
         Assert.NotNull(motivo);
     }
+
+    // ---------------------------------------------------------- revisão do 34
+
+    [Fact]
+    [Trait("Etapa", "34")]
+    public void CincoPorCentoExatosNaoAvisam()
+    {
+        Assert.Empty(Fila(3 * Vao, chao: (x, _) => 0.05 * (x - 100)).Warnings);
+    }
+
+    [Fact]
+    [Trait("Etapa", "34")]
+    public void DesnivelGrandeEntreAsBasesAvisaComOComprimentoDoPilar()
+    {
+        // 30 % na descida: as bases ficam a ~0,73 m uma da outra em altura.
+        var f = Fila(2 * Vao, chao: (_, y) => 0.30 * y);
+
+        Assert.Equal(3, f.Warnings.Count);
+        Assert.Contains("entre as bases", f.Warnings[0]);
+    }
 }

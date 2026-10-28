@@ -74,6 +74,12 @@ public sealed record CarportBay(IReadOnlyList<CarportBar> Purlins, IReadOnlyList
 public static class CarportGeometry
 {
     /// <summary>
+    /// O desnível entre as duas bases de um pórtico a partir do qual a recusa
+    /// do pórtico aponta o chão como causa (e a fila avisa, <see cref="CarportRow"/>).
+    /// </summary>
+    public const double MaiorDesnivelEntreBases = 0.5;
+
+    /// <summary>
     /// O pórtico com o centro em (<paramref name="x"/>, <paramref name="y"/>).
     /// </summary>
     /// <param name="perfil">O carport.</param>
@@ -126,9 +132,13 @@ public static class CarportGeometry
         baseAlta = baseAlta with { Z = zAlta };
         baseBaixa = baseBaixa with { Z = zBaixa };
 
-        // A borda baixa: de baixo do quadro, a altura livre acima do pilar mais alto.
-        var zBorda = Math.Max(zAlta, zBaixa) + perfil.ClearHeight;
-        var origem = new V(centro.X, centro.Y, 0) + d * (planta / 2) + z * zBorda;
+        // A borda baixa: de baixo do quadro, a altura livre acima do chão mais
+        // alto entre os dois pilares e o que fica embaixo dela (o chão que sobe
+        // para o lado baixo não pode encostar na borda; revisão do 34).
+        var bordaEmPlanta = centro + d * (planta / 2);
+        var zSobABorda = chao(bordaEmPlanta.X, bordaEmPlanta.Y) is { } zb && double.IsFinite(zb) ? zb : (double?)null;
+        var zBorda = Math.Max(Math.Max(zAlta, zBaixa), zSobABorda ?? double.NegativeInfinity) + perfil.ClearHeight;
+        var origem = bordaEmPlanta + z * zBorda;
         var subida = d * -Math.Cos(t) + z * Math.Sin(t);
         var normal = d * Math.Sin(t) + z * Math.Cos(t);
 
@@ -145,9 +155,9 @@ public static class CarportGeometry
         var barras = new List<CarportBar>();
         var blocos = new List<CarportBlock>();
         var pontosBaixos = new List<(V Ponto, double Chao)>();
+        if (zSobABorda is { } chaoDaBorda) pontosBaixos.Add((origem, chaoDaBorda));
 
         // Os dois pilares abrem para fora: o alto para o lado alto (-d), o baixo para +d.
-        var topos = new List<(V Topo, V Eixo, int Dentro)>();
         foreach (var (pe, fora) in new[] { (baseAlta, -1.0), (baseBaixa, +1.0) })
         {
             var inicio = pe + z * bases;
@@ -172,7 +182,11 @@ public static class CarportGeometry
             var sTopo = SDe(topo);
             if (sTopo < sVigaBaixa || sTopo > sVigaAlta)
             {
-                motivo = Tr.T("a viga do carport não alcança o topo de um pilar: diminua o recuo da viga ou a abertura do pilar");
+                // Com muito desnível entre as bases, a causa é o chão, não a viga.
+                var desnivel = Math.Abs(zAlta - zBaixa);
+                motivo = desnivel > MaiorDesnivelEntreBases
+                    ? Tr.F("o desnível de {0:0.##} m entre as bases do pórtico leva o topo de um pilar para fora da viga: o chão entre os pilares é íngreme demais para este carport", desnivel)
+                    : Tr.T("a viga do carport não alcança o topo de um pilar: diminua o recuo da viga ou a abertura do pilar");
                 return null;
             }
 
@@ -184,6 +198,12 @@ public static class CarportGeometry
             var noPilar = topo - eixo * f.BraceOnPillar;
             // O alto (fora -1) desce na rampa; o baixo sobe.
             var sNaViga = sTopo + fora * (fora < 0 ? f.BraceOnBeamHigh : f.BraceOnBeamLow);
+            if (sNaViga < sVigaBaixa || sNaViga > sVigaAlta)
+            {
+                motivo = Tr.T("a mão francesa do carport cai fora da viga: diminua a distância na viga");
+                return null;
+            }
+
             var naViga = Rampa(sNaViga, hDeBaixoDaViga);
             barras.Add(new CarportBar(CarportPart.Brace, noPilar.P, naViga.P, f.Brace, d.P));
             pontosBaixos.Add((noPilar, pe.Z));
@@ -236,35 +256,52 @@ public static class CarportGeometry
         var passo = ate.Origem - de.Origem;          // de uma borda baixa à outra
         var inclinado = passo.Length;
         var ao = passo * (1 / inclinado);
-        var normal = de.Subida.Cross(ao);
+
+        // Com desnível ao longo da fila, a subida do pórtico não é perpendicular
+        // a "ao": os módulos usam a descida perpendicular dentro do plano, para
+        // saírem retângulos (revisão do 34: 89,3° e frestas a 10 %).
+        var descida = de.Subida - ao * de.Subida.Dot(ao);
+        descida = descida * (1 / descida.Length);
+        var normal = descida.Cross(ao);
         if (normal.Z < 0) normal = normal * -1;
 
-        V Ponto(double s, double xNoVao, double h) => de.Origem + de.Subida * s + ao * xNoVao + normal * h;
+        V Ponto(double s, double xNoVao, double h) => de.Origem + descida * s + ao * xNoVao + normal * h;
 
+        // As terças vão de viga a viga: cada ponta no seu pórtico.
         var tercas = new List<CarportBar>();
         foreach (var s in PurlinStations(perfil))
         {
             var h = -f.Purlin.Depth / 2;
-            tercas.Add(new CarportBar(CarportPart.Purlin, Ponto(s, 0, h).P, Ponto(s, inclinado, h).P, f.Purlin, normal.P));
+            tercas.Add(new CarportBar(CarportPart.Purlin,
+                (de.Origem + de.Subida * s + de.Normal * h).P,
+                (ate.Origem + ate.Subida * s + ate.Normal * h).P,
+                f.Purlin, normal.P));
         }
 
         var modulos = new List<CarportModule>();
         var largura = arranjo.ModuleAcross;
         var naDescida = arranjo.ModuleDown;
         var espessura = arranjo.Module.Thickness;
+        // As colunas dividem o vão inclinado; em chão plano o passo é módulo + folga.
+        var passoDaColuna = inclinado / arranjo.ModulesAcross;
         for (var fiada = 0; fiada < arranjo.ModulesDown; fiada++)
         {
             var s0 = fiada * (naDescida + arranjo.GapDown);
             for (var coluna = 0; coluna < arranjo.ModulesAcross; coluna++)
             {
-                var x0 = arranjo.GapAcross / 2 + coluna * (largura + arranjo.GapAcross);
-                modulos.Add(new CarportModule(indice, fiada, coluna,
+                var x0 = (passoDaColuna - largura) / 2 + coluna * passoDaColuna;
+                Point3[] cantos =
                 [
                     Ponto(s0, x0, espessura).P,
                     Ponto(s0, x0 + largura, espessura).P,
                     Ponto(s0 + naDescida, x0 + largura, espessura).P,
                     Ponto(s0 + naDescida, x0, espessura).P,
-                ]));
+                ];
+
+                // Sempre anti-horário em planta, como a mesa fixa: com a água
+                // para a esquerda, a borda baixa é percorrida ao contrário.
+                if (AreaEmPlanta(cantos) < 0) cantos = [cantos[1], cantos[0], cantos[3], cantos[2]];
+                modulos.Add(new CarportModule(indice, fiada, coluna, cantos));
             }
         }
 
@@ -293,6 +330,18 @@ public static class CarportGeometry
         }
 
         return lista;
+    }
+
+    private static double AreaEmPlanta(IReadOnlyList<Point3> c)
+    {
+        var soma = 0.0;
+        for (var i = 0; i < c.Count; i++)
+        {
+            var (p, q) = (c[i], c[(i + 1) % c.Count]);
+            soma += p.X * q.Y - q.X * p.Y;
+        }
+
+        return soma / 2;
     }
 
     internal static double Distancia(Point3 p, Point3 q) =>

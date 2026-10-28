@@ -28,7 +28,7 @@ public sealed record CarportBillResult(
 /// das mesmas peças que vão para o desenho (<see cref="CarportGeometry"/>):
 /// a soma dos comprimentos é a soma do que está desenhado.
 ///
-/// Barras agrupadas pelo comprimento de corte arredondado ao centímetro. A
+/// Barras agrupadas pelo comprimento de corte arredondado ao centímetro para cima. A
 /// terça é cortada a cada vão (emenda no pórtico). Grampos de módulo pela
 /// regra de sempre: em cada linha de terça, um intermediário entre módulos
 /// vizinhos e um de ponta em cada ponta da fila. Parafusos e ligações não
@@ -96,7 +96,9 @@ public static class CarportBill
         }
 
         var linhas = barras
-            .GroupBy(b => (b.Item, b.Secao, Comprimento: Math.Round(b.Comprimento, 2)))
+            // Corte arredondado para CIMA ao centímetro: a peça nunca sai curta
+            // (a menos de um milionésimo, para 2,30 não virar 2,31 por ponto flutuante).
+            .GroupBy(b => (b.Item, b.Secao, Comprimento: Math.Ceiling(b.Comprimento * 100 - 1e-6) / 100))
             .OrderBy(g => Ordem(g.Key.Item)).ThenBy(g => g.Key.Secao, StringComparer.Ordinal).ThenBy(g => g.Key.Comprimento)
             .Select(g => new CarportBillLine(g.Key.Item, g.Key.Secao, g.Key.Comprimento, g.Count()))
             .Concat(unidades
@@ -133,7 +135,7 @@ public static class CarportBill
         foreach (var l in lista.Lines)
             pecas.Add([l.Item, l.Section, l.Length is { } c ? Math.Round(c, 2) : null, l.Quantity, l.TotalLength is { } t ? Math.Round(t, 2) : null]);
         pecas.Add([]);
-        pecas.AddNote(Tr.T("Comprimento de corte arredondado ao centímetro. A terça é cortada a cada vão (emenda no pórtico). Parafusos e ligações não entram: dependem do fornecedor da estrutura."));
+        pecas.AddNote(Tr.T("Comprimento de corte arredondado ao centímetro, para cima. A terça é cortada a cada vão (emenda no pórtico). Parafusos e ligações não entram: dependem do fornecedor da estrutura."));
 
         var aba = planilha.Sheet(Tr.T("Carport — pilares"));
         aba.Add([Tr.T("Fila"), Tr.T("Pórtico"), Tr.T("Pilar"), Tr.T("Comprimento (m)"), Tr.T("Cota do chão (m)")]);

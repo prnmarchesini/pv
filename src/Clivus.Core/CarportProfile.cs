@@ -158,6 +158,7 @@ public sealed record CarportProfile(
     private const double MaiorSecao = 1.0;
     private const double MaiorBase = 2.0;
     private const int MaiorTercas = 4;
+    private const double MenorEntreBases = 0.5;
 
     private const int CasasDoGrau = 9;
 
@@ -227,8 +228,8 @@ public sealed record CarportProfile(
             var planta = rampa * Math.Cos(TiltRadians);
 
             if (!Entre(Frame.PillarLeanDegrees, 0, MaiorAberturaGraus)) return Faixa(Tr.T("abertura do pilar"), 0, MaiorAberturaGraus);
-            if (!(Frame.PillarBaseSpacing > 0) || Frame.PillarBaseSpacing >= planta)
-                return Tr.T("a distância entre as bases dos pilares precisa ser maior que zero e menor que a cobertura");
+            if (!(Frame.PillarBaseSpacing >= MenorEntreBases) || Frame.PillarBaseSpacing >= planta)
+                return Tr.F("a distância entre as bases dos pilares precisa ser de pelo menos {0} m e menor que a cobertura", MenorEntreBases);
             if (!double.IsFinite(Frame.PillarOffset) || Math.Abs(Frame.PillarOffset) + Frame.PillarBaseSpacing / 2 >= planta / 2)
                 return Tr.T("com esse deslocamento, um pilar sai de baixo da cobertura");
 
@@ -239,13 +240,17 @@ public sealed record CarportProfile(
 
             if (Frame.PurlinsPerModule < 1 || Frame.PurlinsPerModule > MaiorTercas)
                 return Faixa(Tr.T("terças por módulo"), 1, MaiorTercas);
-            if (Frame.PurlinsPerModule > 1 && !(Frame.PurlinEdgeOffset >= 0 && Frame.PurlinEdgeOffset < Array.ModuleDown / 2))
+            // Finita sempre, mesmo com uma terça só (que vai no meio): o arquivo não grava NaN.
+            if (!double.IsFinite(Frame.PurlinEdgeOffset)
+                || (Frame.PurlinsPerModule > 1 && !(Frame.PurlinEdgeOffset >= 0 && Frame.PurlinEdgeOffset < Array.ModuleDown / 2)))
                 return Tr.T("a terça precisa ficar debaixo do módulo: a distância da ponta do módulo à terça vai de zero até a metade do módulo");
 
             if (!(Frame.BraceOnPillar > 0) || !(Frame.BraceOnBeamHigh > 0) || !(Frame.BraceOnBeamLow > 0)
                 || !double.IsFinite(Frame.BraceOnPillar) || !double.IsFinite(Frame.BraceOnBeamHigh) || !double.IsFinite(Frame.BraceOnBeamLow))
                 return Tr.T("a mão francesa precisa pegar o pilar e a viga a uma distância maior que zero");
             if (Frame.BraceOnPillar >= ClearHeight) return Tr.T("a mão francesa pega o pilar abaixo do chão: diminua a distância no pilar");
+            if (Frame.BraceOnBeamHigh >= rampa / 2 || Frame.BraceOnBeamLow >= rampa / 2)
+                return Tr.T("a mão francesa pega a viga longe demais do pilar: a distância na viga vai até a metade da cobertura");
 
             foreach (var (secao, nome) in new[] { (Frame.Pillar, Tr.T("pilar")), (Frame.Beam, Tr.T("viga")), (Frame.Purlin, Tr.T("terça")), (Frame.Brace, Tr.T("mão francesa")) })
             {
@@ -318,7 +323,7 @@ public sealed record CarportProfile(
                 Height = Array.Module.Height,
                 Width = Array.Module.Width,
                 Thickness = Array.Module.Thickness,
-                Orientation = Array.Orientation,
+                Orientation = Array.Orientation.ToString(),
                 ModulesDown = Array.ModulesDown,
                 ModulesAcross = Array.ModulesAcross,
                 GapAcross = Array.GapAcross,
@@ -382,9 +387,13 @@ public sealed record CarportProfile(
         var f = arquivo.Frame ?? throw Faltou("frame");
         var b = f.Base ?? throw Faltou("frame.base");
 
-        var orientacao = Exigir(a.Orientation, "array.orientation");
-        if (!Enum.IsDefined(orientacao))
-            throw new InvalidOperationException(Tr.F("O arquivo de carport traz uma posição de módulo que este plugin não conhece: {0}.", orientacao));
+        // Só o nome exato: o conversor de enumeração do System.Text.Json aceita
+        // "1", minúscula e "Portrait, Landscape", e um "1" no arquivo viraria
+        // paisagem em silêncio.
+        var textoDaPosicao = a.Orientation ?? throw Faltou("array.orientation");
+        var orientacao = Enum.GetNames<CarportOrientation>().Contains(textoDaPosicao, StringComparer.Ordinal)
+            ? Enum.Parse<CarportOrientation>(textoDaPosicao)
+            : throw new InvalidOperationException(Tr.F("O arquivo de carport traz uma posição de módulo que este plugin não conhece: {0}.", textoDaPosicao));
 
         CarportSection Secao(SecaoNoArquivo? s, string campo) =>
             s is null
@@ -459,7 +468,7 @@ public sealed record CarportProfile(
         public double? Height { get; init; }
         public double? Width { get; init; }
         public double? Thickness { get; init; }
-        public CarportOrientation? Orientation { get; init; }
+        public string? Orientation { get; init; }
         public int? ModulesDown { get; init; }
         public int? ModulesAcross { get; init; }
         public double? GapAcross { get; init; }

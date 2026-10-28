@@ -17,8 +17,8 @@ mais um tipo em Configurações › Nova estrutura, e nada da fixa muda.**
 
 ## Etapa 35: no Civil 3D
 
-- 35.1 Nova estrutura: Fixa ou Carport: PENDENTE
-- 35.2 Janela do carport: PENDENTE
+- 35.1 Nova estrutura: Fixa ou Carport: AGUARDANDO VALIDAÇÃO
+- 35.2 Janela do carport: AGUARDANDO VALIDAÇÃO
 - 35.3 Desenhar a fila: PENDENTE
 - 35.4 Editar, regerar e apagar: PENDENTE
 - 35.5 Lista de material na tela: PENDENTE
@@ -72,3 +72,43 @@ mais um tipo em Configurações › Nova estrutura, e nada da fixa muda.**
     fornecedor); o Excel diz isso numa nota.
   - Excel com três abas: resumo, peças (comprimento × quantidade) e um pilar por
     linha com a cota do chão, para a obra.
+- Revisão da etapa 34 por subagente (28/10/2026): 6 defeitos, todos corrigidos,
+  cada um com teste:
+  1. mão francesa na viga sem teto (840 em vez de 0,84 passava): agora até meia
+     cobertura, e o pórtico recusa a que cai fora da viga;
+  2. posição do módulo lida pelo conversor do .NET aceitava "1" e minúscula:
+     agora só o nome exato;
+  3. desnível grande entre as bases do pórtico: a fila avisa acima de 0,5 m com o
+     comprimento do pilar, e a recusa aponta o chão como causa;
+  4. a altura livre agora vale também sobre o chão embaixo da borda baixa (o chão
+     que sobe para o lado baixo encostava na borda);
+  5. com desnível ao longo da fila os módulos saíam tortos (89,3° a 10 %) e com
+     fresta: agora retângulos, as colunas dividem o vão inclinado e as terças vão
+     de viga a viga;
+  6. distância da terça NaN com uma terça só passava na validação.
+  E das observações: cantos sempre anti-horários em planta (borda baixa primeiro),
+  corte arredondado para CIMA ao centímetro, 5 % exatos não avisam, piso de 0,5 m
+  entre as bases, e a janela ajusta a terça ao trocar para paisagem.
+- 35.1 e 35.2 (28/10/2026), o que assumi:
+  - O botão "Nova mesa..." virou "Nova estrutura..." (pedido do Renan); escolhendo
+    Fixa, segue exatamente o caminho de antes. Os carports ficam no registro
+    `CARPORTS`, separado do `MESAS`; o nome não se repete entre mesa e carport.
+  - Os carports aparecem na lista depois das mesas, sem prioridade (não entram no
+    motor nem na Escolha das estruturas). Subir e Descer não valem para eles.
+  - Na janela, o módulo pode vir de uma mesa do desenho ou ser digitado; não há
+    biblioteca de carports na pasta do usuário, só "Abrir arquivo..." e
+    "Salvar arquivo..." (.clivuscarport.json).
+
+## Roteiro de tela para o Renan (35.1 e 35.2)
+
+1. Com o Civil 3D fechado, instalar (`tools\publicar-bundle.ps1` e depois
+   `tools\instalar.ps1`) e abrir um desenho que já tem mesas.
+2. Configurações › Estruturas: o botão agora é "Nova estrutura...". Clicar,
+   escolher **Fixa** e conferir que abre a janela de Mesa de sempre (cancelar).
+3. "Nova estrutura..." › **Carport**: abre a janela do carport com o biposte de
+   referência e o corte do pórtico. Mudar a altura livre e a inclinação e ver o
+   corte e o resumo mudarem. Trocar para Paisagem e voltar.
+4. "Usar": o carport aparece na lista, depois das mesas, com "carport".
+   "Salvar no desenho", fechar e abrir de novo as Configurações: o carport continua lá.
+5. Editar, Duplicar e Remover com o carport escolhido.
+6. A aba "Escolha das estruturas" e o resto das mesas continuam iguais.

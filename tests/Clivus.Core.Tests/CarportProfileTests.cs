@@ -249,4 +249,46 @@ public class CarportProfileTests
         Assert.Contains("Carport biposte", texto);
         Assert.Contains("3 × 5", texto);
     }
+
+    // ---------------------------------------------------------- revisão do 34
+
+    [Theory]
+    [Trait("Etapa", "34")]
+    [InlineData("1")]
+    [InlineData("portrait")]
+    [InlineData(" Portrait")]
+    [InlineData("Portrait, Landscape")]
+    public void APosicaoSoValeComONomeExato(string escrito)
+    {
+        var json = ComoJson(Padrao);
+        json["array"]!["orientation"] = escrito;
+
+        Assert.Throws<InvalidOperationException>(() => CarportProfile.Parse(json.ToJsonString()));
+    }
+
+    [Fact]
+    [Trait("Etapa", "34")]
+    public void MaoFrancesaEmMilimetroNaVigaERecusada()
+    {
+        var mm = Padrao with { Frame = Padrao.Frame with { BraceOnBeamHigh = 840 } };
+
+        Assert.False(mm.IsValid);
+    }
+
+    [Fact]
+    [Trait("Etapa", "34")]
+    public void DistanciaDaTercaSemNumeroERecusadaMesmoComUmaTerca()
+    {
+        var nan = Padrao with { Frame = Padrao.Frame with { PurlinsPerModule = 1, PurlinEdgeOffset = double.NaN } };
+
+        Assert.False(nan.IsValid);
+        Assert.Throws<InvalidOperationException>(() => nan.ToJson());
+    }
+
+    [Fact]
+    [Trait("Etapa", "34")]
+    public void BasesColadasSaoRecusadas()
+    {
+        Assert.False((Padrao with { Frame = Padrao.Frame with { PillarBaseSpacing = 0.001 } }).IsValid);
+    }
 }

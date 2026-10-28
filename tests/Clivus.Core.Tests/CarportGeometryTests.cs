@@ -30,6 +30,9 @@ public class CarportGeometryTests
     private static void Perto(double esperado, double obtido, double tolerancia, string oque) =>
         Assert.True(Math.Abs(esperado - obtido) <= tolerancia, $"{oque}: esperado {esperado:0.###}, saiu {obtido:0.###} (tolerância {tolerancia})");
 
+    private static double AreaEmPlanta(IReadOnlyList<Point3> c) =>
+        Enumerable.Range(0, c.Count).Sum(i => c[i].X * c[(i + 1) % c.Count].Y - c[(i + 1) % c.Count].X * c[i].Y) / 2;
+
     private static CarportBar Barra(CarportPortal p, CarportPart parte, int qual) => p.Bars.Where(b => b.Part == parte).ElementAt(qual);
 
     // ---------------------------------------------------------- o pórtico de ouro
@@ -159,11 +162,11 @@ public class CarportGeometryTests
         var m = VaoDoModelo(out _, out _).Modules[0];
         var c = m.Corners;
 
-        // 1→2 é a borda baixa no sentido da fila; 3→4 a alta, voltando.
-        Assert.True(c[1].X > c[0].X);
+        // 1→2 é a borda baixa; 3→4 a alta, voltando; sempre anti-horário em planta.
         Assert.Equal(c[0].Z, c[1].Z, 9);
         Assert.True(c[2].Z > c[1].Z);
-        Assert.True(c[3].X < c[2].X);
+        Assert.Equal(c[2].Z, c[3].Z, 9);
+        Assert.True(AreaEmPlanta(c) > 0);
         Perto(Padrao.Array.ModuleAcross, CarportGeometry.Distancia(c[0], c[1]), 1e-9, "largura do módulo");
         Perto(Padrao.Array.ModuleDown, CarportGeometry.Distancia(c[1], c[2]), 1e-9, "altura do módulo");
     }
@@ -287,5 +290,81 @@ public class CarportGeometryTests
 
         Assert.Equal(3, s.Count);
         Assert.Equal(Padrao.Array.ModuleDown / 2, s[0], 9);
+    }
+
+    // ---------------------------------------------------------- revisão do 34
+
+    [Fact]
+    [Trait("Etapa", "34")]
+    public void MaoFrancesaQueCaiForaDaVigaNaoSai()
+    {
+        // Pilares juntos e retos (topos a 0,6 m), a mão francesa do pilar alto
+        // indo 3 m para dentro: passa do outro pilar e da ponta baixa da viga.
+        var longe = Padrao with
+        {
+            Frame = Padrao.Frame with { PillarBaseSpacing = 0.6, PillarLeanRadians = 0, PillarOffset = 0, BeamLowInset = 1.0, BraceOnBeamHigh = 3.0 },
+        };
+        Assert.True(longe.IsValid, longe.WhyInvalid);
+
+        Assert.Null(CarportGeometry.Portal(longe, 0, 0, 1, 0, false, Plano(), out var motivo));
+        Assert.Contains("fora da viga", motivo);
+    }
+
+    [Fact]
+    [Trait("Etapa", "34")]
+    public void AAlturaLivreValeTambemSobABordaBaixa()
+    {
+        // O chão SOBE 8 % para o lado baixo (+Y): embaixo da borda ele é mais alto que nos pilares.
+        var p = PorticoDoModelo(chao: (_, y) => 0.08 * y);
+        var chaoSobABorda = 0.08 * 5.088;
+
+        Perto(chaoSobABorda + 2.345, p.LowEdgeZ, 0.005, "borda baixa sobre o chão embaixo dela");
+        Assert.True(p.LowestAboveGround <= 2.345 + 1e-9);
+    }
+
+    [Fact]
+    [Trait("Etapa", "34")]
+    public void ODesnivelEntreAsBasesEApontadoComoCausa()
+    {
+        // 6 m de desnível entre as bases (a baixa em y ≈ 1,24): o topo do pilar sai da viga.
+        var p = CarportGeometry.Portal(Padrao, 0, 0, 1, 0, false, (_, y) => y > 0.5 ? -6 : 0, out var motivo);
+
+        Assert.Null(p);
+        Assert.Contains("desnível", motivo);
+    }
+
+    [Theory]
+    [Trait("Etapa", "34")]
+    [InlineData(0.05)]
+    [InlineData(0.10)]
+    public void NoDesnivelAoLongoDaFilaOsModulosContinuamRetangulos(double rampa)
+    {
+        var vao = VaoDoModelo(out _, out _, chao: (x, _) => rampa * x);
+
+        foreach (var m in vao.Modules)
+        {
+            var c = m.Corners;
+            var u = (X: c[1].X - c[0].X, Y: c[1].Y - c[0].Y, Z: c[1].Z - c[0].Z);
+            var v = (X: c[3].X - c[0].X, Y: c[3].Y - c[0].Y, Z: c[3].Z - c[0].Z);
+            Assert.True(Math.Abs(u.X * v.X + u.Y * v.Y + u.Z * v.Z) < 1e-9, "canto reto");
+            Perto(CarportGeometry.Distancia(c[0], c[2]), CarportGeometry.Distancia(c[1], c[3]), 1e-9, "diagonais");
+        }
+    }
+
+    [Fact]
+    [Trait("Etapa", "34")]
+    public void ComAAguaParaOOutroLadoOsCantosContinuamAntiHorarios()
+    {
+        foreach (var direita in new[] { true, false })
+        {
+            var de = CarportGeometry.Portal(Padrao, 0, 0, 1, 0, direita, Plano(), out _)!;
+            var ate = CarportGeometry.Portal(Padrao, Padrao.Array.BayWidth, 0, 1, 0, direita, Plano(), out _)!;
+            Assert.All(CarportGeometry.Bay(Padrao, 0, de, ate).Modules, m =>
+            {
+                Assert.True(AreaEmPlanta(m.Corners) > 0);
+                Assert.Equal(m.Corners[0].Z, m.Corners[1].Z, 9);
+                Assert.True(m.Corners[3].Z > m.Corners[0].Z);
+            });
+        }
     }
 }

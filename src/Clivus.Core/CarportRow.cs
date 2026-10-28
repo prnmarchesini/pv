@@ -83,6 +83,7 @@ public static class CarportRow
         var ax = dx / eixo;
         var ay = dy / eixo;
         var porticos = new List<CarportPortal>(quantos + 1);
+        var avisos = new List<string>();
         for (var k = 0; k <= quantos; k++)
         {
             var p = CarportGeometry.Portal(perfil, deX + ax * vao * k, deY + ay * vao * k, ax, ay, caiADireita, chao, out var porque);
@@ -93,16 +94,25 @@ public static class CarportRow
             }
 
             porticos.Add(p);
+
+            // O pilar do lado de chão mais baixo cresce o desnível entre as bases.
+            var entreBases = Math.Abs(p.HighBase.Z - p.LowBase.Z);
+            if (entreBases > CarportGeometry.MaiorDesnivelEntreBases)
+            {
+                var maisComprido = p.Bars.Where(b => b.Part == CarportPart.Pillar).Max(b => b.Length);
+                avisos.Add(Tr.F("no pórtico {0} o chão cai {1:0.##} m entre as bases: um pilar sai com {2:0.##} m",
+                    k + 1, entreBases, maisComprido));
+            }
         }
 
         var vaosMontados = new List<CarportBay>(quantos);
-        var avisos = new List<string>();
         for (var i = 0; i < quantos; i++)
         {
             vaosMontados.Add(CarportGeometry.Bay(perfil, i, porticos[i], porticos[i + 1]));
 
             var desnivel = Math.Abs(porticos[i + 1].LowEdgeZ - porticos[i].LowEdgeZ) / vao;
-            if (desnivel > maiorDesnivel)
+            // Tolerância de ponto flutuante: 5 % exatos não avisam.
+            if (desnivel > maiorDesnivel + 1e-9)
             {
                 avisos.Add(Tr.F("entre os pórticos {0} e {1} a cobertura sobe ou desce {2:0.#} % ao longo da fila (aviso acima de {3:0.#} %)",
                     i + 1, i + 2, desnivel * 100, maiorDesnivel * 100));
