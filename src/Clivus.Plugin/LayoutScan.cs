@@ -125,6 +125,19 @@ internal static class LayoutScan
         return resultado;
     }
 
+    /// <summary>
+    /// As mesas do desenho SEM os vãos de carport (28/10/2026): para quem
+    /// refaz, pinta, numera ou mexe na mesa como mesa FIXA (tesoura, pilares,
+    /// pontas, fileira F). O vão de carport é mesa para contar, somar kWp,
+    /// agrupar e ligar string; refazer é com o carport (CarportCommands).
+    /// </summary>
+    internal static IReadOnlyDictionary<Guid, TableParts> TablesSemCarport(Transaction transacao, Database database)
+    {
+        var todas = Tables(transacao, database);
+        var carport = CarportCommands.VaosDeCarport(database, todas);
+        return carport.Count == 0 ? todas : todas.Where(m => !carport.Contains(m.Key)).ToDictionary(m => m.Key, m => m.Value);
+    }
+
     /// <summary>O GUID da mesa a que uma entidade nossa pertence, ou null se ela não é nossa.</summary>
     internal static Guid? TableOf(Entity entidade)
     {

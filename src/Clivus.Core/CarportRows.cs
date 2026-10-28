@@ -88,14 +88,21 @@ public static class CarportMesh
     public static readonly RgbColor CorDoAco = new(168, 176, 184);
 
     /// <summary>As faces da fila: aço na cor dada, módulos em azul com a espessura do módulo, bases em concreto.</summary>
-    public static IReadOnlyList<Scene3DFace> Faces(CarportProfile perfil, CarportRowResult fila, RgbColor corDoAco)
+    /// <param name="perfil">O carport.</param>
+    /// <param name="fila">A fila montada.</param>
+    /// <param name="corDoAco">A cor do aço.</param>
+    /// <param name="comModulos">
+    /// Com os módulos. Sem eles na página 3D do Clivus: lá o módulo do vão já
+    /// entra como o de qualquer mesa (a face dele), e sairia em dobro.
+    /// </param>
+    public static IReadOnlyList<Scene3DFace> Faces(CarportProfile perfil, CarportRowResult fila, RgbColor corDoAco, bool comModulos = true)
     {
         ArgumentNullException.ThrowIfNull(perfil);
         ArgumentNullException.ThrowIfNull(fila);
 
         var faces = new List<Scene3DFace>();
         foreach (var p in fila.Portals) faces.AddRange(Portico(p, corDoAco));
-        foreach (var v in fila.Bays) faces.AddRange(Vao(perfil, v, corDoAco));
+        foreach (var v in fila.Bays) faces.AddRange(Vao(perfil, v, corDoAco, comModulos));
         return faces;
     }
 
@@ -130,13 +137,13 @@ public static class CarportMesh
         }
     }
 
-    private static IEnumerable<Scene3DFace> Vao(CarportProfile perfil, CarportBay v, RgbColor corDoAco)
+    private static IEnumerable<Scene3DFace> Vao(CarportProfile perfil, CarportBay v, RgbColor corDoAco, bool comModulos = true)
     {
         var espessura = perfil.Array.Module.Thickness;
         foreach (var t in v.Purlins)
             foreach (var f in Barra(t, corDoAco)) yield return f;
 
-        foreach (var m in v.Modules)
+        foreach (var m in comModulos ? v.Modules : [])
         {
             // A face de cima e a de baixo, a espessura do módulo abaixo dela.
             var n = Unit(Cross(Sub(m.Corners[1], m.Corners[0]), Sub(m.Corners[3], m.Corners[0])));
@@ -233,7 +240,8 @@ public static class CarportReturn
         }
     }
 
-    private static Guid IdDoVao(Guid fila, int vao)
+    /// <summary>O id do vão: o mesmo do contorno de mesa dele no desenho e da mesa no TermoVision.</summary>
+    public static Guid IdDoVao(Guid fila, int vao)
     {
         var bytes = System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(fila.ToString("D") + "/" + vao.ToString(CultureInfo.InvariantCulture)));
         return new Guid(bytes);
@@ -256,9 +264,13 @@ public static class CarportLayout
         return new TableFootprint(perfil.Array.BayWidth, perfil.Array.SlopeLength * Math.Cos(perfil.TiltRadians));
     }
 
-    /// <summary>O pitch das filas: o do projeto, mas nunca menos que a cobertura em planta (as filas não se sobrepõem).</summary>
-    public static double Pitch(CarportProfile perfil, double pitchDoProjeto) =>
-        Math.Max(pitchDoProjeto, Footprint(perfil).PlanDepth + FolgaMinima);
+    /// <summary>
+    /// O pitch das filas: a cobertura em planta mais o corredor do carport
+    /// (<see cref="CarportProfile.Aisle"/>). O pitch do projeto é o da mesa
+    /// fixa e não vale aqui: com ele as filas saíam coladas.
+    /// </summary>
+    public static double Pitch(CarportProfile perfil) =>
+        Footprint(perfil).PlanDepth + Math.Max(perfil.Aisle, FolgaMinima);
 
     /// <summary>A folga mínima entre duas filas (o distribuidor quer o pitch maior que o fundo).</summary>
     public const double FolgaMinima = 0.01;

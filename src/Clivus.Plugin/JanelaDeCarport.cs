@@ -33,6 +33,7 @@ internal sealed class JanelaDeCarport : Window
     private readonly TextBox _folgaDescida = Campo();
     private readonly TextBox _inclinacao = Campo();
     private readonly TextBox _alturaLivre = Campo();
+    private readonly TextBox _corredor = Campo();
 
     private readonly TextBox _bases = Campo();
     private readonly TextBox _abertura = Campo();
@@ -104,7 +105,8 @@ internal sealed class JanelaDeCarport : Window
             (Tr.T("Folga colunas (m)"), _folgaColunas, null),
             (Tr.T("Folga descida (m)"), _folgaDescida, null),
             (Tr.T("Inclinação (°)"), _inclinacao, null),
-            (Tr.T("Altura livre (m)"), _alturaLivre, Tr.T("Do chão do pilar mais alto do pórtico à borda baixa dos módulos, por baixo do quadro."))));
+            (Tr.T("Altura livre (m)"), _alturaLivre, Tr.T("Do chão do pilar mais alto do pórtico à borda baixa dos módulos, por baixo do quadro.")),
+            (Tr.T("Corredor (m)"), _corredor, Tr.T("O espaço livre entre uma fila de carport e a próxima, no Usina (a pista do estacionamento)."))));
         c2.Children.Add(Secao(Tr.T("Terças"),
             (Tr.T("Por módulo"), _tercasPorModulo, null),
             (Tr.T("Da ponta (m)"), _tercaDaPonta, Tr.T("Da ponta do módulo à terça mais perto, na rampa. Com uma terça por módulo, ela vai no meio."))));
@@ -179,7 +181,7 @@ internal sealed class JanelaDeCarport : Window
     private IEnumerable<TextBox> Caixas() =>
         new[]
         {
-            _nome, _marca, _modelo, _potencia, _altura, _largura, _espessura, _naDescida, _porVao, _folgaColunas, _folgaDescida,
+            _nome, _corredor, _marca, _modelo, _potencia, _altura, _largura, _espessura, _naDescida, _porVao, _folgaColunas, _folgaDescida,
             _inclinacao, _alturaLivre, _bases, _abertura, _deslocamento, _recuoBaixo, _recuoAlto, _maoNoPilar, _maoNaVigaAlto,
             _maoNaVigaBaixo, _tercasPorModulo, _tercaDaPonta, _chapa, _chapaEspessura, _bloco, _blocoAltura,
         }.Concat(_secoes.SelectMany(s => new[] { s.Nome, s.Altura, s.Largura }));
@@ -265,6 +267,7 @@ internal sealed class JanelaDeCarport : Window
             _folgaDescida.Text = Numero(a.GapDown);
             _inclinacao.Text = Numero(p.TiltDegrees);
             _alturaLivre.Text = Numero(p.ClearHeight);
+            _corredor.Text = Numero(p.Aisle);
             _bases.Text = Numero(f.PillarBaseSpacing);
             _abertura.Text = Numero(f.PillarLeanDegrees);
             _deslocamento.Text = Numero(f.PillarOffset);
@@ -382,7 +385,10 @@ internal sealed class JanelaDeCarport : Window
                 secoes[0], secoes[1], secoes[2], secoes[3],
                 new CarportBase(M(_chapa, Tr.T("Chapa")), M(_chapaEspessura, Tr.T("Espessura")), M(_bloco, Tr.T("Bloco")), M(_blocoAltura, Tr.T("Bloco, altura")))),
             M(_inclinacao, Tr.T("Inclinação")) * Math.PI / 180,
-            M(_alturaLivre, Tr.T("Altura livre")));
+            M(_alturaLivre, Tr.T("Altura livre")))
+        {
+            Aisle = M(_corredor, Tr.T("Corredor")),
+        };
 
         if (ruim is not null)
         {

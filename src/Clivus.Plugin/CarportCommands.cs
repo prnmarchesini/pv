@@ -86,8 +86,9 @@ public static class CarportCommands
 
             // O registro guarda o número de vãos que saiu: regerar não "enche" de novo.
             var registro = new CarportRowRecord(Guid.NewGuid(), carport.Name, a.X, a.Y, b.X, b.Y, caiADireita, fila.Bays.Count);
-            var pecas = Desenhar(documento.Database, carport, registro.Id, fila);
-            Gravar(documento.Database, [.. Registradas(documento.Database), registro]);
+            var jaHavia = Registradas(documento.Database);
+            var pecas = Desenhar(documento.Database, carport, registro.Id, fila, jaHavia.Count + 1);
+            Gravar(documento.Database, [.. jaHavia, registro]);
 
             Relatar(editor, carport, fila, pecas);
         }
@@ -159,7 +160,7 @@ public static class CarportCommands
         try
         {
             layout = RowDistributor.Distribute(area.Vertices, alinhamento.Vertices, alinhamento.Identidade.Side,
-                CarportLayout.Pitch(perfil, config.Pitch), 0, CarportLayout.Footprint(perfil), config.UpslopeAzimuthRadians);
+                CarportLayout.Pitch(perfil), 0, CarportLayout.Footprint(perfil), config.UpslopeAzimuthRadians);
         }
         catch (ArgumentException erro)
         {
@@ -194,7 +195,7 @@ public static class CarportCommands
                 continue;
             }
 
-            pecas += Desenhar(database, escolhido, registro.Id, fila);
+            pecas += Desenhar(database, escolhido, registro.Id, fila, registradas.Count(r => r.Area != area.Nome) + feitas.Count + 1);
             foreach (var w in fila.Warnings) editor.WriteMessage(Tr.F("  ATENÇÃO: {0}.\n", w));
             feitas.Add(registro);
             vaos += fila.Bays.Count;
@@ -232,8 +233,9 @@ public static class CarportCommands
 
             var carports = CarportsDoDesenho.Ler(database);
             var feitas = 0;
-            foreach (var registro in filas)
+            for (var numero = 1; numero <= filas.Count; numero++)
             {
+                var registro = filas[numero - 1];
                 if (DrawingCarports.Find(carports, registro.Carport) is not { } carport)
                 {
                     editor.WriteMessage(Tr.F("\n  A fila do carport \"{0}\" ficou como estava: o carport não está mais cadastrado.\n", registro.Carport));
@@ -248,7 +250,7 @@ public static class CarportCommands
                 }
 
                 Apagar(database, registro.Id);
-                Relatar(editor, carport, fila, Desenhar(database, carport, registro.Id, fila));
+                Relatar(editor, carport, fila, Desenhar(database, carport, registro.Id, fila, numero));
                 feitas++;
             }
 
@@ -360,6 +362,89 @@ public static class CarportCommands
         return montadas;
     }
 
+    /// <summary>
+    /// Os vãos de carport entre estas mesas: os das filas registradas (pelo id
+    /// do vão) e os contornos cujo perfil é o nome de um carport do desenho (a
+    /// cópia de um vão, que não tem fila).
+    /// </summary>
+    internal static HashSet<Guid> VaosDeCarport(Database database, IReadOnlyDictionary<Guid, TableParts> mesas)
+    {
+        var filas = FilaDosVaos(database);
+        var carports = CarportsDoDesenho.Ler(database);
+        return mesas
+            .Where(m => filas.ContainsKey(m.Key) || (m.Value.Identity is { } i && EVaoDeCarport(i, carports)))
+            .Select(m => m.Key)
+            .ToHashSet();
+    }
+
+    /// <summary>De que fila é cada vão (pelo id do vão como mesa).</summary>
+    internal static Dictionary<Guid, CarportRowRecord> FilaDosVaos(Database database)
+    {
+        var mapa = new Dictionary<Guid, CarportRowRecord>();
+        foreach (var r in Registradas(database))
+            for (var v = 0; v < r.Bays; v++) mapa[CarportReturn.IdDoVao(r.Id, v)] = r;
+        return mapa;
+    }
+
+    /// <summary>
+    /// O Recalcular (e o Recalcular pendentes, e o Grupo › Recalcular) num vão
+    /// de carport: refaz a fila inteira dele com o carport e o terreno de agora.
+    /// O vão sem fila (cópia de um vão) fica como está, com o aviso.
+    /// </summary>
+    internal static void RegerarVaos(Editor editor, Document documento, ProcessedTerrain terreno, IReadOnlyList<Guid> vaos)
+    {
+        var database = documento.Database;
+        var mapa = FilaDosVaos(database);
+        var registradas = Registradas(database);
+        var carports = CarportsDoDesenho.Ler(database);
+        double? Chao(double x, double y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null;
+
+        var semFila = vaos.Count(v => !mapa.ContainsKey(v));
+        if (semFila > 0)
+            editor.WriteMessage(Tr.F("\n  {0} vão(s) de carport sem fila (cópia de um vão) ficaram como estavam: para carport, use Usina ou Carport › Desenhar fila.\n", semFila));
+
+        foreach (var registro in vaos.Where(mapa.ContainsKey).Select(v => mapa[v]).DistinctBy(r => r.Id))
+        {
+            if (DrawingCarports.Find(carports, registro.Carport) is not { } carport)
+            {
+                editor.WriteMessage(Tr.F("\n  A fila do carport \"{0}\" ficou como estava: o carport não está mais cadastrado.\n", registro.Carport));
+                continue;
+            }
+
+            var fila = registro.Build(carport.Profile, Chao, out var motivo);
+            if (fila is null)
+            {
+                editor.WriteMessage(Tr.F("\n  A fila do carport \"{0}\" ficou como estava: {1}.\n", registro.Carport, motivo));
+                continue;
+            }
+
+            Apagar(database, registro.Id);
+            Relatar(editor, carport, fila, Desenhar(database, carport, registro.Id, fila, registradas.FindIndex(r => r.Id == registro.Id) + 1));
+        }
+    }
+
+    /// <summary>
+    /// Depois de um Regerar área ou Apagar tudo, que apagam as mesas da área:
+    /// a fila de carport que perdeu todos os vãos sai inteira (o aço e o registro).
+    /// </summary>
+    internal static void LimparFilasSemVao(Database database)
+    {
+        IReadOnlyDictionary<Guid, TableParts> mesas;
+        using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
+            mesas = LayoutScan.Tables(transacao, database);
+
+        var registradas = Registradas(database);
+        var vazias = registradas.Where(r => !Enumerable.Range(0, r.Bays).Any(v => mesas.ContainsKey(CarportReturn.IdDoVao(r.Id, v)))).ToList();
+        if (vazias.Count == 0) return;
+
+        foreach (var r in vazias) Apagar(database, r.Id);
+        Gravar(database, registradas.Except(vazias).ToList());
+    }
+
+    /// <summary>Se a mesa (pela identidade do contorno) é um vão de carport: o perfil dela é o nome de um carport do desenho.</summary>
+    internal static bool EVaoDeCarport(TableIdentity mesa, IReadOnlyList<DrawingCarport> carports) =>
+        mesa.ProfileName is { Length: > 0 } nome && DrawingCarports.Find(carports, nome) is not null;
+
     /// <summary>Os vãos de todas as filas como mesas do TermoVision (36.1).</summary>
     internal static List<TermoVisionTable> MesasDoTermoVision(Document documento)
     {
@@ -370,7 +455,7 @@ public static class CarportCommands
 
     /// <summary>As faces 3D de todas as filas do desenho (a página 3D do Clivus e o servidor).</summary>
     internal static List<Scene3DFace> Faces3D(Database database, Func<double, double, double?> chao) =>
-        Montadas(database, chao).SelectMany(m => CarportMesh.Faces(m.Carport.Profile, m.Fila, CarportMesh.CorDoAco)).ToList();
+        Montadas(database, chao).SelectMany(m => CarportMesh.Faces(m.Carport.Profile, m.Fila, CarportMesh.CorDoAco, comModulos: false)).ToList();
 
     // ------------------------------------------------------------------ miúdos
 
@@ -410,12 +495,17 @@ public static class CarportCommands
     /// <summary>Apaga as peças da fila; devolve quantas.</summary>
     private static int Apagar(Database database, Guid fila)
     {
+        // O aço tem o id da fila; o contorno, os módulos, as faces e o que as
+        // ferramentas de mesa penduraram nele (notas, tags, strings) têm o id
+        // do vão como mesa.
+        var vaos = Enumerable.Range(0, CarportRow.MaiorNumeroDeVaos).Select(v => CarportReturn.IdDoVao(fila, v)).ToHashSet();
         var apagadas = 0;
         using var transacao = database.TransactionManager.StartTransaction();
         var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
         foreach (ObjectId id in espaco)
         {
-            if (id.IsErased || transacao.GetObject(id, OpenMode.ForRead) is not Entity e || IdDaFila(e) != fila) continue;
+            if (id.IsErased || transacao.GetObject(id, OpenMode.ForRead) is not Entity e) continue;
+            if (IdDaFila(e) != fila && !(LayoutScan.TableOf(e) is { } mesa && vaos.Contains(mesa))) continue;
             e.UpgradeOpen();
             e.Erase();
             apagadas++;
@@ -451,7 +541,7 @@ public static class CarportCommands
     }
 
     /// <summary>Desenha a fila em sólidos: módulos com a espessura deles, aço na cor do carport, bases em concreto.</summary>
-    private static int Desenhar(Database database, DrawingCarport carport, Guid idDaFila, CarportRowResult fila)
+    private static int Desenhar(Database database, DrawingCarport carport, Guid idDaFila, CarportRowResult fila, int numeroDaFila)
     {
         var corDoAco = Color.FromRgb(CarportMesh.CorDoAco.R, CarportMesh.CorDoAco.G, CarportMesh.CorDoAco.B);
         var corDoModulo = Color.FromRgb(CarportMesh.CorDoModulo.R, CarportMesh.CorDoModulo.G, CarportMesh.CorDoModulo.B);
@@ -516,27 +606,70 @@ public static class CarportCommands
                     Por(solido, terca.Part.ToString(), v);
                 }
 
-            foreach (var m in vao.Modules)
-                if (Modulo(m, espessura) is { } placa)
-                {
-                    placa.Layer = camadaModulo;
-                    placa.Color = corDoModulo;
-                    Por(placa, "Module", v);
-                }
         }
 
-        // O contorno da cobertura de cada vão (como o da mesa) e o grupo.
+        // Cada vão é uma MESA para o resto do plugin (28/10/2026, Renan: "todas
+        // ferramentas tem que funcionar com a mesa, o resumo, os grupos,
+        // recalcular"): o contorno com a identidade de mesa (potência, rótulo,
+        // o nome do carport como perfil), os módulos no bloco de módulo da fixa
+        // e a face de cima, com as mesmas identidades. Grupo, Resumo, kWp,
+        // numeração, strings, sombras e PVsyst leem o vão como leem a mesa.
+        var modulo = carport.Profile.Array.Module;
+        var blocoDoModulo = LayoutBlocks.GarantirModulo(transacao, database, modulo);
+        var camadaDoModulo = LayoutLayers.Garantir(transacao, database, LayoutLayers.Modulo, new RgbColor(30, 60, 140));
+        var camadaDaFace = LayoutLayers.Garantir(transacao, database, LayoutLayers.Face, new RgbColor(60, 120, 220));
+        var corDoTipo = Color.FromRgb(carport.Color.R, carport.Color.G, carport.Color.B);
+        var paisagem = carport.Profile.Array.Orientation == CarportOrientation.Landscape;
         var vaos = CarportReturn.Tables(idDaFila, carport.Name, carport.Profile, fila).ToList();
+
         for (var v = 0; v < vaos.Count && v < pecasDoVao.Count; v++)
         {
-            var contorno = new Polyline3d { Closed = true, Layer = camadaMesa };
-            Por(contorno, "Contour", v);
-            foreach (var (e, n, z) in vaos[v].Corners)
+            var mesa = vaos[v];
+            var cantos = mesa.Corners.Select(c => new Point3d(c.E, c.N, c.Z)).ToList();
+            var identidade = new TableIdentity(
+                mesa.Id, Tr.F("C{0}.{1}", numeroDaFila, v + 1), cantos[0].Z, cantos[1].Z, carport.Profile.TiltRadians,
+                Marked: false, Reason: null, ModulePowerWatts: modulo.PowerWatts,
+                Anchor: new Clivus.Geo.Point3(cantos[0].X, cantos[0].Y, cantos[0].Z), ProfileName: carport.Name);
+
+            foreach (var m in fila.Bays[v].Modules)
             {
-                var vertice = new PolylineVertex3d(new Point3d(e, n, z));
+                var c = m.Corners.Select(q => new Point3d(q.X, q.Y, q.Z)).ToArray();
+                var ao = (c[1] - c[0]).GetNormal();
+                var sobe = (c[3] - c[0]).GetNormal();
+                var normal = ao.CrossProduct(sobe).GetNormal();
+
+                // O bloco da fixa tem a largura em X e a altura em Y: em retrato
+                // X corre com a fila; em paisagem, X sobe a rampa a partir do
+                // canto 1 e Y volta para o canto 0.
+                var matriz = paisagem
+                    ? Matrix3d.AlignCoordinateSystem(Point3d.Origin, Vector3d.XAxis, Vector3d.YAxis, Vector3d.ZAxis, c[1], sobe, -ao, normal)
+                    : Matrix3d.AlignCoordinateSystem(Point3d.Origin, Vector3d.XAxis, Vector3d.YAxis, Vector3d.ZAxis, c[0], ao, sobe, normal);
+
+                var bloco = new BlockReference(Point3d.Origin, blocoDoModulo) { BlockTransform = matriz, Layer = camadaDoModulo, Color = corDoTipo };
+                pecasDoVao[v].Add(espaco.AppendEntity(bloco));
+                transacao.AddNewlyCreatedDBObject(bloco, true);
+                var idDoModulo = new ModuleIdentity(Guid.NewGuid(), mesa.Id, m.Column, m.Row, null);
+                LayoutXData.SaveModule(transacao, bloco, idDoModulo);
+
+                var face = new Face(c[0], c[1], c[2], c[3], true, true, true, true) { Layer = camadaDaFace };
+                pecasDoVao[v].Add(espaco.AppendEntity(face));
+                transacao.AddNewlyCreatedDBObject(face, true);
+                LayoutXData.SaveFace(transacao, face, new FaceIdentity(Guid.NewGuid(), idDoModulo.Id, mesa.Id, m.Column, m.Row));
+                pecas += 2;
+            }
+
+            var contorno = new Polyline3d { Closed = true, Layer = camadaMesa, Color = corDoTipo };
+            pecasDoVao[v].Add(espaco.AppendEntity(contorno));
+            transacao.AddNewlyCreatedDBObject(contorno, true);
+            foreach (var p in cantos)
+            {
+                var vertice = new PolylineVertex3d(p);
                 contorno.AppendVertex(vertice);
                 transacao.AddNewlyCreatedDBObject(vertice, true);
             }
+
+            LayoutXData.SaveTable(transacao, contorno, identidade);
+            pecas++;
 
             LayoutGroups.Criar(transacao, database, pecasDoVao[v]);
         }

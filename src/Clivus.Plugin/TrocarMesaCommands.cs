@@ -550,7 +550,7 @@ public static class TrocarMesaCommands
     {
         using var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction();
 
-        var mesas = LayoutScan.Tables(transacao, documento.Database);
+        var mesas = LayoutScan.TablesSemCarport(transacao, documento.Database);
         var cantos = new Dictionary<Guid, List<Point3>>();
 
         foreach (var (guid, partes) in mesas)

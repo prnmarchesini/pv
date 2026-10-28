@@ -291,4 +291,18 @@ public class CarportProfileTests
     {
         Assert.False((Padrao with { Frame = Padrao.Frame with { PillarBaseSpacing = 0.001 } }).IsValid);
     }
+
+    [Fact]
+    [Trait("Etapa", "36")]
+    public void OCorredorVaiEVoltaEOArquivoSemEleAbreComOPadrao()
+    {
+        var com = Padrao with { Aisle = 7.5 };
+        Assert.Equal(7.5, CarportProfile.Parse(com.ToJson()).Aisle, 9);
+
+        var json = ComoJson(Padrao);
+        json.Remove("aisle");
+        Assert.Equal(CarportProfile.CorredorPadrao, CarportProfile.Parse(json.ToJsonString()).Aisle, 9);
+
+        Assert.False((Padrao with { Aisle = -1 }).IsValid);
+    }
 }

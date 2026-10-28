@@ -138,6 +138,18 @@ public static class RecalcularCommands
         using (var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction())
             todas = LayoutScan.Tables(transacao, documento.Database);
 
+        // O vão de carport não se recalcula como mesa fixa: refaz a fila dele
+        // (28/10/2026). As vizinhas da fixa também não são vãos de carport.
+        var deCarport = CarportCommands.VaosDeCarport(documento.Database, todas);
+        if (deCarport.Count > 0)
+        {
+            var vaos = mesas.Where(deCarport.Contains).ToList();
+            if (vaos.Count > 0) CarportCommands.RegerarVaos(editor, documento, terreno, vaos);
+            mesas = mesas.Where(m => !deCarport.Contains(m)).ToList();
+            todas = todas.Where(m => !deCarport.Contains(m.Key)).ToDictionary(m => m.Key, m => m.Value);
+            if (mesas.Count == 0) return;
+        }
+
         var feitas = 0;
 
         // Uma vez, antes de apagar qualquer mesa: as cotas da própria mesa
@@ -157,7 +169,7 @@ public static class RecalcularCommands
             if (mesas.Count > 1)
             {
                 using var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction();
-                todas = LayoutScan.Tables(transacao, documento.Database);
+                todas = LayoutScan.TablesSemCarport(transacao, documento.Database);
             }
         }
 

@@ -162,7 +162,7 @@ public class CarportRowsTests
         Point3[] alinhamento = [P(0, 0), P(0, 40)];
 
         // Mesa olhando para o norte: subida para o sul, fileiras leste-oeste a partir da borda oeste.
-        var layout = RowDistributor.Distribute(area, alinhamento, LineSide.Right, CarportLayout.Pitch(p, 6), 0, CarportLayout.Footprint(p), Math.PI);
+        var layout = RowDistributor.Distribute(area, alinhamento, LineSide.Right, CarportLayout.Pitch(p), 0, CarportLayout.Footprint(p), Math.PI);
         var filas = CarportLayout.Rows(layout, p.Name, "A1");
 
         Assert.NotEmpty(filas);
@@ -191,8 +191,9 @@ public class CarportRowsTests
     public void OPitchNuncaSobrepoeAsFilas()
     {
         var p = CarportProfile.Reference;
-        Assert.Equal(CarportLayout.Footprint(p).PlanDepth + CarportLayout.FolgaMinima, CarportLayout.Pitch(p, 6), 9);
-        Assert.Equal(12, CarportLayout.Pitch(p, 12), 9);
+        // O corredor do carport (padrão 6 m) entre as coberturas; sem corredor, coladas mas sem sobrepor.
+        Assert.Equal(CarportLayout.Footprint(p).PlanDepth + 6, CarportLayout.Pitch(p), 9);
+        Assert.Equal(CarportLayout.Footprint(p).PlanDepth + CarportLayout.FolgaMinima, CarportLayout.Pitch(p with { Aisle = 0 }), 9);
     }
 
     [Fact]

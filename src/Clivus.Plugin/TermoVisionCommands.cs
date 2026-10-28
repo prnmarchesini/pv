@@ -322,8 +322,12 @@ public static class TermoVisionCommands
         var padrao = FileiraCommands.PerfilDaMesa(editor, silencioso: true);
 
         using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        var carports = CarportsDoDesenho.Ler(database);
         foreach (var (guid, partes) in LayoutScan.Tables(transacao, database))
         {
+            // O vão de carport vai pelo caminho dele, com o tipo e a estrutura (abaixo).
+            if (partes.Identity is { } talvez && CarportCommands.EVaoDeCarport(talvez, carports)) continue;
+
             var nome = partes.Identity?.Label is { Length: > 0 } rotulo ? rotulo : guid.ToString();
             if (partes.Identity is not { } identidade || partes.Contour is not { } contornoId)
             {

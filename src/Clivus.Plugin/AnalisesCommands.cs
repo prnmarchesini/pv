@@ -162,7 +162,7 @@ public static class AnalisesCommands
 
         using (var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction())
         {
-            foreach (var (guid, mesa) in LayoutScan.Tables(transacao, documento.Database))
+            foreach (var (guid, mesa) in LayoutScan.TablesSemCarport(transacao, documento.Database))
             {
                 if (mesa.Identity is not { } identidade) continue;
 

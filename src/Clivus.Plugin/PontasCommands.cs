@@ -201,7 +201,14 @@ public static class PontasCommands
 
         using (var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction())
         {
-            LayoutScan.Tables(transacao, documento.Database).TryGetValue(guid, out mesa);
+            var todas = LayoutScan.Tables(transacao, documento.Database);
+            if (CarportCommands.VaosDeCarport(documento.Database, todas).Contains(guid))
+            {
+                editor.WriteMessage(Tr.T("\nPONTAS Este é um vão de carport: a altura dele é a altura livre do carport (Configurações), e Regerar filas o refaz.\n"));
+                return null;
+            }
+
+            todas.TryGetValue(guid, out mesa);
 
             if (mesa?.Identity is null || mesa.Contour is not { } contorno)
             {

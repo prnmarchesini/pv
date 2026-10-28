@@ -85,6 +85,7 @@ public static class ApagarTudoCommands
         var database = documento.Database;
 
         var apagadas = LayoutEraser.ApagarDentro(database, area.Vertices);
+        CarportCommands.LimparFilasSemVao(database);
         var orfas = LayoutEraser.ApagarOrfasDentro(database, area.Vertices);
 
         if (apagadas.Tables.Count == 0 && orfas == 0)

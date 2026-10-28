@@ -97,8 +97,12 @@ public static class NumerarCommands
             return null;
         }
 
+        var deCarport = CarportCommands.VaosDeCarport(documento.Database, mesas);
         foreach (var (guid, partes) in mesas)
         {
+            // O vão de carport tem o rótulo C<fila>.<vão> dele.
+            if (deCarport.Contains(guid)) continue;
+
             if (partes.Identity is null || partes.Contour is not { } contorno)
             {
                 // Peças cujo contorno foi apagado à mão (órfãs do 7.7): não

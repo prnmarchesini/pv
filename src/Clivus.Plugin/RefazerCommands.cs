@@ -124,6 +124,7 @@ public static class RefazerCommands
         }
 
         var apagadas = LayoutEraser.ApagarDentro(documento.Database, area.Vertices);
+        CarportCommands.LimparFilasSemVao(documento.Database);
         var orfas = LayoutEraser.ApagarOrfasDentro(documento.Database, area.Vertices);
 
         if (apagadas.Tables.Count > 0) RemovalStore.Remove(documento.Database, apagadas.Tables);

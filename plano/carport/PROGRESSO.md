@@ -170,3 +170,19 @@ mais um tipo em Configurações › Nova estrutura, e nada da fixa muda.**
     leva "tipo" ("fixa" | "carport") e o carport leva "estrutura.triangulos". Exemplo
     mandado a eles (scratchpad/desenho/retorno-carport.json, 19 vãos). Lá ainda falta
     guardar e desenhar.
+- 28/10/2026 (noite), Renan: "usei a ferramenta grupo e não mostra o kWp ... todas
+  ferramentas tem que funcionar com a mesa" e "sairam grudadinhos, falta corredor".
+  - Cada vão é MESA para o plugin: contorno com TableIdentity (rótulo C<fila>.<vão>,
+    ModulePowerWatts, ProfileName = nome do carport, id = IdDoVao), módulos no bloco
+    de módulo da fixa (ModuleIdentity) e face de cima (FaceIdentity). O aço continua
+    com o XData "Carport". Grupo, Resumo, Recontar, kWp da seleção, Excel, strings,
+    rota de cabos, sombras, tags, Estado e Validar leem o vão como mesa.
+  - Quem refaz mesa FIXA pula o carport (LayoutScan.TablesSemCarport): Pintar
+    análises, análises de ponta/pilar, Trocar mesa, Numerar (o rótulo C não é F),
+    vizinhas do Recalcular. Pontas recusa com aviso. Recalcular / pendentes / Grupo ›
+    Recalcular num vão refazem a FILA de carport dele. Regerar área e Apagar tudo
+    limpam o aço da fila que perdeu os vãos.
+  - Corredor entre filas no carport (Aisle, padrão 6 m, campo opcional no arquivo);
+    o pitch do carport no Usina é cobertura + corredor.
+  - Conferido no Paradise: Usina 2 filas, 12 vãos, 180 módulos; Recontar 12 mesas,
+    180 módulos, 129,6 kWp; Pendente + Recalcular refez a fila; Validar limpo.

@@ -407,7 +407,7 @@ internal static class AnalisesIndependentes
         var textos = new List<(ObjectId, AnalysisTextIdentity)>();
         var ignorados = 0;
 
-        foreach (var (guid, partes) in LayoutScan.Tables(transacao, database))
+        foreach (var (guid, partes) in LayoutScan.TablesSemCarport(transacao, database))
         {
             foreach (var id in partes.Notes)
             {

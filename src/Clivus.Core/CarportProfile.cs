@@ -200,6 +200,20 @@ public sealed record CarportProfile(
     /// <summary>A inclinação em graus, como vai para o arquivo e para a tela.</summary>
     public double TiltDegrees => TiltRadians * 180 / Math.PI;
 
+    /// <summary>
+    /// O corredor entre duas filas de carport no Usina (28/10/2026, Renan:
+    /// "sairam grudadinhos, falta a opção de colocar um corredor"): o espaço
+    /// livre em planta entre a cobertura de uma fila e a da outra. O padrão é a
+    /// pista de um estacionamento. No arquivo é opcional: o carport gravado
+    /// antes dele abre com o padrão.
+    /// </summary>
+    public double Aisle { get; init; } = CorredorPadrao;
+
+    /// <summary>O corredor padrão entre filas, em metro.</summary>
+    public const double CorredorPadrao = 6.0;
+
+    private const double MaiorCorredor = 50;
+
     /// <summary>Se o perfil descreve um carport que existe.</summary>
     public bool IsValid => WhyInvalid is null;
 
@@ -223,6 +237,7 @@ public sealed record CarportProfile(
 
             if (!Entre(TiltDegrees, 0, MaiorInclinacaoGraus)) return Faixa(Tr.T("inclinação"), 0, MaiorInclinacaoGraus);
             if (!Entre(ClearHeight, MenorAlturaLivre, MaiorAlturaLivre)) return Faixa(Tr.T("altura livre"), MenorAlturaLivre, MaiorAlturaLivre);
+            if (!Entre(Aisle, 0, MaiorCorredor)) return Faixa(Tr.T("corredor entre filas"), 0, MaiorCorredor);
 
             var rampa = Array.SlopeLength;
             var planta = rampa * Math.Cos(TiltRadians);
@@ -315,6 +330,7 @@ public sealed record CarportProfile(
             Name = Name,
             TiltDegrees = Math.Round(TiltDegrees, CasasDoGrau),
             ClearHeight = ClearHeight,
+            Aisle = Aisle,
             Array = new ArranjoNoArquivo
             {
                 Brand = Array.Module.Brand,
@@ -436,7 +452,10 @@ public sealed record CarportProfile(
                     Exigir(b.PedestalSize, "frame.base.pedestalSize"),
                     Exigir(b.PedestalHeight, "frame.base.pedestalHeight"))),
             Exigir(arquivo.TiltDegrees, "tiltDegrees") * Math.PI / 180,
-            Exigir(arquivo.ClearHeight, "clearHeight"));
+            Exigir(arquivo.ClearHeight, "clearHeight"))
+        {
+            Aisle = arquivo.Aisle ?? CorredorPadrao,
+        };
 
         if (perfil.WhyInvalid is { } motivo)
             throw new InvalidOperationException(Tr.F("O arquivo de carport não descreve um carport: {0}.", motivo));
@@ -456,6 +475,7 @@ public sealed record CarportProfile(
         public string? Name { get; init; }
         public double? TiltDegrees { get; init; }
         public double? ClearHeight { get; init; }
+        public double? Aisle { get; init; }
         public ArranjoNoArquivo? Array { get; init; }
         public AcoNoArquivo? Frame { get; init; }
     }
