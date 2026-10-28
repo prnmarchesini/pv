@@ -231,7 +231,7 @@ public static class CarportCommands
                 return;
             }
 
-            Atualizar(editor, database, chao, _ => true);
+            Atualizar(editor, database, chao, _ => true, _ => true);
         }
         catch (System.Exception erro)
         {
@@ -246,12 +246,18 @@ public static class CarportCommands
     /// escolhida vai para onde os vãos dela estão agora (MOVE, ROTATE, MIRROR
     /// do grupo do vão) e é refeita lá, assentada no terreno, com o carport de
     /// agora. As outras ficam como estão.
+    ///
+    /// O vão copiado (COPY: o vigia dá identidade nova ao contorno e aos
+    /// módulos, e o aço copiado fica com o id da fila original) vira fila nova
+    /// onde a cópia está; cópias lado a lado viram uma fila só.
     /// </summary>
-    private static void Atualizar(Editor editor, Database database, Func<double, double, double?> chao, Func<CarportRowRecord, bool> quais)
+    /// <param name="copias">Quais vãos copiados (pelo id de mesa) viram fila.</param>
+    private static void Atualizar(Editor editor, Database database, Func<double, double, double?> chao, Func<CarportRowRecord, bool> quais, Func<Guid, bool> copias)
     {
         var filas = Registradas(database);
         var carports = CarportsDoDesenho.Ler(database);
         var agora = OndeEstaoOsVaos(database, filas);
+        var copiadas = Copias(database, filas, carports, copias);
         var comPecas = FilasComPecas(database);
         var sumidas = 0;
         var novas = new List<CarportRowRecord>();
@@ -307,12 +313,88 @@ public static class CarportCommands
             feitas++;
         }
 
+        // As cópias: as peças delas saem (o aço copiado já saiu com a fila
+        // original) e cada grupo de vãos vira fila desenhada de novo.
+        var dasCopias = 0;
+        foreach (var grupo in copiadas.GroupBy(c => c.Fila.Carport))
+        {
+            if (DrawingCarports.Find(carports, grupo.Key) is not { } carport) continue;
+            foreach (var mesa in grupo.Select(c => c.Mesa)) ApagarMesa(database, mesa);
+            foreach (var registro in CarportFollow.Merge(grupo.Select(c => c.Fila).ToList()))
+            {
+                if (registro.Build(carport.Profile, chao, out var motivo) is not { } fila)
+                {
+                    editor.WriteMessage(Tr.F("\n  A cópia do carport \"{0}\" não virou fila: {1}.\n", registro.Carport, motivo));
+                    continue;
+                }
+
+                novas.Add(registro);
+                Relatar(editor, carport, fila, Desenhar(database, carport, registro.Id, fila, novas.Count));
+                dasCopias++;
+            }
+        }
+
         Gravar(database, novas);
+        if (dasCopias > 0)
+            editor.WriteMessage(Tr.F("\n  {0} fila(s) nova(s) de carport a partir dos vãos copiados.\n", dasCopias));
         if (sumidas > 0)
             editor.WriteMessage(Tr.F("\n  {0} fila(s) de carport apagada(s) do desenho saíram do registro (não foram refeitas).\n", sumidas));
         editor.WriteMessage(Tr.F("\nCarport: {0} de {1} fila(s) refeitas com o carport e o terreno de agora ({2} seguiram os vãos movidos); {3} fila(s) no desenho.\n",
             feitas, escolhidas - sumidas, movidas, novas.Count));
-        editor.WriteMessage(FormattableString.Invariant($"CLIVUS_CARPORT ATUALIZAR filas={novas.Count} movidas={movidas} sumidas={sumidas}\n"));
+        editor.WriteMessage(FormattableString.Invariant($"CLIVUS_CARPORT ATUALIZAR filas={novas.Count} movidas={movidas} sumidas={sumidas} copias={dasCopias}\n"));
+    }
+
+    /// <summary>
+    /// Os vãos copiados: contorno de mesa com o nome de um carport no perfil
+    /// que não é vão de fila registrada (a cópia com identidade nova), e o
+    /// contorno a mais de um vão registrado (a cópia que ficou com o id da
+    /// original). Cada um como fila de um vão onde ele está.
+    /// </summary>
+    private static List<(Guid Mesa, CarportRowRecord Fila)> Copias(
+        Database database, IReadOnlyList<CarportRowRecord> filas, IReadOnlyList<DrawingCarport> carports, Func<Guid, bool> quais)
+    {
+        var vaos = new Dictionary<Guid, CarportRowRecord>();
+        foreach (var f in filas)
+            for (var v = 0; v < f.Bays; v++) vaos[CarportReturn.IdDoVao(f.Id, v)] = f;
+
+        var copias = new List<(Guid, CarportRowRecord)>();
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        foreach (var (guid, mesa) in LayoutScan.Tables(transacao, database))
+        {
+            if (mesa.Identity is not { } identidade || !EVaoDeCarport(identidade, carports) || !quais(guid)) continue;
+
+            // Vão registrado: só os contornos a mais são cópia. Senão, todos.
+            var contornos = vaos.ContainsKey(guid) ? mesa.Contours.Skip(1) : mesa.Contours;
+            var carport = DrawingCarports.Find(carports, identidade.ProfileName!)!;
+            foreach (var contornoId in contornos)
+            {
+                if (transacao.GetObject(contornoId, OpenMode.ForRead) is not Polyline3d polilinha) continue;
+                var p = polilinha.Cast<ObjectId>().Take(3).Select(id => ((PolylineVertex3d)transacao.GetObject(id, OpenMode.ForRead)).Position).ToList();
+                if (p.Count < 3) continue;
+
+                var agora = new CarportBayNow(p[0].X, p[0].Y, p[1].X, p[1].Y, p[2].X, p[2].Y);
+                if (CarportFollow.FromBay(carport.Profile, carport.Name, agora, Guid.NewGuid()) is { } fila)
+                    copias.Add((vaos.ContainsKey(guid) ? Guid.Empty : guid, fila));
+            }
+        }
+
+        return copias;
+    }
+
+    /// <summary>Apaga as peças de uma mesa (contorno, módulos, faces, notas), pelo id dela.</summary>
+    private static void ApagarMesa(Database database, Guid mesa)
+    {
+        if (mesa == Guid.Empty) return;
+        using var transacao = database.TransactionManager.StartTransaction();
+        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
+        foreach (ObjectId id in espaco)
+        {
+            if (id.IsErased || transacao.GetObject(id, OpenMode.ForRead) is not Entity e || LayoutScan.TableOf(e) != mesa) continue;
+            e.UpgradeOpen();
+            e.Erase();
+        }
+
+        transacao.Commit();
     }
 
     /// <summary>As filas que ainda têm alguma peça de aço ou base no desenho (pelo id da fila no XData).</summary>
@@ -487,13 +569,14 @@ public static class CarportCommands
         var mapa = FilaDosVaos(database);
         double? Chao(double x, double y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null;
 
-        var semFila = vaos.Count(v => !mapa.ContainsKey(v));
-        if (semFila > 0)
-            editor.WriteMessage(Tr.F("\n  {0} vão(s) de carport sem fila (cópia de um vão) ficaram como estavam: para carport, use Usina ou Carport › Desenhar fila.\n", semFila));
-
-        // O vão que foi movido é refeito onde está, não onde estava.
+        // O vão que foi movido é refeito onde está, não onde estava; o vão
+        // copiado (sem fila) vira fila nova.
         var filas = vaos.Where(mapa.ContainsKey).Select(v => mapa[v].Id).ToHashSet();
-        if (filas.Count > 0) Atualizar(editor, database, Chao, r => filas.Contains(r.Id));
+        var copias = vaos.Where(v => !mapa.ContainsKey(v)).ToHashSet();
+        // Com cópia, todas as filas: o aço copiado tem o id da fila original e
+        // só sai quando ela é refeita.
+        if (filas.Count > 0 || copias.Count > 0)
+            Atualizar(editor, database, Chao, r => copias.Count > 0 || filas.Contains(r.Id), copias.Contains);
     }
 
     /// <summary>

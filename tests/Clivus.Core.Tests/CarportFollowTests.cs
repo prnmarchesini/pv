@@ -164,6 +164,52 @@ public class CarportFollowTests
 
     [Fact]
     [Trait("Etapa", "36")]
+    public void VaoCopiadoViraFilaOndeEsta()
+    {
+        // COPY de um vão, girado e espelhado: a fila nova desenha o vão em cima da cópia.
+        var fila = Fila(3);
+        var cantos = Cantos(fila);
+        var mover = Movimento(-25, 30, 40, espelhar: true);
+
+        var nova = CarportFollow.FromBay(P, "Carport", Agora(cantos[1], mover), Guid.NewGuid());
+
+        Assert.NotNull(nova);
+        Assert.Equal(1, nova!.Bays);
+        VaosOnde(nova, [cantos[1].Select(mover).ToArray()]);
+    }
+
+    [Fact]
+    [Trait("Etapa", "36")]
+    public void VaosCopiadosLadoALadoVoltamAUmaFila()
+    {
+        // COPY da fila inteira: cada vão vira fila de um vão, e as três se juntam numa.
+        var fila = Fila(3);
+        var cantos = Cantos(fila);
+        var mover = Movimento(10, 50, -20);
+        var uma = cantos.Select(c => CarportFollow.FromBay(P, "Carport", Agora(c, mover), Guid.NewGuid())!).Reverse().ToList();
+
+        var juntas = CarportFollow.Merge(uma);
+
+        var nova = Assert.Single(juntas);
+        Assert.Equal(3, nova.Bays);
+        VaosOnde(nova, cantos.Select(c => c.Select(mover).ToArray()));
+    }
+
+    [Fact]
+    [Trait("Etapa", "36")]
+    public void FilasSeparadasNaoSeJuntam()
+    {
+        var fila = Fila(3);
+        var cantos = Cantos(fila);
+        var a = CarportFollow.FromBay(P, "Carport", Agora(cantos[0], p => p), Guid.NewGuid())!;
+        var c = CarportFollow.FromBay(P, "Carport", Agora(cantos[2], p => p), Guid.NewGuid())!;
+        var outroCarport = CarportFollow.FromBay(P, "Outro", Agora(cantos[1], p => p), Guid.NewGuid())!;
+
+        Assert.Equal(3, CarportFollow.Merge([a, c, outroCarport]).Count);
+    }
+
+    [Fact]
+    [Trait("Etapa", "36")]
     public void SemVaoNenhumAFilaSai()
     {
         Assert.Empty(CarportFollow.Rows(Fila(), P, new Dictionary<int, CarportBayNow>(), Guid.NewGuid));

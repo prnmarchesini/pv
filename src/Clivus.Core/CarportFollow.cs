@@ -99,6 +99,64 @@ public static class CarportFollow
         };
     }
 
+    /// <summary>
+    /// A fila de um vão só que desenha o vão exatamente onde este contorno está
+    /// (28/10/2026, Renan: "eu copio o carport e depende como copio vai só a
+    /// parte de cima"): a cópia de um vão vira fila de carport com aço. Null se
+    /// o contorno não tem tamanho.
+    /// </summary>
+    public static CarportRowRecord? FromBay(CarportProfile perfil, string carport, CarportBayNow agora, Guid id)
+    {
+        ArgumentNullException.ThrowIfNull(perfil);
+        ArgumentNullException.ThrowIfNull(agora);
+
+        // Um vão de referência na origem, levado para onde o contorno está.
+        var referencia = new CarportRowRecord(id, carport, 0, 0, perfil.Array.BayWidth, 0, true, 1);
+        var novas = Rows(referencia, perfil, new Dictionary<int, CarportBayNow> { [0] = agora }, () => id);
+        return novas.Count == 1 ? novas[0] : null;
+    }
+
+    /// <summary>
+    /// Junta as filas que continuam uma a outra: mesmo carport, mesma direção,
+    /// mesmo lado de descida e a ponta de uma no começo da outra (a 1 cm). Os
+    /// vãos copiados lado a lado voltam a ser uma fila só. A fila que fica com
+    /// a junção guarda o id e a área da primeira.
+    /// </summary>
+    public static IReadOnlyList<CarportRowRecord> Merge(IReadOnlyList<CarportRowRecord> filas)
+    {
+        ArgumentNullException.ThrowIfNull(filas);
+        var lista = filas.ToList();
+        bool juntou;
+        do
+        {
+            juntou = false;
+            for (var i = 0; i < lista.Count && !juntou; i++)
+                for (var j = 0; j < lista.Count && !juntou; j++)
+                {
+                    if (i == j || !Continua(lista[i], lista[j])) continue;
+                    lista[i] = lista[i] with { ToX = lista[j].ToX, ToY = lista[j].ToY, Bays = lista[i].Bays + lista[j].Bays };
+                    lista.RemoveAt(j);
+                    juntou = true;
+                }
+        }
+        while (juntou);
+
+        return lista;
+    }
+
+    /// <summary>Se <paramref name="b"/> começa onde <paramref name="a"/> acaba, na mesma linha e do mesmo jeito.</summary>
+    private static bool Continua(CarportRowRecord a, CarportRowRecord b)
+    {
+        if (a.Carport != b.Carport || a.FallsRight != b.FallsRight) return false;
+        if (Math.Abs(a.ToX - b.FromX) > Tolerancia || Math.Abs(a.ToY - b.FromY) > Tolerancia) return false;
+
+        var (ax, ay) = (a.ToX - a.FromX, a.ToY - a.FromY);
+        var (bx, by) = (b.ToX - b.FromX, b.ToY - b.FromY);
+        var na = Math.Sqrt(ax * ax + ay * ay);
+        var nb = Math.Sqrt(bx * bx + by * by);
+        return na > 1e-9 && nb > 1e-9 && (ax * bx + ay * by) / (na * nb) > 1 - 1e-6;
+    }
+
     /// <summary>Um milímetro: o vértice que está onde a fila o desenha não andou.</summary>
     private const double Parado = 0.001;
 
