@@ -439,7 +439,10 @@ public static class CarportCommands
     {
         var carports = CarportsDoDesenho.Ler(database);
         var montadas = new List<(DrawingCarport, CarportRowResult, Guid)>();
-        foreach (var registro in Registradas(database))
+
+        // A fila apagada do desenho (ERASE) não vai ao 3D, à lista nem ao TermoVision.
+        var comPecas = FilasComPecas(database);
+        foreach (var registro in Registradas(database).Where(r => comPecas.Contains(r.Id)))
         {
             if (DrawingCarports.Find(carports, registro.Carport) is not { } carport) continue;
             if (registro.Build(carport.Profile, chao, out var motivo) is { } fila) montadas.Add((carport, fila, registro.Id));
