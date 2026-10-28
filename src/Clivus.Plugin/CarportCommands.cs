@@ -252,6 +252,8 @@ public static class CarportCommands
         var filas = Registradas(database);
         var carports = CarportsDoDesenho.Ler(database);
         var agora = OndeEstaoOsVaos(database, filas);
+        var comPecas = FilasComPecas(database);
+        var sumidas = 0;
         var novas = new List<CarportRowRecord>();
         var escolhidas = 0;
         var feitas = 0;
@@ -272,9 +274,17 @@ public static class CarportCommands
                 continue;
             }
 
-            // Fila sem nenhum vão como mesa (desenhada antes de 28/10/2026, ou
-            // com todos os contornos apagados à mão): refeita onde está. Quem
-            // tira a fila sem vão é o Regerar área e o Apagar tudo.
+            // Fila sem vão e sem peça nenhuma no desenho: foi apagada (ERASE,
+            // Regerar área). Sai do registro; refazê-la a trazia de volta
+            // (28/10/2026, Renan: "cliquei em atualizar, o trem me criou novas").
+            if (agora[registro.Id].Count == 0 && !comPecas.Contains(registro.Id))
+            {
+                sumidas++;
+                continue;
+            }
+
+            // Fila sem vão como mesa mas com o aço no desenho (desenhada antes
+            // de 28/10/2026, 12:31): refeita onde está.
             var seguidas = agora[registro.Id].Count == 0
                 ? [registro]
                 : CarportFollow.Rows(registro, carport.Profile, agora[registro.Id], Guid.NewGuid, chao);
@@ -298,9 +308,22 @@ public static class CarportCommands
         }
 
         Gravar(database, novas);
+        if (sumidas > 0)
+            editor.WriteMessage(Tr.F("\n  {0} fila(s) de carport apagada(s) do desenho saíram do registro (não foram refeitas).\n", sumidas));
         editor.WriteMessage(Tr.F("\nCarport: {0} de {1} fila(s) refeitas com o carport e o terreno de agora ({2} seguiram os vãos movidos); {3} fila(s) no desenho.\n",
-            feitas, escolhidas, movidas, novas.Count));
-        editor.WriteMessage(FormattableString.Invariant($"CLIVUS_CARPORT ATUALIZAR filas={novas.Count} movidas={movidas}\n"));
+            feitas, escolhidas - sumidas, movidas, novas.Count));
+        editor.WriteMessage(FormattableString.Invariant($"CLIVUS_CARPORT ATUALIZAR filas={novas.Count} movidas={movidas} sumidas={sumidas}\n"));
+    }
+
+    /// <summary>As filas que ainda têm alguma peça de aço ou base no desenho (pelo id da fila no XData).</summary>
+    private static HashSet<Guid> FilasComPecas(Database database)
+    {
+        var ids = new HashSet<Guid>();
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
+        foreach (ObjectId id in espaco)
+            if (!id.IsErased && transacao.GetObject(id, OpenMode.ForRead) is Entity e && IdDaFila(e) is { } fila) ids.Add(fila);
+        return ids;
     }
 
     /// <summary>

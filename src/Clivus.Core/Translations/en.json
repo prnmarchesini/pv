@@ -3293,6 +3293,7 @@
  "{0} face(s) da seleção não tem identidade de módulo e foi ignorada.": "{0} face(s) in the selection have no module identity and were ignored.",
  "{0} face(s) sem identidade de módulo foi ignorada.": "{0} face(s) without module identity were ignored.",
  "{0} ficou sem nome; nada foi feito.": "{0} was left without a name; nothing was done.",
+ "{0} fila(s) de carport apagada(s) do desenho saíram do registro (não foram refeitas).": "{0} carport row(s) erased from the drawing left the register (not rebuilt).",
  "{0} fila(s) de carport que esta área tinha foram trocadas.": "{0} carport row(s) this area had were replaced.",
  "{0} fileira(s), {1} mesa(s), {2} módulo(s), {3:0.#} kWp, {4} pilar(es); {5} mesa(s) marcada(s), {6} pilar(es) com problema, {7} posição(ões) descartada(s) por passar da área; {8:0.0} s": "{0} row(s), {1} table(s), {2} module(s), {3:0.#} kWp, {4} pile(s); {5} table(s) flagged, {6} pile(s) with problems, {7} position(s) discarded for going past the area; {8:0.0} s",
  "{0} fora da faixa ({1} a {2})": "{0} out of range ({1} to {2})",

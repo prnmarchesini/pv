@@ -3293,6 +3293,7 @@
  "{0} face(s) da seleção não tem identidade de módulo e foi ignorada.": "{0} cara(s) de la selección no tiene(n) identidad de módulo y fue(ron) ignorada(s).",
  "{0} face(s) sem identidade de módulo foi ignorada.": "{0} cara(s) sin identidad de módulo fue(ron) ignorada(s).",
  "{0} ficou sem nome; nada foi feito.": "{0} quedó sin nombre; no se hizo nada.",
+ "{0} fila(s) de carport apagada(s) do desenho saíram do registro (não foram refeitas).": "{0} fila(s) de carport borrada(s) del dibujo salieron del registro (no se rehicieron).",
  "{0} fila(s) de carport que esta área tinha foram trocadas.": "{0} fila(s) de carport que esta área tenía fueron reemplazadas.",
  "{0} fileira(s), {1} mesa(s), {2} módulo(s), {3:0.#} kWp, {4} pilar(es); {5} mesa(s) marcada(s), {6} pilar(es) com problema, {7} posição(ões) descartada(s) por passar da área; {8:0.0} s": "{0} fila(s), {1} mesa(s), {2} módulo(s), {3:0.#} kWp, {4} pilote(s); {5} mesa(s) marcada(s), {6} pilote(s) con problemas, {7} posición(es) descartada(s) por salir del área; {8:0.0} s",
  "{0} fora da faixa ({1} a {2})": "{0} fuera del rango ({1} a {2})",
