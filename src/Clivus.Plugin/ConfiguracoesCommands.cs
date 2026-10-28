@@ -75,7 +75,19 @@ public static class ConfiguracoesCommands
             return feito;
         }
 
-        janela = new JanelaDeConfiguracoes(mesas, parametros, aviso, estilos, EditarMesa, divergencias: Divergencias, atualizarPotencia: AtualizarPotencia);
+        // O carport (35.1): o segundo tipo de estrutura, com registro próprio.
+        var carports = CarportsDoDesenho.Ler(database, out var problemasDosCarports);
+        foreach (var problema in problemasDosCarports) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", problema));
+
+        CarportProfile? EditarCarport(CarportProfile perfil)
+        {
+            var modulos = mesas.Select(m => m.Profile.Layout.Module).Distinct().ToList();
+            var carport = new JanelaDeCarport(perfil, modulos) { Owner = janela };
+            return carport.ShowDialog() == true ? carport.Resultado : null;
+        }
+
+        janela = new JanelaDeConfiguracoes(mesas, parametros, aviso, estilos, EditarMesa, divergencias: Divergencias, atualizarPotencia: AtualizarPotencia,
+            carports: carports, editarCarport: EditarCarport);
 
         if (AcadApp.ShowModalWindow(janela) != true || janela.Salvo is not { } salvo)
         {
@@ -100,6 +112,8 @@ public static class ConfiguracoesCommands
 
         var antes = MesasDoDesenho.Ler(database);
         Gravar(Tr.N("as mesas do desenho"), () => MesasDoDesenho.Gravar(database, salvo.Mesas));
+        if (salvo.Carports.Count > 0 || carports.Count > 0)
+            Gravar(Tr.N("os carports do desenho"), () => CarportsDoDesenho.Gravar(database, salvo.Carports, salvo.Mesas));
 
         // A cor do tipo vale já nas mesas desenhadas (03/10/2026: "não tem
         // nenhuma mesa laranja ou verde").

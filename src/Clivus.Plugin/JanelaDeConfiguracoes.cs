@@ -21,6 +21,11 @@ internal sealed class JanelaDeConfiguracoes : Window
 {
     private readonly List<DrawingTable> _mesas;
     private readonly Func<TableProfile, TableProfile?> _editarMesa;
+
+    // O carport (35.1): o segundo tipo de estrutura, na mesma lista, depois
+    // das mesas. Fica fora da Escolha das estruturas, que é do motor da fixa.
+    private readonly List<DrawingCarport> _carports;
+    private readonly Func<CarportProfile, CarportProfile?>? _editarCarport;
     private readonly JanelaDeConfiguracao _parametros;
     private readonly PainelDeEstilos _estilos;
 
@@ -42,7 +47,7 @@ internal sealed class JanelaDeConfiguracoes : Window
     private bool _mesasMudaram;
 
     /// <summary>O que o usuário mandou salvar, ou null se fechou sem salvar.</summary>
-    internal (IReadOnlyList<DrawingTable> Mesas, ProjectSettings Parametros, ProjectStyles Estilos)? Salvo { get; private set; }
+    internal (IReadOnlyList<DrawingTable> Mesas, ProjectSettings Parametros, ProjectStyles Estilos, IReadOnlyList<DrawingCarport> Carports)? Salvo { get; private set; }
 
     /// <param name="mesas">As mesas do desenho.</param>
     /// <param name="parametros">A configuração gravada no desenho.</param>
@@ -52,6 +57,8 @@ internal sealed class JanelaDeConfiguracoes : Window
     /// <param name="abaInicial">A aba que abre na frente (0 a 3).</param>
     /// <param name="divergencias">As divergências do módulo (PAN, estrutura, mesas desenhadas) para a lista de mesas dada, ou null.</param>
     /// <param name="atualizarPotencia">"Atualizar a potência das mesas desenhadas" da estrutura dada (grava no desenho na hora), ou null.</param>
+    /// <param name="carports">Os carports do desenho (35.1), ou null.</param>
+    /// <param name="editarCarport">Abre a janela do carport com o perfil dado; o perfil confirmado, ou null. Sem ela, Nova estrutura é só a mesa.</param>
     internal JanelaDeConfiguracoes(
         IReadOnlyList<DrawingTable> mesas,
         ProjectSettings parametros,
@@ -60,10 +67,14 @@ internal sealed class JanelaDeConfiguracoes : Window
         Func<TableProfile, TableProfile?> editarMesa,
         int abaInicial = 0,
         Func<IReadOnlyList<DrawingTable>, IReadOnlyList<string>>? divergencias = null,
-        Func<List<DrawingTable>, DrawingTable, (int Mesas, double Watts, string Frase)>? atualizarPotencia = null)
+        Func<List<DrawingTable>, DrawingTable, (int Mesas, double Watts, string Frase)>? atualizarPotencia = null,
+        IReadOnlyList<DrawingCarport>? carports = null,
+        Func<CarportProfile, CarportProfile?>? editarCarport = null)
     {
         _mesas = [.. mesas];
         _editarMesa = editarMesa;
+        _carports = [.. carports ?? []];
+        _editarCarport = editarCarport;
         _divergencias = divergencias;
         _atualizarPotencia = atualizarPotencia;
 
@@ -132,7 +143,10 @@ internal sealed class JanelaDeConfiguracoes : Window
             return b;
         }
 
-        Botao(Tr.T("Nova mesa..."), Tr.T("Abre a janela de Mesa para cadastrar uma mesa neste desenho (pode partir de um perfil salvo)."), Nova);
+        if (_editarCarport is null)
+            Botao(Tr.T("Nova mesa..."), Tr.T("Abre a janela de Mesa para cadastrar uma mesa neste desenho (pode partir de um perfil salvo)."), Nova);
+        else
+            Botao(Tr.T("Nova estrutura..."), Tr.T("Pergunta o tipo: Fixa abre a janela de Mesa (pode partir de um perfil salvo); Carport abre a janela do carport."), NovaEstrutura);
         Botao(Tr.T("Editar..."), Tr.T("Abre a mesa escolhida na janela de Mesa: módulo, arranjo, tesoura, pilares, vãos P1-P2, enterro T3."), Editar);
         Botao(Tr.T("Duplicar"), Tr.T("Copia a mesa escolhida com outro nome (para fazer a de 14 a partir da de 28)."), Duplicar);
         Botao(Tr.T("Remover"), Tr.T("Tira a mesa escolhida deste desenho (as mesas já desenhadas continuam como estão)."), Remover);
@@ -287,11 +301,24 @@ internal sealed class JanelaDeConfiguracoes : Window
 
         if (_mesas.Count == 0)
         {
-            _lista.Items.Add(new ListBoxItem { Content = Tr.T("(nenhuma mesa neste desenho: use Nova mesa...)"), IsEnabled = false });
+            if (_carports.Count == 0)
+                _lista.Items.Add(new ListBoxItem { Content = _editarCarport is null ? Tr.T("(nenhuma mesa neste desenho: use Nova mesa...)") : Tr.T("(nenhuma estrutura neste desenho: use Nova estrutura...)"), IsEnabled = false });
             _escolha.Children.Add(new TextBlock { Text = Tr.T("Nenhuma mesa cadastrada neste desenho ainda."), Foreground = Brushes.Gray });
         }
 
-        if (escolhida >= 0 && escolhida < _mesas.Count) _lista.SelectedIndex = escolhida;
+        // Os carports depois das mesas: os índices das mesas na lista não mudam.
+        foreach (var carport in _carports)
+        {
+            _lista.Items.Add(new ListBoxItem
+            {
+                Content = "      " + Tr.F("{0} — carport, {1} × {2} módulos por vão de {3:0.###} m, {4:0.#}°, altura livre {5:0.###} m",
+                    carport.Name, carport.Profile.Array.ModulesDown, carport.Profile.Array.ModulesAcross, carport.Profile.Array.BayWidth,
+                    carport.Profile.TiltDegrees, carport.Profile.ClearHeight),
+                ToolTip = carport.Profile.Describe(),
+            });
+        }
+
+        if (escolhida >= 0 && escolhida < _mesas.Count + _carports.Count) _lista.SelectedIndex = escolhida;
 
         MostrarDivergencias();
     }
@@ -375,6 +402,61 @@ internal sealed class JanelaDeConfiguracoes : Window
     private DrawingTable? Selecionada() =>
         _lista.SelectedIndex >= 0 && _lista.SelectedIndex < _mesas.Count ? _mesas[_lista.SelectedIndex] : null;
 
+    /// <summary>O índice do carport escolhido na lista (os carports vêm depois das mesas), ou -1.</summary>
+    private int CarportEscolhido()
+    {
+        var i = _lista.SelectedIndex - _mesas.Count;
+        return _lista.SelectedIndex >= _mesas.Count && i >= 0 && i < _carports.Count ? i : -1;
+    }
+
+    /// <summary>Nova estrutura... (35.1): pergunta o tipo; Fixa é a Nova mesa de sempre.</summary>
+    private void NovaEstrutura()
+    {
+        var pergunta = new JanelaNovaEstrutura { Owner = this };
+        if (pergunta.ShowDialog() != true || pergunta.Escolhido is not { } tipo) return;
+
+        if (tipo == TipoDeEstrutura.Fixa)
+        {
+            Nova();
+            return;
+        }
+
+        var partida = _carports.Count > 0 ? _carports[^1].Profile : CarportProfile.Reference;
+        var perfil = _editarCarport!(partida with { Name = NomeLivre(partida.Name) });
+        if (perfil is null) return;
+
+        _carports.Add(new DrawingCarport(perfil with { Name = NomeLivre(perfil.Name) }, DrawingCarports.DefaultColor));
+        _mesasMudaram = true;
+        Atualizar();
+        _lista.SelectedIndex = _mesas.Count + _carports.Count - 1;
+        _recado.Text = Tr.T("Carport cadastrado. Para gravar no desenho, clique em \"Salvar no desenho\".");
+    }
+
+    /// <summary>Editar, Duplicar e Remover quando o escolhido é um carport. Devolve false se não é.</summary>
+    private bool NoCarport(Action<int> acao)
+    {
+        var i = CarportEscolhido();
+        if (i < 0) return false;
+        acao(i);
+        return true;
+    }
+
+    private void EditarCarport(int i)
+    {
+        if (_editarCarport is null) return;
+        var carport = _carports[i];
+        var perfil = _editarCarport(carport.Profile);
+        if (perfil is null) return;
+
+        var nome = perfil.Name.Trim();
+        var outro = _carports.Where((c, k) => k != i).Any(c => string.Equals(c.Name, nome, StringComparison.CurrentCultureIgnoreCase))
+            || DrawingTables.Find(_mesas, nome) is not null;
+        _carports[i] = carport with { Profile = perfil with { Name = outro ? NomeLivre(nome) : perfil.Name } };
+        _mesasMudaram = true;
+        Atualizar();
+        _recado.Text = Tr.F("Carport \"{0}\" atualizado. Para gravar no desenho, clique em \"Salvar no desenho\".", _carports[i].Name);
+    }
+
     private void Nova()
     {
         var partida = _mesas.Count > 0 ? _mesas[^1].Profile : MesaCommands.MesaDeExemplo();
@@ -389,6 +471,8 @@ internal sealed class JanelaDeConfiguracoes : Window
 
     private void Editar()
     {
+        if (NoCarport(EditarCarport)) return;
+
         if (Selecionada() is not { } mesa)
         {
             _recado.Text = Tr.T("Escolha uma mesa na lista.");
@@ -412,6 +496,15 @@ internal sealed class JanelaDeConfiguracoes : Window
 
     private void Duplicar()
     {
+        if (NoCarport(i =>
+            {
+                var c = _carports[i];
+                _carports.Add(c with { Profile = c.Profile with { Name = NomeLivre(c.Name + " " + Tr.T("(cópia)")) } });
+                _mesasMudaram = true;
+                Atualizar();
+            }))
+            return;
+
         if (Selecionada() is not { } mesa)
         {
             _recado.Text = Tr.T("Escolha uma mesa na lista.");
@@ -425,6 +518,14 @@ internal sealed class JanelaDeConfiguracoes : Window
 
     private void Remover()
     {
+        if (NoCarport(i =>
+            {
+                _carports.RemoveAt(i);
+                _mesasMudaram = true;
+                Atualizar();
+            }))
+            return;
+
         if (Selecionada() is not { } mesa)
         {
             _recado.Text = Tr.T("Escolha uma mesa na lista.");
@@ -439,12 +540,14 @@ internal sealed class JanelaDeConfiguracoes : Window
     private string NomeLivre(string desejado)
     {
         var nome = string.IsNullOrWhiteSpace(desejado) ? Tr.T("Mesa") : desejado.Trim();
-        if (DrawingTables.Find(_mesas, nome) is null) return nome;
+        // Mesas e carports dividem a lista: o nome não se repete entre os dois.
+        bool Usado(string n) => DrawingTables.Find(_mesas, n) is not null || DrawingCarports.Find(_carports, n) is not null;
+        if (!Usado(nome)) return nome;
 
         for (var n = 2; ; n++)
         {
             var candidato = $"{nome} {n}";
-            if (DrawingTables.Find(_mesas, candidato) is null) return candidato;
+            if (!Usado(candidato)) return candidato;
         }
     }
 
@@ -455,6 +558,12 @@ internal sealed class JanelaDeConfiguracoes : Window
             if (DrawingTables.WhyInvalid(_mesas) is { } motivoDasMesas)
             {
                 _recado.Text = Tr.F("Estruturas: {0}.", motivoDasMesas);
+                return;
+            }
+
+            if (DrawingCarports.WhyInvalid(_carports, _mesas) is { } motivoDosCarports)
+            {
+                _recado.Text = Tr.F("Estruturas: {0}.", motivoDosCarports);
                 return;
             }
 
@@ -474,7 +583,7 @@ internal sealed class JanelaDeConfiguracoes : Window
                 return;
             }
 
-            Salvo = (_mesas, parametros, _estilos.Ler());
+            Salvo = (_mesas, parametros, _estilos.Ler(), _carports);
             DialogResult = true;
         });
     }
