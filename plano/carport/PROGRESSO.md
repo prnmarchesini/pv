@@ -13,7 +13,7 @@ mais um tipo em Configurações › Nova estrutura, e nada da fixa muda.**
 - 34.1 Perfil do carport: VALIDADO (automático) — `CarportProfile`
 - 34.2 Geometria de um pórtico e de um vão: VALIDADO (automático) — `CarportGeometry`, teste de ouro contra o `.glb`
 - 34.3 A fila: VALIDADO (automático) — `CarportRow`
-- 34.4 Lista de material: PENDENTE
+- 34.4 Lista de material: VALIDADO (automático) — `CarportBill`, Excel em três abas
 
 ## Etapa 35: no Civil 3D
 
@@ -64,3 +64,11 @@ mais um tipo em Configurações › Nova estrutura, e nada da fixa muda.**
     exata); com número, o segundo clique só dá o sentido.
   - Desnível entre pórticos vizinhos acima de 5 % vira aviso, não recusa.
   - Teto de 200 vãos por fila, contra clique errado.
+- 34.4 (28/10/2026), o que assumi:
+  - A lista sai das mesmas peças do desenho; barras agrupadas pelo comprimento de
+    corte arredondado ao centímetro; terça cortada a cada vão (emenda no pórtico).
+  - Grampos: em cada linha de terça, um intermediário entre módulos vizinhos e um de
+    ponta em cada ponta da fila. Parafusos e ligações não entram (dependem do
+    fornecedor); o Excel diz isso numa nota.
+  - Excel com três abas: resumo, peças (comprimento × quantidade) e um pilar por
+    linha com a cota do chão, para a obra.
