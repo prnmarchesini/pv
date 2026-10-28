@@ -72,3 +72,11 @@ Tudo que elas apontaram de grave foi corrigido. Ficaram anotados:
   desenho fica em UTM puro). Só a localização do Clivus é gravada.
 - **Um envio por desenho.** Outra área pede um desenho novo, e o mesmo envio
   não abre duas vezes.
+- 28/10/2026: a área aberta chegava sem curvas de nível. O terreno estava lá (TIN
+  com 10.824 pontos da grade de 1 m, 564,90 a 568,64 m); faltava estilo: a TIN
+  nascia com o estilo padrão do desenho, que fora do modelo do Civil mostra só a
+  borda. Agora o Abrir dá à TIN o estilo "CLIVUS Curvas {secundária} e {mestra} m"
+  (borda, mestra e secundária; intervalo pelo desnível, `ContourIntervals`: no
+  máximo 20 curvas; a Área 2 sai com 0,2 m e 1 m). Não foi preciso pedir curvas
+  nem pontos novos ao TermoVision: a grade do pacote já é o DEM. Conferido no
+  Core Console com o pacote do acervo ("CLIVUS_TV CURVAS secundaria=0.2 mestra=1").

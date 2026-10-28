@@ -50,6 +50,34 @@ internal sealed class JanelaDeConfiguracao : Window
 
     // ---- sistema
     private readonly TextBox _azimute = Campo();
+
+    // O azimute pela linha de apoio (28/10/2026): o botão só aparece quando
+    // quem abriu a janela sabe pedir a linha no desenho.
+    private readonly Button _azimutePelaLinha = new()
+    {
+        Content = Tr.T("Pela linha no desenho..."),
+        Height = 24,
+        Padding = new Thickness(8, 0, 8, 0),
+        Margin = new Thickness(0, 0, 8, 6),
+        Visibility = Visibility.Collapsed,
+        ToolTip = Tr.T("Esconde a janela e pede dois pontos no desenho: a linha de apoio, na direção das fileiras. A mesa olha para a perpendicular do lado do azimute atual. A linha não fica no desenho."),
+    };
+    private readonly TextBlock _azimuteEmPalavras = new() { Foreground = Brushes.Gray, FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 6) };
+    private Func<Window, double, double?>? _pegarAzimute;
+
+    /// <summary>
+    /// Pede a linha de apoio no desenho com a janela dada escondida e devolve o
+    /// azimute em graus (recebe o atual, em graus), ou null se a pessoa desistiu.
+    /// </summary>
+    internal Func<Window, double, double?>? PegarAzimute
+    {
+        get => _pegarAzimute;
+        set
+        {
+            _pegarAzimute = value;
+            _azimutePelaLinha.Visibility = value is null ? Visibility.Collapsed : Visibility.Visible;
+        }
+    }
     private readonly TextBox _pitch = Campo();
     private readonly TextBox _pontaBaixaMin = Campo();
     private readonly TextBox _pontaBaixaMax = Campo();
@@ -162,6 +190,24 @@ internal sealed class JanelaDeConfiguracao : Window
 
     private static TextBox Campo() => new() { Margin = new Thickness(0, 2, 0, 6), Height = 24 };
 
+    private void PegarAzimutePelaLinha()
+    {
+        try
+        {
+            if (_pegarAzimute is null) return;
+            var atual = NumberInput.TryParseMeasure(_azimute.Text, out var graus) ? graus : 0;
+            var dono = Window.GetWindow(_azimute) ?? this;
+            if (_pegarAzimute(dono, atual) is { } novo)
+                _azimute.Text = novo.ToString("0.###", Tr.Culture);
+        }
+        catch (Exception erro)
+        {
+            // Manipulador de clique do WPF: exceção solta aqui fecha o Civil 3D.
+            RegistroDeDiagnostico.Registrar("Falha ao pegar o azimute pela linha.", erro);
+            MessageBox.Show(Tr.F("Não consegui pegar o azimute: {0}", erro.Message), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     private UIElement Montar()
     {
         var grade = new Grid { Margin = new Thickness(12) };
@@ -273,6 +319,14 @@ internal sealed class JanelaDeConfiguracao : Window
         {
             pilha.Children.Add(Secao(Tr.T("Orientação")));
             Linha(Tr.T("Azimute para onde a mesa olha (graus, 0 = norte)"), _azimute);
+
+            var linhaDoAzimute = new StackPanel { Orientation = Orientation.Horizontal };
+            linhaDoAzimute.Children.Add(_azimutePelaLinha);
+            linhaDoAzimute.Children.Add(_azimuteEmPalavras);
+            pilha.Children.Add(linhaDoAzimute);
+            _azimutePelaLinha.Click += (_, _) => PegarAzimutePelaLinha();
+            _azimute.TextChanged += (_, _) => _azimuteEmPalavras.Text =
+                NumberInput.TryParseMeasure(_azimute.Text, out var graus) ? FacingFromLine.Describe(graus) : string.Empty;
         }
 
         pilha.Children.Add(Secao(_soAnalises ? Tr.T("Degrau entre mesas vizinhas") : Tr.T("Mesas")));

@@ -2,8 +2,12 @@ using System.Globalization;
 
 namespace Clivus.Core;
 
-/// <summary>Um carport cadastrado no desenho: o perfil e a cor com que ele aparece.</summary>
-public sealed record DrawingCarport(CarportProfile Profile, RgbColor Color)
+/// <summary>
+/// Um carport cadastrado no desenho: o perfil, a cor com que ele aparece e se
+/// está marcado na Escolha das estruturas (o marcado é o que o comando de
+/// desenhar carport oferece primeiro; o motor das mesas não usa carport).
+/// </summary>
+public sealed record DrawingCarport(CarportProfile Profile, RgbColor Color, bool Use = true)
 {
     /// <summary>O nome do carport (o do perfil, aparado).</summary>
     public string Name => Profile.Name.Trim();
@@ -13,15 +17,17 @@ public sealed record DrawingCarport(CarportProfile Profile, RgbColor Color)
 /// Os carports cadastrados NO DESENHO (35.1, <c>plano/carport</c>): a mesma
 /// ideia das mesas (<see cref="DrawingTables"/>), num registro próprio
 /// (<see cref="StorageKey"/>), para não mexer no das mesas (regra 4 do plano:
-/// nada da fixa muda). Versão, quantos, e por carport a cor e o perfil em
-/// JSON partido em pedaços.
+/// nada da fixa muda). Versão, quantos, e por carport a cor, o "usar" e o
+/// perfil em JSON partido em pedaços. A versão 1 (28/10/2026, sem o "usar")
+/// ainda é lida, com todos marcados.
 /// </summary>
 public static class DrawingCarports
 {
     /// <summary>A chave do registro no dicionário do desenho.</summary>
     public const string StorageKey = "CARPORTS";
 
-    private const string Versao = "1";
+    private const string Versao = "2";
+    private const string VersaoSemUsar = "1";
 
     /// <summary>Tamanho de cada pedaço do JSON (o mesmo das mesas).</summary>
     private const int Pedaco = 200;
@@ -43,6 +49,7 @@ public static class DrawingCarports
                 .ToList();
 
             campos.Add(c.Color.ToHex());
+            campos.Add(c.Use ? "1" : "0");
             campos.Add(pedacos.Count.ToString(CultureInfo.InvariantCulture));
             campos.AddRange(pedacos);
         }
@@ -62,30 +69,33 @@ public static class DrawingCarports
 
         if (campos is null || campos.Count == 0) return lista;
 
-        if (campos[0] != Versao || campos.Count < 2 || !int.TryParse(campos[1], NumberStyles.None, CultureInfo.InvariantCulture, out var quantos))
+        var comUsar = campos[0] == Versao;
+        if ((!comUsar && campos[0] != VersaoSemUsar) || campos.Count < 2 || !int.TryParse(campos[1], NumberStyles.None, CultureInfo.InvariantCulture, out var quantos))
         {
             erros.Add(Tr.T("o registro dos carports do desenho é de outra versão ou está quebrado"));
             return lista;
         }
 
         var i = 2;
+        var cabeca = comUsar ? 3 : 2;      // cor, [usar,] pedaços
         for (var n = 0; n < quantos; n++)
         {
-            if (i + 2 > campos.Count
+            if (i + cabeca > campos.Count
                 || !RgbColor.TryParseHex(campos[i], out var cor)
-                || !int.TryParse(campos[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var pedacos)
-                || i + 2 + pedacos > campos.Count)
+                || !int.TryParse(campos[i + cabeca - 1], NumberStyles.None, CultureInfo.InvariantCulture, out var pedacos)
+                || i + cabeca + pedacos > campos.Count)
             {
                 erros.Add(Tr.F("o carport {0} do registro está quebrado; os seguintes não puderam ser lidos", n + 1));
                 return lista;
             }
 
-            var json = string.Concat(campos.Skip(i + 2).Take(pedacos));
-            i += 2 + pedacos;
+            var usar = !comUsar || campos[i + 1] == "1";
+            var json = string.Concat(campos.Skip(i + cabeca).Take(pedacos));
+            i += cabeca + pedacos;
 
             try
             {
-                lista.Add(new DrawingCarport(CarportProfile.Parse(json), cor));
+                lista.Add(new DrawingCarport(CarportProfile.Parse(json), cor, usar));
             }
             catch (InvalidOperationException erro)
             {

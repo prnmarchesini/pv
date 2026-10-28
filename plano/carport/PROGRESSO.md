@@ -112,3 +112,16 @@ mais um tipo em Configurações › Nova estrutura, e nada da fixa muda.**
    "Salvar no desenho", fechar e abrir de novo as Configurações: o carport continua lá.
 5. Editar, Duplicar e Remover com o carport escolhido.
 6. A aba "Escolha das estruturas" e o resto das mesas continuam iguais.
+- Primeira tela do Renan (28/10/2026), três pedidos atendidos no mesmo dia:
+  - "não consigo subir na lista" (carport escolhido): Subir e Descer agora movem
+    o carport entre os carports (eles ficam depois das mesas; a prioridade das
+    mesas é do motor).
+  - "não aparece a opção do carport na escolha das estruturas": os carports
+    entram na aba, com setas, marcar e cor. Renan escolheu (pergunta de 28/10):
+    o marcado é o que o desenho do carport usa; o motor das mesas continua só
+    com mesas. Registro `CARPORTS` passou à versão 2 (com o "usar"); a versão 1,
+    que o Renan já tinha gravado, ainda é lida com todos marcados.
+  - Azimute por linha de apoio (Parâmetros › "Pela linha no desenho..."): esconde
+    a janela, pede dois pontos com elástico, nada fica no desenho; a mesa olha para
+    a perpendicular mais perto do azimute atual (linha subindo 20° → 340°, "20°
+    para oeste do norte"). `FacingFromLine` no Core, com testes.

@@ -16,7 +16,7 @@ public class DrawingCarportsTests
     [Trait("Etapa", "35")]
     public void OsCarportsVoltamIguais()
     {
-        IReadOnlyList<DrawingCarport> lista = [Carport("Estacionamento A"), Carport("Estacionamento B") with { Color = new RgbColor(1, 2, 3) }];
+        IReadOnlyList<DrawingCarport> lista = [Carport("Estacionamento A"), Carport("Estacionamento B") with { Color = new RgbColor(1, 2, 3), Use = false }];
 
         var voltou = DrawingCarports.Decode(DrawingCarports.Encode(lista), out var problemas);
 
@@ -53,8 +53,8 @@ public class DrawingCarportsTests
     public void CarportIlegivelFicaDeForaEOsOutrosEntram()
     {
         var campos = DrawingCarports.Encode([Carport("A"), Carport("B")]).ToList();
-        // Estraga o JSON do primeiro: o primeiro pedaço dele passa a não ser JSON.
-        campos[4] = "x" + campos[4];
+        // Estraga o JSON do primeiro: o primeiro pedaço dele (versão, quantos, cor, usar, pedaços) passa a não ser JSON.
+        campos[5] = "x" + campos[5];
 
         var voltou = DrawingCarports.Decode(campos, out var problemas);
 
@@ -80,5 +80,22 @@ public class DrawingCarportsTests
         // Regra 4 do plano: as mesas continuam com a chave e o formato delas.
         Assert.Equal("MESAS", DrawingTables.StorageKey);
         Assert.NotEqual(DrawingTables.StorageKey, DrawingCarports.StorageKey);
+    }
+
+    [Fact]
+    [Trait("Etapa", "35")]
+    public void ORegistroDaVersaoUmAindaELidoComTodosMarcados()
+    {
+        // O formato instalado em 28/10/2026, antes do "usar": versão, quantos, e por carport cor, pedaços, JSON.
+        var json = CarportProfile.Reference.ToJson();
+        var pedacos = Enumerable.Range(0, (json.Length + 199) / 200).Select(i => json.Substring(i * 200, Math.Min(200, json.Length - i * 200))).ToList();
+        List<string> antigo = ["1", "1", "#96A0AA", pedacos.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), .. pedacos];
+
+        var lido = DrawingCarports.Decode(antigo, out var problemas);
+
+        Assert.Empty(problemas);
+        Assert.Single(lido);
+        Assert.True(lido[0].Use);
+        Assert.Equal(CarportProfile.Reference, lido[0].Profile);
     }
 }

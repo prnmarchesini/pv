@@ -58,6 +58,7 @@ internal sealed class JanelaDeConfiguracoes : Window
     /// <param name="divergencias">As divergências do módulo (PAN, estrutura, mesas desenhadas) para a lista de mesas dada, ou null.</param>
     /// <param name="atualizarPotencia">"Atualizar a potência das mesas desenhadas" da estrutura dada (grava no desenho na hora), ou null.</param>
     /// <param name="carports">Os carports do desenho (35.1), ou null.</param>
+    /// <param name="pegarAzimute">Pede a linha de apoio do azimute no desenho (28/10/2026), ou null.</param>
     /// <param name="editarCarport">Abre a janela do carport com o perfil dado; o perfil confirmado, ou null. Sem ela, Nova estrutura é só a mesa.</param>
     internal JanelaDeConfiguracoes(
         IReadOnlyList<DrawingTable> mesas,
@@ -69,7 +70,8 @@ internal sealed class JanelaDeConfiguracoes : Window
         Func<IReadOnlyList<DrawingTable>, IReadOnlyList<string>>? divergencias = null,
         Func<List<DrawingTable>, DrawingTable, (int Mesas, double Watts, string Frase)>? atualizarPotencia = null,
         IReadOnlyList<DrawingCarport>? carports = null,
-        Func<CarportProfile, CarportProfile?>? editarCarport = null)
+        Func<CarportProfile, CarportProfile?>? editarCarport = null,
+        Func<Window, double, double?>? pegarAzimute = null)
     {
         _mesas = [.. mesas];
         _editarMesa = editarMesa;
@@ -86,7 +88,7 @@ internal sealed class JanelaDeConfiguracoes : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        _parametros = new JanelaDeConfiguracao(parametros, aviso, soAnalises: false, embutida: true);
+        _parametros = new JanelaDeConfiguracao(parametros, aviso, soAnalises: false, embutida: true) { PegarAzimute = pegarAzimute };
         _estilos = new PainelDeEstilos(estilos.Textos, estilos.Cotas, estilos.Chamadas, estilos.Atuais);
 
         var abas = new TabControl { Margin = new Thickness(10, 10, 10, 0) };
@@ -150,8 +152,8 @@ internal sealed class JanelaDeConfiguracoes : Window
         Botao(Tr.T("Editar..."), Tr.T("Abre a mesa escolhida na janela de Mesa: módulo, arranjo, tesoura, pilares, vãos P1-P2, enterro T3."), Editar);
         Botao(Tr.T("Duplicar"), Tr.T("Copia a mesa escolhida com outro nome (para fazer a de 14 a partir da de 28)."), Duplicar);
         Botao(Tr.T("Remover"), Tr.T("Tira a mesa escolhida deste desenho (as mesas já desenhadas continuam como estão)."), Remover);
-        Botao(Tr.T("▲ Subir"), Tr.T("Sobe a mesa escolhida na lista: mais prioridade para o motor."), () => Mover(_lista.SelectedIndex, -1));
-        Botao(Tr.T("▼ Descer"), Tr.T("Desce a mesa escolhida na lista: menos prioridade para o motor."), () => Mover(_lista.SelectedIndex, +1));
+        Botao(Tr.T("▲ Subir"), Tr.T("Sobe a mesa escolhida na lista: mais prioridade para o motor. O carport sobe entre os carports."), () => Mover(_lista.SelectedIndex, -1));
+        Botao(Tr.T("▼ Descer"), Tr.T("Desce a mesa escolhida na lista: menos prioridade para o motor. O carport desce entre os carports."), () => Mover(_lista.SelectedIndex, +1));
 
         if (_atualizarPotencia is not null)
         {
@@ -215,6 +217,21 @@ internal sealed class JanelaDeConfiguracoes : Window
     private void Mover(int indice, int passo)
     {
         var destino = indice + passo;
+
+        // O carport sobe e desce entre os carports (eles vêm depois das mesas;
+        // a prioridade das mesas é do motor, que não usa carport).
+        var carport = indice - _mesas.Count;
+        if (indice >= _mesas.Count && carport < _carports.Count)
+        {
+            var outro = carport + passo;
+            if (outro < 0 || outro >= _carports.Count) return;
+
+            (_carports[carport], _carports[outro]) = (_carports[outro], _carports[carport]);
+            _mesasMudaram = true;
+            Atualizar();
+            _lista.SelectedIndex = _mesas.Count + outro;
+            return;
+        }
 
         if (indice < 0 || indice >= _mesas.Count)
         {
@@ -307,6 +324,54 @@ internal sealed class JanelaDeConfiguracoes : Window
         }
 
         // Os carports depois das mesas: os índices das mesas na lista não mudam.
+        if (_carports.Count > 0)
+        {
+            _escolha.Children.Add(new TextBlock
+            {
+                Text = Tr.T("Carports: o marcado é o que o desenho do carport usa. O motor das mesas não usa carport."),
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 14, 0, 4),
+            });
+        }
+
+        for (var k = 0; k < _carports.Count; k++)
+        {
+            var indiceDoCarport = k;
+            var c = _carports[k];
+            var linhaDoCarport = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 3) };
+
+            Button SetaDoCarport(string texto, int passo, string dica)
+            {
+                var b = new Button { Content = texto, Width = 26, Height = 24, Margin = new Thickness(0, 0, 4, 0), ToolTip = dica };
+                b.Click += (_, _) => Tentar(() => Mover(_mesas.Count + indiceDoCarport, passo));
+                return b;
+            }
+
+            var usarCarport = new CheckBox { IsChecked = c.Use, VerticalAlignment = VerticalAlignment.Center, Width = 26, ToolTip = Tr.T("Marcado, o carport é oferecido no desenho do carport.") };
+            usarCarport.Checked += (_, _) => { _carports[indiceDoCarport] = _carports[indiceDoCarport] with { Use = true }; _mesasMudaram = true; };
+            usarCarport.Unchecked += (_, _) => { _carports[indiceDoCarport] = _carports[indiceDoCarport] with { Use = false }; _mesasMudaram = true; };
+
+            var corDoCarport = PaletaDeCores.Caixa(c.Color, Tr.T("A cor do carport no desenho, para saber qual é qual."));
+            corDoCarport.Width = 140;
+            corDoCarport.SelectionChanged += (_, _) =>
+            {
+                _carports[indiceDoCarport] = _carports[indiceDoCarport] with { Color = PaletaDeCores.Cor(corDoCarport) };
+                _mesasMudaram = true;
+            };
+
+            linhaDoCarport.Children.Add(SetaDoCarport("▲", -1, Tr.T("Sobe o carport entre os carports.")));
+            linhaDoCarport.Children.Add(SetaDoCarport("▼", +1, Tr.T("Desce o carport entre os carports.")));
+            linhaDoCarport.Children.Add(new TextBlock { Width = 30 });
+            linhaDoCarport.Children.Add(usarCarport);
+            linhaDoCarport.Children.Add(corDoCarport);
+            linhaDoCarport.Children.Add(new TextBlock
+            {
+                Text = Tr.F("  {0} — carport, {1} módulos por vão, {2}", c.Name, c.Profile.Array.ModulesDown * c.Profile.Array.ModulesAcross, c.Profile.Array.Module.DisplayName),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            _escolha.Children.Add(linhaDoCarport);
+        }
+
         foreach (var carport in _carports)
         {
             _lista.Items.Add(new ListBoxItem

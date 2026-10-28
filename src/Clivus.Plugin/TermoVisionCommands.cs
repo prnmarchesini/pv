@@ -506,6 +506,16 @@ public static class TermoVisionCommands
         superficie.AddVertices(pontos);
         superficie.Rebuild();
 
+        // As curvas de nível (28/10/2026): sem estilo, a TIN aparecia só com a borda.
+        var cotas = pacote.Terrain.Nodes().Select(p => p.Z).ToList();
+        if (cotas.Count > 0)
+        {
+            var (secundaria, mestra) = ContourIntervals.For(cotas.Max() - cotas.Min());
+            superficie.StyleId = EstiloDeCurvas.Garantir(database, transacao, secundaria, mestra);
+            AcadApp.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(FormattableString.Invariant(
+                $"\nCLIVUS_TV CURVAS secundaria={secundaria} mestra={mestra} estilo={superficie.StyleName}\n"));
+        }
+
         transacao.Commit();
         return id;
     }

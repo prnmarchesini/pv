@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using Autodesk.AutoCAD.ApplicationServices;
+using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using Clivus.Core;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
@@ -86,8 +87,31 @@ public static class ConfiguracoesCommands
             return carport.ShowDialog() == true ? carport.Resultado : null;
         }
 
+        // O azimute pela linha de apoio (28/10/2026): dois pontos com a janela
+        // escondida; só o elástico aparece, nada fica no desenho.
+        double? PegarAzimute(System.Windows.Window dono, double atualGraus)
+        {
+            using var interacao = editor.StartUserInteraction(dono);
+
+            var primeiro = editor.GetPoint(new PromptPointOptions(Tr.T("\nLinha de apoio do azimute, primeiro ponto (na direção das fileiras): ")));
+            if (primeiro.Status != PromptStatus.OK) return null;
+
+            var segundo = editor.GetPoint(new PromptPointOptions(Tr.T("\nSegundo ponto: ")) { UseBasePoint = true, BasePoint = primeiro.Value, UseDashedLine = true });
+            if (segundo.Status != PromptStatus.OK) return null;
+
+            var ucs = editor.CurrentUserCoordinateSystem;
+            var a = primeiro.Value.TransformBy(ucs);
+            var b = segundo.Value.TransformBy(ucs);
+            var az = FacingFromLine.Azimuth(a.X, a.Y, b.X, b.Y, atualGraus * Math.PI / 180);
+            if (az is null) return null;
+
+            var graus = az.Value * 180 / Math.PI;
+            editor.WriteMessage(Tr.F("\nAzimute pela linha: {0:0.###}° ({1}).\n", graus, FacingFromLine.Describe(graus)));
+            return graus;
+        }
+
         janela = new JanelaDeConfiguracoes(mesas, parametros, aviso, estilos, EditarMesa, divergencias: Divergencias, atualizarPotencia: AtualizarPotencia,
-            carports: carports, editarCarport: EditarCarport);
+            carports: carports, editarCarport: EditarCarport, pegarAzimute: PegarAzimute);
 
         if (AcadApp.ShowModalWindow(janela) != true || janela.Salvo is not { } salvo)
         {
