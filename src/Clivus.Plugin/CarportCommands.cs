@@ -231,36 +231,100 @@ public static class CarportCommands
                 return;
             }
 
-            var carports = CarportsDoDesenho.Ler(database);
-            var feitas = 0;
-            for (var numero = 1; numero <= filas.Count; numero++)
-            {
-                var registro = filas[numero - 1];
-                if (DrawingCarports.Find(carports, registro.Carport) is not { } carport)
-                {
-                    editor.WriteMessage(Tr.F("\n  A fila do carport \"{0}\" ficou como estava: o carport não está mais cadastrado.\n", registro.Carport));
-                    continue;
-                }
-
-                var fila = registro.Build(carport.Profile, chao, out var motivo);
-                if (fila is null)
-                {
-                    editor.WriteMessage(Tr.F("\n  A fila do carport \"{0}\" ficou como estava: {1}.\n", registro.Carport, motivo));
-                    continue;
-                }
-
-                Apagar(database, registro.Id);
-                Relatar(editor, carport, fila, Desenhar(database, carport, registro.Id, fila, numero));
-                feitas++;
-            }
-
-            editor.WriteMessage(Tr.F("\nCarport: {0} de {1} fila(s) refeitas com o carport e o terreno de agora.\n", feitas, filas.Count));
+            Atualizar(editor, database, chao, _ => true);
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao regerar o carport.", erro);
             editor.WriteMessage(Tr.F("\nNão consegui regerar o carport: {0}\n", erro.Message));
         }
+    }
+
+    /// <summary>
+    /// Atualizar estruturas (28/10/2026, Renan: "eu movi com o move, e aí
+    /// preciso de uma ferramenta do tipo Atualizar estruturas"): cada fila
+    /// escolhida vai para onde os vãos dela estão agora (MOVE, ROTATE, MIRROR
+    /// do grupo do vão) e é refeita lá, assentada no terreno, com o carport de
+    /// agora. As outras ficam como estão.
+    /// </summary>
+    private static void Atualizar(Editor editor, Database database, Func<double, double, double?> chao, Func<CarportRowRecord, bool> quais)
+    {
+        var filas = Registradas(database);
+        var carports = CarportsDoDesenho.Ler(database);
+        var agora = OndeEstaoOsVaos(database, filas);
+        var novas = new List<CarportRowRecord>();
+        var escolhidas = 0;
+        var feitas = 0;
+        var movidas = 0;
+        foreach (var registro in filas)
+        {
+            if (!quais(registro))
+            {
+                novas.Add(registro);
+                continue;
+            }
+
+            escolhidas++;
+            if (DrawingCarports.Find(carports, registro.Carport) is not { } carport)
+            {
+                editor.WriteMessage(Tr.F("\n  A fila do carport \"{0}\" ficou como estava: o carport não está mais cadastrado.\n", registro.Carport));
+                novas.Add(registro);
+                continue;
+            }
+
+            // Fila sem nenhum vão como mesa (desenhada antes de 28/10/2026, ou
+            // com todos os contornos apagados à mão): refeita onde está. Quem
+            // tira a fila sem vão é o Regerar área e o Apagar tudo.
+            var seguidas = agora[registro.Id].Count == 0
+                ? [registro]
+                : CarportFollow.Rows(registro, carport.Profile, agora[registro.Id], Guid.NewGuid, chao);
+            var montadas = seguidas.Select(s => (Registro: s, Fila: s.Build(carport.Profile, chao, out var motivo), Motivo: motivo)).ToList();
+            if (montadas.FirstOrDefault(m => m.Fila is null) is { Registro: not null } falha)
+            {
+                editor.WriteMessage(Tr.F("\n  A fila do carport \"{0}\" ficou como estava: {1}.\n", registro.Carport, falha.Motivo));
+                novas.Add(registro);
+                continue;
+            }
+
+            if (seguidas.Count != 1 || seguidas[0] != registro) movidas++;
+            Apagar(database, registro.Id);
+            foreach (var (s, fila, _) in montadas)
+            {
+                novas.Add(s);
+                Relatar(editor, carport, fila!, Desenhar(database, carport, s.Id, fila!, novas.Count));
+            }
+
+            feitas++;
+        }
+
+        Gravar(database, novas);
+        editor.WriteMessage(Tr.F("\nCarport: {0} de {1} fila(s) refeitas com o carport e o terreno de agora ({2} seguiram os vãos movidos); {3} fila(s) no desenho.\n",
+            feitas, escolhidas, movidas, novas.Count));
+        editor.WriteMessage(FormattableString.Invariant($"CLIVUS_CARPORT ATUALIZAR filas={novas.Count} movidas={movidas}\n"));
+    }
+
+    /// <summary>
+    /// Onde cada vão de cada fila está agora: os três primeiros vértices do
+    /// contorno. O vão sem contorno (apagado) não entra.
+    /// </summary>
+    private static Dictionary<Guid, Dictionary<int, CarportBayNow>> OndeEstaoOsVaos(Database database, IReadOnlyList<CarportRowRecord> filas)
+    {
+        var resultado = filas.ToDictionary(f => f.Id, _ => new Dictionary<int, CarportBayNow>());
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        var mesas = LayoutScan.Tables(transacao, database);
+        foreach (var f in filas)
+            for (var v = 0; v < f.Bays; v++)
+            {
+                if (!mesas.TryGetValue(CarportReturn.IdDoVao(f.Id, v), out var mesa)) continue;
+                if (mesa.Contour is not { } contorno) continue;
+                if (transacao.GetObject(contorno, OpenMode.ForRead) is not Polyline3d polilinha) continue;
+
+                var p = polilinha.Cast<ObjectId>().Take(3).Select(id => ((PolylineVertex3d)transacao.GetObject(id, OpenMode.ForRead)).Position).ToList();
+                if (p.Count < 3) continue;
+                resultado[f.Id][v] = new CarportBayNow(p[0].X, p[0].Y, p[1].X, p[1].Y, p[2].X, p[2].Y);
+            }
+
+        return resultado;
     }
 
     // ------------------------------------------------------------------ apagar
@@ -395,32 +459,15 @@ public static class CarportCommands
     {
         var database = documento.Database;
         var mapa = FilaDosVaos(database);
-        var registradas = Registradas(database);
-        var carports = CarportsDoDesenho.Ler(database);
         double? Chao(double x, double y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null;
 
         var semFila = vaos.Count(v => !mapa.ContainsKey(v));
         if (semFila > 0)
             editor.WriteMessage(Tr.F("\n  {0} vão(s) de carport sem fila (cópia de um vão) ficaram como estavam: para carport, use Usina ou Carport › Desenhar fila.\n", semFila));
 
-        foreach (var registro in vaos.Where(mapa.ContainsKey).Select(v => mapa[v]).DistinctBy(r => r.Id))
-        {
-            if (DrawingCarports.Find(carports, registro.Carport) is not { } carport)
-            {
-                editor.WriteMessage(Tr.F("\n  A fila do carport \"{0}\" ficou como estava: o carport não está mais cadastrado.\n", registro.Carport));
-                continue;
-            }
-
-            var fila = registro.Build(carport.Profile, Chao, out var motivo);
-            if (fila is null)
-            {
-                editor.WriteMessage(Tr.F("\n  A fila do carport \"{0}\" ficou como estava: {1}.\n", registro.Carport, motivo));
-                continue;
-            }
-
-            Apagar(database, registro.Id);
-            Relatar(editor, carport, fila, Desenhar(database, carport, registro.Id, fila, registradas.FindIndex(r => r.Id == registro.Id) + 1));
-        }
+        // O vão que foi movido é refeito onde está, não onde estava.
+        var filas = vaos.Where(mapa.ContainsKey).Select(v => mapa[v].Id).ToHashSet();
+        if (filas.Count > 0) Atualizar(editor, database, Chao, r => filas.Contains(r.Id));
     }
 
     /// <summary>

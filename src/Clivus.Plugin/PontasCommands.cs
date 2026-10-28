@@ -204,7 +204,7 @@ public static class PontasCommands
             var todas = LayoutScan.Tables(transacao, documento.Database);
             if (CarportCommands.VaosDeCarport(documento.Database, todas).Contains(guid))
             {
-                editor.WriteMessage(Tr.T("\nPONTAS Este é um vão de carport: a altura dele é a altura livre do carport (Configurações), e Regerar filas o refaz.\n"));
+                editor.WriteMessage(Tr.T("\nPONTAS Este é um vão de carport: a altura dele é a altura livre do carport (Configurações), e Carport › Atualizar estruturas o refaz.\n"));
                 return null;
             }
 

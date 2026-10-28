@@ -79,7 +79,7 @@ public static class RibbonLayout
                 new RibbonMenuSpec(Tr.N("Carport"), Tr.N("Cobertura de estacionamento: desenhar a fila pelo eixo, regerar, apagar e a lista de material."), "carport",
                 [
                     B(Tr.N("Desenhar fila"), PluginInfo.ComandoCarport, Tr.N("Clique o eixo da fila (o meio da cobertura) e o lado para onde a água cai; Enter enche o eixo de vãos. Cada pórtico assenta no terreno, com a borda baixa na altura livre."), "carport_fila"),
-                    B(Tr.N("Regerar filas"), PluginInfo.ComandoCarportRegerar, Tr.N("Refaz todas as filas de carport com o carport e o terreno de agora."), "carport_regerar"),
+                    B(Tr.N("Atualizar estruturas"), PluginInfo.ComandoCarportRegerar, Tr.N("Refaz as filas de carport onde os vãos estão agora (depois de mover, girar ou espelhar no desenho), com o carport e o terreno de agora."), "carport_regerar"),
                     B(Tr.N("Apagar fila"), PluginInfo.ComandoCarportApagar, Tr.N("Clique numa peça e a fila inteira sai do desenho."), "carport_apagar"),
                     B(Tr.N("Lista de material"), PluginInfo.ComandoCarportLista, Tr.N("Pilares, vigas, terças, mãos francesas, bases e módulos de todas as filas, em Excel, com o comprimento de cada pilar."), "carport_lista"),
                 ]),

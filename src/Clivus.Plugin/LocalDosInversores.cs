@@ -343,7 +343,7 @@ public static class LocalDosInversores
     /// zero) e os arcos divididos em trechos de até 1 m; sem repetir o
     /// primeiro no fim. Null se não é fechada.
     /// </summary>
-    private static List<Point3>? Contorno(Curve c, Transaction t)
+    internal static List<Point3>? Contorno(Curve c, Transaction t)
     {
         if (!c.Closed && c.StartPoint.DistanceTo(c.EndPoint) > 1e-6) return null;
 

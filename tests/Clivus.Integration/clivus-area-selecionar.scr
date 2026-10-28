@@ -1,0 +1,26 @@
+; Teste de nivel 2 do CLIVUS_AREA pela polilinha que ja esta no desenho
+; (28/10/2026, Renan: "hoje ele so permite desenhar do zero").
+;
+; Desenha um PLINE fechado (cota 9999, absurda de proposito: a area tem que
+; sair na cota do terreno), cria a area com [Selecionar], e confere que a
+; polilinha do usuario ficou no desenho. Depois tenta fazer area da propria
+; area: tem que recusar.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setvar "ELEVATION" 9999)
+(command "_.PLINE" "{{P1}}" "{{P2}}" "{{P3}}" "{{P4}}" "_C")
+(setvar "ELEVATION" 0)
+(setq clivus:plinha (entlast))
+(command "CLIVUS_AREA" "Selecionar" clivus:plinha "{{NOME}}")
+(setq clivus:area (entlast))
+(princ (strcat "\nCLIVUS_PLINHA_FICOU=" (if (entget clivus:plinha) (cdr (assoc 0 (entget clivus:plinha))) "NAO")))
+(princ (strcat "\nCLIVUS_AREA_TIPO=" (cdr (assoc 0 (entget clivus:area)))))
+(princ (strcat "\nCLIVUS_AREA_Z=" (rtos (cadddr (assoc 10 (entget (entnext clivus:area)))) 2 3)))
+(command "CLIVUS_AREA" "Selecionar" clivus:area "")
+(command "CLIVUS_AREAS")
+(setvar "SECURELOAD" clivus:secureload)
+(princ "\nCLIVUS_FIM")
+(princ)

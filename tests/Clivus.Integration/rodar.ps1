@@ -943,6 +943,72 @@ function Testar-Area {
 }
 
 <#
+    A area pela polilinha que ja esta no desenho (28/10/2026): [Selecionar]
+    no primeiro vertice. A area sai assentada no terreno (o PLINE esta na
+    cota 9999), a polilinha do usuario fica, e a propria area nao vira outra.
+#>
+function Testar-AreaSelecionar {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-area-selecionar--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'clivus-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("clivus-area-selecionar : nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $invariante = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $invariante)
+    $centroY = [double]::Parse($Matches[2], $invariante)
+    function Ponto([double] $dx, [double] $dy) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###}', $centroX + $dx, $centroY + $dy)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-area-selecionar' `
+        -Script (Join-Path $PSScriptRoot 'clivus-area-selecionar.scr') `
+        -Substituicoes @{
+            '{{P1}}' = (Ponto -50 -50)
+            '{{P2}}' = (Ponto  50 -50)
+            '{{P3}}' = (Ponto  50  50)
+            '{{P4}}' = (Ponto -50  50)
+            '{{NOME}}' = 'Area da polilinha'
+        }
+
+    if ($r.Texto -notmatch 'CLIVUS_FIM') {
+        $problemas.Add("clivus-area-selecionar : o script nao terminou. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'Área criada:' -or $r.Texto -notmatch 'vértices no terreno:\s+(\d+)' -or [int] $Matches[1] -le 4) {
+        $problemas.Add("clivus-area-selecionar : a area da polilinha nao foi criada assentada no terreno. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'CLIVUS_PLINHA_FICOU=LWPOLYLINE') {
+        $problemas.Add("clivus-area-selecionar : a polilinha do usuario sumiu. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'CLIVUS_AREA_TIPO=POLYLINE' -or $r.Texto -notmatch 'CLIVUS_AREA_Z=(-?[\d.]+)' -or [double]::Parse($Matches[1], $invariante) -gt 9000) {
+        $problemas.Add("clivus-area-selecionar : a area nao saiu na cota do terreno. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'já é a área "Area da polilinha"') {
+        $problemas.Add("clivus-area-selecionar : aceitou fazer area da propria area. Veja $($r.Saida)")
+        return $false
+    }
+
+    if (([regex]::Matches($r.Texto, 'NODESENHO ')).Count -ne 1) {
+        $problemas.Add("clivus-area-selecionar : a listagem nao tem exatamente uma area. Veja $($r.Saida)")
+        return $false
+    }
+
+    return $true
+}
+
+<#
     O alinhamento (passo 4.2): a linha tem que assentar no terreno.
 
     Regra sagrada 5 (01-regras-sagradas.md): qualquer coisa que o plugin
@@ -4603,6 +4669,9 @@ else {
     # E a area, que tambem salva e reabre.
     $total++
     if (Testar-Area -Desenho $desenhos[0]) { $passaram++ }
+
+    $total++
+    if (Testar-AreaSelecionar -Desenho $desenhos[0]) { $passaram++ }
 
     $total++
     if (Testar-Alinhamento -Desenho $desenhos[0]) { $passaram++ }

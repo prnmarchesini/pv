@@ -99,7 +99,7 @@ public static class AreaCommands
         while (true)
         {
             var opcoes = pontos.Count == 0
-                ? new PromptPointOptions(Tr.T("\nPrimeiro vértice: "))
+                ? new PromptPointOptions(Tr.T("\nPrimeiro vértice ou [Selecionar] uma polilinha: "))
                 : new PromptPointOptions(Tr.F("\nPróximo vértice [Fechar] <{0} traçados>: ", pontos.Count))
                 {
                     UseBasePoint = true,
@@ -108,10 +108,16 @@ public static class AreaCommands
                 };
 
             if (pontos.Count > 0) opcoes.Keywords.Add("Fechar");
+            else opcoes.Keywords.Add("Selecionar");
 
             var resposta = editor.GetPoint(opcoes);
 
             if (resposta.Status == PromptStatus.Keyword && resposta.StringResult == "Fechar") break;
+
+            // A área que já está desenhada (28/10/2026, Renan: "hoje ele só
+            // permite desenhar do zero"): os vértices vêm da polilinha.
+            if (resposta.Status == PromptStatus.Keyword && resposta.StringResult == "Selecionar")
+                return Selecionar(editor, rastro);
 
             // Enter fecha a área, como no PLINE. Esc desiste.
             if (resposta.Status == PromptStatus.None) break;
@@ -134,6 +140,55 @@ public static class AreaCommands
         if (pontos.Count > 2) rastro.Acrescentar(pontos[^1], pontos[0]);
 
         return pontos;
+    }
+
+    /// <summary>
+    /// Os vértices de uma polilinha fechada que já está no desenho (2D, 3D ou
+    /// LWPOLYLINE; arco vira trechos de até 1 m). A polilinha do usuário fica
+    /// como está: a área é uma polilinha nova, assentada no terreno, na layer
+    /// das áreas. A cota da polilinha não vale; vem do terreno, no
+    /// <see cref="Criar"/>, como a do clique.
+    /// </summary>
+    private static IReadOnlyList<Point3d>? Selecionar(Editor editor, RastroDoTracado rastro)
+    {
+        var opcoes = new PromptEntityOptions(Tr.T("\nClique na polilinha fechada que vira a área: "));
+        opcoes.SetRejectMessage(Tr.T("\nTem que ser uma polilinha."));
+        opcoes.AddAllowedClass(typeof(Polyline), false);
+        opcoes.AddAllowedClass(typeof(Polyline2d), false);
+        opcoes.AddAllowedClass(typeof(Polyline3d), false);
+
+        while (true)
+        {
+            var escolha = editor.GetEntity(opcoes);
+            if (escolha.Status != PromptStatus.OK)
+            {
+                editor.WriteMessage(Tr.T("\nÁrea não criada.\n"));
+                return null;
+            }
+
+            List<Point3>? contorno;
+            using (var transacao = escolha.ObjectId.Database.TransactionManager.StartOpenCloseTransaction())
+            {
+                var curva = (Curve)transacao.GetObject(escolha.ObjectId, OpenMode.ForRead);
+                if (AreaXData.Load(curva) is { } jaE)
+                {
+                    editor.WriteMessage(Tr.F("\n  Essa polilinha já é a área \"{0}\". Escolha outra.\n", jaE.Name));
+                    continue;
+                }
+
+                contorno = LocalDosInversores.Contorno(curva, transacao);
+            }
+
+            if (contorno is null)
+            {
+                editor.WriteMessage(Tr.T("\n  Essa polilinha não é fechada. Feche-a (PEDIT › Fechar) ou escolha outra.\n"));
+                continue;
+            }
+
+            var pontos = contorno.Select(p => new Point3d(p.X, p.Y, p.Z)).ToList();
+            for (var i = 0; i < pontos.Count; i++) rastro.Acrescentar(pontos[i], pontos[(i + 1) % pontos.Count]);
+            return pontos;
+        }
     }
 
     private static string? PerguntarNome(Editor editor) =>
