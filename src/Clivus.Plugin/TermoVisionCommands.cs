@@ -209,7 +209,17 @@ public static class TermoVisionCommands
             var link = EnvioDoDesenho(documento);
             if (link is null) return;
 
-            var mesas = LerMesas(editor, documento.Database, out var recusadas);
+            var mesas = LerMesas(editor, documento.Database, out var recusadas, out var faltaCarport);
+
+            // Mandar menos vãos do que o desenho tem apagaria os outros lá
+            // (28/10/2026: sem o terreno, o carport saía com 0 mesas e o
+            // TermoVision ficou sem nenhuma).
+            if (faltaCarport > 0)
+            {
+                editor.WriteMessage(Tr.F("\nNada foi mandado: {0} vão(s) de carport não puderam ser montados (o terreno do desenho não está processado). Use o botão Terreno e exporte de novo.\n", faltaCarport));
+                return;
+            }
+
             if (mesas.Count == 0 && !Confirmar(editor, Tr.T(
                     "Não há mesa no desenho. Mandar assim apaga as mesas desta área no TermoVision (o Desfazer de lá as traz). Mandar?"), padraoSim: false))
                 return;
@@ -264,7 +274,8 @@ public static class TermoVisionCommands
 
         try
         {
-            var mesas = LerMesas(editor, documento.Database, out var recusadas);
+            var mesas = LerMesas(editor, documento.Database, out var recusadas, out var faltaCarport);
+            if (faltaCarport > 0) recusadas.Add(FormattableString.Invariant($"carport: {faltaCarport} vão(s) sem montar"));
             var corpo = TermoVisionReturn.Build(ClivusCommands.VersaoDoPlugin(), NomeDoDesenho(documento), mesas, out var invalidas);
             File.WriteAllBytes(caminho.StringResult.Trim().Trim('"'), corpo);
             editor.WriteMessage(FormattableString.Invariant(
@@ -314,9 +325,10 @@ public static class TermoVisionCommands
     /// (nunca da camada); os cantos, do contorno; colunas e fiadas, das faces
     /// dos módulos (a mesa cortada conta o que sobrou); o módulo, do perfil.
     /// </summary>
-    private static List<TermoVisionTable> LerMesas(Editor editor, Database database, out List<string> recusadas)
+    private static List<TermoVisionTable> LerMesas(Editor editor, Database database, out List<string> recusadas, out int faltaCarport)
     {
         recusadas = [];
+        var vaosNoDesenho = new HashSet<Guid>();
         var mesas = new List<TermoVisionTable>();
         var doDesenho = MesasDoDesenho.Ler(database);
         var padrao = FileiraCommands.PerfilDaMesa(editor, silencioso: true);
@@ -326,7 +338,11 @@ public static class TermoVisionCommands
         foreach (var (guid, partes) in LayoutScan.Tables(transacao, database))
         {
             // O vão de carport vai pelo caminho dele, com o tipo e a estrutura (abaixo).
-            if (partes.Identity is { } talvez && CarportCommands.EVaoDeCarport(talvez, carports)) continue;
+            if (partes.Identity is { } talvez && CarportCommands.EVaoDeCarport(talvez, carports))
+            {
+                vaosNoDesenho.Add(guid);
+                continue;
+            }
 
             var nome = partes.Identity?.Label is { Length: > 0 } rotulo ? rotulo : guid.ToString();
             if (partes.Identity is not { } identidade || partes.Contour is not { } contornoId)
@@ -368,6 +384,10 @@ public static class TermoVisionCommands
         // O carport (36.1): cada vão vai como uma mesa.
         if (AcadApp.DocumentManager.MdiActiveDocument is { } documento && documento.Database == database)
             mesas.AddRange(CarportCommands.MesasDoTermoVision(documento));
+
+        // Cada vão de carport do desenho tem que ter ido (o id do vão é o mesmo da mesa).
+        var enviados = mesas.Select(m => m.Id).ToHashSet();
+        faltaCarport = vaosNoDesenho.Count(v => !enviados.Contains(v));
         return mesas;
     }
 

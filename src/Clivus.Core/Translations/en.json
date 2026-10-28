@@ -1462,6 +1462,7 @@
  "Nada foi atribuído: o cadastro elétrico do desenho tem registro que não deu para ler ({0}).": "Nothing was assigned: the drawing's electrical register has a record that could not be read ({0}).",
  "Nada foi desenhado: o cadastro elétrico do desenho tem registro que não deu para ler ({0}).": "Nothing was drawn: the drawing's electrical register has a record that could not be read ({0}).",
  "Nada foi gravado.": "Nothing was saved.",
+ "Nada foi mandado: {0} vão(s) de carport não puderam ser montados (o terreno do desenho não está processado). Use o botão Terreno e exporte de novo.": "Nothing was sent: {0} carport bay(s) could not be built (the drawing terrain is not processed). Use the Terrain button and export again.",
  "Nada fora da regra.": "Nothing outside the rules.",
  "Nenhum AutoCAD encontrado neste computador. O Clivus Solar precisa do Civil 3D 2026 (série {0}).": "No AutoCAD found on this computer. Clivus Solar needs Civil 3D 2026 (series {0}).",
  "Nenhum alinhamento neste desenho.": "No alignment in this drawing.",

@@ -521,7 +521,7 @@ public static class CarportCommands
     /// <summary>Os vãos de todas as filas como mesas do TermoVision (36.1).</summary>
     internal static List<TermoVisionTable> MesasDoTermoVision(Document documento)
     {
-        if (TerrainCache.Get(documento) is not { } terreno) return [];
+        if (TerrenoDoDesenho.Garantir(documento) is not { } terreno) return [];
         return Montadas(documento.Database, (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null)
             .SelectMany(m => CarportReturn.Tables(m.Id, m.Carport.Name, m.Carport.Profile, m.Fila, CarportMesh.CorDoAco)).ToList();
     }
@@ -534,7 +534,7 @@ public static class CarportCommands
 
     private static Func<double, double, double?>? Terreno(Document documento)
     {
-        if (TerrainCache.Get(documento) is { } terreno)
+        if (TerrenoDoDesenho.Garantir(documento) is { } terreno)
             return (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null;
 
         documento.Editor.WriteMessage(Tr.T("\nEscolha o terreno antes (Terreno): o carport assenta cada pilar na cota do terreno.\n"));
