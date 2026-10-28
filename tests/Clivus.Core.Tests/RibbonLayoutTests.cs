@@ -115,4 +115,14 @@ public class RibbonLayoutTests
         foreach (var painel in RibbonLayout.Tabs.SelectMany(t => t.Panels))
             Assert.Equal(painel.Buttons.Count(), painel.Buttons.Select(b => b.Command).Distinct().Count());
     }
+
+    /// <summary>Etapa 33: o suspenso TermoVision, no painel Saída, com Abrir e Exportar.</summary>
+    [Fact]
+    [Trait("Etapa", "33")]
+    public void TermoVisionNoPainelSaida()
+    {
+        var saida = RibbonLayout.Tabs[0].Panels.Single(p => p.Title == "Saída");
+        var menu = Assert.Single(saida.Items.OfType<RibbonMenuSpec>(), m => m.Text == "TermoVision");
+        Assert.Equal([PluginInfo.ComandoTermoVisionAbrir, PluginInfo.ComandoTermoVisionExportar], menu.Items.Select(b => b.Command));
+    }
 }

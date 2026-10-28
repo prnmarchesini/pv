@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Monta o ClivusSolar.bundle e, opcionalmente, instala para o usuario atual.
 
@@ -57,6 +57,7 @@ Set-StrictMode -Version Latest
 
 $raiz     = (Resolve-Path (Split-Path -Parent $PSScriptRoot)).Path
 $projeto  = Join-Path $raiz 'src\Clivus.Plugin\Clivus.Plugin.csproj'
+$projetoLink = Join-Path $raiz 'src\Clivus.Link\Clivus.Link.csproj'
 $bundle   = Join-Path $raiz 'artefatos\ClivusSolar.bundle'
 
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
@@ -79,6 +80,11 @@ $ErrorActionPreference = 'Continue'
 try {
     & dotnet build $projeto -c $Configuracao -v quiet --nologo *> (Join-Path $env:TEMP 'clivus-bundle-build.log')
     $codigo = $LASTEXITCODE
+    # O Clivus.Link (etapa 33): o programa do endereco clivus:// do TermoVision.
+    if ($codigo -eq 0) {
+        & dotnet build $projetoLink -c $Configuracao -v quiet --nologo *>> (Join-Path $env:TEMP 'clivus-bundle-build.log')
+        $codigo = $LASTEXITCODE
+    }
 }
 finally {
     $ErrorActionPreference = $anterior
@@ -111,6 +117,18 @@ Copy-Item (Join-Path $raiz 'src\Clivus.Plugin\PackageContents.xml') $bundle
 # Clipper2Lib (Boost, THIRD-PARTY-NOTICES.md): a uniao das sombras do periodo (05/10/2026).
 foreach ($nome in 'Clivus.Plugin.dll', 'Clivus.Core.dll', 'Clivus.Geo.dll', 'Clipper2Lib.dll') {
     $origem = Join-Path $saidaDoBuild $nome
+    if (-not (Test-Path $origem)) {
+        Write-Host "Faltando na saida do build: $nome" -ForegroundColor Red
+        exit 1
+    }
+    Copy-Item $origem $conteudo
+}
+
+# O Clivus.Link: o plugin grava o protocolo clivus: apontando para ele, na
+# mesma pasta das DLLs. Framework-dependent: o .NET 8 vem com o Civil 3D.
+$saidaDoLink = Join-Path $raiz "src\Clivus.Link\bin\$Configuracao\net8.0-windows"
+foreach ($nome in 'Clivus.Link.exe', 'Clivus.Link.dll', 'Clivus.Link.runtimeconfig.json', 'Clivus.Link.deps.json') {
+    $origem = Join-Path $saidaDoLink $nome
     if (-not (Test-Path $origem)) {
         Write-Host "Faltando na saida do build: $nome" -ForegroundColor Red
         exit 1

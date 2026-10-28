@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Clivus.Link (etapa 33, 26/10/2026): o programa que o Windows chama no
+    endereço clivus:// (protocolo gravado no HKCU pelo plugin). Só confere o
+    endereço e o deixa na pasta de entrada (TermoVisionInbox), que o plugin
+    vigia. Sem janela, sem CAD; vai no bundle ao lado das DLLs.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Clivus.Link</AssemblyName>
+    <RootNamespace>Clivus.Link</RootNamespace>
+    <ApplicationIcon>..\Clivus.Plugin\Resources\Branding\clivus.ico</ApplicationIcon>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Clivus.Core\Clivus.Core.csproj" />
+  </ItemGroup>
+
+</Project>

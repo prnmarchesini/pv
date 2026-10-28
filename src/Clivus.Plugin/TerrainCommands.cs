@@ -380,7 +380,7 @@ public static class TerrainCommands
     /// Lê a superfície escolhida, monta a malha e guarda. O resumo que sai
     /// daqui é o que o usuário confere contra o Civil 3D.
     /// </summary>
-    private static void Processar(Editor editor, SurfaceEntry escolhida)
+    internal static void Processar(Editor editor, SurfaceEntry escolhida)
     {
         var documento = AcadApp.DocumentManager.MdiActiveDocument;
         if (documento is null) return;

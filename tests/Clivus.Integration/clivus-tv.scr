@@ -1,0 +1,41 @@
+; Teste de nivel 2 da ponte com o TermoVision (etapa 33): abre o pacote real
+; da Paradise (acervo/etapa-33) sem rede (CLIVUS_TV_ABRIR_AUTO), poe uma
+; fileira dentro da area que veio do pacote e grava o corpo do retorno
+; (CLIVUS_TV_EXPORTAR_AUTO). O LISP conta o que ficou no desenho: a imagem do
+; orto, as arvores, a area e a cota do primeiro vertice dela.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TV_ABRIR_AUTO" "{{ZIP}}")
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(setq clivus:imagens (ssget "_X" (list (cons 0 "IMAGE") (cons 8 "CLIVUS_TV_ORTO"))))
+(setq clivus:arvores (ssget "_X" (list (cons 0 "INSERT") (cons 8 "CLIVUS_ARVORE"))))
+(setq clivus:objetos (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "CLIVUS_TV_OBJETO"))))
+(setq clivus:areas (ssget "_X" (list (cons 0 "POLYLINE") (cons 8 "CLIVUS_AREA"))))
+(setq clivus:v1 (if clivus:areas (cdr (assoc 10 (entget (entnext (ssname clivus:areas (1- (sslength clivus:areas))))))) '(0 0 0)))
+(princ (strcat "\nCLIVUS_TV_LISP imagens=" (itoa (clivus:conta clivus:imagens))
+               " arvores=" (itoa (clivus:conta clivus:arvores))
+               " objetos=" (itoa (clivus:conta clivus:objetos))
+               " areas=" (itoa (clivus:conta clivus:areas))
+               " v1=" (rtos (car clivus:v1) 2 3) "," (rtos (cadr clivus:v1) 2 3) "," (rtos (caddr clivus:v1) 2 3)))
+
+; A cota do terreno no primeiro vertice da area: tem de bater com a do vertice.
+(command "CLIVUS_COORD" (list (car clivus:v1) (cadr clivus:v1) 0.0) "")
+
+; E no pe da primeira arvore.
+(setq clivus:a1 (if clivus:arvores (cdr (assoc 10 (entget (ssname clivus:arvores 0)))) '(0 0 0)))
+(princ (strcat "\nCLIVUS_TV_ARVORE z=" (rtos (caddr clivus:a1) 2 3)))
+(command "CLIVUS_COORD" (list (car clivus:a1) (cadr clivus:a1) 0.0) "")
+
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento do TermoVision")
+(command "CLIVUS_FILEIRA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_TV_EXPORTAR_AUTO" "{{JSON}}")
+
+(princ "\nCLIVUS_TV_FIM")
+(setvar "SECURELOAD" clivus:secureload)
+(princ)

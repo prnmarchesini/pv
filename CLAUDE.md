@@ -34,6 +34,13 @@ trapezoidal, com 3D e perfil), bacias de contribuição e memória hidráulica t
 plano próprio em `plano/drenagem/` (etapas 25 a 31): comece por
 `plano/drenagem/LEIA-PRIMEIRO.md` e siga o `plano/drenagem/PROGRESSO.md`.
 
+## TermoVision (desde 26/10/2026)
+
+A ponte com o TermoVision (abrir uma área exportada de lá, protocolo
+`clivus://`, e devolver as mesas) tem plano próprio em `plano/termovision/`
+(etapa 33): comece por `plano/termovision/LEIA-PRIMEIRO.md`. O contrato é da
+sessão do TermoVision; mudança nele, avisar antes.
+
 ## Carport (desde 28/10/2026)
 
 A estrutura carport (fila contínua de pórticos biposte, altura livre fixa,
