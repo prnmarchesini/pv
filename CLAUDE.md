@@ -34,6 +34,13 @@ trapezoidal, com 3D e perfil), bacias de contribuição e memória hidráulica t
 plano próprio em `plano/drenagem/` (etapas 25 a 31): comece por
 `plano/drenagem/LEIA-PRIMEIRO.md` e siga o `plano/drenagem/PROGRESSO.md`.
 
+## Carport (desde 28/10/2026)
+
+A estrutura carport (fila contínua de pórticos biposte, altura livre fixa,
+3D completo e lista de material) tem plano próprio em `plano/carport/`
+(etapas 34 a 36): comece por `plano/carport/LEIA-PRIMEIRO.md`. A referência
+é `0 - Assets/Cobertura/carport-biposte.glb`.
+
 ## Regra de ouro
 
 **Um passo por vez. Ao terminar um passo, PARE e espere o Renan validar.** Não comece o passo seguinte, não "adiante" código, não faça nada fora do escopo do passo. Se achar algo que precisa ser feito fora do escopo, anote em `plano/PROGRESSO.md` na seção "Observações" e siga.
