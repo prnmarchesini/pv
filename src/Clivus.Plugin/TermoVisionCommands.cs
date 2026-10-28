@@ -360,6 +360,10 @@ public static class TermoVisionCommands
             mesas.Add(new TermoVisionTable(guid, nome, cantos, colunas, fiadas,
                 new TermoVisionModule(layout.Module.Width, layout.Module.Height, layout.HorizontalGap)));
         }
+
+        // O carport (36.1): cada vão vai como uma mesa.
+        if (AcadApp.DocumentManager.MdiActiveDocument is { } documento && documento.Database == database)
+            mesas.AddRange(CarportCommands.MesasDoTermoVision(documento));
         return mesas;
     }
 

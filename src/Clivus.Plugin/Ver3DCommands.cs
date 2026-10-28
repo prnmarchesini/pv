@@ -260,7 +260,11 @@ public static class Ver3DCommands
         }
 
         var titulo = Path.GetFileNameWithoutExtension(documento.Name);
-        return new Scene3D(string.IsNullOrWhiteSpace(titulo) ? Tr.T("Usina") : titulo, grade, faces, pilares, arvores, sombras, Canaletas(database, terreno));
+        // O carport (36.1) vai junto com as canaletas: faces prontas, na cor de cada peça.
+        var extras = Canaletas(database, terreno);
+        extras.AddRange(CarportCommands.Faces3D(database, (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null));
+
+        return new Scene3D(string.IsNullOrWhiteSpace(titulo) ? Tr.T("Usina") : titulo, grade, faces, pilares, arvores, sombras, extras);
     }
 
     /// <summary>As canaletas da drenagem (29.3): a mesma geometria do sólido do desenho, em triângulos cinza-concreto.</summary>

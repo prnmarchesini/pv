@@ -75,6 +75,14 @@ public static class RibbonLayout
                 B(Tr.N("Usina"), PluginInfo.ComandoUsina, Tr.N("Gera a área inteira com as mesas em uso, sem análise (as análises ficam no painel Análises)."), "usina", grande: true),
                 B(Tr.N("Regerar área"), PluginInfo.ComandoRefazer, Tr.N("Apaga e gera de novo a área com a configuração atual."), "regerar_area"),
                 B(Tr.N("Regerar todas as áreas"), PluginInfo.ComandoRegerar, Tr.N("Refaz todas as áreas do desenho com a configuração atual."), "regerar_todas"),
+                // O carport (35.3, 28/10/2026): o segundo tipo de estrutura, desenhado pelo eixo da fila.
+                new RibbonMenuSpec(Tr.N("Carport"), Tr.N("Cobertura de estacionamento: desenhar a fila pelo eixo, regerar, apagar e a lista de material."), "carport",
+                [
+                    B(Tr.N("Desenhar fila"), PluginInfo.ComandoCarport, Tr.N("Clique o eixo da fila (o meio da cobertura) e o lado para onde a água cai; Enter enche o eixo de vãos. Cada pórtico assenta no terreno, com a borda baixa na altura livre."), "carport_fila"),
+                    B(Tr.N("Regerar filas"), PluginInfo.ComandoCarportRegerar, Tr.N("Refaz todas as filas de carport com o carport e o terreno de agora."), "carport_regerar"),
+                    B(Tr.N("Apagar fila"), PluginInfo.ComandoCarportApagar, Tr.N("Clique numa peça e a fila inteira sai do desenho."), "carport_apagar"),
+                    B(Tr.N("Lista de material"), PluginInfo.ComandoCarportLista, Tr.N("Pilares, vigas, terças, mãos francesas, bases e módulos de todas as filas, em Excel, com o comprimento de cada pilar."), "carport_lista"),
+                ]),
             ]),
             new(Tr.N("Edição"),
             [

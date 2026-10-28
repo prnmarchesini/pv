@@ -234,6 +234,17 @@ def icones():
         # Apagar gráfico: o gráfico e o X em âmbar.
         'drn_grafico_apagar': ([T('M4,4 V20 H20'), T('M6,15 C9,12 12,16 17,9'), ambar_traco('M20,20 L28,28 M28,20 L20,28', L)],
                                [t('M4,4 V20 H20'), ambar_traco('M20,20 L28,28 M28,20 L20,28', S)]),
+        # Carport (35.3): a cobertura inclinada em âmbar sobre os dois pilares em V.
+        'carport': ([ambar_traco('M3,10 L29,5', L), T('M10,9 L13,27 M22,7 L19,27'), T('M4,28 H28')],
+                    [ambar_traco('M3,10 L29,5', S), t('M10,9 L13,27 M22,7 L19,27')]),
+        'carport_fila': ([ambar_traco('M2,11 L16,8 M17,8 L30,5', L), T('M7,10 L9,26 M24,6 L22,26 M15,8 V26'), T('M3,28 H29')],
+                         [ambar_traco('M2,11 L30,5', S), t('M8,10 L10,27 M22,7 L20,27')]),
+        'carport_regerar': ([ambar_traco('M3,10 L23,6', L), T('M8,9 L10,22 M18,7 L16,22'), ambar_traco('M28,23 a5,5 0 1,1 -2,-4 M27,15 V19 H23', L)],
+                            [ambar_traco('M3,10 L23,6', S), t('M28,23 a5,5 0 1,1 -2,-4')]),
+        'carport_apagar': ([ambar_traco('M3,10 L23,6', L), T('M8,9 L10,22 M18,7 L16,22'), ambar_traco('M20,20 L28,28 M28,20 L20,28', L)],
+                           [ambar_traco('M3,10 L23,6', S), t('M20,20 L28,28 M28,20 L20,28')]),
+        'carport_lista': ([ambar_traco('M3,9 L21,5', L), T('M7,8 L9,18 M16,6 L14,18'), T(folha(17, 13, 12, 16, 3))],
+                          [ambar_traco('M3,9 L21,5', S), t(folha(15, 11, 14, 18, 3))]),
         # Elétrica (11.1): dois módulos ligados pelo cabo da string, + e -.
         'string': ([T(modulo(9, 10, 9, 6)), T(modulo(23, 10, 9, 6)), ambar_traco('M9,14 C9,24 23,24 23,14', L),
                     ambar_traco('M3,27 H9 M6,24 V30', L), T('M23,27 H29')],

@@ -19,13 +19,13 @@ mais um tipo em Configurações › Nova estrutura, e nada da fixa muda.**
 
 - 35.1 Nova estrutura: Fixa ou Carport: AGUARDANDO VALIDAÇÃO
 - 35.2 Janela do carport: AGUARDANDO VALIDAÇÃO
-- 35.3 Desenhar a fila: PENDENTE
-- 35.4 Editar, regerar e apagar: PENDENTE
-- 35.5 Lista de material na tela: PENDENTE
+- 35.3 Desenhar a fila: AGUARDANDO VALIDAÇÃO — CLIVUS_CARPORT (ribbon Processar › Carport › Desenhar fila)
+- 35.4 Editar, regerar e apagar: AGUARDANDO VALIDAÇÃO — Regerar filas e Apagar fila (editar = mudar o carport nas Configurações e Regerar)
+- 35.5 Lista de material na tela: AGUARDANDO VALIDAÇÃO — Lista de material (Excel)
 
 ## Etapa 36: o carport no resto do Clivus
 
-- 36.1 O vão como mesa: PENDENTE
+- 36.1 O vão como mesa: AGUARDANDO VALIDAÇÃO — 3D do Clivus (página e servidor) e Exportar para o TermoVision; strings, numeração, sombras e PVsyst ainda não leem o carport
 
 ## Observações
 
@@ -125,3 +125,34 @@ mais um tipo em Configurações › Nova estrutura, e nada da fixa muda.**
     a janela, pede dois pontos com elástico, nada fica no desenho; a mesa olha para
     a perpendicular mais perto do azimute atual (linha subindo 20° → 340°, "20°
     para oeste do norte"). `FacingFromLine` no Core, com testes.
+- 28/10/2026 (tarde), "FAÇA TUDO": 35.3 a 36.1 feitos de uma vez.
+  - CLIVUS_CARPORT: escolhe o carport marcado, eixo (meio da cobertura), lado da
+    água, vãos (Enter enche). Tudo em sólidos: módulos com a espessura deles em
+    azul, aço na cor do carport, bases em concreto; XData "Carport" com o id da
+    fila em cada peça; a fila registrada em `CARPORT_FILAS` (CarportRows).
+  - CLIVUS_CARPORT_REGERAR, CLIVUS_CARPORT_APAGAR (clica uma peça), CLIVUS_CARPORT_LISTA
+    (Excel). Ribbon: Processar › Carport (menu com os quatro).
+  - 3D: a fila entra na página 3D (lista "canaletas", triângulos) e no servidor
+    (visualizador do app desenha a lista desde clivussolar 1e45366; contrato:
+    campo opcional `canaletas`).
+  - TermoVision: cada vão vai como mesa no Exportar (CarportReturn, id fixo por vão).
+  - Conferido no Core Console com o Paradise.dwg do Renan (cópia): fila de 58,6 m,
+    9 vãos, 10 pórticos, 135 módulos (o carport dele, com Risen), 279 peças, pilares
+    de 2,30 a 2,97 m pelo chão; regerar, lista, 3D (3348 triângulos, foto conferida)
+    e o retorno do TermoVision (9 mesas, borda baixa primeiro).
+  - Não feito ainda: strings, numeração, sombras e PVsyst lerem o carport.
+- Tela de 28/10 (Usina "nenhuma fileira cabe"): o Usina é o motor da fixa e não põe
+  carport; a mensagem dizia que a área estava do outro lado do alinhamento "teste2".
+
+## Roteiro de tela para o Renan (35.3 a 36.1)
+
+1. Terreno escolhido; Configurações › Escolha das estruturas com o carport marcado.
+2. Processar › Carport › Desenhar fila: clicar o começo e o fim do eixo (meio da
+   cobertura), clicar do lado para onde a água cai, Enter. Orbitar: pilares em V,
+   viga, terças, mãos francesas, bases, módulos.
+3. Mudar algo do carport nas Configurações (ex.: altura livre), Salvar, e Carport ›
+   Regerar filas.
+4. Carport › Lista de material: abre o Excel.
+5. Saída › 3D: o carport no navegador e o link publicado.
+6. Saída › TermoVision › Exportar: os vãos chegam como mesas na área.
+7. Carport › Apagar fila: clicar uma peça; a fila some.

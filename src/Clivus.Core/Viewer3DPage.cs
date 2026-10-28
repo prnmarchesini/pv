@@ -120,6 +120,7 @@ public static class Viewer3DPage
         }
 
         pontos.AddRange(scene.Faces.SelectMany(f => f.Corners));
+        pontos.AddRange((scene.Channels ?? []).SelectMany(f => f.Corners));
         pontos.AddRange(scene.Trees.Select(a => new Point3(a.X, a.Y, a.Ground)));
 
         if (pontos.Count == 0) return new Point3(0, 0, 0);
@@ -300,7 +301,7 @@ public static class Viewer3DPage
             .Replace("{{TXT_PILARES}}", H(Tr.T("Pilares")), StringComparison.Ordinal)
             .Replace("{{TXT_ARVORES}}", H(Tr.T("Árvores")), StringComparison.Ordinal)
             .Replace("{{TXT_SOMBRAS}}", H(Tr.T("Sombras")), StringComparison.Ordinal)
-            .Replace("{{TXT_CANALETAS}}", H(Tr.T("Canaletas")), StringComparison.Ordinal)
+            .Replace("{{TXT_CANALETAS}}", H(Tr.T("Canaletas e carport")), StringComparison.Ordinal)
             .Replace("{{TXT_EXAGERO}}", H(Tr.T("Exagero vertical")), StringComparison.Ordinal)
             .Replace("{{TXT_ENQUADRAR}}", H(Tr.T("Enquadrar")), StringComparison.Ordinal)
             .Replace("{{TXT_DICA}}", H(Tr.T("Botão esquerdo gira, o direito arrasta, a roda dá zoom.")), StringComparison.Ordinal)
@@ -497,10 +498,10 @@ if (D.terreno) {
 const controles = new THREE.OrbitControls(camera, render.domElement);
 controles.enableDamping = true;
 
-// Enquadra a usina (mesas e árvores); sem elas, o terreno inteiro.
+// Enquadra a usina (mesas, árvores, canaletas e carport); sem elas, o terreno inteiro.
 function enquadrar() {
   const caixa = new THREE.Box3();
-  for (const nome of ['mesas', 'arvores']) if (camadas[nome] && camadas[nome].visible) caixa.expandByObject(camadas[nome]);
+  for (const nome of ['mesas', 'arvores', 'canaletas']) if (camadas[nome] && camadas[nome].visible) caixa.expandByObject(camadas[nome]);
   if (caixa.isEmpty()) caixa.setFromObject(mundo);
   if (caixa.isEmpty()) return;
   const centro = caixa.getCenter(new THREE.Vector3()), tam = caixa.getSize(new THREE.Vector3()).length();

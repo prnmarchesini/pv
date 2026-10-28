@@ -64,6 +64,10 @@ CANAL.md). A página local continua com a origem verdadeira.
 - `arvores`: o pé e as medidas; tronco e copa são cilindros (a copa começa
   onde o tronco acaba).
 - `sombras`: contornos fechados das sombras desenhadas, já no terreno.
+- `canaletas` (opcional, desde 28/10/2026): triângulos prontos
+  `[x1,y1,z1, x2,y2,z2, x3,y3,z3, corRGB]` — as canaletas da drenagem e o
+  carport (aço, bases e módulos com espessura). O servidor guarda como vem; o
+  visualizador desenha na camada das mesas.
 - Listas vazias são válidas; `terreno` pode faltar.
 
 ## O que o servidor responde

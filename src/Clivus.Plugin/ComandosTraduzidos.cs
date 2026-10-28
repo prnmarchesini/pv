@@ -216,6 +216,27 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_BANCO_PRUEBAS")]
     public static void CLIVUS_BANCO_PRUEBAS() => BancadaCommands.Bancada();
 
+    [CommandMethod("CLIVUS_CARPORT_ROW")]
+    public static void CLIVUS_CARPORT_ROW() => CarportCommands.Carport();
+
+    [CommandMethod("CLIVUS_CARPORT_FILA")]
+    public static void CLIVUS_CARPORT_FILA() => CarportCommands.Carport();
+
+    [CommandMethod("CLIVUS_CARPORT_DELETE")]
+    public static void CLIVUS_CARPORT_DELETE() => CarportCommands.ApagarFila();
+
+    [CommandMethod("CLIVUS_CARPORT_BORRAR")]
+    public static void CLIVUS_CARPORT_BORRAR() => CarportCommands.ApagarFila();
+
+    [CommandMethod("CLIVUS_CARPORT_BILL")]
+    public static void CLIVUS_CARPORT_BILL() => CarportCommands.Lista();
+
+    [CommandMethod("CLIVUS_CARPORT_REBUILD")]
+    public static void CLIVUS_CARPORT_REBUILD() => CarportCommands.Regerar();
+
+    [CommandMethod("CLIVUS_CARPORT_REGENERAR")]
+    public static void CLIVUS_CARPORT_REGENERAR() => CarportCommands.Regerar();
+
     [CommandMethod("CLIVUS_PARAMETERS")]
     public static void CLIVUS_PARAMETERS() => ConfigCommands.Config();
 
