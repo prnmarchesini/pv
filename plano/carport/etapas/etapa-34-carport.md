@@ -19,7 +19,9 @@ peças em 3D (eixo de cada barra com seção, as faces dos módulos, as bases).
 Altura livre fixa: a borda baixa fica a `altura livre` do chão **do pórtico**
 (o mais alto dos dois pilares dele manda, para nenhum ponto ficar abaixo).
 Teste de ouro: o vão padrão em chão plano reproduz o `.glb` (tabela do
-modelo de referência, tolerância 1 cm).
+modelo de referência, tolerância 1 cm nos módulos e 7 cm nas terças e mãos
+francesas, ver PROGRESSO). Confere também que a viga alcança o topo dos dois
+pilares (a regra que saiu do perfil no 34.1 por depender da geometria).
 Fecha automático.
 
 ### 34.3 A fila
