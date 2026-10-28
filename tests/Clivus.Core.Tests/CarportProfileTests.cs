@@ -64,7 +64,7 @@ public class CarportProfileTests
             "Carport do teste",
             new CarportArray(new SolarModule("Risen", "RSM132-8-720BHDG", 720, 2.384, 1.303, 0.033),
                 CarportOrientation.Landscape, 4, 6, 0.02, 0.03),
-            new CarportFrame(2.0, 10 * Math.PI / 180, 0.1, 0.4, 0.3, 1, 0.5, 0.7, 0.8,
+            new CarportFrame(2.0, 10 * Math.PI / 180, 0.1, 0.4, 0.3, 1, 0.5, 0.7, 0.8, 0.9,
                 new CarportSection("P", 0.2, 0.15), new CarportSection("V", 0.25, 0.12),
                 new CarportSection("T", 0.1, 0.06), new CarportSection("M", 0.08, 0.04),
                 new CarportBase(0.4, 0.012, 0.5, 0.2)),
@@ -92,7 +92,8 @@ public class CarportProfileTests
         Assert.Equal(1, v.Frame.PurlinsPerModule);
         Assert.Equal(0.5, v.Frame.PurlinEdgeOffset, 9);
         Assert.Equal(0.7, v.Frame.BraceOnPillar, 9);
-        Assert.Equal(0.8, v.Frame.BraceOnBeam, 9);
+        Assert.Equal(0.8, v.Frame.BraceOnBeamHigh, 9);
+        Assert.Equal(0.9, v.Frame.BraceOnBeamLow, 9);
         Assert.Equal(new CarportSection("V", 0.25, 0.12), v.Frame.Beam);
         Assert.Equal(new CarportBase(0.4, 0.012, 0.5, 0.2), v.Frame.Base);
     }

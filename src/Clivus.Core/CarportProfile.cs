@@ -81,7 +81,8 @@ public sealed record CarportArray(
 /// não conta.
 /// </param>
 /// <param name="BraceOnPillar">Onde a mão francesa pega o pilar: a distância do topo do pilar para baixo, ao longo dele.</param>
-/// <param name="BraceOnBeam">Onde a mão francesa pega a viga: a distância do topo do pilar para dentro do pórtico, na rampa.</param>
+/// <param name="BraceOnBeamHigh">Onde a mão francesa do pilar do lado alto pega a viga: a distância do topo dele para dentro do pórtico, na rampa.</param>
+/// <param name="BraceOnBeamLow">O mesmo, para o pilar do lado baixo. No modelo as duas são diferentes (0,84 e 0,71).</param>
 /// <param name="Pillar">A seção do pilar.</param>
 /// <param name="Beam">A seção da viga principal.</param>
 /// <param name="Purlin">A seção da terça.</param>
@@ -96,7 +97,8 @@ public sealed record CarportFrame(
     int PurlinsPerModule,
     double PurlinEdgeOffset,
     double BraceOnPillar,
-    double BraceOnBeam,
+    double BraceOnBeamHigh,
+    double BraceOnBeamLow,
     CarportSection Pillar,
     CarportSection Beam,
     CarportSection Purlin,
@@ -177,13 +179,15 @@ public sealed record CarportProfile(
         new CarportFrame(
             PillarBaseSpacing: 2.425,
             PillarLeanRadians: 15 * Math.PI / 180,
-            PillarOffset: 0.0,
+            // As bases do .glb ficam 2,4 cm para o lado baixo do meio da cobertura.
+            PillarOffset: -0.024,
             BeamLowInset: 0.549,
             BeamHighInset: 0.503,
             PurlinsPerModule: 2,
             PurlinEdgeOffset: 0.57,
             BraceOnPillar: 0.62,
-            BraceOnBeam: 0.77,
+            BraceOnBeamHigh: 0.84,
+            BraceOnBeamLow: 0.71,
             Pillar: new CarportSection("2 × C 130×50", 0.130, 0.100),
             Beam: new CarportSection("2 × C 110×50", 0.110, 0.100),
             Purlin: new CarportSection("C 127×50", 0.127, 0.050),
@@ -238,7 +242,8 @@ public sealed record CarportProfile(
             if (Frame.PurlinsPerModule > 1 && !(Frame.PurlinEdgeOffset >= 0 && Frame.PurlinEdgeOffset < Array.ModuleDown / 2))
                 return Tr.T("a terça precisa ficar debaixo do módulo: a distância da ponta do módulo à terça vai de zero até a metade do módulo");
 
-            if (!(Frame.BraceOnPillar > 0) || !(Frame.BraceOnBeam > 0) || !double.IsFinite(Frame.BraceOnPillar) || !double.IsFinite(Frame.BraceOnBeam))
+            if (!(Frame.BraceOnPillar > 0) || !(Frame.BraceOnBeamHigh > 0) || !(Frame.BraceOnBeamLow > 0)
+                || !double.IsFinite(Frame.BraceOnPillar) || !double.IsFinite(Frame.BraceOnBeamHigh) || !double.IsFinite(Frame.BraceOnBeamLow))
                 return Tr.T("a mão francesa precisa pegar o pilar e a viga a uma distância maior que zero");
             if (Frame.BraceOnPillar >= ClearHeight) return Tr.T("a mão francesa pega o pilar abaixo do chão: diminua a distância no pilar");
 
@@ -329,7 +334,8 @@ public sealed record CarportProfile(
                 PurlinsPerModule = Frame.PurlinsPerModule,
                 PurlinEdgeOffset = Frame.PurlinEdgeOffset,
                 BraceOnPillar = Frame.BraceOnPillar,
-                BraceOnBeam = Frame.BraceOnBeam,
+                BraceOnBeamHigh = Frame.BraceOnBeamHigh,
+                BraceOnBeamLow = Frame.BraceOnBeamLow,
                 Pillar = Secao(Frame.Pillar),
                 Beam = Secao(Frame.Beam),
                 Purlin = Secao(Frame.Purlin),
@@ -409,7 +415,8 @@ public sealed record CarportProfile(
                 Exigir(f.PurlinsPerModule, "frame.purlinsPerModule"),
                 Exigir(f.PurlinEdgeOffset, "frame.purlinEdgeOffset"),
                 Exigir(f.BraceOnPillar, "frame.braceOnPillar"),
-                Exigir(f.BraceOnBeam, "frame.braceOnBeam"),
+                Exigir(f.BraceOnBeamHigh, "frame.braceOnBeamHigh"),
+                Exigir(f.BraceOnBeamLow, "frame.braceOnBeamLow"),
                 Secao(f.Pillar, "frame.pillar"),
                 Secao(f.Beam, "frame.beam"),
                 Secao(f.Purlin, "frame.purlin"),
@@ -469,7 +476,8 @@ public sealed record CarportProfile(
         public int? PurlinsPerModule { get; init; }
         public double? PurlinEdgeOffset { get; init; }
         public double? BraceOnPillar { get; init; }
-        public double? BraceOnBeam { get; init; }
+        public double? BraceOnBeamHigh { get; init; }
+        public double? BraceOnBeamLow { get; init; }
         public SecaoNoArquivo? Pillar { get; init; }
         public SecaoNoArquivo? Beam { get; init; }
         public SecaoNoArquivo? Purlin { get; init; }
