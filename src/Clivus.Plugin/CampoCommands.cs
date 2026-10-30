@@ -144,7 +144,8 @@ public static class CampoCommands
         var levantamento = FieldObjects.Survey(objetos, area.Vertices, rowBreak: settings.Configuration.MaxGapBeforeBreak);
         var casadas = FieldPlacement.Match(levantamento.Rows.SelectMany(r => r.Tables), tipos, out var semMesa);
 
-        var problemas = levantamento.Issues.Concat(semMesa).ToList();
+        var casadosIds = casadas.Select(c => c.Footprint.Id).ToHashSet();
+        var problemas = levantamento.Issues.Where(i => i.Kind != FieldIssueKind.Size || !casadosIds.Contains(i.Id)).Concat(semMesa).ToList();
         if (FieldPlacement.FacingIssue(levantamento, settings.Configuration) is { } virada) problemas.Insert(0, virada);
 
         // Onde marcar cada objeto: o centro da pegada, ou a média dos vértices de quem não virou pegada.
@@ -192,6 +193,7 @@ public static class CampoCommands
         var usina = FieldPlacement.Process(levantamento, tipos, terreno.Mesh, settings, Progresso);
 
         var apagadas = LayoutEraser.ApagarDentro(database, area.Vertices);
+        CarportCommands.LimparFilasSemVao(database);
         var orfas = LayoutEraser.ApagarOrfasDentro(database, area.Vertices);
         if (apagadas.Tables.Count > 0) RemovalStore.Remove(database, apagadas.Tables);
         if (apagadas.Tables.Count > 0 || orfas > 0)
@@ -200,11 +202,11 @@ public static class CampoCommands
         UsinaCommands.Desenhar(editor, documento, new UsinaCommands.PlanoDaUsina(
             settings, usina.Geometries[0], tipos[0], usina.Plant.Layout, usina.Plant, tiposDoDesenho));
 
-        problemas.AddRange(usina.Issues);
+        problemas.AddRange(usina.Issues.Where(i => i.Kind == FieldIssueKind.Deviation));
         var desvios = usina.DeviationByObject.Values.ToList();
         if (desvios.Count > 0)
             editor.WriteMessage(Tr.F("\n{0} As mesas ficaram a no máximo {1:0.000} m do centro dos objetos (média {2:0.000} m).\n", prefixo, desvios.Max(), desvios.Average()));
-        foreach (var p in usina.Issues.Take(30)) editor.WriteMessage($"    {p.Message}\n");
+        foreach (var p in usina.Issues.Where(i => i.Kind == FieldIssueKind.Deviation).Take(30)) editor.WriteMessage($"    {p.Message}\n");
 
         Marcar(editor, database, area, problemas, centros, terreno.Mesh, levantamento.ReferenceAxis);
         Lembrar(database, area.Id, escolha);
@@ -340,9 +342,19 @@ public static class CampoCommands
             ? escolha.Handles.Select(h => PorHandle(database, h)).Where(id => !id.IsNull && !id.IsErased)
             : ((BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead)).Cast<ObjectId>();
 
+        var camadas = (LayerTable)transacao.GetObject(database.LayerTableId, OpenMode.ForRead);
+
+        // Em Todos e Camada, a camada congelada ou desligada (uma revisão
+        // antiga do layout) e as camadas do Clivus (o contorno do objeto do
+        // TermoVision) ficam de fora (revisão do 40.2).
+        bool Visivel(Entity e) =>
+            !e.Layer.StartsWith(PluginInfo.PrefixoDeDados, StringComparison.OrdinalIgnoreCase)
+            && (!camadas.Has(e.Layer) || transacao.GetObject(camadas[e.Layer], OpenMode.ForRead) is not LayerTableRecord camada || (!camada.IsFrozen && !camada.IsOff));
+
         foreach (var id in candidatos)
         {
             if (transacao.GetObject(id, OpenMode.ForRead) is not Curve curva || curva is not (Polyline or Polyline2d or Polyline3d)) continue;
+            if (escolha.Modo != Escolha.Escolhidos && !Visivel(curva)) continue;
 
             using (var nosso = curva.GetXDataForApplication(PluginXData.Aplicativo))
             {
@@ -355,6 +367,8 @@ public static class CampoCommands
 
             if (escolha.Modo != Escolha.Escolhidos)
             {
+                // O retângulo de GIS e de DXF repete o primeiro vértice no fim.
+                if (vertices is { Count: 5 } v5 && Math.Abs(v5[0].X - v5[4].X) < 1e-6 && Math.Abs(v5[0].Y - v5[4].Y) < 1e-6) vertices.RemoveAt(4);
                 if (vertices is not { Count: 4 }) continue;
                 if (!Polygons.Contains(area.Vertices, vertices.Average(p => p.X), vertices.Average(p => p.Y))) continue;
             }
@@ -493,13 +507,12 @@ public static class CampoCommands
                 if (transacao.GetObject(id, OpenMode.ForRead) is not Entity e || !string.Equals(e.Layer, camada, StringComparison.OrdinalIgnoreCase)) continue;
 
                 Point3d? onde = e switch { Circle c => c.Center, MText m => m.Location, _ => null };
-                if (onde is { } q && Polygons.Contains(area.Vertices, q.X, q.Y)) antigas.Add(e);
+                if (onde is { } q && (Polygons.Contains(area.Vertices, q.X, q.Y) || PertoDoContorno(area.Vertices, q.X, q.Y, 30))) antigas.Add(e);
             }
 
             foreach (var e in antigas)
             {
-                e.UpgradeOpen();
-                e.Erase();
+                ((Entity)transacao.GetObject(e.ObjectId, OpenMode.ForWrite, false, true)).Erase();
             }
 
             // O texto corre no eixo das fileiras, sem ficar de cabeça para baixo.
@@ -547,7 +560,7 @@ public static class CampoCommands
     {
         using var transacao = database.TransactionManager.StartTransaction();
 
-        var area = (Entity)transacao.GetObject(areaId, OpenMode.ForWrite);
+        var area = (Entity)transacao.GetObject(areaId, OpenMode.ForWrite, false, true);
         if (area.ExtensionDictionary.IsNull) area.CreateExtensionDictionary();
 
         var dicionario = (DBDictionary)transacao.GetObject(area.ExtensionDictionary, OpenMode.ForWrite);
@@ -613,12 +626,50 @@ public static class CampoCommands
     /// refaz pelos objetos, sem alinhamento, e devolve true; false se a área
     /// não segue objetos (o Regerar segue como sempre).
     /// </summary>
-    internal static bool RefazerSeSegueObjetos(Editor editor, Document documento, ProcessedTerrain terreno, IReadOnlyList<Point3> vertices, TableProfile perfil)
+    /// <returns>Null se a área não segue objetos; senão, se gerou.</returns>
+    internal static bool? RefazerSeSegueObjetos(Editor editor, Document documento, ProcessedTerrain terreno, IReadOnlyList<Point3> vertices, Func<TableProfile> perfil)
     {
-        if (PelosObjetos(documento.Database, vertices) is not { } campo) return false;
+        if (PelosObjetos(documento.Database, vertices) is not { } campo) return null;
 
-        Executar(editor, documento, terreno, campo.Area, campo.Escolha, perfil, perguntar: false, Tr.T("REFAZER"));
+        return Executar(editor, documento, terreno, campo.Area, campo.Escolha, perfil(), perguntar: false, Tr.T("REFAZER"));
+    }
+
+    /// <summary>
+    /// A área deixa de seguir os objetos (revisão do 40.2): a Usina pelo
+    /// alinhamento e o Apagar tudo. Devolve se ela seguia.
+    /// </summary>
+    internal static bool Esquecer(Database database, IReadOnlyList<Point3> vertices)
+    {
+        if (PelosObjetos(database, vertices) is not { } campo) return false;
+
+        using var transacao = database.TransactionManager.StartTransaction();
+        var area = (Entity)transacao.GetObject(campo.Area.Id, OpenMode.ForRead);
+
+        if (!area.ExtensionDictionary.IsNull)
+        {
+            var dicionario = (DBDictionary)transacao.GetObject(area.ExtensionDictionary, OpenMode.ForWrite, false, true);
+            if (dicionario.Contains(ChaveDoRegistro)) transacao.GetObject(dicionario.GetAt(ChaveDoRegistro), OpenMode.ForWrite, false, true).Erase();
+        }
+
+        transacao.Commit();
         return true;
+    }
+
+    /// <summary>Se o ponto está a até <paramref name="distancia"/> do contorno.</summary>
+    private static bool PertoDoContorno(IReadOnlyList<Point3> area, double x, double y, double distancia)
+    {
+        for (var i = 0; i < area.Count; i++)
+        {
+            var a = area[i];
+            var b = area[(i + 1) % area.Count];
+            var (dx, dy) = (b.X - a.X, b.Y - a.Y);
+            var l2 = dx * dx + dy * dy;
+            var t = l2 < 1e-12 ? 0 : Math.Clamp(((x - a.X) * dx + (y - a.Y) * dy) / l2, 0, 1);
+            var (qx, qy) = (a.X + t * dx - x, a.Y + t * dy - y);
+            if (qx * qx + qy * qy <= distancia * distancia) return true;
+        }
+
+        return false;
     }
 
     private static bool Iguais(IReadOnlyList<Point3> a, IReadOnlyList<Point3> b) =>

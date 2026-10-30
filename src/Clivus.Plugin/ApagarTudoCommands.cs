@@ -88,6 +88,10 @@ public static class ApagarTudoCommands
         CarportCommands.LimparFilasSemVao(database);
         var orfas = LayoutEraser.ApagarOrfasDentro(database, area.Vertices);
 
+        // A área vazia deixa de seguir os objetos do cliente (40.2): o Regerar volta ao alinhamento.
+        if (CampoCommands.Esquecer(database, area.Vertices))
+            editor.WriteMessage(Tr.F("\nAPAGAR {0} deixa de seguir os objetos do cliente.\n", area.Nome));
+
         if (apagadas.Tables.Count == 0 && orfas == 0)
         {
             editor.WriteMessage(Tr.F("\nAPAGAR Nada do plugin dentro de {0}.\n", area.Nome));

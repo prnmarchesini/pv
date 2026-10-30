@@ -34,16 +34,21 @@
 (defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
 (defun clivus:dist2d (a b) (sqrt (+ (expt (- (car a) (car b)) 2) (expt (- (cadr a) (cadr b)) 2))))
 
-; O centro de uma polilinha 3D: a media dos vertices.
-(defun clivus:centro (en / v n sx sy p)
-  (setq v (entnext en) n 0 sx 0.0 sy 0.0)
-  (while (and v (= "VERTEX" (cdr (assoc 0 (entget v)))))
-    (setq p (cdr (assoc 10 (entget v))) sx (+ sx (car p)) sy (+ sy (cadr p)) n (1+ n) v (entnext v)))
+; O centro de uma polilinha: a media dos quatro primeiros vertices (a 2D
+; repete o primeiro no fim).
+(defun clivus:centro (en / d v n sx sy p)
+  (setq d (entget en) n 0 sx 0.0 sy 0.0)
+  (if (= (cdr (assoc 0 d)) "LWPOLYLINE")
+    (foreach g d (if (and (= (car g) 10) (< n 4)) (setq sx (+ sx (cadr g)) sy (+ sy (caddr g)) n (1+ n))))
+    (progn
+      (setq v (entnext en))
+      (while (and v (= "VERTEX" (cdr (assoc 0 (entget v)))) (< n 4))
+        (setq p (cdr (assoc 10 (entget v))) sx (+ sx (car p)) sy (+ sy (cadr p)) n (1+ n) v (entnext v)))))
   (if (> n 0) (list (/ sx n) (/ sy n)) nil))
 
 ; Os objetos do cliente (polilinhas 3D sem XData nosso) e as mesas (com XData "Mesa").
 (defun clivus:ler ( / ss i en xd)
-  (setq ss (ssget "_X" '((0 . "POLYLINE"))) i 0 clivus:objetos nil clivus:mesas nil clivus:objxd 0)
+  (setq ss (ssget "_X" '((0 . "POLYLINE,LWPOLYLINE"))) i 0 clivus:objetos nil clivus:mesas nil clivus:objxd 0)
   (while (and ss (< i (sslength ss)))
     (setq en (ssname ss i) xd (clivus:xdata en))
     (cond
@@ -76,6 +81,13 @@
 (clivus:ler)
 (princ (strcat "\nCLIVUS_CAMPO2 mesas=" (itoa (length clivus:mesas)) " pertos=" (itoa clivus:pertos)
                " objetos=" (itoa (length clivus:objetos)) " marcas=" (itoa clivus:marcas)))
+
+; ---- o Apagar tudo: a area deixa de seguir os objetos, e o Regerar volta a
+; pedir o alinhamento (que este desenho nao tem)
+(command "CLIVUS_APAGAR_TUDO_AUTO")
+(command "CLIVUS_REFAZER_AUTO")
+(clivus:ler)
+(princ (strcat "\nCLIVUS_CAMPO3 mesas=" (itoa (length clivus:mesas)) " objetos=" (itoa (length clivus:objetos))))
 
 (setvar "SECURELOAD" clivus:secureload)
 (princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))

@@ -321,6 +321,17 @@ public static class FieldObjects
         var refRumo = pegadas
             .GroupBy(f => Math.Round(f.Axis * 180 / Math.PI, 1) % 180)
             .OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First().Key * Math.PI / 180;
+        // O eixo sai em [0, π): a 179,98° e a 0,02° são a mesma fileira em
+        // sentidos opostos. Cada pegada passa para o sentido da referência
+        // (o lado baixo e a rampa trocam de sinal), senão o lado baixo da
+        // maioria, as fileiras e as células saem viradas (revisão do 40.2).
+        pegadas = [.. pegadas.Select(f => Math.Cos(f.Axis - refRumo) >= 0 ? f : f with
+        {
+            Axis = Math.Atan2(Math.Sin(f.Axis + Math.PI), Math.Cos(f.Axis + Math.PI)),
+            LowSide = -f.LowSide,
+            RowSlope = -f.RowSlope,
+        })];
+
         var inclinadas = pegadas.Where(f => f.Tilt is not null).Select(f => f.Tilt!.Value).OrderBy(t => t).ToList();
         double? refInclinacao = inclinadas.Count == 0 ? null : inclinadas[inclinadas.Count / 2];
         var lados = pegadas.Where(f => f.LowSide is not null).GroupBy(f => f.LowSide!.Value).OrderByDescending(g => g.Count()).ThenByDescending(g => g.Key).ToList();
@@ -357,7 +368,10 @@ public static class FieldObjects
         }
 
         // Dois objetos no mesmo lugar, ou um em cima do outro: fica o primeiro.
-        var ordem = pegadas.Where(f => !pulados.Contains(f.Id)).ToList();
+        // Os do tamanho da maioria primeiro: um retângulo que não é mesa
+        // (cerca, lote) não tira o lugar das mesas que cobre (revisão do 40.2).
+        bool DaMaioria(FieldFootprint f) => Math.Abs(f.Length - refL) <= SizeTolerance && Math.Abs(f.Width - refW) <= SizeTolerance;
+        var ordem = pegadas.Where(f => !pulados.Contains(f.Id)).OrderBy(f => DaMaioria(f) ? 0 : 1).ToList();
         for (var i = 0; i < ordem.Count; i++)
         {
             if (pulados.Contains(ordem[i].Id)) continue;
@@ -367,7 +381,7 @@ public static class FieldObjects
                 var (a, b) = (ordem[i], ordem[j]);
                 if (pulados.Contains(b.Id)) continue;
 
-                var alcance = (Math.Max(a.PlanLength, b.PlanLength) + Math.Max(a.Width, b.Width)) / 1.5;
+                var alcance = Math.Max(a.PlanLength, b.PlanLength) + Math.Max(a.Width, b.Width);
                 if (Math.Abs(a.Center.X - b.Center.X) > alcance || Math.Abs(a.Center.Y - b.Center.Y) > alcance) continue;
 
                 if (PlanDistance(a.Center, b.Center) < SamePlace && Math.Abs(a.Length - b.Length) <= SizeTolerance && Math.Abs(a.Width - b.Width) <= SizeTolerance)
@@ -386,7 +400,7 @@ public static class FieldObjects
         if (profile is not null) problemas.AddRange(ProfileIssues(profile, refL, refW, refInclinacao));
 
         var aceitas = pegadas.Where(f => !pulados.Contains(f.Id)).ToList();
-        var fileiras = Rows(aceitas, refRumo, rowBreak ?? DefaultRowBreak);
+        var fileiras = RowsByAxis(aceitas, rowBreak ?? DefaultRowBreak);
 
         return new FieldSurvey(pegadas, fileiras, problemas, refL, refW, refRumo, refInclinacao, refLado);
     }
@@ -431,6 +445,28 @@ public static class FieldObjects
     /// (do lado esquerdo do eixo para o direito) e, na mesma linha, no sentido
     /// do eixo.
     /// </summary>
+    /// <summary>
+    /// As fileiras, cada grupo de eixos pelo eixo dele: uma fileira a 3° da
+    /// maioria continua uma fileira, e não mesas soltas (revisão do 40.2).
+    /// Os grupos são de eixos a até 1° um do outro; as pegadas já estão no
+    /// sentido da referência (<see cref="Survey"/>).
+    /// </summary>
+    public static IReadOnlyList<FieldRow> RowsByAxis(IReadOnlyList<FieldFootprint> footprints, double? rowBreak = null)
+    {
+        ArgumentNullException.ThrowIfNull(footprints);
+
+        var grupos = new List<List<FieldFootprint>>();
+
+        foreach (var f in footprints.OrderBy(f => f.Axis))
+        {
+            var grupo = grupos.FirstOrDefault(g => AxisDifference(g[0].Axis, f.Axis) <= 1.0 * Math.PI / 180 && Math.Cos(g[0].Axis - f.Axis) > 0);
+            if (grupo is null) grupos.Add([f]);
+            else grupo.Add(f);
+        }
+
+        return [.. grupos.OrderByDescending(g => g.Count).SelectMany(g => Rows(g, Math.Atan2(g.Average(f => Math.Sin(f.Axis)), g.Average(f => Math.Cos(f.Axis))), rowBreak))];
+    }
+
     public static IReadOnlyList<FieldRow> Rows(IReadOnlyList<FieldFootprint> footprints, double axis, double? rowBreak = null)
     {
         var quebra = rowBreak ?? DefaultRowBreak;

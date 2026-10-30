@@ -306,9 +306,9 @@ public static class AnalisesCommands
                 continue;
             }
 
-            if (CampoCommands.RefazerSeSegueObjetos(editor, documento, terreno, area.Value.Vertices, perfil))
+            if (CampoCommands.RefazerSeSegueObjetos(editor, documento, terreno, area.Value.Vertices, () => perfil) is { } gerou)
             {
-                feitas++;
+                if (gerou) feitas++;
                 continue;
             }
 

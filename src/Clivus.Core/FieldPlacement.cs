@@ -67,7 +67,11 @@ public static class FieldPlacement
                 var layout = kinds[k].Layout;
                 var modulos = layout.Length - layout.LeftMargin - layout.RightMargin;
 
-                if (Math.Abs(f.Width - layout.Depth) > FieldObjects.SizeTolerance) continue;
+                // O objeto plano (2D) pode ter sido desenhado com a largura em
+                // planta, e não a da inclinação (revisão do 40.2).
+                var emPlanta = layout.Depth * Math.Cos(kinds[k].TiltRadians);
+                if (Math.Abs(f.Width - layout.Depth) > FieldObjects.SizeTolerance
+                    && (f.Tilt is not null || Math.Abs(f.Width - emPlanta) > FieldObjects.SizeTolerance)) continue;
                 if (f.Tilt is { } t && Math.Abs(t - kinds[k].TiltRadians) > FieldObjects.AngleTolerance) continue;
 
                 if (Math.Abs(f.Length - modulos) <= FieldObjects.SizeTolerance)
@@ -153,7 +157,7 @@ public static class FieldPlacement
         problemas.AddRange(semMesa);
 
         var porId = casadas.ToDictionary(c => c.Footprint.Id);
-        var fileiras = FieldObjects.Rows([.. casadas.Select(c => c.Footprint)], survey.ReferenceAxis, config.MaxGapBeforeBreak);
+        var fileiras = FieldObjects.RowsByAxis([.. casadas.Select(c => c.Footprint)], config.MaxGapBeforeBreak);
 
         var geometrias = kinds.Select(k => TableGeometry.Local(k.Layout, k.Frame.Pillars(k.Layout), k.Frame)).ToList();
         var inclinacao = kinds[0].TiltRadians;

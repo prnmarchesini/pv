@@ -182,9 +182,10 @@ public static class TrocarMesaCommands
 
         // Na área que segue os objetos do cliente (40.2), as vizinhas ficam
         // nos objetos delas: a troca não reespaça a fileira.
-        if (reespacar
-            && AreaDe(database, new Point3(cantos.Average(p => p.X), cantos.Average(p => p.Y), 0)) is { } areaDaMesa
-            && CampoCommands.PelosObjetos(database, areaDaMesa.Vertices) is not null)
+        var segueObjetos = AreaDe(database, new Point3(cantos.Average(p => p.X), cantos.Average(p => p.Y), 0)) is { } areaDaMesa
+            && CampoCommands.PelosObjetos(database, areaDaMesa.Vertices) is not null;
+
+        if (reespacar && segueObjetos)
         {
             editor.WriteMessage(Tr.T("\nTROCAR Esta área segue os objetos do cliente: as vizinhas ficam onde estão, sem reespaçar a fileira.\n"));
             reespacar = false;
@@ -235,7 +236,9 @@ public static class TrocarMesaCommands
         if (troca.Overflows && !reespacar)
         {
             editor.WriteMessage(
-                Tr.F("  ATENÇÃO: as mesas novas passam {0:0.00} m do espaço até a vizinha (com o espaçamento de {1:0.00} m). Use Regerar fileira > Manter para acertar.\n", troca.Overflow, settings.Configuration.TableGap));
+                segueObjetos
+                    ? Tr.F("  ATENÇÃO: as mesas novas passam {0:0.00} m do espaço até a vizinha (com o espaçamento de {1:0.00} m). A área segue os objetos do cliente: acerte os objetos e use o Regerar área.\n", troca.Overflow, settings.Configuration.TableGap)
+                    : Tr.F("  ATENÇÃO: as mesas novas passam {0:0.00} m do espaço até a vizinha (com o espaçamento de {1:0.00} m). Use Regerar fileira > Manter para acertar.\n", troca.Overflow, settings.Configuration.TableGap));
         }
 
         // A ponta da fileira do lado travado fica parada (Renan, 10/10/2026).

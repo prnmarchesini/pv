@@ -39,7 +39,7 @@ public static class RefazerCommands
             if (area is null) return;
 
             // A área que segue os objetos do cliente (40.2) não usa alinhamento.
-            if (CampoCommands.RefazerSeSegueObjetos(editor, documento, terreno, area.Value.Vertices, FileiraCommands.PerfilDaMesa(editor))) return;
+            if (CampoCommands.RefazerSeSegueObjetos(editor, documento, terreno, area.Value.Vertices, () => FileiraCommands.PerfilDaMesa(editor)) is not null) return;
 
             var alinhamento = FileiraCommands.EscolherAlinhamento(editor, documento);
             if (alinhamento is null) return;
@@ -73,7 +73,7 @@ public static class RefazerCommands
             // A área que segue os objetos do cliente (40.2) não usa alinhamento.
             if (areas.Count > 0
                 && FileiraCommands.LerArea(documento.Database, areas[0].Handle) is { } doCampo
-                && CampoCommands.RefazerSeSegueObjetos(editor, documento, terreno, doCampo.Vertices, MesaCommands.MesaDeExemplo()))
+                && CampoCommands.RefazerSeSegueObjetos(editor, documento, terreno, doCampo.Vertices, MesaCommands.MesaDeExemplo) is not null)
             {
                 return;
             }
@@ -112,7 +112,7 @@ public static class RefazerCommands
     {
         // A área que segue os objetos do cliente (40.2) se refaz pelos mesmos
         // objetos, escolhidos do mesmo jeito.
-        if (CampoCommands.RefazerSeSegueObjetos(editor, documento, terreno, area.Vertices, perfil)) return;
+        if (CampoCommands.RefazerSeSegueObjetos(editor, documento, terreno, area.Vertices, () => perfil) is not null) return;
 
         // A área de carport refaz as filas de carport dela (28/10/2026).
         if (CarportCommands.UsinaComCarport(editor, documento, terreno, area, alinhamento)) return;

@@ -170,6 +170,10 @@ public static class UsinaCommands
         if (plano is null) return;
 
         Desenhar(editor, documento, plano);
+
+        // A Usina pelo alinhamento: a área deixa de seguir os objetos do cliente (40.2).
+        if (CampoCommands.Esquecer(documento.Database, area.Vertices))
+            editor.WriteMessage(Tr.F("\nUSINA {0} foi gerada pelo alinhamento: deixa de seguir os objetos do cliente.\n", area.Nome));
     }
 
     /// <summary>

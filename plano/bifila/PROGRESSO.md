@@ -174,105 +174,15 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
   - Nível 2: 8 objetos (6 + 1 repetido + 1 curto) no Z 9999 → 6 mesas a 0,000 m do centro
     dos objetos, 72 pilares na faixa do terreno, os 8 objetos intactos, 2 marcas; o Regerar
     área refaz igual.
-- 39.2 (30/10/2026), a prova:
-  - O nível 2 `clivus-estruturas` roda a mesma cadeia duas vezes no mesmo terreno, com a
-    mesma mesa (a 2P14 GC800): uma vez com estrutura monoposte (`CLIVUS_MONO_2P14_AUTO`,
-    só de teste) e outra com o biposte. A cadeia: usina, alturas, tag de mesas e de
-    módulos, grupo, strings, configuração elétrica (UC, trafo, modelo, inversores, alocação,
-    skid), local dos inversores pelas strings, cabos da rota, vala, Gerar CC, conferência e
-    resumo da rota, resumo elétrico, numeração, tag das strings, análises (PB, pilar,
-    declividade), árvore e sombras, PVsyst, Excel com todas as abas (`CLIVUS_EXCEL_TUDO_AUTO`,
-    só de teste), 3D, TermoVision, Validar e Recontar.
-  - Resultado (10 fileiras, 30 mesas, 840 módulos): as 22 camadas do desenho que não são
-    estrutura saem iguais nas duas (quantas entidades e a soma de X + Y de cada uma): área,
-    alinhamento, mesas, módulos e faces, tags de mesa, de módulo e de string, strings, cabos
-    CC + e −, vala, inversores, grupo, sombras e textos, árvore, declividade. Iguais também:
-    o resumo da usina, o resumo da rota (1.028,59 m de cabo CC, por inversor), o resumo
-    elétrico, as abas do Excel que não são de pilar, o DAE do PVsyst, a cena do 3D (menos
-    pilares e peças) e o retorno do TermoVision. Muda só a estrutura: 180 × 360 pilares,
-    0 × 780 peças, 540 × 720 cotas das alturas (PB/PA uma por pórtico, P3 em cada pilar).
-  - O levantamento do "tudo" (subagente) achou quatro lugares onde o biposte escorregava,
-    corrigidos com teste: a contagem da PB/PA dizia "pilares" e conta pórticos (agora diz
-    "pórticos" quando o desenho tem biposte; o nível 2 da bifila confere); o Apagar › Cores
-    deixava as peças do biposte vermelhas; a regra das pontas iguais olhava o último pilar da
-    lista (o traseiro) e não o que leva a PB (o teste falha com a regra antiga); o palpite do
-    perfil pelo comprimento (mesa antiga sem o nome do perfil) não olhava o tipo, e a 2P14
-    monoposte e a GC800 têm o mesmo comprimento. A caixa do 3D diz "Canaletas, carport e
-    estrutura do biposte".
-  - Ficam fora do nível 2 (sem comando automático ou só de tela): a rota CA e MT (precisam
-    do trafo e da subestação posicionados), a drenagem (não lê mesa), o carport (estrutura à
-    parte), salvar e reabrir o DWG, e as janelas. Estão no roteiro de tela.
-- 38.6 (30/10/2026), o que assumi:
-  - O PAN do PVsyst traz as medidas em metro (Height, Width, Depth; o do Aurora, 2,384 ×
-    1,303 × 0,033). O lado maior vira a altura. PAN sem as três medidas: as medidas ficam
-    como estavam, e o recado diz.
-  - "Carregar .PAN..." põe o módulo do PAN na lista de modelos (o da biblioteca com o mesmo
-    modelo, ou ele mesmo, só nesta janela) e enche marca, modelo, medidas, potência e a parte
-    elétrica. Se a biblioteca do serviço não tem o modelo, pergunta se cadastra, com o PAN;
-    com o serviço fora do ar, diz que o "Cadastrar módulo..." leva depois.
-  - "Cadastrar módulo..." tem "Ler .PAN..."; com o PAN já lido na janela de Mesa, abre com ele.
-    O PAN só vai junto se o modelo não foi trocado à mão.
-  - O serviço (`servidor/`, FastAPI) guarda a parte elétrica (V, A, V/°C, A/°C, %/°C) e o
-    arquivo como veio (até 500 mil caracteres); a lista devolve a parte elétrica e se tem PAN,
-    sem o texto; o arquivo sai em `GET /modulos/{id}/pan`. Migração `3c1d2e7f9a10` (o
-    `tools/servico-local.ps1` já roda o `alembic upgrade head`). Escolher na lista um módulo
-    que tem a parte elétrica no serviço enche os dados elétricos.
-  - **O "servidor" hoje é o serviço de módulos local** (`tools\servico-local.ps1`, ou o
-    endereço de `CLIVUS_SERVICO`). O servidor de produção (Coolify: 3D, licenças, portal) não
-    hospeda o serviço de módulos; para os usuários subirem PAN para todos, o serviço precisa
-    ir para lá — decisão do Renan (e da sessão do servidor, pelo CANAL.md), fora deste passo.
-  - Testes: 8 no serviço (pytest, 32 ao todo) e 8 no Core (medidas do PAN, o lado maior, a
-    parte elétrica indo e voltando). As janelas são de tela.
-
-## Roteiro de tela (38.1 a 39.1)
-
-1. **Nova estrutura (38.1 e 38.5):** Configurações › Estruturas › Nova estrutura… › **Fixa**.
-   A janela de Mesa abre na aba "Perfil e módulo"; clicar no cartão **Biposte** abre a aba
-   Biposte, na Arctech 2P14 GC800, com as seções Pórtico, Mãos francesas, Terças, Tirantes e
-   Seções das peças. Mudar um campo, clicar Monoposte e voltar para Biposte: o campo
-   continua mudado. No corte, conferir os dois
-   pilares, a viga, as duas mãos francesas e as cotas T2, T2t e 3,000 m entre os pilares.
-   Apertar GC1000 e ver as mãos francesas mudarem. "Usar esta mesa", Salvar no desenho,
-   fechar e reabrir: ela está na lista com "(bifila)" e na Escolha das estruturas.
-2. **Desenhar (38.2):** marcar só a bifila na Escolha, pôr a faixa da PB do projeto em
-   0,84 a 1,60 (a GC800 pede 0,832 na face do módulo) e processar uma área. Orbitar uma
-   mesa: 12 pilares (6 pórticos com dianteiro e traseiro), viga em cada pórtico, mãos
-   francesas, 4 terças e o X de tirantes nos vãos 2 e 4 da linha de trás. Apagar uma mesa:
-   tudo some junto.
-3. **Ferramentas (38.3):** Análises › Ponta baixa › Inserir: um texto por pórtico, não dois.
-   Pontas numa mesa bifila: os pilares continuam com 2,20 m de enterro. Trocar uma
-   monoposte por bifila e voltar.
-4. **Excel (38.4):** Exportar Excel com "Estrutura (bifila)" marcada: aba Estrutura com
-   pilares por linha, vigas, mãos francesas, terças (barras e emendas) e tirantes; aba
-   Pilares com a coluna Linha.
-5. **3D (39.1):** Ver 3D numa área bifila: a estrutura aparece em cinza aço embaixo dos
-   módulos.
-6. **Mesas conforme os objetos (40.2):** no `PLAT A_Perfiles.dwg` (Panamá), criar a área
-   pelo contorno de `_CONTORNO`, marcar só o biposte (GC800) na Escolha das estruturas, pôr
-   o azimute olhando para o sul (Configurações › Parâmetros) e a faixa da PB em 0,84 a
-   1,60. Processar › Conforme objetos › Todos. Conferir no relatório quantos objetos viram
-   mesa e as divergências (no Aurora: objetos repetidos e "CELDAS NUEVAS" em cima das
-   antigas); as marcas vermelhas na camada CLIVUS_DIVERGENCIAS; cada mesa em cima do seu
-   objeto. Depois Regerar área: refaz pelos objetos.
-7. **Tudo com biposte (39.2):** numa área com o biposte em uso (faixa da PB 0,84 a 1,60),
-   passar por tudo e comparar com uma área monoposte:
-   - Processar: Usina, Regerar área, Regerar todas;
-   - Edição: Recalcular, Recalcular pendentes, Pontas, Validar, Recontar, Renomear, Estado,
-     Marcar pendente, Trocar mesa, Regerar fileira, Apagar (cores, textos, sombras, strings),
-     Apagar tudo, Grupos; copiar, mover e apagar uma mesa com o AutoCAD (o vigia);
-   - Análises: PB e PA (um por pórtico, "Contado em: pórticos"), parte livre, enterrada e total
-     do pilar (cada pilar), declividade; cores e quantificar;
-   - Tags: fileiras, mesas, módulos, strings;
-   - Sombras: árvore, sombras, por quê;
-   - Elétrica: String, Configuração elétrica (UC, trafo, inversores, alocar, skid,
-     numeração), Resumo, Rota de cabos (CC, CA, MT, valas, recolocar, recalcular, cabos,
-     resumo);
-   - Saídas: PVsyst, Excel (todas as abas; a Estrutura só no biposte), 3D (a caixa
-     "Canaletas, carport e estrutura do biposte" liga e desliga as peças), Publicar 3D,
-     TermoVision;
-   - Salvar, fechar e abrir o DWG: as mesas, os pilares e as peças voltam.
-8. **PAN (38.6):** com o serviço no ar (`tools\servico-local.ps1`), janela de Mesa › Perfil e
-   módulo › Carregar .PAN... › `Panama\Docs\JAM66D46-720_LB.PAN`: o modelo vira "JA Solar
-   JAM66D46-720/LB", as medidas 2,384 × 1,303 × 0,033, a potência 720 e os dados elétricos
-   enchem; a pergunta "Cadastrar agora, com o PAN?" › Sim: o módulo entra na lista. Fechar e
-   abrir a janela, escolher esse módulo na lista: os dados elétricos vêm junto.
+  - Revisão (subagente), corrigido com teste: o eixo perto de 180° (ruído de coordenada ou
+    vértices ao contrário) virava a mesa e abria a junta — cada pegada passa para o sentido da
+    referência (o teste falha sem isso); um retângulo que não é mesa (cerca) tirava o lugar das
+    mesas — os do tamanho da maioria disputam primeiro; a sobreposição pequena na mesma
+    fileira passava — o alcance cobre a mesa inteira; o objeto 2D desenhado com a largura em
+    planta não casava; a fileira a 3° da maioria virava mesas soltas — as fileiras se agrupam
+    pelo eixo; a polilinha com o primeiro vértice repetido no fim (GIS, DXF) era descartada;
+    camadas congeladas, desligadas e do Clivus ficam fora do Todos; a área esquece os objetos
+    na Usina pelo alinhamento e no Apagar tudo; camada travada não derruba; as marcas da vez
+    anterior saem também a até 30 m da área; o objeto de outro tamanho que casa com outra mesa
+    em uso não é divergência; o "sem mesa do tamanho" saía duas vezes; o Regerar todas conta
+    só a área que gerou. Nível 2: mais um objeto 2D (7 mesas) e o Apagar tudo esquecendo.
