@@ -84,6 +84,13 @@ public sealed record TableFrame(
     public double? MinEmbedment { get; init; }
 
     /// <summary>
+    /// A parte bifila (passo 37.1): o pilar traseiro de cada pórtico, as mãos
+    /// francesas, as terças e os tirantes. Null na monoposte, que sai
+    /// exatamente como antes da bifila existir.
+    /// </summary>
+    public BifilaFrame? Bifila { get; init; }
+
+    /// <summary>
     /// O comprimento que os pilares precisam cobrir, do primeiro ao último: a
     /// mesa inteira (módulos, espaçamentos e as duas sobras) menos o balanço
     /// das duas pontas.
@@ -171,6 +178,24 @@ public sealed record TableFrame(
                 return Tr.F("o pilar está a {0} m de uma tesoura de {1} m, ou seja, fora dela", Texto(PillarAlongRafter), Texto(RafterLength));
             }
 
+            if (Bifila is { } bifila)
+            {
+                if (bifila.WhyInvalid is { } porCausaDaBifila) return porCausaDaBifila;
+
+                // O traseiro depois do dianteiro. A distância em planta, que é a
+                // que separa as seções no chão, depende da inclinação: quem a
+                // confere é o TableProfile.
+                if (bifila.RearPillarAlongRafter <= PillarAlongRafter)
+                {
+                    return Tr.F(
+                        "o pilar traseiro (a {0} m na tesoura) precisa ficar depois do dianteiro (a {1} m)",
+                        Texto(bifila.RearPillarAlongRafter), Texto(PillarAlongRafter));
+                }
+
+                if (bifila.RearPillarAlongRafter > RafterLength)
+                    return Tr.F("o pilar traseiro está a {0} m de uma tesoura de {1} m, ou seja, fora dela", Texto(bifila.RearPillarAlongRafter), Texto(RafterLength));
+            }
+
             return null;
         }
     }
@@ -210,6 +235,46 @@ public sealed record TableFrame(
         if (_vaos is not null && Pillars(mesa).WhyDoesNotFit(mesa.Length) is { } naoFecha)
             return naoFecha;
 
+        if (Bifila is { } bifila)
+        {
+            // As duas terças de cada fileira de módulos, uma de cada borda,
+            // não podem se cruzar no meio do módulo.
+            if (2 * bifila.PurlinFromModuleEdge >= mesa.Module.Height)
+            {
+                return Tr.F(
+                    "as terças a {0} m de cada borda se cruzam num módulo de {1} m na inclinação",
+                    Texto(bifila.PurlinFromModuleEdge), Texto(mesa.Module.Height));
+            }
+
+            // A terça apoia nas vigas: a de fora não pode passar da ponta da
+            // tesoura, que fica a (M2 − T1)/2 da borda dos módulos.
+            var sobra = (mesa.Depth - RafterLength) / 2;
+            if (bifila.PurlinFromModuleEdge < sobra)
+            {
+                return Tr.F(
+                    "a terça a {0} m da borda dos módulos fica fora da tesoura, que começa a {1} m da borda: ela ficaria sem apoio",
+                    Texto(bifila.PurlinFromModuleEdge), Texto(sobra));
+            }
+
+            // Tirante num vão que a mesa não tem não é ignorado: o projetista
+            // escreveu um número, e um número errado calado é tirante faltando
+            // na obra. A tabela pode não fechar (vão-alvo absurdo): aí o
+            // motivo é ela.
+            int vaos;
+            try
+            {
+                vaos = Pillars(mesa).Spans.Count;
+            }
+            catch (ArgumentOutOfRangeException erro)
+            {
+                return Tr.F("a tabela de pilares não fecha: {0}", erro.Message);
+            }
+
+            var fora = bifila.RodSpans.FirstOrDefault(v => v > vaos);
+            if (fora > 0)
+                return Tr.F("o tirante está no vão {0}, e a mesa tem {1} vão(s)", fora, vaos);
+        }
+
         return null;
     }
 
@@ -224,9 +289,11 @@ public sealed record TableFrame(
 
         var enterro = MinEmbedment is { } t3 ? Tr.F(", enterro mínimo (T3) de {0} m", Texto(t3)) : "";
 
-        return Tr.F(
+        var texto = Tr.F(
             "tesoura de {0} m, pilar a {1} m dela, seção {2} × {3} m, {4} e balanço de {5} m{6}",
             Texto(RafterLength), Texto(PillarAlongRafter), Texto(PillarWidth), Texto(PillarDepth), vao, Texto(PillarCantilever), enterro);
+
+        return Bifila is { } bifila ? texto + "; " + bifila.Describe() : texto;
     }
 
     /// <summary>
@@ -244,6 +311,7 @@ public sealed record TableFrame(
         && PillarSpanTarget.Equals(outra.PillarSpanTarget)
         && PillarCantilever.Equals(outra.PillarCantilever)
         && Nullable.Equals(MinEmbedment, outra.MinEmbedment)
+        && Equals(Bifila, outra.Bifila)
         && (_vaos is null
             ? outra._vaos is null
             : outra._vaos is not null && _vaos.AsSpan().SequenceEqual(outra._vaos));
@@ -260,6 +328,7 @@ public sealed record TableFrame(
         codigo.Add(PillarSpanTarget);
         codigo.Add(PillarCantilever);
         codigo.Add(MinEmbedment);
+        codigo.Add(Bifila);
         codigo.Add(_vaos is null);
         if (_vaos is not null) foreach (var vao in _vaos) codigo.Add(vao);
 

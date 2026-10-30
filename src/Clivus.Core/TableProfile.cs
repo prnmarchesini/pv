@@ -79,6 +79,15 @@ public sealed record TableProfile(
     public const int VersaoComEletrica = 3;
 
     /// <summary>
+    /// A versão do formato do perfil bifila (passo 37.1): a estrutura traz o
+    /// pilar traseiro, as mãos francesas, as terças e os tirantes em
+    /// <c>frame.bifila</c>. Os dados elétricos são opcionais nela. Perfil sem
+    /// a bifila continua saindo na 2 ou na 3, igual a antes; plugin antigo
+    /// recusa a 4 com o motivo, em vez de abrir uma bifila como monoposte.
+    /// </summary>
+    public const int VersaoBifila = 4;
+
+    /// <summary>
     /// Os dados elétricos do módulo desta estrutura (lidos do .PAN do PVsyst
     /// ou digitados no cadastro), ou null quando a estrutura ainda não os
     /// tem: aí as tensões e correntes da rota ficam em branco. É a fonte
@@ -137,6 +146,9 @@ public sealed record TableProfile(
             if (ModuleElectrical?.WhyInvalid() is { } porCausaDaEletrica)
                 return Tr.F("os dados elétricos do módulo não servem: {0}", porCausaDaEletrica);
 
+            if (Frame.WhyInvalid is null && Layout.WhyInvalid is null && PorQueABifilaNaoServe() is { } porCausaDaBifila)
+                return porCausaDaBifila;
+
             // A mesma conferência que a geometria faz, e do mesmo lugar: sem
             // ela aqui, um perfil errado só explodiria na hora de desenhar,
             // com o projetista já tendo escolhido a área. Chamar a de lá, em
@@ -149,6 +161,60 @@ public sealed record TableProfile(
     /// A inclinação em graus, como ela vai para o arquivo e para a tela.
     /// </summary>
     public double TiltDegrees => TiltRadians * 180 / Math.PI;
+
+    /// <summary>
+    /// O que só se confere na bifila com a inclinação na mão: os dois pilares
+    /// separados em planta, e o topo deles entre o fundo do módulo e o fundo
+    /// da viga (passo 37.1, revisão).
+    /// </summary>
+    private string? PorQueABifilaNaoServe()
+    {
+        if (Frame.Bifila is not { } b) return null;
+
+        var cos = Math.Cos(TiltRadians);
+
+        // Em planta: as seções dos dois pilares no chão, eixo a eixo, mais
+        // longe que a largura do pilar na inclinação.
+        var emPlanta = (b.RearPillarAlongRafter - Frame.PillarAlongRafter) * cos;
+        if (!(emPlanta > Frame.PillarDepth))
+        {
+            return Tr.F(
+                "o pilar traseiro fica a {0} m do dianteiro em planta, e o pilar tem {1} m na inclinação: os dois se encostam",
+                emPlanta.ToString("0.###", Tr.Culture), Frame.PillarDepth.ToString("0.###", Tr.Culture));
+        }
+
+        // Na vertical, no eixo do pilar: o módulo, a terça e a viga estão
+        // empilhados na perpendicular ao plano. O topo do pilar abaixo do
+        // fundo do módulo, e acima do fundo da viga (senão ela fica sem apoio).
+        var modulo = Layout.Module.Thickness / cos;
+        var pilha = (Layout.Module.Thickness + b.Purlin.Depth + b.Beam.Depth) / cos;
+
+        if (b.PillarTopDrop < modulo)
+        {
+            return Tr.F(
+                "o topo do pilar a {0} m abaixo dos módulos fura o módulo, que tem {1} m na vertical",
+                b.PillarTopDrop.ToString("0.###", Tr.Culture), modulo.ToString("0.###", Tr.Culture));
+        }
+
+        if (b.PillarTopDrop > pilha)
+        {
+            return Tr.F(
+                "o topo do pilar a {0} m abaixo dos módulos fica abaixo da viga (módulo, terça e viga somam {1} m na vertical): a viga ficaria sem apoio",
+                b.PillarTopDrop.ToString("0.###", Tr.Culture), pilha.ToString("0.###", Tr.Culture));
+        }
+
+        return null;
+    }
+
+    /// <summary>Se a estrutura é bifila (dois pilares por pórtico).</summary>
+    public bool IsBifila => Frame?.Bifila is not null;
+
+    /// <summary>
+    /// Na bifila, a distância entre os eixos dos dois pilares em planta, que é
+    /// como o fornecedor cota (3,00 m na Arctech); null na monoposte.
+    /// </summary>
+    public double? BifilaHorizontalSpacing =>
+        Frame?.Bifila is { } b ? (b.RearPillarAlongRafter - Frame.PillarAlongRafter) * Math.Cos(TiltRadians) : null;
 
     /// <summary>
     /// O perfil com os dados elétricos do .PAN e a potência do módulo passada
@@ -180,7 +246,8 @@ public sealed record TableProfile(
 
         var arquivo = new Arquivo
         {
-            FormatVersion = ModuleElectrical is null ? VersaoDoFormato : VersaoComEletrica,
+            FormatVersion = Frame.Bifila is not null ? VersaoBifila
+                : ModuleElectrical is null ? VersaoDoFormato : VersaoComEletrica,
             // Sem Trim: trimar só na gravação faria o perfil voltar diferente
             // do que entrou, que é exatamente o que este arquivo existe para
             // evitar. Nome só de espaço já foi recusado pela validação.
@@ -211,6 +278,27 @@ public sealed record TableProfile(
                 PillarCantilever = Frame.PillarCantilever,
                 PillarSpans = Frame.PillarSpans?.ToArray(),
                 MinEmbedment = Frame.MinEmbedment,
+                Bifila = Frame.Bifila is { } b
+                    ? new BifilaNoArquivo
+                    {
+                        RearPillarAlongRafter = b.RearPillarAlongRafter,
+                        PillarTopDrop = b.PillarTopDrop,
+                        FrontBraceLength = b.FrontBraceLength,
+                        FrontBraceBelowTop = b.FrontBraceBelowTop,
+                        RearBraceLength = b.RearBraceLength,
+                        RearBraceBelowTop = b.RearBraceBelowTop,
+                        PurlinFromModuleEdge = b.PurlinFromModuleEdge,
+                        PurlinMaxBar = b.PurlinMaxBar,
+                        RodLine = b.RodLine.ToString(),
+                        RodSpans = [.. b.RodSpans],
+                        RodUpperBelowTop = b.RodUpperBelowTop,
+                        RodLowerBelowTop = b.RodLowerBelowTop,
+                        Beam = SecaoNoArquivo.De(b.Beam),
+                        Purlin = SecaoNoArquivo.De(b.Purlin),
+                        Brace = SecaoNoArquivo.De(b.Brace),
+                        RodDiameter = b.RodDiameter,
+                    }
+                    : null,
             },
             ModuleElectrical = ModuleElectrical is { } e
                 ? new EletricaNoArquivo
@@ -264,10 +352,10 @@ public sealed record TableProfile(
         if (arquivo.FormatVersion is not { } versao)
             throw new InvalidOperationException(Tr.T("O perfil de mesa não diz de que versão do formato é."));
 
-        if (versao != VersaoDoFormato && versao != VersaoComEletrica)
+        if (versao != VersaoDoFormato && versao != VersaoComEletrica && versao != VersaoBifila)
         {
             throw new InvalidOperationException(
-                Tr.F("O perfil de mesa é da versão {0} do formato, e este plugin lê a versão {1}.", versao, VersaoComEletrica));
+                Tr.F("O perfil de mesa é da versão {0} do formato, e este plugin lê a versão {1}.", versao, VersaoBifila));
         }
 
         // Os dados elétricos entraram na versão 3: um perfil que diz ser da 2
@@ -277,6 +365,14 @@ public sealed record TableProfile(
 
         if (versao == VersaoComEletrica && arquivo.ModuleElectrical is null)
             throw new InvalidOperationException(Tr.F("O perfil de mesa não traz o campo \"{0}\".", "moduleElectrical"));
+
+        // A bifila entrou na versão 4, e só ela sai na 4: os dois lados
+        // precisam bater, senão o arquivo foi mexido à mão.
+        if (versao == VersaoBifila && arquivo.Frame?.Bifila is null)
+            throw new InvalidOperationException(Tr.T("O perfil de mesa é da versão 4 do formato e não traz a estrutura bifila (frame.bifila)."));
+
+        if (versao != VersaoBifila && arquivo.Frame?.Bifila is not null)
+            throw new InvalidOperationException(Tr.F("O perfil de mesa é da versão {0} do formato e traz a estrutura bifila, que só existe na versão 4.", versao));
 
         if (arquivo.Layout is null) throw new InvalidOperationException(Tr.T("O perfil de mesa não traz a mesa."));
         if (arquivo.Frame is null) throw new InvalidOperationException(Tr.T("O perfil de mesa não traz a estrutura."));
@@ -319,6 +415,7 @@ public sealed record TableProfile(
                 // o vão-alvo e o enterro da configuração, como sempre abriu.
                 PillarSpans = arquivo.Frame.PillarSpans,
                 MinEmbedment = arquivo.Frame.MinEmbedment,
+                Bifila = arquivo.Frame.Bifila is { } b ? LerBifila(b) : null,
             },
             Exigir(arquivo.TiltDegrees, "tiltDegrees") * Math.PI / 180)
         {
@@ -342,6 +439,47 @@ public sealed record TableProfile(
             throw new InvalidOperationException(Tr.F("O perfil de mesa não descreve uma mesa: {0}.", motivo));
 
         return perfil;
+    }
+
+    /// <summary>
+    /// A parte bifila do arquivo, com cada campo exigido pelo nome: na bifila
+    /// nada é opcional, e zero é valor legítimo (mão francesa zero é "sem").
+    /// </summary>
+    private static BifilaFrame LerBifila(BifilaNoArquivo b)
+    {
+        // Pelo nome exato, e não pelo conversor do .NET, que aceita "1" entre
+        // aspas e "Rear, Front" como se fossem nomes.
+        var texto = b.RodLine ?? throw new InvalidOperationException(Tr.F("O perfil de mesa não traz o campo \"{0}\".", "frame.bifila.rodLine"));
+
+        if (!Enum.GetNames<BifilaRodLine>().Contains(texto, StringComparer.Ordinal))
+            throw new InvalidOperationException(Tr.F("O perfil de mesa traz uma linha de tirante que este plugin não conhece: {0}.", texto));
+
+        var linha = Enum.Parse<BifilaRodLine>(texto);
+
+        return new BifilaFrame(
+            Exigir(b.RearPillarAlongRafter, "frame.bifila.rearPillarAlongRafter"),
+            Exigir(b.PillarTopDrop, "frame.bifila.pillarTopDrop"),
+            Exigir(b.FrontBraceLength, "frame.bifila.frontBraceLength"),
+            Exigir(b.FrontBraceBelowTop, "frame.bifila.frontBraceBelowTop"),
+            Exigir(b.RearBraceLength, "frame.bifila.rearBraceLength"),
+            Exigir(b.RearBraceBelowTop, "frame.bifila.rearBraceBelowTop"),
+            Exigir(b.PurlinFromModuleEdge, "frame.bifila.purlinFromModuleEdge"),
+            Exigir(b.PurlinMaxBar, "frame.bifila.purlinMaxBar"),
+            linha,
+            b.RodSpans ?? throw new InvalidOperationException(Tr.F("O perfil de mesa não traz o campo \"{0}\".", "frame.bifila.rodSpans")),
+            Exigir(b.RodUpperBelowTop, "frame.bifila.rodUpperBelowTop"),
+            Exigir(b.RodLowerBelowTop, "frame.bifila.rodLowerBelowTop"),
+            LerSecao(b.Beam, "frame.bifila.beam"),
+            LerSecao(b.Purlin, "frame.bifila.purlin"),
+            LerSecao(b.Brace, "frame.bifila.brace"),
+            Exigir(b.RodDiameter, "frame.bifila.rodDiameter"));
+    }
+
+    private static BarSection LerSecao(SecaoNoArquivo? secao, string campo)
+    {
+        if (secao is null) throw new InvalidOperationException(Tr.F("O perfil de mesa não traz o campo \"{0}\".", campo));
+
+        return new BarSection(Exigir(secao.Width, campo + ".width"), Exigir(secao.Depth, campo + ".depth"));
     }
 
     /// <summary>A linha que descreve o perfil para o usuário.</summary>
@@ -437,5 +575,37 @@ public sealed record TableProfile(
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public double? MinEmbedment { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public BifilaNoArquivo? Bifila { get; init; }
+    }
+
+    /// <summary>A parte bifila como está no arquivo (versão 4). Tudo anulável, pelo mesmo motivo do resto.</summary>
+    private sealed class BifilaNoArquivo
+    {
+        public double? RearPillarAlongRafter { get; init; }
+        public double? PillarTopDrop { get; init; }
+        public double? FrontBraceLength { get; init; }
+        public double? FrontBraceBelowTop { get; init; }
+        public double? RearBraceLength { get; init; }
+        public double? RearBraceBelowTop { get; init; }
+        public double? PurlinFromModuleEdge { get; init; }
+        public double? PurlinMaxBar { get; init; }
+        public string? RodLine { get; init; }
+        public int[]? RodSpans { get; init; }
+        public double? RodUpperBelowTop { get; init; }
+        public double? RodLowerBelowTop { get; init; }
+        public SecaoNoArquivo? Beam { get; init; }
+        public SecaoNoArquivo? Purlin { get; init; }
+        public SecaoNoArquivo? Brace { get; init; }
+        public double? RodDiameter { get; init; }
+    }
+
+    private sealed class SecaoNoArquivo
+    {
+        public double? Width { get; init; }
+        public double? Depth { get; init; }
+
+        public static SecaoNoArquivo De(BarSection secao) => new() { Width = secao.Width, Depth = secao.Depth };
     }
 }
