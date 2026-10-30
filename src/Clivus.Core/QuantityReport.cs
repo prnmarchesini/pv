@@ -8,7 +8,8 @@ namespace Clivus.Core;
 /// <param name="Embedded">O que fica enterrado, em metro.</param>
 /// <param name="Above">O que fica acima do terreno (P3), em metro; null sem terreno.</param>
 /// <param name="Length">O comprimento total, em metro; null quando o pilar tem problema.</param>
-public sealed record QuantityPillar(string Table, int Number, double Embedded, double? Above, double? Length);
+/// <param name="Line">Na bifila, o lado do pilar no pórtico; <see cref="PillarLine.Single"/> na monoposte.</param>
+public sealed record QuantityPillar(string Table, int Number, double Embedded, double? Above, double? Length, PillarLine Line = PillarLine.Single);
 
 /// <summary>
 /// O relatório do Excel (passo 8.12, Melhorias.docx, 01/10/2026): "essas
@@ -34,8 +35,13 @@ public static class QuantityReport
     /// <param name="extras">Tabelas a mais (cabos): uma aba cada, no fim, com o título como nome.</param>
     /// <param name="eletrico">O resumo elétrico (a aba vai se não for null).</param>
     /// <param name="capa">O nome do desenho e a hora: com ela, a primeira aba é o Sumário (o que há em cada aba).</param>
+    /// <param name="estrutura">
+    /// As peças da bifila (passo 37.4). Com elas, ou com pilar bifila, sai a aba
+    /// "Estrutura"; sem nenhuma das duas, a planilha é a mesma de antes.
+    /// </param>
     public static XlsxWriter Build(int mesas, int modulos, double kwp, IReadOnlyList<QuantityPillar> pilares, IReadOnlyList<AnalysisTally> quantificacoes,
-        ExportSheets abas = ExportSheets.Layout, IEnumerable<CableTable>? extras = null, SystemSummary? eletrico = null, (string Desenho, DateTime Quando)? capa = null)
+        ExportSheets abas = ExportSheets.Layout, IEnumerable<CableTable>? extras = null, SystemSummary? eletrico = null, (string Desenho, DateTime Quando)? capa = null,
+        IReadOnlyList<QuantityBar>? estrutura = null)
     {
         ArgumentNullException.ThrowIfNull(pilares);
         ArgumentNullException.ThrowIfNull(quantificacoes);
@@ -47,6 +53,10 @@ public static class QuantityReport
         if (abas.HasFlag(ExportSheets.Analyses)) indice.Add((Analises(planilha, quantificacoes), Tr.T("A última quantificação de cada análise.")));
         if (abas.HasFlag(ExportSheets.Pillars)) indice.Add((Pilares(planilha, pilares), Tr.T("Um pilar por linha: enterrado, acima do terreno e total.")));
         if (abas.HasFlag(ExportSheets.PillarPurchase)) indice.Add((Compra(planilha, pilares), Tr.T("Os comprimentos agrupados, com a quantidade de cada um.")));
+
+        var barras = estrutura ?? [];
+        if (abas.HasFlag(ExportSheets.Structure) && (barras.Count > 0 || pilares.Any(p => p.Line != PillarLine.Single)))
+            indice.Add((StructureBill.Sheet(planilha, pilares, barras), Tr.T("A bifila: pilares por linha, vigas, mãos francesas, terças e tirantes.")));
         if (eletrico is not null) indice.Add((ResumoEletrico(planilha, eletrico), Tr.T("Subestações, trafos, inversores, strings, módulos e kWp pela cadeia de vínculo.")));
         foreach (var t in extras ?? []) indice.Add((Tabela(planilha, t), t.Title));
 
@@ -157,13 +167,28 @@ public static class QuantityReport
     private static string Pilares(XlsxWriter planilha, IReadOnlyList<QuantityPillar> pilares)
     {
         var aba = planilha.Sheet(Tr.T("Pilares"));
-        aba.Add([Tr.T("Mesa"), Tr.T("Pilar"), Tr.T("Enterrado (m)"), Tr.T("Acima do terreno (m)"), Tr.T("Total (m)")]);
+
+        // A coluna da linha só existe com pilar bifila: a planilha da
+        // monoposte sai com as colunas de sempre.
+        var bifila = pilares.Any(p => p.Line != PillarLine.Single);
+
+        aba.Add(bifila
+            ? [Tr.T("Mesa"), Tr.T("Pilar"), Tr.T("Linha"), Tr.T("Enterrado (m)"), Tr.T("Acima do terreno (m)"), Tr.T("Total (m)")]
+            : [Tr.T("Mesa"), Tr.T("Pilar"), Tr.T("Enterrado (m)"), Tr.T("Acima do terreno (m)"), Tr.T("Total (m)")]);
 
         foreach (var p in pilares.OrderBy(p => p.Table, StringComparer.Ordinal).ThenBy(p => p.Number))
-            aba.Add([p.Table, p.Number, Math.Round(p.Embedded, 3), Arredondar(p.Above), Arredondar(p.Length)]);
+        {
+            aba.Add(bifila
+                ? [p.Table, p.Number, NomeDaLinha(p.Line), Math.Round(p.Embedded, 3), Arredondar(p.Above), Arredondar(p.Length)]
+                : [p.Table, p.Number, Math.Round(p.Embedded, 3), Arredondar(p.Above), Arredondar(p.Length)]);
+        }
 
         if (pilares.Count > 0)
-            aba.AddTotal([Tr.T("Total"), pilares.Count, Math.Round(pilares.Sum(p => p.Embedded), 3), Math.Round(pilares.Sum(p => p.Above ?? 0), 3), Math.Round(pilares.Sum(p => p.Length ?? 0), 3)]);
+        {
+            object?[] total = [Tr.T("Total"), pilares.Count, Math.Round(pilares.Sum(p => p.Embedded), 3), Math.Round(pilares.Sum(p => p.Above ?? 0), 3), Math.Round(pilares.Sum(p => p.Length ?? 0), 3)];
+            aba.AddTotal(bifila ? [total[0], total[1], null, total[2], total[3], total[4]] : total);
+        }
+
         return Tr.T("Pilares");
     }
 
@@ -200,6 +225,13 @@ public static class QuantityReport
     }
 
     private static object? Arredondar(double? valor) => valor is { } v ? Math.Round(v, 3) : null;
+
+    private static string NomeDaLinha(PillarLine linha) => linha switch
+    {
+        PillarLine.Front => Tr.T("dianteiro"),
+        PillarLine.Rear => Tr.T("traseiro"),
+        _ => string.Empty,
+    };
 }
 
 /// <summary>O que vai para o Excel (o menu Exportar, 10/10/2026).</summary>
@@ -214,6 +246,9 @@ public enum ExportSheets
     ElectricalSummary = 16,
     Cables = 32,
 
-    /// <summary>As quatro abas do layout (o Excel de antes do menu).</summary>
-    Layout = Summary | Analyses | Pillars | PillarPurchase,
+    /// <summary>A estrutura bifila (passo 37.4); só sai quando o desenho tem bifila.</summary>
+    Structure = 64,
+
+    /// <summary>As abas do layout (o Excel de antes do menu, e a estrutura quando há bifila).</summary>
+    Layout = Summary | Analyses | Pillars | PillarPurchase | Structure,
 }
