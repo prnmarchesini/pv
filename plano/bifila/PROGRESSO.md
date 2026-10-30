@@ -365,6 +365,9 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
   refiz as edições a partir da conversa (o diff saiu idêntico, linha por linha); os dois novos
   foram reescritos. O `--faltam` agora só grava em .json fora de src/, tests/ e plano/
   (ba8874c), e a revisão foi refeita numa worktree isolada.
+- Bateria completa de 30/10/2026 (18:06 a 18:20), no a9220e7, o mesmo instalado às 18:00:
+  tudo verde. Nível 1: Core 2365 e Geo 264; nível 2 100/100; serviço 53/53; instalador e
+  acervo ok. O SECURELOAD voltou a 1 em todos os perfis.
 
 ## Roteiro de tela (38.1 a 40.2)
 
