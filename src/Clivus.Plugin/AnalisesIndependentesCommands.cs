@@ -202,13 +202,13 @@ public static class AnalisesIndependentesCommands
                 case Acao.Quantificar:
                 {
                     var regra = Regra(database, tipo);
-                    var (pontos, modulos) = AnalisesIndependentes.Quantificar(database, tipo, regra, unidade);
+                    var (pontos, modulos, biposte) = AnalisesIndependentes.Quantificar(database, tipo, regra, unidade);
 
                     QuantificacaoGravada.Gravar(database, tipo, regra, unidade, pontos, modulos);
 
                     editor.WriteMessage(Tr.F("\nQUANTIFICAR {0} — em {1}.\n",
                         IndependentAnalysis.Describe(tipo, regra, pontos, unidade),
-                        IndependentAnalysis.CountedIn(tipo, AnalisesIndependentes.TemBiposte(database))));
+                        IndependentAnalysis.CountedIn(tipo, biposte)));
 
                     if (modulos is not null)
                         editor.WriteMessage(Tr.F("  módulos: {0}.\n", IndependentAnalysis.Describe(tipo, regra, modulos, unidade)));

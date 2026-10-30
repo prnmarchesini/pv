@@ -404,11 +404,11 @@ internal sealed class PainelDeAnalise : ScrollViewer
         var (ok, frase) = _janela.Fazer(Tr.N("quantificar"), () =>
         {
             var unidade = Unidade();
-            var (pontos, modulos) = AnalisesIndependentes.Quantificar(_janela.Database, _tipo, regra, unidade);
+            var (pontos, modulos, biposte) = AnalisesIndependentes.Quantificar(_janela.Database, _tipo, regra, unidade);
             QuantificacaoGravada.Gravar(_janela.Database, _tipo, regra, unidade, pontos, modulos);
 
             var descricao = IndependentAnalysis.Describe(_tipo, regra, pontos, unidade);
-            return Tr.F("Em {0}: {1}", IndependentAnalysis.CountedIn(_tipo, AnalisesIndependentes.TemBiposte(_janela.Database)), descricao)
+            return Tr.F("Em {0}: {1}", IndependentAnalysis.CountedIn(_tipo, biposte), descricao)
                 + (modulos is not null ? Tr.F("\nEm módulos: {0}", IndependentAnalysis.Describe(_tipo, regra, modulos, unidade)) : "");
         });
 

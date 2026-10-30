@@ -432,7 +432,14 @@ public static class TrocarMesaCommands
         {
             var mesa = lida.Mesas[guid];
 
-            var perfil = FileiraCommands.PerfilDaMesaDesenhada(lida.Cantos[guid], padrao, mesa.Identity!.ProfileName, database, LayoutScan.Biposte(database, mesa));
+            var biposte = LayoutScan.Biposte(database, mesa);
+            var perfil = FileiraCommands.PerfilDaMesaDesenhada(lida.Cantos[guid], padrao, mesa.Identity!.ProfileName, database, biposte);
+
+            if (FileiraCommands.TipoTrocado(perfil, biposte, mesa.Identity!.Label, mesa.Identity.ProfileName) is { } trocado)
+            {
+                editor.WriteMessage(Tr.F("\nREGERAR FILEIRA {0}\n", trocado));
+                return;
+            }
             var registro = DrawingTables.Find(doDesenho, perfil.Name) ?? new DrawingTable(perfil, new RgbColor(150, 150, 150), Use: true);
 
             var k = tipos.FindIndex(t => ReferenceEquals(t.Profile, registro.Profile) || t.Name == registro.Name);

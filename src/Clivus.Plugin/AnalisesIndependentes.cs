@@ -373,25 +373,11 @@ internal static class AnalisesIndependentes
     /// <summary>
     /// A contagem da análise, pelos dados das mesas (não pelos textos): os
     /// pontos (pilares, ou mesas na declividade) e, nas pontas, os módulos.
-    /// Mesas marcadas entram: elas existem e vão para o campo.
+    /// Mesas marcadas entram: elas existem e vão para o campo. Biposte diz se
+    /// alguma mesa contada tem pilar de linha (dianteiro ou traseiro): a PB e
+    /// a PA contam pórticos (39.2), pelos mesmos pilares lidos aqui.
     /// </summary>
-    /// <summary>
-    /// Se o desenho tem mesa biposte (o primeiro pilar de alguma mesa é de
-    /// uma linha, dianteira ou traseira): a PB e a PA contam pórticos (39.2).
-    /// </summary>
-    internal static bool TemBiposte(Database database)
-    {
-        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
-
-        foreach (var mesa in LayoutScan.Tables(transacao, database).Values)
-        {
-            if (LayoutScan.Biposte(transacao, mesa) == true) return true;
-        }
-
-        return false;
-    }
-
-    internal static (BandCount Pontos, BandCount? Modulos) Quantificar(Database database, IndependentKind tipo, ThresholdRule regra, SlopeUnit unidade)
+    internal static (BandCount Pontos, BandCount? Modulos, bool Biposte) Quantificar(Database database, IndependentKind tipo, ThresholdRule regra, SlopeUnit unidade)
     {
         using var transacao = database.TransactionManager.StartOpenCloseTransaction();
 
@@ -414,8 +400,10 @@ internal static class AnalisesIndependentes
         if (tipo is IndependentKind.LowEdge or IndependentKind.HighEdge)
             modulos = BandCount.Of(regra, PecasComValor(mesas, tipo, unidade, incluirMarcadas: true).Select(p => p.Valor).ToList());
 
+        var biposte = mesas.Any(m => m.Pilares.Any(p => p.Pilar.Line != PillarLine.Single));
+
         transacao.Commit();
-        return (BandCount.Of(regra, pontos), modulos);
+        return (BandCount.Of(regra, pontos), modulos, biposte);
     }
 
     // ------------------------------------------------------------- leitura

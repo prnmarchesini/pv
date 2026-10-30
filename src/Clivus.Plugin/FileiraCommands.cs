@@ -321,11 +321,11 @@ public static class FileiraCommands
         var dz = cantos[1].Z - cantos[0].Z;
         var comprimento = Math.Sqrt(dx * dx + dy * dy + dz * dz);
 
-        bool Serve(TableProfile p) => Math.Abs(p.Layout.Length - comprimento) <= 0.05 && (biposte is not { } b || p.IsBifila == b);
+        bool Serve(TableProfile p) => DrawingTables.GuessByLength([p], comprimento, biposte) is not null;
 
         if (Serve(padrao)) return padrao;
 
-        if (doDesenho.FirstOrDefault(m => Serve(m.Profile)) is { } doMesmoTamanho) return doMesmoTamanho.Profile;
+        if (DrawingTables.GuessByLength(doDesenho.Select(m => m.Profile), comprimento, biposte) is { } doMesmoTamanho) return doMesmoTamanho;
 
         try
         {
@@ -346,6 +346,18 @@ public static class FileiraCommands
 
         return Serve(exemplo) ? exemplo : padrao;
     }
+
+    /// <summary>
+    /// A recusa do palpite que trocaria o tipo da estrutura (revisão do 39.2):
+    /// a mesa desenhada é biposte (ou monoposte) e o perfil achado é do outro
+    /// tipo, porque nem o desenho nem a biblioteca têm um do tipo dela com o
+    /// comprimento dela. Null quando o tipo bate ou não se sabe.
+    /// </summary>
+    internal static string? TipoTrocado(TableProfile perfil, bool? biposte, string letreiro, string? nomeDoPerfil) =>
+        biposte is { } b && perfil.IsBifila != b
+            ? Tr.F("{0}: a mesa é {1}, e nem o desenho nem a biblioteca têm um perfil desse tipo com o comprimento dela (o perfil \"{2}\" não está mais no desenho?). A mesa não foi mexida; use o Regerar área.",
+                letreiro, b ? Tr.T("biposte") : Tr.T("monoposte"), nomeDoPerfil ?? "?")
+            : null;
 
     /// <summary>A geometria local de um perfil de mesa.</summary>
     internal static TableGeometry GeometriaDe(TableProfile perfil) =>

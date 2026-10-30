@@ -25,6 +25,20 @@ public sealed record DrawingTable(TableProfile Profile, RgbColor Color, bool Use
 /// </summary>
 public static class DrawingTables
 {
+    /// <summary>
+    /// O palpite do perfil de uma mesa desenhada sem perfil que se ache pelo
+    /// nome (mesa antiga, perfil renomeado, mesa colada de outro desenho): o
+    /// primeiro do mesmo comprimento (5 cm) e, sabendo o tipo da mesa, do
+    /// mesmo tipo. Uma 2P14 monoposte e a GC800 têm o mesmo comprimento, e o
+    /// palpite sem o tipo trocava a estrutura da mesa (revisão do 39.2).
+    /// </summary>
+    /// <param name="bifila">Se a mesa desenhada é biposte, ou null quando não se sabe.</param>
+    public static TableProfile? GuessByLength(IEnumerable<TableProfile> profiles, double length, bool? bifila)
+    {
+        ArgumentNullException.ThrowIfNull(profiles);
+        return profiles.FirstOrDefault(p => Math.Abs(p.Layout.Length - length) <= 0.05 && (bifila is not { } b || p.IsBifila == b));
+    }
+
     /// <summary>A chave do registro no dicionário do desenho.</summary>
     public const string StorageKey = "MESAS";
 

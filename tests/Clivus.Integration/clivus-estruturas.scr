@@ -15,9 +15,10 @@
 ; TermoVision, o Validar e o Recontar.
 ;
 ; No fim, a impressao digital do desenho: para cada camada do Clivus e tipo
-; de entidade, quantas entidades e a soma de X + Y dos pontos delas. O
-; nivel 2 (estruturas.ps1) compara as duas rodadas camada por camada: so as
-; camadas da estrutura (pilares, pecas, cotas das alturas) podem mudar.
+; de entidade, quantas entidades, a soma de X, de Y e de Z dos pontos delas e
+; a soma dos codigos do texto (tags, numeracao). As cotas das alturas saem
+; separadas por PB, PA e P3. O nivel 2 (estruturas.ps1) compara as duas
+; rodadas camada por camada: so a estrutura (pilares, pecas, cotas P3) muda.
 ;
 ; O OSNAP e desligado para os pontos digitados chegarem crus.
 
@@ -88,34 +89,55 @@
 (setvar "OSMODE" clivus:osmode)
 
 ; ---- a impressao digital: por camada do Clivus e tipo, quantas e a soma de X + Y
-(defun clivus:soma (e d / v s p)
+; A soma de X, de Y e de Z dos pontos de uma entidade: os vertices da
+; polilinha, os pontos 10 a 13 do resto (3DFACE tem quatro, LINE tem 10 e 11).
+(defun clivus:soma (e d / v p sx sy sz)
+  (setq sx 0.0 sy 0.0 sz 0.0)
   (cond
     ((= (cdr (assoc 0 d)) "POLYLINE")
-     (setq v (entnext e) s 0.0)
+     (setq v (entnext e))
      (while (and v (= "VERTEX" (cdr (assoc 0 (setq p (entget v))))))
-       (setq s (+ s (cadr (assoc 10 p)) (caddr (assoc 10 p))) v (entnext v)))
-     s)
+       (setq p (cdr (assoc 10 p)) sx (+ sx (car p)) sy (+ sy (cadr p)) sz (+ sz (caddr p)) v (entnext v))))
     ((= (cdr (assoc 0 d)) "LWPOLYLINE")
-     (setq s 0.0)
-     (foreach g d (if (= (car g) 10) (setq s (+ s (cadr g) (caddr g)))))
-     s)
-    ((assoc 10 d) (+ (cadr (assoc 10 d)) (caddr (assoc 10 d))))
-    (T 0.0)))
+     (foreach g d (if (= (car g) 10) (setq sx (+ sx (cadr g)) sy (+ sy (caddr g)))))
+     (setq sz (if (assoc 38 d) (cdr (assoc 38 d)) 0.0)))
+    (T
+     (foreach g d
+       (if (member (car g) '(10 11 12 13))
+         (setq sx (+ sx (cadr g)) sy (+ sy (caddr g)) sz (+ sz (if (cdddr g) (cadddr g) 0.0)))))))
+  (list sx sy sz))
 
-(defun clivus:junta (k n s lista / par)
+; A soma dos codigos do texto (MTEXT e TEXT): a tag e a numeracao entram.
+(defun clivus:texto (d / tx s)
+  (setq s 0 tx (cdr (assoc 1 d)))
+  (if (and tx (member (cdr (assoc 0 d)) '("MTEXT" "TEXT"))) (foreach c (vl-string->list tx) (setq s (+ s c))))
+  s)
+
+(defun clivus:junta (k xyz tx lista / par)
   (if (setq par (assoc k lista))
-    (subst (list k (+ n (cadr par)) (+ s (caddr par))) par lista)
-    (cons (list k n s) lista)))
+    (subst (list k (1+ (nth 1 par)) (+ (nth 0 xyz) (nth 2 par)) (+ (nth 1 xyz) (nth 3 par)) (+ (nth 2 xyz) (nth 4 par)) (+ tx (nth 5 par))) par lista)
+    (cons (list k 1 (nth 0 xyz) (nth 1 xyz) (nth 2 xyz) tx) lista)))
+
+; As cotas das alturas: PB e PA dependem so da estacao (iguais nas duas); P3, do pilar.
+(defun clivus:chave (ly tp d / tx)
+  (setq tx (if (assoc 1 d) (cdr (assoc 1 d)) ""))
+  (strcat ly "|" tp
+          (if (and (= (strcase ly) "CLIVUS_ALTURAS") (= tp "MTEXT"))
+            (cond ((wcmatch tx "*P3*") "|P3") ((wcmatch tx "*PB*") "|PB") ((wcmatch tx "*PA*") "|PA") (T "|?"))
+            "")))
 
 (setq clivus:tudo (ssget "_X") clivus:i 0 clivus:hist nil)
 (while (and clivus:tudo (< clivus:i (sslength clivus:tudo)))
   (setq clivus:e (ssname clivus:tudo clivus:i) clivus:d (entget clivus:e) clivus:ly (cdr (assoc 8 clivus:d)))
   (if (wcmatch (strcase clivus:ly) "CLIVUS*")
-    (setq clivus:hist (clivus:junta (strcat clivus:ly "|" (cdr (assoc 0 clivus:d))) 1 (clivus:soma clivus:e clivus:d) clivus:hist)))
+    (setq clivus:hist (clivus:junta (clivus:chave clivus:ly (cdr (assoc 0 clivus:d)) clivus:d)
+                                    (clivus:soma clivus:e clivus:d) (clivus:texto clivus:d) clivus:hist)))
   (setq clivus:i (1+ clivus:i)))
 
 (foreach clivus:h clivus:hist
-  (princ (strcat "\nCLIVUS_IMP " (car clivus:h) " n=" (itoa (cadr clivus:h)) " s=" (rtos (caddr clivus:h) 2 2))))
+  (princ (strcat "\nCLIVUS_IMP " (nth 0 clivus:h) " n=" (itoa (nth 1 clivus:h))
+                 " x=" (rtos (nth 2 clivus:h) 2 3) " y=" (rtos (nth 3 clivus:h) 2 3) " z=" (rtos (nth 4 clivus:h) 2 3)
+                 " t=" (itoa (nth 5 clivus:h)))))
 
 (setvar "SECURELOAD" clivus:secureload)
 (princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))

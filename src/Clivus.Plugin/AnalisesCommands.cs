@@ -188,9 +188,17 @@ public static class AnalisesCommands
                 // Pelo nome gravado; sem nome (mesa antiga), pelo comprimento
                 // entre as do desenho; por fim, a biblioteca.
                 var comprimento = Math.Sqrt(Math.Pow(cantos[1].X - cantos[0].X, 2) + Math.Pow(cantos[1].Y - cantos[0].Y, 2) + Math.Pow(cantos[1].Z - cantos[0].Z, 2));
+                var biposte = LayoutScan.Biposte(transacao, mesa);
                 var perfilDela = DrawingTables.Find(doDesenho, identidade.ProfileName)?.Profile
-                    ?? doDesenho.FirstOrDefault(m => Math.Abs(m.Profile.Layout.Length - comprimento) <= 0.05)?.Profile
-                    ?? FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil);
+                    ?? DrawingTables.GuessByLength(doDesenho.Select(m => m.Profile), comprimento, biposte)
+                    ?? FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil, biposte: biposte);
+
+                // O palpite não troca a estrutura da mesa (revisão do 39.2).
+                if (FileiraCommands.TipoTrocado(perfilDela, biposte, identidade.Label, identidade.ProfileName) is { } trocado)
+                {
+                    puladas.Add(trocado);
+                    continue;
+                }
 
                 if (!geometrias.TryGetValue(perfilDela, out var geometriaDela))
                 {

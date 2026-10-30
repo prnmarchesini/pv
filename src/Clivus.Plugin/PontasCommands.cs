@@ -237,7 +237,14 @@ public static class PontasCommands
         }
 
         // O perfil do tamanho da mesa desenhada, não o "atual" da biblioteca.
-        var doDesenho = FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil, mesa.Identity.ProfileName, documento.Database, LayoutScan.Biposte(documento.Database, mesa));
+        var biposte = LayoutScan.Biposte(documento.Database, mesa);
+        var doDesenho = FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil, mesa.Identity.ProfileName, documento.Database, biposte);
+
+        if (FileiraCommands.TipoTrocado(doDesenho, biposte, mesa.Identity.Label, mesa.Identity.ProfileName) is { } trocado)
+        {
+            editor.WriteMessage(Tr.F("\nPONTAS {0}\n", trocado));
+            return null;
+        }
 
         if (!ReferenceEquals(doDesenho, perfil))
         {

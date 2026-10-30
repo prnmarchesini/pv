@@ -52,7 +52,6 @@ internal sealed record TableParts(
 /// </summary>
 internal static class LayoutScan
 {
-    /// <summary>Todas as mesas do desenho, por GUID. Mesas cujo contorno sumiu aparecem sem identidade.</summary>
     /// <summary>
     /// Se a mesa é biposte (39.2): tem peça da estrutura, ou o primeiro pilar
     /// é da linha dianteira ou traseira. Null quando não dá para saber (mesa
@@ -75,6 +74,7 @@ internal static class LayoutScan
         return Biposte(transacao, mesa);
     }
 
+    /// <summary>Todas as mesas do desenho, por GUID. Mesas cujo contorno sumiu aparecem sem identidade.</summary>
     internal static IReadOnlyDictionary<Guid, TableParts> Tables(Transaction transacao, Database database)
     {
         ArgumentNullException.ThrowIfNull(transacao);

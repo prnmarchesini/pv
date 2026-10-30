@@ -104,15 +104,19 @@ function Testar-Estruturas {
     # ---- a impressao digital, camada por camada
     function Impressao([string] $texto) {
         $h = @{}
-        foreach ($m in [regex]::Matches($texto, 'CLIVUS_IMP (\S+) n=(\d+) s=(-?[\d.]+)')) {
-            $h[$m.Groups[1].Value] = @{ N = [int] $m.Groups[2].Value; S = [double]::Parse($m.Groups[3].Value, $inv) }
+        foreach ($m in [regex]::Matches($texto, 'CLIVUS_IMP (\S+) n=(\d+) x=(-?[\d.]+) y=(-?[\d.]+) z=(-?[\d.]+) t=(\d+)')) {
+            $h[$m.Groups[1].Value] = @{
+                N = [int] $m.Groups[2].Value
+                X = [double]::Parse($m.Groups[3].Value, $inv); Y = [double]::Parse($m.Groups[4].Value, $inv); Z = [double]::Parse($m.Groups[5].Value, $inv)
+                T = [long] $m.Groups[6].Value
+            }
         }
         $h
     }
 
     $im = Impressao $mono.R.Texto
     $ib = Impressao $bi.R.Texto
-    $daEstrutura = '^CLIVUS_(PILAR|ESTRUTURA|ALTURAS)\|'
+    $daEstrutura = '^CLIVUS_(PILAR|ESTRUTURA)\||^CLIVUS_ALTURAS\|(LINE|MTEXT\|P3)$'
     $iguais = 0
     $diferentes = New-Object System.Collections.Generic.List[string]
 
@@ -120,8 +124,10 @@ function Testar-Estruturas {
         if ($k -match $daEstrutura) { continue }
         $a = $im[$k]
         $b = $ib[$k]
-        if ($null -eq $a -or $null -eq $b -or $a.N -ne $b.N -or [Math]::Abs($a.S - $b.S) -gt 0.01 * [Math]::Max(1, $a.N)) {
-            $diferentes.Add("$k (monoposte $(if ($a) { "$($a.N) / $($a.S)" } else { 'nada' }); biposte $(if ($b) { "$($b.N) / $($b.S)" } else { 'nada' }))")
+        # Rodadas iguais dao somas iguais: 5 cm de folga, nao mais.
+        if ($null -eq $a -or $null -eq $b -or $a.N -ne $b.N -or $a.T -ne $b.T -or
+            [Math]::Abs($a.X - $b.X) -gt 0.05 -or [Math]::Abs($a.Y - $b.Y) -gt 0.05 -or [Math]::Abs($a.Z - $b.Z) -gt 0.05) {
+            $diferentes.Add("$k (monoposte $(if ($a) { "n=$($a.N) x=$($a.X) y=$($a.Y) z=$($a.Z) t=$($a.T)" } else { 'nada' }); biposte $(if ($b) { "n=$($b.N) x=$($b.X) y=$($b.Y) z=$($b.Z) t=$($b.T)" } else { 'nada' }))")
         }
         else { $iguais++ }
     }
@@ -131,8 +137,13 @@ function Testar-Estruturas {
         $ok = $false
     }
 
-    # Nada vazio: mesas, strings, inversores, sombras.
-    foreach ($precisa in @('CLIVUS_MESA|', 'CLIVUS_STRING|', 'CLIVUS_EQUIPAMENTO|', 'CLIVUS_SOMBRA|')) {
+    # Nada vazio: cada camada que a cadeia faz tem que existir (camada vazia
+    # nas duas rodadas sumiria das duas impressoes e passaria como igual).
+    $precisam = @('CLIVUS_AREA|', 'CLIVUS_ALINHAMENTO|', 'CLIVUS_MESA|', 'CLIVUS_MODULO|', 'CLIVUS_FACE|', 'CLIVUS_TAG_MESA|',
+        'CLIVUS_TAG_MODULO|', 'CLIVUS_GRUPO|', 'CLIVUS_STRING|', 'CLIVUS_STRING_TAG|', 'CLIVUS_TAG_STRING|', 'CLIVUS_EQUIPAMENTO|',
+        'CLIVUS_CABO_CC_POS|', 'CLIVUS_CABO_CC_NEG|', 'CLIVUS_VALA_CC|', 'CLIVUS_TXT_DECLIVIDADE|', 'CLIVUS_ARVORE|', 'CLIVUS_SOMBRA|',
+        'CLIVUS_SOMBRA_TEXTO|', 'CLIVUS_ALTURAS|MTEXT|PB', 'CLIVUS_ALTURAS|MTEXT|PA')
+    foreach ($precisa in $precisam) {
         if (-not ($im.Keys | Where-Object { $_.StartsWith($precisa) -and $im[$_].N -gt 0 })) {
             $problemas.Add("${rotulo}: a monoposte nao tem nada em $($precisa.TrimEnd('|')); a comparacao nao provaria nada. Veja $($mono.R.Saida)")
             $ok = $false
@@ -154,7 +165,7 @@ function Testar-Estruturas {
         $tb = [regex]::Match($bi.R.Texto, $padrao, 'Singleline')
         # As linhas de amostra (ROTA_RESUMO_LINHA) trazem as tres primeiras strings
         # pelo identificador delas, que e aleatorio a cada rodada; os totais ficam.
-        $limpo = { param($t) (($t -split "`r?`n") | Where-Object { $_ -notmatch '^Command:|princ|ROTA_RESUMO_LINHA' } | ForEach-Object { $_.Trim() } | Where-Object { $_ }) -join "`n" }
+        $limpo = { param($t) (($t -split "`r?`n") | Where-Object { $_ -notmatch '^Command:|princ|ROTA_RESUMO_LINHA|CoreHeartBeat' } | ForEach-Object { $_.Trim() } | Where-Object { $_ }) -join "`n" }
         $textoMono = & $limpo $tm.Groups[1].Value
         $textoBi = & $limpo $tb.Groups[1].Value
         if (-not $tm.Success -or $textoMono.Length -lt 20) {
@@ -165,6 +176,22 @@ function Testar-Estruturas {
             $problemas.Add("${rotulo}: o resumo $bloco mudou com a estrutura. Veja $($mono.R.Saida) e $($bi.R.Saida)")
             $ok = $false
         }
+    }
+
+    # ---- o Validar (limpo e igual) e o Recontar (o biposte com o dobro de pilares)
+    $vm = [regex]::Match($mono.R.Texto, 'VALIDAR_TOTAIS [^\r\n]*')
+    $vb = [regex]::Match($bi.R.Texto, 'VALIDAR_TOTAIS [^\r\n]*')
+    if (-not $vm.Success -or $vm.Value -ne $vb.Value -or $vm.Value -notmatch 'pendentes=0 .*duplicadas=0 pecas=0 orfas=0') {
+        $problemas.Add("${rotulo}: o Validar mudou com a estrutura ou achou problema: '$($vm.Value)' e '$($vb.Value)'.")
+        $ok = $false
+    }
+
+    $rm = [regex]::Match($mono.R.Texto, 'RECONTAR_TOTAIS mesas=(\d+) modulos=(\d+) pilares=(\d+) orfas=(\d+)')
+    $rb = [regex]::Match($bi.R.Texto, 'RECONTAR_TOTAIS mesas=(\d+) modulos=(\d+) pilares=(\d+) orfas=(\d+)')
+    if (-not $rm.Success -or -not $rb.Success -or $rm.Groups[1].Value -ne $rb.Groups[1].Value -or $rm.Groups[2].Value -ne $rb.Groups[2].Value -or
+        [int] $rb.Groups[3].Value -ne 2 * [int] $rm.Groups[3].Value -or $rm.Groups[4].Value -ne '0' -or $rb.Groups[4].Value -ne '0') {
+        $problemas.Add("${rotulo}: o Recontar deu '$($rm.Value)' e '$($rb.Value)'; esperava mesas e modulos iguais, o dobro de pilares e nenhuma orfa.")
+        $ok = $false
     }
 
     # ---- os arquivos
@@ -233,7 +260,7 @@ function Testar-Estruturas {
 
     $abasIguais = 0
     foreach ($aba in $xm.Keys) {
-        if ($aba -match 'Pilar|Estrutura|Resumo|Compra') { continue }
+        if ($aba -match '^(Resumo|Pilares|Compra de pilares|Estrutura)$') { continue }
         $lm = @($xm[$aba]); $lb = @($xb[$aba])
         $diferentes = @()
 
@@ -250,7 +277,10 @@ function Testar-Estruturas {
                     continue
                 }
 
-                if ($aba -match '^An.lises$' -and $a.Count -gt 1 -and $a[1] -eq 'pilares' -and $b[1] -eq 'pórticos') { $a[1] = $b[1] }
+                if ($aba -match '^An.lises$' -and $a.Count -gt 1 -and $a[0] -match '^ponta' -and $a[1] -ne 'módulos') {
+                    if ($a[1] -ne 'pilares' -or $b[1] -ne 'pórticos') { $diferentes += "linha $($i + 1): a PB conta em '$($a[1])' e '$($b[1])' (pilares na monoposte, pórticos no biposte)" }
+                    $a[1] = $b[1]
+                }
 
                 if (($a -join '|') -ne ($b -join '|')) { $diferentes += "linha $($i + 1): '$($a -join '|')' e '$($b -join '|')'" }
             }

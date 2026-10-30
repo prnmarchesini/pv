@@ -206,7 +206,14 @@ public static class RecalcularCommands
 
         // O perfil do tamanho da mesa desenhada, não o "atual" da biblioteca:
         // numa usina com mesas de dois tamanhos, cada uma se refaz com o seu.
-        var doDesenho = FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil, mesa.Identity!.ProfileName, documento.Database, LayoutScan.Biposte(documento.Database, mesa));
+        var biposte = LayoutScan.Biposte(documento.Database, mesa);
+        var doDesenho = FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil, mesa.Identity!.ProfileName, documento.Database, biposte);
+
+        if (FileiraCommands.TipoTrocado(doDesenho, biposte, mesa.Identity!.Label, mesa.Identity.ProfileName) is { } trocado)
+        {
+            editor.WriteMessage(Tr.F("\nRECALCULAR {0}\n", trocado));
+            return false;
+        }
 
         if (!ReferenceEquals(doDesenho, perfil))
         {
