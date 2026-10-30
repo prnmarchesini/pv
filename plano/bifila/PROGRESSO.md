@@ -21,7 +21,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 38.3 As ferramentas que leem pilar: AGUARDANDO VALIDAÇÃO
 - 38.4 Lista de material na tela: AGUARDANDO VALIDAÇÃO
 - 38.5 A janela de Mesa em abas: AGUARDANDO VALIDAÇÃO
-- 38.6 O PAN enche o módulo e sobe para o servidor: PENDENTE
+- 38.6 O PAN enche o módulo e sobe para o servidor: AGUARDANDO VALIDAÇÃO — serviço: `servidor/tests/test_pan.py`
 
 ## Etapa 39: o resto do Clivus
 
@@ -202,6 +202,27 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
   - Ficam fora do nível 2 (sem comando automático ou só de tela): a rota CA e MT (precisam
     do trafo e da subestação posicionados), a drenagem (não lê mesa), o carport (estrutura à
     parte), salvar e reabrir o DWG, e as janelas. Estão no roteiro de tela.
+- 38.6 (30/10/2026), o que assumi:
+  - O PAN do PVsyst traz as medidas em metro (Height, Width, Depth; o do Aurora, 2,384 ×
+    1,303 × 0,033). O lado maior vira a altura. PAN sem as três medidas: as medidas ficam
+    como estavam, e o recado diz.
+  - "Carregar .PAN..." põe o módulo do PAN na lista de modelos (o da biblioteca com o mesmo
+    modelo, ou ele mesmo, só nesta janela) e enche marca, modelo, medidas, potência e a parte
+    elétrica. Se a biblioteca do serviço não tem o modelo, pergunta se cadastra, com o PAN;
+    com o serviço fora do ar, diz que o "Cadastrar módulo..." leva depois.
+  - "Cadastrar módulo..." tem "Ler .PAN..."; com o PAN já lido na janela de Mesa, abre com ele.
+    O PAN só vai junto se o modelo não foi trocado à mão.
+  - O serviço (`servidor/`, FastAPI) guarda a parte elétrica (V, A, V/°C, A/°C, %/°C) e o
+    arquivo como veio (até 500 mil caracteres); a lista devolve a parte elétrica e se tem PAN,
+    sem o texto; o arquivo sai em `GET /modulos/{id}/pan`. Migração `3c1d2e7f9a10` (o
+    `tools/servico-local.ps1` já roda o `alembic upgrade head`). Escolher na lista um módulo
+    que tem a parte elétrica no serviço enche os dados elétricos.
+  - **O "servidor" hoje é o serviço de módulos local** (`tools\servico-local.ps1`, ou o
+    endereço de `CLIVUS_SERVICO`). O servidor de produção (Coolify: 3D, licenças, portal) não
+    hospeda o serviço de módulos; para os usuários subirem PAN para todos, o serviço precisa
+    ir para lá — decisão do Renan (e da sessão do servidor, pelo CANAL.md), fora deste passo.
+  - Testes: 8 no serviço (pytest, 32 ao todo) e 8 no Core (medidas do PAN, o lado maior, a
+    parte elétrica indo e voltando). As janelas são de tela.
 
 ## Roteiro de tela (38.1 a 39.1)
 
@@ -250,3 +271,8 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
      "Canaletas, carport e estrutura do biposte" liga e desliga as peças), Publicar 3D,
      TermoVision;
    - Salvar, fechar e abrir o DWG: as mesas, os pilares e as peças voltam.
+8. **PAN (38.6):** com o serviço no ar (`tools\servico-local.ps1`), janela de Mesa › Perfil e
+   módulo › Carregar .PAN... › `Panama\Docs\JAM66D46-720_LB.PAN`: o modelo vira "JA Solar
+   JAM66D46-720/LB", as medidas 2,384 × 1,303 × 0,033, a potência 720 e os dados elétricos
+   enchem; a pergunta "Cadastrar agora, com o PAN?" › Sim: o módulo entra na lista. Fechar e
+   abrir a janela, escolher esse módulo na lista: os dados elétricos vêm junto.

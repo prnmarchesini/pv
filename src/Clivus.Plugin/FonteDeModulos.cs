@@ -39,6 +39,15 @@ internal static class FonteDeModulos
 
     private static DateTime? _foraDoArAte;
 
+    /// <summary>
+    /// A parte elétrica que o serviço tem de cada módulo (os que vieram de um
+    /// .PAN, 38.6), pelo modelo; vazia com a biblioteca embutida.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, PanModule> Eletrica { get; private set; } = new Dictionary<string, PanModule>();
+
+    /// <summary>Se a última lista veio do serviço (e não da biblioteca embutida).</summary>
+    internal static bool NoAr { get; private set; }
+
     internal static string Endereco =>
         // UFV_SERVICO: o nome de antes da troca para Clivus Solar (04/10/2026).
         ((Environment.GetEnvironmentVariable("CLIVUS_SERVICO") ?? Environment.GetEnvironmentVariable("UFV_SERVICO")) is { Length: > 0 } definido
@@ -50,6 +59,9 @@ internal static class FonteDeModulos
     /// </summary>
     internal static (IReadOnlyList<SolarModule> Modulos, string Origem) Carregar()
     {
+        Eletrica = new Dictionary<string, PanModule>();
+        NoAr = false;
+
         if (EnderecoValido() is null)
         {
             RegistroDeDiagnostico.Registrar($"CLIVUS_SERVICO não é um endereço http: \"{Endereco}\".");
@@ -66,6 +78,8 @@ internal static class FonteDeModulos
             // pode travar esperando o próprio fio.
             var json = Task.Run(() => Cliente.GetStringAsync($"{Endereco}/modulos")).GetAwaiter().GetResult();
             var modulos = ModuleLibrary.ParseService(json);
+            Eletrica = ModuleLibrary.ParseServiceElectrical(json);
+            NoAr = true;
 
             return (modulos, Tr.F("Módulos do serviço ({0}): {1}.", Endereco, modulos.Count));
         }
@@ -84,13 +98,16 @@ internal static class FonteDeModulos
     /// frase para o usuário: o motivo da recusa vem do próprio serviço
     /// (modelo repetido, medida fora da faixa).
     /// </summary>
-    internal static (bool Cadastrou, string Mensagem) Cadastrar(SolarModule modulo)
+    /// <param name="eletrica">A parte elétrica do .PAN (38.6), ou null.</param>
+    /// <param name="pan">O texto do .PAN, que o serviço guarda como veio, ou null.</param>
+    /// <param name="panNome">O nome do arquivo .PAN.</param>
+    internal static (bool Cadastrou, string Mensagem) Cadastrar(SolarModule modulo, PanModule? eletrica = null, string? pan = null, string? panNome = null)
     {
         string json;
 
         try
         {
-            json = ModuleLibrary.ToServiceJson(modulo);
+            json = ModuleLibrary.ToServiceJson(modulo, eletrica, pan, panNome);
         }
         catch (InvalidOperationException erro)
         {
@@ -111,7 +128,9 @@ internal static class FonteDeModulos
             if (resposta.IsSuccessStatusCode)
             {
                 _foraDoArAte = null;
-                return (true, Tr.F("Módulo {0} cadastrado no serviço.", modulo.DisplayName));
+                return (true, pan is null
+                    ? Tr.F("Módulo {0} cadastrado no serviço.", modulo.DisplayName)
+                    : Tr.F("Módulo {0} cadastrado no serviço, com o PAN {1}.", modulo.DisplayName, panNome ?? string.Empty));
             }
 
             return (false, resposta.StatusCode == HttpStatusCode.Conflict

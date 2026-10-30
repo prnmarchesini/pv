@@ -88,6 +88,9 @@ internal sealed class JanelaDeMesa : Window
         ToolTip = Tr.T("Tira os dados elétricos do módulo desta estrutura: as tensões e correntes da rota ficam em branco."),
     };
 
+    /// <summary>O texto e o nome do .PAN carregado nesta janela (38.6): vão junto no "Cadastrar módulo...". O perfil não guarda o arquivo.</summary>
+    private (string Texto, string Nome)? _arquivoDoPan;
+
     /// <summary>O PAN lido (ou o que veio do perfil) e os textos com que ele encheu os campos: mudou um campo, os valores passam a ser à mão.</summary>
     private PanModule? _panLido;
     private string[] _textosDoPan = [];
@@ -979,6 +982,7 @@ internal sealed class JanelaDeMesa : Window
         _modeloDoPerfil = perfil.Layout.Module.Model;
 
         _nome.Text = perfil.Name;
+        _arquivoDoPan = null;
 
         _altura.Text = Numero(perfil.Layout.Module.Height);
         _largura.Text = Numero(perfil.Layout.Module.Width);
@@ -1226,6 +1230,13 @@ internal sealed class JanelaDeMesa : Window
         _largura.Text = Numero(modulo.Width);
         _espessura.Text = Numero(modulo.Thickness);
         _potencia.Text = NumeroGrande(modulo.PowerWatts);
+
+        // O módulo que alguém cadastrou com o .PAN traz a parte elétrica (38.6).
+        if (FonteDeModulos.Eletrica.TryGetValue(modulo.Model, out var eletrica))
+        {
+            PreencherEletrica(eletrica);
+            Recalcular();
+        }
     }
 
     // ------------------------------------------------------------- o cálculo
@@ -1325,7 +1336,11 @@ internal sealed class JanelaDeMesa : Window
             NumberInput.TryParseMeasure(_largura.Text, out var largura);
             NumberInput.TryParseMeasure(_espessura.Text, out var espessura);
 
-            var janela = new JanelaDeCadastroDeModulo(new SolarModule(string.Empty, string.Empty, potencia, altura, largura, espessura))
+            // Com o .PAN carregado nesta janela, o cadastro parte dele, e o arquivo vai junto (38.6).
+            var (marca, modelo) = _panLido is not null && _arquivoDoPan is not null ? Modulo() : (string.Empty, string.Empty);
+            var pan = _panLido is { } lido && _arquivoDoPan is { } arquivo ? (lido, arquivo.Texto, arquivo.Nome) : ((PanModule, string, string)?)null;
+
+            var janela = new JanelaDeCadastroDeModulo(new SolarModule(marca, modelo == "(à mão)" ? string.Empty : modelo, potencia, altura, largura, espessura), pan)
             {
                 Owner = this,
             };
@@ -1469,9 +1484,12 @@ internal sealed class JanelaDeMesa : Window
     }
 
     /// <summary>
-    /// "Carregar .PAN..." (item 15): lê o PAN e põe na estrutura os dados
-    /// elétricos e a potência dele (<see cref="TableProfile.WithPan"/>, o
-    /// mesmo do CLIVUS_ESTRUTURA_PAN). As medidas não mudam.
+    /// "Carregar .PAN..." (item 15; 38.6): lê o PAN e põe na seção Módulo o
+    /// módulo inteiro que ele traz — marca, modelo, medidas e potência — e a
+    /// parte elétrica (Renan, 30/10/2026: "na hora de puxar o pan, já poderia
+    /// configurar o modelo, marca, altura, tudo"). O módulo que a biblioteca
+    /// não tem entra na lista desta janela, e o Clivus oferece cadastrá-lo no
+    /// serviço, com o arquivo.
     /// </summary>
     private void CarregarPan()
     {
@@ -1486,35 +1504,104 @@ internal sealed class JanelaDeMesa : Window
                 return;
             }
 
+            var texto = PanModule.ReadText(caminho);
+            var modulo = PanModule.DimensionsOf(texto)?.ModuleOf(pan);
+            if (modulo is { IsValid: false }) modulo = null;
+
             NumberInput.TryParseLarge(_potencia.Text, out var antes);
-            var atual = Ler(out _);
+            var daBiblioteca = modulo is null ? null : ModuleLibrary.Find(_modulos, modulo.Model);
 
             _preenchendo = true;
-            if (atual is not null)
+            try
             {
-                Preencher(atual.WithPan(pan));
-            }
-            else
-            {
-                // A mesa ainda não fecha: só os campos do módulo mudam.
-                PreencherEletrica(pan);
+                if (modulo is not null)
+                {
+                    // O módulo do PAN na lista: o da biblioteca com o mesmo
+                    // modelo, ou ele mesmo, só nesta janela.
+                    if (daBiblioteca is null)
+                    {
+                        _modulos = [.. _modulos, modulo];
+                        ListarModulos();
+                    }
+
+                    _modelo.SelectedIndex = _modulos.ToList().IndexOf(daBiblioteca ?? modulo);
+                    _marcaDoPerfil = modulo.Brand;
+                    _modeloDoPerfil = modulo.Model;
+                    _altura.Text = Numero(modulo.Height);
+                    _largura.Text = Numero(modulo.Width);
+                    _espessura.Text = Numero(modulo.Thickness);
+                }
+
                 _potencia.Text = NumeroGrande(pan.Pmax);
+                PreencherEletrica(pan);
+                _arquivoDoPan = (texto, System.IO.Path.GetFileName(caminho));
+            }
+            finally
+            {
+                _preenchendo = false;
             }
 
-            _preenchendo = false;
             Recalcular();
 
-            var recado = Tr.F("PAN lido: {0}.", pan.Describe());
+            var recado = Tr.F("PAN lido: {0}.", pan.Describe())
+                + "\n\n"
+                + (modulo is null
+                    ? Tr.T("O PAN não traz as medidas do módulo (Height, Width, Depth): altura, largura e espessura ficaram como estavam.")
+                    : Tr.F("Módulo: {0}, {1} × {2} × {3} m.", modulo.DisplayName, Numero(modulo.Height), Numero(modulo.Width), Numero(modulo.Thickness)));
             if (Math.Abs(antes - pan.Pmax) > ModuleSource.Tolerance)
                 recado += "\n\n" + Tr.F("A potência do módulo passou de {0:0.#} para {1:0.#} Wp. As mesas já desenhadas continuam como estavam: depois de gravar a estrutura no desenho, use \"Atualizar a potência das mesas desenhadas\" nas Configurações.", antes, pan.Pmax);
 
             Avisar(recado);
+
+            // O usuário subindo o PAN para a biblioteca de todos (38.6).
+            if (modulo is not null && daBiblioteca is null)
+                OferecerCadastro(modulo, pan, texto, System.IO.Path.GetFileName(caminho));
         }
         catch (Exception erro)
         {
             _preenchendo = false;
             RegistroDeDiagnostico.Registrar("Falha ao carregar o PAN na janela de Mesa.", erro);
             Avisar(Tr.F("Não consegui carregar o PAN: {0}", erro.Message));
+        }
+    }
+
+    /// <summary>
+    /// O módulo do PAN que a biblioteca não tem: com o serviço no ar, pergunta
+    /// se vai para lá, com o arquivo; fora do ar, diz como fazer depois.
+    /// </summary>
+    private void OferecerCadastro(SolarModule modulo, PanModule pan, string texto, string nome)
+    {
+        if (!FonteDeModulos.NoAr)
+        {
+            Avisar(Tr.F("O módulo {0} não está na biblioteca. Com o serviço de módulos no ar, \"Cadastrar módulo...\" o leva para lá, com o PAN.", modulo.DisplayName));
+            return;
+        }
+
+        var resposta = MessageBox.Show(
+            this,
+            Tr.F("O módulo {0} não está na biblioteca do serviço. Cadastrar agora, com o PAN, para ele aparecer na lista de todos?", modulo.DisplayName),
+            Title,
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (resposta != MessageBoxResult.Yes) return;
+
+        var (cadastrou, mensagem) = FonteDeModulos.Cadastrar(modulo, pan, texto, nome);
+        Avisar(mensagem);
+        if (!cadastrou) return;
+
+        // A lista volta do serviço, com o módulo novo escolhido.
+        _preenchendo = true;
+        try
+        {
+            (_modulos, _origemDosModulos.Text) = FonteDeModulos.Carregar();
+            ListarModulos();
+            var achado = ModuleLibrary.Find(_modulos, modulo.Model);
+            if (achado is not null) _modelo.SelectedIndex = _modulos.ToList().IndexOf(achado);
+        }
+        finally
+        {
+            _preenchendo = false;
         }
     }
 

@@ -172,7 +172,10 @@ public static class ModuleLibrary
     /// Se o plugin recusaria o módulo: ele não vai para o serviço, que o
     /// devolveria na lista e derrubaria a lista inteira para a embutida.
     /// </exception>
-    public static string ToServiceJson(SolarModule modulo)
+    /// <param name="eletrica">A parte elétrica, quando o módulo veio de um .PAN (38.6).</param>
+    /// <param name="pan">O texto do .PAN, que o serviço guarda como veio.</param>
+    /// <param name="panNome">O nome do arquivo .PAN.</param>
+    public static string ToServiceJson(SolarModule modulo, PanModule? eletrica = null, string? pan = null, string? panNome = null)
     {
         ArgumentNullException.ThrowIfNull(modulo);
 
@@ -201,7 +204,55 @@ public static class ModuleLibrary
             AlturaM = modulo.Height,
             LarguraM = modulo.Width,
             EspessuraM = modulo.Thickness,
-        });
+            Eletrica = eletrica is null ? null : new EletricaDoServico
+            {
+                Voc = eletrica.Voc,
+                Isc = eletrica.Isc,
+                Vmp = eletrica.Vmp,
+                Imp = eletrica.Imp,
+                MuVoc = eletrica.VocCoefficient,
+                MuIsc = eletrica.IscCoefficient,
+                Noct = eletrica.Noct,
+                MuPmp = eletrica.PowerCoefficient,
+            },
+            Pan = pan,
+            PanNome = pan is null ? null : panNome,
+        }, SemNulos);
+    }
+
+    /// <summary>Sem PAN, o cadastro sai como antes do 38.6: os campos novos não vão.</summary>
+    private static readonly JsonSerializerOptions SemNulos = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+
+    /// <summary>
+    /// A parte elétrica que o serviço tem de cada módulo (os que vieram de um
+    /// .PAN, 38.6), pelo modelo (sem distinguir maiúsculas). O que não se lê
+    /// ou não faz sentido fica de fora: os módulos continuam valendo sem ela.
+    /// </summary>
+    public static IReadOnlyDictionary<string, PanModule> ParseServiceElectrical(string json)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+
+        var mapa = new Dictionary<string, PanModule>(StringComparer.OrdinalIgnoreCase);
+        List<DoServico>? lista;
+
+        try
+        {
+            lista = JsonSerializer.Deserialize<List<DoServico>>(json, Opcoes);
+        }
+        catch (JsonException)
+        {
+            return mapa;
+        }
+
+        foreach (var m in lista ?? [])
+        {
+            if (m.Eletrica is not { } e || string.IsNullOrWhiteSpace(m.Modelo)) continue;
+
+            var pan = new PanModule(m.Marca?.Trim() ?? string.Empty, m.Modelo.Trim(), m.PotenciaW, e.Voc, e.Isc, e.Vmp, e.Imp, e.MuVoc, e.MuIsc, e.Noct, e.MuPmp);
+            if (pan.WhyInvalid() is null) mapa[m.Modelo.Trim()] = pan;
+        }
+
+        return mapa;
     }
 
     private static IReadOnlyList<SolarModule> Validar(List<Entrada> entradas)
@@ -284,6 +335,22 @@ public static class ModuleLibrary
         [JsonPropertyName("altura_m")] public double AlturaM { get; init; }
         [JsonPropertyName("largura_m")] public double LarguraM { get; init; }
         [JsonPropertyName("espessura_m")] public double EspessuraM { get; init; }
+        [JsonPropertyName("eletrica")] public EletricaDoServico? Eletrica { get; init; }
+        [JsonPropertyName("pan")] public string? Pan { get; init; }
+        [JsonPropertyName("pan_nome")] public string? PanNome { get; init; }
+    }
+
+    /// <summary>A parte elétrica como o serviço guarda (38.6): V, A, V/°C, A/°C e %/°C.</summary>
+    private sealed class EletricaDoServico
+    {
+        [JsonPropertyName("voc")] public double Voc { get; init; }
+        [JsonPropertyName("isc")] public double Isc { get; init; }
+        [JsonPropertyName("vmp")] public double Vmp { get; init; }
+        [JsonPropertyName("imp")] public double Imp { get; init; }
+        [JsonPropertyName("mu_voc")] public double MuVoc { get; init; }
+        [JsonPropertyName("mu_isc")] public double MuIsc { get; init; }
+        [JsonPropertyName("noct")] public double? Noct { get; init; }
+        [JsonPropertyName("mu_pmp")] public double? MuPmp { get; init; }
     }
 
     /// <summary>

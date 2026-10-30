@@ -40,15 +40,7 @@ public sealed record PanModule(
     {
         ArgumentNullException.ThrowIfNull(texto);
 
-        var valores = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var linha in texto.Split('\n'))
-        {
-            var i = linha.IndexOf('=');
-            if (i <= 0) continue;
-            var chave = linha[..i].Trim();
-            // A primeira ocorrência vale (o bloco do módulo vem antes dos sub-blocos).
-            valores.TryAdd(chave, linha[(i + 1)..].Trim());
-        }
+        var valores = Chaves(texto);
 
         var faltam = new List<string>();
 
@@ -93,7 +85,13 @@ public sealed record PanModule(
     /// recentes) ou em Latin-1 (nos antigos): o texto que não é UTF-8 válido
     /// é relido como Latin-1, para o fabricante sair com o acento certo.
     /// </summary>
-    public static PanModule? Load(string caminho, out IReadOnlyList<string> missing)
+    public static PanModule? Load(string caminho, out IReadOnlyList<string> missing) => Parse(ReadText(caminho), out missing);
+
+    /// <summary>
+    /// O texto do .PAN: UTF-8 (com BOM, nos recentes) ou, quando não é UTF-8
+    /// válido, Latin-1 (nos antigos), para o fabricante sair com o acento certo.
+    /// </summary>
+    public static string ReadText(string caminho)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(caminho);
 
@@ -109,7 +107,44 @@ public sealed record PanModule(
             texto = System.Text.Encoding.Latin1.GetString(bytes);
         }
 
-        return Parse(texto.TrimStart('﻿'), out missing);
+        return texto.TrimStart('﻿');
+    }
+
+    /// <summary>
+    /// As medidas do módulo no .PAN (38.6): Height, Width e Depth, em metro,
+    /// a primeira ocorrência de cada (o bloco comercial vem antes dos
+    /// sub-blocos). Null quando falta alguma ou ela não se lê: medida não se
+    /// inventa. O lado maior vira a altura, como o plugin espera.
+    /// </summary>
+    public static PanDimensions? DimensionsOf(string texto)
+    {
+        ArgumentNullException.ThrowIfNull(texto);
+
+        var valores = Chaves(texto);
+
+        double? Medida(string chave) =>
+            valores.TryGetValue(chave, out var t) && double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && double.IsFinite(v) && v > 0
+                ? v
+                : null;
+
+        if (Medida("Height") is not { } altura || Medida("Width") is not { } largura || Medida("Depth") is not { } espessura) return null;
+
+        return new PanDimensions(Math.Max(altura, largura), Math.Min(altura, largura), espessura);
+    }
+
+    /// <summary>As linhas "Chave=valor" do .PAN; a primeira ocorrência vale (o bloco do módulo vem antes dos sub-blocos).</summary>
+    private static Dictionary<string, string> Chaves(string texto)
+    {
+        var valores = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var linha in texto.Split('\n'))
+        {
+            var i = linha.IndexOf('=');
+            if (i <= 0) continue;
+            valores.TryAdd(linha[..i].Trim(), linha[(i + 1)..].Trim());
+        }
+
+        return valores;
     }
 
     /// <summary>O coeficiente da Voc em %/°C (o do datasheet).</summary>
@@ -159,4 +194,18 @@ public sealed record PanModule(
     }
 
     private static string Num(double v) => v.ToString("R", CultureInfo.InvariantCulture);
+}
+
+/// <summary>
+/// As medidas do módulo no .PAN (38.6), em metro: a altura é o lado maior, a
+/// largura o menor, a espessura a do quadro.
+/// </summary>
+public sealed record PanDimensions(double Height, double Width, double Thickness)
+{
+    /// <summary>O módulo do .PAN com estas medidas: marca, modelo e potência do PAN.</summary>
+    public SolarModule ModuleOf(PanModule pan)
+    {
+        ArgumentNullException.ThrowIfNull(pan);
+        return new SolarModule(pan.Manufacturer.Trim(), pan.Model.Trim(), pan.Pmax, Height, Width, Thickness);
+    }
 }

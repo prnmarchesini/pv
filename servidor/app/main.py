@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -16,7 +17,7 @@ from app.db import obter_sessao
 from app.models import Modulo, chave_do_modelo
 from app.schemas import ModuloEntrada, ModuloSaida
 
-VERSAO = "1"
+VERSAO = "2"
 
 MODULOS_INICIAIS = Path(__file__).with_name("modulos_iniciais.json")
 
@@ -45,7 +46,8 @@ def obter_modulo(modulo_id: str, sessao: Session = Depends(obter_sessao)):
 @app.post("/modulos", response_model=ModuloSaida, status_code=status.HTTP_201_CREATED)
 def cadastrar_modulo(entrada: ModuloEntrada, sessao: Session = Depends(obter_sessao)):
     _recusar_modelo_repetido(sessao, entrada)
-    modulo = Modulo(**entrada.model_dump(), chave=chave_do_modelo(entrada.modelo))
+    modulo = Modulo(**entrada.model_dump(exclude=_DO_PAN), chave=chave_do_modelo(entrada.modelo))
+    modulo.guardar_eletrica(entrada.eletrica, entrada.pan, entrada.pan_nome)
     sessao.add(modulo)
     _gravar(sessao, entrada)
     return modulo
@@ -59,12 +61,25 @@ def alterar_modulo(modulo_id: str, entrada: ModuloEntrada, sessao: Session = Dep
 
     _recusar_modelo_repetido(sessao, entrada, menos=modulo_id)
 
-    for campo, valor in entrada.model_dump().items():
+    for campo, valor in entrada.model_dump(exclude=_DO_PAN).items():
         setattr(modulo, campo, valor)
+    modulo.guardar_eletrica(entrada.eletrica, entrada.pan, entrada.pan_nome)
     modulo.chave = chave_do_modelo(entrada.modelo)
 
     _gravar(sessao, entrada)
     return modulo
+
+
+@app.get("/modulos/{modulo_id}/pan", response_class=PlainTextResponse)
+def baixar_pan(modulo_id: str, sessao: Session = Depends(obter_sessao)):
+    """O .PAN do módulo, como o usuário mandou (passo 38.6)."""
+    modulo = sessao.get(Modulo, modulo_id)
+    if modulo is None or modulo.pan is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Este módulo não tem .PAN.")
+    return PlainTextResponse(
+        modulo.pan,
+        headers={"Content-Disposition": f'attachment; filename="{modulo.pan_nome}"'},
+    )
 
 
 @app.delete("/modulos/{modulo_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -74,6 +89,10 @@ def apagar_modulo(modulo_id: str, sessao: Session = Depends(obter_sessao)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Módulo não encontrado.")
     sessao.delete(modulo)
     sessao.commit()
+
+
+# Os campos da entrada que não são colunas com o mesmo nome (o .PAN e a parte elétrica).
+_DO_PAN = {"eletrica", "pan", "pan_nome"}
 
 
 def _recusar_modelo_repetido(sessao: Session, entrada: ModuloEntrada, menos: str | None = None) -> None:

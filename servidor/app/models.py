@@ -3,8 +3,8 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, String, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import DateTime, Float, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, deferred, mapped_column
 
 from app.db import Base
 
@@ -35,8 +35,44 @@ class Modulo(Base):
     altura_m: Mapped[float] = mapped_column(Float)
     largura_m: Mapped[float] = mapped_column(Float)
     espessura_m: Mapped[float] = mapped_column(Float)
+    # A parte elétrica do .PAN (passo 38.6), quando o módulo veio de um: em V
+    # e A, os coeficientes em V/°C e A/°C, o da potência em %/°C.
+    voc: Mapped[float | None] = mapped_column(Float, nullable=True)
+    isc: Mapped[float | None] = mapped_column(Float, nullable=True)
+    vmp: Mapped[float | None] = mapped_column(Float, nullable=True)
+    imp: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mu_voc: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mu_isc: Mapped[float | None] = mapped_column(Float, nullable=True)
+    noct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mu_pmp: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # O arquivo como o usuário mandou. Adiado: a lista não carrega o texto.
+    pan: Mapped[str | None] = deferred(mapped_column(Text, nullable=True))
+    pan_nome: Mapped[str | None] = mapped_column(String(200), nullable=True)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_agora)
     alterado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_agora, onupdate=_agora)
+
+
+    @property
+    def eletrica(self) -> dict | None:
+        """A parte elétrica, ou None quando o módulo não veio de um .PAN."""
+        if self.voc is None:
+            return None
+        return {
+            "voc": self.voc, "isc": self.isc, "vmp": self.vmp, "imp": self.imp,
+            "mu_voc": self.mu_voc, "mu_isc": self.mu_isc, "noct": self.noct, "mu_pmp": self.mu_pmp,
+        }
+
+    @property
+    def tem_pan(self) -> bool:
+        return self.pan_nome is not None
+
+    def guardar_eletrica(self, eletrica, pan: str | None, pan_nome: str | None) -> None:
+        """Grava a parte elétrica e o .PAN que vieram (ou limpa, se não vieram)."""
+        campos = ("voc", "isc", "vmp", "imp", "mu_voc", "mu_isc", "noct", "mu_pmp")
+        for campo in campos:
+            setattr(self, campo, getattr(eletrica, campo) if eletrica is not None else None)
+        self.pan = pan
+        self.pan_nome = (pan_nome or "modulo.pan") if pan is not None else None
 
 
 def chave_do_modelo(modelo: str) -> str:
