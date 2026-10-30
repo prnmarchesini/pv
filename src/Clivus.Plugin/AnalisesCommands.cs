@@ -232,6 +232,7 @@ public static class AnalisesCommands
 
         var pintadas = 0;
         var marcadas = 0;
+        var avisosDaBifila = new List<(string Aviso, string Mesa)>();
 
         foreach (var grupo in processadas.GroupBy(p => perfilDa[p], ReferenceEqualityComparer.Instance))
         {
@@ -255,7 +256,10 @@ public static class AnalisesCommands
 
             pintadas += desenho.Painted;
             marcadas += desenho.Marked;
+            avisosDaBifila.AddRange(desenho.StructureWarnings);
         }
+
+        LayoutDrawer.EscreverAvisos(editor, avisosDaBifila);
 
         var abaixo = processadas.Sum(p => p.Report.Modules.Count(m => m.Verdict.Outcome == AnalysisOutcome.Below));
         var acima = processadas.Sum(p => p.Report.Modules.Count(m => m.Verdict.Outcome == AnalysisOutcome.Above));

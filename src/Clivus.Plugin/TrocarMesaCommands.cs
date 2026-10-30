@@ -190,7 +190,9 @@ public static class TrocarMesaCommands
         var geometria = FileiraCommands.GeometriaDe(perfil);
         var doProjeto = ConfigCommands.Inicial(documento, out var aviso);
         if (aviso is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
-        var settings = doProjeto.ForTable(perfil.Frame);
+        // O motor aplica o T3 de cada mesa (WithEmbedmentOf); entregar o
+        // ForTable de um tipo só passava o T3 dele para os outros (38.3).
+        var settings = doProjeto;
 
         var pegada = new TableFootprint(geometria.Length, geometria.Depth * Math.Cos(perfil.TiltRadians));
         var troca = TableSwap.Plan(celula, pegada, kind: 0, quantas, settings.Configuration.TableGap, ancora, vao);
@@ -209,6 +211,7 @@ public static class TrocarMesaCommands
         RecalcularCommands.Apagar(documento, mesa);
 
         foreach (var a in fileira.Warnings) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", a));
+        LayoutDrawer.EscreverAvisos(editor, desenho.StructureWarnings);
 
         var magenta = desenho.Marked > 0 ? Tr.F(", {0} com módulo dentro da terra (magenta)", desenho.Marked) : string.Empty;
         var novas = string.Join(", ", troca.Tables.Select(t => t.Label));
@@ -445,7 +448,9 @@ public static class TrocarMesaCommands
 
         var (desenhoDosTipos, pegadas, _) = UsinaCommands.Tipos(tipos);
         var doProjeto = ConfigCommands.Inicial(documento, out _);
-        var settings = doProjeto.ForTable(tipos[0].Profile.Frame);
+        // O motor aplica o T3 de cada mesa (WithEmbedmentOf); entregar o
+        // ForTable de um tipo só passava o T3 dele para os outros (38.3).
+        var settings = doProjeto;
         var tilt = tipos[0].Profile.TiltRadians;
 
         var reespacadas = TableSwap.Respace(celulas, pegadas, settings.Configuration.TableGap, settings.Configuration.MaxGapBeforeBreak, lado, troca);
@@ -465,6 +470,7 @@ public static class TrocarMesaCommands
             idDaMesa: m => guids.TryGetValue(m.Label, out var g) ? g : Guid.NewGuid(), analisar: analise, tipos: desenhoDosTipos);
 
         AvisarForaDaArea(editor, database, reespacadas, Tr.T("REGERAR FILEIRA"));
+        LayoutDrawer.EscreverAvisos(editor, desenho.StructureWarnings);
 
         foreach (var a in fileira.Warnings) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", a));
 
@@ -519,6 +525,7 @@ public static class TrocarMesaCommands
         RecalcularCommands.Apagar(documento, daFileira.Select(g => lida.Mesas[g]).ToList());
 
         foreach (var a in escolhida.Warnings) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", a));
+        LayoutDrawer.EscreverAvisos(editor, desenho.StructureWarnings);
 
         editor.WriteMessage(
             Tr.F("\nREGERAR FILEIRA {0} pelo motor: {1} mesa(s) apagada(s), {2} desenhada(s), {3} módulo(s){4}.\n", escolhida.Row.Number, daFileira.Count, desenho.Tables, desenho.Modules, (desenho.Marked > 0 ? Tr.F(", {0} com módulo dentro da terra (magenta)", desenho.Marked) : string.Empty)));

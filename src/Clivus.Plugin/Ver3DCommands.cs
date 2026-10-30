@@ -264,7 +264,46 @@ public static class Ver3DCommands
         var extras = Canaletas(database, terreno);
         extras.AddRange(CarportCommands.Faces3D(database, (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null));
 
+        // A bifila (39.1): as vigas, mãos francesas, terças e tirantes, com
+        // as faces lidas dos próprios sólidos do desenho.
+        extras.AddRange(EstruturaDaBifila(database));
+
         return new Scene3D(string.IsNullOrWhiteSpace(titulo) ? Tr.T("Usina") : titulo, grade, faces, pilares, arvores, sombras, extras);
+    }
+
+    /// <summary>
+    /// As peças da bifila (39.1): cada sólido com XData "Estrutura" vira a
+    /// barra dele em triângulos, montada no Core (<see cref="BarMesh"/>) pelo
+    /// eixo e pela seção gravados na peça, sem as tampas, na cor do aço. A
+    /// peça movida ou copiada aparece onde está: o centro do sólido no desenho
+    /// menos o meio do eixo gravado é o quanto ela andou. Explodir o sólido,
+    /// como no começo, eram 13 mil sólidos explodidos numa usina de 500 mesas.
+    /// </summary>
+    private static List<Scene3DFace> EstruturaDaBifila(Database database)
+    {
+        var faces = new List<Scene3DFace>();
+
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForRead);
+        var espaco = (BlockTableRecord)transacao.GetObject(tabela[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+
+        foreach (ObjectId id in espaco)
+        {
+            if (id.ObjectClass.DxfName != "3DSOLID") continue;
+            if (transacao.GetObject(id, OpenMode.ForRead) is not Solid3d solido || LayoutXData.LoadStructure(solido) is not { } peca) continue;
+
+            var caixa = solido.GeometricExtents;
+            var andou = new Point3(
+                (caixa.MinPoint.X + caixa.MaxPoint.X) / 2 - (peca.Start.X + peca.End.X) / 2,
+                (caixa.MinPoint.Y + caixa.MaxPoint.Y) / 2 - (peca.Start.Y + peca.End.Y) / 2,
+                (caixa.MinPoint.Z + caixa.MaxPoint.Z) / 2 - (peca.Start.Z + peca.End.Z) / 2);
+
+            Point3 Levar(Point3 p) => new(p.X + andou.X, p.Y + andou.Y, p.Z + andou.Z);
+
+            faces.AddRange(BarMesh.Box(Levar(peca.Start), Levar(peca.End), peca.Width, peca.Depth, peca.DepthDirection, CarportMesh.CorDoAco, caps: false));
+        }
+
+        return faces;
     }
 
     /// <summary>As canaletas da drenagem (29.3): a mesma geometria do sólido do desenho, em triângulos cinza-concreto.</summary>

@@ -89,7 +89,7 @@ public static class ExcelCommands
         var database = documento.Database;
         if (!caminho.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)) caminho += ".xlsx";
 
-        var (mesas, modulos, kwp, pilares) = Ler(database);
+        var (mesas, modulos, kwp, pilares, barras) = Ler(database);
 
         var quantificacoes = Enum.GetValues<IndependentKind>()
             .Select(t => QuantificacaoGravada.Ler(database, t))
@@ -99,11 +99,15 @@ public static class ExcelCommands
         var eletrico = abas.HasFlag(ExportSheets.ElectricalSummary) ? ResumoEletricoCommands.Ler(documento).Resumo : null;
         var desenho = Path.GetFileNameWithoutExtension(documento.Name);
         File.WriteAllBytes(caminho, QuantityReport.Build(mesas, modulos, kwp, pilares, quantificacoes, abas, Extras(documento, abas), eletrico,
-            capa ? (string.IsNullOrWhiteSpace(desenho) ? "usina" : desenho, DateTime.Now) : null).ToBytes());
+            capa ? (string.IsNullOrWhiteSpace(desenho) ? "usina" : desenho, DateTime.Now) : null, barras).ToBytes());
 
         editor.WriteMessage(Tr.F(
             "\nEXCEL {0} mesa(s), {1} módulo(s), {2} pilar(es), {3} análise(s) quantificada(s) em {4}\n",
             mesas, modulos, pilares.Count, quantificacoes.Count, caminho));
+
+        // A bifila (38.4): as peças da estrutura que foram para a aba Estrutura.
+        if (abas.HasFlag(ExportSheets.Structure) && (barras.Count > 0 || pilares.Any(p => p.Line != PillarLine.Single)))
+            editor.WriteMessage(FormattableString.Invariant($"  EXCEL_ESTRUTURA pecas={barras.Count} vigas={barras.Count(b => b.Part == StructurePart.Beam)} maos={barras.Count(b => b.Part == StructurePart.Brace)} tercas={barras.Count(b => b.Part == StructurePart.Purlin)} tirantes={barras.Count(b => b.Part == StructurePart.Rod)} dianteiros={pilares.Count(p => p.Line == PillarLine.Front)} traseiros={pilares.Count(p => p.Line == PillarLine.Rear)}\n"));
 
         if (quantificacoes.Count == 0)
             editor.WriteMessage(Tr.T("  Nenhuma análise quantificada ainda: use o Quantificar de cada análise para elas entrarem.\n"));
@@ -138,7 +142,7 @@ public static class ExcelCommands
         return tabelas;
     }
 
-    private static (int Mesas, int Modulos, double Kwp, List<QuantityPillar> Pilares) Ler(Database database)
+    private static (int Mesas, int Modulos, double Kwp, List<QuantityPillar> Pilares, List<QuantityBar> Barras) Ler(Database database)
     {
         using var transacao = database.TransactionManager.StartOpenCloseTransaction();
 
@@ -146,6 +150,7 @@ public static class ExcelCommands
         var modulos = 0;
         var watts = 0.0;
         var pilares = new List<QuantityPillar>();
+        var barras = new List<QuantityBar>();
         var simulada = FonteDoModulo.Simulada(database)?.Watts;
 
         foreach (var (_, partes) in LayoutScan.Tables(transacao, database))
@@ -159,11 +164,18 @@ public static class ExcelCommands
             foreach (var id in partes.Pillars)
             {
                 if (transacao.GetObject(id, OpenMode.ForRead) is Entity e && LayoutXData.LoadPillar(e) is { } p)
-                    pilares.Add(new QuantityPillar(mesa.Label, p.Number, p.Embedment, p.FreeHeight, p.Length));
+                    pilares.Add(new QuantityPillar(mesa.Label, p.Number, p.Embedment, p.FreeHeight, p.Length, p.Line));
+            }
+
+            // As peças da bifila, pelo comprimento gravado em cada uma (38.4).
+            foreach (var id in partes.StructureBars)
+            {
+                if (transacao.GetObject(id, OpenMode.ForRead) is Entity e && LayoutXData.LoadStructure(e) is { } b)
+                    barras.Add(new QuantityBar(mesa.Label, b.Part, b.Line, b.Index, b.Length, b.MaxBar));
             }
         }
 
         transacao.Commit();
-        return (mesas, modulos, watts / 1000, pilares);
+        return (mesas, modulos, watts / 1000, pilares, barras);
     }
 }

@@ -190,7 +190,9 @@ public static class PontasCommands
     {
         var doProjeto = ConfigCommands.Inicial(documento, out var avisoDaConfig);
         if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", notaDoT3));
-        var settings = doProjeto.ForTable(perfil.Frame);
+        // O motor aplica o T3 de cada mesa (WithEmbedmentOf); entregar o
+        // ForTable de um tipo só passava o T3 dele para os outros (38.3).
+        var settings = doProjeto;
         if (avisoDaConfig is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", avisoDaConfig));
 
         var pilares = perfil.Frame.Pillars(perfil.Layout);
@@ -257,8 +259,8 @@ public static class PontasCommands
 
         // Como a mesa está hoje: as cotas da borda baixa do contorno.
         var hoje = RowPipeline.ProcessFixed(celula, geometria, perfil.TiltRadians, terreno.Mesh, settings, cantos[0].Z, cantos[1].Z, null).Tables[0];
-        var primeiro = hoje.Pillars.Pillars[0];
-        var ultimo = hoje.Pillars.Pillars[^1];
+        var primeiro = PillarStations.EndCarrier(hoje.Pillars.Pillars, first: true);
+        var ultimo = PillarStations.EndCarrier(hoje.Pillars.Pillars, first: false);
 
         if (primeiro.LowEdgeClearance is not { } a || ultimo.LowEdgeClearance is not { } b)
         {
@@ -287,7 +289,7 @@ public static class PontasCommands
         var guid = c.Mesa.Identity!.Id;
         var pontas = (ajuste.FirstLowEdge, ajuste.LastLowEdge);
 
-        LayoutDrawer.Draw(
+        var desenho = LayoutDrawer.Draw(
             documento.Database, ajuste.Row, c.Geometria, c.Perfil.Layout.Module, c.Perfil.TiltRadians, c.Settings.Analyses,
             _ => guid, _ => pontas, analise,
             LayoutDrawer.TiposDeMesa.DaMesa(documento.Database, c.Mesa.Identity!.ProfileName, c.Geometria, c.Perfil.Layout.Module));
@@ -300,6 +302,7 @@ public static class PontasCommands
             Math.Abs(mesa.Pillars.LongitudinalTiltRadians) * 180 / Math.PI, mesa.Pillars.Describe()));
 
         foreach (var aviso in ajuste.Warnings) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
+        LayoutDrawer.EscreverAvisos(editor, desenho.StructureWarnings);
 
         editor.WriteMessage(Tr.T("\n  As alturas ficam gravadas na mesa: o Recalcular as mantém; \"Automatico\" devolve a mesa ao motor.\n"));
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);

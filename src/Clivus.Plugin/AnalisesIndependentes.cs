@@ -53,6 +53,20 @@ internal static class AnalisesIndependentes
         /// <summary>O comprimento da borda baixa.</summary>
         internal double Comprimento => Distancia(Cantos[0], Cantos[1]);
 
+        /// <summary>
+        /// Um pilar por estação, para o que é da estação (PB e PA): na bifila
+        /// os dois pilares do pórtico têm a mesma PB e PA, e contar os dois
+        /// escrevia o texto duas vezes e dobrava a quantificação (38.3).
+        /// </summary>
+        internal IEnumerable<(PillarIdentity Pilar, ObjectId Bloco)> UmPorEstacao
+        {
+            get
+            {
+                var levam = PillarStations.EdgeCarriers(Pilares.Select(p => (p.Pilar.Station, p.Pilar.Problem is null)).ToList());
+                return Pilares.Where((_, i) => levam.Contains(i));
+            }
+        }
+
         /// <summary>O ponto da borda baixa (ou alta) na estação dada.</summary>
         internal Point3 NaBorda(double estacao, bool alta)
         {
@@ -135,7 +149,7 @@ internal static class AnalisesIndependentes
                     var (ux, uy) = mesa.ParaCima;
                     var sinal = alta ? 1 : -1;
 
-                    foreach (var (pilar, _) in mesa.Pilares)
+                    foreach (var (pilar, _) in mesa.UmPorEstacao)
                     {
                         var valor = (alta ? pilar.HighEdgeClearance : pilar.LowEdgeClearance) ?? double.NaN;
                         var naBorda = mesa.NaBorda(pilar.Station, alta);
@@ -373,8 +387,8 @@ internal static class AnalisesIndependentes
             switch (tipo)
             {
                 case IndependentKind.Slope: pontos.Add(mesa.Declividade(unidade)); break;
-                case IndependentKind.LowEdge: pontos.AddRange(mesa.Pilares.Select(p => p.Pilar.LowEdgeClearance ?? double.NaN)); break;
-                case IndependentKind.HighEdge: pontos.AddRange(mesa.Pilares.Select(p => p.Pilar.HighEdgeClearance ?? double.NaN)); break;
+                case IndependentKind.LowEdge: pontos.AddRange(mesa.UmPorEstacao.Select(p => p.Pilar.LowEdgeClearance ?? double.NaN)); break;
+                case IndependentKind.HighEdge: pontos.AddRange(mesa.UmPorEstacao.Select(p => p.Pilar.HighEdgeClearance ?? double.NaN)); break;
                 default: pontos.AddRange(mesa.Pilares.Select(p => IndependentAnalysis.PillarValue(tipo, p.Pilar))); break;
             }
         }
@@ -507,7 +521,9 @@ internal static class AnalisesIndependentes
                         }
 
                         var estacao = (modulo.Column + 0.5) * largura;
-                        var perto = mesa.Pilares.MinBy(p => Math.Abs(p.Pilar.Station - estacao)).Pilar;
+                        // O pilar da estação que leva a PB e a PA (na bifila, o
+                        // primeiro sem problema), como o texto da análise.
+                        var perto = mesa.UmPorEstacao.MinBy(p => Math.Abs(p.Pilar.Station - estacao)).Pilar;
                         var valor = (tipo == IndependentKind.HighEdge ? perto.HighEdgeClearance : perto.LowEdgeClearance) ?? double.NaN;
 
                         yield return (bloco, valor);

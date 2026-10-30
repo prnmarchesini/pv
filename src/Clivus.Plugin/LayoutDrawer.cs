@@ -13,7 +13,15 @@ namespace Clivus.Plugin;
 /// <param name="Modules">Quantos módulos (blocos), e o mesmo tanto de faces.</param>
 /// <param name="Painted">Quantas peças saíram pintadas por alguma análise.</param>
 /// <param name="Marked">Quantas mesas saíram marcadas.</param>
-internal sealed record DrawnRow(int Tables, int Pillars, int Modules, int Painted, int Marked);
+internal sealed record DrawnRow(int Tables, int Pillars, int Modules, int Painted, int Marked)
+{
+    /// <summary>
+    /// O que a bifila não pôde montar nas mesas desta fileira (mão francesa
+    /// que não alcança a viga, ponto dentro do chão), com a mesa de cada um
+    /// (38.2). Quem escreve é <see cref="LayoutDrawer.EscreverAvisos"/>.
+    /// </summary>
+    public IReadOnlyList<(string Aviso, string Mesa)> StructureWarnings { get; init; } = [];
+}
 
 /// <summary>
 /// Desenha uma fileira processada no desenho: pilares primeiro (blocos),
@@ -87,6 +95,10 @@ internal static class LayoutDrawer
 
         var camadaMesa = LayoutLayers.Garantir(transacao, database, LayoutLayers.Mesa, new RgbColor(140, 140, 140));
         var camadaPilar = LayoutLayers.Garantir(transacao, database, LayoutLayers.Pilar, new RgbColor(120, 90, 60));
+
+        // A camada das peças da bifila (38.2) só nasce quando há bifila: o
+        // desenho da monoposte continua com as camadas de sempre.
+        string? camadaEstrutura = null;
         var camadaModulo = LayoutLayers.Garantir(transacao, database, LayoutLayers.Modulo, new RgbColor(30, 60, 140));
         var camadaFace = LayoutLayers.Garantir(transacao, database, LayoutLayers.Face, new RgbColor(60, 120, 220));
         var camadaAlturas = oQue.Cotas
@@ -117,6 +129,7 @@ internal static class LayoutDrawer
         var modulos = 0;
         var pintadas = 0;
         var marcadas = 0;
+        var avisosDaEstrutura = new List<(string Aviso, string Mesa)>();
 
         foreach (var mesa in fileira.Tables)
         {
@@ -168,6 +181,10 @@ internal static class LayoutDrawer
             // e nenhuma ficou boa; ficou a primeira (02/10/2026).
             var corDeNaoCabe = mesa.Cell.TriedAll ? CorTentouTodas : CorDeNaoCabe;
 
+            // Quem leva a PB e a PA de cada estação: um pilar por pórtico, o
+            // primeiro sem problema (na monoposte, todos).
+            var levamPontas = PillarStations.EdgeCarriers(mesa.Pillars.Pillars.Select(p => (p.Station, p.Problem is null)).ToList());
+
             // 1. Pilares.
             for (var i = 0; i < mesa.Pillars.Pillars.Count; i++)
             {
@@ -200,7 +217,7 @@ internal static class LayoutDrawer
 
                 LayoutXData.SavePillar(transacao, bloco, new PillarIdentity(
                     Guid.NewGuid(), identidade.Id, i + 1, pilar.Station, pilar.Length, pilar.Embedment, pilar.FreeHeight, pilar.Problem, pilar.GroundZ,
-                    pilar.LowEdgeClearance, pilar.HighEdgeClearance));
+                    pilar.LowEdgeClearance, pilar.HighEdgeClearance, pilar.Line));
 
                 pilares++;
 
@@ -220,8 +237,14 @@ internal static class LayoutDrawer
                 }
                 else if (pilar.Problem is null)
                 {
-                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.LowEdgeClearance, "PB", pontaBaixa, direcaoDaFileira, rumo, estilo);
-                    Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.HighEdgeClearance, "PA", pontaAlta, direcaoDaFileira, rumo, estilo);
+                    // PB e PA são da estação: na bifila, uma vez por pórtico
+                    // (no primeiro pilar sem problema), e o P3 em cada pilar.
+                    if (levamPontas.Contains(i))
+                    {
+                        Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.LowEdgeClearance, "PB", pontaBaixa, direcaoDaFileira, rumo, estilo);
+                        Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.HighEdgeClearance, "PA", pontaAlta, direcaoDaFileira, rumo, estilo);
+                    }
+
                     Cota(transacao, espaco, camadaAlturas, identidade.Id, pilar.FreeHeight, "P3", new Point3(pilar.X, pilar.Y, pilar.TopZ), direcaoDaFileira, rumo, estilo);
                 }
                 else
@@ -285,6 +308,46 @@ internal static class LayoutDrawer
                 modulos++;
             }
 
+            // 2b. As peças da bifila (38.2): viga, mãos francesas, terças e
+            //     tirantes, em sólidos, no grupo da mesa. Na monoposte não há
+            //     nada (a geometria não tem a parte bifila).
+            var estrutura = BifilaStructure.Build(geo, mesa.Pillars);
+
+            if (estrutura.Bars.Count > 0)
+            {
+                camadaEstrutura ??= LayoutLayers.Garantir(transacao, database, LayoutLayers.Estrutura, CarportMesh.CorDoAco);
+                var barraMaxima = geo.Frame?.Bifila?.PurlinMaxBar;
+
+                foreach (var barra in estrutura.Bars)
+                {
+                    if (SolidoDeBarra.Caixa(barra.Start, barra.End, barra.Section.Width, barra.Section.Depth, barra.DepthDirection) is not { } solido) continue;
+
+                    try
+                    {
+                        solido.Layer = naoCabe ? camadaMarcada : camadaEstrutura;
+                        if (naoCabe) solido.Color = corDeNaoCabe;
+
+                        pecas.Add(espaco.AppendEntity(solido));
+                    }
+                    catch
+                    {
+                        // Fora do banco, o sólido é nosso: sem isto o corpo
+                        // ACIS ficaria para o coletor, no thread dele.
+                        solido.Dispose();
+                        throw;
+                    }
+
+                    transacao.AddNewlyCreatedDBObject(solido, true);
+
+                    LayoutXData.SaveStructure(transacao, solido, new StructureIdentity(
+                        Guid.NewGuid(), identidade.Id, barra.Part, barra.Line, barra.Index, barra.Length,
+                        barra.Part == StructurePart.Purlin ? barraMaxima : null,
+                        barra.Start, barra.End, barra.Section.Width, barra.Section.Depth, barra.DepthDirection));
+                }
+            }
+
+            foreach (var aviso in estrutura.Warnings) avisosDaEstrutura.Add((aviso, mesa.Label));
+
             // 3. O contorno da mesa: o plano dos módulos, fechado.
             var contorno = new Polyline3d { Closed = true, Layer = camadaMesa };
 
@@ -343,7 +406,43 @@ internal static class LayoutDrawer
 
         transacao.Commit();
 
-        return new DrawnRow(fileira.Tables.Count, pilares, modulos, pintadas, marcadas);
+        return new DrawnRow(fileira.Tables.Count, pilares, modulos, pintadas, marcadas) { StructureWarnings = [.. avisosDaEstrutura] };
+    }
+
+    /// <summary>
+    /// Os avisos da bifila, um por motivo, com as mesas em que aconteceram
+    /// (até seis letreiros e a conta do resto): "a mão francesa ... (F1.2,
+    /// F1.5 e mais 3 mesa(s))". Sem a mesa, o aviso não dizia onde olhar.
+    /// </summary>
+    internal static IReadOnlyList<string> ResumoDosAvisos(IEnumerable<(string Aviso, string Mesa)> avisos)
+    {
+        ArgumentNullException.ThrowIfNull(avisos);
+
+        // F1.2 antes de F1.10: os números do letreiro comparados como número.
+        static string Natural(string letreiro) =>
+            System.Text.RegularExpressions.Regex.Replace(letreiro, @"\d+", m => m.Value.PadLeft(10, '0'));
+
+        return avisos
+            .GroupBy(a => a.Aviso, StringComparer.Ordinal)
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .Select(g =>
+            {
+                var mesas = g.Select(a => a.Mesa).Distinct(StringComparer.Ordinal).OrderBy(Natural, StringComparer.Ordinal).ToList();
+                var mostradas = string.Join(", ", mesas.Take(6));
+                return mesas.Count > 6
+                    ? Tr.F("{0} ({1} e mais {2} mesa(s))", g.Key, mostradas, mesas.Count - 6)
+                    : Tr.F("{0} ({1})", g.Key, mostradas);
+            })
+            .ToList();
+    }
+
+    /// <summary>Escreve os avisos da bifila na linha de comando.</summary>
+    internal static void EscreverAvisos(Autodesk.AutoCAD.EditorInput.Editor editor, IEnumerable<(string Aviso, string Mesa)> avisos)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        foreach (var linha in ResumoDosAvisos(avisos))
+            editor.WriteMessage(Tr.F("\n  ATENÇÃO (bifila): {0}\n", linha));
     }
 
     /// <summary>

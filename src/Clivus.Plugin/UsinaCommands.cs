@@ -193,8 +193,13 @@ public static class UsinaCommands
         if (doDesenho.Count > 0) perfil = doDesenho[0].Profile;
 
         var doProjeto = ConfigCommands.Inicial(documento, out var avisoDaConfig);
-        if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", notaDoT3));
-        var settings = doProjeto.ForTable(perfil.Frame);
+        // A nota do T3 de cada tipo em uso (cada um tem o seu enterro).
+        var estruturas = doDesenho.Count > 0 ? doDesenho.Select(m => m.Profile.Frame) : [perfil.Frame];
+        foreach (var notaDoT3 in estruturas.Select(doProjeto.EmbedmentNote).OfType<string>().Distinct())
+            editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", notaDoT3));
+        // O motor aplica o T3 de cada mesa (WithEmbedmentOf); entregar o
+        // ForTable de um tipo só passava o T3 dele para os outros (38.3).
+        var settings = doProjeto;
         if (avisoDaConfig is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", avisoDaConfig));
 
         if (avisarSeJaHaMesas) FileiraCommands.AvisarSeJaHaMesas(editor, documento.Database);
@@ -280,6 +285,7 @@ public static class UsinaCommands
         var modulosDesenhados = 0;
         var pintadas = 0;
         var marcadas = 0;
+        var avisosDaBifila = new List<(string Aviso, string Mesa)>();
 
         foreach (var fileira in usina.Rows)
         {
@@ -292,12 +298,14 @@ public static class UsinaCommands
             modulosDesenhados += desenho.Modules;
             pintadas += desenho.Painted;
             marcadas += desenho.Marked;
+            avisosDaBifila.AddRange(desenho.StructureWarnings);
         }
 
         relogio.Stop();
 
         foreach (var aviso in usina.Warnings.Take(10)) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
         if (usina.Warnings.Count > 10) editor.WriteMessage(Tr.F("\n  ... e mais {0} aviso(s).\n", usina.Warnings.Count - 10));
+        LayoutDrawer.EscreverAvisos(editor, avisosDaBifila);
 
         var cotas = usina.Tables.SelectMany(t => t.Pillars.Pillars).Where(p => p.Length is not null).Select(p => p.Length!.Value).ToList();
 

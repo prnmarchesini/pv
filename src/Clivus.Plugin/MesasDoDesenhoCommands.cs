@@ -39,4 +39,35 @@ public static class MesasDoDesenhoCommands
             documento.Editor.WriteMessage(Tr.F("\nNão consegui gravar as mesas: {0}\n", erro.Message));
         }
     }
+
+    /// <summary>
+    /// CLIVUS_BIFILA_EXEMPLO_AUTO (38.2): a bifila Arctech 2P14 GC800, sozinha
+    /// e em uso, e a faixa da PB do projeto que ela pede (de 0,84 a 1,60 m: a
+    /// GC800 quer 0,80 livre no fundo do módulo, 0,832 na face). Para o nível 2.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoBifilaExemploAutomatico)]
+    public static void BifilaExemplo()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        try
+        {
+            var bifila = BifilaReference.Profile(BifilaVariant.Gc800);
+            MesasDoDesenho.Gravar(documento.Database, [new DrawingTable(bifila, DrawingTables.NextColor([]), true)]);
+
+            var atual = ConfigCommands.Inicial(documento, out _);
+            SettingsStore.Save(documento.Database, atual with
+            {
+                Configuration = atual.Configuration with { MinLowEdge = 0.84, MaxLowEdge = 1.60 },
+            });
+
+            documento.Editor.WriteMessage(Tr.F("\nBIFILA {0} no desenho, em uso; PB de 0,84 a 1,60 m.\n", bifila.Name));
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no CLIVUS_BIFILA_EXEMPLO_AUTO.", erro);
+            documento.Editor.WriteMessage(Tr.F("\nNão consegui gravar a bifila: {0}\n", erro.Message));
+        }
+    }
 }

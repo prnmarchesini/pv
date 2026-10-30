@@ -153,10 +153,18 @@ public static class AlturasCommands
             var rumo = LayoutDrawer.RumoLegivel(direcao.X, direcao.Y);
             var feita = false;
 
-            foreach (var id in mesa.Pillars)
+            var lidos = mesa.Pillars
+                .Select(id => transacao.GetObject(id, OpenMode.ForRead) is BlockReference b && LayoutXData.LoadPillar(b) is { } p ? (Bloco: b, Pilar: p) : default)
+                .Where(l => l.Bloco is not null)
+                .ToList();
+
+            // Quem leva a PB e a PA de cada estação: um pilar por pórtico, o
+            // primeiro sem problema (na monoposte, todos), como no desenho.
+            var levamPontas = PillarStations.EdgeCarriers(lidos.Select(l => (l.Pilar.Station, l.Pilar.Problem is null)).ToList());
+
+            for (var indice = 0; indice < lidos.Count; indice++)
             {
-                if (transacao.GetObject(id, OpenMode.ForRead) is not BlockReference bloco) continue;
-                if (LayoutXData.LoadPillar(bloco) is not { } pilar) continue;
+                var (bloco, pilar) = lidos[indice];
 
                 var t = Math.Clamp(pilar.Station / comprimento, 0, 1);
                 var pontaBaixa = new Point3(cantos[0].X + (cantos[1].X - cantos[0].X) * t, cantos[0].Y + (cantos[1].Y - cantos[0].Y) * t, cantos[0].Z + (cantos[1].Z - cantos[0].Z) * t);
@@ -173,15 +181,20 @@ public static class AlturasCommands
                     continue;
                 }
 
-                if (pilar.LowEdgeClearance is null && pilar.HighEdgeClearance is null)
+                // PB e PA são da estação: na bifila, uma vez por pórtico; o
+                // outro pilar leva só o P3 dele (38.3).
+                if (levamPontas.Contains(indice))
                 {
-                    semPontas++;
-                }
-                else
-                {
-                    LayoutDrawer.Cota(transacao, espaco, camada, guid, pilar.LowEdgeClearance, "PB", pontaBaixa, direcao, rumo, estilo);
-                    LayoutDrawer.Cota(transacao, espaco, camada, guid, pilar.HighEdgeClearance, "PA", pontaAlta, direcao, rumo, estilo);
-                    cotas += 2;
+                    if (pilar.LowEdgeClearance is null && pilar.HighEdgeClearance is null)
+                    {
+                        semPontas++;
+                    }
+                    else
+                    {
+                        LayoutDrawer.Cota(transacao, espaco, camada, guid, pilar.LowEdgeClearance, "PB", pontaBaixa, direcao, rumo, estilo);
+                        LayoutDrawer.Cota(transacao, espaco, camada, guid, pilar.HighEdgeClearance, "PA", pontaAlta, direcao, rumo, estilo);
+                        cotas += 2;
+                    }
                 }
 
                 LayoutDrawer.Cota(transacao, espaco, camada, guid, pilar.FreeHeight, "P3", topo, direcao, rumo, estilo);

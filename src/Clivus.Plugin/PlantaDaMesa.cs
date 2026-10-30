@@ -165,7 +165,9 @@ internal sealed class PlantaDaMesa : FrameworkElement
 
         Escrever(
             tela,
-            Tr.F("{0} módulos · {1} pilares · {2} m na inclinação", _mesa.Modules.Count, _mesa.Pillars.Count, Medida(profundidade)),
+            _mesa.RearPillarRow is null
+                ? Tr.F("{0} módulos · {1} pilares · {2} m na inclinação", _mesa.Modules.Count, _mesa.Pillars.Count, Medida(profundidade))
+                : Tr.F("{0} módulos · {1} pórticos com {2} pilares · {3} m na inclinação", _mesa.Modules.Count, _mesa.Pillars.Select(p => p.Station).Distinct().Count(), _mesa.Pillars.Count, Medida(profundidade)),
             Fraco,
             11,
             new Point(X(0), baixo + 62));
@@ -228,7 +230,9 @@ internal sealed class PlantaDaMesa : FrameworkElement
     {
         if (_mesa is null || _mesa.Pillars.Count == 0) return;
 
-        var estacoes = _mesa.Pillars.Select(p => p.Station).ToList();
+        // Por estação, e não por pilar: na bifila os dois pilares do pórtico
+        // têm a mesma estação, e contar os dois dava vãos de zero (38.1).
+        var estacoes = _mesa.Pillars.Select(p => p.Station).Distinct().ToList();
 
         // Um milímetro: abaixo disso o pilar está na ponta.
         const double Nada = 0.001;

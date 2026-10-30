@@ -855,24 +855,6 @@ public static class CarportCommands
     }
 
     /// <summary>A barra como sólido: caixa do comprimento do eixo, na largura e na altura da seção.</summary>
-    private static Solid3d? Barra(CarportBar barra)
-    {
-        var inicio = new Point3d(barra.Start.X, barra.Start.Y, barra.Start.Z);
-        var fim = new Point3d(barra.End.X, barra.End.Y, barra.End.Z);
-        var eixo = fim - inicio;
-        if (eixo.Length < 1e-6) return null;
-
-        var x = eixo.GetNormal();
-        var altura = new Vector3d(barra.DepthDirection.X, barra.DepthDirection.Y, barra.DepthDirection.Z);
-        var z = altura - x * altura.DotProduct(x);
-        if (z.Length < 1e-9) z = x.GetPerpendicularVector();
-        z = z.GetNormal();
-        var y = z.CrossProduct(x);
-
-        var solido = new Solid3d();
-        solido.CreateBox(eixo.Length, barra.Section.Width, barra.Section.Depth);
-        solido.TransformBy(Matrix3d.AlignCoordinateSystem(
-            Point3d.Origin, Vector3d.XAxis, Vector3d.YAxis, Vector3d.ZAxis, inicio + eixo / 2, x, y, z));
-        return solido;
-    }
+    private static Solid3d? Barra(CarportBar barra) =>
+        SolidoDeBarra.Caixa(barra.Start, barra.End, barra.Section.Width, barra.Section.Depth, barra.DepthDirection);
 }

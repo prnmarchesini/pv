@@ -22,6 +22,9 @@ internal static class LayoutLayers
     /// <summary>Os pilares.</summary>
     internal const string Pilar = Prefixo + "PILAR";
 
+    /// <summary>As peças da bifila (viga, mão francesa, terça, tirante), passo 38.2.</summary>
+    internal const string Estrutura = Prefixo + "ESTRUTURA";
+
     /// <summary>Os blocos dos módulos.</summary>
     internal const string Modulo = Prefixo + "MODULO";
 

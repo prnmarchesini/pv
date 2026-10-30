@@ -125,7 +125,9 @@ public static class RecalcularCommands
     {
         var doProjeto = ConfigCommands.Inicial(documento, out var avisoDaConfig);
         if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", notaDoT3));
-        var settings = doProjeto.ForTable(perfil.Frame);
+        // O motor aplica o T3 de cada mesa (WithEmbedmentOf); entregar o
+        // ForTable de um tipo só passava o T3 dele para os outros (38.3).
+        var settings = doProjeto;
         if (avisoDaConfig is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", avisoDaConfig));
 
         var pilares = perfil.Frame.Pillars(perfil.Layout);
@@ -302,6 +304,7 @@ public static class RecalcularCommands
         var processada = fileira.Tables[0];
 
         foreach (var aviso in fileira.Warnings.Concat(avisos)) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
+        LayoutDrawer.EscreverAvisos(editor, desenho.StructureWarnings);
 
         if (processada.Orientation.DivergenceRadians > 5 * Math.PI / 180)
         {

@@ -10,13 +10,17 @@ internal enum TipoDeEstrutura
 {
     Fixa,
     Carport,
+
+    /// <summary>Fixa com dois pilares por pórtico (38.1).</summary>
+    Bifila,
 }
 
 /// <summary>
 /// Configurações › Estruturas › Nova estrutura... (35.1): a pergunta do tipo.
 /// Renan, 28/10/2026: <i>"ele entra em configurações, em nova estrutura, ai
 /// coloca que tem fixo e carport"</i>. Fixa segue para a janela de Mesa de
-/// sempre; Carport, para a janela do carport.
+/// sempre; Carport, para a janela do carport. Desde 30/10/2026 (38.1) há a
+/// Fixa bifila: a mesma janela de Mesa, com a seção da bifila.
 /// </summary>
 internal sealed class JanelaNovaEstrutura : Window
 {
@@ -36,6 +40,7 @@ internal sealed class JanelaNovaEstrutura : Window
 
         var linha = new StackPanel { Orientation = Orientation.Horizontal };
         linha.Children.Add(Opcao(Tr.T("Fixa"), Tr.T("Mesa fixa no terreno, com tesoura e pilares cravados. A janela de Mesa de sempre."), TipoDeEstrutura.Fixa));
+        linha.Children.Add(Opcao(Tr.T("Fixa bifila"), Tr.T("Mesa fixa com dois pilares por pórtico (dianteiro e traseiro), mãos francesas, terças e tirantes. Abre com a última bifila do desenho, ou com a Arctech 2P14 GC800."), TipoDeEstrutura.Bifila));
         linha.Children.Add(Opcao(Tr.T("Carport"), Tr.T("Cobertura de estacionamento: pórticos biposte em fila, módulos por cima, altura livre para os carros."), TipoDeEstrutura.Carport));
         painel.Children.Add(linha);
 

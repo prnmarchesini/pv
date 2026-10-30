@@ -1,0 +1,146 @@
+; Teste de nivel 2 da bifila (passos 38.2, 38.3, 38.4 e 39.1). Processa o
+; terreno, grava a bifila Arctech GC800 no desenho (sozinha e em uso, com a
+; faixa da PB que ela pede), traca area e alinhamento, processa a fileira 1 e
+; le do proprio desenho o que foi criado.
+;
+; O que se confere em LISP, e nao pelo relatorio do plugin:
+;   - os pilares: quantos, quantos na versao 3 do XData (a da bifila), quantos
+;     dianteiros e traseiros (o campo da linha), P3 = topo - terreno em cada
+;     um com terreno (regra sagrada 5), e cada dianteiro a 3,00 m do traseiro
+;     mais perto (o pilar em planta, pelo bloco);
+;   - as pecas da estrutura: os solidos com o nosso XData (pelo XData, nunca
+;     pela camada: mesa marcada leva as pecas para a camada das marcadas),
+;     contados por peca (viga, mao francesa, terca, tirante);
+;   - a geometria de cada solido, lida das arestas: o XEDGES vira as arestas em
+;     linhas, que o entget le (as linhas sao apagadas depois). PICKSTYLE 0
+;     durante o laco, senao o XEDGES pega o grupo da mesa inteira. Cada caixa
+;     tem 12 arestas; menos que isso reprova (sem aresta nao ha cota para
+;     conferir). Cada solido tem que ficar perto de um pilar (centro a menos de
+;     10 m em planta), acima do pe enterrado dele e abaixo do topo dele mais
+;     1 m; e dentro da faixa do terreno. O ponto do alinhamento vem com Z
+;     9999: peca no Z do clique sai dali;
+;   - as cotas das Alturas (PB/PA uma vez por portico), as quantificacoes, o
+;     Excel, o 3D;
+;   - e, no fim, o Apagar tudo da area: nenhuma peca da bifila pode sobrar.
+;
+; O OSNAP e desligado para os pontos digitados chegarem crus.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(command "CLIVUS_BIFILA_EXEMPLO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area da bifila")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento da bifila")
+(command "CLIVUS_FILEIRA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:dist2d (a b) (sqrt (+ (expt (- (car a) (car b)) 2) (expt (- (cadr a) (cadr b)) 2))))
+
+; ---- os pilares: (x y topo pe linha)
+(setq clivus:pilares (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_PILAR"))))
+(setq clivus:np (clivus:conta clivus:pilares) clivus:v3 0 clivus:frente 0 clivus:tras 0 clivus:p3ok 0 clivus:p3total 0
+      clivus:listap nil clivus:i 0)
+(while (< clivus:i clivus:np)
+  (setq clivus:en (ssname clivus:pilares clivus:i) clivus:e (entget clivus:en))
+  (setq clivus:p (cdr (assoc 10 clivus:e)) clivus:z (caddr clivus:p))
+  (setq clivus:xd (clivus:xdata clivus:en) clivus:linha "")
+  (if (and clivus:xd (= (cdr (nth 1 clivus:xd)) 3)) (setq clivus:v3 (1+ clivus:v3)))
+  (if clivus:xd (setq clivus:linha (clivus:campo clivus:xd 11)))
+  (if (= clivus:linha "Front") (setq clivus:frente (1+ clivus:frente)))
+  (if (= clivus:linha "Rear") (setq clivus:tras (1+ clivus:tras)))
+  (setq clivus:listap (cons (list (car clivus:p) (cadr clivus:p) clivus:z (- clivus:z (cdr (assoc 43 clivus:e))) clivus:linha) clivus:listap))
+  (if (and clivus:xd (> (strlen (clivus:campo clivus:xd 6)) 0) (> (strlen (clivus:campo clivus:xd 8)) 0))
+    (progn
+      (setq clivus:p3total (1+ clivus:p3total))
+      (if (< (abs (- (- clivus:z (atof (clivus:campo clivus:xd 8))) (atof (clivus:campo clivus:xd 6)))) 0.001)
+        (setq clivus:p3ok (1+ clivus:p3ok)))))
+  (setq clivus:i (1+ clivus:i)))
+
+; Cada dianteiro a 3,00 m (em planta) do traseiro mais perto.
+(setq clivus:pares 0)
+(foreach clivus:f clivus:listap
+  (if (= (nth 4 clivus:f) "Front")
+    (progn
+      (setq clivus:melhor 1e99)
+      (foreach clivus:t clivus:listap
+        (if (= (nth 4 clivus:t) "Rear") (setq clivus:melhor (min clivus:melhor (clivus:dist2d clivus:f clivus:t)))))
+      (if (< (abs (- clivus:melhor 3.0)) 0.005) (setq clivus:pares (1+ clivus:pares))))))
+
+; ---- as pecas da estrutura, pelo nosso XData
+(setq clivus:solidos (ssget "_X" '((0 . "3DSOLID") (-3 ("CLIVUS")))))
+(setq clivus:ns (clivus:conta clivus:solidos) clivus:vigas 0 clivus:maos 0 clivus:tercas 0 clivus:tirantes 0 clivus:xdok 0
+      clivus:zmin 1e99 clivus:zmax -1e99 clivus:dentro 0 clivus:arestas 0 clivus:pertos 0 clivus:i 0)
+(setq clivus:pickstyle (getvar "PICKSTYLE"))
+(setvar "PICKSTYLE" 0)
+(while (< clivus:i clivus:ns)
+  (setq clivus:en (ssname clivus:solidos clivus:i))
+  (setq clivus:xd (clivus:xdata clivus:en))
+  (if (and clivus:xd (= (cdr (nth 0 clivus:xd)) "Estrutura"))
+    (progn
+      (setq clivus:xdok (1+ clivus:xdok))
+      (setq clivus:peca (clivus:campo clivus:xd 2))
+      (cond ((= clivus:peca "Beam") (setq clivus:vigas (1+ clivus:vigas)))
+            ((= clivus:peca "Brace") (setq clivus:maos (1+ clivus:maos)))
+            ((= clivus:peca "Purlin") (setq clivus:tercas (1+ clivus:tercas)))
+            ((= clivus:peca "Rod") (setq clivus:tirantes (1+ clivus:tirantes))))))
+  ; As arestas do solido viram linhas; a cota e o centro saem delas, e elas saem do desenho.
+  (setq clivus:marca (entlast))
+  (command "_.XEDGES" clivus:en "")
+  (setq clivus:a (entnext clivus:marca) clivus:smin 1e99 clivus:smax -1e99 clivus:nl 0 clivus:sx 0.0 clivus:sy 0.0)
+  (while clivus:a
+    (setq clivus:d (entget clivus:a) clivus:prox (entnext clivus:a))
+    (if (= (cdr (assoc 0 clivus:d)) "LINE")
+      (progn
+        (setq clivus:nl (1+ clivus:nl)
+              clivus:sx (+ clivus:sx (car (cdr (assoc 10 clivus:d))) (car (cdr (assoc 11 clivus:d))))
+              clivus:sy (+ clivus:sy (cadr (cdr (assoc 10 clivus:d))) (cadr (cdr (assoc 11 clivus:d))))
+              clivus:smin (min clivus:smin (cadddr (assoc 10 clivus:d)) (cadddr (assoc 11 clivus:d)))
+              clivus:smax (max clivus:smax (cadddr (assoc 10 clivus:d)) (cadddr (assoc 11 clivus:d))))))
+    (entdel clivus:a)
+    (setq clivus:a clivus:prox))
+  (if (= clivus:nl 12)
+    (progn
+      (setq clivus:arestas (1+ clivus:arestas))
+      (setq clivus:zmin (min clivus:zmin clivus:smin) clivus:zmax (max clivus:zmax clivus:smax))
+      (if (and (>= clivus:smin (- {{ZMIN}} 0.01)) (<= clivus:smax (+ {{ZMAX}} 4.0))) (setq clivus:dentro (1+ clivus:dentro)))
+      ; Os pilares a menos de 10 m do centro, em planta (a terca de 18,6 m pega a mesa toda):
+      ; a peca tem que ficar acima do pe mais baixo deles e abaixo do topo mais alto + 1 m.
+      (setq clivus:c (list (/ clivus:sx 24.0) (/ clivus:sy 24.0)) clivus:topo -1e99 clivus:pe 1e99 clivus:achou nil)
+      (foreach clivus:p clivus:listap
+        (if (< (clivus:dist2d clivus:c clivus:p) 10.0)
+          (setq clivus:achou T clivus:topo (max clivus:topo (nth 2 clivus:p)) clivus:pe (min clivus:pe (nth 3 clivus:p)))))
+      (if (and clivus:achou (>= clivus:smin (- clivus:pe 0.01)) (<= clivus:smax (+ clivus:topo 1.0)))
+        (setq clivus:pertos (1+ clivus:pertos)))))
+  (setq clivus:i (1+ clivus:i)))
+(setvar "PICKSTYLE" clivus:pickstyle)
+
+; ---- 38.3, 38.4 e 39.1: as cotas, as analises, o Excel e o 3D com a bifila
+; Alturas: PB e PA uma vez por portico, P3 em cada pilar.
+(command "CLIVUS_ALTURAS_REGERAR")
+(setq clivus:alturas (clivus:conta (ssget "_X" (list (cons 0 "MTEXT") (cons 8 "CLIVUS_ALTURAS")))))
+(command "CLIVUS_AN_PB_QUANTIFICAR")
+(command "CLIVUS_AN_PILAR_QUANTIFICAR")
+(command "CLIVUS_EXCEL_AUTO" "{{XLSX}}")
+(command "CLIVUS_3D_AUTO" "{{HTML}}")
+
+; ---- o Apagar tudo da area: nenhuma peca da bifila pode sobrar
+(command "CLIVUS_APAGAR_TUDO_AUTO")
+(setq clivus:sobra (clivus:conta (ssget "_X" '((0 . "3DSOLID") (-3 ("CLIVUS"))))))
+(setq clivus:sobrap (clivus:conta (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_PILAR")))))
+
+(princ (strcat "\nCLIVUS_BIFILA pilares=" (itoa clivus:np) " v3=" (itoa clivus:v3) " frente=" (itoa clivus:frente)
+               " tras=" (itoa clivus:tras) " p3ok=" (itoa clivus:p3ok) " p3total=" (itoa clivus:p3total) " pares=" (itoa clivus:pares)))
+(princ (strcat "\nCLIVUS_BIFILA2 solidos=" (itoa clivus:ns) " xdata=" (itoa clivus:xdok) " vigas=" (itoa clivus:vigas)
+               " maos=" (itoa clivus:maos) " tercas=" (itoa clivus:tercas) " tirantes=" (itoa clivus:tirantes)
+               " arestas=" (itoa clivus:arestas) " dentro=" (itoa clivus:dentro) " pertos=" (itoa clivus:pertos)
+               " zmin=" (rtos clivus:zmin 2 3) " zmax=" (rtos clivus:zmax 2 3)))
+(princ (strcat "\nCLIVUS_BIFILA3 alturas=" (itoa clivus:alturas) " sobra=" (itoa clivus:sobra) " sobrap=" (itoa clivus:sobrap)))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

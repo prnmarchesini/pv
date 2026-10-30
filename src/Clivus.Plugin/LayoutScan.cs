@@ -14,14 +14,19 @@ namespace Clivus.Plugin;
 /// <param name="Modules">Os blocos de módulo.</param>
 /// <param name="Faces">As faces superiores.</param>
 /// <param name="Notes">As notas: cotas (risco e texto) e avisos.</param>
+/// <param name="Bars">As peças da bifila (viga, mão francesa, terça, tirante), 38.2; vazio na monoposte.</param>
 internal sealed record TableParts(
     TableIdentity? Identity,
     IReadOnlyList<ObjectId> Contours,
     IReadOnlyList<ObjectId> Pillars,
     IReadOnlyList<ObjectId> Modules,
     IReadOnlyList<ObjectId> Faces,
-    IReadOnlyList<ObjectId> Notes)
+    IReadOnlyList<ObjectId> Notes,
+    IReadOnlyList<ObjectId>? Bars = null)
 {
+    /// <summary>As peças da estrutura bifila (nunca null).</summary>
+    public IReadOnlyList<ObjectId> StructureBars => Bars ?? [];
+
     /// <summary>O contorno (o primeiro, quando há cópia), ou nulo.</summary>
     public ObjectId? Contour => Contours.Count > 0 ? Contours[0] : null;
 
@@ -32,7 +37,7 @@ internal sealed record TableParts(
     public IEnumerable<ObjectId> Paintable => Contours.Concat(Pillars).Concat(Modules);
 
     /// <summary>Tudo da mesa: o que se apaga ao refazer.</summary>
-    public IEnumerable<ObjectId> All => Paintable.Concat(Faces).Concat(Notes);
+    public IEnumerable<ObjectId> All => Paintable.Concat(Faces).Concat(Notes).Concat(StructureBars);
 }
 
 /// <summary>
@@ -59,6 +64,7 @@ internal static class LayoutScan
         var modulos = new Dictionary<Guid, List<ObjectId>>();
         var faces = new Dictionary<Guid, List<ObjectId>>();
         var notas = new Dictionary<Guid, List<ObjectId>>();
+        var barras = new Dictionary<Guid, List<ObjectId>>();
 
         var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForRead);
         var espaco = (BlockTableRecord)transacao.GetObject(tabela[BlockTableRecord.ModelSpace], OpenMode.ForRead);
@@ -72,6 +78,14 @@ internal static class LayoutScan
 
             using (var dados = entidade.GetXDataForApplication(PluginXData.Aplicativo))
                 if (dados is null) continue;
+
+            // Sólido só pode ser peça da bifila: lê ela primeiro, sem passar
+            // pelas outras catorze leituras de XData.
+            if (entidade is Solid3d)
+            {
+                if (LayoutXData.LoadStructure(entidade) is { } barra) Juntar(barras, barra.Table, id);
+                continue;
+            }
 
             if (LayoutXData.LoadTable(entidade) is { } mesa)
             {
@@ -108,7 +122,7 @@ internal static class LayoutScan
             }
         }
 
-        var todas = contornos.Keys.Concat(pilares.Keys).Concat(modulos.Keys).Concat(faces.Keys).Concat(notas.Keys).Distinct();
+        var todas = contornos.Keys.Concat(pilares.Keys).Concat(modulos.Keys).Concat(faces.Keys).Concat(notas.Keys).Concat(barras.Keys).Distinct();
         var resultado = new Dictionary<Guid, TableParts>();
 
         foreach (var guid in todas)
@@ -119,7 +133,8 @@ internal static class LayoutScan
                 pilares.GetValueOrDefault(guid) ?? [],
                 modulos.GetValueOrDefault(guid) ?? [],
                 faces.GetValueOrDefault(guid) ?? [],
-                notas.GetValueOrDefault(guid) ?? []);
+                notas.GetValueOrDefault(guid) ?? [],
+                barras.GetValueOrDefault(guid) ?? []);
         }
 
         return resultado;
@@ -152,7 +167,8 @@ internal static class LayoutScan
             ?? LayoutXData.LoadFace(entidade)?.Table
             ?? LayoutXData.LoadNote(entidade)?.Table
             ?? LayoutXData.LoadAnalysisText(entidade)?.Table
-            ?? LayoutXData.LoadTag(entidade)?.Table;
+            ?? LayoutXData.LoadTag(entidade)?.Table
+            ?? LayoutXData.LoadStructure(entidade)?.Table;
     }
 
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDoBloco = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(BlockReference));
@@ -160,11 +176,12 @@ internal static class LayoutScan
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDaFace = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Face));
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDoTexto = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(MText));
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDaLinha = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Line));
+    private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDoSolido = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Solid3d));
 
-    /// <summary>Bloco (pilar, módulo), polilinha 3D (contorno), face, texto ou linha (notas): o que pode ser peça nossa.</summary>
+    /// <summary>Bloco (pilar, módulo), polilinha 3D (contorno), face, texto ou linha (notas), sólido (peça da bifila): o que pode ser peça nossa.</summary>
     internal static bool ENossaClasse(ObjectId id) =>
         id.ObjectClass == ClasseDoBloco || id.ObjectClass == ClasseDaPolilinha || id.ObjectClass == ClasseDaFace
-        || id.ObjectClass == ClasseDoTexto || id.ObjectClass == ClasseDaLinha;
+        || id.ObjectClass == ClasseDoTexto || id.ObjectClass == ClasseDaLinha || id.ObjectClass == ClasseDoSolido;
 
     private static void Juntar(Dictionary<Guid, List<ObjectId>> grupos, Guid mesa, ObjectId id)
     {

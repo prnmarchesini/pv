@@ -107,7 +107,7 @@ internal static class PontasVizinhas
             var pilares = desenhada.Pillars.Pillars;
             if (pilares.Count == 0) continue;
 
-            var pilar = par.Dela == 0 ? pilares.MinBy(p => p.Station)! : pilares.MaxBy(p => p.Station)!;
+            var pilar = PillarStations.EndCarrier(pilares, first: par.Dela == 0);
             if (pilar.LowEdgeClearance is not { } pb) continue;
 
             if (par.Minha == 0 && par.D < distPrimeira)

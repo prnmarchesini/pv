@@ -32,6 +32,17 @@ internal static class LayoutXData
     private const int VersaoDaMesaAntiga = 1;
     private const int VersaoDoPilar = 2;
     private const int VersaoDoPilarAntiga = 1;
+
+    /// <summary>
+    /// Versão 3 (38.2): a linha do pilar no pórtico, no fim. Só o pilar da
+    /// bifila sai nela; o da monoposte continua na 2, igual a antes.
+    /// </summary>
+    private const int VersaoDoPilarBifila = 3;
+
+    private const int VersaoDaEstrutura = 1;
+
+    /// <summary>GUID, mesa, peça, linha, índice, comprimento, barra máxima, o eixo (início e fim), a seção e a direção da altura.</summary>
+    private const int CamposDaEstrutura = 18;
     private const int VersaoDoModulo = 1;
 
     /// <summary>GUID, letreiro, cota inicial, cota final, inclinação, marcada, motivo, suja, motivo da sujeira, potência do módulo, âncora X, Y, Z, ponta à mão no primeiro e no último pilar.</summary>
@@ -57,6 +68,9 @@ internal static class LayoutXData
 
     /// <summary>Os nove primeiros, na versão 1 (sem as pontas).</summary>
     private const int CamposDoPilarAntigo = 9;
+
+    /// <summary>Os onze da versão 2 e a linha do pilar (versão 3, bifila).</summary>
+    private const int CamposDoPilarBifila = 12;
 
     /// <summary>GUID, mesa, coluna, fileira, altura livre.</summary>
     private const int CamposDoModulo = 5;
@@ -133,9 +147,10 @@ internal static class LayoutXData
         return mesa.IsValid ? mesa : null;
     }
 
-    internal static void SavePillar(Transaction transacao, Entity entidade, PillarIdentity pilar) =>
-        PluginXData.Save(
-            transacao, entidade, PillarIdentity.Tipo, VersaoDoPilar,
+    internal static void SavePillar(Transaction transacao, Entity entidade, PillarIdentity pilar)
+    {
+        string[] campos =
+        [
             pilar.Id.ToString("D"),
             pilar.Table.ToString("D"),
             pilar.Number.ToString(CultureInfo.InvariantCulture),
@@ -146,13 +161,34 @@ internal static class LayoutXData
             pilar.Problem ?? string.Empty,
             Opcional(pilar.GroundZ),
             Opcional(pilar.LowEdgeClearance),
-            Opcional(pilar.HighEdgeClearance));
+            Opcional(pilar.HighEdgeClearance),
+        ];
+
+        // A monoposte continua na versão 2, campo a campo como antes: os
+        // testes de nível 2 e os desenhos já gravados leem por posição.
+        if (pilar.Line == PillarLine.Single)
+            PluginXData.Save(transacao, entidade, PillarIdentity.Tipo, VersaoDoPilar, campos);
+        else
+            PluginXData.Save(transacao, entidade, PillarIdentity.Tipo, VersaoDoPilarBifila, [.. campos, pilar.Line.ToString()]);
+    }
 
     internal static PillarIdentity? LoadPillar(Entity entidade)
     {
-        var c = PluginXData.Load(entidade, PillarIdentity.Tipo, VersaoDoPilar, CamposDoPilar)
+        var bifila = PluginXData.Load(entidade, PillarIdentity.Tipo, VersaoDoPilarBifila, CamposDoPilarBifila);
+        var c = bifila
+            ?? PluginXData.Load(entidade, PillarIdentity.Tipo, VersaoDoPilar, CamposDoPilar)
             ?? PluginXData.Load(entidade, PillarIdentity.Tipo, VersaoDoPilarAntiga, CamposDoPilarAntigo);
         if (c is null) return null;
+
+        // Na versão 3 a linha é dianteira ou traseira, pelo nome: "Single",
+        // "1" ou "7" ali é XData mexido, e o pilar não é lido.
+        var linha = PillarLine.Single;
+        if (bifila is not null)
+        {
+            if (bifila[11] == nameof(PillarLine.Front)) linha = PillarLine.Front;
+            else if (bifila[11] == nameof(PillarLine.Rear)) linha = PillarLine.Rear;
+            else return null;
+        }
 
         if (!Guid.TryParse(c[0], out var id) || !Guid.TryParse(c[1], out var mesa)) return null;
         if (!int.TryParse(c[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var numero)) return null;
@@ -162,9 +198,50 @@ internal static class LayoutXData
             id, mesa, numero, estacao, RealOpcional(c[4]), enterro, RealOpcional(c[6]),
             c[7].Length == 0 ? null : c[7], RealOpcional(c[8]),
             c.Count >= CamposDoPilar ? RealOpcional(c[9]) : null,
-            c.Count >= CamposDoPilar ? RealOpcional(c[10]) : null);
+            c.Count >= CamposDoPilar ? RealOpcional(c[10]) : null,
+            linha);
 
         return pilar.IsValid ? pilar : null;
+    }
+
+    /// <summary>Grava a identidade de uma peça da estrutura bifila (38.2).</summary>
+    internal static void SaveStructure(Transaction transacao, Entity entidade, StructureIdentity peca) =>
+        PluginXData.Save(
+            transacao, entidade, StructureIdentity.Tipo, VersaoDaEstrutura,
+            peca.Id.ToString("D"),
+            peca.Table.ToString("D"),
+            peca.Part.ToString(),
+            peca.Line.ToString(),
+            peca.Index.ToString(CultureInfo.InvariantCulture),
+            Numero(peca.Length),
+            Opcional(peca.MaxBar),
+            Numero(peca.Start.X), Numero(peca.Start.Y), Numero(peca.Start.Z),
+            Numero(peca.End.X), Numero(peca.End.Y), Numero(peca.End.Z),
+            Numero(peca.Width), Numero(peca.Depth),
+            Numero(peca.DepthDirection.X), Numero(peca.DepthDirection.Y), Numero(peca.DepthDirection.Z));
+
+    internal static StructureIdentity? LoadStructure(Entity entidade)
+    {
+        var c = PluginXData.Load(entidade, StructureIdentity.Tipo, VersaoDaEstrutura, CamposDaEstrutura);
+        if (c is null) return null;
+
+        if (!Guid.TryParse(c[0], out var id) || !Guid.TryParse(c[1], out var mesa)) return null;
+        if (!Enum.GetNames<StructurePart>().Contains(c[2], StringComparer.Ordinal)) return null;
+        if (!Enum.GetNames<PillarLine>().Contains(c[3], StringComparer.Ordinal)) return null;
+        var parte = Enum.Parse<StructurePart>(c[2]);
+        var linha = Enum.Parse<PillarLine>(c[3]);
+        if (!int.TryParse(c[4], NumberStyles.Integer, CultureInfo.InvariantCulture, out var indice)) return null;
+        if (!Real(c[5], out var comprimento)) return null;
+
+        var n = new double[11];
+        for (var k = 0; k < n.Length; k++)
+            if (!Real(c[7 + k], out n[k])) return null;
+
+        var peca = new StructureIdentity(
+            id, mesa, parte, linha, indice, comprimento, RealOpcional(c[6]),
+            new Clivus.Geo.Point3(n[0], n[1], n[2]), new Clivus.Geo.Point3(n[3], n[4], n[5]), n[6], n[7],
+            new Clivus.Geo.Point3(n[8], n[9], n[10]));
+        return peca.IsValid ? peca : null;
     }
 
     internal static void SaveModule(Transaction transacao, Entity entidade, ModuleIdentity modulo) =>

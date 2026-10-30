@@ -40,6 +40,8 @@ param(
     [switch] $SoDrenagem,
     # Só o caso da ponte com o TermoVision (termovision.ps1, etapa 33).
     [switch] $SoTermoVision,
+    # Só os casos da bifila (bifila.ps1, etapas 37 a 39).
+    [switch] $SoBifila,
     [string] $Filtro = ''
 )
 
@@ -4534,6 +4536,10 @@ function Testar-Ativar {
 
 . (Join-Path $PSScriptRoot 'termovision.ps1')
 
+# ---- a bifila (plano/bifila): os casos ficam em bifila.ps1 -----------------
+
+. (Join-Path $PSScriptRoot 'bifila.ps1')
+
 # ---- a licenca da rodada ---------------------------------------------------
 
 # Com a chave publica de producao embutida, sem licenca todo comando do
@@ -4582,9 +4588,9 @@ if ($SoTermoVision) {
     exit 1
 }
 
-if ($SoEletrica -or $SoDrenagem) {
-    $casos = if ($SoDrenagem) { $CasosDrenagem } else { $CasosEletricos }
-    $nomeDaParte = if ($SoDrenagem) { 'Drenagem' } else { 'Eletrica' }
+if ($SoEletrica -or $SoDrenagem -or $SoBifila) {
+    $casos = if ($SoDrenagem) { $CasosDrenagem } elseif ($SoBifila) { $CasosBifila } else { $CasosEletricos }
+    $nomeDaParte = if ($SoDrenagem) { 'Drenagem' } elseif ($SoBifila) { 'Bifila' } else { 'Eletrica' }
     foreach ($caso in $casos | Where-Object { $_ -like "*$Filtro*" }) {
         $total++
         if (& $caso -Desenho $desenhos[0]) { $passaram++ }
@@ -4679,6 +4685,12 @@ else {
     # A fileira inteira no CAD: distribuicao, alinhamento, pilares, desenho.
     $total++
     if (Testar-Fileira -Desenho $desenhos[0]) { $passaram++ }
+
+    # A bifila (38.2): dois pilares por portico e as pecas da estrutura.
+    foreach ($caso in $CasosBifila) {
+        $total++
+        if (& $caso -Desenho $desenhos[0]) { $passaram++ }
+    }
 
     # E a area inteira, com o tempo medido.
     $total++

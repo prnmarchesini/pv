@@ -309,6 +309,12 @@ internal static class LayoutEraser
             case BlockReference bloco:
                 yield return new Point3(bloco.Position.X, bloco.Position.Y, 0);
                 break;
+            case Solid3d solido:
+                // Peça da bifila (38.2): o centro da caixa que a envolve, para a
+                // peça que sobrou sem a mesa ser achada dentro da área.
+                var caixa = solido.GeometricExtents;
+                yield return new Point3((caixa.MinPoint.X + caixa.MaxPoint.X) / 2, (caixa.MinPoint.Y + caixa.MaxPoint.Y) / 2, 0);
+                break;
             case Face face:
                 var p = face.GetVertexAt(0);
                 yield return new Point3(p.X, p.Y, 0);

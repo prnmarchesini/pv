@@ -41,6 +41,7 @@ internal sealed class JanelaDeExportar : Window
         Caixa(ExportSheets.Analyses, Tr.T("Análises"), Tr.T("A última quantificação de cada análise."));
         Caixa(ExportSheets.Pillars, Tr.T("Pilares"), Tr.T("Um pilar por linha: enterrado, acima do terreno e total."));
         Caixa(ExportSheets.PillarPurchase, Tr.T("Compra de pilares"), Tr.T("Os comprimentos agrupados, com a quantidade de cada um."));
+        Caixa(ExportSheets.Structure, Tr.T("Estrutura (bifila)"), Tr.T("A bifila: pilares por linha, vigas, mãos francesas, terças e tirantes. Só sai quando o desenho tem bifila."));
         Caixa(ExportSheets.ElectricalSummary, Tr.T("Resumo elétrico"), Tr.T("Subestações, trafos, inversores, strings, módulos e kWp pela cadeia de vínculo."));
         Caixa(ExportSheets.Cables, Tr.T("Cabos (com totalização)"), Tr.T("Uma aba por rota com cabos (recontada antes), o resumo de cabos e a lista de material."));
 

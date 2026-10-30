@@ -98,6 +98,28 @@ internal sealed class JanelaDeMesa : Window
     private readonly TextBox _vaoAlvo = Campo();
     private readonly TextBox _balanco = Campo();
     private readonly TextBox _enterro = Campo();
+
+    // Bifila (38.1): a seção só aparece quando a mesa aberta é bifila.
+    private bool _bifila;
+    private GroupBox? _secaoBifila;
+    private readonly TextBox _bfEntrePilares = Campo();
+    private readonly TextBox _bfTopo = Campo();
+    private readonly TextBox _bfMaoFrente = Campo();
+    private readonly TextBox _bfMaoFrenteAbaixo = Campo();
+    private readonly TextBox _bfMaoTras = Campo();
+    private readonly TextBox _bfMaoTrasAbaixo = Campo();
+    private readonly TextBox _bfTercaBorda = Campo();
+    private readonly TextBox _bfTercaBarra = Campo();
+    private readonly ComboBox _bfTiranteLinha = new() { Margin = new Thickness(0, 2, 0, 6) };
+    private readonly TextBox _bfTiranteVaos = Campo();
+    private readonly TextBox _bfTiranteCima = Campo();
+    private readonly TextBox _bfTiranteBaixo = Campo();
+    private readonly TextBox _bfViga = Campo();
+    private readonly TextBox _bfTerca = Campo();
+    private readonly TextBox _bfMao = Campo();
+    private readonly TextBox _bfTiranteDiametro = Campo();
+    private readonly Button _bfGc800 = new() { Content = "Arctech GC800", Height = 24, Margin = new Thickness(0, 2, 6, 4) };
+    private readonly Button _bfGc1000 = new() { Content = "Arctech GC1000", Height = 24, Margin = new Thickness(0, 2, 0, 4) };
     private readonly Button _botaoDosVaos = new()
     {
         Content = Tr.T("Vãos entre pilares..."),
@@ -192,6 +214,17 @@ internal sealed class JanelaDeMesa : Window
             Tag = TableArrangement.DoubleRow,
         });
 
+        foreach (var (linha, texto) in new[]
+        {
+            (BifilaRodLine.Rear, Tr.T("Na linha dos pilares traseiros")),
+            (BifilaRodLine.Front, Tr.T("Na linha dos pilares dianteiros")),
+            (BifilaRodLine.Both, Tr.T("Nas duas linhas")),
+            (BifilaRodLine.None, Tr.T("Sem tirante")),
+        })
+        {
+            _bfTiranteLinha.Items.Add(new ComboBoxItem { Content = texto, Tag = linha });
+        }
+
         _salvar = new Button { Content = Tr.T("Salvar perfil"), Width = 110, Height = 26 };
         _salvar.Click += (_, _) => Salvar();
 
@@ -206,6 +239,17 @@ internal sealed class JanelaDeMesa : Window
         _usar.Click += (_, _) => Confirmar();
 
         Content = Montar();
+
+        // A seção da bifila virou um GroupBox no layout compacto: é ele que
+        // aparece e some com o tipo da mesa.
+        for (DependencyObject? d = _bfEntrePilares; d is not null; d = LogicalTreeHelper.GetParent(d))
+        {
+            if (d is GroupBox caixa)
+            {
+                _secaoBifila = caixa;
+                break;
+            }
+        }
 
         ListarSalvos();
         Preencher(inicial);
@@ -394,6 +438,31 @@ internal sealed class JanelaDeMesa : Window
         pilha.Children.Add(_resumoDosVaos);
         Linha(Tr.T("Balanço nas pontas (m)"), _balanco, Tr.T("Quanto de estrutura sobra para fora do primeiro e do último pilar."));
 
+        // A bifila (38.1): dois pilares por pórtico. O T2 de cima é o do
+        // dianteiro; o traseiro sai da distância entre os dois na horizontal,
+        // que é como o fornecedor cota.
+        Secao(Tr.T("Bifila"));
+        var padroes = new WrapPanel();
+        padroes.Children.Add(_bfGc800);
+        padroes.Children.Add(_bfGc1000);
+        pilha.Children.Add(padroes);
+        Linha(Tr.T("Entre pilares, na horizontal (m)"), _bfEntrePilares, Tr.T("Distância entre os eixos do pilar dianteiro e do traseiro, em planta (3,00 na Arctech). O T2 acima é o do dianteiro."));
+        Linha(Tr.T("Topo do pilar abaixo dos módulos (m)"), _bfTopo, Tr.T("Na vertical, da face de cima dos módulos ao topo dos pilares: módulo, terça e viga (0,126 na Arctech)."));
+        Linha(Tr.T("Mão francesa dianteira (m)"), _bfMaoFrente, Tr.T("Comprimento da peça. Zero: sem mão francesa."));
+        Linha(Tr.T("…pega no dianteiro, abaixo do topo (m)"), _bfMaoFrenteAbaixo, Tr.T("Onde a mão francesa dianteira pega no pilar, medido do topo dele."));
+        Linha(Tr.T("Mão francesa traseira (m)"), _bfMaoTras, Tr.T("Comprimento da peça. Zero: sem mão francesa."));
+        Linha(Tr.T("…pega no traseiro, abaixo do topo (m)"), _bfMaoTrasAbaixo, Tr.T("Onde a mão francesa traseira pega no pilar, medido do topo dele."));
+        Linha(Tr.T("Terça a partir da borda do módulo (m)"), _bfTercaBorda, Tr.T("Duas terças por fileira de módulos, cada uma a esta distância de uma borda (0,492 na Arctech)."));
+        Linha(Tr.T("Barra máxima da terça (m)"), _bfTercaBarra, Tr.T("A terça da mesa é cortada em barras de até este comprimento; cada corte é uma emenda na lista."));
+        Linha(Tr.T("Tirantes"), _bfTiranteLinha);
+        Linha(Tr.T("Vãos com tirante"), _bfTiranteVaos, Tr.T("Os vãos travados com o X, contados de 1 a partir do começo da mesa, separados por ponto e vírgula (2; 4 na Arctech 2P14)."));
+        Linha(Tr.T("Tirante: ponto de cima abaixo do topo (m)"), _bfTiranteCima);
+        Linha(Tr.T("Tirante: ponto de baixo abaixo do topo (m)"), _bfTiranteBaixo);
+        Linha(Tr.T("Viga: largura × altura (m)"), _bfViga, Tr.T("Seção da viga, para o 3D. Ex.: 0,05 × 0,08."));
+        Linha(Tr.T("Terça: largura × altura (m)"), _bfTerca, Tr.T("Seção da terça, para o 3D. Ex.: 0,05 × 0,10."));
+        Linha(Tr.T("Mão francesa: largura × altura (m)"), _bfMao, Tr.T("Seção da mão francesa, para o 3D. Ex.: 0,04 × 0,06."));
+        Linha(Tr.T("Tirante: diâmetro (m)"), _bfTiranteDiametro);
+
         foreach (var (campo, _) in Todos()) campo.TextChanged += (_, _) => Recalcular();
 
         _arranjo.SelectionChanged += (_, _) => Recalcular();
@@ -406,6 +475,14 @@ internal sealed class JanelaDeMesa : Window
         _limparEletrica.Click += (_, _) => LimparEletrica();
 
         foreach (var campo in CamposEletricos()) campo.TextChanged += (_, _) => Recalcular();
+        foreach (var (campo, _) in CamposDaBifila()) campo.TextChanged += (_, _) => Recalcular();
+        _bfTiranteVaos.TextChanged += (_, _) => Recalcular();
+        foreach (var secao in new[] { _bfViga, _bfTerca, _bfMao }) secao.TextChanged += (_, _) => Recalcular();
+        _bfTiranteLinha.SelectionChanged += (_, _) => Recalcular();
+        _bfGc800.Click += (_, _) => PreencherMaos(BifilaReference.Frame(BifilaVariant.Gc800));
+        _bfGc1000.Click += (_, _) => PreencherMaos(BifilaReference.Frame(BifilaVariant.Gc1000));
+        _bfGc800.ToolTip = Tr.T("As mãos francesas da Arctech 2P14 GC800MM-NS 10 (0,80 m livres no fundo do módulo, 10 % norte-sul).");
+        _bfGc1000.ToolTip = Tr.T("As mãos francesas da Arctech 2P14 GC1000MM-NS 20 (1,00 m livre no fundo do módulo, 20 % norte-sul).");
 
         return pilha;
     }
@@ -437,6 +514,160 @@ internal sealed class JanelaDeMesa : Window
         yield return (_pilarProfundidade, Tr.T("Pilar: largura na inclinação"));
         yield return (_vaoAlvo, Tr.T("Vão-alvo entre pilares"));
         yield return (_balanco, Tr.T("Balanço nas pontas"));
+    }
+
+    /// <summary>Os campos de número da bifila e o nome de cada um, para a mensagem de erro.</summary>
+    private IEnumerable<(TextBox Campo, string Nome)> CamposDaBifila()
+    {
+        yield return (_bfEntrePilares, Tr.T("Entre pilares, na horizontal"));
+        yield return (_bfTopo, Tr.T("Topo do pilar abaixo dos módulos"));
+        yield return (_bfMaoFrente, Tr.T("Mão francesa dianteira"));
+        yield return (_bfMaoFrenteAbaixo, Tr.T("Mão francesa dianteira: abaixo do topo"));
+        yield return (_bfMaoTras, Tr.T("Mão francesa traseira"));
+        yield return (_bfMaoTrasAbaixo, Tr.T("Mão francesa traseira: abaixo do topo"));
+        yield return (_bfTercaBorda, Tr.T("Terça a partir da borda do módulo"));
+        yield return (_bfTercaBarra, Tr.T("Barra máxima da terça"));
+        yield return (_bfTiranteCima, Tr.T("Tirante: ponto de cima"));
+        yield return (_bfTiranteBaixo, Tr.T("Tirante: ponto de baixo"));
+        yield return (_bfTiranteDiametro, Tr.T("Tirante: diâmetro"));
+    }
+
+    /// <summary>Enche a seção da bifila (e a mostra), ou a esconde na monoposte.</summary>
+    private void PreencherBifila(TableProfile perfil)
+    {
+        _bifila = perfil.Frame.Bifila is not null;
+        if (_secaoBifila is not null) _secaoBifila.Visibility = _bifila ? Visibility.Visible : Visibility.Collapsed;
+
+        if (perfil.Frame.Bifila is not { } b) return;
+
+        // Ao milímetro: a volta pela tesoura dava 2,9997 no lugar dos 3,000.
+        _bfEntrePilares.Text = Numero(Math.Round(perfil.BifilaHorizontalSpacing ?? 0, 3));
+        _bfTopo.Text = Numero(b.PillarTopDrop);
+        PreencherMaos(b);
+        _bfTercaBorda.Text = Numero(b.PurlinFromModuleEdge);
+        _bfTercaBarra.Text = Numero(b.PurlinMaxBar);
+        Selecionar(_bfTiranteLinha, b.RodLine);
+        _bfTiranteVaos.Text = string.Join("; ", b.RodSpans.Select(v => v.ToString(Tr.Culture)));
+        _bfTiranteCima.Text = Numero(b.RodUpperBelowTop);
+        _bfTiranteBaixo.Text = Numero(b.RodLowerBelowTop);
+        _bfViga.Text = Secao(b.Beam);
+        _bfTerca.Text = Secao(b.Purlin);
+        _bfMao.Text = Secao(b.Brace);
+        _bfTiranteDiametro.Text = Numero(b.RodDiameter);
+    }
+
+    /// <summary>As mãos francesas de uma bifila (os botões dos padrões da Arctech só mexem nelas).</summary>
+    private void PreencherMaos(BifilaFrame b)
+    {
+        _bfMaoFrente.Text = Numero(b.FrontBraceLength);
+        _bfMaoFrenteAbaixo.Text = Numero(b.FrontBraceBelowTop);
+        _bfMaoTras.Text = Numero(b.RearBraceLength);
+        _bfMaoTrasAbaixo.Text = Numero(b.RearBraceBelowTop);
+    }
+
+    private static string Secao(BarSection secao) => $"{Numero(secao.Width)} × {Numero(secao.Depth)}";
+
+    /// <summary>"0,05 × 0,08" (ou com x, X ou *) em largura e altura.</summary>
+    private static bool LerSecao(string texto, out BarSection secao)
+    {
+        secao = new BarSection(0, 0);
+        var partes = texto.Split(['×', 'x', 'X', '*'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+        if (partes.Length != 2
+            || !NumberInput.TryParseMeasure(partes[0], out var largura)
+            || !NumberInput.TryParseMeasure(partes[1], out var altura))
+        {
+            return false;
+        }
+
+        secao = new BarSection(largura, altura);
+        return true;
+    }
+
+    /// <summary>
+    /// A parte bifila que os campos descrevem, ou false com o motivo. O
+    /// pilar traseiro na tesoura sai do T2 do dianteiro e da distância na
+    /// horizontal, com a inclinação da mesa.
+    /// </summary>
+    private bool LerBifila(double t2, double tiltRadians, out BifilaFrame? bifila, out string motivo)
+    {
+        bifila = null;
+
+        foreach (var (campo, nome) in CamposDaBifila())
+        {
+            if (NumberInput.TryParseMeasure(campo.Text, out _)) continue;
+
+            motivo = string.IsNullOrWhiteSpace(campo.Text)
+                ? Tr.F("o campo \"{0}\" está em branco.", nome)
+                : Tr.F("não consigo ler o número do campo \"{0}\".", nome);
+            return false;
+        }
+
+        double Valor(TextBox campo)
+        {
+            NumberInput.TryParseMeasure(campo.Text, out var v);
+            return v;
+        }
+
+        var vaos = new List<int>();
+        foreach (var parte in _bfTiranteVaos.Text.Split([';', ',', ' '], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!NumberInput.TryParseCount(parte, out var vao))
+            {
+                motivo = Tr.F("não consigo ler o vão \"{0}\" do campo \"{1}\": escreva os números separados por ponto e vírgula.", parte, Tr.T("Vãos com tirante"));
+                return false;
+            }
+
+            vaos.Add(vao);
+        }
+
+        foreach (var (campo, nome) in new[]
+        {
+            (_bfViga, Tr.T("Viga: largura × altura")),
+            (_bfTerca, Tr.T("Terça: largura × altura")),
+            (_bfMao, Tr.T("Mão francesa: largura × altura")),
+        })
+        {
+            if (LerSecao(campo.Text, out _)) continue;
+
+            motivo = Tr.F("o campo \"{0}\" precisa de duas medidas, como 0,05 × 0,08.", nome);
+            return false;
+        }
+
+        LerSecao(_bfViga.Text, out var viga);
+        LerSecao(_bfTerca.Text, out var terca);
+        LerSecao(_bfMao.Text, out var mao);
+
+        // "Sem tirante" é linha nenhuma e lista vazia: os vãos escritos no
+        // campo ficam lá, mas não vão para a mesa.
+        var linhaDoTirante = (_bfTiranteLinha.SelectedItem as ComboBoxItem)?.Tag as BifilaRodLine? ?? BifilaRodLine.None;
+
+        if (!(tiltRadians >= 0 && tiltRadians < Math.PI / 2))
+        {
+            motivo = Tr.T("a bifila precisa de inclinação entre 0 e 90°.");
+            return false;
+        }
+
+        bifila = new BifilaFrame(
+            BifilaFrame.RearAlongRafter(t2, Valor(_bfEntrePilares), tiltRadians),
+            Valor(_bfTopo),
+            Valor(_bfMaoFrente),
+            Valor(_bfMaoFrenteAbaixo),
+            Valor(_bfMaoTras),
+            Valor(_bfMaoTrasAbaixo),
+            Valor(_bfTercaBorda),
+            Valor(_bfTercaBarra),
+            linhaDoTirante,
+            linhaDoTirante == BifilaRodLine.None ? [] : vaos,
+            Valor(_bfTiranteCima),
+            Valor(_bfTiranteBaixo),
+            viga,
+            terca,
+            mao,
+            Valor(_bfTiranteDiametro));
+
+        motivo = string.Empty;
+        return true;
     }
 
     // --------------------------------------------------------- ida e volta
@@ -523,6 +754,7 @@ internal sealed class JanelaDeMesa : Window
 
         Selecionar(_arranjo, perfil.Layout.Arrangement);
         PreencherEletrica(perfil.ModuleElectrical);
+        PreencherBifila(perfil);
 
         var daBiblioteca = ModuleLibrary.Find(_modulos, perfil.Layout.Module.Model);
 
@@ -598,6 +830,14 @@ internal sealed class JanelaDeMesa : Window
             return null;
         }
 
+        BifilaFrame? bifila = null;
+
+        if (_bifila && !LerBifila(t2, graus * Math.PI / 180, out bifila, out var porQueBifila))
+        {
+            motivo = porQueBifila;
+            return null;
+        }
+
         var perfil = new TableProfile(
             _nome.Text,
             new TableLayout(
@@ -609,6 +849,7 @@ internal sealed class JanelaDeMesa : Window
             {
                 PillarSpans = _vaosEscritos,
                 MinEmbedment = enterro,
+                Bifila = bifila,
             },
             graus * Math.PI / 180)
         {
@@ -690,7 +931,7 @@ internal sealed class JanelaDeMesa : Window
             var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
 
             _planta.Mostrar(geometria);
-            _corte.Mostrar(geometria, perfil.TiltRadians, perfil.Frame.MinEmbedment);
+            _corte.Mostrar(geometria, perfil.TiltRadians, perfil.Frame.MinEmbedment, perfil.Frame.Bifila);
 
             var potencia = perfil.Layout.ModuleCount * perfil.Layout.Module.PowerWatts / 1000;
 
@@ -702,15 +943,23 @@ internal sealed class JanelaDeMesa : Window
                 Tr.F("Comprimento {0} m · {1} m na inclinação · {2} colunas · {3:0.#} kWp",
                     Numero(perfil.Layout.Length), Numero(perfil.Layout.Depth), perfil.Layout.Columns, potencia)
                 + "\n"
-                + (_vaosEscritos is null
-                    ? Tr.F("{0} pilares em {1} vãos de {2} m", pilares.PillarCount, pilares.Spans.Count, Numero(pilares.Spans[0]))
-                    : Tr.F("{0} pilares em {1} vãos escritos ({2} m)", pilares.PillarCount, pilares.Spans.Count, string.Join(" + ", pilares.Spans.Select(Numero))))
+                + (perfil.IsBifila
+                    ? (_vaosEscritos is null
+                        ? Tr.F("{0} pórticos de dois pilares em {1} vãos de {2} m", pilares.PillarCount, pilares.Spans.Count, Numero(pilares.Spans[0]))
+                        : Tr.F("{0} pórticos de dois pilares em {1} vãos escritos ({2} m)", pilares.PillarCount, pilares.Spans.Count, string.Join(" + ", pilares.Spans.Select(Numero))))
+                    : _vaosEscritos is null
+                        ? Tr.F("{0} pilares em {1} vãos de {2} m", pilares.PillarCount, pilares.Spans.Count, Numero(pilares.Spans[0]))
+                        : Tr.F("{0} pilares em {1} vãos escritos ({2} m)", pilares.PillarCount, pilares.Spans.Count, string.Join(" + ", pilares.Spans.Select(Numero))))
                 + (pilares.Cantilever > 0
                     ? Tr.F(", com balanço de {0} m em cada ponta", Numero(pilares.Cantilever))
                     : Tr.T(", com o pilar na ponta da estrutura"))
                 + "\n"
-                + Tr.F("O pilar encosta na mesa a {0} m da ponta baixa do módulo (sobra da tesoura {1} m), e sobe {2} m acima dela.",
-                    Numero(geometria.PillarRow), Numero(geometria.RafterOffset), Numero(subida))
+                + (geometria.RearPillarRow is { } tras && perfil.Frame.Bifila is { } bf
+                    ? Tr.F("Pilar dianteiro a {0} m da ponta baixa do módulo e traseiro a {1} m ({2} m entre eles na horizontal); o topo deles fica {3} m e {4} m acima da ponta baixa.",
+                        Numero(geometria.PillarRow), Numero(tras), Numero(perfil.BifilaHorizontalSpacing ?? 0),
+                        Numero(subida - bf.PillarTopDrop), Numero(PillarSizing.FreeHeight(0, tras, perfil.TiltRadians) - bf.PillarTopDrop))
+                    : Tr.F("O pilar encosta na mesa a {0} m da ponta baixa do módulo (sobra da tesoura {1} m), e sobe {2} m acima dela.",
+                        Numero(geometria.PillarRow), Numero(geometria.RafterOffset), Numero(subida)))
                 + (ModuleSource.ProfileDivergence(perfil) is { } divergencia ? "\n" + Tr.F("ATENÇÃO: {0}", divergencia) : string.Empty);
 
             _usar.IsEnabled = true;

@@ -68,20 +68,26 @@ internal sealed class CorteDaMesa : FrameworkElement
 
     private const double Margem = 30;
 
+    private static readonly Pen MaoFrancesa =
+        Congelar(new Pen(Congelar(new SolidColorBrush(Color.FromRgb(0xB8, 0xC4, 0xD0))), 3));
+
     private TableGeometry? _mesa;
     private double _tilt;
     private double? _enterro;
+    private BifilaFrame? _bifila;
     private string? _recado;
 
     /// <summary>
     /// Mostra o corte desta mesa, com esta inclinação em radianos e o enterro
-    /// mínimo T3 da estrutura (null: o da configuração do projeto).
+    /// mínimo T3 da estrutura (null: o da configuração do projeto). Com a
+    /// parte bifila (38.1), os dois pilares, a viga e as mãos francesas.
     /// </summary>
-    internal void Mostrar(TableGeometry mesa, double tiltRadians, double? enterroMinimo = null)
+    internal void Mostrar(TableGeometry mesa, double tiltRadians, double? enterroMinimo = null, BifilaFrame? bifila = null)
     {
         _mesa = mesa;
         _tilt = tiltRadians;
         _enterro = enterroMinimo;
+        _bifila = mesa.RearPillarRow is null ? null : bifila;
         _recado = null;
         InvalidateVisual();
     }
@@ -149,8 +155,9 @@ internal sealed class CorteDaMesa : FrameworkElement
         // Linha de referência: a altura da ponta baixa do módulo.
         tela.DrawLine(Referencia, new Point(Margem, yBaixa), new Point(ActualWidth - Margem, yBaixa));
 
-        // A tesoura, recuada por baixo dos módulos.
-        tela.DrawLine(Tesoura, No(sobra, 11), No(sobra + t1, 11));
+        // A tesoura, recuada por baixo dos módulos. Na bifila ela sai no eixo
+        // de verdade, debaixo da terça, junto com os pilares.
+        if (_bifila is null) tela.DrawLine(Tesoura, No(sobra, 11), No(sobra + t1, 11));
 
         // Os módulos, fileira por fileira, com a face superior destacada.
         foreach (var faixa in Fileiras())
@@ -165,6 +172,12 @@ internal sealed class CorteDaMesa : FrameworkElement
         var encosto = No(pilarEm, 11);
         var ySolo = yBaixa + vaoAteOSolo * k;
         var yPe = ySolo + t3 * k;
+
+        if (_bifila is { } bifila && _mesa.RearPillarRow is { } trasEm)
+        {
+            DesenharBifila(tela, bifila, pilarEm, trasEm, sobra, t1, x0, yBaixa, k, ySolo, yPe, m2);
+            return;
+        }
 
         tela.DrawLine(Pilar, encosto, new Point(encosto.X, yBaixa));
         tela.DrawLine(PilarSemFim, new Point(encosto.X, yBaixa), new Point(encosto.X, ySolo));
@@ -194,6 +207,147 @@ internal sealed class CorteDaMesa : FrameworkElement
             Fraco,
             10.5,
             new Point(Margem, ActualHeight - 16));
+    }
+
+    /// <summary>
+    /// A bifila (38.1): os dois pilares com o topo abaixo dos módulos, a viga
+    /// (o eixo dela, debaixo da terça), as mãos francesas pelo comprimento da
+    /// peça e as cotas que o fornecedor dá: T2 e T2t na tesoura e a
+    /// distância entre os pilares na horizontal.
+    /// </summary>
+    private void DesenharBifila(
+        DrawingContext tela, BifilaFrame bifila, double frenteEm, double trasEm, double sobra, double t1,
+        double x0, double yBaixa, double k, double ySolo, double yPe, double m2)
+    {
+        var cos = Math.Cos(_tilt);
+        var sen = Math.Sin(_tilt);
+
+        // Em metro, com a origem na ponta baixa do módulo: h para o lado alto,
+        // v para cima. A tela é só a escala.
+        Point Tela(double h, double v) => new(x0 + h * k, yBaixa - v * k);
+
+        var espessura = _mesa!.Modules.Count > 0 ? -_mesa.Modules[0].Solid.Min(p => p.Z) : 0;
+        var eixoDaViga = espessura + bifila.Purlin.Depth + bifila.Beam.Depth / 2;
+
+        (double H, double V) NaViga(double d) => (d * cos + sen * eixoDaViga, d * sen - cos * eixoDaViga);
+
+        // A viga.
+        var (ha, va) = NaViga(sobra);
+        var (hb, vb) = NaViga(sobra + t1);
+        tela.DrawLine(Tesoura, Tela(ha, va), Tela(hb, vb));
+
+        // Meia seção do pilar na inclinação, para a cabeça da mão francesa ficar
+        // entre a face deste pilar e a do outro, como o Core confere.
+        var meiaSecao = _mesa.Pillars.Count > 0
+            ? (_mesa.Pillars[0].Footprint.Max(p => p.Y) - _mesa.Pillars[0].Footprint.Min(p => p.Y)) / 2
+            : 0;
+        var recusadas = new List<string>();
+
+        foreach (var (em, outroEm, comprimento, abaixo, paraTras) in new[]
+        {
+            (frenteEm, trasEm, bifila.FrontBraceLength, bifila.FrontBraceBelowTop, true),
+            (trasEm, frenteEm, bifila.RearBraceLength, bifila.RearBraceBelowTop, false),
+        })
+        {
+            var hp = em * cos;
+            var vTopo = em * sen - bifila.PillarTopDrop;
+            var topo = Tela(hp, vTopo);
+
+            tela.DrawLine(Pilar, topo, new Point(topo.X, yBaixa));
+            tela.DrawLine(PilarSemFim, new Point(topo.X, yBaixa), new Point(topo.X, ySolo));
+            tela.DrawLine(Pilar, new Point(topo.X, ySolo), new Point(topo.X, yPe));
+            DesenharSolo(tela, ySolo, topo.X);
+
+            CotaVertical(tela, topo.X + 22, topo.Y, yBaixa, Medida(vTopo), Laranja);
+
+            if (comprimento <= 0) continue;
+
+            // A mão francesa: do pé no pilar até onde uma peça deste
+            // comprimento encosta no eixo da viga, do lado do outro pilar.
+            var pv = vTopo - abaixo;
+            var (fh, fv) = NaViga(0);
+            var dx = fh - hp;
+            var dy = fv - pv;
+            var qb = 2 * (dx * cos + dy * sen);
+            var qc = dx * dx + dy * dy - comprimento * comprimento;
+            var delta = qb * qb - 4 * qc;
+
+            var lado = paraTras ? Tr.T("dianteira") : Tr.T("traseira");
+
+            // As mesmas regras do desenho (BifilaStructure): o pé abaixo do
+            // fundo da viga, a cabeça dentro da viga e entre os dois pilares.
+            // Sem elas, o corte mostrava uma peça que o desenho não põe.
+            var vigaNoPilar = NaViga((hp - sen * eixoDaViga) / cos).V - bifila.Beam.Depth / 2;
+            if (pv >= vigaNoPilar)
+            {
+                recusadas.Add(Tr.F("mão francesa {0}: pega acima do fundo da viga", lado));
+                continue;
+            }
+
+            if (delta < 0)
+            {
+                recusadas.Add(Tr.F("mão francesa {0}: não alcança a viga", lado));
+                continue;
+            }
+
+            var d = paraTras ? (-qb + Math.Sqrt(delta)) / 2 : (-qb - Math.Sqrt(delta)) / 2;
+            if (d < sobra || d > sobra + t1)
+            {
+                recusadas.Add(Tr.F("mão francesa {0}: passa da ponta da viga", lado));
+                continue;
+            }
+
+            var (hc, vc) = NaViga(d);
+            var avanco = paraTras ? hc - hp : hp - hc;
+            var vaoEntrePilares = Math.Abs(outroEm - em) * cos;
+
+            if (avanco <= meiaSecao || avanco >= vaoEntrePilares - meiaSecao)
+            {
+                recusadas.Add(Tr.F("mão francesa {0}: encosta fora do vão entre os pilares", lado));
+                continue;
+            }
+
+            tela.DrawLine(MaoFrancesa, Tela(hp, pv), Tela(hc, vc));
+        }
+
+        if (recusadas.Count > 0)
+            Escrever(tela, string.Join(" · ", recusadas), Laranja, 10.5, new Point(Margem, ActualHeight - 32));
+
+        Angulo(tela, Tela(0, 0), k);
+
+        Point No(double d, double recuo = 0) => new(x0 + d * cos * k + sen * recuo, yBaixa - d * sen * k + cos * recuo);
+
+        CotaInclinada(tela, No(0, -26), No(m2, -26), $"M2 {Medida(m2)}", Texto);
+        CotaInclinada(tela, No(sobra, 36), No(sobra + t1, 36), $"T1 {Medida(t1)}", Verde);
+        CotaInclinada(tela, No(sobra, 58), No(frenteEm, 58), $"T2 {Medida(frenteEm - sobra)}", Laranja);
+        CotaInclinada(tela, No(sobra, 80), No(trasEm, 80), $"T2t {Medida(trasEm - sobra)}", Laranja);
+
+        var xFrente = Tela(frenteEm * cos, 0).X;
+        var xTras = Tela(trasEm * cos, 0).X;
+        CotaHorizontal(tela, xFrente, xTras, yPe + 12, Medida((trasEm - frenteEm) * cos), Laranja);
+
+        if (_enterro is { } escrito)
+            CotaVertical(tela, xFrente - 26, ySolo, yPe, $"T3 {Medida(escrito)}", Terra, aEsquerda: true);
+
+        Escrever(
+            tela,
+            Tr.F("bifila: pilares a {0} m na horizontal, topo {1} m abaixo dos módulos · tracejado: o resto depende do terreno",
+                Medida((trasEm - frenteEm) * cos), Medida(bifila.PillarTopDrop)),
+            Fraco,
+            10.5,
+            new Point(Margem, ActualHeight - 16));
+    }
+
+    private void CotaHorizontal(DrawingContext tela, double de, double ate, double y, string texto, Brush cor)
+    {
+        if (Math.Abs(ate - de) < 26) return;
+
+        tela.DrawLine(Cota, new Point(de, y), new Point(ate, y));
+        tela.DrawLine(Cota, new Point(de, y - 4), new Point(de, y + 4));
+        tela.DrawLine(Cota, new Point(ate, y - 4), new Point(ate, y + 4));
+
+        var formatado = Formatar(texto, 10.5, cor);
+        tela.DrawText(formatado, new Point((de + ate) / 2 - formatado.Width / 2, y + 2));
     }
 
     /// <summary>

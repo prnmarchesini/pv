@@ -436,6 +436,7 @@ internal sealed class JanelaDeConfiguracoes : Window
             + Tr.F(
                 "{0} — {1} módulos, {2:0.###} m, {3:0.#}°",
                 mesa.Name, mesa.Profile.Layout.ModuleCount, mesa.Profile.Layout.Length, mesa.Profile.TiltDegrees)
+            + (mesa.Profile.IsBifila ? Tr.T("  (bifila)") : "")
             + (mesa.Use ? Tr.T("  (em uso)") : "")
             + (ModuleSource.ProfileDivergence(mesa.Profile) is null ? "" : Tr.T("  (PAN diferente da potência do módulo)"));
     }
@@ -486,6 +487,12 @@ internal sealed class JanelaDeConfiguracoes : Window
             return;
         }
 
+        if (tipo == TipoDeEstrutura.Bifila)
+        {
+            NovaBifila();
+            return;
+        }
+
         var partida = _carports.Count > 0 ? _carports[^1].Profile : CarportProfile.Reference;
         var perfil = _editarCarport!(partida with { Name = NomeLivre(partida.Name) });
         if (perfil is null) return;
@@ -522,9 +529,28 @@ internal sealed class JanelaDeConfiguracoes : Window
         _recado.Text = Tr.F("Carport \"{0}\" atualizado. Para gravar no desenho, clique em \"Salvar no desenho\".", _carports[i].Name);
     }
 
+    /// <summary>
+    /// A Fixa bifila (38.1): parte da última bifila do desenho, ou da Arctech
+    /// 2P14 GC800 (a revisão mais nova do projeto Aurora), e abre a mesma
+    /// janela de Mesa, que mostra a seção da bifila.
+    /// </summary>
+    private void NovaBifila()
+    {
+        var partida = _mesas.LastOrDefault(m => m.Profile.IsBifila)?.Profile ?? BifilaReference.Profile(BifilaVariant.Gc800);
+        var perfil = _editarMesa(partida with { Name = NomeLivre(partida.Name) });
+        if (perfil is null) return;
+
+        _mesas.Add(new DrawingTable(perfil with { Name = NomeLivre(perfil.Name) }, DrawingTables.NextColor(_mesas), Use: true));
+        _mesasMudaram = true;
+        Atualizar();
+        _lista.SelectedIndex = _mesas.Count - 1;
+    }
+
     private void Nova()
     {
-        var partida = _mesas.Count > 0 ? _mesas[^1].Profile : MesaCommands.MesaDeExemplo();
+        // A última monoposte, e não a última mesa: pedir Fixa depois de criar
+        // uma bifila abria a janela em modo bifila (revisão do 38.1).
+        var partida = _mesas.LastOrDefault(m => !m.Profile.IsBifila)?.Profile ?? MesaCommands.MesaDeExemplo();
         var perfil = _editarMesa(partida with { Name = NomeLivre(partida.Name) });
         if (perfil is null) return;
 

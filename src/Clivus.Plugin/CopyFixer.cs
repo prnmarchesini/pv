@@ -195,6 +195,12 @@ internal static class CopyFixer
                     LayoutXData.SaveTag(transacao, entidade, tag with { Id = Guid.NewGuid(), Table = novaMesa });
                     pecas++;
                 }
+                else if (LayoutXData.LoadStructure(entidade) is { } barra)
+                {
+                    // Peça da bifila (38.2): vai com a cópia, com identidade nova.
+                    LayoutXData.SaveStructure(transacao, entidade, barra with { Id = Guid.NewGuid(), Table = novaMesa });
+                    pecas++;
+                }
             }
 
             resultado.Add(new ReidentifiedCopy(novaMesa, letreiro, contorno, pecas));
@@ -211,7 +217,8 @@ internal static class CopyFixer
         ?? LayoutXData.LoadFace(entidade)?.Id
         ?? LayoutXData.LoadNote(entidade)?.Id
         ?? LayoutXData.LoadAnalysisText(entidade)?.Id
-        ?? LayoutXData.LoadTag(entidade)?.Id;
+        ?? LayoutXData.LoadTag(entidade)?.Id
+        ?? LayoutXData.LoadStructure(entidade)?.Id;
 
     /// <summary>Um ponto da entidade, para medir o deslocamento da cópia.</summary>
     private static Point3d? Posicao(Transaction transacao, Entity entidade)
@@ -224,6 +231,10 @@ internal static class CopyFixer
                 return null;
             case BlockReference bloco:
                 return bloco.Position;
+            case Solid3d solido:
+                // Peça da bifila: o centro da caixa que a envolve.
+                var caixa = solido.GeometricExtents;
+                return caixa.MinPoint + (caixa.MaxPoint - caixa.MinPoint) / 2;
             case Face face:
                 return face.GetVertexAt(0);
             case MText texto:

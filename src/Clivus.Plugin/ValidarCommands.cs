@@ -148,7 +148,7 @@ public static class ValidarCommands
 
         foreach (var mesa in mesas)
         {
-            foreach (var id in mesa.Pillars.Concat(mesa.Modules).Concat(mesa.Faces).Concat(mesa.Notes))
+            foreach (var id in mesa.Pillars.Concat(mesa.Modules).Concat(mesa.Faces).Concat(mesa.Notes).Concat(mesa.StructureBars))
             {
                 var entidade = (Entity)transacao.GetObject(id, OpenMode.ForRead);
 

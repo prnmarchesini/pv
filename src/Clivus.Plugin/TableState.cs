@@ -36,7 +36,9 @@ internal static class TableState
 
         var pintadas = 0;
 
-        foreach (var id in mesa.Paintable)
+        // As peças da bifila também ficam vermelhas: senão a mesa suja aparecia
+        // vermelha menos a estrutura (revisão do 38.2).
+        foreach (var id in mesa.Paintable.Concat(mesa.StructureBars))
         {
             var peca = (Entity)transacao.GetObject(id, OpenMode.ForWrite);
             peca.Color = Color.FromRgb(CorDaSuja.R, CorDaSuja.G, CorDaSuja.B);

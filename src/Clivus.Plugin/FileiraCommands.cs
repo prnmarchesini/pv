@@ -159,7 +159,9 @@ public static class FileiraCommands
 
         var doProjeto = ConfigCommands.Inicial(documento, out var avisoDaConfig);
         if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", notaDoT3));
-        var settings = doProjeto.ForTable(perfil.Frame);
+        // O motor aplica o T3 de cada mesa (WithEmbedmentOf); entregar o
+        // ForTable de um tipo só passava o T3 dele para os outros (38.3).
+        var settings = doProjeto;
         if (avisoDaConfig is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", avisoDaConfig));
 
         AvisarSeJaHaMesas(editor, documento.Database);
@@ -220,6 +222,7 @@ public static class FileiraCommands
         relogio.Stop();
 
         foreach (var aviso in processada.Warnings) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
+        LayoutDrawer.EscreverAvisos(editor, desenho.StructureWarnings);
 
         Relatar(editor, layout, processada, desenho, relogio.Elapsed);
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);

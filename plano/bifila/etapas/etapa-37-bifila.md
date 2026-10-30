@@ -65,7 +65,8 @@ O desenho da mesa (Fileira, Usina, Recalcular, Trocar) põe os dois pilares de
 cada pórtico (bloco do pilar), as cotas PB/PA uma vez por pórtico e o P3 em
 cada pilar; viga, mãos francesas, terças e tirantes em sólidos na camada
 `CLIVUS_ESTRUTURA`, no grupo da mesa, com XData `Estrutura` (GUID, mesa, peça,
-comprimento). XData do pilar versão 3 (linha e pórtico no fim). O
+comprimento). XData do pilar versão 3 (a linha no fim; o pórtico sai da
+estação). O
 `LayoutScan` reconhece as peças: apagar, copiar, recontar, validar e limpar
 tratam delas. Nível 2: a cota de cada peça lida em LISP, entre o fundo dos
 pilares e o topo dos módulos.
