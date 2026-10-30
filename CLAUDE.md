@@ -54,7 +54,11 @@ A estrutura fixa bifila (dois pilares por pórtico, mãos francesas, terças e
 tirantes; referência Arctech 2P14 GC800/GC1000 do projeto Aurora, Panamá) tem
 plano próprio em `plano/bifila/` (etapas 37 a 39): comece por
 `plano/bifila/LEIA-PRIMEIRO.md`. Ela é uma mesa fixa (entra no motor); a
-monoposte não muda.
+monoposte não muda. Na tela ela se chama **biposte** (cartão na primeira aba
+da janela de Mesa, 38.5); no código e no arquivo, `Bifila`. No mesmo plano:
+o PAN que enche o módulo e sobe para o serviço de módulos (38.6), a prova de
+que monoposte e biposte dão o mesmo resto (39.2, `rodar.ps1 -SoEstruturas`) e
+as mesas conforme os objetos do cliente (etapa 40, `rodar.ps1 -SoCampo`).
 
 ## Regra de ouro
 
