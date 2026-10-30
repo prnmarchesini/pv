@@ -48,6 +48,14 @@ A estrutura carport (fila contínua de pórticos biposte, altura livre fixa,
 (etapas 34 a 36): comece por `plano/carport/LEIA-PRIMEIRO.md`. A referência
 é `0 - Assets/Cobertura/carport-biposte.glb`.
 
+## Bifila (desde 30/10/2026)
+
+A estrutura fixa bifila (dois pilares por pórtico, mãos francesas, terças e
+tirantes; referência Arctech 2P14 GC800/GC1000 do projeto Aurora, Panamá) tem
+plano próprio em `plano/bifila/` (etapas 37 a 39): comece por
+`plano/bifila/LEIA-PRIMEIRO.md`. Ela é uma mesa fixa (entra no motor); a
+monoposte não muda.
+
 ## Regra de ouro
 
 **Um passo por vez. Ao terminar um passo, PARE e espere o Renan validar.** Não comece o passo seguinte, não "adiante" código, não faça nada fora do escopo do passo. Se achar algo que precisa ser feito fora do escopo, anote em `plano/PROGRESSO.md` na seção "Observações" e siga.
