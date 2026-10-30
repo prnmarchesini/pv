@@ -108,3 +108,63 @@ def test_alterar_troca_a_eletrica_e_o_pan(cliente):  # noqa: F811
     assert resposta.status_code == 200, resposta.text
     assert resposta.json()["eletrica"]["voc"] == 49.5
     assert "49.50" in cliente.get(f"/modulos/{criado['id']}/pan").text
+
+
+@pytest.mark.parametrize("campo", ["mu_voc", "mu_isc", "noct", "mu_pmp", "voc"])
+@pytest.mark.parametrize("valor", [float("nan"), float("inf"), float("-inf")])
+def test_nan_e_infinito_sao_recusados(cliente, campo, valor):  # noqa: F811
+    """Revisão do 38.6: um só módulo com NaN derrubava a lista de todos."""
+    import json
+
+    # Corpo cru: o json.dumps do Python escreve NaN e Infinity (o cliente de teste recusaria).
+    errado = json.dumps({**JA, "eletrica": {**JA["eletrica"], campo: valor}})
+
+    assert cliente.post("/modulos", content=errado, headers={"Content-Type": "application/json"}).status_code == 422
+    assert cliente.get("/modulos").status_code == 200
+
+
+def test_alterar_sem_o_pan_mantem_o_pan(cliente):  # noqa: F811
+    """Revisão do 38.6: a lista não devolve o texto, e GET, editar, PUT o apagava."""
+    criado = cliente.post("/modulos", json=JA).json()
+    sem_pan = {k: v for k, v in criado.items() if k not in ("id", "eletrica", "tem_pan", "pan_nome")}
+
+    resposta = cliente.put(f"/modulos/{criado['id']}", json={**sem_pan, "potencia_w": 715})
+
+    assert resposta.status_code == 200, resposta.text
+    assert resposta.json()["tem_pan"] is True
+    assert resposta.json()["eletrica"]["voc"] == 49.0
+    assert cliente.get(f"/modulos/{criado['id']}/pan").text == PAN
+
+
+@pytest.mark.parametrize("nome", ["JAM72S30–545.PAN", "晶科 JKM.PAN", 'aspas "x".PAN'])
+def test_o_nome_do_arquivo_com_qualquer_caractere(cliente, nome):  # noqa: F811
+    criado = cliente.post("/modulos", json={**JA, "pan_nome": nome}).json()
+
+    resposta = cliente.get(f"/modulos/{criado['id']}/pan")
+
+    assert resposta.status_code == 200
+    assert "filename*=UTF-8''" in resposta.headers["content-disposition"]
+    assert resposta.text == PAN
+
+
+def test_o_nul_sai_do_texto(cliente):  # noqa: F811
+    criado = cliente.post("/modulos", json={**JA, "pan": PAN + "\x00"}).json()
+
+    assert "\x00" not in cliente.get(f"/modulos/{criado['id']}/pan").text
+
+
+def test_a_lista_bate_com_o_contrato_do_plugin(cliente):  # noqa: F811
+    """O contrato do plugin (tests/dados/servico-modulos-com-pan.json, lido também
+    pelo Core): o que o serviço devolve na lista, campo a campo."""
+    import json
+    from pathlib import Path
+
+    contrato = json.loads((Path(__file__).resolve().parents[2] / "tests" / "dados" / "servico-modulos-com-pan.json").read_text(encoding="utf-8"))
+    risen = {k: v for k, v in contrato[1].items() if k not in ("eletrica", "tem_pan", "pan_nome")}
+    cliente.post("/modulos", json=JA)
+    cliente.post("/modulos", json=risen)
+
+    lista = [{k: v for k, v in m.items() if k != "id"} for m in cliente.get("/modulos").json()]
+
+    assert lista == contrato
+

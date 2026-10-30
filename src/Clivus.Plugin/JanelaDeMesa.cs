@@ -78,7 +78,7 @@ internal sealed class JanelaDeMesa : Window
         Content = Tr.T("Carregar .PAN..."),
         Height = 24,
         Margin = new Thickness(0, 2, 6, 2),
-        ToolTip = Tr.T("Lê o arquivo PAN do PVsyst: fabricante, modelo, Pmáx, Voc, Isc, Vmp, Imp e os coeficientes de temperatura. A potência do módulo passa a ser a do PAN; as medidas não mudam. É a fonte única do módulo para a parte elétrica."),
+        ToolTip = Tr.T("Lê o arquivo PAN do PVsyst: marca, modelo, medidas (Height, Width, Depth), Pmáx, Voc, Isc, Vmp, Imp e os coeficientes de temperatura. O módulo passa a ser o do PAN. É a fonte única do módulo para a parte elétrica."),
     };
     private readonly Button _limparEletrica = new()
     {
@@ -90,6 +90,16 @@ internal sealed class JanelaDeMesa : Window
 
     /// <summary>O texto e o nome do .PAN carregado nesta janela (38.6): vão junto no "Cadastrar módulo...". O perfil não guarda o arquivo.</summary>
     private (string Texto, string Nome)? _arquivoDoPan;
+
+    /// <summary>
+    /// O módulo do último PAN lido nesta janela, com a parte elétrica e o
+    /// arquivo dele: escolher esse modelo na lista traz os dois de volta
+    /// (revisão do 38.6).
+    /// </summary>
+    private (SolarModule Modulo, PanModule Eletrica, string Texto, string Nome)? _doPan;
+
+    /// <summary>A entrada que o PAN pôs na lista de modelos, só nesta janela (a biblioteca não tinha o modelo).</summary>
+    private SolarModule? _provisorio;
 
     /// <summary>O PAN lido (ou o que veio do perfil) e os textos com que ele encheu os campos: mudou um campo, os valores passam a ser à mão.</summary>
     private PanModule? _panLido;
@@ -1231,13 +1241,29 @@ internal sealed class JanelaDeMesa : Window
         _espessura.Text = Numero(modulo.Thickness);
         _potencia.Text = NumeroGrande(modulo.PowerWatts);
 
-        // O módulo que alguém cadastrou com o .PAN traz a parte elétrica (38.6).
-        if (FonteDeModulos.Eletrica.TryGetValue(modulo.Model, out var eletrica))
+        // A parte elétrica acompanha o módulo escolhido (38.6, e a revisão):
+        // a do PAN lido nesta janela, a que o serviço tem, ou nenhuma; nunca
+        // a de outro módulo. Valores à mão, sem PAN, ficam.
+        if (_doPan is { } doPan && MesmoModelo(doPan.Modulo.Model, modulo.Model))
+        {
+            PreencherEletrica(doPan.Eletrica);
+            _arquivoDoPan = (doPan.Texto, doPan.Nome);
+        }
+        else if (FonteDeModulos.Eletrica.TryGetValue(modulo.Model, out var eletrica))
         {
             PreencherEletrica(eletrica);
-            Recalcular();
+            _arquivoDoPan = null;
         }
+        else if (_panLido is { } lido && !MesmoModelo(lido.Model, modulo.Model))
+        {
+            PreencherEletrica(null);
+            _arquivoDoPan = null;
+        }
+
+        Recalcular();
     }
+
+    private static bool MesmoModelo(string a, string b) => string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
 
     // ------------------------------------------------------------- o cálculo
 
@@ -1505,10 +1531,29 @@ internal sealed class JanelaDeMesa : Window
             }
 
             var texto = PanModule.ReadText(caminho);
-            var modulo = PanModule.DimensionsOf(texto)?.ModuleOf(pan);
+            var medidas = PanModule.DimensionsOf(texto);
+            var modulo = medidas?.ModuleOf(pan);
             if (modulo is { IsValid: false }) modulo = null;
 
             NumberInput.TryParseLarge(_potencia.Text, out var antes);
+
+            _preenchendo = true;
+            try
+            {
+                // A entrada que o PAN anterior pôs na lista sai: um PAN do
+                // mesmo modelo, lido de novo, a troca (revisão do 38.6).
+                if (_provisorio is { } velho)
+                {
+                    _modulos = [.. _modulos.Where(m => !ReferenceEquals(m, velho))];
+                    _provisorio = null;
+                    ListarModulos();
+                }
+            }
+            finally
+            {
+                _preenchendo = false;
+            }
+
             var daBiblioteca = modulo is null ? null : ModuleLibrary.Find(_modulos, modulo.Model);
 
             _preenchendo = true;
@@ -1521,6 +1566,7 @@ internal sealed class JanelaDeMesa : Window
                     if (daBiblioteca is null)
                     {
                         _modulos = [.. _modulos, modulo];
+                        _provisorio = modulo;
                         ListarModulos();
                     }
 
@@ -1535,6 +1581,7 @@ internal sealed class JanelaDeMesa : Window
                 _potencia.Text = NumeroGrande(pan.Pmax);
                 PreencherEletrica(pan);
                 _arquivoDoPan = (texto, System.IO.Path.GetFileName(caminho));
+                _doPan = modulo is null ? null : (modulo, pan, texto, System.IO.Path.GetFileName(caminho));
             }
             finally
             {
@@ -1545,9 +1592,11 @@ internal sealed class JanelaDeMesa : Window
 
             var recado = Tr.F("PAN lido: {0}.", pan.Describe())
                 + "\n\n"
-                + (modulo is null
-                    ? Tr.T("O PAN não traz as medidas do módulo (Height, Width, Depth): altura, largura e espessura ficaram como estavam.")
-                    : Tr.F("Módulo: {0}, {1} × {2} × {3} m.", modulo.DisplayName, Numero(modulo.Height), Numero(modulo.Width), Numero(modulo.Thickness)));
+                + (modulo is not null
+                    ? Tr.F("Módulo: {0}, {1} × {2} × {3} m.", modulo.DisplayName, Numero(modulo.Height), Numero(modulo.Width), Numero(modulo.Thickness))
+                    : medidas is null
+                        ? Tr.T("O PAN não traz as medidas do módulo (Height, Width, Depth): altura, largura e espessura ficaram como estavam.")
+                        : Tr.F("As medidas do PAN não servem ({0} × {1} × {2}; o PVsyst grava em metro): altura, largura e espessura ficaram como estavam.", Numero(medidas.Height), Numero(medidas.Width), Numero(medidas.Thickness)));
             if (Math.Abs(antes - pan.Pmax) > ModuleSource.Tolerance)
                 recado += "\n\n" + Tr.F("A potência do módulo passou de {0:0.#} para {1:0.#} Wp. As mesas já desenhadas continuam como estavam: depois de gravar a estrutura no desenho, use \"Atualizar a potência das mesas desenhadas\" nas Configurações.", antes, pan.Pmax);
 
@@ -1595,9 +1644,25 @@ internal sealed class JanelaDeMesa : Window
         try
         {
             (_modulos, _origemDosModulos.Text) = FonteDeModulos.Carregar();
-            ListarModulos();
             var achado = ModuleLibrary.Find(_modulos, modulo.Model);
-            if (achado is not null) _modelo.SelectedIndex = _modulos.ToList().IndexOf(achado);
+
+            // A lista não recarregou do serviço (ou ainda não tem o módulo):
+            // ele volta a ser a entrada desta janela, escolhida, e o usuário sabe.
+            if (achado is null)
+            {
+                _modulos = [.. _modulos, modulo];
+                _provisorio = modulo;
+            }
+            else
+            {
+                _provisorio = null;
+            }
+
+            ListarModulos();
+            _modelo.SelectedIndex = _modulos.ToList().IndexOf(achado ?? modulo);
+
+            if (achado is null)
+                Avisar(Tr.F("O módulo {0} foi cadastrado, mas a lista não recarregou do serviço; ele fica na lista desta janela.", modulo.DisplayName));
         }
         finally
         {

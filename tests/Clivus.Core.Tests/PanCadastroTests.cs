@@ -122,4 +122,52 @@ public class PanCadastroTests
         Assert.DoesNotContain("pan", json);
         Assert.Empty(ModuleLibrary.ParseServiceElectrical("[" + json + "]"));
     }
+
+    /// <summary>
+    /// O contrato com o serviço (tests/dados/servico-modulos-com-pan.json, o
+    /// mesmo que o pytest do serviço confere contra a resposta dele): a lista
+    /// com um módulo de PAN e um sem.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void OContratoDoServicoComPanSeLe()
+    {
+        var json = File.ReadAllText(Path.Combine(Repositorio.Raiz, "tests", "dados", "servico-modulos-com-pan.json"));
+
+        var modulos = ModuleLibrary.ParseService(json);
+        var eletrica = ModuleLibrary.ParseServiceElectrical(json);
+
+        Assert.Equal(2, modulos.Count);
+        var ja = Assert.Single(eletrica).Value;
+        Assert.Equal("JAM66D46-720/LB", ja.Model);
+        Assert.Equal(-0.1195, ja.VocCoefficient);
+        Assert.Equal(0.00811, ja.IscCoefficient);
+        Assert.Null(ja.Noct);
+    }
+
+    /// <summary>
+    /// A parte elétrica de um módulo com campo nulo (o NaN que o banco gravou
+    /// como NULL) fica de fora, e a lista continua valendo (revisão do 38.6).
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void AParteEletricaQuebradaNaoDerrubaALista()
+    {
+        var json = File.ReadAllText(Path.Combine(Repositorio.Raiz, "tests", "dados", "servico-modulos-com-pan.json"))
+            .Replace("\"mu_voc\": -0.1195", "\"mu_voc\": null");
+
+        Assert.Equal(2, ModuleLibrary.ParseService(json).Count);
+        Assert.Empty(ModuleLibrary.ParseServiceElectrical(json));
+    }
+
+    [Theory]
+    [Trait("Etapa", "38")]
+    [InlineData("{\"id\":\"1\",\"modelo\":\"X\",\"tem_pan\":true}", true)]
+    [InlineData("{\"id\":\"1\",\"modelo\":\"X\",\"tem_pan\":false}", false)]
+    [InlineData("{\"id\":\"1\",\"modelo\":\"X\"}", false)]
+    [InlineData("não é json", false)]
+    public void ARespostaDizSeOServicoGuardouOPan(string resposta, bool guardou)
+    {
+        Assert.Equal(guardou, ModuleLibrary.ServiceKeptPan(resposta));
+    }
 }

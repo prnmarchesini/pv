@@ -130,7 +130,9 @@ internal static class FonteDeModulos
                 _foraDoArAte = null;
                 return (true, pan is null
                     ? Tr.F("Módulo {0} cadastrado no serviço.", modulo.DisplayName)
-                    : Tr.F("Módulo {0} cadastrado no serviço, com o PAN {1}.", modulo.DisplayName, panNome ?? string.Empty));
+                    : ModuleLibrary.ServiceKeptPan(texto)
+                        ? Tr.F("Módulo {0} cadastrado no serviço, com o PAN {1}.", modulo.DisplayName, panNome ?? string.Empty)
+                        : Tr.F("Módulo {0} cadastrado no serviço, mas sem o PAN: o serviço é de antes do cadastro com PAN. Atualize-o (tools\\servico-local.ps1), apague o módulo lá e cadastre de novo.", modulo.DisplayName));
             }
 
             return (false, resposta.StatusCode == HttpStatusCode.Conflict

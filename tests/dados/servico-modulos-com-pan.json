@@ -1,0 +1,33 @@
+[
+  {
+    "marca": "JA Solar",
+    "modelo": "JAM66D46-720/LB",
+    "potencia_w": 720.0,
+    "altura_m": 2.384,
+    "largura_m": 1.303,
+    "espessura_m": 0.033,
+    "eletrica": {
+      "voc": 49.0,
+      "isc": 18.59,
+      "vmp": 41.19,
+      "imp": 17.48,
+      "mu_voc": -0.1195,
+      "mu_isc": 0.00811,
+      "noct": null,
+      "mu_pmp": -0.293
+    },
+    "tem_pan": true,
+    "pan_nome": "JAM66D46-720_LB.PAN"
+  },
+  {
+    "marca": "Risen",
+    "modelo": "RSM132-8-720BHDG",
+    "potencia_w": 720.0,
+    "altura_m": 2.384,
+    "largura_m": 1.303,
+    "espessura_m": 0.033,
+    "eletrica": null,
+    "tem_pan": false,
+    "pan_nome": null
+  }
+]

@@ -247,8 +247,10 @@ public static class ModuleLibrary
         foreach (var m in lista ?? [])
         {
             if (m.Eletrica is not { } e || string.IsNullOrWhiteSpace(m.Modelo)) continue;
+            if (e.Voc is not { } voc || e.Isc is not { } isc || e.Vmp is not { } vmp || e.Imp is not { } imp
+                || e.MuVoc is not { } muVoc || e.MuIsc is not { } muIsc) continue;
 
-            var pan = new PanModule(m.Marca?.Trim() ?? string.Empty, m.Modelo.Trim(), m.PotenciaW, e.Voc, e.Isc, e.Vmp, e.Imp, e.MuVoc, e.MuIsc, e.Noct, e.MuPmp);
+            var pan = new PanModule(m.Marca?.Trim() ?? string.Empty, m.Modelo.Trim(), m.PotenciaW, voc, isc, vmp, imp, muVoc, muIsc, e.Noct, e.MuPmp);
             if (pan.WhyInvalid() is null) mapa[m.Modelo.Trim()] = pan;
         }
 
@@ -338,17 +340,40 @@ public static class ModuleLibrary
         [JsonPropertyName("eletrica")] public EletricaDoServico? Eletrica { get; init; }
         [JsonPropertyName("pan")] public string? Pan { get; init; }
         [JsonPropertyName("pan_nome")] public string? PanNome { get; init; }
+        [JsonPropertyName("tem_pan")] public bool? TemPan { get; init; }
+    }
+
+    /// <summary>
+    /// Se a resposta do cadastro diz que o serviço guardou o .PAN (38.6). O
+    /// serviço de antes do 38.6 ignora o arquivo e responde 201 do mesmo
+    /// jeito; a resposta dele não tem "tem_pan" (revisão do 38.6).
+    /// </summary>
+    public static bool ServiceKeptPan(string respostaJson)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<DoServico>(respostaJson, Opcoes)?.TemPan == true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     /// <summary>A parte elétrica como o serviço guarda (38.6): V, A, V/°C, A/°C e %/°C.</summary>
+    /// <remarks>
+    /// Tudo aceita nulo: o serviço antigo (ou um módulo gravado com NaN, que o
+    /// banco guarda como NULL) não pode derrubar a leitura da lista inteira
+    /// por causa da parte elétrica de um módulo (revisão do 38.6).
+    /// </remarks>
     private sealed class EletricaDoServico
     {
-        [JsonPropertyName("voc")] public double Voc { get; init; }
-        [JsonPropertyName("isc")] public double Isc { get; init; }
-        [JsonPropertyName("vmp")] public double Vmp { get; init; }
-        [JsonPropertyName("imp")] public double Imp { get; init; }
-        [JsonPropertyName("mu_voc")] public double MuVoc { get; init; }
-        [JsonPropertyName("mu_isc")] public double MuIsc { get; init; }
+        [JsonPropertyName("voc")] public double? Voc { get; init; }
+        [JsonPropertyName("isc")] public double? Isc { get; init; }
+        [JsonPropertyName("vmp")] public double? Vmp { get; init; }
+        [JsonPropertyName("imp")] public double? Imp { get; init; }
+        [JsonPropertyName("mu_voc")] public double? MuVoc { get; init; }
+        [JsonPropertyName("mu_isc")] public double? MuIsc { get; init; }
         [JsonPropertyName("noct")] public double? Noct { get; init; }
         [JsonPropertyName("mu_pmp")] public double? MuPmp { get; init; }
     }

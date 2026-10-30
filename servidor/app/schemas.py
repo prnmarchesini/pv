@@ -20,14 +20,16 @@ class EletricaDoModulo(BaseModel):
     um módulo fora deles, e a lista inteira cairia para a biblioteca embutida.
     """
 
-    voc: float = Field(gt=0, le=3000)
-    isc: float = Field(gt=0, le=100)
-    vmp: float = Field(gt=0, le=3000)
-    imp: float = Field(gt=0, le=100)
-    mu_voc: float = Field(description="Coeficiente da Voc, V/°C")
-    mu_isc: float = Field(description="Coeficiente da Isc, A/°C")
-    noct: float | None = None
-    mu_pmp: float | None = Field(default=None, description="Coeficiente da potência, %/°C")
+    # Sem NaN nem infinito: um só módulo assim derrubava a lista de todos
+    # (o banco grava NULL, a resposta não valida). Revisão do 38.6.
+    voc: float = Field(gt=0, le=3000, allow_inf_nan=False)
+    isc: float = Field(gt=0, le=100, allow_inf_nan=False)
+    vmp: float = Field(gt=0, le=3000, allow_inf_nan=False)
+    imp: float = Field(gt=0, le=100, allow_inf_nan=False)
+    mu_voc: float = Field(ge=-10, le=10, allow_inf_nan=False, description="Coeficiente da Voc, V/°C")
+    mu_isc: float = Field(ge=-1, le=1, allow_inf_nan=False, description="Coeficiente da Isc, A/°C")
+    noct: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
+    mu_pmp: float | None = Field(default=None, ge=-5, le=5, allow_inf_nan=False, description="Coeficiente da potência, %/°C")
 
     @model_validator(mode="after")
     def pontos_do_datasheet(self):
@@ -74,7 +76,12 @@ class ModuloEntrada(ModuloBase):
 
     eletrica: EletricaDoModulo | None = None
     pan: str | None = Field(default=None, max_length=500_000)
-    pan_nome: str | None = Field(default=None, max_length=200)
+    pan_nome: str | None = Field(default=None, max_length=255)
+
+    @field_validator("pan")
+    @classmethod
+    def sem_nul(cls, valor: str | None) -> str | None:
+        return None if valor is None else valor.replace("\x00", "")
 
 
 class ModuloSaida(ModuloBase):

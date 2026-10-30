@@ -104,7 +104,10 @@ internal sealed class JanelaDeCadastroDeModulo : Window
             _espessura.Text = Partida(partida.Thickness, Tr.Culture);
         }
 
-        if (pan is { } doPan) UsarPan(doPan.Eletrica, doPan.Texto, doPan.Nome);
+        // Com as medidas da janela de Mesa válidas, ficam elas: o usuário pode
+        // ter corrigido à mão uma medida do PAN (revisão do 38.6).
+        var medidasDaJanela = partida is not null && partida.Height > 0 && partida.Width > 0 && partida.Thickness > 0;
+        if (pan is { } doPan) UsarPan(doPan.Eletrica, doPan.Texto, doPan.Nome, medidas: !medidasDaJanela);
         else MostrarOrigem();
     }
 
@@ -135,7 +138,8 @@ internal sealed class JanelaDeCadastroDeModulo : Window
         }
     }
 
-    private void UsarPan(PanModule eletrica, string texto, string nome)
+    /// <param name="medidas">Se as medidas saem do PAN (o "Ler .PAN..." daqui) ou ficam as que estão nos campos.</param>
+    private void UsarPan(PanModule eletrica, string texto, string nome, bool medidas = true)
     {
         _pan = (eletrica, texto, nome);
 
@@ -143,11 +147,16 @@ internal sealed class JanelaDeCadastroDeModulo : Window
         _modelo.Text = eletrica.Model.Trim();
         _potencia.Text = Partida(eletrica.Pmax, Brasil);
 
-        if (PanModule.DimensionsOf(texto) is { } medidas)
+        if (!medidas)
         {
-            _altura.Text = Partida(medidas.Height, Tr.Culture);
-            _largura.Text = Partida(medidas.Width, Tr.Culture);
-            _espessura.Text = Partida(medidas.Thickness, Tr.Culture);
+            Dizer(string.Empty, erro: false);
+        }
+        else if (PanModule.DimensionsOf(texto) is { } doPan)
+        {
+            var medidasDoPan = doPan;
+            _altura.Text = Partida(medidasDoPan.Height, Tr.Culture);
+            _largura.Text = Partida(medidasDoPan.Width, Tr.Culture);
+            _espessura.Text = Partida(medidasDoPan.Thickness, Tr.Culture);
             Dizer(string.Empty, erro: false);
         }
         else

@@ -6,9 +6,14 @@ Coolify depois, sem mudar o código: só a `DATABASE_URL`.
 
 import json
 from pathlib import Path
+from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.responses import PlainTextResponse
+import math
+
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -22,6 +27,20 @@ VERSAO = "2"
 MODULOS_INICIAIS = Path(__file__).with_name("modulos_iniciais.json")
 
 app = FastAPI(title="Clivus Solar — serviço do plugin", version=VERSAO)
+
+
+@app.exception_handler(RequestValidationError)
+async def recusar(_: Request, erro: RequestValidationError) -> JSONResponse:
+    """O 422 de sempre, com o valor recusado em texto quando ele é NaN ou
+    infinito: o JSON não os escreve, e o 422 virava 500 (revisão do 38.6)."""
+
+    def limpo(item: dict) -> dict:
+        valor = item.get("input")
+        if isinstance(valor, float) and not math.isfinite(valor):
+            item = {**item, "input": str(valor)}
+        return item
+
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder([limpo(e) for e in erro.errors()])})
 
 
 @app.get("/saude")
@@ -63,7 +82,10 @@ def alterar_modulo(modulo_id: str, entrada: ModuloEntrada, sessao: Session = Dep
 
     for campo, valor in entrada.model_dump(exclude=_DO_PAN).items():
         setattr(modulo, campo, valor)
-    modulo.guardar_eletrica(entrada.eletrica, entrada.pan, entrada.pan_nome)
+    # Sem a parte elétrica e sem o PAN, o módulo fica com os que tem: a lista
+    # não devolve o texto do PAN, e um GET, editar, PUT o apagaria.
+    if entrada.eletrica is not None or entrada.pan is not None:
+        modulo.guardar_eletrica(entrada.eletrica, entrada.pan, entrada.pan_nome)
     modulo.chave = chave_do_modelo(entrada.modelo)
 
     _gravar(sessao, entrada)
@@ -76,10 +98,13 @@ def baixar_pan(modulo_id: str, sessao: Session = Depends(obter_sessao)):
     modulo = sessao.get(Modulo, modulo_id)
     if modulo is None or modulo.pan is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Este módulo não tem .PAN.")
-    return PlainTextResponse(
-        modulo.pan,
-        headers={"Content-Disposition": f'attachment; filename="{modulo.pan_nome}"'},
-    )
+    return PlainTextResponse(modulo.pan, headers={"Content-Disposition": _anexo(modulo.pan_nome or "modulo.pan")})
+
+
+def _anexo(nome: str) -> str:
+    """O cabeçalho do anexo com qualquer nome: o ASCII (sem aspas nem controle) e o UTF-8."""
+    ascii_ = "".join(c if 32 <= ord(c) < 127 and c not in '"\\' else "_" for c in nome)
+    return f"attachment; filename=\"{ascii_}\"; filename*=UTF-8''{quote(nome, safe='')}"
 
 
 @app.delete("/modulos/{modulo_id}", status_code=status.HTTP_204_NO_CONTENT)

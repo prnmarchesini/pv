@@ -31,6 +31,7 @@ serviço no ar, o plugin usa a biblioteca embutida e avisa.
 | POST | `/modulos` | cadastra |
 | PUT | `/modulos/{id}` | altera |
 | DELETE | `/modulos/{id}` | apaga |
+| GET | `/modulos/{id}/pan` | o .PAN do módulo, como foi cadastrado (38.6) |
 
 Medidas em metro, potência em Wp, os mesmos limites do plugin. Modelo é
 único (ignorando maiúscula).
