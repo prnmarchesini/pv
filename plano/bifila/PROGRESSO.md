@@ -30,7 +30,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 
 ## Etapa 40: mesas conforme os objetos do cliente
 
-- 40.1 Reconhecer as mesas do cliente: PENDENTE
+- 40.1 Reconhecer as mesas do cliente: VALIDADO (automático) — `FieldObjects`, 21 testes; nos 641 objetos do Aurora: 609 mesas em 101 fileiras, 18 repetidos e 14 sobrepostos
 - 40.2 Gerar conforme objetos em campo: PENDENTE
 
 ## Observações
@@ -142,6 +142,23 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     tirante" não apaga mais os vãos escritos no campo; o LEIA-PRIMEIRO.
   - Fica como está: o nome é um só para os dois tipos (fica na primeira aba); trocar o tipo
     não muda o nome.
+- 40.1 (30/10/2026), o que assumi:
+  - O objeto é a área dos módulos ou a mesa inteira (com as sobras): os dois casam.
+  - Tamanho e ângulo reto medidos em 3D (o retângulo do cliente vira paralelogramo em
+    planta); o eixo e o lado da ponta baixa, em planta. A inclinação é o giro em torno do eixo
+    (nos 641 objetos: 9,999° a 10,001°).
+  - A referência é o que a maioria tem; tamanho, rumo, inclinação e ponta baixa diferentes
+    são apontados, e a mesa sai mesmo assim. Não viram mesa: o que não é retângulo de 4
+    vértices, o repetido (fica o primeiro), o que está em cima de parte de outro, o que está
+    com o centro fora da área. Atravessar o contorno vira mesa, com aviso.
+  - A fileira se parte onde a folga entre duas mesas passa da do motor (5 m no padrão),
+    para a fileira do Clivus ser a corrente que o motor resolve.
+- 40.2, núcleo (30/10/2026): `FieldPlacement` casa cada objeto com a primeira mesa em uso do
+  tamanho e da inclinação dele, recusa o projeto que olha para o outro lado (o motor viraria
+  as mesas) e roda o motor duas vezes: a primeira com a rampa do objeto, a segunda com a célula
+  corrigida pelo que a primeira mediu (o motor ancora a mesa no canto da ponta baixa e encurta
+  a planta pelo giro). 8 testes, um deles conferido desligando a segunda passada (ele falha).
+  Mono e biposte nos mesmos objetos dão os módulos no mesmo lugar (a menos de 1 cm).
 
 ## Roteiro de tela (38.1 a 39.1)
 

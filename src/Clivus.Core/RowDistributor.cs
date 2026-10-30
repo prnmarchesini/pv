@@ -84,6 +84,16 @@ public sealed class PlanLayout
         Tables = rows.SelectMany(f => f.Tables).ToList();
     }
 
+    /// <summary>
+    /// A distribuição feita por fora do <see cref="RowDistributor"/>: as mesas
+    /// conforme os objetos do cliente (40.2), já em fileiras.
+    /// </summary>
+    public static PlanLayout FromRows(IReadOnlyList<PlanRow> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        return new PlanLayout([.. rows.Where(f => f.Tables.Count > 0)], 0);
+    }
+
     /// <summary>As fileiras com pelo menos uma mesa, na ordem de criação.</summary>
     public IReadOnlyList<PlanRow> Rows { get; }
 
