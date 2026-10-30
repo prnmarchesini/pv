@@ -527,8 +527,15 @@ internal sealed class JanelaDeConfiguracoes : Window
     }
 
     /// <summary>
+    /// A configuração do sistema como está na aba do projeto, mesmo sem
+    /// gravar, ou null se ela ainda não fecha: é dela que a janela de Mesa
+    /// tira a altura básica do P1 e do P2 (38.7).
+    /// </summary>
+    internal SystemConfiguration? ConfiguracaoAtual => _parametros.Validar(out _)?.Configuration;
+
+    /// <summary>
     /// A janela de Mesa para o perfil dado (38.5): a aba do outro tipo começa
-    /// na última mesa desse tipo da lista; sem nenhuma, na de referência.
+    /// na última mesa desse tipo da lista; sem nenhuma, no biposte genérico.
     /// </summary>
     private TableProfile? EditarMesa(TableProfile perfil) =>
         _editarMesa(perfil, _mesas.LastOrDefault(m => m.Profile.IsBifila != perfil.IsBifila)?.Profile);

@@ -89,7 +89,8 @@ public static class MesaCommands
         var perfis = new TableProfileStore(PastaDosPerfis);
         var inicial = PrimeiroPerfil(perfis) ?? MesaDeExemplo();
 
-        var janela = new JanelaDeMesa(perfis, inicial);
+        // A configuração do desenho dá a altura básica do P1 e do P2 (38.7).
+        var janela = new JanelaDeMesa(perfis, inicial, projeto: ConfigCommands.Inicial(editor.Document, out _).Configuration);
 
         Autodesk.AutoCAD.ApplicationServices.Core.Application.ShowModalWindow(janela);
 

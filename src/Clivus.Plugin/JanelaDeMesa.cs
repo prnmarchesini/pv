@@ -166,6 +166,23 @@ internal sealed class JanelaDeMesa : Window
     private readonly TextBox _bfTerca = Campo();
     private readonly TextBox _bfMao = Campo();
     private readonly TextBox _bfTiranteDiametro = Campo();
+
+    // P1 e P2 na altura básica (38.7): só leitura, saem dos outros campos e
+    // da ponta baixa mínima do projeto.
+    private readonly TextBox _bfP1 = Leitura();
+    private readonly TextBox _bfP2 = Leitura();
+    private readonly TextBlock _bfAlturaBasica = new() { FontSize = 11, Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap };
+
+    /// <summary>A configuração do projeto: a ponta baixa mínima e o enterro da altura básica (38.7).</summary>
+    private readonly SystemConfiguration _projeto;
+
+    // A aba Fabricantes (38.7): as estruturas prontas, que vão para a aba do biposte.
+    private readonly TabItem _abaDosFabricantes = new();
+    private readonly TextBlock _recadoDosFabricantes = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+
+    /// <summary>A estrutura de fabricante que encheu a aba do biposte por último, para o recado da altura livre dela.</summary>
+    private VendorStructure? _doFabricante;
+
     private readonly Button _botaoDosVaos = new()
     {
         Content = Tr.T("Vãos entre pilares..."),
@@ -234,14 +251,19 @@ internal sealed class JanelaDeMesa : Window
     /// </param>
     /// <param name="outroTipo">
     /// A mesa com que a aba do outro tipo começa (38.5): a última desse tipo
-    /// no desenho. Null (ou do mesmo tipo da inicial): a de referência, a
-    /// Arctech 2P14 GC800 no biposte e o exemplo na monoposte.
+    /// no desenho. Null (ou do mesmo tipo da inicial): o biposte genérico, ou
+    /// o exemplo na monoposte.
     /// </param>
-    internal JanelaDeMesa(TableProfileStore perfis, TableProfile inicial, bool doDesenho = false, TableProfile? outroTipo = null)
+    /// <param name="projeto">
+    /// A configuração do projeto, para o P1 e o P2 na altura básica (38.7).
+    /// Null: a padrão.
+    /// </param>
+    internal JanelaDeMesa(TableProfileStore perfis, TableProfile inicial, bool doDesenho = false, TableProfile? outroTipo = null, SystemConfiguration? projeto = null)
     {
         _perfis = perfis ?? throw new ArgumentNullException(nameof(perfis));
         _nomeAberto = (inicial ?? throw new ArgumentNullException(nameof(inicial))).Name;
         _doDesenho = doDesenho;
+        _projeto = projeto ?? ProjectSettings.Default.Configuration;
 
         Title = Tr.T("Clivus Solar — Mesa");
         Width = 1320;
@@ -295,7 +317,7 @@ internal sealed class JanelaDeMesa : Window
             bifila: false);
         _cartaoBiposte = Cartao(
             Tr.T("Biposte"),
-            Tr.T("Dois pilares por pórtico (dianteiro e traseiro), viga, mãos francesas, terças e tirantes."),
+            Tr.T("Dois pilares por pórtico (dianteiro e traseiro), viga e terças; mãos francesas e tirantes, se o seu tiver. Os prontos de fabricante estão na aba Fabricantes."),
             bifila: true);
 
         Content = Montar();
@@ -311,9 +333,11 @@ internal sealed class JanelaDeMesa : Window
 
         // A aba do outro tipo começa na semente e fica guardada; a do tipo da
         // mesa aberta, na própria mesa.
+        // O biposte genérico (38.7) vai pelo vão-alvo: abre com qualquer módulo
+        // na primeira aba sem sair reprovado.
         var semente = outroTipo is { } outro && outro.IsBifila != inicial.IsBifila
             ? outro
-            : inicial.IsBifila ? MesaCommands.MesaDeExemplo() : SementeDoBiposte(inicial.Layout.Module);
+            : inicial.IsBifila ? MesaCommands.MesaDeExemplo() : BifilaReference.Generic();
         PreencherEstrutura(semente);
         _rascunhos[semente.IsBifila] = Capturar();
 
@@ -321,21 +345,6 @@ internal sealed class JanelaDeMesa : Window
 
         _preenchendo = false;
         Recalcular();
-    }
-
-    /// <summary>
-    /// A Arctech 2P14 GC800 para a aba do biposte. Os vãos escritos dela
-    /// (3,2 + 3,5 × 3 + 3,2) só fecham com 14 módulos de 1,303 m: com outro
-    /// módulo na primeira aba, a semente vai pelo vão-alvo, e a aba não abre
-    /// reprovada (revisão do 38.5).
-    /// </summary>
-    private static TableProfile SementeDoBiposte(SolarModule modulo)
-    {
-        var referencia = BifilaReference.Profile(BifilaVariant.Gc800);
-
-        return Math.Abs(referencia.Layout.Module.Width - modulo.Width) < 1e-6
-            ? referencia
-            : referencia with { Frame = referencia.Frame with { PillarSpans = null } };
     }
 
     /// <summary>O GroupBox do layout compacto onde o controle foi parar, ou null.</summary>
@@ -352,6 +361,16 @@ internal sealed class JanelaDeMesa : Window
     // ------------------------------------------------------------- montagem
 
     private static TextBox Campo() => new() { Margin = new Thickness(0, 2, 0, 6), Height = 24 };
+
+    /// <summary>Um número que a janela calcula: na grade dos campos, mas sem cursor e com o fundo de controle.</summary>
+    private static TextBox Leitura() => new()
+    {
+        Margin = new Thickness(0, 2, 0, 6),
+        Height = 24,
+        IsReadOnly = true,
+        IsTabStop = false,
+        Background = SystemColors.ControlBrush,
+    };
 
     private UIElement Montar()
     {
@@ -370,8 +389,13 @@ internal sealed class JanelaDeMesa : Window
 
         _abaDaEstrutura.Content = AbaDaEstrutura();
 
+        _abaDosFabricantes.Header = Tr.T("Fabricantes");
+        _abaDosFabricantes.ToolTip = Tr.T("Estruturas prontas de fabricante, com as medidas dos desenhos deles: a escolhida vai para a aba do biposte.");
+        _abaDosFabricantes.Content = AbaDosFabricantes();
+
         _abas.Items.Add(_abaDoModulo);
         _abas.Items.Add(_abaDaEstrutura);
+        _abas.Items.Add(_abaDosFabricantes);
 
         var botoes = new StackPanel
         {
@@ -455,6 +479,128 @@ internal sealed class JanelaDeMesa : Window
         grade.Children.Add(direita);
 
         return grade;
+    }
+
+    /// <summary>
+    /// A aba Fabricantes (38.7): um cartão por estrutura pronta, com as peças,
+    /// a altura livre e os pilares de catálogo. "Usar esta estrutura" enche a
+    /// aba do biposte; o genérico, para montar o seu, é o cartão Biposte da
+    /// primeira aba.
+    /// </summary>
+    private UIElement AbaDosFabricantes()
+    {
+        var pilha = new StackPanel { Margin = new Thickness(12) };
+
+        pilha.Children.Add(new TextBlock
+        {
+            Text = Tr.T("Estruturas prontas, com as medidas dos desenhos do fabricante. Usar uma enche a aba do biposte: a mesa, o pórtico, as mãos francesas, as terças e os tirantes. O módulo e o nome continuam os da primeira aba. Para montar o seu, use o cartão Biposte da primeira aba: ele abre o biposte genérico."),
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 10),
+        });
+
+        var cartoes = new WrapPanel();
+        foreach (var estrutura in VendorStructures.All) cartoes.Children.Add(CartaoDoFabricante(estrutura));
+
+        pilha.Children.Add(cartoes);
+        pilha.Children.Add(_recadoDosFabricantes);
+
+        return new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = pilha,
+        };
+    }
+
+    /// <summary>O cartão de uma estrutura de fabricante: o desenho do pórtico, o nome, as peças, o catálogo e o botão.</summary>
+    private Border CartaoDoFabricante(VendorStructure estrutura)
+    {
+        var figura = FiguraDoTipo(bifila: true);
+        DockPanel.SetDock(figura, Dock.Left);
+
+        var textos = new StackPanel { Margin = new Thickness(10, 0, 0, 0) };
+        textos.Children.Add(new TextBlock { Text = estrutura.Manufacturer, FontSize = 11, Foreground = Brushes.Gray });
+        textos.Children.Add(new TextBlock { Text = estrutura.Model, FontSize = 13.5, FontWeight = FontWeights.SemiBold });
+        textos.Children.Add(new TextBlock { Text = estrutura.Describe(), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
+        textos.Children.Add(new TextBlock { Text = estrutura.DescribeCatalog(), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
+        textos.Children.Add(new TextBlock { Text = estrutura.Source, FontSize = 10.5, Foreground = Brushes.Gray, Margin = new Thickness(0, 4, 0, 0) });
+
+        var usar = new Button
+        {
+            Content = Tr.T("Usar esta estrutura"),
+            Height = 26,
+            Padding = new Thickness(10, 0, 10, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 8, 0, 0),
+            ToolTip = Tr.T("Enche a aba do biposte com esta estrutura e abre a aba. O que estava nela é substituído; a monoposte fica guardada."),
+        };
+
+        usar.Click += (_, _) =>
+        {
+            // Manipulador de evento do WPF: exceção solta aqui fecha o Civil 3D.
+            try
+            {
+                UsarDoFabricante(estrutura);
+            }
+            catch (Exception erro)
+            {
+                _preenchendo = false;
+                RegistroDeDiagnostico.Registrar("Falha ao usar a estrutura de fabricante.", erro);
+                Avisar(Tr.F("Não consegui usar a estrutura {0}: {1}", estrutura.Name, erro.Message));
+            }
+        };
+
+        textos.Children.Add(usar);
+
+        var conteudo = new DockPanel { Margin = new Thickness(10) };
+        conteudo.Children.Add(figura);
+        conteudo.Children.Add(textos);
+
+        return new Border
+        {
+            Child = conteudo,
+            Width = 470,
+            BorderBrush = Brushes.Gray,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
+            Margin = new Thickness(0, 0, 12, 12),
+        };
+    }
+
+    /// <summary>
+    /// Uma estrutura de fabricante (38.7) na aba do biposte, como se o cartão
+    /// do biposte tivesse sido clicado: a monoposte fica guardada. O módulo e o
+    /// nome não mudam; os vãos escritos do fabricante só ficam com a largura do
+    /// módulo dele, senão a mesa vai pelo vão-alvo, como a semente do 38.5.
+    /// </summary>
+    private void UsarDoFabricante(VendorStructure estrutura)
+    {
+        var perfil = estrutura.Profile;
+        var mesmaLargura = NumberInput.TryParseMeasure(_largura.Text, out var largura)
+            && Math.Abs(largura - perfil.Layout.Module.Width) < 1e-6;
+
+        if (!mesmaLargura) perfil = perfil with { Frame = perfil.Frame with { PillarSpans = null } };
+
+        if (!_bifila) _rascunhos[false] = Capturar();
+
+        _preenchendo = true;
+        try
+        {
+            PreencherEstrutura(perfil);
+        }
+        finally
+        {
+            _preenchendo = false;
+        }
+
+        _doFabricante = estrutura;
+        _recadoDosFabricantes.Text = mesmaLargura
+            ? Tr.F("A {0} está na aba Biposte.", estrutura.Name)
+            : Tr.F("A {0} está na aba Biposte, com o vão-alvo: os vãos dela são para o módulo de {1} m de largura.", estrutura.Name, Numero(estrutura.Profile.Layout.Module.Width));
+
+        Recalcular();
+        _abas.SelectedItem = _abaDaEstrutura;
     }
 
     /// <summary>
@@ -677,7 +823,12 @@ internal sealed class JanelaDeMesa : Window
         // O biposte (38.1): dois pilares por pórtico. O T2 de cima é o do
         // dianteiro; o traseiro sai da distância entre os dois na horizontal,
         // que é como o fornecedor cota. Cada parte tem a sua seção (38.5).
+        // Na frente, o P1 e o P2 na altura básica (38.7): "P1 que é o pilar
+        // menor e P2 que é o pilar maior, e aí o resto".
         Secao(Tr.T("Pórtico"));
+        Linha(Tr.T("P1: pilar menor, o dianteiro (m)"), _bfP1, Tr.T("O pilar dianteiro inteiro, com o enterro, na altura básica: chão plano e ponta baixa na mínima do projeto. Sai da ponta baixa, do T2, da inclinação, do topo abaixo dos módulos e do T3."));
+        Linha(Tr.T("P2: pilar maior, o traseiro (m)"), _bfP2, Tr.T("O pilar traseiro inteiro, na altura básica: o P1 mais a distância entre os pilares vezes a tangente da inclinação. O catálogo do fabricante pode trazer um P2 maior, com folga para o chão caindo para trás."));
+        pilha.Children.Add(_bfAlturaBasica);
         Linha(Tr.T("Entre pilares, na horizontal (m)"), _bfEntrePilares, Tr.T("Distância entre os eixos do pilar dianteiro e do traseiro, em planta (ex.: 3,00). O T2 acima é o do dianteiro."));
         Linha(Tr.T("Topo do pilar abaixo dos módulos (m)"), _bfTopo, Tr.T("Na vertical, da face de cima dos módulos ao topo dos pilares: módulo, terça e viga (ex.: 0,126)."));
 
@@ -983,6 +1134,8 @@ internal sealed class JanelaDeMesa : Window
 
         _nome.Text = perfil.Name;
         _arquivoDoPan = null;
+        _doFabricante = null;
+        _recadoDosFabricantes.Text = string.Empty;
 
         _altura.Text = Numero(perfil.Layout.Module.Height);
         _largura.Text = Numero(perfil.Layout.Module.Width);
@@ -1286,8 +1439,10 @@ internal sealed class JanelaDeMesa : Window
             var pilares = perfil.Frame.Pillars(perfil.Layout);
             var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
 
+            var basica = AlturaBasica(perfil);
+
             _planta.Mostrar(geometria);
-            _corte.Mostrar(geometria, perfil.TiltRadians, perfil.Frame.MinEmbedment, perfil.Frame.Bifila);
+            _corte.Mostrar(geometria, perfil.TiltRadians, perfil.Frame.MinEmbedment, perfil.Frame.Bifila, basica);
 
             var potencia = perfil.Layout.ModuleCount * perfil.Layout.Module.PowerWatts / 1000;
 
@@ -1310,10 +1465,13 @@ internal sealed class JanelaDeMesa : Window
                     ? Tr.F(", com balanço de {0} m em cada ponta", Numero(pilares.Cantilever))
                     : Tr.T(", com o pilar na ponta da estrutura"))
                 + "\n"
-                + (geometria.RearPillarRow is { } tras && perfil.Frame.Bifila is { } bf
-                    ? Tr.F("Pilar dianteiro a {0} m da ponta baixa do módulo e traseiro a {1} m ({2} m entre eles na horizontal); o topo deles fica {3} m e {4} m acima da ponta baixa.",
+                + (geometria.RearPillarRow is { } tras && basica?.P2 is { } p2
+                    ? Tr.F("Pilar dianteiro a {0} m da ponta baixa do módulo e traseiro a {1} m ({2} m entre eles na horizontal). Na altura básica, P1 de {3} m e P2 de {4} m, com {5} m enterrados.",
                         Numero(geometria.PillarRow), Numero(tras), Numero(perfil.BifilaHorizontalSpacing ?? 0),
-                        Numero(subida - bf.PillarTopDrop), Numero(PillarSizing.FreeHeight(0, tras, perfil.TiltRadians) - bf.PillarTopDrop))
+                        Milimetro(basica.P1), Milimetro(p2), Numero(basica.Embedment))
+                    : geometria.RearPillarRow is { } traseiro
+                    ? Tr.F("Pilar dianteiro a {0} m da ponta baixa do módulo e traseiro a {1} m ({2} m entre eles na horizontal).",
+                        Numero(geometria.PillarRow), Numero(traseiro), Numero(perfil.BifilaHorizontalSpacing ?? 0))
                     : Tr.F("O pilar encosta na mesa a {0} m da ponta baixa do módulo (sobra da tesoura {1} m), e sobe {2} m acima dela.",
                         Numero(geometria.PillarRow), Numero(geometria.RafterOffset), Numero(subida)))
                 + (ModuleSource.ProfileDivergence(perfil) is { } divergencia ? "\n" + Tr.F("ATENÇÃO: {0}", divergencia) : string.Empty);
@@ -1719,8 +1877,51 @@ internal sealed class JanelaDeMesa : Window
         Recalcular();
     }
 
+    /// <summary>
+    /// O P1 e o P2 na altura básica (38.7), nos campos de leitura e no recado
+    /// embaixo deles. Null na monoposte, ou se a conta não fechar: aí os
+    /// campos ficam com um traço e o resto da janela segue.
+    /// </summary>
+    private BasicPillars? AlturaBasica(TableProfile perfil)
+    {
+        if (!perfil.IsBifila) return null;
+
+        try
+        {
+            var basica = perfil.PillarsAtBasicHeight(_projeto);
+
+            _bfP1.Text = Milimetro(basica.P1);
+            _bfP2.Text = basica.P2 is { } p2 ? Milimetro(p2) : "—";
+
+            var texto = Tr.F(
+                "No chão plano, com a ponta baixa na mínima do projeto ({0} m) e {1} m enterrados: {2} m e {3} m acima do chão. No terreno, cada pilar sai com o seu comprimento.",
+                Numero(basica.LowEdge), Numero(basica.Embedment), Milimetro(basica.FrontFree), Milimetro(basica.RearFree ?? 0));
+
+            // A estrutura de fabricante dá os pilares do catálogo só com a
+            // altura livre dele, que é do projeto: a janela avisa, não muda.
+            if (_doFabricante is { } fabricante && Math.Abs(fabricante.LowEdge - basica.LowEdge) > 0.001)
+            {
+                texto += " " + Tr.F(
+                    "A {0} pede {1} m livres sob o módulo, que é a ponta baixa mínima de {2} m no projeto (hoje {3} m; Configurações › Projeto).",
+                    fabricante.Name, Numero(fabricante.ClearanceUnderModule), Milimetro(fabricante.LowEdge), Numero(basica.LowEdge));
+            }
+
+            _bfAlturaBasica.Text = texto;
+            return basica;
+        }
+        catch (Exception erro) when (erro is ArgumentException or InvalidOperationException)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui a altura básica dos pilares.", erro);
+            _bfP1.Text = _bfP2.Text = "—";
+            _bfAlturaBasica.Text = Tr.F("Sem a altura básica: {0}", erro.Message);
+            return null;
+        }
+    }
+
     private void NaoDeu(string motivo)
     {
+        _bfP1.Text = _bfP2.Text = "—";
+        _bfAlturaBasica.Text = string.Empty;
         _planta.Dizer(Tr.T("A mesa ainda não fecha."));
         _corte.Dizer(Tr.T("A mesa ainda não fecha."));
         _resumo.Text = motivo;
@@ -1811,6 +2012,9 @@ internal sealed class JanelaDeMesa : Window
     // ------------------------------------------------------------ números
 
     private static string Numero(double valor) => valor.ToString("0.####", Tr.Culture);
+
+    /// <summary>Ao milímetro, sempre com as três casas: é como o fabricante cota o pilar (3,059).</summary>
+    private static string Milimetro(double valor) => valor.ToString("0.000", Tr.Culture);
 
     /// <summary>
     /// Potência no campo: fica no formato brasileiro, porque o campo é lido

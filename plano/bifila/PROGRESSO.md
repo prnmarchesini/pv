@@ -22,6 +22,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 38.4 Lista de material na tela: AGUARDANDO VALIDAÇÃO
 - 38.5 A janela de Mesa em abas: AGUARDANDO VALIDAÇÃO
 - 38.6 O PAN enche o módulo e sobe para o servidor: AGUARDANDO VALIDAÇÃO — serviço: `servidor/tests/test_pan.py`
+- 38.7 Fabricantes, biposte genérico e a altura básica (P1 e P2): AGUARDANDO VALIDAÇÃO — `VendorStructures`, `PillarsAtBasicHeight`, 10 testes
 
 ## Etapa 39: o resto do Clivus
 
@@ -257,17 +258,51 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     Core). Serviço: 53 testes.
   - Fica como está: o texto do PAN antigo (ANSI) é guardado como lido (Latin-1), não os bytes
     exatos; os números, que são o que conta, são ASCII.
+- 38.7 (30/10/2026), o que assumi:
+  - Pedidos do Renan: "se for um biposte específico do fabricante, crie uma aba de
+    fabricantes e aí um genérico, para a pessoa montar o biposte dela" ("esse biposte eu vi
+    que tem umas mãos francesas, etc"), e, com o desenho da Arctech ao lado (3059 e 3888),
+    "cadê a altura básica das duas pernas da mesa? Vc colocou T3 somente. Ao meu ver seria
+    P1 que é o pilar menor e P2 que é o pilar maior, e aí o resto".
+  - Aba **Fabricantes** na janela de Mesa: um cartão por estrutura (`VendorStructures`, Core),
+    com as peças, a altura livre, os pilares de catálogo e a fonte. Hoje são as duas da
+    Arctech (2P14 GC800MM-NS 10 e GC1000MM-NS 20), com o nome do fabricante (a mesa vai para
+    o desenho como "Arctech 2P14 GC800"). "Usar esta estrutura" enche a aba do biposte
+    (mesa, pórtico, mãos francesas, terças, tirantes, seções) e a abre; a monoposte fica
+    guardada. Não muda o módulo nem o nome da mesa (renomear mesa do desenho é do usuário);
+    os vãos escritos do fabricante só ficam com a largura do módulo dele, senão vai o vão-alvo.
+  - O **biposte genérico** (`BifilaReference.Generic`, sem nome de fabricante) é a semente do
+    cartão Biposte: o pórtico de referência sem mão francesa e sem tirante, pelo vão-alvo.
+    Quem tiver mãos francesas e tirantes põe nas seções deles. Antes a semente era a GC800
+    inteira, com as mãos francesas dela.
+  - **P1 e P2 são calculados, não digitados.** A altura da mesa vem da faixa da ponta baixa do
+    projeto, igual para monoposte e biposte (o motor assenta a mesa na mínima no chão plano);
+    o P2 sai do P1, da distância entre os pilares e da inclinação. Digitar os dois daria três
+    donos para a mesma altura. Então o Pórtico abre com P1 (pilar menor, o dianteiro) e P2
+    (pilar maior, o traseiro), inteiros com o enterro, na **altura básica**: chão plano, ponta
+    baixa na mínima do projeto (a da aba Projeto das Configurações, mesmo sem gravar) e o T3
+    da mesa. Embaixo, quanto cada um tem acima do chão. O corte desenha o chão nessa altura
+    e cota P1, P2 e T3.
+  - O P2 do catálogo da Arctech (3,888) é maior que o da altura básica (3,588): tem a folga do
+    chão caindo 10 % para trás (3,00 × 10 % = 0,300). O cartão do fabricante diz isso, e o
+    teste confere que os números do catálogo fecham com a conta (P1 3,059 com a ponta baixa
+    de 0,832; P2 de catálogo = P2 + 0,300).
+  - Com uma estrutura de fabricante e a ponta baixa mínima do projeto diferente da que dá a
+    altura livre dela (0,832 na GC800, 1,032 na GC1000), a janela avisa embaixo do P1 e do P2;
+    não muda a configuração do projeto.
+  - Testes: 10 no Core (o P1 e o P2 são os do motor no chão plano, no biposte e na monoposte;
+    o enterro é o T3 ou o mínimo do projeto; os números de catálogo; o genérico sem nada de
+    fabricante). As abas e o corte são de tela.
 
 ## Roteiro de tela (38.1 a 40.2)
 
 1. **Nova estrutura (38.1 e 38.5):** Configurações › Estruturas › Nova estrutura… › **Fixa**.
    A janela de Mesa abre na aba "Perfil e módulo"; clicar no cartão **Biposte** abre a aba
-   Biposte, na Arctech 2P14 GC800, com as seções Pórtico, Mãos francesas, Terças, Tirantes e
-   Seções das peças. Mudar um campo, clicar Monoposte e voltar para Biposte: o campo
-   continua mudado. No corte, conferir os dois
-   pilares, a viga, as duas mãos francesas e as cotas T2, T2t e 3,000 m entre os pilares.
-   Apertar GC1000 e ver as mãos francesas mudarem. "Usar esta mesa", Salvar no desenho,
-   fechar e reabrir: ela está na lista com "(bifila)" e na Escolha das estruturas.
+   Biposte, no biposte genérico (sem mão francesa e sem tirante), com as seções Pórtico, Mãos
+   francesas, Terças, Tirantes e Seções das peças. Mudar um campo, clicar Monoposte e voltar
+   para Biposte: o campo continua mudado. No corte, conferir os dois pilares, a viga e as
+   cotas T2, T2t e 3,000 m entre os pilares. "Usar esta mesa", Salvar no desenho, fechar e
+   reabrir: ela está na lista com "(biposte)" e na Escolha das estruturas.
 2. **Desenhar (38.2):** marcar só a bifila na Escolha, pôr a faixa da PB do projeto em
    0,84 a 1,60 (a GC800 pede 0,832 na face do módulo) e processar uma área. Orbitar uma
    mesa: 12 pilares (6 pórticos com dianteiro e traseiro), viga em cada pórtico, mãos
@@ -310,3 +345,12 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
    JAM66D46-720/LB", as medidas 2,384 × 1,303 × 0,033, a potência 720 e os dados elétricos
    enchem; a pergunta "Cadastrar agora, com o PAN?" › Sim: o módulo entra na lista. Fechar e
    abrir a janela, escolher esse módulo na lista: os dados elétricos vêm junto.
+9. **Fabricantes e altura básica (38.7):** com a faixa da PB do projeto em 0,8325 a 1,60
+   (Configurações › Projeto), abrir a janela de Mesa. Aba **Fabricantes**: dois cartões da
+   Arctech, cada um com as peças, a altura livre e os pilares de catálogo. "Usar esta
+   estrutura" na GC800: abre a aba Biposte com as mãos francesas de 1,244 e 1,209, tirantes
+   nos vãos 2 e 4, e o Pórtico começa com **P1 3,059** e **P2 3,588** (0,859 e 1,388 acima do
+   chão). No corte, o chão na altura certa e as cotas P1, P2 e T3. Usar a GC1000: as mãos
+   francesas mudam e aparece o recado de que ela pede a ponta baixa de 1,032. Voltar à
+   primeira aba, Monoposte e Biposte de novo: a GC1000 continua na aba. Mudar a PB mínima do
+   projeto e reabrir a janela: o P1 e o P2 acompanham.

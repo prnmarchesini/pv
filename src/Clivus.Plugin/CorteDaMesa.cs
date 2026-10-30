@@ -75,19 +75,23 @@ internal sealed class CorteDaMesa : FrameworkElement
     private double _tilt;
     private double? _enterro;
     private BifilaFrame? _bifila;
+    private BasicPillars? _basica;
     private string? _recado;
 
     /// <summary>
     /// Mostra o corte desta mesa, com esta inclinação em radianos e o enterro
     /// mínimo T3 da estrutura (null: o da configuração do projeto). Com a
-    /// parte bifila (38.1), os dois pilares, a viga e as mãos francesas.
+    /// parte bifila (38.1), os dois pilares, a viga e as mãos francesas; com a
+    /// altura básica (38.7), o chão na ponta baixa mínima do projeto e os
+    /// pilares cotados, P1 e P2.
     /// </summary>
-    internal void Mostrar(TableGeometry mesa, double tiltRadians, double? enterroMinimo = null, BifilaFrame? bifila = null)
+    internal void Mostrar(TableGeometry mesa, double tiltRadians, double? enterroMinimo = null, BifilaFrame? bifila = null, BasicPillars? basica = null)
     {
         _mesa = mesa;
         _tilt = tiltRadians;
         _enterro = enterroMinimo;
         _bifila = mesa.RearPillarRow is null ? null : bifila;
+        _basica = _bifila is null ? null : basica;
         _recado = null;
         InvalidateVisual();
     }
@@ -132,8 +136,10 @@ internal sealed class CorteDaMesa : FrameworkElement
 
         // O solo é símbolo: fica a um vão fixo abaixo da ponta baixa, e o
         // pilar entra nele o T3 (ou um T3 de mostra, sem cota, sem T3 escrito).
-        var vaoAteOSolo = 0.35;
-        var t3 = _enterro ?? 0.6;
+        // No biposte com a altura básica (38.7), é o chão plano de verdade: a
+        // ponta baixa mínima do projeto abaixo dela, e o enterro que vale.
+        var vaoAteOSolo = _basica?.LowEdge ?? 0.35;
+        var t3 = _basica?.Embedment ?? _enterro ?? 0.6;
 
         // A caixa do desenho vai da ponta baixa até a ponta alta, mais o
         // pedaço abaixo dela até o pé do pilar dentro do solo.
@@ -258,7 +264,18 @@ internal sealed class CorteDaMesa : FrameworkElement
             tela.DrawLine(Pilar, new Point(topo.X, ySolo), new Point(topo.X, yPe));
             DesenharSolo(tela, ySolo, topo.X);
 
-            CotaVertical(tela, topo.X + 22, topo.Y, yBaixa, Medida(vTopo), Laranja);
+            // Com a altura básica, o pilar inteiro, do pé ao topo: P1 o
+            // dianteiro (o menor), P2 o traseiro (38.7). Sem ela, a subida
+            // acima da ponta baixa, como antes.
+            if (_basica is { } alturaBasica)
+            {
+                var inteiro = paraTras ? alturaBasica.P1 : alturaBasica.P2 ?? alturaBasica.P1;
+                CotaVertical(tela, topo.X + 22, topo.Y, yPe, $"{(paraTras ? "P1" : "P2")} {Milimetro(inteiro)}", Laranja);
+            }
+            else
+            {
+                CotaVertical(tela, topo.X + 22, topo.Y, yBaixa, Medida(vTopo), Laranja);
+            }
 
             if (comprimento <= 0) continue;
 
@@ -326,13 +343,16 @@ internal sealed class CorteDaMesa : FrameworkElement
         var xTras = Tela(trasEm * cos, 0).X;
         CotaHorizontal(tela, xFrente, xTras, yPe + 12, Medida((trasEm - frenteEm) * cos), Laranja);
 
-        if (_enterro is { } escrito)
+        if ((_basica?.Embedment ?? _enterro) is { } escrito)
             CotaVertical(tela, xFrente - 26, ySolo, yPe, $"T3 {Medida(escrito)}", Terra, aEsquerda: true);
 
         Escrever(
             tela,
-            Tr.F("biposte: pilares a {0} m na horizontal, topo {1} m abaixo dos módulos · tracejado: o resto depende do terreno",
-                Medida((trasEm - frenteEm) * cos), Medida(bifila.PillarTopDrop)),
+            _basica is { } basica
+                ? Tr.F("biposte na altura básica: chão plano, ponta baixa {0} m (a mínima do projeto) · no terreno, cada pilar sai com o seu comprimento",
+                    Medida(basica.LowEdge))
+                : Tr.F("biposte: pilares a {0} m na horizontal, topo {1} m abaixo dos módulos · tracejado: o resto depende do terreno",
+                    Medida((trasEm - frenteEm) * cos), Medida(bifila.PillarTopDrop)),
             Fraco,
             10.5,
             new Point(Margem, ActualHeight - 16));
@@ -472,6 +492,9 @@ internal sealed class CorteDaMesa : FrameworkElement
         Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
 
     private static string Medida(double valor) => valor.ToString("0.###", Cultura);
+
+    /// <summary>O pilar ao milímetro, com as três casas, como o fabricante cota (3,059).</summary>
+    private static string Milimetro(double valor) => valor.ToString("0.000", Cultura);
 
     private static T Congelar<T>(T objeto) where T : Freezable
     {

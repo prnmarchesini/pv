@@ -217,6 +217,35 @@ public sealed record TableProfile(
         Frame?.Bifila is { } b ? (b.RearPillarAlongRafter - Frame.PillarAlongRafter) * Math.Cos(TiltRadians) : null;
 
     /// <summary>
+    /// Os pilares na altura básica (38.7; Renan, 30/10/2026: "cadê a altura
+    /// básica das duas pernas da mesa? ... P1 que é o pilar menor e P2 que é o
+    /// pilar maior"): no chão plano, com a ponta baixa na mínima do projeto,
+    /// que é onde o motor assenta a mesa no plano, e o enterro T3 da mesa (sem
+    /// T3, o mínimo do projeto). No terreno, cada pilar sai com o seu.
+    /// </summary>
+    /// <param name="projeto">A configuração do projeto: a ponta baixa mínima e o enterro.</param>
+    /// <exception cref="InvalidOperationException">Com o perfil inválido.</exception>
+    public BasicPillars PillarsAtBasicHeight(SystemConfiguration projeto)
+    {
+        ArgumentNullException.ThrowIfNull(projeto);
+        if (WhyInvalid is { } motivo) throw new InvalidOperationException(motivo);
+
+        var geometria = TableGeometry.Local(Layout, Frame.Pillars(Layout), Frame);
+        var pontaBaixa = projeto.MinLowEdge;
+
+        // A mesma conta do pilar da janela: a subida até o pilar, menos o que
+        // o topo dele fica abaixo dos módulos (zero na monoposte).
+        double Livre(double ateOPilar) =>
+            PillarSizing.FreeHeight(pontaBaixa, ateOPilar, TiltRadians) - geometria.PillarTopDrop;
+
+        return new BasicPillars(
+            pontaBaixa,
+            projeto.WithEmbedmentOf(Frame).MinEmbedment,
+            Livre(geometria.PillarRow),
+            geometria.RearPillarRow is { } tras ? Livre(tras) : null);
+    }
+
+    /// <summary>
     /// O perfil com os dados elétricos do .PAN e a potência do módulo passada
     /// para a do PAN (item 15). Nada mais muda: medidas, quantidade, arranjo e
     /// estrutura ficam como estavam.

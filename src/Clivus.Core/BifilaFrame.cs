@@ -359,6 +359,37 @@ public static class BifilaReference
             10 * Grau);
     }
 
+    /// <summary>
+    /// O biposte genérico, para montar o seu (38.7; Renan, 30/10/2026: "se for
+    /// um biposte específico do fabricante, crie uma aba de fabricantes e aí um
+    /// genérico, para a pessoa montar o biposte dela"). A mesa e o pórtico de
+    /// referência, sem mão francesa e sem tirante, que são do fabricante (quem
+    /// tiver os põe), e com o vão-alvo no lugar dos vãos escritos, que só
+    /// fecham com o módulo de referência.
+    /// </summary>
+    public static TableProfile Generic()
+    {
+        var referencia = Profile(BifilaVariant.Gc800);
+
+        return referencia with
+        {
+            Name = "Biposte",
+            Frame = referencia.Frame with
+            {
+                PillarSpans = null,
+                Bifila = Frame(BifilaVariant.Gc800) with
+                {
+                    FrontBraceLength = 0,
+                    FrontBraceBelowTop = 0,
+                    RearBraceLength = 0,
+                    RearBraceBelowTop = 0,
+                    RodLine = BifilaRodLine.None,
+                    RodSpans = [],
+                },
+            },
+        };
+    }
+
     /// <summary>O nome do perfil pronto.</summary>
     public static string Name(BifilaVariant variante) => variante switch
     {

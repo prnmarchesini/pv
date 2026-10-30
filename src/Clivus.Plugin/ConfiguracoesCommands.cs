@@ -54,7 +54,10 @@ public static class ConfiguracoesCommands
         {
             // Resultado, e não só a confirmada: "Salvar perfil" com o mesmo
             // nome e depois Fechar também atualiza a mesa (05/10/2026).
-            var mesa = new JanelaDeMesa(biblioteca, perfil, doDesenho: true, outroTipo: outroTipo) { Owner = janela };
+            // A altura básica do P1 e do P2 (38.7) sai da configuração como
+            // está na aba do projeto, mesmo antes de gravada.
+            var projeto = janela?.ConfiguracaoAtual ?? parametros.Configuration;
+            var mesa = new JanelaDeMesa(biblioteca, perfil, doDesenho: true, outroTipo: outroTipo, projeto: projeto) { Owner = janela };
             mesa.ShowDialog();
             return mesa.Resultado;
         }
