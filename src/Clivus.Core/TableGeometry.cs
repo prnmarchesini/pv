@@ -40,7 +40,28 @@ public sealed record ModulePiece(
 public sealed record PillarPiece(
     double Station,
     Point3 Anchor,
-    IReadOnlyList<Point3> Footprint);
+    IReadOnlyList<Point3> Footprint)
+{
+    /// <summary>
+    /// A linha do pilar no pórtico: <see cref="PillarLine.Single"/> na
+    /// monoposte; na bifila, <see cref="PillarLine.Front"/> ou
+    /// <see cref="PillarLine.Rear"/> (passo 37.2).
+    /// </summary>
+    public PillarLine Line { get; init; } = PillarLine.Single;
+}
+
+/// <summary>Em que linha do pórtico o pilar fica.</summary>
+public enum PillarLine
+{
+    /// <summary>O pilar único da monoposte.</summary>
+    Single,
+
+    /// <summary>O dianteiro da bifila: o do lado baixo dos módulos.</summary>
+    Front,
+
+    /// <summary>O traseiro da bifila: o do lado alto.</summary>
+    Rear,
+}
 
 /// <summary>
 /// A mesa como geometria, em coordenadas locais.
@@ -72,21 +93,63 @@ public sealed class TableGeometry
         double sobraDaTesoura,
         double fileiraDoPilar,
         double comprimento,
-        double profundidade)
+        double profundidade,
+        double? fileiraDoTraseiro = null,
+        double quedaDoTopo = 0,
+        TableLayout? mesa = null,
+        TableFrame? estrutura = null)
     {
+        Layout = mesa;
+        Frame = estrutura;
         Modules = modulos;
         Pillars = pilares;
         RafterOffset = sobraDaTesoura;
         PillarRow = fileiraDoPilar;
         Length = comprimento;
         Depth = profundidade;
+        RearPillarRow = fileiraDoTraseiro;
+        PillarTopDrop = quedaDoTopo;
     }
 
     /// <summary>Os módulos, coluna a coluna e fileira a fileira.</summary>
     public IReadOnlyList<ModulePiece> Modules { get; }
 
-    /// <summary>Os pilares, na ordem da tabela.</summary>
+    /// <summary>
+    /// Os pilares, na ordem da tabela. Na bifila são dois por estação, na
+    /// ordem estação → frente → trás: o primeiro e o último continuam sendo
+    /// os da primeira e da última estação, que é o que quem procura as pontas
+    /// da mesa espera.
+    /// </summary>
     public IReadOnlyList<PillarPiece> Pillars { get; }
+
+    /// <summary>
+    /// Na bifila, onde a fileira dos pilares traseiros fica, medida da ponta
+    /// baixa do MÓDULO (sobra + T2t), como <see cref="PillarRow"/> é a dos
+    /// dianteiros. Null na monoposte.
+    /// </summary>
+    public double? RearPillarRow { get; }
+
+    /// <summary>
+    /// Quanto o topo dos pilares fica abaixo da face dos módulos, na vertical:
+    /// zero na monoposte (o pilar vai até o plano, como sempre foi), o
+    /// <see cref="BifilaFrame.PillarTopDrop"/> na bifila. Quem desce o topo é o
+    /// <see cref="PillarCalculator"/>; o âncora continua no plano, que é o que
+    /// a regra sagrada 2 confere.
+    /// </summary>
+    public double PillarTopDrop { get; }
+
+    /// <summary>
+    /// A mesa (módulos, arranjo, folgas) de que esta geometria saiu, ou null
+    /// na geometria montada à mão pelos testes dos verificadores.
+    /// </summary>
+    public TableLayout? Layout { get; }
+
+    /// <summary>
+    /// A estrutura de que esta geometria saiu, ou null como em
+    /// <see cref="Layout"/>. É dela que a bifila tira as peças
+    /// (<see cref="BifilaStructure"/>) sem o perfil inteiro.
+    /// </summary>
+    public TableFrame? Frame { get; }
 
     /// <summary>
     /// Quanto o módulo sobra abaixo da tesoura: <c>(M2 − T1) / 2</c>.
@@ -147,14 +210,19 @@ public sealed class TableGeometry
 
         var sobra = (profundidade - estrutura.RafterLength) / 2;
         var fileiraDoPilar = sobra + estrutura.PillarAlongRafter;
+        double? fileiraDoTraseiro = estrutura.Bifila is { } bifila ? sobra + bifila.RearPillarAlongRafter : null;
 
         return new TableGeometry(
             MontarModulos(mesa),
-            MontarPilares(pilares, estrutura, fileiraDoPilar),
+            MontarPilares(pilares, estrutura, fileiraDoPilar, fileiraDoTraseiro),
             sobra,
             fileiraDoPilar,
             mesa.Length,
-            profundidade);
+            profundidade,
+            fileiraDoTraseiro,
+            estrutura.Bifila?.PillarTopDrop ?? 0,
+            mesa,
+            estrutura);
     }
 
     /// <summary>
@@ -191,10 +259,13 @@ public sealed class TableGeometry
             .Select(p => new PillarPiece(
                 p.Station,
                 colocacao.Apply(p.Anchor),
-                Levar(p.Footprint, colocacao)))
+                Levar(p.Footprint, colocacao))
+            {
+                Line = p.Line,
+            })
             .ToList();
 
-        return new TableGeometry(modulos, pilares, RafterOffset, PillarRow, Length, Depth);
+        return new TableGeometry(modulos, pilares, RafterOffset, PillarRow, Length, Depth, RearPillarRow, PillarTopDrop, Layout, Frame);
     }
 
     /// <summary>
@@ -291,26 +362,31 @@ public sealed class TableGeometry
     }
 
     private static IReadOnlyList<PillarPiece> MontarPilares(
-        PillarTable pilares, TableFrame estrutura, double fileira)
+        PillarTable pilares, TableFrame estrutura, double fileira, double? fileiraDoTraseiro)
     {
         var meiaLargura = estrutura.PillarWidth / 2;
         var meiaProfundidade = estrutura.PillarDepth / 2;
 
-        return pilares.Positions
-            .Select(estacao =>
-            {
-                var x0 = estacao - meiaLargura;
-                var x1 = estacao + meiaLargura;
-                var y0 = fileira - meiaProfundidade;
-                var y1 = fileira + meiaProfundidade;
+        PillarPiece Pilar(double estacao, double y, PillarLine linha)
+        {
+            var x0 = estacao - meiaLargura;
+            var x1 = estacao + meiaLargura;
+            var y0 = y - meiaProfundidade;
+            var y1 = y + meiaProfundidade;
 
-                Point3[] pegada =
-                [
-                    new(x0, y0, 0), new(x1, y0, 0), new(x1, y1, 0), new(x0, y1, 0),
-                ];
+            Point3[] pegada =
+            [
+                new(x0, y0, 0), new(x1, y0, 0), new(x1, y1, 0), new(x0, y1, 0),
+            ];
 
-                return new PillarPiece(estacao, new Point3(estacao, fileira, 0), pegada);
-            })
-            .ToList();
+            return new PillarPiece(estacao, new Point3(estacao, y, 0), pegada) { Line = linha };
+        }
+
+        // Na bifila, o dianteiro e o traseiro de cada estação, nesta ordem.
+        return fileiraDoTraseiro is { } tras
+            ? pilares.Positions
+                .SelectMany(estacao => new[] { Pilar(estacao, fileira, PillarLine.Front), Pilar(estacao, tras, PillarLine.Rear) })
+                .ToList()
+            : pilares.Positions.Select(estacao => Pilar(estacao, fileira, PillarLine.Single)).ToList();
     }
 }

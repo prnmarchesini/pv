@@ -9,7 +9,10 @@ namespace Clivus.Core;
 /// <param name="X">Onde o pilar fura o chão, em planta (a posição real, depois do giro).</param>
 /// <param name="Y">Onde o pilar fura o chão, em planta.</param>
 /// <param name="GroundZ">A cota do terreno no pé, ou null se o pé caiu fora do terreno.</param>
-/// <param name="TopZ">A cota onde o pilar encosta na mesa.</param>
+/// <param name="TopZ">
+/// A cota do topo do pilar: onde ele encosta na mesa na monoposte; na bifila,
+/// o topo fica abaixo da face dos módulos pela queda da estrutura (37.2).
+/// </param>
 /// <param name="FreeHeight">O que fica acima do terreno (P3), ou null sem terreno.</param>
 /// <param name="Embedment">
 /// O que fica enterrado (P2): o enterro mínimo da configuração, sempre — é
@@ -40,7 +43,8 @@ public sealed record PillarResult(
     double? Length,
     string? Problem,
     double? LowEdgeClearance = null,
-    double? HighEdgeClearance = null)
+    double? HighEdgeClearance = null,
+    PillarLine Line = PillarLine.Single)
 {
     /// <summary>Se o pilar está de pé como deve: tem terreno, altura livre e enterro.</summary>
     public bool IsSound => Problem is null;
@@ -169,17 +173,21 @@ public static class PillarCalculator
         var pilares = geometry.Pillars
             .Select(p =>
             {
-                var topo = colocacao.Apply(p.Anchor);
+                // Na bifila o topo do pilar fica abaixo da face dos módulos
+                // (terça e viga no meio); o pilar é vertical, então só o Z
+                // desce. Na monoposte a queda é zero e o topo é o âncora.
+                var ancora = colocacao.Apply(p.Anchor);
+                var topo = ancora with { Z = ancora.Z - geometry.PillarTopDrop };
                 var enterro = configuration.MinEmbedment;
 
                 if (semGiro is not null)
-                    return new PillarResult(p.Station, topo.X, topo.Y, null, topo.Z, null, enterro, null, semGiro);
+                    return new PillarResult(p.Station, topo.X, topo.Y, null, topo.Z, null, enterro, null, semGiro, Line: p.Line);
 
                 if (!terrain.TryGetZ(topo.X, topo.Y, out var terreno))
                 {
                     return new PillarResult(
                         p.Station, topo.X, topo.Y, null, topo.Z, null, enterro, null,
-                        Tr.T("o pé do pilar caiu fora do terreno"));
+                        Tr.T("o pé do pilar caiu fora do terreno"), Line: p.Line);
                 }
 
                 var livre = topo.Z - terreno;
@@ -203,7 +211,7 @@ public static class PillarCalculator
                 double? comprimento = problema is null ? PillarSizing.Length(livre, enterro) : null;
 
                 return new PillarResult(
-                    p.Station, topo.X, topo.Y, terreno, topo.Z, livre, enterro, comprimento, problema, pontaBaixa, pontaAlta);
+                    p.Station, topo.X, topo.Y, terreno, topo.Z, livre, enterro, comprimento, problema, pontaBaixa, pontaAlta, p.Line);
             })
             .ToList();
 
