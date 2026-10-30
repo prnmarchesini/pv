@@ -149,7 +149,8 @@ public static class ManualEnds
     {
         var pilares = linha.Tables[0].Pillars.Pillars;
 
-        if (pilares[0].LowEdgeClearance is not { } a || pilares[^1].LowEdgeClearance is not { } b)
+        if (PillarStations.EndCarrier(pilares, first: true).LowEdgeClearance is not { } a
+            || PillarStations.EndCarrier(pilares, first: false).LowEdgeClearance is not { } b)
             throw new InvalidOperationException(Tr.T("A ponta baixa de um pilar da ponta está fora do terreno: não há altura a medir."));
 
         return (a, b);

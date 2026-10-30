@@ -108,13 +108,61 @@ public sealed record PillarIdentity(
     string? Problem,
     double? GroundZ,
     double? LowEdgeClearance = null,
-    double? HighEdgeClearance = null)
+    double? HighEdgeClearance = null,
+    PillarLine Line = PillarLine.Single)
 {
     /// <summary>O tipo, como vai no XData.</summary>
     public const string Tipo = "Pilar";
 
     /// <summary>Se a identidade é utilizável.</summary>
     public bool IsValid => Id != Guid.Empty && Table != Guid.Empty && Number > 0 && double.IsFinite(Station);
+}
+
+/// <summary>
+/// A identidade de uma peça da estrutura bifila desenhada (passo 38.2): viga,
+/// mão francesa, terça ou tirante, ligada à mesa pelo GUID dela.
+/// </summary>
+/// <param name="Id">O GUID da peça.</param>
+/// <param name="Table">O GUID da mesa.</param>
+/// <param name="Part">Que peça é.</param>
+/// <param name="Line">A linha de pilares (mão francesa e tirante).</param>
+/// <param name="Index">O pórtico, a linha de terça ou o vão (ver <see cref="StructureBar.Index"/>).</param>
+/// <param name="Length">O comprimento, em metro: é o que vai para a lista de material.</param>
+/// <param name="MaxBar">Na terça, a maior barra em que ela é cortada; null nas outras.</param>
+/// <param name="Start">Uma ponta do eixo, como a peça foi desenhada.</param>
+/// <param name="End">A outra ponta.</param>
+/// <param name="Width">A largura da seção.</param>
+/// <param name="Depth">A altura da seção.</param>
+/// <param name="DepthDirection">Para onde a altura da seção aponta.</param>
+/// <remarks>
+/// O eixo e a seção vão no XData para o 3D montar a peça no Core, sem explodir
+/// o sólido (revisão do 39.1). Peça movida ou copiada é achada pelo centro
+/// dela no desenho: o deslocamento entre esse centro e o meio do eixo gravado
+/// leva o eixo junto.
+/// </remarks>
+public sealed record StructureIdentity(
+    Guid Id,
+    Guid Table,
+    StructurePart Part,
+    PillarLine Line,
+    int Index,
+    double Length,
+    double? MaxBar,
+    Point3 Start,
+    Point3 End,
+    double Width,
+    double Depth,
+    Point3 DepthDirection)
+{
+    /// <summary>O tipo, como vai no XData.</summary>
+    public const string Tipo = "Estrutura";
+
+    /// <summary>Se a identidade é utilizável.</summary>
+    public bool IsValid =>
+        Id != Guid.Empty && Table != Guid.Empty && Enum.IsDefined(Part) && Enum.IsDefined(Line)
+        && double.IsFinite(Length) && Length > 0 && (MaxBar is null || (double.IsFinite(MaxBar.Value) && MaxBar.Value > 0))
+        && Start.IsFinite && End.IsFinite && DepthDirection.IsFinite
+        && double.IsFinite(Width) && Width > 0 && double.IsFinite(Depth) && Depth > 0;
 }
 
 /// <summary>A identidade de um módulo desenhado (o bloco).</summary>

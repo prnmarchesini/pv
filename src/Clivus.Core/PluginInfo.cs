@@ -523,6 +523,12 @@ public static partial class PluginInfo
     /// <summary>Só para o nível 2: cadastra no desenho a mesa de exemplo de 28 módulos e uma de 14, as duas em uso.</summary>
     public const string ComandoMesasExemploAutomatico = "CLIVUS_MESAS_EXEMPLO_AUTO";
 
+    /// <summary>
+    /// Só para o nível 2 (38.2): cadastra no desenho a bifila Arctech GC800, em
+    /// uso e sozinha, e a faixa da PB que ela pede.
+    /// </summary>
+    public const string ComandoBifilaExemploAutomatico = "CLIVUS_BIFILA_EXEMPLO_AUTO";
+
     /// <summary>Passo 8.7: a janela de Configurações (Estruturas, Escolha das estruturas, Parâmetros, Projeto).</summary>
     public const string ComandoConfiguracoes = "CLIVUS_CONFIGURACOES";
 

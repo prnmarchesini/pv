@@ -71,16 +71,9 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
     public ProjectSettings ForTable(TableFrame estrutura)
     {
         ArgumentNullException.ThrowIfNull(estrutura);
-        if (estrutura.MinEmbedment is not { } t3) return this;
+        if (estrutura.MinEmbedment is null) return this;
 
-        return this with
-        {
-            Configuration = Configuration with
-            {
-                MinEmbedment = t3,
-                MaxEmbedment = Math.Max(Configuration.MaxEmbedment, t3),
-            },
-        };
+        return this with { Configuration = Configuration.WithEmbedmentOf(estrutura) };
     }
 
     // Os nomes ficam gravados no arquivo do usuário: mudar qualquer um torna

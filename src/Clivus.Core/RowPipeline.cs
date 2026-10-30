@@ -247,13 +247,18 @@ public static class RowPipeline
 
         for (var i = 0; i < row.Tables.Count; i++)
         {
+            // O enterro T3 é da estrutura de CADA mesa (38.3): numa usina
+            // mista, a bifila de 2,20 m e a monoposte de 1,50 não dividem o
+            // enterro do primeiro tipo. Tipo sem T3 fica com o da usina.
+            var daMesa = config.WithEmbedmentOf(geometries[i].Frame);
+
             var pilares = PillarCalculator.Compute(
-                geometries[i], row.Tables[i], orientacoes[i], tiltRadians, resolvidas[i], terrain, config);
+                geometries[i], row.Tables[i], orientacoes[i], tiltRadians, resolvidas[i], terrain, daMesa);
 
             var finais = TerrainSampler.Sample(geometries[i], pilares.Placement, terrain);
 
             var relatorio = TableAnalysis.Evaluate(
-                resolvidas[i], finais, geometries[i].Length, pilares, row.Tables[i], settings.Analyses, config);
+                resolvidas[i], finais, geometries[i].Length, pilares, row.Tables[i], settings.Analyses, daMesa);
 
             mesas.Add(new ProcessedTable(
                 row.Tables[i], orientacoes[i], semGiro[i], finais, viaveis[i], resolvidas[i], pilares, relatorio));
@@ -321,9 +326,12 @@ public static class RowPipeline
 
         var resolvida = new SolvedTable(cell.Label, startElevation, endElevation, estouros, marked || estourou, motivoDaMarca, Seated: marked || estourou);
 
-        var pilares = PillarCalculator.Compute(geometry, cell, orientacao, tiltRadians, resolvida, terrain, config);
+        // O T3 da estrutura desta mesa, como na fileira: as pontas à mão e o
+        // Recalcular de uma mesa não podem dar outro pilar (revisão do 38.3).
+        var daMesa = config.WithEmbedmentOf(geometry.Frame);
+        var pilares = PillarCalculator.Compute(geometry, cell, orientacao, tiltRadians, resolvida, terrain, daMesa);
         var finais = TerrainSampler.Sample(geometry, pilares.Placement, terrain);
-        var relatorio = TableAnalysis.Evaluate(resolvida, finais, geometry.Length, pilares, cell, settings.Analyses, config);
+        var relatorio = TableAnalysis.Evaluate(resolvida, finais, geometry.Length, pilares, cell, settings.Analyses, daMesa);
 
         var mesa = new ProcessedTable(cell, orientacao, amostra, finais, viavel, resolvida, pilares, relatorio);
         var solucao = new RowSolution([new SolvedRun([resolvida], [])]);

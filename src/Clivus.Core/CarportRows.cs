@@ -153,38 +153,13 @@ public static class CarportMesh
         }
     }
 
-    private static IEnumerable<Scene3DFace> Barra(CarportBar b, RgbColor cor)
-    {
-        var eixo = Sub(b.End, b.Start);
-        var x = Unit(eixo);
-        var alt = b.DepthDirection;
-        var z = Sub(alt, Mul(x, Dot(alt, x)));
-        z = Norma(z) < 1e-9 ? Unit(Cross(x, new Point3(0, 0, 1))) : Unit(z);
-        var y = Cross(z, x);
-
-        var hw = b.Section.Width / 2;
-        var hd = b.Section.Depth / 2;
-        Point3 P(double sy, double sz) => Add(b.Start, Add(Mul(y, sy * hw), Mul(z, sz * hd)));
-        List<Point3> secao = [P(-1, -1), P(1, -1), P(1, 1), P(-1, 1)];
-        return Prisma(secao, eixo, cor);
-    }
+    private static IEnumerable<Scene3DFace> Barra(CarportBar b, RgbColor cor) =>
+        BarMesh.Box(b.Start, b.End, b.Section.Width, b.Section.Depth, b.DepthDirection, cor);
 
     // As faces de um prisma de base quadrada, em triângulos (a página 3D
     // desenha a lista das canaletas como triângulos): base, tampa e lados.
-    private static IEnumerable<Scene3DFace> Prisma(IReadOnlyList<Point3> base_, Point3 vetor, RgbColor cor)
-    {
-        var tampa = base_.Select(p => Add(p, vetor)).ToList();
-        IEnumerable<Scene3DFace> Quad(Point3 a, Point3 b, Point3 c, Point3 d) =>
-            [new Scene3DFace([a, b, c], cor), new Scene3DFace([a, c, d], cor)];
-
-        foreach (var f in Quad(base_[3], base_[2], base_[1], base_[0])) yield return f;
-        foreach (var f in Quad(tampa[0], tampa[1], tampa[2], tampa[3])) yield return f;
-        for (var i = 0; i < base_.Count; i++)
-        {
-            var j = (i + 1) % base_.Count;
-            foreach (var f in Quad(base_[i], base_[j], tampa[j], tampa[i])) yield return f;
-        }
-    }
+    private static IEnumerable<Scene3DFace> Prisma(IReadOnlyList<Point3> base_, Point3 vetor, RgbColor cor) =>
+        BarMesh.Prism(base_, vetor, cor);
 
     private static List<Point3> Retangulo(Point3 c, Point3 x, Point3 y, double hx, double hy) =>
     [

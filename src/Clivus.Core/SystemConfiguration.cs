@@ -115,6 +115,21 @@ public sealed record SystemConfiguration(
     /// dele. Um formulário em branco seria pior: ele obrigaria a digitar uma
     /// dúzia de campos antes de qualquer coisa funcionar.
     /// </summary>
+    /// <summary>
+    /// A configuração com o enterro mínimo T3 da estrutura, se ela tem um; o
+    /// máximo sobe junto quando o T3 passa dele. Sem T3, a mesma configuração.
+    ///
+    /// É a regra do T3 num lugar só (revisão do 38.3): o ForTable do projeto,
+    /// a fileira e a mesa avulsa do motor aplicam esta, cada mesa com a
+    /// estrutura dela. Antes a fileira tinha a sua cópia e a mesa avulsa (as
+    /// pontas à mão) nenhuma, e a mesma bifila saía com 2,20 de enterro num
+    /// comando e 1,10 em outro.
+    /// </summary>
+    public SystemConfiguration WithEmbedmentOf(TableFrame? estrutura) =>
+        estrutura?.MinEmbedment is { } t3
+            ? this with { MinEmbedment = t3, MaxEmbedment = Math.Max(MaxEmbedment, t3) }
+            : this;
+
     public static readonly SystemConfiguration Default = new(
         FacingAzimuthRadians: 0,            // Renan: mesa olhando para o norte
         Pitch: 6.0,                         // meu
