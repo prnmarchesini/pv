@@ -1,12 +1,12 @@
 namespace Clivus.Core;
 
 /// <summary>
-/// Os pilares de uma mesa na altura básica: no chão plano, com a ponta baixa
-/// na mínima do projeto (<see cref="TableProfile.PillarsAtBasicHeight"/>).
-/// Os nomes são os do Renan para o biposte: P1 é o pilar menor (o dianteiro)
-/// e P2 o maior (o traseiro), os dois inteiros, com o enterro.
+/// Os pilares de uma mesa no chão plano (<see cref="TableProfile.PillarsAtBasicHeight"/>
+/// e <see cref="TableProfile.PillarsOnFlatGround"/>). Os nomes são os do
+/// Renan para o biposte: P1 é o pilar menor (o dianteiro) e P2 o maior (o
+/// traseiro), os dois inteiros, com o enterro.
 /// </summary>
-/// <param name="LowEdge">A ponta baixa usada: a mínima do projeto.</param>
+/// <param name="LowEdge">A ponta baixa usada: na altura básica, a mínima do projeto na grade de cotas.</param>
 /// <param name="Embedment">O enterro: o T3 da mesa, ou o mínimo do projeto.</param>
 /// <param name="FrontFree">O que o P1 tem acima do chão.</param>
 /// <param name="RearFree">O que o P2 tem acima do chão; null na monoposte.</param>

@@ -77,6 +77,23 @@ public sealed class ViableElevations
     /// <summary>O passo padrão da grade de cotas: um centímetro, como o plano de requisitos sugere.</summary>
     public const double DefaultStep = 0.01;
 
+    /// <summary>
+    /// A ponta baixa em que o motor assenta a mesa no chão plano, com o chão
+    /// numa cota da grade: a mínima da configuração subida para o passo
+    /// seguinte da grade (0,8325 vira 0,84). É a altura básica do P1 e do P2
+    /// (38.7). Usar a mínima crua dava pilares até um passo mais curtos que os
+    /// que o motor desenha (revisão do 38.7: 7,5 mm na GC800).
+    /// </summary>
+    public static double FlatGroundLowEdge(SystemConfiguration configuration, double step = DefaultStep)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        if (!double.IsFinite(step) || step <= 0) throw new ArgumentOutOfRangeException(nameof(step), step, "Precisa ser positivo.");
+
+        // O arredondamento tira o resto de ponto flutuante de k × passo: o
+        // motor compara com folga de nanômetro, e a janela mostra milímetro.
+        return Math.Round(Math.Ceiling((configuration.MinLowEdge - Tolerancia) / step) * step, 9);
+    }
+
     private readonly List<(double Station, double Ground)> _modulos;
     private readonly int _toleradas;
     private readonly double? _maxDeclive;

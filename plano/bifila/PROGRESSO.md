@@ -22,7 +22,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 38.4 Lista de material na tela: AGUARDANDO VALIDAÇÃO
 - 38.5 A janela de Mesa em abas: AGUARDANDO VALIDAÇÃO
 - 38.6 O PAN enche o módulo e sobe para o servidor: AGUARDANDO VALIDAÇÃO — serviço: `servidor/tests/test_pan.py`
-- 38.7 Fabricantes, biposte genérico e a altura básica (P1 e P2): AGUARDANDO VALIDAÇÃO — `VendorStructures`, `PillarsAtBasicHeight`, 10 testes
+- 38.7 Fabricantes, biposte genérico e a altura básica (P1 e P2): AGUARDANDO VALIDAÇÃO — `VendorStructures`, `PillarsAtBasicHeight`, 22 testes contra o motor
 - 38.8 Os módulos no servidor do Clivus, com a validação da gestão: AGUARDANDO VALIDAÇÃO — servidor: clivussolar 2cc6561 (gate `validate_modulos`); plugin: `ModuleServiceReply`, 20 testes
 
 ## Etapa 39: o resto do Clivus
@@ -281,19 +281,36 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     o P2 sai do P1, da distância entre os pilares e da inclinação. Digitar os dois daria três
     donos para a mesma altura. Então o Pórtico abre com P1 (pilar menor, o dianteiro) e P2
     (pilar maior, o traseiro), inteiros com o enterro, na **altura básica**: chão plano, ponta
-    baixa na mínima do projeto (a da aba Projeto das Configurações, mesmo sem gravar) e o T3
-    da mesa. Embaixo, quanto cada um tem acima do chão. O corte desenha o chão nessa altura
-    e cota P1, P2 e T3.
+    baixa na mínima do projeto subida para a grade de 1 cm do motor (a de Configurações ›
+    Parâmetros › Ponta baixa do módulo, mesmo sem gravar) e o T3 da mesa (sem T3, o enterro
+    do projeto). Embaixo, quanto cada um tem acima do chão. O corte desenha o chão nessa
+    altura e cota P1, P2 e T3.
   - O P2 do catálogo da Arctech (3,888) é maior que o da altura básica (3,588): tem a folga do
     chão caindo 10 % para trás (3,00 × 10 % = 0,300). O cartão do fabricante diz isso, e o
     teste confere que os números do catálogo fecham com a conta (P1 3,059 com a ponta baixa
     de 0,832; P2 de catálogo = P2 + 0,300).
-  - Com uma estrutura de fabricante e a ponta baixa mínima do projeto diferente da que dá a
-    altura livre dela (0,832 na GC800, 1,032 na GC1000), a janela avisa embaixo do P1 e do P2;
-    não muda a configuração do projeto.
-  - Testes: 10 no Core (o P1 e o P2 são os do motor no chão plano, no biposte e na monoposte;
-    o enterro é o T3 ou o mínimo do projeto; os números de catálogo; o genérico sem nada de
-    fabricante). As abas e o corte são de tela.
+  - Com uma estrutura de fabricante e a ponta baixa do projeto diferente da que dá a altura
+    livre dela, a janela avisa embaixo do P1 e do P2, em cm e na grade (84 cm na GC800 e 104
+    na GC1000, com o módulo e a inclinação da mesa); não muda a configuração do projeto.
+  - Testes: 22 no Core (o P1 e o P2 iguais aos do motor inteiro, `RowPipeline.ProcessRow` num
+    terreno plano, com a ponta baixa dentro e fora da grade, no biposte e na monoposte, com e
+    sem T3; a grade; o enterro; os números de catálogo; o genérico). Com a conta antiga (a
+    mínima crua), 9 reprovam. As abas e o corte são de tela.
+  - Revisão (subagente, numa worktree isolada), corrigido:
+    - O motor assenta a mesa na grade de 1 cm: com a mínima de 0,8325 ele usa 0,84, e a
+      janela mostrava o P1 7,5 mm mais curto que o desenhado. A altura básica agora usa a
+      mesma grade (`ViableElevations.FlatGroundLowEdge`), e os testes passam pelo motor
+      inteiro (os primeiros montavam a cota à mão e não viam a grade).
+    - O biposte genérico herdava o T3 de 2,20 m da Arctech, que é do solo do Aurora: agora
+      vem sem T3, e vale o enterro do projeto.
+    - O aviso apontava para a aba Projeto (a dos estilos), em metro: agora é Parâmetros ›
+      Ponta baixa do módulo, em cm, com o módulo e a inclinação da mesa atual.
+    - Carregar um perfil monoposte esquecia o fabricante do rascunho do biposte: só um
+      biposte carregado o esquece agora.
+    - O corte explica o tracejado e escreve "enterro 0,9 (projeto)" quando a mesa não tem T3;
+      a fonte do cartão do fabricante passa pela tradução.
+    - Quatro eventos da janela (Salvar perfil, Usar esta mesa, trocar o módulo, Limpar) ganham
+      o try que os outros já tinham: exceção solta num evento fecha o Civil 3D.
 - 38.8 (30/10/2026), o que assumi:
   - Pedidos do Renan: "então suba para o servidor de produção" e "os arquivos pan do cliente
     vão para a página de gestão do clivus, onde uma pessoa valida os pans e vai integrando a
@@ -376,15 +393,18 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
    JAM66D46-720/LB", as medidas 2,384 × 1,303 × 0,033, a potência 720 e os dados elétricos
    enchem; a pergunta "Cadastrar agora, com o PAN?" › Sim: o módulo entra na lista. Fechar e
    abrir a janela, escolher esse módulo na lista: os dados elétricos vêm junto.
-9. **Fabricantes e altura básica (38.7):** com a faixa da PB do projeto em 0,8325 a 1,60
-   (Configurações › Projeto), abrir a janela de Mesa. Aba **Fabricantes**: dois cartões da
-   Arctech, cada um com as peças, a altura livre e os pilares de catálogo. "Usar esta
-   estrutura" na GC800: abre a aba Biposte com as mãos francesas de 1,244 e 1,209, tirantes
-   nos vãos 2 e 4, e o Pórtico começa com **P1 3,059** e **P2 3,588** (0,859 e 1,388 acima do
-   chão). No corte, o chão na altura certa e as cotas P1, P2 e T3. Usar a GC1000: as mãos
-   francesas mudam e aparece o recado de que ela pede a ponta baixa de 1,032. Voltar à
-   primeira aba, Monoposte e Biposte de novo: a GC1000 continua na aba. Mudar a PB mínima do
-   projeto e reabrir a janela: o P1 e o P2 acompanham.
+9. **Fabricantes e altura básica (38.7):** em Configurações › Parâmetros › Ponta baixa do
+   módulo, altura livre mínima de 84 cm e máxima de 160; abrir a janela de Mesa. Aba
+   **Fabricantes**: dois cartões da Arctech, cada um com as peças, a altura livre e os
+   pilares de catálogo. "Usar esta estrutura" na GC800: abre a aba Biposte com as mãos
+   francesas de 1,244 e 1,209, tirantes nos vãos 2 e 4, e o Pórtico começa com **P1 3,066**
+   e **P2 3,595** (0,866 e 1,395 acima do chão). O catálogo diz 3,059 porque cota os 0,80 m
+   livres exatos; o motor assenta a mesa na grade de 1 cm, em 84. No corte, o chão na altura
+   certa e as cotas P1, P2 e T3. Usar a GC1000: as mãos francesas mudam e aparece o recado
+   de que os pilares de catálogo dela pedem 104 cm. Voltar à primeira aba, Monoposte e
+   Biposte de novo: a GC1000 continua na aba. Mudar a altura livre mínima e reabrir a
+   janela: o P1 e o P2 acompanham. O cartão Biposte de uma mesa monoposte abre o genérico,
+   sem T3: o enterro é o do projeto.
 10. **Módulos no servidor do Clivus (38.8):** sem `CLIVUS_SERVICO` e com a
     `CLIVUS_SERVIDOR_CHAVE`, abrir a janela de Mesa: embaixo do modelo, "Módulos do servidor
     do Clivus: 3". Carregar .PAN › `JAM66D46-720_LB.PAN` › "Cadastrar agora?" › Sim: o recado

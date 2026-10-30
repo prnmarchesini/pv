@@ -364,8 +364,9 @@ public static class BifilaReference
     /// um biposte específico do fabricante, crie uma aba de fabricantes e aí um
     /// genérico, para a pessoa montar o biposte dela"). A mesa e o pórtico de
     /// referência, sem mão francesa e sem tirante, que são do fabricante (quem
-    /// tiver os põe), e com o vão-alvo no lugar dos vãos escritos, que só
-    /// fecham com o módulo de referência.
+    /// tiver os põe), com o vão-alvo no lugar dos vãos escritos, que só fecham
+    /// com o módulo de referência, e sem T3: o enterro é o do projeto, que
+    /// sabe o solo (o 2,20 da Arctech é do solo do Aurora; revisão do 38.7).
     /// </summary>
     public static TableProfile Generic()
     {
@@ -377,6 +378,7 @@ public static class BifilaReference
             Frame = referencia.Frame with
             {
                 PillarSpans = null,
+                MinEmbedment = null,
                 Bifila = Frame(BifilaVariant.Gc800) with
                 {
                     FrontBraceLength = 0,

@@ -299,7 +299,7 @@ internal sealed class JanelaDeMesa : Window
         }
 
         _salvar = new Button { Content = Tr.T("Salvar perfil"), Width = 110, Height = 26 };
-        _salvar.Click += (_, _) => Salvar();
+        _salvar.Click += (_, _) => Protegido(Salvar, Tr.T("salvar o perfil"));
 
         _usar = new Button
         {
@@ -309,7 +309,7 @@ internal sealed class JanelaDeMesa : Window
             Margin = new Thickness(8, 0, 0, 0),
             IsDefault = true,
         };
-        _usar.Click += (_, _) => Confirmar();
+        _usar.Click += (_, _) => Protegido(Confirmar, Tr.T("usar a mesa"));
 
         _cartaoMonoposte = Cartao(
             Tr.T("Monoposte"),
@@ -524,7 +524,7 @@ internal sealed class JanelaDeMesa : Window
         textos.Children.Add(new TextBlock { Text = estrutura.Model, FontSize = 13.5, FontWeight = FontWeights.SemiBold });
         textos.Children.Add(new TextBlock { Text = estrutura.Describe(), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
         textos.Children.Add(new TextBlock { Text = estrutura.DescribeCatalog(), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
-        textos.Children.Add(new TextBlock { Text = estrutura.Source, FontSize = 10.5, Foreground = Brushes.Gray, Margin = new Thickness(0, 4, 0, 0) });
+        textos.Children.Add(new TextBlock { Text = estrutura.DescribeSource(), FontSize = 10.5, Foreground = Brushes.Gray, Margin = new Thickness(0, 4, 0, 0) });
 
         var usar = new Button
         {
@@ -863,19 +863,38 @@ internal sealed class JanelaDeMesa : Window
         foreach (var (campo, _) in Todos()) campo.TextChanged += (_, _) => Recalcular();
 
         _arranjo.SelectionChanged += (_, _) => Recalcular();
-        _modelo.SelectionChanged += (_, _) => TrocarModulo();
+        _modelo.SelectionChanged += (_, _) => Protegido(TrocarModulo, Tr.T("trocar o módulo"));
         _salvos.SelectionChanged += (_, _) => CarregarSalvo();
         _enterro.TextChanged += (_, _) => Recalcular();
         _botaoDosVaos.Click += (_, _) => EscreverVaos();
         _cadastrarModulo.Click += (_, _) => CadastrarModulo();
         _carregarPan.Click += (_, _) => CarregarPan();
-        _limparEletrica.Click += (_, _) => LimparEletrica();
+        _limparEletrica.Click += (_, _) => Protegido(LimparEletrica, Tr.T("limpar os dados elétricos"));
 
         foreach (var campo in CamposEletricos()) campo.TextChanged += (_, _) => Recalcular();
         foreach (var (campo, _) in CamposDaBifila()) campo.TextChanged += (_, _) => Recalcular();
         _bfTiranteVaos.TextChanged += (_, _) => Recalcular();
         foreach (var secao in new[] { _bfViga, _bfTerca, _bfMao }) secao.TextChanged += (_, _) => Recalcular();
         _bfTiranteLinha.SelectionChanged += (_, _) => Recalcular();
+    }
+
+    /// <summary>
+    /// Um manipulador de evento que não deixa exceção sair: solta num evento
+    /// do WPF, ela fecha o Civil 3D (revisão do 38.7, para os que ainda não
+    /// tinham o try dentro).
+    /// </summary>
+    /// <param name="oQue">O que o usuário tentou fazer, para o recado ("salvar o perfil").</param>
+    private void Protegido(Action acao, string oQue)
+    {
+        try
+        {
+            acao();
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar($"Falha na janela de Mesa ao {oQue}.", erro);
+            Avisar(Tr.F("Não consegui {0}: {1}", oQue, erro.Message));
+        }
     }
 
     /// <summary>
@@ -1134,8 +1153,15 @@ internal sealed class JanelaDeMesa : Window
 
         _nome.Text = perfil.Name;
         _arquivoDoPan = null;
-        _doFabricante = null;
-        _recadoDosFabricantes.Text = string.Empty;
+
+        // Um biposte carregado substitui a aba do biposte, e com ela a
+        // estrutura de fabricante; uma monoposte deixa a aba do biposte como
+        // estava, e o fabricante continua valendo para ela (revisão do 38.7).
+        if (perfil.IsBifila)
+        {
+            _doFabricante = null;
+            _recadoDosFabricantes.Text = string.Empty;
+        }
 
         _altura.Text = Numero(perfil.Layout.Module.Height);
         _largura.Text = Numero(perfil.Layout.Module.Width);
@@ -1924,17 +1950,28 @@ internal sealed class JanelaDeMesa : Window
             _bfP1.Text = Milimetro(basica.P1);
             _bfP2.Text = basica.P2 is { } p2 ? Milimetro(p2) : "—";
 
-            var texto = Tr.F(
-                "No chão plano, com a ponta baixa na mínima do projeto ({0} m) e {1} m enterrados: {2} m e {3} m acima do chão. No terreno, cada pilar sai com o seu comprimento.",
-                Numero(basica.LowEdge), Numero(basica.Embedment), Milimetro(basica.FrontFree), Milimetro(basica.RearFree ?? 0));
+            var enterro = perfil.Frame.MinEmbedment is null
+                ? Tr.F("{0} m enterrados, o mínimo do projeto", Numero(basica.Embedment))
+                : Tr.F("{0} m enterrados, o T3", Numero(basica.Embedment));
 
-            // A estrutura de fabricante dá os pilares do catálogo só com a
-            // altura livre dele, que é do projeto: a janela avisa, não muda.
-            if (_doFabricante is { } fabricante && Math.Abs(fabricante.LowEdge - basica.LowEdge) > 0.001)
+            var texto = Tr.F(
+                "No chão plano, com a ponta baixa em {0} m (a mínima do projeto, na grade de 1 cm do motor) e {1}: {2} m e {3} m acima do chão. No terreno, cada pilar sai com o seu comprimento.",
+                Numero(basica.LowEdge), enterro, Milimetro(basica.FrontFree), Milimetro(basica.RearFree ?? 0));
+
+            // Os pilares do catálogo do fabricante são para a altura livre
+            // dele, que é configuração do projeto: a janela avisa, não muda.
+            // A conta é com o módulo e a inclinação desta mesa, e na grade do
+            // motor, como a altura básica (revisão do 38.7).
+            if (_doFabricante is { } fabricante)
             {
-                texto += " " + Tr.F(
-                    "A {0} pede {1} m livres sob o módulo, que é a ponta baixa mínima de {2} m no projeto (hoje {3} m; Configurações › Projeto).",
-                    fabricante.Name, Numero(fabricante.ClearanceUnderModule), Milimetro(fabricante.LowEdge), Numero(basica.LowEdge));
+                var pedida = ViableElevations.FlatGroundLowEdge(_projeto with { MinLowEdge = fabricante.LowEdgeFor(perfil) });
+
+                if (Math.Abs(pedida - basica.LowEdge) > 1e-6)
+                {
+                    texto += " " + Tr.F(
+                        "Os pilares de catálogo da {0} são para {1} m livres sob o módulo: no projeto, altura livre mínima de {2} cm (hoje {3} cm; Configurações › Parâmetros › Ponta baixa do módulo).",
+                        fabricante.Name, Numero(fabricante.ClearanceUnderModule), Numero(pedida * 100), Numero(_projeto.MinLowEdge * 100));
+                }
             }
 
             _bfAlturaBasica.Text = texto;

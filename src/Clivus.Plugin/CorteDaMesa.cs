@@ -343,13 +343,17 @@ internal sealed class CorteDaMesa : FrameworkElement
         var xTras = Tela(trasEm * cos, 0).X;
         CotaHorizontal(tela, xFrente, xTras, yPe + 12, Medida((trasEm - frenteEm) * cos), Laranja);
 
-        if ((_basica?.Embedment ?? _enterro) is { } escrito)
+        // O T3 é o da mesa; sem ele, o enterro que vale é o do projeto, e a
+        // cota diz isso (revisão do 38.7).
+        if (_enterro is { } escrito)
             CotaVertical(tela, xFrente - 26, ySolo, yPe, $"T3 {Medida(escrito)}", Terra, aEsquerda: true);
+        else if (_basica is { } doProjeto)
+            CotaVertical(tela, xFrente - 26, ySolo, yPe, Tr.F("enterro {0} (projeto)", Medida(doProjeto.Embedment)), Terra, aEsquerda: true);
 
         Escrever(
             tela,
             _basica is { } basica
-                ? Tr.F("biposte na altura básica: chão plano, ponta baixa {0} m (a mínima do projeto) · no terreno, cada pilar sai com o seu comprimento",
+                ? Tr.F("biposte na altura básica: chão plano, ponta baixa {0} m (a mínima do projeto na grade de 1 cm) · tracejado: a parte livre, que muda com o terreno",
                     Medida(basica.LowEdge))
                 : Tr.F("biposte: pilares a {0} m na horizontal, topo {1} m abaixo dos módulos · tracejado: o resto depende do terreno",
                     Medida((trasEm - frenteEm) * cos), Medida(bifila.PillarTopDrop)),

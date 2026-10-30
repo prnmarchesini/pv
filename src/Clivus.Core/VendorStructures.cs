@@ -19,7 +19,8 @@ namespace Clivus.Core;
 /// <param name="CatalogP1">O pilar menor (o dianteiro) do catálogo, inteiro.</param>
 /// <param name="CatalogP2">O pilar maior (o traseiro) do catálogo, inteiro, já com a folga do declive.</param>
 /// <param name="CatalogSlope">O declive do chão caindo para trás (fração) para o qual o P2 de catálogo foi feito.</param>
-/// <param name="Source">De onde vieram as medidas.</param>
+/// <param name="Project">O projeto dos desenhos de onde vieram as medidas.</param>
+/// <param name="Revision">A revisão dos desenhos, como o fabricante escreve.</param>
 public sealed record VendorStructure(
     string Manufacturer,
     string Model,
@@ -28,18 +29,33 @@ public sealed record VendorStructure(
     double CatalogP1,
     double CatalogP2,
     double CatalogSlope,
-    string Source)
+    string Project,
+    string Revision)
 {
     /// <summary>O fabricante e o modelo, como aparecem na aba Fabricantes.</summary>
     public string Name => $"{Manufacturer} {Model}";
 
     /// <summary>
     /// A ponta baixa do Clivus (a face de cima do módulo) que dá a altura
-    /// livre do fabricante: a altura livre mais a espessura do módulo na
-    /// vertical. É a ponta baixa mínima que o projeto precisa ter para os
-    /// pilares saírem os do catálogo no chão plano.
+    /// livre do fabricante, com o módulo e a inclinação dele: a altura livre
+    /// mais a espessura do módulo na vertical. É com ela que os pilares saem
+    /// os do catálogo no chão plano.
     /// </summary>
-    public double LowEdge => ClearanceUnderModule + Profile.Layout.Module.Thickness * Math.Cos(Profile.TiltRadians);
+    public double LowEdge => LowEdgeFor(Profile);
+
+    /// <summary>
+    /// A ponta baixa que dá a altura livre do fabricante com o módulo e a
+    /// inclinação desta mesa, que podem não ser os dele: "Usar esta estrutura"
+    /// mantém o módulo da janela (revisão do 38.7).
+    /// </summary>
+    public double LowEdgeFor(TableProfile mesa)
+    {
+        ArgumentNullException.ThrowIfNull(mesa);
+        return ClearanceUnderModule + mesa.Layout.Module.Thickness * Math.Cos(mesa.TiltRadians);
+    }
+
+    /// <summary>De onde vieram as medidas, numa frase no idioma da tela.</summary>
+    public string DescribeSource() => Tr.F("Desenhos da {0}, projeto {1}, {2}.", Manufacturer, Project, Revision);
 
     /// <summary>As peças da estrutura, numa frase.</summary>
     public string Describe()
@@ -117,6 +133,7 @@ public static class VendorStructures
             p1,
             p2,
             declive,
-            $"Arctech, projeto Aurora (Panamá), {revisao}");
+            "Aurora (Panamá)",
+            revisao);
     }
 }
