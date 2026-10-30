@@ -53,6 +53,28 @@ internal sealed record TableParts(
 internal static class LayoutScan
 {
     /// <summary>Todas as mesas do desenho, por GUID. Mesas cujo contorno sumiu aparecem sem identidade.</summary>
+    /// <summary>
+    /// Se a mesa é biposte (39.2): tem peça da estrutura, ou o primeiro pilar
+    /// é da linha dianteira ou traseira. Null quando não dá para saber (mesa
+    /// sem pilar).
+    /// </summary>
+    internal static bool? Biposte(Transaction transacao, TableParts mesa)
+    {
+        if (mesa.StructureBars.Count > 0) return true;
+        if (mesa.Pillars.Count == 0) return null;
+
+        return transacao.GetObject(mesa.Pillars[0], OpenMode.ForRead) is Entity pilar && LayoutXData.LoadPillar(pilar) is { } identidade
+            ? identidade.Line != PillarLine.Single
+            : null;
+    }
+
+    /// <summary>O mesmo, numa transação própria.</summary>
+    internal static bool? Biposte(Database database, TableParts mesa)
+    {
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        return Biposte(transacao, mesa);
+    }
+
     internal static IReadOnlyDictionary<Guid, TableParts> Tables(Transaction transacao, Database database)
     {
         ArgumentNullException.ThrowIfNull(transacao);

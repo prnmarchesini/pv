@@ -69,6 +69,9 @@ public enum CleanupPiece
     Contour,
     Module,
     Pillar,
+
+    /// <summary>Uma peça do biposte (viga, mão francesa, terça, tirante), 39.2: ByLayer, como o pilar.</summary>
+    Structure,
 }
 
 /// <summary>
@@ -209,13 +212,13 @@ public static class Cleanup
     /// <summary>
     /// A cor original da peça, a que o desenho da usina dá (null: ByLayer).
     /// Mesa que não cabe: inteira magenta (roxo se tentou todas). Senão o
-    /// contorno e os módulos com a cor do tipo de mesa (sem tipo, ByLayer) e
-    /// o pilar ByLayer.
+    /// contorno e os módulos com a cor do tipo de mesa (sem tipo, ByLayer); o
+    /// pilar e as peças do biposte ByLayer.
     /// </summary>
     public static RgbColor? OriginalColor(CleanupPiece piece, bool marked, bool triedAll, RgbColor? typeColor)
     {
         if (marked) return triedAll ? TriedAllColor : MarkedColor;
-        return piece == CleanupPiece.Pillar ? null : typeColor;
+        return piece is CleanupPiece.Pillar or CleanupPiece.Structure ? null : typeColor;
     }
 
     /// <summary>Quantos itens cada opção leva, contando as entidades classificadas e o resto.</summary>

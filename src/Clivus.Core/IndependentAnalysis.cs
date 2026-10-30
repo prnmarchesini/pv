@@ -242,6 +242,19 @@ public static class IndependentAnalysis
         return regra.IsValid ? regra : Default(tipo);
     }
 
+    /// <summary>
+    /// Em que a quantificação conta ("Contado em", 39.2): mesas na
+    /// declividade; na PB e na PA, um ponto por estação de pilar, que no
+    /// biposte é o pórtico (os dois pilares dele dão a mesma PB); nas partes
+    /// do pilar, cada pilar.
+    /// </summary>
+    public static string CountedIn(IndependentKind kind, bool biposte) => kind switch
+    {
+        IndependentKind.Slope => Tr.T("mesas"),
+        IndependentKind.LowEdge or IndependentKind.HighEdge when biposte => Tr.T("pórticos"),
+        _ => Tr.T("pilares"),
+    };
+
     /// <summary>A linha da quantificação para o usuário.</summary>
     public static string Describe(IndependentKind tipo, ThresholdRule regra, BandCount conta, SlopeUnit unidade)
     {

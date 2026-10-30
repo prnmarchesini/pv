@@ -375,6 +375,22 @@ internal static class AnalisesIndependentes
     /// pontos (pilares, ou mesas na declividade) e, nas pontas, os módulos.
     /// Mesas marcadas entram: elas existem e vão para o campo.
     /// </summary>
+    /// <summary>
+    /// Se o desenho tem mesa biposte (o primeiro pilar de alguma mesa é de
+    /// uma linha, dianteira ou traseira): a PB e a PA contam pórticos (39.2).
+    /// </summary>
+    internal static bool TemBiposte(Database database)
+    {
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+
+        foreach (var mesa in LayoutScan.Tables(transacao, database).Values)
+        {
+            if (LayoutScan.Biposte(transacao, mesa) == true) return true;
+        }
+
+        return false;
+    }
+
     internal static (BandCount Pontos, BandCount? Modulos) Quantificar(Database database, IndependentKind tipo, ThresholdRule regra, SlopeUnit unidade)
     {
         using var transacao = database.TransactionManager.StartOpenCloseTransaction();

@@ -95,6 +95,37 @@ public class QuantityReportTests
         Assert.Throws<InvalidOperationException>(() => new XlsxWriter().ToBytes());
     }
 
+    /// <summary>
+    /// No biposte, a PB é contada por pórtico (os dois pilares dele dão a
+    /// mesma PB): o "Contado em" diz pórticos, e não pilares (39.2).
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "39")]
+    public void NoBiposteAPbEContadaEmPorticos()
+    {
+        var pilares = new[]
+        {
+            new QuantityPillar("F1.1", 1, 2.2, 0.9, 3.1, PillarLine.Front),
+            new QuantityPillar("F1.1", 2, 2.2, 1.5, 3.7, PillarLine.Rear),
+        };
+
+        var pb = new AnalysisTally(
+            IndependentKind.LowEdge, IndependentAnalysis.Default(IndependentKind.LowEdge), SlopeUnit.Percent,
+            new BandCount(0, 1, 0, 0), null, new DateTime(2026, 10, 30, 9, 0, 0));
+        var livre = new AnalysisTally(
+            IndependentKind.PillarAbove, IndependentAnalysis.Default(IndependentKind.PillarAbove), SlopeUnit.Percent,
+            new BandCount(0, 2, 0, 0), null, new DateTime(2026, 10, 30, 9, 0, 0));
+
+        var partes = Abrir(QuantityReport.Build(1, 28, 20.16, pilares, [pb, livre]).ToBytes());
+        var analises = partes["xl/worksheets/sheet2.xml"];
+
+        Assert.Equal("pórticos", Celula(analises, "B2"));
+        Assert.Equal("pilares", Celula(analises, "B3"));
+        Assert.Equal("pórticos", IndependentAnalysis.CountedIn(IndependentKind.HighEdge, biposte: true));
+        Assert.Equal("pilares", IndependentAnalysis.CountedIn(IndependentKind.LowEdge, biposte: false));
+        Assert.Equal("mesas", IndependentAnalysis.CountedIn(IndependentKind.Slope, biposte: true));
+    }
+
     [Fact]
     [Trait("Etapa", "8")]
     public void ORelatorioTemOResumoAsAnalisesEOsPilares()

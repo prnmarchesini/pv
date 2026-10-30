@@ -76,6 +76,7 @@ public class CleanupTests
         Assert.Equal(doTipo, Cleanup.OriginalColor(CleanupPiece.Contour, marked: false, triedAll: false, doTipo));
         Assert.Equal(doTipo, Cleanup.OriginalColor(CleanupPiece.Module, marked: false, triedAll: false, doTipo));
         Assert.Null(Cleanup.OriginalColor(CleanupPiece.Pillar, marked: false, triedAll: false, doTipo));
+        Assert.Null(Cleanup.OriginalColor(CleanupPiece.Structure, marked: false, triedAll: false, doTipo));
         Assert.Null(Cleanup.OriginalColor(CleanupPiece.Module, marked: false, triedAll: false, typeColor: null));
 
         // A mesa que não cabe fica inteira magenta (roxo se tentou todas), pilar inclusive.

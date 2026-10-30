@@ -496,6 +496,9 @@ public static partial class PluginInfo
     /// <summary>O mesmo, com o caminho na linha de comando. Para o nível 2.</summary>
     public const string ComandoExportarExcelAutomatico = "CLIVUS_EXCEL_AUTO";
 
+    /// <summary>O Excel com todas as abas, inclusive o resumo elétrico e os cabos (a prova da 39.2).</summary>
+    public const string ComandoExportarExcelTudoAutomatico = "CLIVUS_EXCEL_TUDO_AUTO";
+
     /// <summary>Passo 8.15: o resumo do terreno (superfície, área, cidade, país e fuso UTM).</summary>
     public const string ComandoTerrenoResumo = "CLIVUS_TERRENO_RESUMO";
 
@@ -537,6 +540,13 @@ public static partial class PluginInfo
     /// uso e sozinha, e a faixa da PB que ela pede.
     /// </summary>
     public const string ComandoBifilaExemploAutomatico = "CLIVUS_BIFILA_EXEMPLO_AUTO";
+
+    /// <summary>
+    /// A prova da 39.2: a mesma mesa da Arctech 2P14 GC800 (módulos, arranjo,
+    /// inclinação, vãos e T3), com estrutura monoposte, sozinha e em uso, com a
+    /// mesma faixa da PB. Para o nível 2 comparar monoposte e biposte.
+    /// </summary>
+    public const string ComandoMonoposte2P14Automatico = "CLIVUS_MONO_2P14_AUTO";
 
     /// <summary>Passo 8.7: a janela de Configurações (Estruturas, Escolha das estruturas, Parâmetros, Projeto).</summary>
     public const string ComandoConfiguracoes = "CLIVUS_CONFIGURACOES";

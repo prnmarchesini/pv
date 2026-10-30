@@ -44,6 +44,8 @@ param(
     [switch] $SoBifila,
     # Só os casos das mesas conforme os objetos do cliente (campo.ps1, etapa 40).
     [switch] $SoCampo,
+    # Só a prova de que monoposte e biposte dão o mesmo resto (estruturas.ps1, 39.2).
+    [switch] $SoEstruturas,
     [string] $Filtro = ''
 )
 
@@ -4546,6 +4548,10 @@ function Testar-Ativar {
 
 . (Join-Path $PSScriptRoot 'campo.ps1')
 
+# ---- a prova de que monoposte e biposte dão o mesmo resto (39.2) ----------
+
+. (Join-Path $PSScriptRoot 'estruturas.ps1')
+
 # ---- a licenca da rodada ---------------------------------------------------
 
 # Com a chave publica de producao embutida, sem licenca todo comando do
@@ -4594,9 +4600,9 @@ if ($SoTermoVision) {
     exit 1
 }
 
-if ($SoEletrica -or $SoDrenagem -or $SoBifila -or $SoCampo) {
-    $casos = if ($SoDrenagem) { $CasosDrenagem } elseif ($SoBifila) { $CasosBifila } elseif ($SoCampo) { $CasosCampo } else { $CasosEletricos }
-    $nomeDaParte = if ($SoDrenagem) { 'Drenagem' } elseif ($SoBifila) { 'Bifila' } elseif ($SoCampo) { 'Campo' } else { 'Eletrica' }
+if ($SoEletrica -or $SoDrenagem -or $SoBifila -or $SoCampo -or $SoEstruturas) {
+    $casos = if ($SoDrenagem) { $CasosDrenagem } elseif ($SoBifila) { $CasosBifila } elseif ($SoCampo) { $CasosCampo } elseif ($SoEstruturas) { $CasosEstruturas } else { $CasosEletricos }
+    $nomeDaParte = if ($SoDrenagem) { 'Drenagem' } elseif ($SoBifila) { 'Bifila' } elseif ($SoCampo) { 'Campo' } elseif ($SoEstruturas) { 'Estruturas' } else { 'Eletrica' }
     foreach ($caso in $casos | Where-Object { $_ -like "*$Filtro*" }) {
         $total++
         if (& $caso -Desenho $desenhos[0]) { $passaram++ }
@@ -4700,6 +4706,12 @@ else {
 
     # As mesas conforme os objetos do cliente (40.2).
     foreach ($caso in $CasosCampo) {
+        $total++
+        if (& $caso -Desenho $desenhos[0]) { $passaram++ }
+    }
+
+    # A prova da 39.2: monoposte ou biposte, o resto sai igual.
+    foreach ($caso in $CasosEstruturas) {
         $total++
         if (& $caso -Desenho $desenhos[0]) { $passaram++ }
     }

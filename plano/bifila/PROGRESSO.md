@@ -26,7 +26,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 ## Etapa 39: o resto do Clivus
 
 - 39.1 3D e TermoVision: AGUARDANDO VALIDAÇÃO
-- 39.2 Tudo funciona com biposte (a prova): PENDENTE
+- 39.2 Tudo funciona com biposte (a prova): AGUARDANDO VALIDAÇÃO — nível 2 `clivus-estruturas` (rodar.ps1 -SoEstruturas)
 
 ## Etapa 40: mesas conforme os objetos do cliente
 
@@ -174,6 +174,34 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
   - Nível 2: 8 objetos (6 + 1 repetido + 1 curto) no Z 9999 → 6 mesas a 0,000 m do centro
     dos objetos, 72 pilares na faixa do terreno, os 8 objetos intactos, 2 marcas; o Regerar
     área refaz igual.
+- 39.2 (30/10/2026), a prova:
+  - O nível 2 `clivus-estruturas` roda a mesma cadeia duas vezes no mesmo terreno, com a
+    mesma mesa (a 2P14 GC800): uma vez com estrutura monoposte (`CLIVUS_MONO_2P14_AUTO`,
+    só de teste) e outra com o biposte. A cadeia: usina, alturas, tag de mesas e de
+    módulos, grupo, strings, configuração elétrica (UC, trafo, modelo, inversores, alocação,
+    skid), local dos inversores pelas strings, cabos da rota, vala, Gerar CC, conferência e
+    resumo da rota, resumo elétrico, numeração, tag das strings, análises (PB, pilar,
+    declividade), árvore e sombras, PVsyst, Excel com todas as abas (`CLIVUS_EXCEL_TUDO_AUTO`,
+    só de teste), 3D, TermoVision, Validar e Recontar.
+  - Resultado (10 fileiras, 30 mesas, 840 módulos): as 22 camadas do desenho que não são
+    estrutura saem iguais nas duas (quantas entidades e a soma de X + Y de cada uma): área,
+    alinhamento, mesas, módulos e faces, tags de mesa, de módulo e de string, strings, cabos
+    CC + e −, vala, inversores, grupo, sombras e textos, árvore, declividade. Iguais também:
+    o resumo da usina, o resumo da rota (1.028,59 m de cabo CC, por inversor), o resumo
+    elétrico, as abas do Excel que não são de pilar, o DAE do PVsyst, a cena do 3D (menos
+    pilares e peças) e o retorno do TermoVision. Muda só a estrutura: 180 × 360 pilares,
+    0 × 780 peças, 540 × 720 cotas das alturas (PB/PA uma por pórtico, P3 em cada pilar).
+  - O levantamento do "tudo" (subagente) achou quatro lugares onde o biposte escorregava,
+    corrigidos com teste: a contagem da PB/PA dizia "pilares" e conta pórticos (agora diz
+    "pórticos" quando o desenho tem biposte; o nível 2 da bifila confere); o Apagar › Cores
+    deixava as peças do biposte vermelhas; a regra das pontas iguais olhava o último pilar da
+    lista (o traseiro) e não o que leva a PB (o teste falha com a regra antiga); o palpite do
+    perfil pelo comprimento (mesa antiga sem o nome do perfil) não olhava o tipo, e a 2P14
+    monoposte e a GC800 têm o mesmo comprimento. A caixa do 3D diz "Canaletas, carport e
+    estrutura do biposte".
+  - Ficam fora do nível 2 (sem comando automático ou só de tela): a rota CA e MT (precisam
+    do trafo e da subestação posicionados), a drenagem (não lê mesa), o carport (estrutura à
+    parte), salvar e reabrir o DWG, e as janelas. Estão no roteiro de tela.
 
 ## Roteiro de tela (38.1 a 39.1)
 
@@ -205,3 +233,20 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
    mesa e as divergências (no Aurora: objetos repetidos e "CELDAS NUEVAS" em cima das
    antigas); as marcas vermelhas na camada CLIVUS_DIVERGENCIAS; cada mesa em cima do seu
    objeto. Depois Regerar área: refaz pelos objetos.
+7. **Tudo com biposte (39.2):** numa área com o biposte em uso (faixa da PB 0,84 a 1,60),
+   passar por tudo e comparar com uma área monoposte:
+   - Processar: Usina, Regerar área, Regerar todas;
+   - Edição: Recalcular, Recalcular pendentes, Pontas, Validar, Recontar, Renomear, Estado,
+     Marcar pendente, Trocar mesa, Regerar fileira, Apagar (cores, textos, sombras, strings),
+     Apagar tudo, Grupos; copiar, mover e apagar uma mesa com o AutoCAD (o vigia);
+   - Análises: PB e PA (um por pórtico, "Contado em: pórticos"), parte livre, enterrada e total
+     do pilar (cada pilar), declividade; cores e quantificar;
+   - Tags: fileiras, mesas, módulos, strings;
+   - Sombras: árvore, sombras, por quê;
+   - Elétrica: String, Configuração elétrica (UC, trafo, inversores, alocar, skid,
+     numeração), Resumo, Rota de cabos (CC, CA, MT, valas, recolocar, recalcular, cabos,
+     resumo);
+   - Saídas: PVsyst, Excel (todas as abas; a Estrutura só no biposte), 3D (a caixa
+     "Canaletas, carport e estrutura do biposte" liga e desliga as peças), Publicar 3D,
+     TermoVision;
+   - Salvar, fechar e abrir o DWG: as mesas, os pilares e as peças voltam.

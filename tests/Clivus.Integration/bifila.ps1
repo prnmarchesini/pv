@@ -152,11 +152,12 @@ function Testar-Bifila {
         return $false
     }
 
-    # 38.3: a quantificacao da PB conta um ponto por portico; a do pilar, todos.
-    $quantificacoes = [regex]::Matches($r.Texto, 'QUANTIFICAR [^\n]*?\(total (\d+)\) — em pilares')
-    if ($quantificacoes.Count -lt 2 -or [int] $quantificacoes[0].Groups[1].Value -ne $np / 2 -or [int] $quantificacoes[1].Groups[1].Value -ne $np) {
-        $totais = ($quantificacoes | ForEach-Object { $_.Groups[1].Value }) -join ', '
-        $problemas.Add("clivus-bifila: a quantificacao deu os totais [$totais]; esperava $($np / 2) na PB (um por portico) e $np no pilar. Veja $($r.Saida)")
+    # 38.3 e 39.2: a quantificacao da PB conta um ponto por portico, e diz
+    # "em pórticos"; a do pilar conta todos, "em pilares".
+    $pb = [regex]::Match($r.Texto, 'QUANTIFICAR [^\n]*?\(total (\d+)\) — em pórticos')
+    $pil = [regex]::Match($r.Texto, 'QUANTIFICAR [^\n]*?\(total (\d+)\) — em pilares')
+    if (-not $pb.Success -or -not $pil.Success -or [int] $pb.Groups[1].Value -ne $np / 2 -or [int] $pil.Groups[1].Value -ne $np) {
+        $problemas.Add("clivus-bifila: a quantificacao deu PB '$($pb.Value)' e pilar '$($pil.Value)'; esperava $($np / 2) em porticos na PB e $np em pilares no pilar. Veja $($r.Saida)")
         return $false
     }
 

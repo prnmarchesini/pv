@@ -50,7 +50,7 @@ public static class QuantityReport
         var indice = new List<(string Aba, string Conteudo)>();
 
         if (abas.HasFlag(ExportSheets.Summary)) indice.Add((Resumo(planilha, mesas, modulos, kwp, pilares), Tr.T("Mesas, módulos, potência e os totais de pilar.")));
-        if (abas.HasFlag(ExportSheets.Analyses)) indice.Add((Analises(planilha, quantificacoes), Tr.T("A última quantificação de cada análise.")));
+        if (abas.HasFlag(ExportSheets.Analyses)) indice.Add((Analises(planilha, quantificacoes, pilares.Any(p => p.Line != PillarLine.Single)), Tr.T("A última quantificação de cada análise.")));
         if (abas.HasFlag(ExportSheets.Pillars)) indice.Add((Pilares(planilha, pilares), Tr.T("Um pilar por linha: enterrado, acima do terreno e total.")));
         if (abas.HasFlag(ExportSheets.PillarPurchase)) indice.Add((Compra(planilha, pilares), Tr.T("Os comprimentos agrupados, com a quantidade de cada um.")));
 
@@ -150,14 +150,15 @@ public static class QuantityReport
         return Tr.T("Resumo");
     }
 
-    private static string Analises(XlsxWriter planilha, IReadOnlyList<AnalysisTally> quantificacoes)
+    /// <param name="biposte">O desenho tem biposte: a PB e a PA contam pórticos (39.2).</param>
+    private static string Analises(XlsxWriter planilha, IReadOnlyList<AnalysisTally> quantificacoes, bool biposte)
     {
         var analises = planilha.Sheet(Tr.T("Análises"));
         analises.Add([Tr.T("Análise"), Tr.T("Contado em"), Tr.T("Abaixo de"), Tr.T("Qtde abaixo"), Tr.T("Dentro"), Tr.T("Acima de"), Tr.T("Qtde acima"), Tr.T("Sem valor"), Tr.T("Total"), Tr.T("Quando")]);
 
         foreach (var q in quantificacoes.OrderBy(q => q.Kind))
         {
-            Linha(analises, q, q.Points, q.Kind == IndependentKind.Slope ? Tr.T("mesas") : Tr.T("pilares"));
+            Linha(analises, q, q.Points, IndependentAnalysis.CountedIn(q.Kind, biposte));
             if (q.Modules is not null) Linha(analises, q, q.Modules, Tr.T("módulos"));
         }
 

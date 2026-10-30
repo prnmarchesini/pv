@@ -47,10 +47,12 @@ public static class EqualTips
             if (a.Pillars.Pillars.Count == 0 || b.Pillars.Pillars.Count == 0) continue;
 
             // Com o comprimento correndo com a fileira, o fim local de A
-            // encosta no início local de B; senão, o contrário.
+            // encosta no início local de B; senão, o contrário. A ponta é o
+            // pilar da estação que leva a PB: no biposte, o último da lista é
+            // o traseiro, e sem terreno ele escondia a junta (39.2).
             var comAFileira = a.Orientation.LengthRunsWithRow;
-            var pontaA = comAFileira ? a.Pillars.Pillars[^1] : a.Pillars.Pillars[0];
-            var pontaB = comAFileira ? b.Pillars.Pillars[0] : b.Pillars.Pillars[^1];
+            var pontaA = PillarStations.EndCarrier(a.Pillars.Pillars, first: !comAFileira);
+            var pontaB = PillarStations.EndCarrier(b.Pillars.Pillars, first: comAFileira);
 
             if (pontaA.LowEdgeClearance is not { } pa || pontaB.LowEdgeClearance is not { } pb) continue;
 

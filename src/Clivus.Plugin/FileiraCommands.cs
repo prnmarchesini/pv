@@ -302,8 +302,13 @@ public static class FileiraCommands
     /// desenho, a mesa cadastrada no desenho com esse nome vale antes de
     /// qualquer adivinhação; depois, as do desenho pelo comprimento.
     /// </remarks>
+    /// <param name="biposte">
+    /// Se a mesa desenhada é biposte (pelos pilares dela), ou null quando não
+    /// se sabe: sabendo, o palpite pelo comprimento só aceita perfil do mesmo
+    /// tipo. Uma 2P14 monoposte e a GC800 têm o mesmo comprimento (39.2).
+    /// </param>
     internal static TableProfile PerfilDaMesaDesenhada(
-        IReadOnlyList<Point3> cantos, TableProfile padrao, string? nomeDoPerfil = null, Database? database = null)
+        IReadOnlyList<Point3> cantos, TableProfile padrao, string? nomeDoPerfil = null, Database? database = null, bool? biposte = null)
     {
         var doDesenho = database is null ? [] : MesasDoDesenho.Ler(database);
 
@@ -316,7 +321,7 @@ public static class FileiraCommands
         var dz = cantos[1].Z - cantos[0].Z;
         var comprimento = Math.Sqrt(dx * dx + dy * dy + dz * dz);
 
-        bool Serve(TableProfile p) => Math.Abs(p.Layout.Length - comprimento) <= 0.05;
+        bool Serve(TableProfile p) => Math.Abs(p.Layout.Length - comprimento) <= 0.05 && (biposte is not { } b || p.IsBifila == b);
 
         if (Serve(padrao)) return padrao;
 

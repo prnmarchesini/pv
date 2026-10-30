@@ -267,8 +267,8 @@ internal sealed class PainelDeAnalise : ScrollViewer
 
     private static string Explicacao(IndependentKind tipo) => tipo switch
     {
-        IndependentKind.LowEdge => Tr.T("A altura livre da ponta baixa do módulo em cada pilar (PB), escrita fora da borda baixa da mesa."),
-        IndependentKind.HighEdge => Tr.T("A altura livre da ponta alta do módulo em cada pilar (PA), escrita fora da borda alta da mesa."),
+        IndependentKind.LowEdge => Tr.T("A altura livre da ponta baixa do módulo em cada pilar (PB; no biposte, uma por pórtico), escrita fora da borda baixa da mesa."),
+        IndependentKind.HighEdge => Tr.T("A altura livre da ponta alta do módulo em cada pilar (PA; no biposte, uma por pórtico), escrita fora da borda alta da mesa."),
         IndependentKind.Slope => Tr.T("A declividade de cada mesa ao longo da fileira, com a seta descendo."),
         IndependentKind.PillarBuried => Tr.T("A parte ENTERRADA de cada pilar (E): do terreno até a ponta de baixo. Escrita junto ao pilar, um pouco para a borda baixa."),
         IndependentKind.PillarLength => Tr.T("O comprimento TOTAL de cada pilar (PT): parte livre mais parte enterrada. Escrito junto ao pilar, um pouco para a borda alta."),
@@ -408,7 +408,7 @@ internal sealed class PainelDeAnalise : ScrollViewer
             QuantificacaoGravada.Gravar(_janela.Database, _tipo, regra, unidade, pontos, modulos);
 
             var descricao = IndependentAnalysis.Describe(_tipo, regra, pontos, unidade);
-            return (_tipo == IndependentKind.Slope ? Tr.F("Em mesas: {0}", descricao) : Tr.F("Em pilares: {0}", descricao))
+            return Tr.F("Em {0}: {1}", IndependentAnalysis.CountedIn(_tipo, AnalisesIndependentes.TemBiposte(_janela.Database)), descricao)
                 + (modulos is not null ? Tr.F("\nEm módulos: {0}", IndependentAnalysis.Describe(_tipo, regra, modulos, unidade)) : "");
         });
 

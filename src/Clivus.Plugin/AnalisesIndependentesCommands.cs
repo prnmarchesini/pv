@@ -206,9 +206,9 @@ public static class AnalisesIndependentesCommands
 
                     QuantificacaoGravada.Gravar(database, tipo, regra, unidade, pontos, modulos);
 
-                    editor.WriteMessage(tipo == IndependentKind.Slope
-                        ? Tr.F("\nQUANTIFICAR {0} — em mesas.\n", IndependentAnalysis.Describe(tipo, regra, pontos, unidade))
-                        : Tr.F("\nQUANTIFICAR {0} — em pilares.\n", IndependentAnalysis.Describe(tipo, regra, pontos, unidade)));
+                    editor.WriteMessage(Tr.F("\nQUANTIFICAR {0} — em {1}.\n",
+                        IndependentAnalysis.Describe(tipo, regra, pontos, unidade),
+                        IndependentAnalysis.CountedIn(tipo, AnalisesIndependentes.TemBiposte(database))));
 
                     if (modulos is not null)
                         editor.WriteMessage(Tr.F("  módulos: {0}.\n", IndependentAnalysis.Describe(tipo, regra, modulos, unidade)));

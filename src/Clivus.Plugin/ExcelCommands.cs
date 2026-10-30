@@ -84,6 +84,29 @@ public static class ExcelCommands
         }
     }
 
+    /// <summary>CLIVUS_EXCEL_TUDO_AUTO: todas as abas, com o resumo elétrico e os cabos (a prova da 39.2).</summary>
+    [CommandMethod(PluginInfo.ComandoExportarExcelTudoAutomatico)]
+    public static void ExportarTudoAutomatico()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+
+        try
+        {
+            var resposta = editor.GetString(new PromptStringOptions(Tr.T("\nArquivo XLSX: ")) { AllowSpaces = true });
+            if (resposta.Status != PromptStatus.OK || string.IsNullOrWhiteSpace(resposta.StringResult)) return;
+
+            Gravar(editor, documento, resposta.StringResult.Trim(), ExportSheets.Layout | ExportSheets.ElectricalSummary | ExportSheets.Cables);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no CLIVUS_EXCEL_TUDO_AUTO.", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui exportar para o Excel: {0}\n", erro.Message));
+        }
+    }
+
     internal static void Gravar(Editor editor, Document documento, string caminho, ExportSheets abas, bool capa = false)
     {
         var database = documento.Database;

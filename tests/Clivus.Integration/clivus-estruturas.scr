@@ -1,0 +1,123 @@
+; A prova da 39.2: monoposte ou biposte, o resto do Clivus sai igual.
+;
+; O mesmo script roda duas vezes no mesmo desenho de teste (o arquivo nao e
+; salvo entre as rodadas): uma com a monoposte que tem a mesa da Arctech 2P14
+; GC800 (CLIVUS_MONO_2P14_AUTO) e outra com a propria GC800, biposte
+; (CLIVUS_BIFILA_EXEMPLO_AUTO). Mesmos modulos, arranjo, inclinacao, vaos, T3
+; e faixa da PB; so a estrutura muda.
+;
+; A cadeia passa por tudo que vem depois das mesas: usina, alturas, tags,
+; grupo, strings, a configuracao eletrica (UC, trafo, modelo, inversores,
+; alocacao, skid), o local dos inversores pelas strings, os cabos da rota,
+; a vala, o Gerar CC, a conferencia e o resumo da rota, o resumo eletrico, a
+; numeracao, a tag das strings, as analises (PB, pilar, declividade), a
+; arvore e as sombras, o PVsyst (DAE), o Excel com todas as abas, o 3D, o
+; TermoVision, o Validar e o Recontar.
+;
+; No fim, a impressao digital do desenho: para cada camada do Clivus e tipo
+; de entidade, quantas entidades e a soma de X + Y dos pontos delas. O
+; nivel 2 (estruturas.ps1) compara as duas rodadas camada por camada: so as
+; camadas da estrutura (pilares, pecas, cotas das alturas) podem mudar.
+;
+; O OSNAP e desligado para os pontos digitados chegarem crus.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(command "{{ESTRUTURA}}")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area das estruturas")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento das estruturas")
+(command "CLIVUS_USINA_AUTO")
+(command "CLIVUS_ALTURAS_REGERAR")
+(command "CLIVUS_TAG_MESAS")
+(command "CLIVUS_TAG_MODULOS")
+
+; O grupo: todas as mesas.
+(sssetfirst nil (ssget "_X" '((0 . "POLYLINE") (-3 ("CLIVUS")))))
+(command "CLIVUS_GRUPO_CRIAR" "Bloco A")
+(sssetfirst nil nil)
+
+; A parte eletrica, como no caso da rota CC.
+(command "CLIVUS_STRINGS_TESTE_AUTO")
+(command "CLIVUS_ELETRICA_AUTO" "Uc" "Unitarias" "1")
+(command "CLIVUS_ELETRICA_AUTO" "Trafo" "2")
+(command "CLIVUS_ELETRICA_AUTO" "Vincular" "U1" "T1")
+(command "CLIVUS_ELETRICA_AUTO" "Modelo" "Huawei 250" "5" "4")
+(command "CLIVUS_ELETRICA_AUTO" "Inversores" "Huawei 250" "2")
+(command "CLIVUS_ELETRICA_AUTO" "Alocar" "Inversor 1" "6")
+(command "CLIVUS_ELETRICA_AUTO" "Alocar" "Inversor 2" "6")
+(command "CLIVUS_ELETRICA_AUTO" "Skid" "T1" "Skid 1" "Inversor 1;Inversor 2")
+(command "CLIVUS_ELETRICA_LOCAL" "Strings" "Inversor 1;Inversor 2")
+(command "CLIVUS_ROTA_CABOS")
+(command "_.PLINE" "{{V1}}" "{{V2}}" "")
+(setq clivus:sel (ssadd (entlast)))
+(command "CLIVUS_ROTA_VALA" "CC" clivus:sel "")
+(command "CLIVUS_ROTA_GERAR" "CC")
+(command "CLIVUS_ROTA_CONFERIR_AUTO")
+(princ "\nCLIVUS_ESTR_ROTA_INICIO")
+(command "CLIVUS_ROTA_RESUMO_AUTO")
+(princ "\nCLIVUS_ESTR_ROTA_FIM")
+(princ "\nCLIVUS_ESTR_ELETRICA_INICIO")
+(command "CLIVUS_ELETRICA_RESUMO_AUTO")
+(princ "\nCLIVUS_ESTR_ELETRICA_FIM")
+
+; A numeracao das strings: um bloco com todas as mesas.
+(setq clivus:mesas (ssget "_X" '((0 . "POLYLINE") (-3 ("CLIVUS")))))
+(command "CLIVUS_NUMERACAO_AUTO" "Bloco" "Novo")
+(command "CLIVUS_NUMERACAO_AUTO" "Bloco" "Mesas" "Bloco 1" clivus:mesas "")
+(command "CLIVUS_NUMERACAO_AUTO" "Gerar")
+(command "CLIVUS_TAG_STRINGS" 14)
+
+; As analises, a arvore e as sombras.
+(command "CLIVUS_AN_PB_QUANTIFICAR")
+(command "CLIVUS_AN_PILAR_QUANTIFICAR")
+(command "CLIVUS_AN_DECL_INSERIR")
+(command "CLIVUS_ARVORE_AUTO" 4 0.6 10 8 "{{P}}" "")
+(command "CLIVUS_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "09:00" "09:00" "30" "-3" "1")
+
+; As saidas: PVsyst, Excel com todas as abas, 3D e TermoVision.
+(command "CLIVUS_EXPORTAR_AUTO" "{{DAE}}")
+(command "CLIVUS_EXCEL_TUDO_AUTO" "{{XLSX}}")
+(command "CLIVUS_3D_AUTO" "{{HTML}}")
+(command "CLIVUS_TV_EXPORTAR_AUTO" "{{JSON}}")
+(command "CLIVUS_VALIDAR")
+(command "CLIVUS_RECONTAR")
+(setvar "OSMODE" clivus:osmode)
+
+; ---- a impressao digital: por camada do Clivus e tipo, quantas e a soma de X + Y
+(defun clivus:soma (e d / v s p)
+  (cond
+    ((= (cdr (assoc 0 d)) "POLYLINE")
+     (setq v (entnext e) s 0.0)
+     (while (and v (= "VERTEX" (cdr (assoc 0 (setq p (entget v))))))
+       (setq s (+ s (cadr (assoc 10 p)) (caddr (assoc 10 p))) v (entnext v)))
+     s)
+    ((= (cdr (assoc 0 d)) "LWPOLYLINE")
+     (setq s 0.0)
+     (foreach g d (if (= (car g) 10) (setq s (+ s (cadr g) (caddr g)))))
+     s)
+    ((assoc 10 d) (+ (cadr (assoc 10 d)) (caddr (assoc 10 d))))
+    (T 0.0)))
+
+(defun clivus:junta (k n s lista / par)
+  (if (setq par (assoc k lista))
+    (subst (list k (+ n (cadr par)) (+ s (caddr par))) par lista)
+    (cons (list k n s) lista)))
+
+(setq clivus:tudo (ssget "_X") clivus:i 0 clivus:hist nil)
+(while (and clivus:tudo (< clivus:i (sslength clivus:tudo)))
+  (setq clivus:e (ssname clivus:tudo clivus:i) clivus:d (entget clivus:e) clivus:ly (cdr (assoc 8 clivus:d)))
+  (if (wcmatch (strcase clivus:ly) "CLIVUS*")
+    (setq clivus:hist (clivus:junta (strcat clivus:ly "|" (cdr (assoc 0 clivus:d))) 1 (clivus:soma clivus:e clivus:d) clivus:hist)))
+  (setq clivus:i (1+ clivus:i)))
+
+(foreach clivus:h clivus:hist
+  (princ (strcat "\nCLIVUS_IMP " (car clivus:h) " n=" (itoa (cadr clivus:h)) " s=" (rtos (caddr clivus:h) 2 2))))
+
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ "\nCLIVUS_ESTR_FIM")
+(princ)

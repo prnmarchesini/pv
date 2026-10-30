@@ -181,6 +181,7 @@ internal static class Limpeza
                     {
                         CleanupPiece.Contour => LayoutLayers.Mesa,
                         CleanupPiece.Pillar => LayoutLayers.Pilar,
+                        CleanupPiece.Structure => LayoutLayers.Estrutura,
                         _ => LayoutLayers.Modulo,
                     };
 
@@ -192,6 +193,10 @@ internal static class Limpeza
                 foreach (var id in partes.Contours) Conferir(id, CleanupPiece.Contour);
                 foreach (var id in partes.Pillars) Conferir(id, CleanupPiece.Pillar);
                 foreach (var id in partes.Modules) Conferir(id, CleanupPiece.Module);
+
+                // As peças do biposte: a mesa pendente as pinta de vermelho
+                // (TableState), e sem isto ficavam vermelhas (39.2).
+                foreach (var id in partes.StructureBars) Conferir(id, CleanupPiece.Structure);
             }
 
             foreach (var (id, antes) in antesDaSombra)

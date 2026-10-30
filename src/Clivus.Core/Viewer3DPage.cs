@@ -301,7 +301,7 @@ public static class Viewer3DPage
             .Replace("{{TXT_PILARES}}", H(Tr.T("Pilares")), StringComparison.Ordinal)
             .Replace("{{TXT_ARVORES}}", H(Tr.T("Árvores")), StringComparison.Ordinal)
             .Replace("{{TXT_SOMBRAS}}", H(Tr.T("Sombras")), StringComparison.Ordinal)
-            .Replace("{{TXT_CANALETAS}}", H(Tr.T("Canaletas e carport")), StringComparison.Ordinal)
+            .Replace("{{TXT_CANALETAS}}", H(Tr.T("Canaletas, carport e estrutura do biposte")), StringComparison.Ordinal)
             .Replace("{{TXT_EXAGERO}}", H(Tr.T("Exagero vertical")), StringComparison.Ordinal)
             .Replace("{{TXT_ENQUADRAR}}", H(Tr.T("Enquadrar")), StringComparison.Ordinal)
             .Replace("{{TXT_DICA}}", H(Tr.T("Botão esquerdo gira, o direito arrasta, a roda dá zoom.")), StringComparison.Ordinal)

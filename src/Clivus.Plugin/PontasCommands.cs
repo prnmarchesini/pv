@@ -237,7 +237,7 @@ public static class PontasCommands
         }
 
         // O perfil do tamanho da mesa desenhada, não o "atual" da biblioteca.
-        var doDesenho = FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil, mesa.Identity.ProfileName, documento.Database);
+        var doDesenho = FileiraCommands.PerfilDaMesaDesenhada(cantos, perfil, mesa.Identity.ProfileName, documento.Database, LayoutScan.Biposte(documento.Database, mesa));
 
         if (!ReferenceEquals(doDesenho, perfil))
         {

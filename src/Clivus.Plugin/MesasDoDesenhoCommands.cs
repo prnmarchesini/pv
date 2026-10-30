@@ -70,4 +70,52 @@ public static class MesasDoDesenhoCommands
             documento.Editor.WriteMessage(Tr.F("\nNão consegui gravar o biposte: {0}\n", erro.Message));
         }
     }
+
+    /// <summary>
+    /// CLIVUS_MONO_2P14_AUTO (39.2): a mesma mesa da GC800, com estrutura
+    /// monoposte (um pilar por pórtico, nas mesmas estações e com o mesmo T3),
+    /// sozinha e em uso, com a faixa da PB do biposte. O nível 2 roda a mesma
+    /// usina com esta e com a GC800 e compara tudo o que não é estrutura.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoMonoposte2P14Automatico)]
+    public static void MonoposteExemplo()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        try
+        {
+            var mono = Monoposte2P14();
+            MesasDoDesenho.Gravar(documento.Database, [new DrawingTable(mono, DrawingTables.NextColor([]), true)]);
+
+            var atual = ConfigCommands.Inicial(documento, out _);
+            SettingsStore.Save(documento.Database, atual with
+            {
+                Configuration = atual.Configuration with { MinLowEdge = 0.84, MaxLowEdge = 1.60 },
+            });
+
+            documento.Editor.WriteMessage(Tr.F("\nMONOPOSTE {0} no desenho, em uso; PB de 0,84 a 1,60 m.\n", mono.Name));
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no CLIVUS_MONO_2P14_AUTO.", erro);
+            documento.Editor.WriteMessage(Tr.F("\nNão consegui gravar a monoposte: {0}\n", erro.Message));
+        }
+    }
+
+    /// <summary>A GC800 com estrutura monoposte: o pilar a 1,50 m da ponta baixa de uma tesoura de 3,00 m.</summary>
+    internal static TableProfile Monoposte2P14()
+    {
+        var gc800 = BifilaReference.Profile(BifilaVariant.Gc800);
+
+        return gc800 with
+        {
+            Name = "2P14 monoposte",
+            Frame = new TableFrame(3.00, 1.50, 0.15, 0.07, gc800.Frame.PillarSpanTarget, gc800.Frame.PillarCantilever)
+            {
+                PillarSpans = gc800.Frame.PillarSpans,
+                MinEmbedment = gc800.Frame.MinEmbedment,
+            },
+        };
+    }
 }
