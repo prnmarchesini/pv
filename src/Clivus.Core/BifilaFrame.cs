@@ -362,8 +362,8 @@ public static class BifilaReference
     /// <summary>O nome do perfil pronto.</summary>
     public static string Name(BifilaVariant variante) => variante switch
     {
-        BifilaVariant.Gc800 => "Arctech 2P14 GC800 bifila",
-        BifilaVariant.Gc1000 => "Arctech 2P14 GC1000 bifila",
+        BifilaVariant.Gc800 => "Biposte 2P14 (0,80 m livre)",
+        BifilaVariant.Gc1000 => "Biposte 2P14 (1,00 m livre)",
         _ => throw new ArgumentOutOfRangeException(nameof(variante), variante, null),
     };
 

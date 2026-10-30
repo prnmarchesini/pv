@@ -57,7 +57,7 @@ function Testar-Bifila {
         return $false
     }
 
-    if ($r.Texto -notmatch 'BIFILA Arctech 2P14 GC800 bifila no desenho') {
+    if ($r.Texto -notmatch 'BIFILA Biposte 2P14 \(0,80 m livre\) no desenho') {
         $problemas.Add("clivus-bifila: a bifila nao foi gravada no desenho. Veja $($r.Saida)")
         return $false
     }

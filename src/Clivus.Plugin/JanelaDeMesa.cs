@@ -166,8 +166,6 @@ internal sealed class JanelaDeMesa : Window
     private readonly TextBox _bfTerca = Campo();
     private readonly TextBox _bfMao = Campo();
     private readonly TextBox _bfTiranteDiametro = Campo();
-    private readonly Button _bfGc800 = new() { Content = "Arctech GC800", Height = 24, Margin = new Thickness(0, 2, 6, 4) };
-    private readonly Button _bfGc1000 = new() { Content = "Arctech GC1000", Height = 24, Margin = new Thickness(0, 2, 0, 4) };
     private readonly Button _botaoDosVaos = new()
     {
         Content = Tr.T("Vãos entre pilares..."),
@@ -297,7 +295,7 @@ internal sealed class JanelaDeMesa : Window
             bifila: false);
         _cartaoBiposte = Cartao(
             Tr.T("Biposte"),
-            Tr.T("Dois pilares por pórtico (dianteiro e traseiro), viga, mãos francesas, terças e tirantes, como a Arctech 2P14 GC800 e GC1000."),
+            Tr.T("Dois pilares por pórtico (dianteiro e traseiro), viga, mãos francesas, terças e tirantes."),
             bifila: true);
 
         Content = Montar();
@@ -680,26 +678,22 @@ internal sealed class JanelaDeMesa : Window
         // dianteiro; o traseiro sai da distância entre os dois na horizontal,
         // que é como o fornecedor cota. Cada parte tem a sua seção (38.5).
         Secao(Tr.T("Pórtico"));
-        Linha(Tr.T("Entre pilares, na horizontal (m)"), _bfEntrePilares, Tr.T("Distância entre os eixos do pilar dianteiro e do traseiro, em planta (3,00 na Arctech). O T2 acima é o do dianteiro."));
-        Linha(Tr.T("Topo do pilar abaixo dos módulos (m)"), _bfTopo, Tr.T("Na vertical, da face de cima dos módulos ao topo dos pilares: módulo, terça e viga (0,126 na Arctech)."));
+        Linha(Tr.T("Entre pilares, na horizontal (m)"), _bfEntrePilares, Tr.T("Distância entre os eixos do pilar dianteiro e do traseiro, em planta (ex.: 3,00). O T2 acima é o do dianteiro."));
+        Linha(Tr.T("Topo do pilar abaixo dos módulos (m)"), _bfTopo, Tr.T("Na vertical, da face de cima dos módulos ao topo dos pilares: módulo, terça e viga (ex.: 0,126)."));
 
         Secao(Tr.T("Mãos francesas"));
-        var padroes = new WrapPanel();
-        padroes.Children.Add(_bfGc800);
-        padroes.Children.Add(_bfGc1000);
-        pilha.Children.Add(padroes);
         Linha(Tr.T("Dianteira (m)"), _bfMaoFrente, Tr.T("Comprimento da mão francesa do pilar dianteiro. Zero: sem mão francesa."));
         Linha(Tr.T("…pega no dianteiro, abaixo do topo (m)"), _bfMaoFrenteAbaixo, Tr.T("Onde a mão francesa dianteira pega no pilar, medido do topo dele."));
         Linha(Tr.T("Traseira (m)"), _bfMaoTras, Tr.T("Comprimento da mão francesa do pilar traseiro. Zero: sem mão francesa."));
         Linha(Tr.T("…pega no traseiro, abaixo do topo (m)"), _bfMaoTrasAbaixo, Tr.T("Onde a mão francesa traseira pega no pilar, medido do topo dele."));
 
         Secao(Tr.T("Terças"));
-        Linha(Tr.T("A partir da borda do módulo (m)"), _bfTercaBorda, Tr.T("Duas terças por fileira de módulos, cada uma a esta distância de uma borda (0,492 na Arctech)."));
+        Linha(Tr.T("A partir da borda do módulo (m)"), _bfTercaBorda, Tr.T("Duas terças por fileira de módulos, cada uma a esta distância de uma borda (ex.: 0,492)."));
         Linha(Tr.T("Barra máxima (m)"), _bfTercaBarra, Tr.T("A terça da mesa é cortada em barras de até este comprimento; cada corte é uma emenda na lista."));
 
         Secao(Tr.T("Tirantes"));
         Linha(Tr.T("Em que linha de pilares"), _bfTiranteLinha);
-        Linha(Tr.T("Vãos com tirante"), _bfTiranteVaos, Tr.T("Os vãos travados com o X, contados de 1 a partir do começo da mesa, separados por ponto e vírgula (2; 4 na Arctech 2P14)."));
+        Linha(Tr.T("Vãos com tirante"), _bfTiranteVaos, Tr.T("Os vãos travados com o X, contados de 1 a partir do começo da mesa, separados por ponto e vírgula (ex.: 2; 4)."));
         Linha(Tr.T("Ponto de cima, abaixo do topo (m)"), _bfTiranteCima);
         Linha(Tr.T("Ponto de baixo, abaixo do topo (m)"), _bfTiranteBaixo);
         Linha(Tr.T("Diâmetro (m)"), _bfTiranteDiametro);
@@ -731,10 +725,6 @@ internal sealed class JanelaDeMesa : Window
         _bfTiranteVaos.TextChanged += (_, _) => Recalcular();
         foreach (var secao in new[] { _bfViga, _bfTerca, _bfMao }) secao.TextChanged += (_, _) => Recalcular();
         _bfTiranteLinha.SelectionChanged += (_, _) => Recalcular();
-        _bfGc800.Click += (_, _) => PreencherMaos(BifilaReference.Frame(BifilaVariant.Gc800));
-        _bfGc1000.Click += (_, _) => PreencherMaos(BifilaReference.Frame(BifilaVariant.Gc1000));
-        _bfGc800.ToolTip = Tr.T("As mãos francesas da Arctech 2P14 GC800MM-NS 10 (0,80 m livres no fundo do módulo, 10 % norte-sul).");
-        _bfGc1000.ToolTip = Tr.T("As mãos francesas da Arctech 2P14 GC1000MM-NS 20 (1,00 m livre no fundo do módulo, 20 % norte-sul).");
     }
 
     /// <summary>
@@ -814,7 +804,7 @@ internal sealed class JanelaDeMesa : Window
         _bfTiranteDiametro.Text = Numero(b.RodDiameter);
     }
 
-    /// <summary>As mãos francesas de uma bifila (os botões dos padrões da Arctech só mexem nelas).</summary>
+    /// <summary>As mãos francesas de um biposte.</summary>
     private void PreencherMaos(BifilaFrame b)
     {
         _bfMaoFrente.Text = Numero(b.FrontBraceLength);
@@ -1094,12 +1084,12 @@ internal sealed class JanelaDeMesa : Window
 
         _rotuloT1.Text = _bifila ? Tr.T("Viga T1 (m)") : Tr.T("Tesoura T1 (m)");
         _rotuloT1.ToolTip = _tesoura.ToolTip = _bifila
-            ? Tr.T("Comprimento da viga do pórtico, ao longo da inclinação (4,030 na Arctech 2P14).")
+            ? Tr.T("Comprimento da viga do pórtico, ao longo da inclinação (ex.: 4,030).")
             : Tr.T("Comprimento da tesoura, ao longo da inclinação.");
 
         _rotuloT2.Text = _bifila ? Tr.T("Pilar dianteiro na viga T2 (m)") : Tr.T("Pilar na tesoura T2 (m)");
         _rotuloT2.ToolTip = _pilarNaTesoura.ToolTip = _bifila
-            ? Tr.T("Onde o pilar dianteiro encosta na viga, medido da ponta baixa dela (0,498 na Arctech 2P14). O traseiro sai da distância entre os pilares, na seção Pórtico.")
+            ? Tr.T("Onde o pilar dianteiro encosta na viga, medido da ponta baixa dela (ex.: 0,498). O traseiro sai da distância entre os pilares, na seção Pórtico.")
             : Tr.T("Onde o pilar encosta na tesoura, medido da ponta baixa dela.");
 
         _cartaoMonoposte.IsChecked = !_bifila;
