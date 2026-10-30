@@ -122,6 +122,10 @@ def icones():
         'area': ([T('M5,23 L11,6 L21,10 L27,5 L28,25 L6,27 Z')], [t('M5,24 L11,6 L27,6 L28,26 Z')]),
         'alinhamento': ([T('M5,27 L27,5'), T('M15,25 L25,15 M21,15 H25 V19'), ambar_cheio(modulo(9, 11))],
                         [t('M5,27 L27,5'), ambar_cheio(modulo(10, 11, 9, 6))]),
+        # Etapa 41 (30/10/2026): a lista das áreas, três áreas e as linhas da
+        # lista; a do meio, hachurada, em âmbar (a ação).
+        'areas': ([T('M3,4 L10,3 L12,10 L4,11 Z'), ambar_cheio('M3,13 L10,12 L12,19 L4,20 Z'), T('M3,22 L10,21 L12,28 L4,29 Z'), T('M16,7 H29 M16,16 H29 M16,25 H29')],
+                  [t('M3,4 L12,3 L14,13 L4,14 Z'), ambar_cheio('M3,18 L12,17 L14,27 L4,28 Z'), t('M18,9 H29 M18,23 H29')]),
         'usina': ([T(modulo(7, 18, 7, 5)), ambar_cheio(modulo(16, 15.5, 7, 5)), T(modulo(25, 13, 7, 5)), T('M3,27 H29')],
                   [t(modulo(8, 16, 10, 7)), ambar_cheio(modulo(22, 13, 10, 7))]),
         # 40.2: os objetos do cliente (retângulos) e a mesa do Clivus num deles.

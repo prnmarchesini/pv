@@ -18,7 +18,10 @@ internal sealed class JanelaDeNome : Window
 
     internal string? Nome { get; private set; }
 
-    internal JanelaDeNome(string titulo, string pergunta)
+    /// <param name="titulo">O título da janela.</param>
+    /// <param name="pergunta">A pergunta, em cima da caixa.</param>
+    /// <param name="inicial">O nome que já vem na caixa, selecionado (renomear), ou null.</param>
+    internal JanelaDeNome(string titulo, string pergunta, string? inicial = null)
     {
         Title = titulo;
         Width = 420;
@@ -49,9 +52,15 @@ internal sealed class JanelaDeNome : Window
         painel.Children.Add(botoes);
         Content = painel;
 
+        if (!string.IsNullOrEmpty(inicial)) _caixa.Text = inicial.Length > Perguntas.MaiorNome ? inicial[..Perguntas.MaiorNome] : inicial;
+
         Loaded += (_, _) =>
         {
-            try { _caixa.Focus(); }
+            try
+            {
+                _caixa.Focus();
+                _caixa.SelectAll();
+            }
             catch (System.Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao focar a caixa do nome.", erro); }
         };
     }

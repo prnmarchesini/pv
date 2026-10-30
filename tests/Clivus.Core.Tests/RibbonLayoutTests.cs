@@ -117,6 +117,24 @@ public class RibbonLayoutTests
     }
 
     /// <summary>
+    /// Etapa 41 (Renan, 30/10/2026: "em implantação, eu quero ter um botão,
+    /// pequeno, de lista de áreas"): o Áreas, pequeno, no painel Implantação,
+    /// com ícone próprio, abrindo a janela pelo CLIVUS_AREAS.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "41")]
+    public void AreasEUmBotaoPequenoNaImplantacao()
+    {
+        var implantacao = RibbonLayout.Tabs[0].Panels.Single(p => p.Title == "Implantação");
+        var botao = Assert.Single(implantacao.Buttons, b => b.Command == PluginInfo.ComandoAreas);
+
+        Assert.Equal("Áreas", botao.Text);
+        Assert.False(botao.Large);
+        Assert.Equal("areas", botao.Icon);
+        Assert.Equal(PluginInfo.ComandoArea, implantacao.Buttons.First().Command);
+    }
+
+    /// <summary>
     /// Etapa 33, desde 28/10/2026 um botão só no painel Saída: o TermoVision
     /// abre ou manda conforme o desenho (pedido do Renan).
     /// </summary>

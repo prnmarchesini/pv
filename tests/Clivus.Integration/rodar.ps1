@@ -46,6 +46,8 @@ param(
     [switch] $SoCampo,
     # Só a prova de que monoposte e biposte dão o mesmo resto (estruturas.ps1, 39.2).
     [switch] $SoEstruturas,
+    # Só a janela Áreas (areas.ps1, etapa 41).
+    [switch] $SoAreas,
     [string] $Filtro = ''
 )
 
@@ -4552,6 +4554,10 @@ function Testar-Ativar {
 
 . (Join-Path $PSScriptRoot 'estruturas.ps1')
 
+# ---- a janela Areas (etapa 41): os casos ficam em areas.ps1 ----------------
+
+. (Join-Path $PSScriptRoot 'areas.ps1')
+
 # ---- a licenca da rodada ---------------------------------------------------
 
 # Com a chave publica de producao embutida, sem licenca todo comando do
@@ -4600,9 +4606,9 @@ if ($SoTermoVision) {
     exit 1
 }
 
-if ($SoEletrica -or $SoDrenagem -or $SoBifila -or $SoCampo -or $SoEstruturas) {
-    $casos = if ($SoDrenagem) { $CasosDrenagem } elseif ($SoBifila) { $CasosBifila } elseif ($SoCampo) { $CasosCampo } elseif ($SoEstruturas) { $CasosEstruturas } else { $CasosEletricos }
-    $nomeDaParte = if ($SoDrenagem) { 'Drenagem' } elseif ($SoBifila) { 'Bifila' } elseif ($SoCampo) { 'Campo' } elseif ($SoEstruturas) { 'Estruturas' } else { 'Eletrica' }
+if ($SoEletrica -or $SoDrenagem -or $SoBifila -or $SoCampo -or $SoEstruturas -or $SoAreas) {
+    $casos = if ($SoDrenagem) { $CasosDrenagem } elseif ($SoBifila) { $CasosBifila } elseif ($SoCampo) { $CasosCampo } elseif ($SoEstruturas) { $CasosEstruturas } elseif ($SoAreas) { $CasosAreas } else { $CasosEletricos }
+    $nomeDaParte = if ($SoDrenagem) { 'Drenagem' } elseif ($SoBifila) { 'Bifila' } elseif ($SoCampo) { 'Campo' } elseif ($SoEstruturas) { 'Estruturas' } elseif ($SoAreas) { 'Areas' } else { 'Eletrica' }
     foreach ($caso in $casos | Where-Object { $_ -like "*$Filtro*" }) {
         $total++
         if (& $caso -Desenho $desenhos[0]) { $passaram++ }
@@ -4712,6 +4718,12 @@ else {
 
     # A prova da 39.2: monoposte ou biposte, o resto sai igual.
     foreach ($caso in $CasosEstruturas) {
+        $total++
+        if (& $caso -Desenho $desenhos[0]) { $passaram++ }
+    }
+
+    # A janela Areas (41): resumo, hachura, renomear e Excel pelo caminho dos botoes.
+    foreach ($caso in $CasosAreas) {
         $total++
         if (& $caso -Desenho $desenhos[0]) { $passaram++ }
     }

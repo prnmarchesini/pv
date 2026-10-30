@@ -69,6 +69,8 @@ public static class RibbonLayout
             [
                 B(Tr.N("Área"), PluginInfo.ComandoArea, Tr.N("Traça a área de implantação e a assenta no terreno."), "area", grande: true),
                 B(Tr.N("Alinhamento"), PluginInfo.ComandoAlinhamento, Tr.N("Traça a linha onde as fileiras nascem e escolhe o lado delas."), "alinhamento", grande: true),
+                // Etapa 41 (30/10/2026): pequeno, ao lado dos dois grandes.
+                B(Tr.N("Áreas"), PluginInfo.ComandoAreas, Tr.N("A lista das áreas do desenho com o resumo de cada uma (área em ha, mesas, módulos, kWp, pilares, tipos de mesa, ocupação); dá zoom, hachura cada área com uma cor, renomeia e exporta o resumo por área para o Excel."), "areas"),
             ]),
             new(Tr.N("Processar"),
             [

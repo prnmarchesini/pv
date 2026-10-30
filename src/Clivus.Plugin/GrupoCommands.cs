@@ -405,7 +405,7 @@ public static class GrupoCommands
     /// A potência de módulo para mesa sem potência gravada: só lê o perfil do
     /// disco se alguma mesa precisar (o mesmo critério da caixa da seleção).
     /// </summary>
-    private static double Reserva(Document documento, IReadOnlyDictionary<Guid, TableParts> mesas)
+    internal static double Reserva(Document documento, IReadOnlyDictionary<Guid, TableParts> mesas)
     {
         var identidades = mesas.Values.Select(m => m.Identity).ToList();
 
