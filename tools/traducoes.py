@@ -67,13 +67,46 @@ def gravar(codigo, catalogo):
         f.write('\n')
 
 
+def destino_do_faltam(args):
+    """O caminho do --faltam, conferido antes de gravar.
+
+    Ele GRAVA no caminho que recebe: em 30/10/2026 uma revisão passou os
+    fontes ali e nove .cs viraram "[]". Só aceita um .json fora de src/,
+    tests/ e plano/, e só sobrescreve uma lista gravada por ele mesmo.
+    """
+    if len(args) != 2:
+        sys.exit('uso: python tools/traducoes.py --faltam X.json (um caminho só)')
+
+    alvo = os.path.abspath(args[1])
+    if not alvo.lower().endswith('.json'):
+        sys.exit(f'--faltam só grava em .json: {args[1]}')
+
+    for pasta in ('src', 'tests', 'plano'):
+        if alvo.lower().startswith((os.path.join(RAIZ, pasta) + os.sep).lower()):
+            sys.exit(f'--faltam não grava dentro de {pasta}/ do repositório: {args[1]}')
+
+    if os.path.exists(alvo):
+        try:
+            with open(alvo, encoding='utf-8-sig') as f:
+                anterior = json.load(f)
+        except (OSError, ValueError):
+            anterior = None
+        if not isinstance(anterior, list) or not all(isinstance(x, str) for x in anterior):
+            sys.exit(f'--faltam não sobrescreve {args[1]}: o arquivo existe e não é uma lista do --faltam')
+
+    return alvo
+
+
 def main(args):
+    if args[:1] == ['--faltam']:
+        destino = destino_do_faltam(args)
+
     frases = frases_do_codigo()
     catalogos = {c: ler(c) for c in ('en', 'es')}
 
     if args[:1] == ['--faltam']:
         faltam = sorted(f for f in frases if any(not catalogos[c].get(f) for c in catalogos))
-        with open(args[1], 'w', encoding='utf-8', newline='\n') as f:
+        with open(destino, 'w', encoding='utf-8', newline='\n') as f:
             json.dump(faltam, f, ensure_ascii=False, indent=1)
         print(f'{len(faltam)} frase(s) gravadas em {args[1]}')
         return
