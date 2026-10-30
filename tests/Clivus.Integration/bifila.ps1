@@ -117,7 +117,7 @@ function Testar-Bifila {
 
     # Mao francesa e tirante podem virar aviso num pedaco ingreme do terreno
     # (pegariam dentro do chao); sem aviso, tem que estar tudo la.
-    $comAviso = $r.Texto -match 'ATENÇÃO \(bifila\)'
+    $comAviso = $r.Texto -match 'ATENÇÃO \(biposte\)'
     if ((-not $comAviso -and ($maos -ne 12 * $mesas -or $tirantes -ne 4 * $mesas)) -or $maos -gt 12 * $mesas -or $tirantes -gt 4 * $mesas -or $maos -eq 0) {
         $problemas.Add("clivus-bifila: $maos mao(s) francesa(s) e $tirantes tirante(s) para $mesas mesa(s) (aviso da bifila: $comAviso). Veja $($r.Saida)")
         return $false

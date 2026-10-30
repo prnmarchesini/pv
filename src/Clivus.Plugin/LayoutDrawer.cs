@@ -442,7 +442,7 @@ internal static class LayoutDrawer
         ArgumentNullException.ThrowIfNull(editor);
 
         foreach (var linha in ResumoDosAvisos(avisos))
-            editor.WriteMessage(Tr.F("\n  ATENÇÃO (bifila): {0}\n", linha));
+            editor.WriteMessage(Tr.F("\n  ATENÇÃO (biposte): {0}\n", linha));
     }
 
     /// <summary>

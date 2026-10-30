@@ -171,11 +171,12 @@ public class BifilaFrameTests
         var bifila = Gc800().ToJson();
         var mono = Monoposte().ToJson();
 
+        // A mensagem diz o tipo com o nome da tela (biposte, desde 38.5).
         var erro1 = Assert.Throws<InvalidOperationException>(() => TableProfile.Parse(bifila.Replace("\"formatVersion\": 4", "\"formatVersion\": 2")));
-        Assert.Contains("bifila", erro1.Message);
+        Assert.Contains("biposte", erro1.Message);
 
         var erro2 = Assert.Throws<InvalidOperationException>(() => TableProfile.Parse(mono.Replace("\"formatVersion\": 2", "\"formatVersion\": 4")));
-        Assert.Contains("bifila", erro2.Message);
+        Assert.Contains("biposte", erro2.Message);
     }
 
     /// <summary>
@@ -429,8 +430,8 @@ public class BifilaFrameTests
     {
         var texto = Gc800().Frame.Describe();
 
-        Assert.Contains("bifila", texto);
+        Assert.Contains("biposte", texto);
         Assert.Contains("3,544", texto);
-        Assert.DoesNotContain("bifila", Monoposte().Frame.Describe());
+        Assert.DoesNotContain("biposte", Monoposte().Frame.Describe());
     }
 }

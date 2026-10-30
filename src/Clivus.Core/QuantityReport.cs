@@ -56,7 +56,7 @@ public static class QuantityReport
 
         var barras = estrutura ?? [];
         if (abas.HasFlag(ExportSheets.Structure) && (barras.Count > 0 || pilares.Any(p => p.Line != PillarLine.Single)))
-            indice.Add((StructureBill.Sheet(planilha, pilares, barras), Tr.T("A bifila: pilares por linha, vigas, mãos francesas, terças e tirantes.")));
+            indice.Add((StructureBill.Sheet(planilha, pilares, barras), Tr.T("O biposte: pilares por linha, vigas, mãos francesas, terças e tirantes.")));
         if (eletrico is not null) indice.Add((ResumoEletrico(planilha, eletrico), Tr.T("Subestações, trafos, inversores, strings, módulos e kWp pela cadeia de vínculo.")));
         foreach (var t in extras ?? []) indice.Add((Tabela(planilha, t), t.Title));
 

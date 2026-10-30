@@ -10,17 +10,15 @@ internal enum TipoDeEstrutura
 {
     Fixa,
     Carport,
-
-    /// <summary>Fixa com dois pilares por pórtico (38.1).</summary>
-    Bifila,
 }
 
 /// <summary>
 /// Configurações › Estruturas › Nova estrutura... (35.1): a pergunta do tipo.
 /// Renan, 28/10/2026: <i>"ele entra em configurações, em nova estrutura, ai
 /// coloca que tem fixo e carport"</i>. Fixa segue para a janela de Mesa de
-/// sempre; Carport, para a janela do carport. Desde 30/10/2026 (38.1) há a
-/// Fixa bifila: a mesma janela de Mesa, com a seção da bifila.
+/// sempre; Carport, para a janela do carport. A monoposte e o biposte (a
+/// bifila, 38.1) são os dois tipos da Fixa, escolhidos na primeira aba da
+/// janela de Mesa (38.5), e não aqui.
 /// </summary>
 internal sealed class JanelaNovaEstrutura : Window
 {
@@ -39,8 +37,7 @@ internal sealed class JanelaNovaEstrutura : Window
         painel.Children.Add(new TextBlock { Text = Tr.T("Que tipo de estrutura?"), FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 10) });
 
         var linha = new StackPanel { Orientation = Orientation.Horizontal };
-        linha.Children.Add(Opcao(Tr.T("Fixa"), Tr.T("Mesa fixa no terreno, com tesoura e pilares cravados. A janela de Mesa de sempre."), TipoDeEstrutura.Fixa));
-        linha.Children.Add(Opcao(Tr.T("Fixa bifila"), Tr.T("Mesa fixa com dois pilares por pórtico (dianteiro e traseiro), mãos francesas, terças e tirantes. Abre com a última bifila do desenho, ou com a Arctech 2P14 GC800."), TipoDeEstrutura.Bifila));
+        linha.Children.Add(Opcao(Tr.T("Fixa"), Tr.T("Mesa fixa no terreno, com pilares cravados: monoposte ou biposte, escolhidos na primeira aba da janela de Mesa."), TipoDeEstrutura.Fixa));
         linha.Children.Add(Opcao(Tr.T("Carport"), Tr.T("Cobertura de estacionamento: pórticos biposte em fila, módulos por cima, altura livre para os carros."), TipoDeEstrutura.Carport));
         painel.Children.Add(linha);
 

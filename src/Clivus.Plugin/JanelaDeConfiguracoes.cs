@@ -20,7 +20,7 @@ namespace Clivus.Plugin;
 internal sealed class JanelaDeConfiguracoes : Window
 {
     private readonly List<DrawingTable> _mesas;
-    private readonly Func<TableProfile, TableProfile?> _editarMesa;
+    private readonly Func<TableProfile, TableProfile?, TableProfile?> _editarMesa;
 
     // O carport (35.1): o segundo tipo de estrutura, na mesma lista, depois
     // das mesas. Fica fora da Escolha das estruturas, que é do motor da fixa.
@@ -53,7 +53,7 @@ internal sealed class JanelaDeConfiguracoes : Window
     /// <param name="parametros">A configuração gravada no desenho.</param>
     /// <param name="aviso">Aviso da leitura da configuração, ou null.</param>
     /// <param name="estilos">Os estilos do desenho (texto, cota, chamada) e os escolhidos.</param>
-    /// <param name="editarMesa">Abre a janela de Mesa com o perfil dado; o perfil confirmado, ou null.</param>
+    /// <param name="editarMesa">Abre a janela de Mesa com o perfil dado e a semente da aba do outro tipo (38.5); o perfil confirmado, ou null.</param>
     /// <param name="abaInicial">A aba que abre na frente (0 a 3).</param>
     /// <param name="divergencias">As divergências do módulo (PAN, estrutura, mesas desenhadas) para a lista de mesas dada, ou null.</param>
     /// <param name="atualizarPotencia">"Atualizar a potência das mesas desenhadas" da estrutura dada (grava no desenho na hora), ou null.</param>
@@ -65,7 +65,7 @@ internal sealed class JanelaDeConfiguracoes : Window
         ProjectSettings parametros,
         string? aviso,
         (IReadOnlyList<string> Textos, IReadOnlyList<string> Cotas, IReadOnlyList<string> Chamadas, ProjectStyles Atuais) estilos,
-        Func<TableProfile, TableProfile?> editarMesa,
+        Func<TableProfile, TableProfile?, TableProfile?> editarMesa,
         int abaInicial = 0,
         Func<IReadOnlyList<DrawingTable>, IReadOnlyList<string>>? divergencias = null,
         Func<List<DrawingTable>, DrawingTable, (int Mesas, double Watts, string Frase)>? atualizarPotencia = null,
@@ -148,7 +148,7 @@ internal sealed class JanelaDeConfiguracoes : Window
         if (_editarCarport is null)
             Botao(Tr.T("Nova mesa..."), Tr.T("Abre a janela de Mesa para cadastrar uma mesa neste desenho (pode partir de um perfil salvo)."), Nova);
         else
-            Botao(Tr.T("Nova estrutura..."), Tr.T("Pergunta o tipo: Fixa abre a janela de Mesa (pode partir de um perfil salvo); Carport abre a janela do carport."), NovaEstrutura);
+            Botao(Tr.T("Nova estrutura..."), Tr.T("Pergunta o tipo: Fixa abre a janela de Mesa, onde se escolhe monoposte ou biposte (pode partir de um perfil salvo); Carport abre a janela do carport."), NovaEstrutura);
         Botao(Tr.T("Editar..."), Tr.T("Abre a mesa escolhida na janela de Mesa: módulo, arranjo, tesoura, pilares, vãos P1-P2, enterro T3."), Editar);
         Botao(Tr.T("Duplicar"), Tr.T("Copia a mesa escolhida com outro nome (para fazer a de 14 a partir da de 28)."), Duplicar);
         Botao(Tr.T("Remover"), Tr.T("Tira a mesa escolhida deste desenho (as mesas já desenhadas continuam como estão)."), Remover);
@@ -436,7 +436,7 @@ internal sealed class JanelaDeConfiguracoes : Window
             + Tr.F(
                 "{0} — {1} módulos, {2:0.###} m, {3:0.#}°",
                 mesa.Name, mesa.Profile.Layout.ModuleCount, mesa.Profile.Layout.Length, mesa.Profile.TiltDegrees)
-            + (mesa.Profile.IsBifila ? Tr.T("  (bifila)") : "")
+            + (mesa.Profile.IsBifila ? Tr.T("  (biposte)") : "")
             + (mesa.Use ? Tr.T("  (em uso)") : "")
             + (ModuleSource.ProfileDivergence(mesa.Profile) is null ? "" : Tr.T("  (PAN diferente da potência do módulo)"));
     }
@@ -475,7 +475,10 @@ internal sealed class JanelaDeConfiguracoes : Window
         return _lista.SelectedIndex >= _mesas.Count && i >= 0 && i < _carports.Count ? i : -1;
     }
 
-    /// <summary>Nova estrutura... (35.1): pergunta o tipo; Fixa é a Nova mesa de sempre.</summary>
+    /// <summary>
+    /// Nova estrutura... (35.1): pergunta o tipo; Fixa é a Nova mesa, e a
+    /// monoposte ou o biposte se escolhem na janela de Mesa (38.5).
+    /// </summary>
     private void NovaEstrutura()
     {
         var pergunta = new JanelaNovaEstrutura { Owner = this };
@@ -484,12 +487,6 @@ internal sealed class JanelaDeConfiguracoes : Window
         if (tipo == TipoDeEstrutura.Fixa)
         {
             Nova();
-            return;
-        }
-
-        if (tipo == TipoDeEstrutura.Bifila)
-        {
-            NovaBifila();
             return;
         }
 
@@ -530,28 +527,18 @@ internal sealed class JanelaDeConfiguracoes : Window
     }
 
     /// <summary>
-    /// A Fixa bifila (38.1): parte da última bifila do desenho, ou da Arctech
-    /// 2P14 GC800 (a revisão mais nova do projeto Aurora), e abre a mesma
-    /// janela de Mesa, que mostra a seção da bifila.
+    /// A janela de Mesa para o perfil dado (38.5): a aba do outro tipo começa
+    /// na última mesa desse tipo da lista; sem nenhuma, na de referência.
     /// </summary>
-    private void NovaBifila()
-    {
-        var partida = _mesas.LastOrDefault(m => m.Profile.IsBifila)?.Profile ?? BifilaReference.Profile(BifilaVariant.Gc800);
-        var perfil = _editarMesa(partida with { Name = NomeLivre(partida.Name) });
-        if (perfil is null) return;
-
-        _mesas.Add(new DrawingTable(perfil with { Name = NomeLivre(perfil.Name) }, DrawingTables.NextColor(_mesas), Use: true));
-        _mesasMudaram = true;
-        Atualizar();
-        _lista.SelectedIndex = _mesas.Count - 1;
-    }
+    private TableProfile? EditarMesa(TableProfile perfil) =>
+        _editarMesa(perfil, _mesas.LastOrDefault(m => m.Profile.IsBifila != perfil.IsBifila)?.Profile);
 
     private void Nova()
     {
-        // A última monoposte, e não a última mesa: pedir Fixa depois de criar
-        // uma bifila abria a janela em modo bifila (revisão do 38.1).
-        var partida = _mesas.LastOrDefault(m => !m.Profile.IsBifila)?.Profile ?? MesaCommands.MesaDeExemplo();
-        var perfil = _editarMesa(partida with { Name = NomeLivre(partida.Name) });
+        // A última mesa, de qualquer tipo (38.5): a janela abre com o tipo
+        // dela marcado, e o outro tipo está a um clique, na primeira aba.
+        var partida = _mesas.LastOrDefault()?.Profile ?? MesaCommands.MesaDeExemplo();
+        var perfil = EditarMesa(partida with { Name = NomeLivre(partida.Name) });
         if (perfil is null) return;
 
         _mesas.Add(new DrawingTable(perfil with { Name = NomeLivre(perfil.Name) }, DrawingTables.NextColor(_mesas), Use: true));
@@ -570,7 +557,7 @@ internal sealed class JanelaDeConfiguracoes : Window
             return;
         }
 
-        var perfil = _editarMesa(mesa.Profile);
+        var perfil = EditarMesa(mesa.Profile);
         if (perfil is null) return;
 
         var outras = _mesas.Where(m => !ReferenceEquals(m, mesa)).ToList();

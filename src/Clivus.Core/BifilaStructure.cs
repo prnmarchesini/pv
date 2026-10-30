@@ -112,7 +112,7 @@ public static class BifilaStructure
         // pilar. Vazio, mas dito: calado, a lista sairia com a mesa sem
         // estrutura e ninguém saberia.
         if (pillars.Pillars.Count != geometry.Pillars.Count)
-            return new BifilaStructureResult([], [Tr.T("os pilares calculados não batem com a geometria da mesa: a estrutura da bifila não foi montada")]);
+            return new BifilaStructureResult([], [Tr.T("os pilares calculados não batem com a geometria da mesa: a estrutura do biposte não foi montada")]);
 
         var colocacao = pillars.Placement;
 

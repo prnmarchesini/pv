@@ -369,10 +369,10 @@ public sealed record TableProfile(
         // A bifila entrou na versão 4, e só ela sai na 4: os dois lados
         // precisam bater, senão o arquivo foi mexido à mão.
         if (versao == VersaoBifila && arquivo.Frame?.Bifila is null)
-            throw new InvalidOperationException(Tr.T("O perfil de mesa é da versão 4 do formato e não traz a estrutura bifila (frame.bifila)."));
+            throw new InvalidOperationException(Tr.T("O perfil de mesa é da versão 4 do formato e não traz a estrutura do biposte (frame.bifila)."));
 
         if (versao != VersaoBifila && arquivo.Frame?.Bifila is not null)
-            throw new InvalidOperationException(Tr.F("O perfil de mesa é da versão {0} do formato e traz a estrutura bifila, que só existe na versão 4.", versao));
+            throw new InvalidOperationException(Tr.F("O perfil de mesa é da versão {0} do formato e traz a estrutura do biposte, que só existe na versão 4.", versao));
 
         if (arquivo.Layout is null) throw new InvalidOperationException(Tr.T("O perfil de mesa não traz a mesa."));
         if (arquivo.Frame is null) throw new InvalidOperationException(Tr.T("O perfil de mesa não traz a estrutura."));

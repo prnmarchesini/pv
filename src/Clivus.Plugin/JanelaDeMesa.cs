@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using Clivus.Core;
 
@@ -25,6 +26,12 @@ namespace Clivus.Plugin;
 /// Montada em código, como a janela do terreno. É mais janela que aquela, mas
 /// ainda são caixas de texto numa grade; um arquivo de marcação traria o
 /// aparato de XAML sem trazer clareza.
+///
+/// Desde 30/10/2026 (38.5) são duas abas: "Perfil e módulo", onde também se
+/// escolhe monoposte ou biposte, e a aba do tipo escolhido, com a mesa, a
+/// estrutura e os desenhos (Renan: "uma guia ... para configuração do perfil,
+/// módulo, e aí eu escolho se é mono ou biposte, e aí abre a aba certa para a
+/// opção escolhida, e aí sim faço a configuração").
 /// </summary>
 internal sealed class JanelaDeMesa : Window
 {
@@ -99,9 +106,37 @@ internal sealed class JanelaDeMesa : Window
     private readonly TextBox _balanco = Campo();
     private readonly TextBox _enterro = Campo();
 
-    // Bifila (38.1): a seção só aparece quando a mesa aberta é bifila.
+    // Biposte (a bifila, 38.1): as seções dele só aparecem na aba do biposte.
     private bool _bifila;
-    private GroupBox? _secaoBifila;
+    private readonly List<GroupBox> _secoesDoBiposte = [];
+
+    // As abas (38.5): a primeira é do perfil e do módulo; a segunda muda de
+    // título e de seções com o tipo escolhido nos cartões.
+    private readonly TabControl _abas = new() { Margin = new Thickness(12, 12, 12, 0) };
+    private readonly TabItem _abaDoModulo = new();
+    private readonly TabItem _abaDaEstrutura = new();
+    private readonly ToggleButton _cartaoMonoposte;
+    private readonly ToggleButton _cartaoBiposte;
+    private readonly TextBlock _rotuloT1 = new();
+    private readonly TextBlock _rotuloT2 = new();
+
+    /// <summary>Por que a mesa ainda não fecha, embaixo e fora das abas: o erro pode estar na aba que não está à vista.</summary>
+    private readonly TextBlock _recado = new()
+    {
+        TextWrapping = TextWrapping.Wrap,
+        Foreground = Brushes.Firebrick,
+        VerticalAlignment = VerticalAlignment.Center,
+        Margin = new Thickness(0, 0, 12, 0),
+    };
+
+    /// <summary>
+    /// O que ficou na aba do outro tipo, por tipo (true: biposte): trocar de
+    /// monoposte para biposte e voltar não perde nada do que foi digitado.
+    /// </summary>
+    private readonly Dictionary<bool, Rascunho> _rascunhos = new();
+
+    /// <summary>Os textos da mesa e da estrutura de um tipo, como estavam nos campos.</summary>
+    private sealed record Rascunho(IReadOnlyList<string> Textos, int Arranjo, IReadOnlyList<double>? Vaos);
     private readonly TextBox _bfEntrePilares = Campo();
     private readonly TextBox _bfTopo = Campo();
     private readonly TextBox _bfMaoFrente = Campo();
@@ -186,7 +221,12 @@ internal sealed class JanelaDeMesa : Window
     /// Aberta para uma mesa do desenho (Configurações): o recado de "Salvar
     /// perfil" diz que a mesa do desenho acompanha e que falta gravar no desenho.
     /// </param>
-    internal JanelaDeMesa(TableProfileStore perfis, TableProfile inicial, bool doDesenho = false)
+    /// <param name="outroTipo">
+    /// A mesa com que a aba do outro tipo começa (38.5): a última desse tipo
+    /// no desenho. Null (ou do mesmo tipo da inicial): a de referência, a
+    /// Arctech 2P14 GC800 no biposte e o exemplo na monoposte.
+    /// </param>
+    internal JanelaDeMesa(TableProfileStore perfis, TableProfile inicial, bool doDesenho = false, TableProfile? outroTipo = null)
     {
         _perfis = perfis ?? throw new ArgumentNullException(nameof(perfis));
         _nomeAberto = (inicial ?? throw new ArgumentNullException(nameof(inicial))).Name;
@@ -238,24 +278,64 @@ internal sealed class JanelaDeMesa : Window
         };
         _usar.Click += (_, _) => Confirmar();
 
+        _cartaoMonoposte = Cartao(
+            Tr.T("Monoposte"),
+            Tr.T("Um pilar por pórtico, sob a tesoura: a mesa fixa de sempre."),
+            bifila: false);
+        _cartaoBiposte = Cartao(
+            Tr.T("Biposte"),
+            Tr.T("Dois pilares por pórtico (dianteiro e traseiro), viga, mãos francesas, terças e tirantes, como a Arctech 2P14 GC800 e GC1000."),
+            bifila: true);
+
         Content = Montar();
 
-        // A seção da bifila virou um GroupBox no layout compacto: é ele que
-        // aparece e some com o tipo da mesa.
-        for (DependencyObject? d = _bfEntrePilares; d is not null; d = LogicalTreeHelper.GetParent(d))
+        // As seções do biposte viraram GroupBox no layout compacto: são elas
+        // que aparecem e somem com o tipo da mesa.
+        foreach (var campo in new Control[] { _bfEntrePilares, _bfMaoFrente, _bfTercaBorda, _bfTiranteVaos, _bfViga })
         {
-            if (d is GroupBox caixa)
-            {
-                _secaoBifila = caixa;
-                break;
-            }
+            if (Caixa(campo) is { } caixa) _secoesDoBiposte.Add(caixa);
         }
 
         ListarSalvos();
+
+        // A aba do outro tipo começa na semente e fica guardada; a do tipo da
+        // mesa aberta, na própria mesa.
+        var semente = outroTipo is { } outro && outro.IsBifila != inicial.IsBifila
+            ? outro
+            : inicial.IsBifila ? MesaCommands.MesaDeExemplo() : SementeDoBiposte(inicial.Layout.Module);
+        PreencherEstrutura(semente);
+        _rascunhos[semente.IsBifila] = Capturar();
+
         Preencher(inicial);
 
         _preenchendo = false;
         Recalcular();
+    }
+
+    /// <summary>
+    /// A Arctech 2P14 GC800 para a aba do biposte. Os vãos escritos dela
+    /// (3,2 + 3,5 × 3 + 3,2) só fecham com 14 módulos de 1,303 m: com outro
+    /// módulo na primeira aba, a semente vai pelo vão-alvo, e a aba não abre
+    /// reprovada (revisão do 38.5).
+    /// </summary>
+    private static TableProfile SementeDoBiposte(SolarModule modulo)
+    {
+        var referencia = BifilaReference.Profile(BifilaVariant.Gc800);
+
+        return Math.Abs(referencia.Layout.Module.Width - modulo.Width) < 1e-6
+            ? referencia
+            : referencia with { Frame = referencia.Frame with { PillarSpans = null } };
+    }
+
+    /// <summary>O GroupBox do layout compacto onde o controle foi parar, ou null.</summary>
+    private static GroupBox? Caixa(DependencyObject controle)
+    {
+        for (DependencyObject? d = controle; d is not null; d = LogicalTreeHelper.GetParent(d))
+        {
+            if (d is GroupBox caixa) return caixa;
+        }
+
+        return null;
     }
 
     // ------------------------------------------------------------- montagem
@@ -264,27 +344,74 @@ internal sealed class JanelaDeMesa : Window
 
     private UIElement Montar()
     {
-        var grade = new Grid { Margin = new Thickness(12) };
+        // Seções lado a lado, rótulo ao lado do campo (02/10/2026: "otimizar
+        // espaço e melhorar UX de tudo"): enchem a altura e passam para a
+        // coluna seguinte, em vez de uma coluna estreita com barra de rolagem.
+        _abaDoModulo.Header = Tr.T("Perfil e módulo");
+        _abaDoModulo.ToolTip = Tr.T("O perfil, o módulo (medidas e dados elétricos) e o tipo de estrutura: monoposte ou biposte.");
+        _abaDoModulo.Content = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Margin = new Thickness(8),
+            Content = LayoutCompacto.Secoes((Panel)FormularioDoModulo()),
+        };
+
+        _abaDaEstrutura.Content = AbaDaEstrutura();
+
+        _abas.Items.Add(_abaDoModulo);
+        _abas.Items.Add(_abaDaEstrutura);
+
+        var botoes = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        botoes.Children.Add(_salvar);
+        botoes.Children.Add(_usar);
+        botoes.Children.Add(new Button
+        {
+            Content = Tr.T("Fechar"),
+            Width = 90,
+            Height = 26,
+            Margin = new Thickness(8, 0, 0, 0),
+            IsCancel = true,
+        });
+
+        var rodape = new DockPanel { Margin = new Thickness(12) };
+        DockPanel.SetDock(botoes, Dock.Right);
+        rodape.Children.Add(botoes);
+        rodape.Children.Add(_recado);
+
+        var raiz = new DockPanel();
+        DockPanel.SetDock(rodape, Dock.Bottom);
+        raiz.Children.Add(rodape);
+        raiz.Children.Add(_abas);
+
+        LigarEventos();
+
+        return raiz;
+    }
+
+    /// <summary>A aba do tipo: os campos da mesa e da estrutura à esquerda, os desenhos à direita.</summary>
+    private UIElement AbaDaEstrutura()
+    {
+        var grade = new Grid { Margin = new Thickness(8) };
 
         grade.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grade.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
         grade.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        grade.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        grade.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-        // Seções lado a lado, rótulo ao lado do campo (02/10/2026: "otimizar
-        // espaço e melhorar UX de tudo"): enchem a altura e passam para a
-        // coluna seguinte, em vez de uma coluna estreita com barra de rolagem.
         var campos = new ScrollViewer
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = LayoutCompacto.Secoes((Panel)Formulario()),
+            Content = LayoutCompacto.Secoes((Panel)FormularioDaEstrutura()),
         };
 
         Grid.SetColumn(campos, 0);
-        Grid.SetRow(campos, 0);
         grade.Children.Add(campos);
 
         var direita = new DockPanel();
@@ -314,33 +441,94 @@ internal sealed class JanelaDeMesa : Window
         direita.Children.Add(desenhos);
 
         Grid.SetColumn(direita, 2);
-        Grid.SetRow(direita, 0);
         grade.Children.Add(direita);
 
-        var botoes = new StackPanel
+        return grade;
+    }
+
+    /// <summary>
+    /// O cartão de um tipo na primeira aba (38.5): o nome, uma frase e o
+    /// desenho do pórtico. Clicar escolhe o tipo e abre a aba dele.
+    /// </summary>
+    private ToggleButton Cartao(string titulo, string texto, bool bifila)
+    {
+        var figura = FiguraDoTipo(bifila);
+        DockPanel.SetDock(figura, Dock.Left);
+
+        var textos = new StackPanel { Margin = new Thickness(8, 0, 0, 0) };
+        textos.Children.Add(new TextBlock { Text = titulo, FontSize = 13.5, FontWeight = FontWeights.SemiBold });
+        textos.Children.Add(new TextBlock { Text = texto, FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
+
+        var conteudo = new DockPanel { Margin = new Thickness(4) };
+        conteudo.Children.Add(figura);
+        conteudo.Children.Add(textos);
+
+        var cartao = new ToggleButton
         {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
+            Content = conteudo,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 3, 0, 3),
+            ToolTip = Tr.T("Escolhe o tipo e abre a aba dele, com a mesa e a estrutura."),
         };
 
-        botoes.Children.Add(_salvar);
-        botoes.Children.Add(_usar);
-        botoes.Children.Add(new Button
+        cartao.Click += (_, _) =>
         {
-            Content = Tr.T("Fechar"),
-            Width = 90,
-            Height = 26,
-            Margin = new Thickness(8, 0, 0, 0),
-            IsCancel = true,
-        });
+            // Manipulador de evento do WPF: exceção solta aqui fecha o Civil 3D.
+            try
+            {
+                Escolher(bifila);
+            }
+            catch (Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao trocar o tipo da mesa.", erro);
+                Avisar(Tr.F("Não consegui trocar o tipo da mesa: {0}", erro.Message));
+            }
+        };
 
-        Grid.SetColumn(botoes, 0);
-        Grid.SetColumnSpan(botoes, 3);
-        Grid.SetRow(botoes, 1);
-        grade.Children.Add(botoes);
+        return cartao;
+    }
 
-        return grade;
+    /// <summary>
+    /// O pórtico de cada tipo em traço simples: chão, pilares, a viga (ou a
+    /// tesoura) e os módulos por cima; no biposte, também as mãos francesas.
+    /// </summary>
+    private static Canvas FiguraDoTipo(bool bifila)
+    {
+        var figura = new Canvas { Width = 92, Height = 62 };
+
+        void Traco(double x1, double y1, double x2, double y2, Brush cor, double espessura) =>
+            figura.Children.Add(new System.Windows.Shapes.Line
+            {
+                X1 = x1, Y1 = y1, X2 = x2, Y2 = y2,
+                Stroke = cor,
+                StrokeThickness = espessura,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+            });
+
+        // A viga sobe da esquerda (ponta baixa) para a direita; os módulos vão
+        // 4 px acima dela, paralelos.
+        const double chao = 58;
+        double Viga(double x) => 36 - (x - 10) * 0.24;
+
+        Traco(2, chao, 90, chao, Brushes.SaddleBrown, 1.5);
+        Traco(8, Viga(8) - 4, 86, Viga(86) - 4, Brushes.SteelBlue, 4.5);
+
+        if (bifila)
+        {
+            Traco(26, chao, 26, Viga(26), Brushes.DimGray, 3);
+            Traco(68, chao, 68, Viga(68), Brushes.DimGray, 3);
+            Traco(12, Viga(12), 82, Viga(82), Brushes.DimGray, 2);
+            Traco(26, Viga(26) + 13, 38, Viga(38), Brushes.Gray, 1.5);
+            Traco(68, Viga(68) + 13, 56, Viga(56), Brushes.Gray, 1.5);
+        }
+        else
+        {
+            Traco(48, chao, 48, Viga(48), Brushes.DimGray, 3);
+            Traco(22, Viga(22), 76, Viga(76), Brushes.DimGray, 2);
+        }
+
+        return figura;
     }
 
     /// <summary>Um desenho com o seu rótulo em cima.</summary>
@@ -369,24 +557,34 @@ internal sealed class JanelaDeMesa : Window
         return painel;
     }
 
-    private UIElement Formulario()
+    /// <summary>O título de seção que o <see cref="LayoutCompacto"/> reconhece.</summary>
+    private static void Secao(Panel pilha, string titulo) => pilha.Children.Add(new TextBlock
+    {
+        Text = titulo.ToUpperInvariant(),
+        FontSize = 10.5,
+        Foreground = Brushes.Gray,
+        Margin = new Thickness(0, 10, 0, 2),
+    });
+
+    /// <param name="texto">O rótulo já criado, quando a janela muda o texto dele depois (T1 e T2 do biposte).</param>
+    private static void Linha(Panel pilha, string rotulo, Control campo, string? dica = null, TextBlock? texto = null)
+    {
+        texto ??= new TextBlock();
+        texto.Text = rotulo;
+        texto.FontSize = 12;
+        texto.ToolTip = dica;
+        pilha.Children.Add(texto);
+        if (dica is not null) campo.ToolTip = dica;
+        pilha.Children.Add(campo);
+    }
+
+    /// <summary>A primeira aba: perfil, módulo, dados elétricos e o tipo de estrutura.</summary>
+    private UIElement FormularioDoModulo()
     {
         var pilha = new StackPanel { Margin = new Thickness(0, 0, 10, 0) };
 
-        void Secao(string titulo) => pilha.Children.Add(new TextBlock
-        {
-            Text = titulo.ToUpperInvariant(),
-            FontSize = 10.5,
-            Foreground = Brushes.Gray,
-            Margin = new Thickness(0, 10, 0, 2),
-        });
-
-        void Linha(string rotulo, Control campo, string? dica = null)
-        {
-            pilha.Children.Add(new TextBlock { Text = rotulo, FontSize = 12, ToolTip = dica });
-            if (dica is not null) campo.ToolTip = dica;
-            pilha.Children.Add(campo);
-        }
+        void Secao(string titulo) => JanelaDeMesa.Secao(pilha, titulo);
+        void Linha(string rotulo, Control campo, string? dica = null) => JanelaDeMesa.Linha(pilha, rotulo, campo, dica);
 
         Secao(Tr.T("Perfil"));
         Linha(Tr.T("Perfil salvo"), _salvos);
@@ -418,6 +616,32 @@ internal sealed class JanelaDeMesa : Window
         Linha(Tr.T("γ Pmáx (%/°C, opcional)"), _gamaPmax, Tr.T("Coeficiente de temperatura da potência. Com ele (e o da Isc), a Vmp no calor sai mais exata; em branco, usa o da Voc."));
         Linha(Tr.T("α Isc (%/°C, opcional)"), _alfaIsc, Tr.T("Coeficiente de temperatura da Isc. Em branco, zero."));
 
+        // 38.5: o tipo é escolhido aqui, e a escolha abre a aba dele.
+        Secao(Tr.T("Tipo de estrutura"));
+        pilha.Children.Add(_cartaoMonoposte);
+        pilha.Children.Add(_cartaoBiposte);
+        pilha.Children.Add(new TextBlock
+        {
+            Text = Tr.T("A escolha abre a aba do tipo, com a mesa e a estrutura dele. O resto do Clivus é o mesmo para os dois: strings, rotas, valas, cabos e quantitativos."),
+            FontSize = 11,
+            Foreground = Brushes.Gray,
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        return pilha;
+    }
+
+    /// <summary>
+    /// A aba do tipo: a mesa e a estrutura; no biposte, também o pórtico, as
+    /// mãos francesas, as terças, os tirantes e as seções das peças.
+    /// </summary>
+    private UIElement FormularioDaEstrutura()
+    {
+        var pilha = new StackPanel { Margin = new Thickness(0, 0, 10, 0) };
+
+        void Secao(string titulo) => JanelaDeMesa.Secao(pilha, titulo);
+        void Linha(string rotulo, Control campo, string? dica = null, TextBlock? texto = null) => JanelaDeMesa.Linha(pilha, rotulo, campo, dica, texto);
+
         Secao(Tr.T("Mesa"));
         Linha(Tr.T("Módulos"), _quantidade);
         Linha(Tr.T("Arranjo"), _arranjo);
@@ -427,9 +651,10 @@ internal sealed class JanelaDeMesa : Window
         Linha(Tr.T("Sobra da direita (m)"), _sobraDireita);
         Linha(Tr.T("Inclinação (graus)"), _inclinacao);
 
+        // T1 e T2 mudam de nome no biposte (MostrarTipo): viga, e pilar dianteiro.
         Secao(Tr.T("Estrutura"));
-        Linha(Tr.T("Tesoura T1 (m)"), _tesoura, Tr.T("Comprimento da tesoura, ao longo da inclinação."));
-        Linha(Tr.T("Pilar na tesoura T2 (m)"), _pilarNaTesoura, Tr.T("Onde o pilar encosta na tesoura, medido da ponta baixa dela."));
+        Linha(Tr.T("Tesoura T1 (m)"), _tesoura, Tr.T("Comprimento da tesoura, ao longo da inclinação."), _rotuloT1);
+        Linha(Tr.T("Pilar na tesoura T2 (m)"), _pilarNaTesoura, Tr.T("Onde o pilar encosta na tesoura, medido da ponta baixa dela."), _rotuloT2);
         Linha(Tr.T("Pilar: largura ao longo da fileira (m)"), _pilarLargura, Tr.T("Lado da seção do pilar no sentido da fileira (comprimento da mesa)."));
         Linha(Tr.T("Pilar: largura na inclinação (m)"), _pilarProfundidade, Tr.T("Lado da seção do pilar no sentido da inclinação (tesoura)."));
         Linha(Tr.T("Enterro mínimo T3 (m)"), _enterro, Tr.T("O mínimo que o pilar fica dentro do solo. Em branco, vale o enterro mínimo da configuração do projeto."));
@@ -438,31 +663,45 @@ internal sealed class JanelaDeMesa : Window
         pilha.Children.Add(_resumoDosVaos);
         Linha(Tr.T("Balanço nas pontas (m)"), _balanco, Tr.T("Quanto de estrutura sobra para fora do primeiro e do último pilar."));
 
-        // A bifila (38.1): dois pilares por pórtico. O T2 de cima é o do
+        // O biposte (38.1): dois pilares por pórtico. O T2 de cima é o do
         // dianteiro; o traseiro sai da distância entre os dois na horizontal,
-        // que é como o fornecedor cota.
-        Secao(Tr.T("Bifila"));
+        // que é como o fornecedor cota. Cada parte tem a sua seção (38.5).
+        Secao(Tr.T("Pórtico"));
+        Linha(Tr.T("Entre pilares, na horizontal (m)"), _bfEntrePilares, Tr.T("Distância entre os eixos do pilar dianteiro e do traseiro, em planta (3,00 na Arctech). O T2 acima é o do dianteiro."));
+        Linha(Tr.T("Topo do pilar abaixo dos módulos (m)"), _bfTopo, Tr.T("Na vertical, da face de cima dos módulos ao topo dos pilares: módulo, terça e viga (0,126 na Arctech)."));
+
+        Secao(Tr.T("Mãos francesas"));
         var padroes = new WrapPanel();
         padroes.Children.Add(_bfGc800);
         padroes.Children.Add(_bfGc1000);
         pilha.Children.Add(padroes);
-        Linha(Tr.T("Entre pilares, na horizontal (m)"), _bfEntrePilares, Tr.T("Distância entre os eixos do pilar dianteiro e do traseiro, em planta (3,00 na Arctech). O T2 acima é o do dianteiro."));
-        Linha(Tr.T("Topo do pilar abaixo dos módulos (m)"), _bfTopo, Tr.T("Na vertical, da face de cima dos módulos ao topo dos pilares: módulo, terça e viga (0,126 na Arctech)."));
-        Linha(Tr.T("Mão francesa dianteira (m)"), _bfMaoFrente, Tr.T("Comprimento da peça. Zero: sem mão francesa."));
+        Linha(Tr.T("Dianteira (m)"), _bfMaoFrente, Tr.T("Comprimento da mão francesa do pilar dianteiro. Zero: sem mão francesa."));
         Linha(Tr.T("…pega no dianteiro, abaixo do topo (m)"), _bfMaoFrenteAbaixo, Tr.T("Onde a mão francesa dianteira pega no pilar, medido do topo dele."));
-        Linha(Tr.T("Mão francesa traseira (m)"), _bfMaoTras, Tr.T("Comprimento da peça. Zero: sem mão francesa."));
+        Linha(Tr.T("Traseira (m)"), _bfMaoTras, Tr.T("Comprimento da mão francesa do pilar traseiro. Zero: sem mão francesa."));
         Linha(Tr.T("…pega no traseiro, abaixo do topo (m)"), _bfMaoTrasAbaixo, Tr.T("Onde a mão francesa traseira pega no pilar, medido do topo dele."));
-        Linha(Tr.T("Terça a partir da borda do módulo (m)"), _bfTercaBorda, Tr.T("Duas terças por fileira de módulos, cada uma a esta distância de uma borda (0,492 na Arctech)."));
-        Linha(Tr.T("Barra máxima da terça (m)"), _bfTercaBarra, Tr.T("A terça da mesa é cortada em barras de até este comprimento; cada corte é uma emenda na lista."));
-        Linha(Tr.T("Tirantes"), _bfTiranteLinha);
+
+        Secao(Tr.T("Terças"));
+        Linha(Tr.T("A partir da borda do módulo (m)"), _bfTercaBorda, Tr.T("Duas terças por fileira de módulos, cada uma a esta distância de uma borda (0,492 na Arctech)."));
+        Linha(Tr.T("Barra máxima (m)"), _bfTercaBarra, Tr.T("A terça da mesa é cortada em barras de até este comprimento; cada corte é uma emenda na lista."));
+
+        Secao(Tr.T("Tirantes"));
+        Linha(Tr.T("Em que linha de pilares"), _bfTiranteLinha);
         Linha(Tr.T("Vãos com tirante"), _bfTiranteVaos, Tr.T("Os vãos travados com o X, contados de 1 a partir do começo da mesa, separados por ponto e vírgula (2; 4 na Arctech 2P14)."));
-        Linha(Tr.T("Tirante: ponto de cima abaixo do topo (m)"), _bfTiranteCima);
-        Linha(Tr.T("Tirante: ponto de baixo abaixo do topo (m)"), _bfTiranteBaixo);
+        Linha(Tr.T("Ponto de cima, abaixo do topo (m)"), _bfTiranteCima);
+        Linha(Tr.T("Ponto de baixo, abaixo do topo (m)"), _bfTiranteBaixo);
+        Linha(Tr.T("Diâmetro (m)"), _bfTiranteDiametro);
+
+        Secao(Tr.T("Seções das peças"));
         Linha(Tr.T("Viga: largura × altura (m)"), _bfViga, Tr.T("Seção da viga, para o 3D. Ex.: 0,05 × 0,08."));
         Linha(Tr.T("Terça: largura × altura (m)"), _bfTerca, Tr.T("Seção da terça, para o 3D. Ex.: 0,05 × 0,10."));
         Linha(Tr.T("Mão francesa: largura × altura (m)"), _bfMao, Tr.T("Seção da mão francesa, para o 3D. Ex.: 0,04 × 0,06."));
-        Linha(Tr.T("Tirante: diâmetro (m)"), _bfTiranteDiametro);
 
+        return pilha;
+    }
+
+    /// <summary>Os eventos dos campos das duas abas, ligados uma vez, depois de as duas existirem.</summary>
+    private void LigarEventos()
+    {
         foreach (var (campo, _) in Todos()) campo.TextChanged += (_, _) => Recalcular();
 
         _arranjo.SelectionChanged += (_, _) => Recalcular();
@@ -483,8 +722,6 @@ internal sealed class JanelaDeMesa : Window
         _bfGc1000.Click += (_, _) => PreencherMaos(BifilaReference.Frame(BifilaVariant.Gc1000));
         _bfGc800.ToolTip = Tr.T("As mãos francesas da Arctech 2P14 GC800MM-NS 10 (0,80 m livres no fundo do módulo, 10 % norte-sul).");
         _bfGc1000.ToolTip = Tr.T("As mãos francesas da Arctech 2P14 GC1000MM-NS 20 (1,00 m livre no fundo do módulo, 20 % norte-sul).");
-
-        return pilha;
     }
 
     /// <summary>
@@ -508,8 +745,8 @@ internal sealed class JanelaDeMesa : Window
         yield return (_sobraEsquerda, Tr.T("Sobra da esquerda"));
         yield return (_sobraDireita, Tr.T("Sobra da direita"));
         yield return (_inclinacao, Tr.T("Inclinação"));
-        yield return (_tesoura, Tr.T("Tesoura T1"));
-        yield return (_pilarNaTesoura, Tr.T("Pilar na tesoura T2"));
+        yield return (_tesoura, _bifila ? Tr.T("Viga T1") : Tr.T("Tesoura T1"));
+        yield return (_pilarNaTesoura, _bifila ? Tr.T("Pilar dianteiro na viga T2") : Tr.T("Pilar na tesoura T2"));
         yield return (_pilarLargura, Tr.T("Pilar: largura ao longo da fileira"));
         yield return (_pilarProfundidade, Tr.T("Pilar: largura na inclinação"));
         yield return (_vaoAlvo, Tr.T("Vão-alvo entre pilares"));
@@ -532,11 +769,15 @@ internal sealed class JanelaDeMesa : Window
         yield return (_bfTiranteDiametro, Tr.T("Tirante: diâmetro"));
     }
 
-    /// <summary>Enche a seção da bifila (e a mostra), ou a esconde na monoposte.</summary>
+    /// <summary>
+    /// Enche as seções do biposte e deixa a aba com a cara do tipo do perfil.
+    /// Na monoposte, os campos do biposte ficam como estavam: são a aba do
+    /// outro tipo, guardada.
+    /// </summary>
     private void PreencherBifila(TableProfile perfil)
     {
         _bifila = perfil.Frame.Bifila is not null;
-        if (_secaoBifila is not null) _secaoBifila.Visibility = _bifila ? Visibility.Visible : Visibility.Collapsed;
+        MostrarTipo();
 
         if (perfil.Frame.Bifila is not { } b) return;
 
@@ -547,7 +788,11 @@ internal sealed class JanelaDeMesa : Window
         _bfTercaBorda.Text = Numero(b.PurlinFromModuleEdge);
         _bfTercaBarra.Text = Numero(b.PurlinMaxBar);
         Selecionar(_bfTiranteLinha, b.RodLine);
-        _bfTiranteVaos.Text = string.Join("; ", b.RodSpans.Select(v => v.ToString(Tr.Culture)));
+
+        // "Sem tirante" vem com a lista vazia; os vãos que o usuário deixou
+        // escritos no campo ficam lá (LerBifila só não os manda para a mesa).
+        if (b.RodLine != BifilaRodLine.None || b.RodSpans.Count > 0)
+            _bfTiranteVaos.Text = string.Join("; ", b.RodSpans.Select(v => v.ToString(Tr.Culture)));
         _bfTiranteCima.Text = Numero(b.RodUpperBelowTop);
         _bfTiranteBaixo.Text = Numero(b.RodLowerBelowTop);
         _bfViga.Text = Secao(b.Beam);
@@ -644,7 +889,7 @@ internal sealed class JanelaDeMesa : Window
 
         if (!(tiltRadians >= 0 && tiltRadians < Math.PI / 2))
         {
-            motivo = Tr.T("a bifila precisa de inclinação entre 0 e 90°.");
+            motivo = Tr.T("o biposte precisa de inclinação entre 0 e 90°.");
             return false;
         }
 
@@ -710,6 +955,10 @@ internal sealed class JanelaDeMesa : Window
         {
             var perfil = _perfis.Load(nome);
 
+            // Perfil do outro tipo: o que estava na aba atual fica guardado,
+            // como se o usuário tivesse trocado de cartão.
+            if (perfil.IsBifila != _bifila) _rascunhos[_bifila] = Capturar();
+
             _preenchendo = true;
             Preencher(perfil);
             _preenchendo = false;
@@ -736,6 +985,19 @@ internal sealed class JanelaDeMesa : Window
         _espessura.Text = Numero(perfil.Layout.Module.Thickness);
         _potencia.Text = NumeroGrande(perfil.Layout.Module.PowerWatts);
 
+        PreencherEstrutura(perfil);
+        PreencherEletrica(perfil.ModuleElectrical);
+
+        var daBiblioteca = ModuleLibrary.Find(_modulos, perfil.Layout.Module.Model);
+
+        _modelo.SelectedIndex = daBiblioteca is null
+            ? _modelo.Items.Count - 1
+            : _modulos.ToList().IndexOf(daBiblioteca);
+    }
+
+    /// <summary>A mesa e a estrutura do perfil, que é a aba do tipo dele; o módulo fica como está.</summary>
+    private void PreencherEstrutura(TableProfile perfil)
+    {
         _quantidade.Text = perfil.Layout.ModuleCount.ToString(Tr.Culture);
         _espacamentoH.Text = Numero(perfil.Layout.HorizontalGap);
         _espacamentoV.Text = Numero(perfil.Layout.VerticalGap);
@@ -753,14 +1015,81 @@ internal sealed class JanelaDeMesa : Window
         _vaosEscritos = perfil.Frame.PillarSpans;
 
         Selecionar(_arranjo, perfil.Layout.Arrangement);
-        PreencherEletrica(perfil.ModuleElectrical);
         PreencherBifila(perfil);
+    }
 
-        var daBiblioteca = ModuleLibrary.Find(_modulos, perfil.Layout.Module.Model);
+    // ------------------------------------------------- o tipo da mesa (38.5)
 
-        _modelo.SelectedIndex = daBiblioteca is null
-            ? _modelo.Items.Count - 1
-            : _modulos.ToList().IndexOf(daBiblioteca);
+    /// <summary>
+    /// Os campos que as duas abas de tipo dividem: a mesa e a estrutura comum.
+    /// Os do biposte só existem na aba dele e não entram aqui.
+    /// </summary>
+    private IEnumerable<TextBox> CamposDaAba() =>
+    [
+        _quantidade, _espacamentoH, _espacamentoV, _sobraEsquerda, _sobraDireita, _inclinacao,
+        _tesoura, _pilarNaTesoura, _pilarLargura, _pilarProfundidade, _enterro, _vaoAlvo, _balanco,
+    ];
+
+    private Rascunho Capturar() => new([.. CamposDaAba().Select(c => c.Text)], _arranjo.SelectedIndex, _vaosEscritos);
+
+    private void Restaurar(Rascunho rascunho)
+    {
+        foreach (var (campo, texto) in CamposDaAba().Zip(rascunho.Textos)) campo.Text = texto;
+
+        _arranjo.SelectedIndex = rascunho.Arranjo;
+        _vaosEscritos = rascunho.Vaos;
+    }
+
+    /// <summary>
+    /// O cartão de um tipo: guarda a aba do tipo atual, põe nos campos a do
+    /// tipo escolhido (como ficou da última vez, ou a semente) e abre a aba.
+    /// </summary>
+    private void Escolher(bool bifila)
+    {
+        if (bifila != _bifila)
+        {
+            var guardado = Capturar();
+
+            _preenchendo = true;
+            try
+            {
+                if (_rascunhos.TryGetValue(bifila, out var rascunho)) Restaurar(rascunho);
+                _rascunhos[_bifila] = guardado;
+                _bifila = bifila;
+            }
+            finally
+            {
+                _preenchendo = false;
+            }
+        }
+
+        MostrarTipo();
+        Recalcular();
+        _abas.SelectedItem = _abaDaEstrutura;
+    }
+
+    /// <summary>A aba da estrutura com a cara do tipo: título, T1 e T2, as seções do biposte e o cartão marcado.</summary>
+    private void MostrarTipo()
+    {
+        _abaDaEstrutura.Header = _bifila ? Tr.T("Biposte") : Tr.T("Monoposte");
+        _abaDaEstrutura.ToolTip = _bifila
+            ? Tr.T("A mesa e a estrutura do biposte: dois pilares por pórtico, viga, mãos francesas, terças e tirantes.")
+            : Tr.T("A mesa e a estrutura da monoposte: um pilar por pórtico, sob a tesoura.");
+
+        foreach (var secao in _secoesDoBiposte) secao.Visibility = _bifila ? Visibility.Visible : Visibility.Collapsed;
+
+        _rotuloT1.Text = _bifila ? Tr.T("Viga T1 (m)") : Tr.T("Tesoura T1 (m)");
+        _rotuloT1.ToolTip = _tesoura.ToolTip = _bifila
+            ? Tr.T("Comprimento da viga do pórtico, ao longo da inclinação (4,030 na Arctech 2P14).")
+            : Tr.T("Comprimento da tesoura, ao longo da inclinação.");
+
+        _rotuloT2.Text = _bifila ? Tr.T("Pilar dianteiro na viga T2 (m)") : Tr.T("Pilar na tesoura T2 (m)");
+        _rotuloT2.ToolTip = _pilarNaTesoura.ToolTip = _bifila
+            ? Tr.T("Onde o pilar dianteiro encosta na viga, medido da ponta baixa dela (0,498 na Arctech 2P14). O traseiro sai da distância entre os pilares, na seção Pórtico.")
+            : Tr.T("Onde o pilar encosta na tesoura, medido da ponta baixa dela.");
+
+        _cartaoMonoposte.IsChecked = !_bifila;
+        _cartaoBiposte.IsChecked = _bifila;
     }
 
     /// <summary>
@@ -964,6 +1293,7 @@ internal sealed class JanelaDeMesa : Window
 
             _usar.IsEnabled = true;
             _salvar.IsEnabled = true;
+            _recado.Text = string.Empty;
         }
         catch (Exception erro)
         {
@@ -1252,6 +1582,7 @@ internal sealed class JanelaDeMesa : Window
         _planta.Dizer(Tr.T("A mesa ainda não fecha."));
         _corte.Dizer(Tr.T("A mesa ainda não fecha."));
         _resumo.Text = motivo;
+        _recado.Text = Tr.F("A mesa ainda não fecha: {0}", motivo);
         _usar.IsEnabled = false;
         _salvar.IsEnabled = false;
     }

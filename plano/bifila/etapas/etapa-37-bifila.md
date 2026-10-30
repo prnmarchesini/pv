@@ -89,6 +89,92 @@ Exportar Excel com a aba "Estrutura" e a linha (frente/trás) na aba Pilares.
 **Validação do Renan:** exportar e conferir com uma mesa desenhada (12
 pilares, 6 vigas, 12 mãos francesas, 4 linhas de terça, 4 tirantes na 2P14).
 
+### 38.5 A janela de Mesa em abas (pedido de 30/10/2026)
+
+Renan, olhando a janela de Mesa: *"nessa tela deveria ter a opção de escolher
+Biestaca ou mono estaca, e a configuração da estrutura mudaria completamente
+[...] uma guia para monoposte e outra para biposte"* e *"Uma guia do chrome
+para configuração do perfil, módulo, e aí, eu escolho se é mono ou biposte, e
+aí abre a aba certa para a opção escolhida, e aí sim faço a configuração"*.
+
+- Primeira aba, **Perfil e módulo**: perfil salvo e nome, módulo (medidas e
+  dados elétricos) e os cartões **Monoposte** e **Biposte**, cada um com o
+  desenho do pórtico. O cartão abre a aba do tipo.
+- Segunda aba, com o nome do tipo: Mesa e Estrutura e, no biposte, Pórtico,
+  Mãos francesas, Terças, Tirantes e Seções das peças; à direita, a planta e
+  a vista lateral. No biposte, T1 vira "Viga T1" e T2 vira "Pilar dianteiro
+  na viga T2".
+- Trocar de tipo guarda o que estava na aba do outro: ir e voltar não perde
+  nada. A aba do outro tipo começa na última mesa desse tipo no desenho, ou
+  na de referência (Arctech 2P14 GC800 no biposte, o exemplo na monoposte).
+- O motivo de a mesa não fechar aparece embaixo, fora das abas.
+- Configurações › Nova estrutura volta a ter só Fixa e Carport: o tipo da Fixa
+  se escolhe na janela. Na tela, "bifila" vira "biposte" (a palavra do Renan);
+  o código e o arquivo seguem com `Bifila`.
+
+**Validação do Renan:** Nova estrutura › Fixa: a janela abre em "Perfil e
+módulo"; clicar Biposte abre a aba Biposte com o pórtico; mudar um campo,
+voltar para Monoposte e de novo para Biposte: o campo continua mudado.
+
+### 38.6 O PAN enche o módulo e sobe para o servidor (pedido de 30/10/2026)
+
+Renan: *"na hora de puxar o pan, já poderia configurar o modelo, marca,
+altura, tudo [...] o pan tem tudo, dimensão marca modelo, e eu poderia já
+escolher em cadastrar, e esse arquivo pan já subir no servidor, esse módulo já
+ficaria salvo no servidor [...] é usuário subindo pan para gente"*.
+
+- "Carregar .PAN..." enche a seção Módulo inteira: marca, modelo, altura,
+  largura, espessura e potência, além dos dados elétricos.
+- "Cadastrar módulo..." aceita um .PAN: os campos saem dele, e o arquivo vai
+  junto para o serviço de módulos, que guarda o PAN e a parte elétrica.
+- O módulo escolhido na lista traz a parte elétrica que o serviço tem.
+
+### 39.2 Tudo funciona com biposte: a prova (pedido de 30/10/2026)
+
+Renan: *"O cliente pode escolher biposte ou monoposte, o resto não muda nada,
+TODO o sistema funciona igual, preciso de roteiro de teste provando que
+independente da estrutura escolhida TUDO vai funcionar: rota de cabos, vala,
+cabos, contagem, grupos, enfim, tudo"*.
+
+- Nível 2 de ponta a ponta: a mesma área, o mesmo terreno e a mesma mesa (2P14
+  a 10°), uma vez monoposte e outra biposte, passando por tudo que vem depois
+  das mesas. Tudo que não é estrutura tem que sair igual nas duas; o que é
+  estrutura, com a diferença esperada (o dobro de pilares e as peças).
+- Roteiro de tela com a lista inteira, item por item.
+
+## Etapa 40: mesas conforme os objetos do cliente (pedido de 30/10/2026)
+
+Renan: *"quero ter a opção de escolher os objetos em planta e falar 'esses
+objetos são mesas' [...] o cliente quer esta disposição, eu quero seguir [...]
+Se tiver divergência ele deve apontar, em teoria todos objetos devem ser
+iguais, estruture um processo para isso. Eu vou criar as áreas normalmente
+[...] e aí na hora de gerar, ao invés de ter a opção de gerar automático como
+já tem, pode ter a opção gerar conforme objetos em campo, aí eu escolho o
+objeto da área, e ele segue eles e faz a alocação [...] área por área"*.
+
+Referência: `Panama\Docs\Marcheng\PLAT A_Perfiles.dwg` — 641 polilinhas 3D
+fechadas de 4 vértices nas camadas `*CELDAS*`, cada uma a área de módulos de
+uma 2P14 (18,502 × 4,788 m em 3D, 10° de inclinação, seguindo a rampa da
+fileira), contornos em `_CONTORNO` e o terreno em superfícies TIN.
+
+### 40.1 Reconhecer as mesas do cliente (Core)
+
+Cada objeto (polilinha fechada de 4 vértices, 2D ou 3D) vira uma pegada: o
+centro em planta, o eixo da fileira (o lado maior), o lado da ponta baixa
+(pelo Z, quando há), o tamanho em 3D e a inclinação. As pegadas se agrupam em
+fileiras (mesmo eixo, uma atrás da outra). As divergências saem com o motivo:
+tamanho diferente da maioria, rumo diferente, inclinação diferente, objeto
+fora da área, objeto em cima de outro, e a mesa do Clivus que não bate com o
+objeto.
+
+### 40.2 Gerar conforme objetos em campo (tela)
+
+Na geração da área, ao lado do automático: "Conforme objetos em campo". O
+usuário escolhe os objetos (ou a camada); o Clivus mostra o resumo (quantos,
+o tamanho da maioria, as divergências) e põe uma mesa em cada objeto, sentada
+no terreno pelo motor, com tudo o que o automático grava. As divergências
+ficam marcadas no desenho, numa camada própria, e listadas.
+
 ## Etapa 39: o resto do Clivus
 
 ### 39.1 3D e TermoVision

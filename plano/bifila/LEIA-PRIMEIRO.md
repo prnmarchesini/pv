@@ -80,8 +80,9 @@ um X de tirantes na linha dos pilares traseiros.
   (frente/trás em `PillarPiece` e `PillarResult`), `BifilaStructure` (as peças
   em 3D a partir da mesa assentada, sem CAD), `StructureBill` (lista de
   material da estrutura e a aba do Excel).
-- `Clivus.Plugin`: opção "Fixa bifila" na Nova estrutura, modo bifila na
-  janela de Mesa (corte e planta), desenho dos dois pilares e das peças, XData
+- `Clivus.Plugin`: o cartão Biposte na primeira aba da janela de Mesa (38.5;
+  antes, a opção "Fixa bifila" na Nova estrutura), a aba do biposte (corte e
+  planta), desenho dos dois pilares e das peças, XData
   `Pilar` v3 e `Estrutura` v1, leitura pelo `LayoutScan`, Alturas, Análises,
   Pontas, Usina mista, Excel, 3D.
 

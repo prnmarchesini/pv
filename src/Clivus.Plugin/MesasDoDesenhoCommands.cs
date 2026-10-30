@@ -67,7 +67,7 @@ public static class MesasDoDesenhoCommands
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha no CLIVUS_BIFILA_EXEMPLO_AUTO.", erro);
-            documento.Editor.WriteMessage(Tr.F("\nNão consegui gravar a bifila: {0}\n", erro.Message));
+            documento.Editor.WriteMessage(Tr.F("\nNão consegui gravar o biposte: {0}\n", erro.Message));
         }
     }
 }

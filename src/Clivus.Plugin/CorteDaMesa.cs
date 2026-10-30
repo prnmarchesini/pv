@@ -331,7 +331,7 @@ internal sealed class CorteDaMesa : FrameworkElement
 
         Escrever(
             tela,
-            Tr.F("bifila: pilares a {0} m na horizontal, topo {1} m abaixo dos módulos · tracejado: o resto depende do terreno",
+            Tr.F("biposte: pilares a {0} m na horizontal, topo {1} m abaixo dos módulos · tracejado: o resto depende do terreno",
                 Medida((trasEm - frenteEm) * cos), Medida(bifila.PillarTopDrop)),
             Fraco,
             10.5,

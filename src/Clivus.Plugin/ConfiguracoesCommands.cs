@@ -50,11 +50,11 @@ public static class ConfiguracoesCommands
 
         JanelaDeConfiguracoes? janela = null;
 
-        TableProfile? EditarMesa(TableProfile perfil)
+        TableProfile? EditarMesa(TableProfile perfil, TableProfile? outroTipo)
         {
             // Resultado, e não só a confirmada: "Salvar perfil" com o mesmo
             // nome e depois Fechar também atualiza a mesa (05/10/2026).
-            var mesa = new JanelaDeMesa(biblioteca, perfil, doDesenho: true) { Owner = janela };
+            var mesa = new JanelaDeMesa(biblioteca, perfil, doDesenho: true, outroTipo: outroTipo) { Owner = janela };
             mesa.ShowDialog();
             return mesa.Resultado;
         }

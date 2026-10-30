@@ -221,7 +221,7 @@ public sealed record BifilaFrame(
         };
 
         return Tr.F(
-            "bifila: pilar traseiro a {0} m na tesoura, topo dos pilares {1} m abaixo dos módulos, {2}, terças a {3} m da borda dos módulos, {4}",
+            "biposte: pilar traseiro a {0} m na tesoura, topo dos pilares {1} m abaixo dos módulos, {2}, terças a {3} m da borda dos módulos, {4}",
             Texto(RearPillarAlongRafter), Texto(PillarTopDrop), maos, Texto(PurlinFromModuleEdge), tirantes);
     }
 

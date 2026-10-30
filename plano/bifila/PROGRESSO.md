@@ -20,10 +20,18 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 38.2 Desenhar a bifila: AGUARDANDO VALIDAÇÃO — nível 2 `clivus-bifila` (rodar.ps1 -SoBifila)
 - 38.3 As ferramentas que leem pilar: AGUARDANDO VALIDAÇÃO
 - 38.4 Lista de material na tela: AGUARDANDO VALIDAÇÃO
+- 38.5 A janela de Mesa em abas: AGUARDANDO VALIDAÇÃO
+- 38.6 O PAN enche o módulo e sobe para o servidor: PENDENTE
 
 ## Etapa 39: o resto do Clivus
 
 - 39.1 3D e TermoVision: AGUARDANDO VALIDAÇÃO
+- 39.2 Tudo funciona com biposte (a prova): PENDENTE
+
+## Etapa 40: mesas conforme os objetos do cliente
+
+- 40.1 Reconhecer as mesas do cliente: PENDENTE
+- 40.2 Gerar conforme objetos em campo: PENDENTE
 
 ## Observações
 
@@ -118,11 +126,30 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     se a terça, 3,3 cm abaixo do módulo, não aparece por cima dele.
   - Commits: o 38.1 a 39.1 saíram em dois commits (o núcleo no Core e o plugin), e não um
     por passo, porque as correções das revisões cruzaram os passos nos mesmos arquivos.
+- 38.5 (30/10/2026), o que assumi:
+  - A janela abre sempre na aba "Perfil e módulo", com o tipo da mesa aberta marcado; para
+    uma mesa nova, o tipo da última mesa do desenho.
+  - Só a aba do tipo escolhido aparece; a do outro fica guardada (os textos dos campos,
+    o arranjo e os vãos escritos), e o perfil salvo de outro tipo também guarda a atual.
+  - Na tela, "bifila" virou "biposte" (a palavra do Renan nos pedidos de 30/10); o nome
+    técnico (`Bifila`, `frame.bifila`) não muda. Dois testes do 37.1 que procuravam a
+    palavra na mensagem passaram a procurar "biposte", com a mesma força.
+  - Nova estrutura voltou a Fixa e Carport: a Fixa bifila virou o cartão Biposte.
+  - Revisão (subagente, que rodou a janela fora do Civil 3D e clicou nos cartões): nada grave;
+    corrigido o nível 2 da bifila, que procurava "ATENÇÃO (bifila)"; a semente do biposte com
+    outro módulo vai pelo vão-alvo (os vãos escritos da GC800 só fecham com o módulo de
+    1,303 m); "Seções das peças" sem o "(3D)", que o layout compacto escrevia "(3d)"; "Sem
+    tirante" não apaga mais os vãos escritos no campo; o LEIA-PRIMEIRO.
+  - Fica como está: o nome é um só para os dois tipos (fica na primeira aba); trocar o tipo
+    não muda o nome.
 
 ## Roteiro de tela (38.1 a 39.1)
 
-1. **Nova estrutura (38.1):** Configurações › Estruturas › Nova estrutura… › **Fixa bifila**.
-   A janela abre na Arctech 2P14 GC800, com a seção Bifila. No corte, conferir os dois
+1. **Nova estrutura (38.1 e 38.5):** Configurações › Estruturas › Nova estrutura… › **Fixa**.
+   A janela de Mesa abre na aba "Perfil e módulo"; clicar no cartão **Biposte** abre a aba
+   Biposte, na Arctech 2P14 GC800, com as seções Pórtico, Mãos francesas, Terças, Tirantes e
+   Seções das peças. Mudar um campo, clicar Monoposte e voltar para Biposte: o campo
+   continua mudado. No corte, conferir os dois
    pilares, a viga, as duas mãos francesas e as cotas T2, T2t e 3,000 m entre os pilares.
    Apertar GC1000 e ver as mãos francesas mudarem. "Usar esta mesa", Salvar no desenho,
    fechar e reabrir: ela está na lista com "(bifila)" e na Escolha das estruturas.
