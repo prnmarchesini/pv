@@ -42,6 +42,8 @@ param(
     [switch] $SoTermoVision,
     # Só os casos da bifila (bifila.ps1, etapas 37 a 39).
     [switch] $SoBifila,
+    # Só os casos das mesas conforme os objetos do cliente (campo.ps1, etapa 40).
+    [switch] $SoCampo,
     [string] $Filtro = ''
 )
 
@@ -4540,6 +4542,10 @@ function Testar-Ativar {
 
 . (Join-Path $PSScriptRoot 'bifila.ps1')
 
+# ---- as mesas conforme os objetos do cliente (plano/bifila, etapa 40) -------
+
+. (Join-Path $PSScriptRoot 'campo.ps1')
+
 # ---- a licenca da rodada ---------------------------------------------------
 
 # Com a chave publica de producao embutida, sem licenca todo comando do
@@ -4588,9 +4594,9 @@ if ($SoTermoVision) {
     exit 1
 }
 
-if ($SoEletrica -or $SoDrenagem -or $SoBifila) {
-    $casos = if ($SoDrenagem) { $CasosDrenagem } elseif ($SoBifila) { $CasosBifila } else { $CasosEletricos }
-    $nomeDaParte = if ($SoDrenagem) { 'Drenagem' } elseif ($SoBifila) { 'Bifila' } else { 'Eletrica' }
+if ($SoEletrica -or $SoDrenagem -or $SoBifila -or $SoCampo) {
+    $casos = if ($SoDrenagem) { $CasosDrenagem } elseif ($SoBifila) { $CasosBifila } elseif ($SoCampo) { $CasosCampo } else { $CasosEletricos }
+    $nomeDaParte = if ($SoDrenagem) { 'Drenagem' } elseif ($SoBifila) { 'Bifila' } elseif ($SoCampo) { 'Campo' } else { 'Eletrica' }
     foreach ($caso in $casos | Where-Object { $_ -like "*$Filtro*" }) {
         $total++
         if (& $caso -Desenho $desenhos[0]) { $passaram++ }
@@ -4688,6 +4694,12 @@ else {
 
     # A bifila (38.2): dois pilares por portico e as pecas da estrutura.
     foreach ($caso in $CasosBifila) {
+        $total++
+        if (& $caso -Desenho $desenhos[0]) { $passaram++ }
+    }
+
+    # As mesas conforme os objetos do cliente (40.2).
+    foreach ($caso in $CasosCampo) {
         $total++
         if (& $caso -Desenho $desenhos[0]) { $passaram++ }
     }

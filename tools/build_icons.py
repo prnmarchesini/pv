@@ -124,6 +124,9 @@ def icones():
                         [t('M5,27 L27,5'), ambar_cheio(modulo(10, 11, 9, 6))]),
         'usina': ([T(modulo(7, 18, 7, 5)), ambar_cheio(modulo(16, 15.5, 7, 5)), T(modulo(25, 13, 7, 5)), T('M3,27 H29')],
                   [t(modulo(8, 16, 10, 7)), ambar_cheio(modulo(22, 13, 10, 7))]),
+        # 40.2: os objetos do cliente (retângulos) e a mesa do Clivus num deles.
+        'usina_objetos': ([T('M4,5 H14 V12 H4 Z'), T('M18,5 H28 V12 H18 Z'), T('M4,19 H14 V26 H4 Z'), T('M18,19 H28 V26 H18 Z'), ambar_cheio(modulo(23, 22.5, 8, 4.5, 0))],
+                          [t('M3,5 H14 V13 H3 Z'), t('M18,5 H29 V13 H18 Z'), ambar_cheio(modulo(16, 23, 18, 6, 0))]),
         'regerar_area': ([T('M4,17 L8,5 L16,7 L18,17 Z'), T(ciclo(21, 21, 7)), ambar_cheio(modulo(21, 21, 5, 3.5))],
                          [t('M4,16 L8,4 L17,6 L18,16 Z'), t(ciclo(21, 21, 7))]),
         'regerar_todas': ([T('M3,13 L6,4 L12,6 L13,13 Z'), T('M15,10 L18,3 L25,5 L26,10 Z'), T(ciclo(19, 22, 6.5)), ambar_cheio(modulo(19, 22, 5, 3.5))],

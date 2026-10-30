@@ -73,6 +73,8 @@ public static class RibbonLayout
             new(Tr.N("Processar"),
             [
                 B(Tr.N("Usina"), PluginInfo.ComandoUsina, Tr.N("Gera a área inteira com as mesas em uso, sem análise (as análises ficam no painel Análises)."), "usina", grande: true),
+                // 40.2 (30/10/2026): a área pelos objetos do cliente, em vez da distribuição automática.
+                B(Tr.N("Conforme objetos"), PluginInfo.ComandoUsinaObjetos, Tr.N("Gera a área seguindo os objetos do cliente: uma mesa em cada retângulo de 4 vértices (polilinha 2D ou 3D), no centro e no rumo dele, sentada no terreno pelo motor. Aponta o que diverge (tamanho, rumo, inclinação, repetido, sobreposto, fora da área), e o Regerar área passa a refazer pelos objetos."), "usina_objetos"),
                 B(Tr.N("Regerar área"), PluginInfo.ComandoRefazer, Tr.N("Apaga e gera de novo a área com a configuração atual."), "regerar_area"),
                 B(Tr.N("Regerar todas as áreas"), PluginInfo.ComandoRegerar, Tr.N("Refaz todas as áreas do desenho com a configuração atual."), "regerar_todas"),
                 // O carport (35.3, 28/10/2026): o segundo tipo de estrutura, desenhado pelo eixo da fila.

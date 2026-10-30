@@ -280,23 +280,19 @@ public static class AnalisesCommands
         var areas = AreaStore.Load(documento.Database);
         var alinhamentos = AlignmentStore.Load(documento.Database);
 
-        if (areas.Count == 0 || alinhamentos.Count == 0)
+        if (areas.Count == 0)
         {
             editor.WriteMessage(Tr.T("\nREGERAR Sem área ou sem alinhamento registrado neste desenho.\n"));
             return;
         }
 
+        // Sem alinhamento, só as áreas que seguem os objetos do cliente (40.2)
+        // se refazem; as outras são puladas, uma a uma, com o motivo.
         var linhas = alinhamentos
             .Select(a => FileiraCommands.LerAlinhamento(documento.Database, a))
             .Where(a => a is not null)
             .Select(a => a!.Value)
             .ToList();
-
-        if (linhas.Count == 0)
-        {
-            editor.WriteMessage(Tr.T("\nREGERAR Os alinhamentos registrados não estão mais no desenho.\n"));
-            return;
-        }
 
         var feitas = 0;
 
@@ -307,6 +303,18 @@ public static class AnalisesCommands
             if (area is null)
             {
                 editor.WriteMessage(Tr.F("\nREGERAR A área {0} não está mais no desenho; pulada.\n", registro.Identity.DisplayName));
+                continue;
+            }
+
+            if (CampoCommands.RefazerSeSegueObjetos(editor, documento, terreno, area.Value.Vertices, perfil))
+            {
+                feitas++;
+                continue;
+            }
+
+            if (linhas.Count == 0)
+            {
+                editor.WriteMessage(Tr.F("\nREGERAR {0}: o desenho não tem alinhamento; pulada.\n", area.Value.Nome));
                 continue;
             }
 

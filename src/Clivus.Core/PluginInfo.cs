@@ -124,6 +124,15 @@ public static partial class PluginInfo
     public const string ComandoUsinaAutomatico = "CLIVUS_USINA_AUTO";
 
     /// <summary>
+    /// Gerar conforme objetos em campo (40.2): uma mesa do Clivus em cada
+    /// objeto do cliente (polilinha fechada de 4 vértices) da área.
+    /// </summary>
+    public const string ComandoUsinaObjetos = "CLIVUS_USINA_OBJETOS";
+
+    /// <summary>O mesmo na primeira área, com todos os retângulos dela, sem perguntar (nível 2).</summary>
+    public const string ComandoUsinaObjetosAutomatico = "CLIVUS_USINA_OBJETOS_AUTO";
+
+    /// <summary>
     /// Comando que exporta os módulos selecionados para o PVsyst: seleção,
     /// formato, arquivo.
     /// </summary>

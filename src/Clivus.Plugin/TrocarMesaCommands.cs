@@ -180,6 +180,16 @@ public static class TrocarMesaCommands
             return false;
         }
 
+        // Na área que segue os objetos do cliente (40.2), as vizinhas ficam
+        // nos objetos delas: a troca não reespaça a fileira.
+        if (reespacar
+            && AreaDe(database, new Point3(cantos.Average(p => p.X), cantos.Average(p => p.Y), 0)) is { } areaDaMesa
+            && CampoCommands.PelosObjetos(database, areaDaMesa.Vertices) is not null)
+        {
+            editor.WriteMessage(Tr.T("\nTROCAR Esta área segue os objetos do cliente: as vizinhas ficam onde estão, sem reespaçar a fileira.\n"));
+            reespacar = false;
+        }
+
         // Esquerda e direita pelo norte; início e fim pelo sentido em que a
         // mesa foi desenhada.
         var ancora = TableSwap.AnchorOf(lado, celula.DirectionRadians);
@@ -339,6 +349,14 @@ public static class TrocarMesaCommands
         if (area is null)
         {
             editor.WriteMessage(Tr.F("\nREGERAR FILEIRA A mesa {0} não está dentro de nenhuma área registrada.\n", letreiro));
+            return;
+        }
+
+        // A área que segue os objetos do cliente (40.2): reespaçar ou
+        // redistribuir a fileira tiraria as mesas dos objetos.
+        if (CampoCommands.PelosObjetos(database, area.Value.Vertices) is not null)
+        {
+            editor.WriteMessage(Tr.F("\nREGERAR FILEIRA {0} está numa área que segue os objetos do cliente: a fileira não muda. Para mudar as mesas, mude os objetos e use o Regerar área.\n", letreiro));
             return;
         }
 

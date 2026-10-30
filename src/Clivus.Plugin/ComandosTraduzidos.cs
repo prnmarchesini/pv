@@ -768,6 +768,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_PLANTA")]
     public static void CLIVUS_PLANTA() => UsinaCommands.Usina();
 
+    [CommandMethod("CLIVUS_PLANT_FROM_OBJECTS", CommandFlags.UsePickSet)]
+    public static void CLIVUS_PLANT_FROM_OBJECTS() => CampoCommands.UsinaObjetos();
+
+    [CommandMethod("CLIVUS_PLANTA_OBJETOS", CommandFlags.UsePickSet)]
+    public static void CLIVUS_PLANTA_OBJETOS() => CampoCommands.UsinaObjetos();
+
     [CommandMethod("CLIVUS_VALIDATE", CommandFlags.Modal | CommandFlags.NoUndoMarker)]
     public static void CLIVUS_VALIDATE() => ValidarCommands.Validar();
 }

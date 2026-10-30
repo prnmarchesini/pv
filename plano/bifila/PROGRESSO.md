@@ -31,7 +31,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 ## Etapa 40: mesas conforme os objetos do cliente
 
 - 40.1 Reconhecer as mesas do cliente: VALIDADO (automático) — `FieldObjects`, 21 testes; nos 641 objetos do Aurora: 609 mesas em 101 fileiras, 18 repetidos e 14 sobrepostos
-- 40.2 Gerar conforme objetos em campo: PENDENTE
+- 40.2 Gerar conforme objetos em campo: AGUARDANDO VALIDAÇÃO — nível 2 `clivus-campo` (rodar.ps1 -SoCampo)
 
 ## Observações
 
@@ -159,6 +159,21 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
   corrigida pelo que a primeira mediu (o motor ancora a mesa no canto da ponta baixa e encurta
   a planta pelo giro). 8 testes, um deles conferido desligando a segunda passada (ele falha).
   Mono e biposte nos mesmos objetos dão os módulos no mesmo lugar (a menos de 1 cm).
+- 40.2, na tela (30/10/2026), o que assumi:
+  - Botão "Conforme objetos" no painel Processar, ao lado de Usina, e "Gerar conforme objetos
+    em campo…" no clique direito da área. Pergunta "[Todos/Camada/Escolher]": Todos são as
+    polilinhas fechadas de 4 vértices com o centro dentro da área; Camada, as de uma camada
+    (clica-se um objeto); Escolher, os objetos selecionados.
+  - Processa antes de apagar: se o motor falhar, as mesas da área ficam. Depois troca as
+    mesas que a área tinha (pergunta antes, com quantas saem e quantas entram).
+  - As marcas (círculo e motivo, na cota do terreno) ficam na camada CLIVUS_DIVERGENCIAS; a
+    rodada seguinte na mesma área apaga as da vez anterior.
+  - A área guarda, no dicionário dela, que segue os objetos e como foram escolhidos: o
+    Regerar área, o Regerar todas e o automático refazem pelos objetos, sem alinhamento. O
+    Regerar fileira não mexe nessa área, e o Trocar não reespaça as vizinhas.
+  - Nível 2: 8 objetos (6 + 1 repetido + 1 curto) no Z 9999 → 6 mesas a 0,000 m do centro
+    dos objetos, 72 pilares na faixa do terreno, os 8 objetos intactos, 2 marcas; o Regerar
+    área refaz igual.
 
 ## Roteiro de tela (38.1 a 39.1)
 
@@ -183,4 +198,10 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
    Pilares com a coluna Linha.
 5. **3D (39.1):** Ver 3D numa área bifila: a estrutura aparece em cinza aço embaixo dos
    módulos.
-
+6. **Mesas conforme os objetos (40.2):** no `PLAT A_Perfiles.dwg` (Panamá), criar a área
+   pelo contorno de `_CONTORNO`, marcar só o biposte (GC800) na Escolha das estruturas, pôr
+   o azimute olhando para o sul (Configurações › Parâmetros) e a faixa da PB em 0,84 a
+   1,60. Processar › Conforme objetos › Todos. Conferir no relatório quantos objetos viram
+   mesa e as divergências (no Aurora: objetos repetidos e "CELDAS NUEVAS" em cima das
+   antigas); as marcas vermelhas na camada CLIVUS_DIVERGENCIAS; cada mesa em cima do seu
+   objeto. Depois Regerar área: refaz pelos objetos.

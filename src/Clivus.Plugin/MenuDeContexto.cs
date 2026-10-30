@@ -47,6 +47,7 @@ internal static class MenuDeContexto
         _raiz = new MenuItem("Clivus Solar");
 
         ItensDaArea.Add(Item(Tr.T("Refazer as mesas desta área"), PluginInfo.ComandoRefazer));
+        ItensDaArea.Add(Item(Tr.T("Gerar conforme objetos em campo…"), PluginInfo.ComandoUsinaObjetos));
         ItensDaArea.Add(Item(Tr.T("Apagar tudo"), PluginInfo.ComandoApagarTudo));
 
         // 10/10/2026, Renan (item 14): "Trocar potência do módulo", uma

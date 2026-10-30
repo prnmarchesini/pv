@@ -1,0 +1,82 @@
+; Teste de nivel 2 das mesas conforme os objetos do cliente (passo 40.2).
+; Processa o terreno, grava a bifila Arctech GC800 no desenho (em uso, com a
+; faixa da PB que ela pede), traca a area e desenha os objetos do cliente com
+; 3DPOLY: duas fileiras de tres retangulos 3D (a area dos modulos de uma 2P14,
+; 10 graus, ponta baixa para o norte, como o projeto de teste olha), um
+; repetido em cima do primeiro e um curto (9,3 m), que nao casa com mesa
+; nenhuma. Os objetos vem com Z 9999 de proposito: mesa ou pilar no Z do
+; objeto esta errado (regra sagrada 5).
+;
+; O que se confere em LISP, e nao pelo relatorio do plugin:
+;   - as mesas: os contornos com o nosso XData "Mesa", e o centro de cada um a
+;     menos de 5 cm do centro de algum objeto;
+;   - os pilares: quantos, e o topo de cada um dentro da faixa do terreno;
+;   - os objetos do cliente: continuam la, todos, e sem XData nosso;
+;   - as marcas de divergencia: um circulo por objeto que diverge;
+;   - e o Regerar area: refaz pelos objetos (sem alinhamento no desenho), com
+;     as mesmas mesas e as mesmas marcas.
+;
+; O OSNAP e desligado para os pontos digitados chegarem crus.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(command "CLIVUS_BIFILA_EXEMPLO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area do campo")
+{{OBJETOS}}
+(setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_USINA_OBJETOS_AUTO")
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:dist2d (a b) (sqrt (+ (expt (- (car a) (car b)) 2) (expt (- (cadr a) (cadr b)) 2))))
+
+; O centro de uma polilinha 3D: a media dos vertices.
+(defun clivus:centro (en / v n sx sy p)
+  (setq v (entnext en) n 0 sx 0.0 sy 0.0)
+  (while (and v (= "VERTEX" (cdr (assoc 0 (entget v)))))
+    (setq p (cdr (assoc 10 (entget v))) sx (+ sx (car p)) sy (+ sy (cadr p)) n (1+ n) v (entnext v)))
+  (if (> n 0) (list (/ sx n) (/ sy n)) nil))
+
+; Os objetos do cliente (polilinhas 3D sem XData nosso) e as mesas (com XData "Mesa").
+(defun clivus:ler ( / ss i en xd)
+  (setq ss (ssget "_X" '((0 . "POLYLINE"))) i 0 clivus:objetos nil clivus:mesas nil clivus:objxd 0)
+  (while (and ss (< i (sslength ss)))
+    (setq en (ssname ss i) xd (clivus:xdata en))
+    (cond
+      ((null xd) (setq clivus:objetos (cons (clivus:centro en) clivus:objetos)))
+      ((= (cdr (nth 0 xd)) "Mesa") (setq clivus:mesas (cons (clivus:centro en) clivus:mesas))))
+    (setq i (1+ i)))
+  (setq clivus:pertos 0)
+  (foreach m clivus:mesas
+    (setq clivus:melhor 1e99)
+    (foreach o clivus:objetos (setq clivus:melhor (min clivus:melhor (clivus:dist2d m o))))
+    (if (< clivus:melhor 0.05) (setq clivus:pertos (1+ clivus:pertos))))
+  (setq clivus:marcas (clivus:conta (ssget "_X" '((0 . "CIRCLE") (8 . "CLIVUS_DIVERGENCIAS"))))))
+
+(clivus:ler)
+
+; ---- os pilares: o topo de cada um dentro da faixa do terreno
+(setq clivus:pilares (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_PILAR"))))
+(setq clivus:np (clivus:conta clivus:pilares) clivus:zok 0 clivus:i 0)
+(while (< clivus:i clivus:np)
+  (setq clivus:z (caddr (cdr (assoc 10 (entget (ssname clivus:pilares clivus:i))))))
+  (if (and (> clivus:z (- {{ZMIN}} 1.0)) (< clivus:z (+ {{ZMAX}} 6.0))) (setq clivus:zok (1+ clivus:zok)))
+  (setq clivus:i (1+ clivus:i)))
+
+(princ (strcat "\nCLIVUS_CAMPO mesas=" (itoa (length clivus:mesas)) " pertos=" (itoa clivus:pertos)
+               " pilares=" (itoa clivus:np) " pilaresok=" (itoa clivus:zok)
+               " objetos=" (itoa (length clivus:objetos)) " marcas=" (itoa clivus:marcas)))
+
+; ---- o Regerar area: a area lembra que segue os objetos
+(command "CLIVUS_REFAZER_AUTO")
+(clivus:ler)
+(princ (strcat "\nCLIVUS_CAMPO2 mesas=" (itoa (length clivus:mesas)) " pertos=" (itoa clivus:pertos)
+               " objetos=" (itoa (length clivus:objetos)) " marcas=" (itoa clivus:marcas)))
+
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)
