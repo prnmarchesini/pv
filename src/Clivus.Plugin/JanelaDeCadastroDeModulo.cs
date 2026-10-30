@@ -86,7 +86,9 @@ internal sealed class JanelaDeCadastroDeModulo : Window
 
         pilha.Children.Add(new TextBlock
         {
-            Text = Tr.F("Vai para o serviço em {0}.", FonteDeModulos.Endereco),
+            Text = FonteDeModulos.DoServidorDoClivus
+                ? Tr.T("Vai para o servidor do Clivus, com o .PAN. Lá ele espera a equipe conferir antes de entrar na lista de todos; nesta sessão do Civil 3D, ele já fica na lista das janelas de Mesa.")
+                : Tr.F("Vai para o serviço em {0}.", FonteDeModulos.Endereco),
             FontSize = 11,
             Foreground = Brushes.Gray,
             Margin = new Thickness(0, 6, 0, 0),
@@ -94,7 +96,7 @@ internal sealed class JanelaDeCadastroDeModulo : Window
         pilha.Children.Add(_recado);
 
         var botoes = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
-        var cadastrar = new Button { Content = Tr.T("Cadastrar"), Width = 100, Height = 26, IsDefault = true, ToolTip = Tr.T("Grava o módulo no serviço; ele aparece na lista de modelos da janela de Mesa.") };
+        var cadastrar = new Button { Content = Tr.T("Cadastrar"), Width = 100, Height = 26, IsDefault = true, ToolTip = Tr.T("Manda o módulo para a biblioteca; ele aparece na lista de modelos da janela de Mesa (no servidor do Clivus, esperando a validação).") };
         cadastrar.Click += (_, _) => Cadastrar();
         botoes.Children.Add(cadastrar);
         botoes.Children.Add(new Button { Content = Tr.T("Cancelar"), Width = 90, Height = 26, Margin = new Thickness(8, 0, 0, 0), IsCancel = true });
@@ -207,7 +209,19 @@ internal sealed class JanelaDeCadastroDeModulo : Window
 
             // O PAN só vai junto se ainda é o mesmo módulo (o modelo não foi trocado à mão).
             var pan = _pan is { } lido && string.Equals(lido.Eletrica.Model.Trim(), modulo.Model, StringComparison.OrdinalIgnoreCase) ? lido : ((PanModule, string, string)?)null;
-            var (cadastrou, pendente, mensagem) = FonteDeModulos.Cadastrar(modulo, pan?.Item1, pan?.Item2, pan?.Item3);
+            // O envio pode levar uns segundos (o .PAN subindo): o cursor diz (revisão do 38.8).
+            (bool Cadastrou, bool Pendente, string Mensagem) resultado;
+            System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
+            try
+            {
+                resultado = FonteDeModulos.Cadastrar(modulo, pan?.Item1, pan?.Item2, pan?.Item3);
+            }
+            finally
+            {
+                System.Windows.Input.Mouse.OverrideCursor = null;
+            }
+
+            var (cadastrou, pendente, mensagem) = resultado;
 
             if (!cadastrou)
             {

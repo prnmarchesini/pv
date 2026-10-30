@@ -23,7 +23,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 38.5 A janela de Mesa em abas: AGUARDANDO VALIDAÇÃO
 - 38.6 O PAN enche o módulo e sobe para o servidor: AGUARDANDO VALIDAÇÃO — serviço: `servidor/tests/test_pan.py`
 - 38.7 Fabricantes, biposte genérico e a altura básica (P1 e P2): AGUARDANDO VALIDAÇÃO — `VendorStructures`, `PillarsAtBasicHeight`, 22 testes contra o motor
-- 38.8 Os módulos no servidor do Clivus, com a validação da gestão: AGUARDANDO VALIDAÇÃO — servidor: clivussolar 2cc6561 (gate `validate_modulos`); plugin: `ModuleServiceReply`, 20 testes
+- 38.8 Os módulos no servidor do Clivus, com a validação da gestão: AGUARDANDO VALIDAÇÃO — servidor: clivussolar 2cc6561 (gate `validate_modulos`); plugin: `ModuleServiceReply` e `ModuleServer`, 37 testes
 
 ## Etapa 39: o resto do Clivus
 
@@ -332,9 +332,34 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     seu token (etapa das licenças), todo envio aparece como "Enviado por Develop", e cliente
     sem a chave não manda módulo.
   - Fica de fora: tirar da lista um módulo já aprovado e avisar o cliente da recusa.
-  - Testes: 20 no Core (`ModuleServiceReply`: o pendente, o `{"erro"}` do servidor e o
-    `detail` do serviço local) e o gate do servidor (70 conferências, que reprova nos sete
-    defeitos plantados). O HTTP do plugin é de tela.
+  - Testes: 37 no Core (`ModuleServiceReply`: o pendente, o `{"erro"}` do servidor e o
+    `detail` do serviço local; `ModuleServer`: o endereço, a chave só por HTTPS, o caminho
+    sem chave, as variáveis que não prestam; o .PAN grande demais) e o gate do servidor (70
+    conferências, que reprova nos sete defeitos plantados). O HTTP do plugin é de tela.
+  - Revisão (subagente, worktree isolada), corrigido:
+    - O módulo pendente sumia da janela ao carregar outro .PAN, e mandá-lo de novo dava
+      "já existe" (o servidor recusa modelo pendente). Agora os mandados na sessão do Civil
+      3D ficam na lista de toda janela de Mesa, marcados "(esperando a validação)", com a
+      parte elétrica, até a lista do servidor trazê-los aprovados; e o "já existe" do
+      servidor do Clivus é tratado como "já enviado".
+    - A janela esperava a internet (até 3 s) em cada abertura: a lista boa vale 10 min e o
+      "fora do ar", 5. O envio mostra o cursor de espera.
+    - Sem a chave, o recado do .PAN diz que o módulo vale só nesta janela, e o "Cadastrar
+      módulo..." diz o motivo antes de abrir o diálogo; os textos do diálogo falam do
+      servidor do Clivus e do pendente.
+    - O recado do servidor aparece também quando o cadastro vai pelo botão (o "sem o PAN"
+      do serviço antigo se perdia).
+    - `CLIVUS_SERVIDOR` malformado não cai mais calado no localhost: a lista embutida diz
+      que é ele. A decisão de endereço e chave saiu para o Core (`ModuleServer`), com teste.
+    - O .PAN acima de 500 mil caracteres é recusado antes de subir (chegava ao 413 no meio
+      do envio).
+    - O README e o docker-compose do `servidor/` e o `tools\servico-local.ps1` diziam que o
+      plugin procura o localhost: agora dizem que é preciso `CLIVUS_SERVICO`, senão o
+      cadastro de teste vai para a produção.
+    - Notado e deixado como está: a rota de cadastro do servidor é `async` com o banco
+      síncrono (trava o laço por um instante a cada cadastro; o tráfego é baixo); sem
+      `CLIVUS_DEV_SENHA` a conta Develop não existe e a chave certa leva 401 (a produção tem
+      a senha).
 - Incidente de 30/10/2026: a revisão do 38.7 (subagente) rodou `tools/traducoes.py --faltam`
   passando os fontes como destino, e nove .cs viraram "[]". Recuperei os versionados do git e
   refiz as edições a partir da conversa (o diff saiu idêntico, linha por linha); os dois novos
@@ -409,6 +434,10 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     `CLIVUS_SERVIDOR_CHAVE`, abrir a janela de Mesa: embaixo do modelo, "Módulos do servidor
     do Clivus: 3". Carregar .PAN › `JAM66D46-720_LB.PAN` › "Cadastrar agora?" › Sim: o recado
     diz que ele foi para o servidor e espera a validação; o módulo fica escolhido, com os
-    dados elétricos. No site, entrar com a conta Develop › cartão **Gestão**: o módulo
-    pendente, com o .PAN para baixar. Aprovar. Fechar e abrir a janela de Mesa: ele está na
-    lista ("Módulos do servidor do Clivus: 4"), e escolher ele traz os dados elétricos.
+    dados elétricos, e na lista aparece "(esperando a validação)". Carregar outro .PAN: o
+    primeiro continua na lista. Fechar e abrir a janela: ele ainda está lá. No site, entrar
+    com a conta Develop › cartão **Gestão**: o módulo pendente, com o .PAN para baixar.
+    Aprovar. Reabrir o Civil 3D e a janela de Mesa: ele está na lista sem a marca
+    ("Módulos do servidor do Clivus: 4"), e escolher ele traz os dados elétricos. Sem a
+    chave (outro usuário do Windows): o recado do .PAN diz que o módulo vale só na janela, e
+    "Cadastrar módulo..." diz que falta a `CLIVUS_SERVIDOR_CHAVE`.

@@ -1,7 +1,8 @@
 # Localhost: Postgres + serviço, como vai ficar no Coolify.
 #   docker compose up -d --build
-# O plugin procura o serviço em http://localhost:8765 (ou na variável
-# de ambiente CLIVUS_SERVICO).
+# O plugin só usa este serviço com a variável de ambiente
+# CLIVUS_SERVICO=http://localhost:8765 definida antes de abrir o Civil 3D;
+# sem ela, desde o 38.8, ele vai ao servidor do Clivus (produção).
 services:
   banco:
     image: postgres:16-alpine

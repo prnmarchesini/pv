@@ -40,3 +40,6 @@ Start-Process python -ArgumentList '-m', 'uvicorn', 'app.main:app', '--host', '1
     -WorkingDirectory $servidor
 
 Write-Host 'Serviço de módulos em http://localhost:8765 (feche a janela dele para parar).'
+Write-Host 'Para o plugin usar este serviço, e não o servidor do Clivus (produção), defina'
+Write-Host 'CLIVUS_SERVICO=http://localhost:8765 ANTES de abrir o Civil 3D. Sem ela, um cadastro'
+Write-Host 'de teste vai para a produção e fica pendente lá.'

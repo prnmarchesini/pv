@@ -8,7 +8,12 @@ namespace Clivus.Core.Tests;
 /// </summary>
 public class ModuleServiceReplyTests
 {
-    /// <summary>A resposta 201 do servidor de produção, como o clivussolar devolve (lista + situação).</summary>
+    /// <summary>
+    /// A resposta 201 do servidor de produção, no formato que o clivussolar
+    /// devolve: o módulo da lista (<c>services/modulos.py</c>, <c>para_a_lista</c>)
+    /// mais a <c>situacao</c> (<c>api/v1/modulos.py</c>). O arquivo foi escrito à
+    /// mão a partir desse código; o gate do servidor confere só a lista.
+    /// </summary>
     private static string RespostaDeProducao() =>
         File.ReadAllText(Path.Combine(Repositorio.Raiz, "tests", "dados", "servidor-modulo-pendente.json"));
 

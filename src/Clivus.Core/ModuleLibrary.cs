@@ -27,6 +27,9 @@ public static class ModuleLibrary
     /// <summary>O maior nome (marca ou modelo) que o serviço aceita.</summary>
     private const int MaiorNome = 120;
 
+    /// <summary>O maior .PAN que os servidores guardam, em caracteres (servidor/app/schemas.py e o clivussolar).</summary>
+    public const int MaiorPan = 500_000;
+
     /// <summary>
     /// O comparador de nomes, um só para procurar, ordenar e achar repetido.
     ///
@@ -195,6 +198,12 @@ public static class ModuleLibrary
 
         if (modulo.Brand.Trim().Length > MaiorNome || modulo.Model.Trim().Length > MaiorNome)
             throw new InvalidOperationException(Tr.F("O módulo não pode ser cadastrado: marca e modelo vão até {0} caracteres.", MaiorNome));
+
+        // Os dois servidores guardam o .PAN até 500 mil caracteres. Conferir
+        // aqui dá a mensagem antes de subir o arquivo; o arquivo grande demais
+        // chegava ao 413 no meio do envio, como conexão cortada (revisão do 38.8).
+        if (pan is not null && pan.Length > MaiorPan)
+            throw new InvalidOperationException(Tr.F("O módulo não pode ser cadastrado com este .PAN: ele tem {0} caracteres, e o servidor guarda até {1}. Confira se o arquivo é mesmo um .PAN do PVsyst.", pan.Length, MaiorPan));
 
         return JsonSerializer.Serialize(new DoServico
         {

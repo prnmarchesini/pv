@@ -125,7 +125,13 @@ existia no serviço local (`servidor/`, `tools\servico-local.ps1`, rotas sem o
   - Erros com `{"erro": "..."}` no idioma do `Accept-Language`: `401` (chave),
     `409` (o modelo já existe, pendente ou aprovado, sem diferença de
     maiúscula), `413` (grande demais), `422` (medida ou parte elétrica fora
-    dos limites do plugin, ou com NaN ou infinito), `400` (JSON ou UTF-8).
+    dos limites do plugin, ou com NaN ou infinito), `400` (JSON ou UTF-8),
+    `503` (o servidor está sem a chave do plugin configurada).
+  - O plugin trata o `409` do servidor do Clivus como "já enviado" (o modelo
+    espera a gestão, talvez mandado em outra sessão, ou já foi aprovado): o
+    módulo fica na lista das janelas de Mesa da sessão, marcado "esperando a
+    validação", até a lista pública trazê-lo. O .PAN acima de 500 mil
+    caracteres é recusado antes de subir.
 
 ## Identidade visual
 

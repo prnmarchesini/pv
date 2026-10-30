@@ -1518,7 +1518,14 @@ internal sealed class JanelaDeMesa : Window
         _modelo.Items.Clear();
 
         foreach (var modulo in _modulos)
-            _modelo.Items.Add(new ComboBoxItem { Content = modulo.Describe(), Tag = modulo });
+        {
+            // O mandado ao servidor do Clivus nesta sessão espera a gestão (38.8).
+            var texto = FonteDeModulos.EhPendente(modulo.Model)
+                ? Tr.F("{0} (esperando a validação)", modulo.Describe())
+                : modulo.Describe();
+
+            _modelo.Items.Add(new ComboBoxItem { Content = texto, Tag = modulo });
+        }
 
         _modelo.Items.Add(new ComboBoxItem { Content = Tr.T("(outro módulo, medidas à mão)"), Tag = null });
     }
@@ -1531,6 +1538,14 @@ internal sealed class JanelaDeMesa : Window
     {
         try
         {
+            // Sem endereço, sem HTTPS ou sem a chave, o cadastro não iria: a
+            // janela diz antes de o usuário encher o diálogo (revisão do 38.8).
+            if (FonteDeModulos.PorQueNaoCadastra is { } porQue)
+            {
+                Avisar(porQue);
+                return;
+            }
+
             NumberInput.TryParseLarge(_potencia.Text, out var potencia);
             NumberInput.TryParseMeasure(_altura.Text, out var altura);
             NumberInput.TryParseMeasure(_largura.Text, out var largura);
@@ -1547,32 +1562,19 @@ internal sealed class JanelaDeMesa : Window
 
             if (janela.ShowDialog() != true || janela.Cadastrado is not { } novo) return;
 
-            // No servidor do Clivus o módulo espera a validação da gestão
-            // (38.8): a lista de todos ainda não o tem. Ele fica só nesta
-            // janela, escolhido, com o .PAN que foi junto.
-            if (janela.Pendente)
-            {
-                _preenchendo = true;
-                try
-                {
-                    _modulos = [.. _modulos.Where(m => !ReferenceEquals(m, _provisorio)), novo];
-                    _provisorio = novo;
-                    if (janela.PanEnviado is { } enviado) _doPan = (novo, enviado.Eletrica, enviado.Texto, enviado.Nome);
-                    ListarModulos();
-                    _modelo.SelectedIndex = _modulos.ToList().IndexOf(novo);
-                }
-                finally
-                {
-                    _preenchendo = false;
-                }
-
-                TrocarModulo();
-                Avisar(janela.Mensagem);
-                return;
-            }
-
+            // A lista volta (a guardada, mais os pendentes desta sessão: o
+            // mandado ao servidor do Clivus está nela, esperando a gestão),
+            // com o módulo novo escolhido. A entrada de um .PAN que não foi
+            // mandado continua na janela (revisão do 38.8).
             _preenchendo = true;
             (_modulos, _origemDosModulos.Text) = FonteDeModulos.Carregar();
+
+            if (_provisorio is { } provisorio && ModuleLibrary.Find(_modulos, provisorio.Model) is null)
+                _modulos = [.. _modulos, provisorio];
+            else
+                _provisorio = null;
+
+            if (janela.PanEnviado is { } enviado) _doPan = (novo, enviado.Eletrica, enviado.Texto, enviado.Nome);
             ListarModulos();
 
             var achado = ModuleLibrary.Find(_modulos, novo.Model);
@@ -1594,6 +1596,10 @@ internal sealed class JanelaDeMesa : Window
             else
             {
                 TrocarModulo();
+
+                // O que o servidor disse: o pendente, o "já está lá", ou o
+                // serviço antigo que não guardou o .PAN (revisão do 38.8).
+                Avisar(janela.Mensagem);
             }
 
             Recalcular();
@@ -1798,6 +1804,12 @@ internal sealed class JanelaDeMesa : Window
             if (Math.Abs(antes - pan.Pmax) > ModuleSource.Tolerance)
                 recado += "\n\n" + Tr.F("A potência do módulo passou de {0:0.#} para {1:0.#} Wp. As mesas já desenhadas continuam como estavam: depois de gravar a estrutura no desenho, use \"Atualizar a potência das mesas desenhadas\" nas Configurações.", antes, pan.Pmax);
 
+            // Sem a chave (ou sem servidor), o módulo novo não pode ir para a
+            // biblioteca de todos: o recado diz que ele vale só nesta janela,
+            // e a janela nem pergunta (revisão do 38.8).
+            if (modulo is not null && daBiblioteca is null && FonteDeModulos.PorQueNaoCadastra is { } porQue)
+                recado += "\n\n" + Tr.F("O módulo vale só nesta janela. {0}", porQue);
+
             Avisar(recado);
 
             // O usuário subindo o PAN para a biblioteca de todos (38.6).
@@ -1818,9 +1830,9 @@ internal sealed class JanelaDeMesa : Window
     /// </summary>
     private void OferecerCadastro(SolarModule modulo, PanModule pan, string texto, string nome)
     {
-        // Sem a chave, o servidor do Clivus recusaria (38.8): nem pergunta. O
-        // "Cadastrar módulo..." explica o porquê, se o usuário quiser mandar.
-        if (FonteDeModulos.DoServidorDoClivus && Publicador3D.Chave is null) return;
+        // Sem a chave, o servidor do Clivus recusaria (38.8): nem pergunta; o
+        // recado do .PAN já disse que o módulo vale só nesta janela.
+        if (FonteDeModulos.PorQueNaoCadastra is not null) return;
 
         if (!FonteDeModulos.NoAr)
         {
@@ -1837,14 +1849,23 @@ internal sealed class JanelaDeMesa : Window
 
         if (resposta != MessageBoxResult.Yes) return;
 
-        var (cadastrou, pendente, mensagem) = FonteDeModulos.Cadastrar(modulo, pan, texto, nome);
-        Avisar(mensagem);
+        // O envio pode levar uns segundos (o .PAN subindo): o cursor diz.
+        (bool Cadastrou, bool Pendente, string Mensagem) resultado;
+        System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
+        try
+        {
+            resultado = FonteDeModulos.Cadastrar(modulo, pan, texto, nome);
+        }
+        finally
+        {
+            System.Windows.Input.Mouse.OverrideCursor = null;
+        }
 
-        // Pendente da validação (servidor do Clivus, 38.8): a lista de todos
-        // ainda não o tem, e ele continua a entrada desta janela, escolhido.
-        if (!cadastrou || pendente) return;
+        Avisar(resultado.Mensagem);
+        if (!resultado.Cadastrou) return;
 
-        // A lista volta do serviço, com o módulo novo escolhido.
+        // A lista volta, com o módulo novo escolhido: do serviço local, ou,
+        // pendente no servidor do Clivus, dos pendentes desta sessão (38.8).
         _preenchendo = true;
         try
         {

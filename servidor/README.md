@@ -17,9 +17,12 @@ Sem Docker (SQLite em `clivus.db`):
     python semear.py
     uvicorn app.main:app --port 8765
 
-O plugin procura o serviço em `http://localhost:8765`. Para outro endereço,
-defina a variável de ambiente `CLIVUS_SERVICO` antes de abrir o Civil 3D. Sem
-serviço no ar, o plugin usa a biblioteca embutida e avisa.
+Desde o 38.8 (30/10/2026), o plugin lê os módulos do **servidor do Clivus**
+(produção, `/api/v1/modulos`), onde o módulo mandado fica pendente até a gestão
+validar. Para usar este serviço local, defina a variável de ambiente
+`CLIVUS_SERVICO=http://localhost:8765` **antes** de abrir o Civil 3D; sem ela,
+um cadastro de teste vai para a produção. Sem serviço no ar, o plugin usa a
+biblioteca embutida e avisa.
 
 ## Rotas
 

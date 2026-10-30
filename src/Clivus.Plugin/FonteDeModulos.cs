@@ -9,45 +9,58 @@ namespace Clivus.Plugin;
 /// <summary>
 /// De onde vêm os módulos da janela de Mesa: do servidor do Clivus (38.8),
 /// do serviço local quando <c>CLIVUS_SERVICO</c> aponta para ele (passo 8.3)
-/// e, sem nenhum no ar, da biblioteca embutida na DLL.
+/// e, sem nenhum no ar, da biblioteca embutida na DLL. Quem decide o endereço
+/// e se o cadastro pode ir é o <see cref="ModuleServer"/> do Core.
 ///
-/// Sem <c>CLIVUS_SERVICO</c>, o endereço é o do servidor do Clivus, o mesmo
-/// do Publicar 3D (<c>CLIVUS_SERVIDOR</c> ou o de produção), com
-/// <c>/api/v1</c>. Lá o cadastro leva a chave (<c>CLIVUS_SERVIDOR_CHAVE</c>)
+/// No servidor do Clivus o cadastro leva a chave (<c>CLIVUS_SERVIDOR_CHAVE</c>)
 /// e o módulo fica pendente até a gestão conferir o .PAN; só então entra na
-/// lista de todos (plano/contrato-servidor-3d.md).
+/// lista de todos (plano/contrato-servidor-3d.md). Até lá, ele fica na lista
+/// das janelas desta sessão do Civil 3D (<see cref="Pendentes"/>).
 /// </summary>
 internal static class FonteDeModulos
 {
-    /// <summary>O serviço local, se nem o servidor do Clivus estiver configurado.</summary>
-    private const string EnderecoLocal = "http://localhost:8765";
-
     /// <summary>
     /// Curto de propósito: a janela espera por isto ao abrir, e servidor fora
     /// do ar não pode virar janela travada. Três segundos dão para o servidor
-    /// do Clivus pela internet (o serviço local respondia em 1,5).
+    /// do Clivus pela internet; e a lista boa e o "fora do ar" ficam guardados
+    /// (<see cref="ValidadeDaLista"/>), para a espera não se repetir.
     /// </summary>
     private static readonly HttpClient Cliente = new() { Timeout = TimeSpan.FromSeconds(3) };
 
     /// <summary>
     /// Para o cadastro, mais folga: gravar pode demorar (banco frio,
     /// antivírus, o .PAN subindo), e um "não respondeu" com o módulo já
-    /// gravado leva o usuário a um 409 na segunda tentativa.
+    /// gravado leva o usuário a um "já existe" na segunda tentativa.
     /// </summary>
     private static readonly HttpClient ClienteDoCadastro = new() { Timeout = TimeSpan.FromSeconds(15) };
 
-    /// <summary>O endereço, se for http(s) absoluto; null se CLIVUS_SERVICO não presta.</summary>
-    private static string? EnderecoValido() =>
-        Uri.TryCreate(Endereco, UriKind.Absolute, out var base_)
-        && (base_.Scheme == Uri.UriSchemeHttp || base_.Scheme == Uri.UriSchemeHttps)
-            ? Endereco
-            : null;
+    /// <summary>
+    /// Quanto vale a última lista boa: a janela de Mesa abre sem esperar a
+    /// internet de novo (revisão do 38.8: até 3 s em cada abertura). A lista
+    /// muda pouco, só quando a gestão aprova um módulo.
+    /// </summary>
+    private static readonly TimeSpan ValidadeDaLista = TimeSpan.FromMinutes(10);
+
+    /// <summary>Quanto vale o "fora do ar": sem rede, a janela não espera a cada abertura.</summary>
+    private static readonly TimeSpan ValidadeDoForaDoAr = TimeSpan.FromMinutes(5);
+
+    private static (IReadOnlyList<SolarModule> Modulos, IReadOnlyDictionary<string, PanModule> Eletrica, string Origem, string Endereco, DateTime Quando)? _ultimaLista;
 
     private static DateTime? _foraDoArAte;
 
     /// <summary>
+    /// Os módulos mandados ao servidor do Clivus nesta sessão do Civil 3D que
+    /// esperam a gestão (revisão do 38.8), com a parte elétrica: entram na
+    /// lista de toda janela de Mesa até a lista do servidor trazê-los
+    /// aprovados. Sem isto, o pendente sumia ao carregar outro .PAN, e
+    /// mandá-lo de novo dava "já existe".
+    /// </summary>
+    private static readonly Dictionary<string, (SolarModule Modulo, PanModule? Eletrica)> Pendentes = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// A parte elétrica que o servidor tem de cada módulo (os que vieram de um
-    /// .PAN, 38.6), pelo modelo; vazia com a biblioteca embutida.
+    /// .PAN, 38.6), pelo modelo, mais a dos pendentes desta sessão; vazia com
+    /// a biblioteca embutida.
     /// </summary>
     internal static IReadOnlyDictionary<string, PanModule> Eletrica { get; private set; } = new Dictionary<string, PanModule>();
 
@@ -56,62 +69,109 @@ internal static class FonteDeModulos
 
     /// <summary>O serviço local de CLIVUS_SERVICO (ou UFV_SERVICO, o nome de antes de 04/10/2026), ou null.</summary>
     private static string? ServicoLocal =>
-        (Environment.GetEnvironmentVariable("CLIVUS_SERVICO") ?? Environment.GetEnvironmentVariable("UFV_SERVICO")) is { Length: > 0 } definido
-            ? definido.Trim()
-            : null;
+        Environment.GetEnvironmentVariable("CLIVUS_SERVICO") ?? Environment.GetEnvironmentVariable("UFV_SERVICO");
 
-    /// <summary>Se os módulos vêm do servidor do Clivus, e não de um serviço local: lá o cadastro pede a chave e fica pendente.</summary>
-    internal static bool DoServidorDoClivus => ServicoLocal is null && Publicador3D.Endereco is not null;
+    /// <summary>Onde fica a biblioteca agora (as variáveis podem mudar com o Civil 3D aberto).</summary>
+    internal static ModuleServer Servidor => ModuleServer.Resolve(ServicoLocal, Publicador3D.Endereco);
 
-    internal static string Endereco =>
-        (ServicoLocal ?? (Publicador3D.Endereco is { } servidor ? servidor + "/api/v1" : EnderecoLocal)).TrimEnd('/');
+    /// <summary>Se os módulos vêm do servidor do Clivus, e não de um serviço local.</summary>
+    internal static bool DoServidorDoClivus => Servidor.IsClivus;
+
+    /// <summary>O endereço da biblioteca, para as mensagens.</summary>
+    internal static string Endereco => Servidor.Address ?? "—";
+
+    /// <summary>Por que um cadastro não pode ir agora (sem endereço, sem HTTPS, sem chave), ou null.</summary>
+    internal static string? PorQueNaoCadastra => Servidor.WhyCannotRegister(Publicador3D.Chave);
+
+    /// <summary>Se o modelo foi mandado nesta sessão e espera a validação da gestão.</summary>
+    internal static bool EhPendente(string modelo) => Pendentes.ContainsKey(modelo.Trim());
 
     /// <summary>
-    /// Os módulos e uma linha dizendo de onde vieram, para a janela mostrar.
+    /// Os módulos e uma linha dizendo de onde vieram, para a janela mostrar,
+    /// com os pendentes desta sessão no fim.
     /// </summary>
     internal static (IReadOnlyList<SolarModule> Modulos, string Origem) Carregar()
     {
+        var servidor = Servidor;
         Eletrica = new Dictionary<string, PanModule>();
         NoAr = false;
 
-        if (EnderecoValido() is null)
+        if (servidor.Address is not { } endereco)
         {
-            RegistroDeDiagnostico.Registrar($"CLIVUS_SERVICO não é um endereço http: \"{Endereco}\".");
-            return (ModuleLibrary.Default(), Tr.F("Biblioteca embutida (CLIVUS_SERVICO inválido: {0}).", Endereco));
+            RegistroDeDiagnostico.Registrar($"Biblioteca de módulos sem endereço: {servidor.Problem}.");
+            return ComPendentes(ModuleLibrary.Default(), new Dictionary<string, PanModule>(), Tr.F("Biblioteca embutida ({0}).", servidor.Problem ?? string.Empty));
         }
 
-        // Servidor fora do ar há pouco: não espera de novo a cada janela.
+        // A última lista boa do mesmo endereço, enquanto vale.
+        if (_ultimaLista is { } ultima && ultima.Endereco == endereco && DateTime.UtcNow - ultima.Quando < ValidadeDaLista)
+        {
+            NoAr = true;
+            return ComPendentes(ultima.Modulos, ultima.Eletrica, ultima.Origem);
+        }
+
+        // Fora do ar há pouco: não espera de novo a cada janela.
         if (_foraDoArAte is { } ate && DateTime.UtcNow < ate)
-            return (ModuleLibrary.Default(), Tr.T("Biblioteca embutida (serviço fora do ar)."));
+            return ComPendentes(ModuleLibrary.Default(), new Dictionary<string, PanModule>(), Tr.T("Biblioteca embutida (serviço fora do ar)."));
 
         try
         {
             // Task.Run: sem ele, o .Result no fio da interface do AutoCAD
             // pode travar esperando o próprio fio.
-            var json = Task.Run(() => Cliente.GetStringAsync($"{Endereco}/modulos")).GetAwaiter().GetResult();
+            var json = Task.Run(() => Cliente.GetStringAsync($"{endereco}/modulos")).GetAwaiter().GetResult();
             var modulos = ModuleLibrary.ParseService(json);
-            Eletrica = ModuleLibrary.ParseServiceElectrical(json);
+            var eletrica = ModuleLibrary.ParseServiceElectrical(json);
+            var origem = servidor.IsClivus
+                ? Tr.F("Módulos do servidor do Clivus: {0}.", modulos.Count)
+                : Tr.F("Módulos do serviço ({0}): {1}.", endereco, modulos.Count);
+
+            _ultimaLista = (modulos, eletrica, origem, endereco, DateTime.UtcNow);
+            _foraDoArAte = null;
             NoAr = true;
 
-            return (modulos, DoServidorDoClivus
-                ? Tr.F("Módulos do servidor do Clivus: {0}.", modulos.Count)
-                : Tr.F("Módulos do serviço ({0}): {1}.", Endereco, modulos.Count));
+            return ComPendentes(modulos, eletrica, origem);
         }
         catch (Exception erro) when (erro is HttpRequestException or TaskCanceledException or InvalidOperationException)
         {
-            RegistroDeDiagnostico.Registrar($"Servidor de módulos indisponível em {Endereco}; usando a biblioteca embutida.", erro);
-            if (erro is not InvalidOperationException) _foraDoArAte = DateTime.UtcNow.AddMinutes(1);
+            RegistroDeDiagnostico.Registrar($"Servidor de módulos indisponível em {endereco}; usando a biblioteca embutida.", erro);
+            if (erro is not InvalidOperationException) _foraDoArAte = DateTime.UtcNow + ValidadeDoForaDoAr;
 
             var motivo = erro is InvalidOperationException ? erro.Message : Tr.T("serviço fora do ar");
-            return (ModuleLibrary.Default(), Tr.F("Biblioteca embutida ({0}).", motivo));
+            return ComPendentes(ModuleLibrary.Default(), new Dictionary<string, PanModule>(), Tr.F("Biblioteca embutida ({0}).", motivo));
         }
+    }
+
+    /// <summary>
+    /// A lista com os pendentes desta sessão que ela ainda não tem, e a parte
+    /// elétrica deles. O pendente que a lista já traz (a gestão aprovou) sai
+    /// dos pendentes.
+    /// </summary>
+    private static (IReadOnlyList<SolarModule> Modulos, string Origem) ComPendentes(
+        IReadOnlyList<SolarModule> modulos, IReadOnlyDictionary<string, PanModule> eletrica, string origem)
+    {
+        foreach (var aprovado in Pendentes.Keys.Where(m => ModuleLibrary.Find(modulos, m) is not null).ToList())
+            Pendentes.Remove(aprovado);
+
+        var juntos = new Dictionary<string, PanModule>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (modelo, dados) in eletrica) juntos[modelo] = dados;
+        foreach (var (modelo, (_, dados)) in Pendentes)
+        {
+            if (dados is not null) juntos[modelo] = dados;
+        }
+
+        Eletrica = juntos;
+
+        if (Pendentes.Count == 0) return (modulos, origem);
+
+        return (
+            [.. modulos, .. Pendentes.Values.Select(p => p.Modulo)],
+            origem + " " + Tr.F("Esperando a validação da equipe: {0}.", string.Join(", ", Pendentes.Values.Select(p => p.Modulo.Model))));
     }
 
     /// <summary>
     /// Cadastra o módulo (passo 8.4). Devolve se o servidor aceitou, se o
     /// módulo ficou pendente da validação da gestão (servidor do Clivus, 38.8)
     /// e a frase para o usuário. O motivo da recusa vem do próprio servidor
-    /// (modelo repetido, medida fora da faixa, chave).
+    /// (medida fora da faixa, chave) ou do <see cref="ModuleServer"/>.
     /// </summary>
     /// <param name="eletrica">A parte elétrica do .PAN (38.6), ou null.</param>
     /// <param name="pan">O texto do .PAN, que o servidor guarda como veio, ou null.</param>
@@ -129,32 +189,20 @@ internal static class FonteDeModulos
             return (false, false, erro.Message);
         }
 
-        if (EnderecoValido() is null)
-        {
-            return (false, false, Tr.F("CLIVUS_SERVICO não é um endereço http: \"{0}\".", Endereco));
-        }
-
-        var doClivus = DoServidorDoClivus;
+        var servidor = Servidor;
         var chave = Publicador3D.Chave;
 
-        if (doClivus)
-        {
-            // A chave só vai por HTTPS (plano/seguranca.md), como no Publicar 3D.
-            if (Viewer3DPage.WhyServerUnsafe(Endereco) is { } inseguro) return (false, false, inseguro);
-
-            if (chave is null)
-            {
-                return (false, false, Tr.T("Para mandar o módulo ao servidor do Clivus falta a chave (variável CLIVUS_SERVIDOR_CHAVE)."));
-            }
-        }
+        // A chave só vai por HTTPS e só para o servidor do Clivus; o serviço
+        // local não pede nenhuma.
+        if (servidor.WhyCannotRegister(chave) is { } motivo) return (false, false, motivo);
+        var endereco = servidor.Address!;
 
         try
         {
             using var corpo = new StringContent(json, Encoding.UTF8, "application/json");
-            using var pedido = new HttpRequestMessage(HttpMethod.Post, $"{Endereco}/modulos") { Content = corpo };
+            using var pedido = new HttpRequestMessage(HttpMethod.Post, $"{endereco}/modulos") { Content = corpo };
 
-            // O serviço local não pede chave; o do Clivus, sim. O erro volta no idioma da tela.
-            if (doClivus && chave is not null) pedido.Headers.Authorization = new AuthenticationHeaderValue("Bearer", chave);
+            if (servidor.IsClivus) pedido.Headers.Authorization = new AuthenticationHeaderValue("Bearer", chave!.Trim());
             pedido.Headers.AcceptLanguage.ParseAdd(Tr.AcceptLanguage);
 
             using var resposta = Task.Run(() => ClienteDoCadastro.SendAsync(pedido)).GetAwaiter().GetResult();
@@ -168,10 +216,15 @@ internal static class FonteDeModulos
                 // .PAN; só depois entra na lista de todos (38.8).
                 if (ModuleServiceReply.IsPending(texto))
                 {
+                    Pendentes[modulo.Model.Trim()] = (modulo, eletrica);
+
                     return (true, true, pan is not null && ModuleLibrary.ServiceKeptPan(texto)
-                        ? Tr.F("O módulo {0} foi para o servidor do Clivus, com o PAN {1}, e espera a validação da equipe. Depois de conferido, ele entra na lista de todos; até lá, fica só nesta janela.", modulo.DisplayName, panNome ?? string.Empty)
-                        : Tr.F("O módulo {0} foi para o servidor do Clivus e espera a validação da equipe. Depois de conferido, ele entra na lista de todos; até lá, fica só nesta janela.", modulo.DisplayName));
+                        ? Tr.F("O módulo {0} foi para o servidor do Clivus, com o PAN {1}, e espera a validação da equipe. Depois de conferido, ele entra na lista de todos; até lá, fica na lista das janelas de Mesa desta sessão do Civil 3D.", modulo.DisplayName, panNome ?? string.Empty)
+                        : Tr.F("O módulo {0} foi para o servidor do Clivus e espera a validação da equipe. Depois de conferido, ele entra na lista de todos; até lá, fica na lista das janelas de Mesa desta sessão do Civil 3D.", modulo.DisplayName));
                 }
+
+                // No serviço local ele entra na lista na hora: a guardada já não vale.
+                _ultimaLista = null;
 
                 return (true, false, pan is null
                     ? Tr.F("Módulo {0} cadastrado no serviço.", modulo.DisplayName)
@@ -180,16 +233,28 @@ internal static class FonteDeModulos
                         : Tr.F("Módulo {0} cadastrado no serviço, mas sem o PAN: o serviço é de antes do cadastro com PAN. Atualize-o (tools\\servico-local.ps1), apague o módulo lá e cadastre de novo.", modulo.DisplayName));
             }
 
+            // No servidor do Clivus, "já existe" é de um módulo que espera a
+            // gestão (mandado antes, talvez em outra sessão) ou que ela já
+            // aprovou: o envio já foi. Ele fica com os pendentes, e a próxima
+            // lista mostra se foi aprovado (revisão do 38.8).
+            if (servidor.IsClivus && resposta.StatusCode == HttpStatusCode.Conflict)
+            {
+                Pendentes[modulo.Model.Trim()] = (modulo, eletrica);
+                _ultimaLista = null;
+
+                return (true, true, Tr.F("O módulo {0} já está no servidor do Clivus: espera a validação da equipe ou já foi aprovado. Nesta sessão do Civil 3D, ele fica na lista das janelas de Mesa.", modulo.DisplayName));
+            }
+
             return (false, false, resposta.StatusCode == HttpStatusCode.Conflict
                 ? ModuleServiceReply.ErrorMessage(texto) ?? Tr.T("Já existe um módulo com esse modelo.")
                 : Tr.F("O serviço recusou ({0}): {1}", (int)resposta.StatusCode, ModuleServiceReply.ErrorMessage(texto) ?? Cortar(texto)));
         }
         catch (Exception erro) when (erro is HttpRequestException or TaskCanceledException)
         {
-            RegistroDeDiagnostico.Registrar($"Falha ao cadastrar módulo em {Endereco}.", erro);
-            return (false, false, doClivus
-                ? Tr.F("O servidor do Clivus não respondeu em {0}. Se ele estava no ar, o módulo pode ter ido: tente de novo daqui a pouco; um \"já existe\" quer dizer que foi.", Endereco)
-                : Tr.F("O serviço de módulos não respondeu em {0}. Se ele estava no ar, o módulo pode ter sido gravado: feche e abra a janela de Mesa para conferir a lista. Fora do ar, rode tools\\servico-local.ps1.", Endereco));
+            RegistroDeDiagnostico.Registrar($"Falha ao cadastrar módulo em {endereco}.", erro);
+            return (false, false, servidor.IsClivus
+                ? Tr.F("O servidor do Clivus não respondeu em {0}. Se ele estava no ar, o módulo pode ter ido: mande de novo daqui a pouco, e o Clivus diz se ele já está lá.", endereco)
+                : Tr.F("O serviço de módulos não respondeu em {0}. Se ele estava no ar, o módulo pode ter sido gravado: feche e abra a janela de Mesa para conferir a lista. Fora do ar, rode tools\\servico-local.ps1.", endereco));
         }
     }
 
