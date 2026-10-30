@@ -103,6 +103,30 @@ Erros: `400` (JSON fora do contrato, com `{"erro": "..."}` em português),
 - `CLIVUS_SERVIDOR` e `CLIVUS_SERVIDOR_CHAVE` vêm de variável de ambiente
   (como `CLIVUS_SERVICO`, o serviço de módulos).
 
+## A biblioteca de módulos (38.6 e 38.8, 30/10/2026)
+
+O servidor também guarda a biblioteca de módulos da janela de Mesa. Ela já
+existia no serviço local (`servidor/`, `tools\servico-local.ps1`, rotas sem o
+`/api/v1`), que continua valendo quando `CLIVUS_SERVICO` aponta para ele.
+
+- `GET /api/v1/modulos`: a lista pública, só com os módulos que a gestão
+  aprovou. Cada módulo vem no formato de `tests/dados/servico-modulos-com-pan.json`:
+  `id`, `marca`, `modelo`, `potencia_w`, `altura_m`, `largura_m`,
+  `espessura_m`, `eletrica` (ou null), `tem_pan` e `pan_nome`. É a cópia que o
+  gate `validate_modulos` do servidor confere.
+- `GET /api/v1/modulos/{id}` e `GET /api/v1/modulos/{id}/pan` (o .PAN como foi
+  enviado): só os aprovados.
+- `POST /api/v1/modulos` com `Authorization: Bearer {CLIVUS_SERVIDOR_CHAVE}`,
+  o corpo de `ModuleLibrary.ToServiceJson` (até 1,2 MB, com o .PAN):
+  - `201`: o módulo da lista mais `"situacao": "pendente"` (exemplo em
+    `tests/dados/servidor-modulo-pendente.json`). Ele só entra na lista
+    pública depois que uma pessoa da gestão confere o .PAN e aprova em
+    `/gestao/modulos`. Até lá, o plugin o deixa só na janela que o mandou.
+  - Erros com `{"erro": "..."}` no idioma do `Accept-Language`: `401` (chave),
+    `409` (o modelo já existe, pendente ou aprovado, sem diferença de
+    maiúscula), `413` (grande demais), `422` (medida ou parte elétrica fora
+    dos limites do plugin, ou com NaN ou infinito), `400` (JSON ou UTF-8).
+
 ## Identidade visual
 
 Cores do Clivus: azul-petróleo `#0F2533`, âmbar `#F4A51C`, branco. A página

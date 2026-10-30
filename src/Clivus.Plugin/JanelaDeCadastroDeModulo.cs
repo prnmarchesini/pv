@@ -35,6 +35,18 @@ internal sealed class JanelaDeCadastroDeModulo : Window
     /// <summary>O módulo cadastrado, ou null se não houve cadastro.</summary>
     internal SolarModule? Cadastrado { get; private set; }
 
+    /// <summary>
+    /// Se o módulo ficou esperando a validação da gestão (servidor do Clivus,
+    /// 38.8): ele ainda não está na lista de todos.
+    /// </summary>
+    internal bool Pendente { get; private set; }
+
+    /// <summary>A frase do servidor sobre o cadastro, para a janela de Mesa mostrar.</summary>
+    internal string Mensagem { get; private set; } = string.Empty;
+
+    /// <summary>O .PAN que foi junto no cadastro, ou null.</summary>
+    internal (PanModule Eletrica, string Texto, string Nome)? PanEnviado { get; private set; }
+
     /// <param name="partida">Medidas para começar (as que estão na janela de Mesa), ou null.</param>
     /// <param name="pan">O .PAN que a janela de Mesa já leu (38.6), ou null.</param>
     internal JanelaDeCadastroDeModulo(SolarModule? partida, (PanModule Eletrica, string Texto, string Nome)? pan = null)
@@ -195,7 +207,7 @@ internal sealed class JanelaDeCadastroDeModulo : Window
 
             // O PAN só vai junto se ainda é o mesmo módulo (o modelo não foi trocado à mão).
             var pan = _pan is { } lido && string.Equals(lido.Eletrica.Model.Trim(), modulo.Model, StringComparison.OrdinalIgnoreCase) ? lido : ((PanModule, string, string)?)null;
-            var (cadastrou, mensagem) = FonteDeModulos.Cadastrar(modulo, pan?.Item1, pan?.Item2, pan?.Item3);
+            var (cadastrou, pendente, mensagem) = FonteDeModulos.Cadastrar(modulo, pan?.Item1, pan?.Item2, pan?.Item3);
 
             if (!cadastrou)
             {
@@ -204,6 +216,9 @@ internal sealed class JanelaDeCadastroDeModulo : Window
             }
 
             Cadastrado = modulo;
+            Pendente = pendente;
+            Mensagem = mensagem;
+            PanEnviado = pan;
             DialogResult = true;
         }
         catch (Exception erro)

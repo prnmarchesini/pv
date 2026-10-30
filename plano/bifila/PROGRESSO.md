@@ -23,6 +23,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 38.5 A janela de Mesa em abas: AGUARDANDO VALIDAÇÃO
 - 38.6 O PAN enche o módulo e sobe para o servidor: AGUARDANDO VALIDAÇÃO — serviço: `servidor/tests/test_pan.py`
 - 38.7 Fabricantes, biposte genérico e a altura básica (P1 e P2): AGUARDANDO VALIDAÇÃO — `VendorStructures`, `PillarsAtBasicHeight`, 10 testes
+- 38.8 Os módulos no servidor do Clivus, com a validação da gestão: AGUARDANDO VALIDAÇÃO — servidor: clivussolar 2cc6561 (gate `validate_modulos`); plugin: `ModuleServiceReply`, 20 testes
 
 ## Etapa 39: o resto do Clivus
 
@@ -293,6 +294,35 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
   - Testes: 10 no Core (o P1 e o P2 são os do motor no chão plano, no biposte e na monoposte;
     o enterro é o T3 ou o mínimo do projeto; os números de catálogo; o genérico sem nada de
     fabricante). As abas e o corte são de tela.
+- 38.8 (30/10/2026), o que assumi:
+  - Pedidos do Renan: "então suba para o servidor de produção" e "os arquivos pan do cliente
+    vão para a página de gestão do clivus, onde uma pessoa valida os pans e vai integrando a
+    plataforma de forma pública após validação".
+  - Servidor (clivussolar, 2cc6561, no ar desde 30/10 às ~17h30; o trabalho foi de um fork e
+    eu revisei antes do push): `GET /api/v1/modulos` só com os aprovados, `POST` com a chave
+    do plugin cria **pendente**, a página `/gestao/modulos` aprova ou recusa (com motivo) e
+    baixa o .PAN. Quem entra na gestão: as contas de `CLIVUS_ADM_EMAILS` (sem ela, a Develop).
+    Os três módulos embutidos no plugin entram aprovados na tabela vazia. Conferido no ar: a
+    lista com os 3, a gestão sem login vai para `/entrar`, o `POST` sem chave dá 401 com o
+    `{"erro"}`. O contrato está em `plano/contrato-servidor-3d.md`.
+  - Plugin: sem `CLIVUS_SERVICO`, a janela de Mesa lê os módulos do servidor do Clivus (o do
+    Publicar 3D, com `/api/v1`); com ela, do serviço local, como antes. O cadastro leva a
+    `CLIVUS_SERVIDOR_CHAVE` (só por HTTPS) e o idioma; a resposta "pendente" deixa o módulo só
+    na janela que o mandou, escolhido, com o .PAN, e o recado diz que ele espera a validação.
+    Sem a chave, o "Carregar .PAN" não pergunta se cadastra (o servidor recusaria); o
+    "Cadastrar módulo..." diz que falta a chave.
+  - Hoje a chave do plugin é uma só (a sua) e publica na conta Develop: até cada conta ter o
+    seu token (etapa das licenças), todo envio aparece como "Enviado por Develop", e cliente
+    sem a chave não manda módulo.
+  - Fica de fora: tirar da lista um módulo já aprovado e avisar o cliente da recusa.
+  - Testes: 20 no Core (`ModuleServiceReply`: o pendente, o `{"erro"}` do servidor e o
+    `detail` do serviço local) e o gate do servidor (70 conferências, que reprova nos sete
+    defeitos plantados). O HTTP do plugin é de tela.
+- Incidente de 30/10/2026: a revisão do 38.7 (subagente) rodou `tools/traducoes.py --faltam`
+  passando os fontes como destino, e nove .cs viraram "[]". Recuperei os versionados do git e
+  refiz as edições a partir da conversa (o diff saiu idêntico, linha por linha); os dois novos
+  foram reescritos. O `--faltam` agora só grava em .json fora de src/, tests/ e plano/
+  (ba8874c), e a revisão foi refeita numa worktree isolada.
 
 ## Roteiro de tela (38.1 a 40.2)
 
@@ -340,7 +370,8 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
      "Canaletas, carport e estrutura do biposte" liga e desliga as peças), Publicar 3D,
      TermoVision;
    - Salvar, fechar e abrir o DWG: as mesas, os pilares e as peças voltam.
-8. **PAN (38.6):** com o serviço no ar (`tools\servico-local.ps1`), janela de Mesa › Perfil e
+8. **PAN (38.6):** com o serviço local no ar (`tools\servico-local.ps1`) e
+   `CLIVUS_SERVICO=http://localhost:8765` (sem ela, desde o 38.8, vale o item 10), janela de Mesa › Perfil e
    módulo › Carregar .PAN... › `Panama\Docs\JAM66D46-720_LB.PAN`: o modelo vira "JA Solar
    JAM66D46-720/LB", as medidas 2,384 × 1,303 × 0,033, a potência 720 e os dados elétricos
    enchem; a pergunta "Cadastrar agora, com o PAN?" › Sim: o módulo entra na lista. Fechar e
@@ -354,3 +385,10 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
    francesas mudam e aparece o recado de que ela pede a ponta baixa de 1,032. Voltar à
    primeira aba, Monoposte e Biposte de novo: a GC1000 continua na aba. Mudar a PB mínima do
    projeto e reabrir a janela: o P1 e o P2 acompanham.
+10. **Módulos no servidor do Clivus (38.8):** sem `CLIVUS_SERVICO` e com a
+    `CLIVUS_SERVIDOR_CHAVE`, abrir a janela de Mesa: embaixo do modelo, "Módulos do servidor
+    do Clivus: 3". Carregar .PAN › `JAM66D46-720_LB.PAN` › "Cadastrar agora?" › Sim: o recado
+    diz que ele foi para o servidor e espera a validação; o módulo fica escolhido, com os
+    dados elétricos. No site, entrar com a conta Develop › cartão **Gestão**: o módulo
+    pendente, com o .PAN para baixar. Aprovar. Fechar e abrir a janela de Mesa: ele está na
+    lista ("Módulos do servidor do Clivus: 4"), e escolher ele traz os dados elétricos.

@@ -1,0 +1,22 @@
+{
+  "id": "9b2f0c1e-6a4d-4c8e-9f3a-2d7e5b1c0a42",
+  "marca": "JA Solar",
+  "modelo": "JAM66D46-720/LB",
+  "potencia_w": 720.0,
+  "altura_m": 2.384,
+  "largura_m": 1.303,
+  "espessura_m": 0.033,
+  "eletrica": {
+    "voc": 55.89,
+    "isc": 16.38,
+    "vmp": 46.67,
+    "imp": 15.43,
+    "mu_voc": -0.1398,
+    "mu_isc": 0.00737,
+    "noct": 45.0,
+    "mu_pmp": -0.29
+  },
+  "tem_pan": true,
+  "pan_nome": "JAM66D46-720_LB.PAN",
+  "situacao": "pendente"
+}

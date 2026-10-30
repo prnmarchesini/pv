@@ -52,7 +52,7 @@ internal sealed class JanelaDeMesa : Window
         Content = Tr.T("Cadastrar módulo..."),
         Height = 24,
         Margin = new Thickness(0, 2, 0, 6),
-        ToolTip = Tr.T("Grava um módulo novo no serviço local (biblioteca de módulos). Precisa do serviço no ar: tools\\servico-local.ps1."),
+        ToolTip = Tr.T("Manda um módulo novo para a biblioteca de módulos, com o .PAN. No servidor do Clivus ele espera a equipe conferir antes de entrar na lista de todos; no serviço local (CLIVUS_SERVICO), entra na hora."),
     };
     private readonly TextBlock _origemDosModulos = new() { FontSize = 11, Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap };
 
@@ -1521,6 +1521,30 @@ internal sealed class JanelaDeMesa : Window
 
             if (janela.ShowDialog() != true || janela.Cadastrado is not { } novo) return;
 
+            // No servidor do Clivus o módulo espera a validação da gestão
+            // (38.8): a lista de todos ainda não o tem. Ele fica só nesta
+            // janela, escolhido, com o .PAN que foi junto.
+            if (janela.Pendente)
+            {
+                _preenchendo = true;
+                try
+                {
+                    _modulos = [.. _modulos.Where(m => !ReferenceEquals(m, _provisorio)), novo];
+                    _provisorio = novo;
+                    if (janela.PanEnviado is { } enviado) _doPan = (novo, enviado.Eletrica, enviado.Texto, enviado.Nome);
+                    ListarModulos();
+                    _modelo.SelectedIndex = _modulos.ToList().IndexOf(novo);
+                }
+                finally
+                {
+                    _preenchendo = false;
+                }
+
+                TrocarModulo();
+                Avisar(janela.Mensagem);
+                return;
+            }
+
             _preenchendo = true;
             (_modulos, _origemDosModulos.Text) = FonteDeModulos.Carregar();
             ListarModulos();
@@ -1768,6 +1792,10 @@ internal sealed class JanelaDeMesa : Window
     /// </summary>
     private void OferecerCadastro(SolarModule modulo, PanModule pan, string texto, string nome)
     {
+        // Sem a chave, o servidor do Clivus recusaria (38.8): nem pergunta. O
+        // "Cadastrar módulo..." explica o porquê, se o usuário quiser mandar.
+        if (FonteDeModulos.DoServidorDoClivus && Publicador3D.Chave is null) return;
+
         if (!FonteDeModulos.NoAr)
         {
             Avisar(Tr.F("O módulo {0} não está na biblioteca. Com o serviço de módulos no ar, \"Cadastrar módulo...\" o leva para lá, com o PAN.", modulo.DisplayName));
@@ -1783,9 +1811,12 @@ internal sealed class JanelaDeMesa : Window
 
         if (resposta != MessageBoxResult.Yes) return;
 
-        var (cadastrou, mensagem) = FonteDeModulos.Cadastrar(modulo, pan, texto, nome);
+        var (cadastrou, pendente, mensagem) = FonteDeModulos.Cadastrar(modulo, pan, texto, nome);
         Avisar(mensagem);
-        if (!cadastrou) return;
+
+        // Pendente da validação (servidor do Clivus, 38.8): a lista de todos
+        // ainda não o tem, e ele continua a entrada desta janela, escolhido.
+        if (!cadastrou || pendente) return;
 
         // A lista volta do serviço, com o módulo novo escolhido.
         _preenchendo = true;

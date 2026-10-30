@@ -28,7 +28,7 @@ internal static class Publicador3D
             ? uri.ToString().TrimEnd('/')
             : null;
 
-    private static string? Chave => Environment.GetEnvironmentVariable("CLIVUS_SERVIDOR_CHAVE") is { Length: > 0 } c ? c.Trim() : null;
+    internal static string? Chave => Environment.GetEnvironmentVariable("CLIVUS_SERVIDOR_CHAVE") is { Length: > 0 } c ? c.Trim() : null;
 
     /// <summary>Publica o corpo (já no formato do contrato). O link, ou o erro em português.</summary>
     internal static (PublishedScene? Publicada, string? Erro) Publicar(string corpo)
