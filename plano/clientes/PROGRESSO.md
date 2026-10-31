@@ -94,8 +94,10 @@ O contrato com o servidor está nos dois contratos, na seção "Etapa 43"
   cópia com o número na saída (alvo `CarimbarPackageContents`), que o
   `publicar-bundle.ps1` põe no bundle (ele confere o número). Subir para
   0.1.1: trocar o `<Version>` e rodar `tools\gerar-instalador.ps1`.
-- **Traduções:** 59 frases novas sem inglês e espanhol; o
-  `TranslationCatalogTests` falha até o Renan traduzir.
+- **Traduções:** as 59 frases novas traduzidas no merge (31/10/2026). O "Atualizar" em
+  inglês passou de "Refresh" para "Update": a mesma chave é o botão novo da ribbon e os
+  de reler as janelas, e "Update" serve aos dois. No instalador, "não foi preciso" virou
+  "não foi necessária".
 - **Revisão (subagente, worktree isolada no `85b43bb`).** Corrigido: a
   tentativa depois de uma cópia que falhou lia "já está instalada" no
   descritor novo e saía com sucesso com o bundle pela metade; o comando

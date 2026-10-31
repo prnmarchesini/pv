@@ -133,7 +133,7 @@ internal static class EsperaDoCivil3D
             {
                 case InstallDecision.AlreadyCurrent:
                 {
-                    var frase = Tr.F("O Clivus Solar {0} já está instalado; a atualização para a {1} não foi preciso.", instalada, versao);
+                    var frase = Tr.F("O Clivus Solar {0} já está instalado; a atualização para a {1} não foi necessária.", instalada, versao);
                     Registrar(log, $"0 {frase}");
                     return (0, frase, false);
                 }
