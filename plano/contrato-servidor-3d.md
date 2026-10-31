@@ -42,15 +42,23 @@ CANAL.md). A página local continua com a origem verdadeira.
 {
   "titulo": "Curvas Itatiba",
   "origem": [0, 0, 0],
+  "local": { "latitude": -23.0, "longitude": -46.8, "fuso": -3 },
   "terreno": {
     "x0": -50.0, "y0": -25.0, "passo": 2.0,
     "colunas": 51, "linhas": 26,
     "z": [0.0, 0.1, null, ...]
   },
   "faces":   [[x1,y1,z1, x2,y2,z2, x3,y3,z3, x4,y4,z4, corRGB], ...],
-  "pilares": [[x, y, zTopo, zPe], ...],
+  "pilares": [[x, y, zTopo, zPe, largura, profundidade, giro], [x, y, zTopo, zPe], ...],
   "arvores": [[x, y, zChao, alturaTronco, larguraTronco, alturaCopa, larguraCopa], ...],
-  "sombras": [[x1,y1,z1, x2,y2,z2, ...], ...]
+  "sombras": [[x1,y1,z1, x2,y2,z2, ...], ...],
+  "canaletas": [[x1,y1,z1, x2,y2,z2, x3,y3,z3, corRGB], ...],
+  "resumo": {
+    "total": { "mesas": 618, "modulos": 17304, "kwp": 9515.2 },
+    "areas": [{ "nome": "Área 1", "mesas": 600, "modulos": 16800, "kwp": 9240 },
+              { "nome": "Fora das áreas", "fora": true, "mesas": 18, "modulos": 504, "kwp": 275.2 }],
+    "tipos": [{ "nome": "GC800", "mesas": 618, "modulos": 17304, "kwp": 9515.2 }]
+  }
 }
 ```
 
@@ -60,7 +68,13 @@ CANAL.md). A página local continua com a origem verdadeira.
 - `faces`: uma face de módulo por item, quatro cantos em ordem (borda baixa
   primeiro) e a cor como inteiro `0xRRGGBB` (a cor do tipo de mesa ou da
   marca de sombra, como está no desenho).
-- `pilares`: o traço visível, do pé (no terreno) ao topo.
+- `pilares`: o pilar visível, do pé (no terreno) ao topo. Desde 31/10/2026
+  (passo 42.2, "os pilares também sejam modelados") ele pode trazer a seção:
+  `largura` (ao longo da mesa) e `profundidade` em metros, acima de 0 e até
+  10, e o `giro` em radianos, de X para Y — a escala X e Y e a rotação do
+  bloco do pilar. São os três ou nenhum; sem eles, a seção é 0,10 × 0,10 e
+  o giro 0. O visualizador desenha uma caixa por pilar, que faz e recebe
+  sombra.
 - `arvores`: o pé e as medidas; tronco e copa são cilindros (a copa começa
   onde o tronco acaba).
 - `sombras`: contornos fechados das sombras desenhadas, já no terreno.
@@ -68,7 +82,26 @@ CANAL.md). A página local continua com a origem verdadeira.
   `[x1,y1,z1, x2,y2,z2, x3,y3,z3, corRGB]` — as canaletas da drenagem e o
   carport (aço, bases e módulos com espessura). O servidor guarda como vem; o
   visualizador desenha na camada das mesas.
-- Listas vazias são válidas; `terreno` pode faltar.
+- `local` (opcional, desde 31/10/2026, passo 42.2): onde a usina está, para o
+  navegador calcular o sol (o `SolarCalculator` do plugin portado para
+  JavaScript, `sol.js`) e fazer a sombra em tempo real: `latitude` (−90 a
+  90, positiva ao norte) e `longitude` (−180 a 180, positiva a leste) em
+  graus, e `fuso` em horas (−14 a 14; −3 em Brasília), o mesmo das sombras
+  do desenho. Sem ele (desenho sem localização), o visualizador fica sem os
+  controles do sol e com a luz de sempre. No envio ao servidor a latitude e
+  a longitude vão arredondadas a 0,1° (uns 11 km): o sol muda menos de
+  0,05° e o lugar exato da usina não sai do computador, como a `origem`; a
+  página local leva o lugar com o centímetro.
+- `resumo` (opcional, desde 31/10/2026, passo 42.2): o quadro "Resumo" das
+  camadas, pela conta da janela Áreas e do Recontar. `total` com `mesas`,
+  `modulos` e `kwp` (potência DC); `areas` (só quando o desenho tem área,
+  com a linha das mesas fora delas marcada `"fora": true`) e `tipos` (por
+  tipo de mesa), cada linha com o `nome` e os mesmos três números. Números
+  sem sinal; até 1000 linhas por lista. Sem ele, o item "Resumo" não
+  aparece.
+- Listas vazias são válidas; `terreno` pode faltar. O servidor recusa com
+  `400` o `local`, a seção do pilar ou o `resumo` fora do formato acima (NaN
+  e infinito também); `null` vale como ausente.
 
 ## O que o servidor responde
 
@@ -91,7 +124,11 @@ Erros: `400` (JSON fora do contrato, com `{"erro": "..."}` em português),
 - `GET /3d/{id}`: a página 3D. O visualizador de referência é o do plugin
   (o modelo HTML em `Viewer3DPage.cs`, com three.js r128): o servidor pode
   usar o mesmo, carregando a cena de `GET /api/v1/cenas/{id}` em vez de ela
-  vir embutida.
+  vir embutida. O sol e o resumo (passo 42.2) são dois arquivos do plugin,
+  `src/Clivus.Core/Visualizador3D/sol.js` e `resumo.js`, que o servidor serve
+  iguais em `/estatico/`: mudou um, copia para o outro. A página pública
+  leva o logo do Clivus e a propaganda (o botão "Conheça o Clivus Solar"
+  leva à landing, `CLIVUS_SITE_URL`); a local, só o logo.
 - `GET /api/v1/cenas/{id}`: a cena como foi enviada.
 - `GET /api/v1/saude`: `200 {"ok": true}` (o plugin testa antes de enviar).
 

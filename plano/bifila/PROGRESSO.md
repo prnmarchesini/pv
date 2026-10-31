@@ -43,6 +43,10 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 41.1 A janela Áreas (Implantação): a lista das áreas com o resumo de cada uma, zoom, hachura, renomear e o Excel por área: AGUARDANDO VALIDAÇÃO — `AreaSummary`, `AreaHatch`, `AreaReport`, 34 testes; nível 2 `clivus-areas` (rodar.ps1 -SoAreas)
 - 41.2 As ações por área (Apagar área, Limpar mesas, Regerar, Recalcular), a área repetida recusada e avisada, e a área achada pelo clique mesmo com a linha do cliente por cima: AGUARDANDO VALIDAÇÃO — `EscolhaDeArea`, `CLIVUS_AREA_APAGAR`, `CLIVUS_AREA_RECALCULAR`, `Polygons.SameOutline`; nível 2 `clivus-areas-acoes` (rodar.ps1 -SoAreas)
 
+## Etapa 42: as sombras
+
+- 42.2 O 3D com o sol (31/10/2026: "leve a simulacao de sombra para o 3D no navegador"): o navegador calcula o sol e faz a sombra em tempo real (data, hora, animar o dia, equinócios e solstícios, ligar a sombra), os pilares modelados (a seção e o giro do bloco), o item Resumo das camadas (mesas, módulos e kWp, por área e por tipo) e o logo do Clivus; na página pública, a propaganda que leva à landing: AGUARDANDO VALIDAÇÃO — `sol.js` e `resumo.js` (os mesmos no servidor), `Scene3DLocation`, `Scene3DPillarSection`, `Scene3DSummary`, 6 testes da etapa 42; servidor: clivussolar branch `sombras-3d`
+
 ## Observações
 
 - 37.1 (30/10/2026), o que assumi:
@@ -667,8 +671,53 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     - depois o Validar não acha registro sobrando.
   - Não deu para renderizar a janela Áreas fora do Civil 3D (ela nasce de um Document): os
     botões novos ficam para a tela.
+- 42.2 (31/10/2026), o que assumi. Pedidos do Renan no dia: a sombra no 3D do navegador
+  ("talvez fazer o navegador calcular"), os pilares modelados, o logo e a propaganda no link
+  público, e o item Resumo nas camadas.
+  - O navegador calcula: a cena leva `local` (latitude, longitude e o fuso de
+    `SombrasCommands.FusoDoLugar`) e o `sol.js` é o `SolarCalculator` portado, conferido com o
+    node contra o C# em 42.592 instantes (16 lugares, 5 anos, 11 horas por dia): no máximo
+    4e-9° no azimute e 6e-13° na elevação. O teste `OSolDoNavegadorUsaAsConstantesDoNoaa` pega
+    a constante trocada de um lado só.
+  - Privacidade (plano/seguranca.md, como a origem zerada): no envio ao servidor a latitude e
+    a longitude vão a 0,1° (uns 11 km; o sol muda menos de 0,05°). A página local leva 7 casas.
+  - Os eixos: desenho (x leste, y norte, z cima) vira three (x, z, −y); o vetor do sol (leste,
+    norte, cima) vira (leste, cima × exagero, −norte): com o exagero vertical a sombra cai no
+    chão onde cairia sem ele. Conferido de cima, com um poste de 10 m em Itatiba, 21/06: às 9h
+    a sombra vai para sudoeste com 21,4 m (calculado 21,7), às 15h para sudeste com 18,8
+    (19,05) e ao meio-dia para o sul com 10,6 (10,5).
+  - A sombra: a câmera da sombra cobre a usina vista do sol (mesas, pilares, árvores,
+    canaletas e estrutura, com folga de 5 % ou 10 m) e, em profundidade, o mundo todo (o morro
+    entre o sol e a usina faz sombra nela). Mapa quadrado de 1024 a 4096 (2048 no celular),
+    uns 10 cm por texel, sempre do mesmo tamanho; só é refeito quando muda o sol, uma camada ou
+    o exagero, não a cada quadro. Viés de um texel ao longo da normal: as faces dos módulos e do
+    terreno passaram a ir com a normal para cima (o terreno ia para baixo), sem mudar a cor.
+  - A luz com o sol: céu 0,6 e sol 0,75 (a de sempre, sem o lugar, continua 0,75 e 0,65); a
+    luz direta cresce até 6° de altura; abaixo do horizonte, só o céu e o texto "Sol abaixo do
+    horizonte".
+  - Abre hoje, na hora de agora do relógio da usina (o fuso da cena, não o do navegador); de
+    noite, às 10h. Os atalhos são os dias do equinócio e do solstício calculados para o ano
+    (2026: 20/03, 21/06, 22/09, 21/12; em 2027 o de setembro é 23/09). "Animar o dia": do nascer
+    ao pôr do sol, uma hora por segundo, e de novo.
+  - Os pilares: uma caixa por pilar numa malha só (InstancedMesh), do pé ao topo, na largura
+    (escala X do bloco), na profundidade (escala Y) e no giro (rotação); a cor do aço da
+    estrutura. Cena antiga, sem a seção: 0,10 × 0,10. Antes eram um traço, que não recebia
+    sombra.
+  - O resumo é o de `AreasDoDesenho.Ler(documento).Resumo`; por área só quando o desenho tem
+    área, com a linha de fora das áreas marcada (cada visualizador escreve o nome dela no
+    idioma da página). Liga no PC e desliga no celular.
+  - O logo é o horizontal escuro do plugin (cópia em `Visualizador3D/clivus-logo.svg`, que o
+    Core embute): 92 px no canto da página local. Na pública, 132 px (108 no celular), com a
+    propaganda, que recolhe no × (e, no celular, sozinha no primeiro toque no 3D) e volta no
+    logo. O botão leva a `CLIVUS_SITE_URL/{pt|en|es}/`, por padrão https://clivussolar.com, que
+    ainda não tem DNS: no Coolify, pôr o domínio temporário do site até lá.
+  - Traduções: 13 frases novas sem inglês e espanhol (o Renan traduz depois); até lá, os dois
+    casos de `TranslationCatalogTests` falham.
+  - Desempenho: aqui não há placa de vídeo (o Chrome sem cabeça desenha na CPU). Numa usina de
+    16.016 módulos e 6.864 pilares: 7,7 quadros/s com a sombra parada, 4,5 animando e 9,2 sem
+    sombra. Só a proporção vale; o número de verdade é na tela.
 
-## Roteiro de tela (38.1 a 41.2)
+## Roteiro de tela (38.1 a 42.2)
 
 1. **Nova estrutura (38.1 e 38.5):** Configurações › Estruturas › Nova estrutura… › **Fixa**.
    A janela de Mesa abre na aba "Perfil e módulo"; clicar no cartão **Biposte** abre a aba
@@ -792,3 +841,19 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     Conforme objetos › clicar na linha (ou dentro da área): "Área: ..." e segue. Área › os
     mesmos vértices de uma área que já existe: "Já existe a área ..." antes de pedir o
     nome.
+22. **O sol no 3D (42.2):** num desenho com localização, Ver 3D (a página local): o painel
+    tem "Sol", com a data de hoje e a hora de agora (UTC−3). Mexer na hora: a sombra das mesas
+    anda no chão e nas mesas de trás. Clicar 21/06 e pôr 9h: sombras longas para sudoeste. ▶
+    anima o dia; desligar "Sombras do sol": somem; exagero 3×: a sombra no chão fica no mesmo
+    lugar. Num desenho sem localização, a linha de comando avisa e a página não tem o sol.
+23. **Os pilares modelados (42.2):** chegar perto de uma mesa: os pilares são caixas na seção
+    do pilar, giradas com a mesa, do chão até debaixo do módulo; no biposte, os dois pilares
+    de cada pórtico. A camada Pilares liga e desliga.
+24. **O resumo (42.2):** o quadro no canto de cima bate com a janela Áreas (o total, cada área,
+    fora das áreas e cada tipo de mesa: mesas, módulos e kWp). O item Resumo das camadas o
+    desliga.
+25. **A página pública (42.2):** Publicar 3D e abrir no PC e no celular: o logo do Clivus no
+    canto de baixo; o cartão "Usina projetada com o Clivus Solar" recolhe no × e volta no logo
+    (no celular, recolhe sozinho ao tocar no 3D); "Conheça o Clivus Solar" abre a landing. O sol
+    e o resumo como na local. No Aurora (usina grande), girar e animar o dia com a sombra e ver
+    se fica liso.

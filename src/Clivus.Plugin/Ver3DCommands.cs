@@ -130,6 +130,9 @@ public static class Ver3DCommands
         if (cena.Faces.Count == 0 && cena.Trees.Count == 0)
             editor.WriteMessage(Tr.T("\n  ATENÇÃO: o desenho não tem módulo nem árvore do plugin; a página mostra só o terreno.\n"));
 
+        if (cena.Location is null)
+            editor.WriteMessage(Tr.T("\n  O desenho não tem localização (latitude e longitude): o 3D sai sem o sol e as sombras. Corrija em Terreno > Resumo > Localização.\n"));
+
         AvisarTerrenoMudado(editor, documento, terreno);
 
         return cena;
@@ -287,8 +290,12 @@ public static class Ver3DCommands
 
                     case BlockReference br when LayoutXData.LoadPillar(br) is { } p:
                         // O topo do pilar é a origem do bloco; o pé visível, o terreno.
+                        // A seção (42.2) é a do bloco (LayoutDrawer): a escala X é a
+                        // largura ao longo da mesa, a Y a profundidade, e a rotação o giro.
                         var topo = br.Position;
-                        pilares.Add(new Scene3DPillar(topo.X, topo.Y, topo.Z, p.GroundZ ?? topo.Z - (p.FreeHeight ?? 0)));
+                        var escala = br.ScaleFactors;
+                        pilares.Add(new Scene3DPillar(topo.X, topo.Y, topo.Z, p.GroundZ ?? topo.Z - (p.FreeHeight ?? 0),
+                            new Scene3DPillarSection(Math.Abs(escala.X), Math.Abs(escala.Y), br.Rotation)));
                         break;
 
                     case BlockReference br when LayoutXData.LoadTree(br) is { } a:
@@ -314,7 +321,35 @@ public static class Ver3DCommands
         // as faces lidas dos próprios sólidos do desenho.
         extras.AddRange(EstruturaDaBifila(database));
 
-        return new Scene3D(string.IsNullOrWhiteSpace(titulo) ? Tr.T("Usina") : titulo, grade, faces, pilares, arvores, sombras, extras);
+        return new Scene3D(string.IsNullOrWhiteSpace(titulo) ? Tr.T("Usina") : titulo, grade, faces, pilares, arvores, sombras, extras, Lugar(documento), ResumoDaUsina(documento));
+    }
+
+    /// <summary>
+    /// O lugar do desenho, para o sol do 3D (42.2): a latitude e a longitude
+    /// do terreno e o fuso do relógio, os mesmos das sombras do desenho; null
+    /// sem localização (a página fica com a luz de sempre).
+    /// </summary>
+    private static Scene3DLocation? Lugar(Document documento) =>
+        SombrasCommands.Lugar(documento) is { IsValid: true } lugar
+            ? new Scene3DLocation(lugar.Latitude, lugar.Longitude, SombrasCommands.FusoDoLugar(documento))
+            : null;
+
+    /// <summary>
+    /// O resumo da usina para o quadro do 3D (42.2): a conta da janela Áreas e
+    /// do Recontar. Se a leitura falhar, o 3D sai sem o quadro (e o registro
+    /// de diagnóstico guarda o porquê).
+    /// </summary>
+    private static Scene3DSummary? ResumoDaUsina(Document documento)
+    {
+        try
+        {
+            return Scene3DSummary.From(AreasDoDesenho.Ler(documento).Resumo);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao montar o resumo do 3D.", erro);
+            return null;
+        }
     }
 
     /// <summary>
