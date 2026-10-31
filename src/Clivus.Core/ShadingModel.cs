@@ -63,6 +63,15 @@ public sealed class ShadingModel
     private readonly double _celula;
     private readonly Dictionary<long, List<int>> _grade = [];
     private readonly Dictionary<long, double> _alturaDaCelula = [];
+
+    /// <summary>
+    /// A face mais alta de cada bloco de 8 × 8 células (31/10/2026): no
+    /// terreno ondulado o raio anda centenas de metros até passar da face mais
+    /// alta do desenho, e o bloco inteiro abaixo dele é pulado sem olhar célula
+    /// por célula (o raio só sobe: abaixo na entrada, abaixo no bloco todo).
+    /// </summary>
+    private readonly Dictionary<long, double> _alturaDoBloco = [];
+
     private readonly double _maisAlta;
     private readonly int[] _carimbo;
     private int _rodada;
@@ -114,6 +123,9 @@ public sealed class ShadingModel
                     if (!_grade.TryGetValue(chave, out var lista)) _grade[chave] = lista = [];
                     lista.Add(k);
                     _alturaDaCelula[chave] = _alturaDaCelula.TryGetValue(chave, out var h) ? Math.Max(h, topo) : topo;
+
+                    var bloco = Bloco(ix, iy);
+                    _alturaDoBloco[bloco] = _alturaDoBloco.TryGetValue(bloco, out var hb) ? Math.Max(hb, topo) : topo;
                 }
             }
         }
@@ -304,10 +316,23 @@ public sealed class ShadingModel
         var deltaX = Math.Abs(ux) < 1e-12 ? double.PositiveInfinity : _celula / Math.Abs(ux);
         var deltaY = Math.Abs(uy) < 1e-12 ? double.PositiveInfinity : _celula / Math.Abs(uy);
         var entrada = 0.0;
+        var blocoAtual = long.MinValue;
+        var pularBloco = false;
 
         while (entrada <= alcance)
         {
-            if (BateNaCelula(Chave(ix, iy), p, grupo, s, p.Z + entrada * subida)) return true;
+            var cota = p.Z + entrada * subida;
+
+            // O bloco novo: se a face mais alta dele fica abaixo do raio já na
+            // entrada, nenhuma célula dele é olhada (o raio só sobe).
+            var bloco = Bloco(ix, iy);
+            if (bloco != blocoAtual)
+            {
+                blocoAtual = bloco;
+                pularBloco = !_alturaDoBloco.TryGetValue(bloco, out var maisAltaDoBloco) || maisAltaDoBloco < cota;
+            }
+
+            if (!pularBloco && BateNaCelula(Chave(ix, iy), p, grupo, s, cota)) return true;
 
             if (proximaX < proximaY)
             {
@@ -423,6 +448,9 @@ public sealed class ShadingModel
     private int Indice(double v) => (int)Math.Floor(v / _celula);
 
     private static long Chave(int ix, int iy) => ((long)ix << 32) ^ (uint)iy;
+
+    /// <summary>O bloco de 8 × 8 células da célula (o deslocamento aritmético arredonda para baixo, também no negativo).</summary>
+    private static long Bloco(int ix, int iy) => Chave(ix >> 3, iy >> 3);
 
     private static Point3 Centro(IReadOnlyList<Point3> c) =>
         new(c.Average(p => p.X), c.Average(p => p.Y), c.Average(p => p.Z));
