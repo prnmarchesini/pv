@@ -83,7 +83,15 @@ internal sealed class SeletorDeEscopo
         var mesasNoDesenho = Botao(Tr.T("Escolher mesas no desenho…"), Tr.T("Selecione as mesas no desenho (janela, cruzamento ou clique): elas entram junto com as áreas marcadas."), escolherMesas ?? (() => PedirAoDesenho(PluginInfo.ComandoEscolherMesas)));
         _limpar = Botao(Tr.T("Limpar"), Tr.T("Tira as mesas escolhidas."), () => DefinirMesas([]));
 
-        _tudo.Checked += (_, _) => tentar(Aplicar);
+        // Marcar uma área desmarca o desenho inteiro, e marcar o desenho
+        // inteiro desmarca as áreas: as caixas nunca ficam desligadas (a
+        // janela das análises abre no desenho inteiro e a área tem de poder
+        // ser marcada direto).
+        _tudo.Checked += (_, _) => tentar(() =>
+        {
+            foreach (var c in Caixas) c.IsChecked = false;
+            Aplicar();
+        });
         _tudo.Unchecked += (_, _) => tentar(Aplicar);
 
         var linhaDasAreas = new DockPanel { Margin = new Thickness(0, 3, 0, 3) };
@@ -186,7 +194,16 @@ internal sealed class SeletorDeEscopo
         }
 
         Pedintes[_documento] = this;
-        _documento.SendStringToExecute($"_{comando} ", true, false, false);
+
+        // Dois Esc antes: um comando que estivesse no meio levaria o nome do
+        // nosso como resposta.
+        _documento.SendStringToExecute($"\x03\x03_{comando} ", true, false, false);
+    }
+
+    /// <summary>A janela fechou: o seletor dela deixa de esperar a escolha do desenho.</summary>
+    internal void Soltar()
+    {
+        if (Pedintes.TryGetValue(_documento, out var esperando) && esperando == this) Pedintes.Remove(_documento);
     }
 
     /// <summary>O seletor que pediu ao desenho (e que deixa de esperar), ou null.</summary>
@@ -195,12 +212,9 @@ internal sealed class SeletorDeEscopo
     /// <summary>Entrega a escolha do desenho ao seletor, protegida como um clique da janela.</summary>
     internal void Receber(Action escolha) => _tentar(escolha);
 
-    /// <summary>O desenho inteiro tira a escolha das áreas e das mesas (fica tudo).</summary>
+    /// <summary>A linha das mesas escolhidas: quantas, e o Limpar só com alguma.</summary>
     private void Aplicar()
     {
-        var tudo = DesenhoInteiro;
-        foreach (var c in Caixas) c.IsEnabled = !tudo;
-
         _selecao.Text = _mesasEscolhidas.Count == 0 ? Tr.T("nenhuma mesa escolhida") : Tr.F("{0} mesa(s) escolhida(s)", _mesasEscolhidas.Count);
         _limpar.Visibility = _mesasEscolhidas.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -229,7 +243,8 @@ internal sealed class SeletorDeEscopo
 /// <summary>
 /// O "Escolher no desenho…" das janelas soltas (sombras, análises): o clique
 /// na área ou a seleção das mesas, entregue ao seletor que pediu. Sem janela
-/// esperando (fechada no meio, ou o comando digitado), só diz o que escolheu.
+/// esperando (a janela fechou, que solta o pedido, ou o comando foi
+/// digitado), só diz o que escolheu.
 /// </summary>
 public static class EscopoCommands
 {

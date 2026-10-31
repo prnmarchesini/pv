@@ -53,7 +53,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 42.3, a segunda rodada (31/10/2026, tarde; 0.1.4): "Solsticio de inverno para quem? [...] o projeto é no panama" virou **Pior dia do ano (dd/mm)**, o dia do sol mais baixo ao meio-dia no lugar do desenho (`SolarCalculator.WorstShadowDay`: dezembro no norte, junho no sul); "uma area pintou e na outra nao [...] cade o botão de escolher area ou escolher o que eu quero (mesas, arvores, etc)" virou as áreas em caixas de marcar (com "· N mesas" e "Desenho inteiro"), "Escolher área no desenho…" (`CLIVUS_SOMBRAS_AREA`, clique dentro da área), "Escolher mesas no desenho…" (`CLIVUS_SOMBRAS_MESAS`), áreas e mesas somando, e a linha **Fazem sombra** (Mesas, Árvores e objetos, Relevo; `ShadowCasters`); "Nao quero que leve o magenta no 3d web, a web ja tem sombra propria": o 3D (servidor clivussolar 8fc8fb0 e a página local) não desenha mais as hachuras do CAD nem pinta os módulos do momento, e o plugin não as manda (o botão do momento só leva o sol à hora da análise e diz quantos módulos): AGUARDANDO VALIDAÇÃO
 - 42.4 A exportação para o PVsyst por escopo (31/10/2026: "tenho que ter a liberdade de exportar uma area, varias, todas, e pode selecionar as mesas que eu quero se for o caso"): a mesma escolha da janela das sombras (`SeletorDeEscopo`), numa janela antes de pedir o arquivo: AGUARDANDO VALIDAÇÃO
 - 42.5 A janela Áreas com as ações na linha (31/10/2026, tarde: "eu clico em apagar area e nao apaga. As ações precisam estar na linha"): dois cliques dá zoom, a lixeira (ou Del) apaga com aviso, F2 ou o segundo clique devagar renomeia, o botão direito tem o resto; embaixo, "Todas as áreas" (Hachurar, Tirar hachura, Limpar, Regerar, Apagar); o Apagar área, o Limpar e o Recalcular só com as mesas DA área. E o CLIVUS_3D com a janela de andamento e o Cancelar ("trava gostoso [...] sem MATAR MEU CAD"): AGUARDANDO VALIDAÇÃO — bc9b912; nível 2 `clivus-areas-acoes` (rodar.ps1 -SoAreas)
-- 42.6 As análises por escopo, o fundo e a borda dos textos e as colunas do biposte (31/10/2026, tarde: "Em analise eu tbm quero poder escolher o que analisar, uma area ou todas, isso para TODAS analises"; "texto ruim de ver, falta opção do texto de colocar o fundo e borda, isso para TODAS analises"; "em pilar, deveria ter a opção de analisar AMBOS pilares, cada um tem uma altura [...] uma coluna para cada pilar o da frente e o de traz, a cor pode ser o mesmo para ambos"): AGUARDANDO VALIDAÇÃO — `LineLimits`, `ThresholdRule.ForLine`, `AnalysisTally` V2 (o lugar e as linhas), `AnalysisTextLook`, 20 testes da etapa 42; nível 2 `clivus-analises-escopo` (rodar.ps1 -Caso Testar-AnalisesEscopo)
+- 42.6 As análises por escopo, o fundo e a borda dos textos e as colunas do biposte (31/10/2026, tarde: "Em analise eu tbm quero poder escolher o que analisar, uma area ou todas, isso para TODAS analises"; "texto ruim de ver, falta opção do texto de colocar o fundo e borda, isso para TODAS analises"; "em pilar, deveria ter a opção de analisar AMBOS pilares, cada um tem uma altura [...] uma coluna para cada pilar o da frente e o de traz, a cor pode ser o mesmo para ambos"): AGUARDANDO VALIDAÇÃO — `LineLimits`, `ThresholdRule.ForLine`, `AnalysisTally` V2 (o lugar e as linhas), `AnalysisTextLook`, `ThresholdForm`, 26 testes da etapa 42; nível 2 `clivus-analises-escopo` (rodar.ps1 -Caso Testar-AnalisesEscopo)
 
 ## Observações
 
@@ -952,6 +952,32 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     as cores da Leste (a Oeste fica) e da Oeste, apagar a Oeste (a Leste fica), a declividade
     só na Leste e a janela desenhada num PNG (conferida: a grade com Pilar da frente e Pilar
     de trás).
+  - A revisão (subagente em worktree, no 1002064) achou e eu corrigi:
+    - **bug:** o texto de pilar inserido antes (XData versão 1, sem a linha) era pintado pela
+      regra da monoposte, que num desenho só de biposte não tem coluna na janela. Agora ele
+      pinta pela linha do pilar mais perto em planta (o texto nasce no topo do pilar); o
+      nível 2 regrava os textos da Leste na versão 1 (gancho `clivus-analises-texto-antigo`)
+      e confere que só os de trás pintam;
+    - com "Desenho inteiro" marcado, as caixas das áreas ficavam desligadas: agora ficam
+      sempre ligadas; marcar uma área desmarca o desenho inteiro e vice-versa (vale também
+      na janela das sombras);
+    - a ordem de desenho do fundo era pedida com o model space só para leitura: agora para
+      escrita (num desenho sem a tabela da ordem, ela nasce ali);
+    - com escopo, a pintura velha de mesa com contorno deformado não saía: agora todas as
+      peças das mesas do escopo entram na conta;
+    - o pedido ao desenho ficava preso à janela fechada: a janela solta o pedido ao fechar, e
+      o comando vai depois de dois Esc (um comando no meio levaria o nome como resposta);
+    - a montagem da regra pelas caixas foi para o Core (`ThresholdForm`, 6 testes), com o
+      lado desmarcado desligando também as linhas sem coluna; o nível 2 analisa a Oeste por
+      ela (`analisar-como-janela`); o erro da regra sai na seção que pediu;
+    - a linha de comando do biposte não mostra mais a soma com o limite da monoposte; o
+      "desenho inteiro" vai sem nome para o registro (a tela e o Excel o dizem no idioma da
+      hora); o fundo dos textos antigos ao abrir a janela é uma varredura só.
+  - Ficaram como estão, de propósito: abrir a janela pela primeira vez grava o fundo nos
+    textos antigos (o U desfaz); o Excel guarda a última quantificação de cada análise, e a
+    coluna Onde diz de onde ela é (quantificar a Leste depois da Oeste troca o número); o
+    desenho salvo nesta versão, aberto numa anterior, perde a regra por linha, a quantificação
+    nova e o reconhecimento do texto de pilar do biposte (a versão antiga não os lê).
 
 ## Roteiro de tela (38.1 a 42.6)
 

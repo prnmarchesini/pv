@@ -91,6 +91,7 @@ internal sealed class JanelaDeAnalises : Window
         // A janela é solta (03/10/2026: "quero poder mexer na tela análises
         // e no CAD ao mesmo tempo"): IsCancel só fecha diálogo, aqui fecha à mão.
         fechar.Click += (_, _) => Close();
+        Closed += (_, _) => _seletor.Soltar();
 
         var raiz = new DockPanel();
         DockPanel.SetDock(oQue, Dock.Top);
@@ -145,13 +146,15 @@ internal sealed class JanelaDeAnalises : Window
     /// </summary>
     private void DarFundoAosTextosAntigos(Document documento)
     {
+        var semEscolha = Analises.Where(t => AnalisesIndependentes.AparenciaGravada(_database, t) is null).ToList();
+        if (semEscolha.Count == 0) return;
+
         EscritaForaDeComando.Fazer(documento, () =>
         {
-            foreach (var tipo in Analises)
-            {
-                if (AnalisesIndependentes.AparenciaGravada(_database, tipo) is not null) continue;
-                if (AnalisesIndependentes.AplicarAparencia(_database, tipo) > 0) AnalisesIndependentes.GravarAparencia(_database, tipo, AnalysisTextLook.Default);
-            }
+            // Uma varredura do desenho para as seis; grava só as que tinham
+            // texto, para o desenho sem análise não ficar modificado à toa.
+            foreach (var tipo in AnalisesIndependentes.AplicarAparencia(_database, semEscolha, out _))
+                AnalisesIndependentes.GravarAparencia(_database, tipo, AnalysisTextLook.Default);
         });
     }
 
@@ -322,9 +325,7 @@ internal sealed class PainelDeAnalise : ScrollViewer
         var emMetro = tipo != IndependentKind.Slope;
 
         _gravada = regra;
-        _colunas = IndependentAnalysis.IsPillar(tipo) && (linhas.Contains(PillarLine.Front) || linhas.Contains(PillarLine.Rear))
-            ? new[] { PillarLine.Single, PillarLine.Front, PillarLine.Rear }.Where(linhas.Contains).ToList()
-            : [PillarLine.Single];
+        _colunas = ThresholdForm.Columns(tipo, linhas);
 
         _corAbaixo = PaletaDeCores.Caixa(regra.BelowColor, Tr.T("Cor de quem fica abaixo do limite."));
         _corAcima = PaletaDeCores.Caixa(regra.AboveColor, Tr.T("Cor de quem fica acima do limite."));
@@ -545,68 +546,22 @@ internal sealed class PainelDeAnalise : ScrollViewer
             ? u
             : AnalisesIndependentesCommands.Unidade(_janela.Database);
 
-    /// <summary>A regra dos campos, ou null com o motivo no recado das cores.</summary>
-    private ThresholdRule? LerRegra()
+    /// <summary>A regra das caixas (<see cref="ThresholdForm"/>), ou null com o motivo no recado da seção que pediu.</summary>
+    private ThresholdRule? LerRegra(TextBlock recado)
     {
-        var usarAbaixo = _usarAbaixo.IsChecked == true;
-        var usarAcima = _usarAcima.IsChecked == true;
-        var lidos = new Dictionary<PillarLine, LineLimits>();
+        var regra = ThresholdForm.Build(
+            _colunas,
+            _limites.ToDictionary(l => l.Key, l => (l.Value.Abaixo.Text, l.Value.Acima.Text)),
+            _usarAbaixo.IsChecked == true,
+            _usarAcima.IsChecked == true,
+            PaletaDeCores.Cor(_corAbaixo),
+            PaletaDeCores.Cor(_corAcima),
+            _pecas.IsChecked == true,
+            _gravada,
+            out var erro);
 
-        foreach (var linha in _colunas)
-        {
-            var (caixaAbaixo, caixaAcima) = _limites[linha];
-            if (!Limite(caixaAbaixo, usarAbaixo, linha, Tr.T("não consigo ler o limite de baixo"), out var abaixo)) return null;
-            if (!Limite(caixaAcima, usarAcima, linha, Tr.T("não consigo ler o limite de cima"), out var acima)) return null;
-            lidos[linha] = new LineLimits(abaixo, acima);
-        }
-
-        if (_colunas.Count > 1 && lidos.Values.All(l => l.Below is null && l.Above is null))
-        {
-            JanelaDeAnalises.Dizer(_recadoCores, false, Tr.T("Preencha pelo menos um limite (de uma das colunas)."));
-            return null;
-        }
-
-        // A linha sem coluna (a monoposte num desenho só de biposte) fica
-        // com o limite gravado; desmarcar o lado desliga em todas.
-        var monoposte = lidos.TryGetValue(PillarLine.Single, out var lida)
-            ? lida
-            : new LineLimits(usarAbaixo ? _gravada.Below : null, usarAcima ? _gravada.Above : null);
-
-        var regra = new ThresholdRule(monoposte.Below, PaletaDeCores.Cor(_corAbaixo), monoposte.Above, PaletaDeCores.Cor(_corAcima), _pecas.IsChecked == true)
-        {
-            Front = lidos.TryGetValue(PillarLine.Front, out var frente) ? frente : _gravada.Front,
-            Rear = lidos.TryGetValue(PillarLine.Rear, out var tras) ? tras : _gravada.Rear,
-        };
-
-        if (regra.WhyInvalid is { } motivo)
-        {
-            JanelaDeAnalises.Dizer(_recadoCores, false, char.ToUpper(motivo[0], Tr.Culture) + motivo[1..] + ".");
-            return null;
-        }
-
+        if (regra is null) JanelaDeAnalises.Dizer(recado, false, erro ?? Tr.T("A regra não serve."));
         return regra;
-    }
-
-    /// <summary>
-    /// O limite de uma caixa: desligado, nenhum. Numa coluna só, ligado e
-    /// vazio é erro (como sempre foi); com as colunas do biposte, vazio é a
-    /// linha sem limite desse lado.
-    /// </summary>
-    private bool Limite(TextBox caixa, bool ligado, PillarLine linha, string erro, out double? valor)
-    {
-        valor = null;
-        if (!ligado || (_colunas.Count > 1 && string.IsNullOrWhiteSpace(caixa.Text))) return true;
-
-        if (!NumberInput.TryParseMeasure(caixa.Text, out var lido))
-        {
-            JanelaDeAnalises.Dizer(_recadoCores, false, _colunas.Count > 1
-                ? Tr.F("{0}: {1}.", IndependentAnalysis.LineName(linha), erro)
-                : char.ToUpper(erro[0], Tr.Culture) + erro[1..] + ".");
-            return false;
-        }
-
-        valor = lido;
-        return true;
     }
 
     /// <summary>Se a unidade da declividade mudou, grava e reinsere nela os textos que existiam.</summary>
@@ -659,7 +614,7 @@ internal sealed class PainelDeAnalise : ScrollViewer
     private void Analisar()
     {
         if (_janela.Escopo(_recadoCores) is not { } escopo) return;
-        if (LerRegra() is not { } regra) return;
+        if (LerRegra(_recadoCores) is not { } regra) return;
 
         var (ok, frase) = _janela.Fazer(Tr.N("analisar"), () =>
         {
@@ -687,7 +642,7 @@ internal sealed class PainelDeAnalise : ScrollViewer
     private void Quantificar()
     {
         if (_janela.Escopo(_recadoQuantidade) is not { } escopo) return;
-        if (LerRegra() is not { } regra) return;
+        if (LerRegra(_recadoQuantidade) is not { } regra) return;
 
         var (ok, frase) = _janela.Fazer(Tr.N("quantificar"), () =>
         {
@@ -767,7 +722,9 @@ internal static class OperacoesDeAnalise
     internal static string Quantificar(Database database, IndependentKind tipo, ThresholdRule regra, SlopeUnit unidade, IReadOnlySet<Guid>? mesas, string onde)
     {
         var (pontos, modulos, biposte, linhas) = AnalisesIndependentes.Quantificar(database, tipo, regra, unidade, mesas);
-        QuantificacaoGravada.Gravar(database, tipo, regra, unidade, pontos, modulos, onde, linhas);
+
+        // O desenho inteiro vai sem nome: a aba e o Excel o dizem no idioma da tela.
+        QuantificacaoGravada.Gravar(database, tipo, regra, unidade, pontos, modulos, mesas is null ? null : onde, linhas);
 
         if (linhas is { Count: > 0 })
             return Tr.F("{0}, {1}:", Lugar(onde), IndependentAnalysis.Name(tipo))

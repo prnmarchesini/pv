@@ -203,10 +203,14 @@ public static class AnalisesIndependentesCommands
                     var regra = Regra(database, tipo);
                     var (pontos, modulos, biposte, linhas) = AnalisesIndependentes.Quantificar(database, tipo, regra, unidade);
 
-                    QuantificacaoGravada.Gravar(database, tipo, regra, unidade, pontos, modulos, Tr.T("desenho inteiro"), linhas);
+                    QuantificacaoGravada.Gravar(database, tipo, regra, unidade, pontos, modulos, null, linhas);
 
+                    // No biposte, os limites de cada linha de pilar vão nas linhas de baixo:
+                    // a soma não tem um limite só (revisão do 42.6).
                     editor.WriteMessage(Tr.F("\nQUANTIFICAR {0} — em {1}.\n",
-                        IndependentAnalysis.Describe(tipo, regra, pontos, unidade),
+                        linhas is { Count: > 0 }
+                            ? Tr.F("{0}: cada linha de pilar pelos limites dela (total {1})", IndependentAnalysis.Name(tipo), pontos.Total)
+                            : IndependentAnalysis.Describe(tipo, regra, pontos, unidade),
                         IndependentAnalysis.CountedIn(tipo, biposte)));
 
                     foreach (var l in linhas ?? [])

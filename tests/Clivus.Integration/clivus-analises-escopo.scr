@@ -15,10 +15,13 @@
 ;   - inserir a parte livre na Oeste escreve so na Oeste, um texto por pilar,
 ;     com fundo e sem borda (o padrao); na Leste depois, a Oeste fica igual;
 ;   - o fundo e a borda ligados pela aba valem para todos os textos;
-;   - analisar a Oeste com a frente acima de 100 m e a tras acima de 0 m
-;     pinta so os textos e os pilares de tras da Oeste;
+;   - analisar a Oeste com a frente acima de 100 m e a tras acima de 0 m,
+;     pelas caixas da janela, pinta so os textos e os pilares de tras da Oeste;
 ;   - tirar as cores da Leste nao mexe na Oeste; da Oeste, volta tudo;
 ;   - apagar a Oeste deixa a Leste;
+;   - os textos da Leste como eram antes do 42.6 (sem a linha do pilar no
+;     XData), com a monoposte acima de 0 m: cada um pinta pela linha do pilar
+;     mais perto, e so os de tras saem pintados;
 ;   - a declividade so na Leste, um texto por mesa;
 ;   - e a janela desenhada num PNG, na aba da parte livre.
 
@@ -103,7 +106,7 @@
 (clivus-analises-pela-janela "aparencia" "PillarAbove" "TUDO" "-" "-" "fundo,borda")
 (clivus:estado "FUNDO_BORDA" "PillarAbove")
 
-(clivus-analises-pela-janela "analisar" "PillarAbove" "AREA" "Area Oeste" "-" "F=;100 T=;0 P")
+(clivus-analises-pela-janela "analisar-como-janela" "PillarAbove" "AREA" "Area Oeste" "-" "acima P Front=;100 Rear=;0")
 (clivus:estado "ANALISAR_OESTE" "PillarAbove")
 
 (clivus-analises-pela-janela "quantificar" "PillarAbove" "AREA" "Area Oeste" "-" "F=;100 T=;0")
@@ -116,6 +119,11 @@
 
 (clivus-analises-pela-janela "apagar" "PillarAbove" "AREA" "Area Oeste" "-")
 (clivus:estado "APAGAR_OESTE" "PillarAbove")
+
+(setq clivus:antigos (clivus-analises-texto-antigo "PillarAbove"))
+(clivus-analises-pela-janela "analisar" "PillarAbove" "AREA" "Area Leste" "-" ";0 F=;100 T=;0")
+(clivus:estado "ANTIGOS_LESTE" "PillarAbove")
+(princ (strcat "\nCLIVUS_AN_ESCOPO_ANTIGOS n=" (if clivus:antigos (itoa clivus:antigos) "nil") " fim"))
 
 (clivus-analises-pela-janela "inserir" "Slope" "AREA" "Area Leste" "-")
 (clivus:estado "DECL_LESTE" "Slope")

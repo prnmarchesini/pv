@@ -264,6 +264,33 @@ function Testar-Estruturas {
         $lm = @($xm[$aba]); $lb = @($xb[$aba])
         $diferentes = @()
 
+        # 42.6 (31/10/2026): no biposte, a analise de pilar sai numa linha por
+        # linha de pilar ("pilares da frente" e "pilares de tras"), cada uma
+        # com o total da monoposte (o biposte tem o dobro de pilares, metade em
+        # cada linha). As duas viram uma, somada, para a comparacao de sempre.
+        if ($aba -match '^An.lises$') {
+            $juntas = @()
+            for ($k = 0; $k -lt $lb.Count; $k++) {
+                $b = @($lb[$k])
+                if ($b.Count -gt 8 -and $b[0] -match 'pilar' -and $b[1] -match 'pilares da frente') {
+                    $c = if ($k + 1 -lt $lb.Count) { @($lb[$k + 1]) } else { @() }
+                    if ($c.Count -le 8 -or $c[0] -ne $b[0] -or $c[1] -notmatch 'pilares de tr') {
+                        $diferentes += "linha $($k + 1): '$($b[0])' do biposte sem a linha dos pilares de tras logo depois"
+                        $juntas += ,$b
+                        continue
+                    }
+                    if ([int] $b[8] -ne [int] $c[8]) { $diferentes += "linhas $($k + 1) e $($k + 2): os pilares da frente ($($b[8])) e os de tras ($($c[8])) deviam ser tantos quanto" }
+                    $soma = @($b)
+                    $soma[1] = 'pilares'
+                    foreach ($col in 3, 4, 6, 7, 8) { $soma[$col] = [string] ([int] $b[$col] + [int] $c[$col]) }
+                    $juntas += ,$soma
+                    $k++
+                }
+                else { $juntas += ,$b }
+            }
+            $lb = $juntas
+        }
+
         if ($lm.Count -ne $lb.Count) { $diferentes += "linhas $($lm.Count) e $($lb.Count)" }
         else {
             for ($i = 0; $i -lt $lm.Count; $i++) {

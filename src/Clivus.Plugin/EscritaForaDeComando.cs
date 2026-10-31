@@ -201,8 +201,12 @@ public static class GanchosDeTeste
     /// análise, o nome do IndependentKind (PillarAbove...); o escopo, como nas
     /// sombras (TUDO, AREA...). A regra: "baixo;cima", e "F=baixo;cima",
     /// "T=baixo;cima" (as linhas do biposte) e "P" (pintar as peças),
-    /// separados por espaço; vazio é sem limite. (clivus-analises-pela-janela
-    /// "linhas") diz as linhas de pilar do desenho. Escreve a frase e devolve T.
+    /// separados por espaço; vazio é sem limite. A ação analisar-como-janela
+    /// monta a regra pelas caixas, como a janela (<see cref="ThresholdForm"/>,
+    /// com as colunas do desenho e a regra gravada): "abaixo" e "acima" (as
+    /// caixas marcadas), "P" e "Single=", "Front=", "Rear=" com o texto de cada
+    /// coluna. (clivus-analises-pela-janela "linhas") diz as linhas de pilar do
+    /// desenho. Escreve a frase e devolve T.
     /// </summary>
     [LispFunction("CLIVUS-ANALISES-PELA-JANELA")]
     public static object? AnalisesPelaJanela(ResultBuffer argumentos)
@@ -247,6 +251,7 @@ public static class GanchosDeTeste
                     "inserir" => OperacoesDeAnalise.Inserir(database, tipo, unidade, mesas, onde),
                     "apagar" => OperacoesDeAnalise.Apagar(database, tipo, mesas, onde),
                     "analisar" => OperacoesDeAnalise.Analisar(database, tipo, Regra(extra), unidade, mesas, onde),
+                    "analisar-como-janela" => OperacoesDeAnalise.Analisar(database, tipo, RegraDaJanela(database, tipo, extra), unidade, mesas, onde),
                     "tirar-cores" => OperacoesDeAnalise.TirarCores(database, tipo, mesas, onde),
                     "quantificar" => OperacoesDeAnalise.Quantificar(database, tipo, Regra(extra), unidade, mesas, onde),
                     "aparencia" => OperacoesDeAnalise.Aparencia(database, tipo, new AnalysisTextLook(extra.Contains("fundo", StringComparison.Ordinal), extra.Contains("borda", StringComparison.Ordinal))),
@@ -282,6 +287,63 @@ public static class GanchosDeTeste
             Front = pedacos.FirstOrDefault(p => p.StartsWith("F=", StringComparison.Ordinal)) is { } f ? Limites(f[2..]) : null,
             Rear = pedacos.FirstOrDefault(p => p.StartsWith("T=", StringComparison.Ordinal)) is { } t ? Limites(t[2..]) : null,
         };
+    }
+
+    /// <summary>A regra pelas caixas da janela: as colunas do desenho, a regra gravada e o texto de cada coluna.</summary>
+    private static ThresholdRule RegraDaJanela(Database database, IndependentKind tipo, string texto)
+    {
+        var pedacos = texto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var colunas = ThresholdForm.Columns(tipo, AnalisesIndependentes.Linhas(database));
+        var textos = new Dictionary<PillarLine, (string, string)>();
+
+        foreach (var linha in Enum.GetValues<PillarLine>())
+        {
+            if (pedacos.FirstOrDefault(p => p.StartsWith(linha + "=", StringComparison.Ordinal)) is not { } coluna) continue;
+
+            var par = coluna[(linha.ToString().Length + 1)..].Split(';');
+            textos[linha] = (par[0], par.Length > 1 ? par[1] : "");
+        }
+
+        var gravada = AnalisesIndependentesCommands.Regra(database, tipo);
+        return ThresholdForm.Build(colunas, textos, pedacos.Contains("abaixo"), pedacos.Contains("acima"), RgbColor.Red, RgbColor.Blue, pedacos.Contains("P"), gravada, out var erro)
+            ?? throw new ArgumentException(erro);
+    }
+
+    /// <summary>
+    /// O texto de análise como era antes do 42.6 (revisão): (clivus-analises-
+    /// texto-antigo "PillarAbove") regrava os textos dessa análise no XData
+    /// versão 1, sem a linha do pilar. Devolve quantos.
+    /// </summary>
+    [LispFunction("CLIVUS-ANALISES-TEXTO-ANTIGO")]
+    public static object? AnalisesTextoAntigo(ResultBuffer argumentos)
+    {
+        var valores = Valores(argumentos);
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (valores.Length < 1 || documento is null || !Enum.TryParse<IndependentKind>(valores[0], out var tipo)) return null;
+
+        return EscritaForaDeComando.Fazer(documento, () =>
+        {
+            var database = documento.Database;
+            using var transacao = database.TransactionManager.StartTransaction();
+
+            var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForRead);
+            var espaco = (BlockTableRecord)transacao.GetObject(tabela[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+            var antigos = 0;
+
+            foreach (ObjectId id in espaco)
+            {
+                if (transacao.GetObject(id, OpenMode.ForRead) is not MText texto || LayoutXData.LoadAnalysisText(texto) is not { } identidade || identidade.Kind != tipo) continue;
+
+                texto.UpgradeOpen();
+                PluginXData.Save(transacao, texto, AnalysisTextIdentity.Tipo, 1,
+                    identidade.Id.ToString("D"), identidade.Table.ToString("D"), identidade.Kind.ToString(),
+                    identidade.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                antigos++;
+            }
+
+            transacao.Commit();
+            return antigos;
+        });
     }
 
     /// <summary>(clivus-sombras-modulos): os handles dos blocos dos módulos com sombra no registro dos motivos, ou nil.</summary>

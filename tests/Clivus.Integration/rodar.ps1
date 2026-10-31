@@ -4329,7 +4329,7 @@ function Testar-AnalisesEscopo {
     }
 
     $etapas = [ordered]@{}
-    foreach ($rotulo in 'INS_OESTE', 'INS_LESTE', 'FUNDO_BORDA', 'ANALISAR_OESTE', 'TIRAR_LESTE', 'TIRAR_OESTE', 'APAGAR_OESTE', 'DECL_LESTE') {
+    foreach ($rotulo in 'INS_OESTE', 'INS_LESTE', 'FUNDO_BORDA', 'ANALISAR_OESTE', 'TIRAR_LESTE', 'TIRAR_OESTE', 'APAGAR_OESTE', 'ANTIGOS_LESTE', 'DECL_LESTE') {
         $etapas[$rotulo] = Estado $rotulo
         if ($null -eq $etapas[$rotulo]) {
             $problemas.Add("clivus-analises-escopo: nao li a etapa $rotulo. Veja $($r.Saida)")
@@ -4367,6 +4367,12 @@ function Testar-AnalisesEscopo {
 
     $e = $etapas['APAGAR_OESTE']
     Conferir ($e.O.N -eq 0 -and $e.L.N -eq $leste.Pilares) "apagar a Oeste deixou $($e.O.N) na Oeste e $($e.L.N) na Leste ($($leste.Pilares))"
+
+    # Revisao do 42.6: o texto de antes (sem a linha no XData) pinta pela linha do pilar mais perto.
+    $antigos = [regex]::Match($t, 'CLIVUS_AN_ESCOPO_ANTIGOS n=(\d+) fim')
+    $e = $etapas['ANTIGOS_LESTE']
+    Conferir ($antigos.Success -and [int] $antigos.Groups[1].Value -eq $leste.Pilares) "os textos antigos da Leste deviam ser $($leste.Pilares); foram $($antigos.Value)"
+    Conferir ($e.L.Pintados -eq $leste.Tras -and $e.L.N -eq $leste.Pilares) "os textos antigos da Leste (monoposte acima de 0 m, frente acima de 100 m, tras acima de 0 m) pintaram $($e.L.Pintados) de $($e.L.N); esperava so os $($leste.Tras) de tras"
 
     $e = $etapas['DECL_LESTE']
     Conferir ($e.L.N -eq $leste.Mesas -and $e.O.N -eq 0) "a declividade na Leste deu $($e.L.N) texto(s) ($($leste.Mesas) mesas) e $($e.O.N) na Oeste"

@@ -114,6 +114,7 @@ internal sealed class JanelaDeSombras : Window
         // botões de escolher no desenho vão como comando: a janela fica aberta.
 
         _seletor = new SeletorDeEscopo(documento, Tr.T("Calcular"), Recado, Tentar);
+        Closed += (_, _) => _seletor.Soltar();
 
         // ---- o período
 
