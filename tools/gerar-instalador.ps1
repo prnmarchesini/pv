@@ -83,8 +83,15 @@ if ($Enviar) {
 
     $arquivos = @($exe, "$exe.sha256", $fixo, "$fixo.sha256")
     $comandos = (($arquivos | ForEach-Object { "put `"$($_.Replace('\', '/'))`"" }) -join "`n") + "`n"
-    $comandos | & sftp -i $chave -o IdentitiesOnly=yes -o BatchMode=yes -b - $servidor
-    if ($LASTEXITCODE -ne 0) { Write-Host 'O envio falhou.' -ForegroundColor Red; exit 1 }
+    # Por arquivo, nao por pipe: com o $OutputEncoding em UTF-8, o PowerShell
+    # 5.1 manda o texto ao sftp com BOM, e o primeiro put vira "Invalid
+    # command" (31/10/2026).
+    $lote = Join-Path ([IO.Path]::GetTempPath()) 'clivus-sftp-lote.txt'
+    [IO.File]::WriteAllText($lote, $comandos, (New-Object Text.UTF8Encoding($false)))
+    & sftp -i $chave -o IdentitiesOnly=yes -o BatchMode=yes -b $lote $servidor
+    $codigo = $LASTEXITCODE
+    Remove-Item $lote -Force -ErrorAction SilentlyContinue
+    if ($codigo -ne 0) { Write-Host 'O envio falhou.' -ForegroundColor Red; exit 1 }
 
     foreach ($nome in (Split-Path -Leaf $exe), 'ClivusSolar-Setup.exe') {
         $baixado = Join-Path ([IO.Path]::GetTempPath()) "conferir-$nome"
