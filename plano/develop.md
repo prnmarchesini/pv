@@ -7,8 +7,9 @@ no servidor. Escrito pelo agente do servidor em 04/10/2026. Contexto completo:
 
 ## O que já está pronto do lado do servidor
 
-- **App** (API, 3D e área do cliente):
-  `https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io`. Já está embutido
+- **App** (API, 3D e área do cliente): `https://clivus.marcheng.com.br` desde
+  31/10/2026 (antes, `https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io`,
+  que continua atendendo o plugin instalado antes disso). Já está embutido
   no plugin (`PluginInfo.ServidorDeProducao`), então não precisa de
   `CLIVUS_SERVIDOR`.
 - **Conta Develop** no app: `develop@clivussolar.com`, plano `develop`. Tudo o

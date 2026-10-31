@@ -92,9 +92,11 @@ Comandos que rodam **sem** licença: `CLIVUS_ATIVAR`, `CLIVUS_SOBRE`,
 
 Os três são o mesmo app:
 
-- `ServidorDeProducao` (3D e licenças): hoje
-  `https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io`, o domínio
-  temporário do Coolify com HTTPS válido.
+- `ServidorDeProducao` (3D e licenças): `https://clivus.marcheng.com.br` desde
+  31/10/2026. O domínio temporário do Coolify
+  (`https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io`) segue no mesmo
+  app para o plugin instalado antes disso; sem `CLIVUS_SERVIDOR_URL` no
+  Coolify, o link do 3D sai no host em que o pedido chegou.
 - `PortalDoApp`: o mesmo endereço, onde o cliente gera o código.
 - A variável `CLIVUS_SERVIDOR` vale por cima do embutido (para teste).
   `CLIVUS_LICENCAS` separa só o endereço das licenças.

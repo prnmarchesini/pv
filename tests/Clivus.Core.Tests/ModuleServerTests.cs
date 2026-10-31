@@ -7,7 +7,7 @@ namespace Clivus.Core.Tests;
 /// </summary>
 public class ModuleServerTests
 {
-    private const string Producao = "https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io";
+    private const string Producao = "https://clivus.marcheng.com.br";
 
     [Fact]
     [Trait("Etapa", "38")]

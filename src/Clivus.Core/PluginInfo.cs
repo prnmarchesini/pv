@@ -359,11 +359,12 @@ public static partial class PluginInfo
     /// <summary>
     /// O endereço de produção do servidor (3D, licenças e portal do app),
     /// embutido para não depender de variável de ambiente (plano/seguranca.md);
-    /// CLIVUS_SERVIDOR vale por cima. Hoje é o domínio temporário do Coolify
-    /// (HTTPS válido); vira https://app.clivussolar.com quando o DNS existir,
-    /// combinado no CANAL.md (o servidor segue atendendo no temporário).
+    /// CLIVUS_SERVIDOR vale por cima. Desde 31/10/2026 é o domínio da
+    /// Marcheng; o servidor segue atendendo também no temporário do Coolify
+    /// (h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io), que o plugin
+    /// instalado antes disso ainda usa, e devolve o link no host do pedido.
     /// </summary>
-    public const string ServidorDeProducao = "https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io";
+    public const string ServidorDeProducao = "https://clivus.marcheng.com.br";
 
     /// <summary>
     /// As chaves públicas que assinam licenças, por <c>kid</c> (SubjectPublicKeyInfo,
