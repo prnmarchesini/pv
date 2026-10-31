@@ -39,6 +39,12 @@ public sealed record ShadingResult(IReadOnlyList<double> Fractions, IReadOnlyLis
 ///   mesas (dois triângulos cada). Célula cuja face mais alta fica abaixo do
 ///   raio é pulada.
 /// - Árvores: o cilindro de <see cref="Shading.Blocks"/>.
+///
+/// Com o escopo (42.1, 31/10/2026): só as faces que recebem (<c>receivers</c>)
+/// são avaliadas; as outras só fazem sombra. Com a sombra do relevo
+/// (<see cref="TerrainShadow"/>), o relevo é conferido ponto a ponto, na
+/// mesma varredura que desenha a sombra dele: a face fica com a parte que o
+/// terreno esconde de verdade, e não inteira pelo horizonte do centro da mesa.
 /// </summary>
 public sealed class ShadingModel
 {
@@ -51,6 +57,8 @@ public sealed class ShadingModel
     private readonly int _atraves;
     private readonly double[][]? _horizontes;
     private readonly (double MinX, double MaxX, double MinY, double MaxY, double MinZ)[] _caixas;
+    private readonly IReadOnlyList<bool>? _recebe;
+    private readonly TerrainShadow? _relevo;
 
     private readonly double _celula;
     private readonly Dictionary<long, List<int>> _grade = [];
@@ -66,13 +74,17 @@ public sealed class ShadingModel
     /// <param name="tablesCastShadow">Se as mesas fazem sombra umas nas outras.</param>
     /// <param name="along">Pontos amostrados ao longo da face.</param>
     /// <param name="across">Pontos amostrados no fundo da face.</param>
+    /// <param name="receivers">Quais faces recebem sombra (as do escopo); null: todas. As outras só fazem.</param>
+    /// <param name="terrain">A sombra do relevo, conferida ponto a ponto; null deixa o relevo para o horizonte de <paramref name="ground"/>.</param>
     public ShadingModel(
         IReadOnlyList<ShadowQuad> faces, IReadOnlyList<ShadowCylinder> cylinders, Func<double, double, double?>? ground = null,
-        double groundMaxZ = double.NaN, bool tablesCastShadow = true, int along = 4, int across = 2)
+        double groundMaxZ = double.NaN, bool tablesCastShadow = true, int along = 4, int across = 2,
+        IReadOnlyList<bool>? receivers = null, TerrainShadow? terrain = null)
     {
         ArgumentNullException.ThrowIfNull(faces);
         ArgumentNullException.ThrowIfNull(cylinders);
         if (faces.Any(f => f.Corners.Count != 4)) throw new ArgumentException("toda face precisa de quatro cantos", nameof(faces));
+        if (receivers is not null && receivers.Count != faces.Count) throw new ArgumentException("uma marca de quem recebe por face", nameof(receivers));
 
         _faces = faces;
         _cilindros = cylinders;
@@ -80,6 +92,8 @@ public sealed class ShadingModel
         _ao = Math.Max(1, along);
         _atraves = Math.Max(1, across);
         _carimbo = new int[faces.Count];
+        _recebe = receivers;
+        _relevo = terrain;
 
         _caixas = faces.Select(f => (f.Corners.Min(p => p.X), f.Corners.Max(p => p.X), f.Corners.Min(p => p.Y), f.Corners.Max(p => p.Y), f.Corners.Min(p => p.Z))).ToArray();
 
@@ -107,18 +121,23 @@ public sealed class ShadingModel
         // O horizonte é um por mesa, do centro dela: numa mesa de 20 m a
         // diferença é desprezível, e por face a conta levava 14 s numa usina
         // de 2 mil módulos.
-        if (ground is not null)
+        if (ground is not null && terrain is null)
         {
+            // Só as mesas que recebem precisam do horizonte.
             var porMesa = faces
-                .Select((f, k) => (f.Group, Centro: Centro(f.Corners)))
+                .Select((f, k) => (f.Group, Centro: Centro(f.Corners), Recebe: Recebe(k)))
                 .GroupBy(x => x.Group)
+                .Where(g => g.Any(x => x.Recebe))
                 .ToDictionary(
                     g => g.Key,
                     g => Horizonte(new Point3(g.Average(x => x.Centro.X), g.Average(x => x.Centro.Y), g.Average(x => x.Centro.Z)), ground, groundMaxZ));
 
-            _horizontes = faces.Select(f => porMesa[f.Group]).ToArray();
+            var nenhum = Enumerable.Repeat(-90.0, Setores).ToArray();
+            _horizontes = faces.Select(f => porMesa.TryGetValue(f.Group, out var h) ? h : nenhum).ToArray();
         }
     }
+
+    private bool Recebe(int face) => _recebe is null || _recebe[face];
 
     /// <summary>A fração sombreada e a causa de cada face, com o sol nesta direção.</summary>
     public ShadingResult At(SunPosition sun)
@@ -135,9 +154,15 @@ public sealed class ShadingModel
         var perto = new List<ShadowCylinder>();
         var porCausa = new int[4];
 
+        // O relevo deste passo: a varredura (já feita, se quem desenha a
+        // sombra do relevo preparou o mesmo sol), ou nada se ele não alcança.
+        var relevo = _relevo is not null && _relevo.Prepare(sun);
+
         for (var k = 0; k < _faces.Count; k++)
         {
-            // O relevo: abaixo do horizonte, a face inteira.
+            if (!Recebe(k)) continue;
+
+            // O relevo pelo horizonte (sem a varredura): abaixo dele, a face inteira.
             if (_horizontes is not null && sun.ElevationDegrees < Horizonte(_horizontes[k], sun.AzimuthDegrees))
             {
                 fracoes[k] = 1;
@@ -158,7 +183,9 @@ public sealed class ShadingModel
                 for (var j = 0; j < _atraves; j++)
                 {
                     var p = Bilinear(_faces[k].Corners, (i + 0.5) / _ao, (j + 0.5) / _atraves);
-                    var causa = Causa(p, _faces[k].Group, s, perto);
+
+                    // O relevo primeiro: uma conta só, e o mais barato.
+                    var causa = relevo && _relevo!.Occludes(p.X, p.Y, p.Z) ? ShadowCause.Terrain : Causa(p, _faces[k].Group, s, perto);
                     if (causa == ShadowCause.None) continue;
 
                     sombra++;
@@ -167,10 +194,20 @@ public sealed class ShadingModel
             }
 
             fracoes[k] = (double)sombra / (_ao * _atraves);
-            if (sombra > 0) causas[k] = porCausa[(int)ShadowCause.Object] >= porCausa[(int)ShadowCause.Table] ? ShadowCause.Object : ShadowCause.Table;
+            if (sombra > 0) causas[k] = Principal(porCausa);
         }
 
         return new ShadingResult(fracoes, causas);
+    }
+
+    /// <summary>A causa com mais pontos (no empate, árvore, depois mesa, depois terreno).</summary>
+    private static ShadowCause Principal(int[] porCausa)
+    {
+        var melhor = ShadowCause.Object;
+        foreach (var c in new[] { ShadowCause.Table, ShadowCause.Terrain })
+            if (porCausa[(int)c] > porCausa[(int)melhor]) melhor = c;
+
+        return melhor;
     }
 
     /// <summary>O pior caso de cada face num período, com a causa nesse pior instante.</summary>

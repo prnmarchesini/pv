@@ -1,10 +1,18 @@
-; Teste de nivel 2 das sombras (9.7 e 9.8): usina com 28 e 14, uma arvore grande
-; (tronco 4 m, copa 10 m de altura e 8 m de largura) no meio da F1.3; a sombra
-; de 21/06/2026 as 09:00 (fuso -3) e desenhada no terreno e pega modulos, que
-; ficam em tons de roxo; Apagar tira os contornos e devolve a cor de antes; o
-; dia inteiro (06:00 as 18:00, de hora em hora) marca pelo pior caso pelo
-; menos os mesmos modulos; as 07:30 (sol baixo) a fileira da frente faz sombra
-; na de tras (as mesas tambem fazem sombra).
+; Teste de nivel 2 das sombras (9.7, 9.8 e a revisao de 31/10/2026, 42.1):
+; usina com 28 e 14, uma arvore grande (tronco 4 m, copa 10 m de altura e
+; 8 m de largura) no meio da F1.3. A sombra de 21/06/2026 as 09:00 (fuso -3)
+; e desenhada em HACHURA magenta na camada CLIVUS_SOMBRA: no chao (cada
+; pedaco num plano 4 cm acima do terreno) e sobre as mesas. Conferido em
+; LISP, lido da entidade e nao do relatorio do plugin:
+;   - as hachuras de sombra: SOLID, magenta (420 = 16711935), na camada
+;     CLIVUS_SOMBRA, com transparencia (440, alfa 127);
+;   - a cota de cada vertice das hachuras do chao (o ponto do contorno no
+;     OCS da hachura, levado ao mundo pela normal 210) na faixa do terreno;
+;   - uma amostra desses vertices com a cota do terreno no mesmo X e Y (o
+;     CLIVUS_COORD, na mesma ordem): a hachura a poucos cm acima dele;
+;   - nenhum modulo repintado (a sombra nao pinta mais o bloco).
+; Depois o Apagar (Tudo, o Enter) tira tudo; o dia inteiro desenha a mancha;
+; as 07:30 (sol baixo) a fileira da frente faz sombra na de tras.
 
 (setq clivus:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
@@ -37,43 +45,87 @@
 (command "CLIVUS_ARVORE_AUTO" 4 0.6 10 8 clivus:meio "")
 (setvar "OSMODE" clivus:osmode)
 
-; Cores dos modulos: as tres da sombra e as outras.
-(defun clivus:cores ( / ss i c n)
-  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_MOD*"))) i 0 n 0)
-  (while (< i (clivus:conta ss))
-    (setq c (cdr (assoc 420 (entget (ssname ss i)))))
-    (if (member c '(14136575 10509030 6231200)) (setq n (1+ n)))
-    (setq i (1+ i)))
-  n)
+; A cor e a camada de cada modulo: a sombra nao pode mexer.
 (defun clivus:assinatura ( / ss i l)
   (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_MOD*"))) i 0)
   (while (< i (clivus:conta ss))
-    (setq l (cons (list (cdr (assoc 5 (entget (ssname ss i)))) (cdr (assoc 62 (entget (ssname ss i)))) (cdr (assoc 420 (entget (ssname ss i))))) l) i (1+ i)))
+    (setq l (cons (list (cdr (assoc 5 (entget (ssname ss i)))) (cdr (assoc 62 (entget (ssname ss i)))) (cdr (assoc 420 (entget (ssname ss i)))) (cdr (assoc 8 (entget (ssname ss i))))) l) i (1+ i)))
   l)
-(defun clivus:sombras ( / ss i n zmin zmax)
-  (setq ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) i 0 n 0 zmin 1e99 zmax -1e99)
+
+; As entidades de sombra (XData "Sombra"): de um tipo ("HATCH", "POLYLINE",
+; "MTEXT") e de um lugar ("Chao", "Mesa", ou nil para todos).
+(defun clivus:sombras (tipo onde / ss i e xd l)
+  (setq ss (ssget "_X" (list (cons 0 tipo) (list -3 (list "CLIVUS")))) i 0 l nil)
   (while (< i (clivus:conta ss))
-    (if (= (cdr (nth 0 (clivus:xdata (ssname ss i)))) "Sombra")
-      (progn
-        (setq n (1+ n))
-        (foreach p (clivus:verts (ssname ss i)) (setq zmin (min zmin (caddr p)) zmax (max zmax (caddr p))))))
+    (setq e (ssname ss i) xd (clivus:xdata e))
+    (if (and (= (cdr (nth 0 xd)) "Sombra") (or (null onde) (= (cdr (nth 3 xd)) onde))) (setq l (cons e l)))
     (setq i (1+ i)))
-  (list n zmin zmax))
+  l)
+(defun clivus:todas () (+ (length (clivus:sombras "HATCH" nil)) (length (clivus:sombras "POLYLINE" nil)) (length (clivus:sombras "MTEXT" nil))))
+
+; Os vertices do contorno da hachura no mundo: os 10 entre o 91 e o 75,
+; com a elevacao (o primeiro 10), levados do OCS ao mundo pela normal (210).
+(defun clivus:hverts (e / d elev normal dentro l)
+  (setq d (entget e) elev (cadddr (assoc 10 d)) normal (cdr (assoc 210 d)) dentro nil l nil)
+  (foreach g d
+    (cond ((= (car g) 91) (setq dentro T))
+          ((= (car g) 75) (setq dentro nil))
+          ((and dentro (= (car g) 10)) (setq l (cons (trans (list (cadr g) (caddr g) elev) normal 0) l)))))
+  l)
+
+; Quantas hachuras de sombra NAO sao magenta, NAO estao na CLIVUS_SOMBRA,
+; NAO tem transparencia (alfa 127) ou NAO sao SOLID.
+(defun clivus:erradas (/ d n m c a)
+  (setq n 0 m 0 c 0 a 0)
+  (foreach e (clivus:sombras "HATCH" nil)
+    (setq d (entget e))
+    (if (/= (cdr (assoc 420 d)) 16711935) (setq n (1+ n)))
+    (if (/= (strcase (cdr (assoc 8 d))) "CLIVUS_SOMBRA") (setq c (1+ c)))
+    (if (or (null (assoc 440 d)) (/= (logand (cdr (assoc 440 d)) 255) 127)) (setq a (1+ a)))
+    (if (/= (strcase (cdr (assoc 2 d))) "SOLID") (setq m (1+ m))))
+  (strcat " naomagenta=" (itoa n) " foradacamada=" (itoa c) " semtransparencia=" (itoa a) " naosolid=" (itoa m)))
+
+; A faixa de cotas dos vertices das hachuras de um lugar.
+(defun clivus:faixa (onde / zmin zmax)
+  (setq zmin 1e99 zmax -1e99)
+  (foreach e (clivus:sombras "HATCH" onde)
+    (foreach p (clivus:hverts e) (setq zmin (min zmin (caddr p)) zmax (max zmax (caddr p)))))
+  (list zmin zmax))
+
+; Uma amostra (o primeiro vertice de ate 25 hachuras do chao): a cota da
+; hachura e, logo depois, a do terreno no mesmo ponto (CLIVUS_COORD).
+(defun clivus:amostra (/ l n p)
+  (setq l (clivus:sombras "HATCH" "Chao") n 0)
+  (princ "\nCLIVUS_AMOSTRA_INICIO")
+  (foreach e l
+    (if (< n 25)
+      (progn
+        (setq p (car (clivus:hverts e)) n (1+ n))
+        (princ (strcat "\nCLIVUS_HV z=" (rtos (caddr p) 2 4)))
+        (command "CLIVUS_COORD" (list (car p) (cadr p) 0.0) ""))))
+  (princ "\nCLIVUS_AMOSTRA_FIM"))
 
 (setq clivus:antes (clivus:assinatura))
 (command "CLIVUS_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "09:00" "09:00" "30" "-3" "1")
-(setq clivus:s1 (clivus:sombras) clivus:c1 (clivus:cores))
-(command "CLIVUS_SOMBRAS_APAGAR")
-(setq clivus:s2 (clivus:sombras) clivus:c2 (clivus:cores) clivus:volta (equal clivus:antes (clivus:assinatura)))
-(command "CLIVUS_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "06:00" "18:00" "60" "-3" "1")
-(setq clivus:s3 (clivus:sombras) clivus:c3 (clivus:cores))
+(setq clivus:chao (length (clivus:sombras "HATCH" "Chao")) clivus:mesa (length (clivus:sombras "HATCH" "Mesa"))
+      clivus:bordas (length (clivus:sombras "POLYLINE" nil)) clivus:faixa1 (clivus:faixa "Chao") clivus:erradas1 (clivus:erradas))
+(clivus:amostra)
+(setq clivus:repintou (if (equal clivus:antes (clivus:assinatura)) "0" "1"))
 
-; Sol baixo (07:30): a fileira da frente faz sombra na de tras (a linha de
-; comando diz quantos modulos por outra mesa).
+; O Apagar da linha de comando, Tudo (Enter).
+(command "CLIVUS_SOMBRAS_APAGAR" "")
+(setq clivus:apagado (clivus:todas))
+
+(command "CLIVUS_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "06:00" "18:00" "60" "-3" "1")
+(setq clivus:dia (length (clivus:sombras "HATCH" "Chao")) clivus:repintoudia (if (equal clivus:antes (clivus:assinatura)) "0" "1"))
+
+; Sol baixo (07:30): a fileira da frente faz sombra na de tras (o detalhe da
+; linha de comando diz quantos modulos por outra mesa).
+(princ "\nCLIVUS_SOMBRAS_0730")
 (command "CLIVUS_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "07:30" "07:30" "30" "-3" "1")
 
-(princ (strcat "\nCLIVUS_SOMBRAS instante=" (itoa (car clivus:s1)) " zmin=" (rtos (cadr clivus:s1) 2 3) " zmax=" (rtos (caddr clivus:s1) 2 3)
-               " marcados=" (itoa clivus:c1) " apagado=" (itoa (car clivus:s2)) " marcadosdepois=" (itoa clivus:c2)
-               " volta=" (if clivus:volta "1" "0") " dia=" (itoa (car clivus:s3)) " marcadosdia=" (itoa clivus:c3)))
+(princ (strcat "\nCLIVUS_SOMBRAS chao=" (itoa clivus:chao) " mesa=" (itoa clivus:mesa) " bordas=" (itoa clivus:bordas)
+               " zmin=" (rtos (car clivus:faixa1) 2 3) " zmax=" (rtos (cadr clivus:faixa1) 2 3) clivus:erradas1
+               " repintou=" clivus:repintou " apagado=" (itoa clivus:apagado) " dia=" (itoa clivus:dia) " repintoudia=" clivus:repintoudia " fim"))
 (setvar "SECURELOAD" clivus:secureload)
 (princ)

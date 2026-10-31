@@ -294,8 +294,30 @@ public static partial class PluginInfo
     /// <summary>Sombras pela linha de comando (data, hora ou período). Para o nível 2.</summary>
     public const string ComandoSombrasAutomatico = "CLIVUS_SOMBRAS_AUTO";
 
-    /// <summary>Apaga as sombras desenhadas e tira as marcas dos módulos.</summary>
+    /// <summary>Apaga as sombras desenhadas de um escopo (tudo, uma área ou as mesas escolhidas) e devolve a cor dos módulos pintados por desenho antigo.</summary>
     public const string ComandoSombrasApagar = "CLIVUS_SOMBRAS_APAGAR";
+
+    /// <summary>
+    /// Sombras num escopo pela linha de comando (42.1): o escopo (SELECAO,
+    /// AREA, AREA+SELECAO, AREAS, TUDO), as áreas e as mesas pelos nomes, e o
+    /// período como no CLIVUS_SOMBRAS_AUTO. Para o nível 2.
+    /// </summary>
+    public const string ComandoSombrasEscopoAutomatico = "CLIVUS_SOMBRAS_ESCOPO_AUTO";
+
+    /// <summary>Apagar as sombras de um escopo pela linha de comando, sem clique. Para o nível 2.</summary>
+    public const string ComandoSombrasApagarAutomatico = "CLIVUS_SOMBRAS_APAGAR_AUTO";
+
+    /// <summary>Esconde as sombras: desliga as camadas delas (42.1).</summary>
+    public const string ComandoSombrasOcultar = "CLIVUS_SOMBRAS_OCULTAR";
+
+    /// <summary>Mostra as sombras: liga as camadas delas (42.1).</summary>
+    public const string ComandoSombrasMostrar = "CLIVUS_SOMBRAS_MOSTRAR";
+
+    /// <summary>A janela das análises de sombra: área › mesa › módulo, com o zoom no clique (42.1).</summary>
+    public const string ComandoSombrasAnalises = "CLIVUS_SOMBRAS_ANALISES";
+
+    /// <summary>As análises de sombra escritas na linha de comando, um tópico por linha. Para o nível 2.</summary>
+    public const string ComandoSombrasAnalisesAutomatico = "CLIVUS_SOMBRAS_ANALISES_AUTO";
 
     /// <summary>Clica num módulo e diz por que ele está marcado de sombra: quanto, o quê e quando (05/10/2026).</summary>
     public const string ComandoSombraPorQue = "CLIVUS_SOMBRA_PORQUE";

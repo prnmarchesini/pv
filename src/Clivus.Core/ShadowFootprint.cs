@@ -93,8 +93,12 @@ public sealed class ShadowAccumulator
 /// passo do cálculo, as árvores (cilindros) e as mesas (os contornos) fazem
 /// sombra no chão e nas outras mesas; tudo é unido, passo a passo, numa
 /// mancha no chão e numa mancha por mesa. O mesmo conjunto que o
-/// <see cref="ShadingModel"/> usa para marcar os módulos (o relevo não tem
-/// contorno: ele só tira o sol do módulo).
+/// <see cref="ShadingModel"/> usa para marcar os módulos (o relevo tem a
+/// conta própria, <see cref="TerrainShadow"/>).
+///
+/// Com o escopo (42.1): fazem sombra todas as mesas recebidas; recebem só
+/// as marcadas em <c>receivers</c>, e a sombra no chão que cai toda fora de
+/// <c>groundBounds</c> (a caixa do chão do escopo) não entra na mancha.
 /// </summary>
 public sealed class ShadowFootprint
 {
@@ -105,6 +109,8 @@ public sealed class ShadowFootprint
     private readonly bool _mesasFazemSombra;
     private readonly (double MinX, double MaxX, double MinY, double MaxY, double MinZ, double MaxZ)[] _caixas;
     private readonly double _maisBaixa;
+    private readonly IReadOnlyList<bool>? _recebe;
+    private readonly (double MinX, double MinY, double MaxX, double MaxY)? _caixaDoChao;
 
     private readonly double _celula;
     private readonly Dictionary<long, List<int>> _grade = [];
@@ -119,20 +125,26 @@ public sealed class ShadowFootprint
     /// <param name="ground">A cota do terreno em (x, y), ou null fora dele.</param>
     /// <param name="tablesCastShadow">Se as mesas fazem sombra (no chão e nas outras).</param>
     /// <param name="edgeStep">Os lados da mesa ganham um ponto a cada tantos metros antes de irem ao chão (a sombra acompanha o relevo).</param>
+    /// <param name="receivers">Quais mesas recebem sombra (as do escopo); null: todas.</param>
+    /// <param name="groundBounds">A caixa do chão que interessa; a sombra no chão toda fora dela não entra. Null: todo o chão.</param>
     public ShadowFootprint(
         IReadOnlyList<ShadowCylinder> cylinders, IReadOnlyList<IReadOnlyList<Point3>> tables, Func<double, double, double?> ground,
-        bool tablesCastShadow = true, double edgeStep = 5)
+        bool tablesCastShadow = true, double edgeStep = 5, IReadOnlyList<bool>? receivers = null,
+        (double MinX, double MinY, double MaxX, double MaxY)? groundBounds = null)
     {
         ArgumentNullException.ThrowIfNull(cylinders);
         ArgumentNullException.ThrowIfNull(tables);
         ArgumentNullException.ThrowIfNull(ground);
         if (!(edgeStep > 0)) throw new ArgumentOutOfRangeException(nameof(edgeStep));
+        if (receivers is not null && receivers.Count != tables.Count) throw new ArgumentException("uma marca de quem recebe por mesa", nameof(receivers));
 
         _cilindros = cylinders;
         _mesas = tables;
         _chao = ground;
         _mesasFazemSombra = tablesCastShadow;
         _carimbo = new int[tables.Count];
+        _recebe = receivers;
+        _caixaDoChao = groundBounds;
 
         _caixas = tables.Select(t => t.Count == 0
             ? (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -176,7 +188,7 @@ public sealed class ShadowFootprint
         foreach (var c in _cilindros)
         {
             var contorno = Shading.ShadowOutline(c, s, _chao);
-            if (contorno.Count >= 3) _noChao.Add(contorno);
+            if (contorno.Count >= 3 && NoChaoQueInteressa(contorno)) _noChao.Add(contorno);
 
             // A caixa da sombra até a mesa mais baixa: só as mesas dentro dela.
             var t = Math.Max((c.Top - _maisBaixa) / s.Z, 0);
@@ -185,7 +197,7 @@ public sealed class ShadowFootprint
 
             foreach (var m in MesasNa(caixa))
             {
-                if (_caixas[m].MinZ >= c.Top) continue;
+                if (!Recebe(m) || _caixas[m].MinZ >= c.Top) continue;
                 var naMesa = Shading.ShadowOnPlane(c, s, _mesas[m]);
                 if (naMesa.Count >= 3) Mancha(m).Add(naMesa);
             }
@@ -198,7 +210,7 @@ public sealed class ShadowFootprint
             if (_mesas[i].Count < 3) continue;
 
             var noChao = Shading.PolygonShadowOnGround(_densas[i], s, _chao);
-            if (noChao.Count >= 3) _noChao.Add(noChao);
+            if (noChao.Count >= 3 && NoChaoQueInteressa(noChao)) _noChao.Add(noChao);
 
             // A caixa da mesa e da sombra dela até a mesa mais baixa.
             var c = _caixas[i];
@@ -209,11 +221,27 @@ public sealed class ShadowFootprint
             foreach (var m in MesasNa(caixa))
             {
                 // A mesa não faz sombra nela mesma, nem numa que está toda acima dela.
-                if (m == i || _caixas[m].MinZ >= c.MaxZ) continue;
+                if (m == i || !Recebe(m) || _caixas[m].MinZ >= c.MaxZ) continue;
                 var naMesa = Shading.PolygonShadowOnPlane(_mesas[i], s, _mesas[m]);
                 if (naMesa.Count >= 3) Mancha(m).Add(naMesa);
             }
         }
+    }
+
+    private bool Recebe(int mesa) => _recebe is null || _recebe[mesa];
+
+    /// <summary>Se a sombra no chão toca a caixa do chão do escopo (sem caixa, sempre).</summary>
+    private bool NoChaoQueInteressa(IReadOnlyList<Point3> sombra)
+    {
+        if (_caixaDoChao is not { } b) return true;
+
+        double x0 = double.PositiveInfinity, y0 = double.PositiveInfinity, x1 = double.NegativeInfinity, y1 = double.NegativeInfinity;
+        foreach (var p in sombra)
+        {
+            (x0, y0, x1, y1) = (Math.Min(x0, p.X), Math.Min(y0, p.Y), Math.Max(x1, p.X), Math.Max(y1, p.Y));
+        }
+
+        return x1 >= b.MinX && x0 <= b.MaxX && y1 >= b.MinY && y0 <= b.MaxY;
     }
 
     /// <summary>As bordas da mancha no chão (em planta; a cota vem do terreno ao desenhar).</summary>
