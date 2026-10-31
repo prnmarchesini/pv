@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Autodesk.AutoCAD.ApplicationServices;
+using Autodesk.AutoCAD.EditorInput;
 using Clivus.Core;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
@@ -34,13 +35,28 @@ internal sealed class JanelaDoPvsyst : Window
         ShowInTaskbar = false;
         ResizeMode = ResizeMode.NoResize;
 
-        _seletor = new SeletorDeEscopo(documento, Tr.T("Exportar"),
-            Tr.T("O que exportar: as mesas escolhidas no desenho, uma área, uma área e mais as mesas escolhidas, várias áreas ou o desenho inteiro."),
-            Recado, Tentar, escolhidas);
+        // A janela é modal: para escolher no desenho, ela se esconde enquanto a
+        // pessoa clica (StartUserInteraction) e volta.
+        _seletor = new SeletorDeEscopo(documento, Tr.T("Exportar"), Recado, Tentar,
+            escolherArea: () =>
+            {
+                using (_documento.Editor.StartUserInteraction(this))
+                {
+                    if (EscolhaDeArea.Pedir(_documento.Editor, _documento) is { } area) _seletor!.MarcarArea(area.Identity.Id);
+                }
+            },
+            escolherMesas: () =>
+            {
+                using (_documento.Editor.StartUserInteraction(this))
+                {
+                    var selecao = _documento.Editor.GetSelection(new PromptSelectionOptions { MessageForAdding = Tr.T("\nEscolha as mesas a exportar: ") });
+                    if (selecao.Status == PromptStatus.OK) _seletor!.DefinirMesas(SelecaoCommands.MesasTocadas(_documento, selecao.Value.GetObjectIds()));
+                }
+            },
+            escolhidas);
 
         var pilha = new StackPanel { Margin = new Thickness(12) };
-        pilha.Children.Add(_seletor.Linha);
-        pilha.Children.Add(_seletor.Caixas);
+        pilha.Children.Add(_seletor.Painel);
         pilha.Children.Add(new TextBlock
         {
             Text = Tr.T("Vão as faces dos módulos das mesas escolhidas, num arquivo DAE (Collada) para importar no PVsyst. A área leva as áreas que estão dentro dela."),
@@ -60,9 +76,6 @@ internal sealed class JanelaDoPvsyst : Window
         pilha.Children.Add(botoes);
 
         Content = pilha;
-
-        // Sem área no desenho, o seletor já abriu no desenho inteiro: o aviso de "nenhuma área" não vale.
-        if (_seletor.Tipo == ShadowScopeKind.Drawing) _recado.Text = string.Empty;
     }
 
     /// <summary>

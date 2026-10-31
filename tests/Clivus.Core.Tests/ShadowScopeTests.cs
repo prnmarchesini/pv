@@ -104,6 +104,20 @@ public class ShadowScopeTests
 
     [Fact]
     [Trait("Etapa", "42")]
+    public void AsAreasMarcadasEAsMesasEscolhidasSomam()
+    {
+        // 42.3: a janela soma o que está marcado (várias áreas e mais as mesas escolhidas).
+        var escopo = new ShadowScope(ShadowScopeKind.AreaAndSelection, [Oeste, Leste], [Mesas[4].Id]);
+        Assert.Null(escopo.WhyInvalid());
+
+        var plano = ShadowScopePlan.Build(escopo, Areas, Mesas, 8);
+        Assert.Equal([true, true, true, true, true], plano.Receives);
+        Assert.NotNull(new ShadowScope(ShadowScopeKind.AreaAndSelection, [], [Mesas[4].Id]).WhyInvalid());
+        Assert.NotNull(new ShadowScope(ShadowScopeKind.Area, [Oeste, Leste], []).WhyInvalid());
+    }
+
+    [Fact]
+    [Trait("Etapa", "42")]
     public void AAreaQueSoEncostaNaoVaiJunto()
     {
         // A Leste com metade fora da Oeste deslocada: não está dentro, fica de fora.

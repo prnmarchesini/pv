@@ -145,39 +145,6 @@ public static class Ver3DCommands
     }
 
     /// <summary>
-    /// Os laços da hachura no mundo: os vértices estão no plano dela (o OCS da
-    /// normal, na elevação), e a matriz do plano os leva ao mundo. Laço de
-    /// curvas (não polilinha) vale pelos pontos de começo delas.
-    /// </summary>
-    private static IEnumerable<List<Point3>> AneisDaHachura(Hatch hachura)
-    {
-        var plano = Matrix3d.PlaneToWorld(hachura.Normal);
-
-        Point3 Mundo(double x, double y)
-        {
-            var p = new Point3d(x, y, hachura.Elevation).TransformBy(plano);
-            return new Point3(p.X, p.Y, p.Z);
-        }
-
-        for (var i = 0; i < hachura.NumberOfLoops; i++)
-        {
-            var laco = hachura.GetLoopAt(i);
-            var anel = new List<Point3>();
-
-            if (laco.IsPolyline)
-            {
-                foreach (BulgeVertex v in laco.Polyline) anel.Add(Mundo(v.Vertex.X, v.Vertex.Y));
-            }
-            else
-            {
-                foreach (Curve2d curva in laco.Curves) anel.Add(Mundo(curva.StartPoint.X, curva.StartPoint.Y));
-            }
-
-            yield return anel;
-        }
-    }
-
-    /// <summary>
     /// As mesas assentadas num terreno diferente do de hoje (30/10/2026: "o 3d
     /// no navegador cagou forte, no 3d do cad não tem isso"): o 3D mostra o
     /// terreno de hoje, e onde ele subiu depois que as mesas foram geradas o
@@ -224,8 +191,8 @@ public static class Ver3DCommands
     private static string Resumo(Scene3D cena)
     {
         return Tr.F(
-            "{0} módulo(s), {1} pilar(es), {2} árvore(s), {3} contorno(s) de sombra, terreno em grade de {4:0.#} m",
-            cena.Faces.Count, cena.Pillars.Count, cena.Trees.Count, cena.Shadows.Count, cena.Terrain!.Step);
+            "{0} módulo(s), {1} pilar(es), {2} árvore(s), terreno em grade de {3:0.#} m",
+            cena.Faces.Count, cena.Pillars.Count, cena.Trees.Count, cena.Terrain!.Step);
     }
 
     /// <summary>Grava a página local. O caminho gravado.</summary>
@@ -302,8 +269,6 @@ public static class Ver3DCommands
         var faces = new List<Scene3DFace>();
         var pilares = new List<Scene3DPillar>();
         var arvores = new List<Scene3DTree>();
-        var sombras = new List<IReadOnlyList<Point3>>();
-        var grupos = new List<int>();
 
         // A análise de sombras do CAD (42.3): o momento e a fração de cada
         // módulo com sombra, e a cor de antes dos pintados pela versão antiga.
@@ -330,7 +295,7 @@ public static class Ver3DCommands
             {
                 if (id.IsErased) continue;
                 var dxf = id.ObjectClass.DxfName;
-                if (dxf != "3DFACE" && dxf != "INSERT" && dxf != "HATCH") continue;
+                if (dxf != "3DFACE" && dxf != "INSERT") continue;
                 if (transacao.GetObject(id, OpenMode.ForRead) is not Entity e) continue;
 
                 using (var dados = e.GetXDataForApplication(PluginXData.Aplicativo))
@@ -362,21 +327,6 @@ public static class Ver3DCommands
                     case BlockReference br when LayoutXData.LoadTree(br) is { } a:
                         arvores.Add(new Scene3DTree(br.Position.X, br.Position.Y, br.Position.Z, a.Spec));
                         break;
-
-                    // A sombra (42.1) é a hachura magenta, no chão e sobre as mesas:
-                    // cada laço vira um anel no mundo. A borda passou a ser trechos
-                    // abertos por pedaço, que não fecham anel.
-                    case Hatch hachura when PluginXData.Load(hachura, "Sombra", 1, 1) is not null:
-                        // Os anéis da hachura vão com o número dela (42.3): o de dentro de outro é furo.
-                        var grupo = grupos.Count == 0 ? 0 : grupos[^1] + 1;
-                        foreach (var anel in AneisDaHachura(hachura))
-                        {
-                            if (anel.Count < 3) continue;
-                            sombras.Add(anel);
-                            grupos.Add(grupo);
-                        }
-
-                        break;
                 }
             }
 
@@ -393,8 +343,11 @@ public static class Ver3DCommands
         // as faces lidas dos próprios sólidos do desenho.
         extras.AddRange(EstruturaDaBifila(database));
 
-        return new Scene3D(string.IsNullOrWhiteSpace(titulo) ? Tr.T("Usina") : titulo, grade, faces, pilares, arvores, sombras, extras, Lugar(documento), ResumoDaUsina(documento),
-            momentos, grupos);
+        // As hachuras de sombra do CAD não vão (31/10/2026, Renan: "Nao quero que
+        // leve o magenta no 3d web, a web ja tem sombra propria"): a sombra do 3D é
+        // a do sol, calculada no navegador; da análise vão só os momentos.
+        return new Scene3D(string.IsNullOrWhiteSpace(titulo) ? Tr.T("Usina") : titulo, grade, faces, pilares, arvores, [], extras, Lugar(documento), ResumoDaUsina(documento),
+            momentos);
     }
 
     /// <summary>O instante no minuto (o momento da análise vai até o minuto).</summary>

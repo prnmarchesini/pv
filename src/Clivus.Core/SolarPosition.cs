@@ -33,6 +33,36 @@ public sealed record SunPosition(double AzimuthDegrees, double ElevationDegrees,
 /// </summary>
 public static class SolarCalculator
 {
+    /// <summary>
+    /// O pior dia do ano no lugar (42.3, Renan, 31/10/2026: "Solsticio de
+    /// inverno para quem? Estou no brasil, e quem esta no panama que é o
+    /// projeto"): o dia de sombra mais longa, o do sol mais baixo ao
+    /// meio-dia, a maior distância entre a latitude e a declinação. No
+    /// hemisfério sul é o solstício de junho; no norte, o de dezembro (a 8° N,
+    /// o sol do meio-dia fica a uns 58° em dezembro e 75° em junho).
+    /// </summary>
+    /// <param name="latitude">Graus, positivo ao norte.</param>
+    /// <param name="longitude">Graus, positivo a leste.</param>
+    /// <param name="year">O ano.</param>
+    /// <param name="utcOffsetHours">O fuso do relógio do lugar.</param>
+    public static DateOnly WorstShadowDay(double latitude, double longitude, int year, double utcOffsetHours)
+    {
+        var pior = new DateOnly(year, 1, 1);
+        var maior = double.NegativeInfinity;
+
+        for (var dia = pior; dia.Year == year; dia = dia.AddDays(1))
+        {
+            var distancia = Math.Abs(latitude - Compute(latitude, longitude, dia.ToDateTime(new TimeOnly(12, 0)), utcOffsetHours).DeclinationDegrees);
+            if (distancia > maior)
+            {
+                maior = distancia;
+                pior = dia;
+            }
+        }
+
+        return pior;
+    }
+
     /// <summary>A posição do sol.</summary>
     /// <param name="latitude">Graus, positivo ao norte.</param>
     /// <param name="longitude">Graus, positivo a leste (o Brasil é negativo).</param>

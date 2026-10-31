@@ -335,6 +335,64 @@ public static class SombrasCommands
         }
     }
 
+    /// <summary>
+    /// CLIVUS_SOMBRAS_AREA: clique dentro de uma área e ela fica marcada na
+    /// janela das sombras (abre a janela, se estiver fechada). O "Escolher
+    /// área no desenho…" da janela (42.3: "cade o botão de escolher area").
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoSombrasArea)]
+    public static void SombrasArea()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        try
+        {
+            if (EscolhaDeArea.Pedir(documento.Editor, documento) is not { } area) return;
+            if (!ClivusExtension.TemInterface()) return;
+
+            JanelaDeSombras.Abrir(documento);
+            JanelaDeSombras.MarcarArea(documento, area.Identity.Id);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao escolher a área das sombras.", erro);
+            documento.Editor.WriteMessage(Tr.F("\nNão consegui escolher a área: {0}\n", erro.Message));
+        }
+    }
+
+    /// <summary>
+    /// CLIVUS_SOMBRAS_MESAS: selecione mesas no desenho e elas entram na
+    /// janela das sombras (com a seleção feita antes, ela vale direto). O
+    /// "Escolher mesas no desenho…" da janela.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoSombrasMesas, CommandFlags.UsePickSet)]
+    public static void SombrasMesas()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+
+        try
+        {
+            var selecao = editor.GetSelection(new PromptSelectionOptions { MessageForAdding = Tr.T("\nEscolha as mesas para as sombras: ") });
+            if (selecao.Status != PromptStatus.OK) return;
+
+            var mesas = SelecaoCommands.MesasTocadas(documento, selecao.Value.GetObjectIds());
+            editor.WriteMessage(Tr.F("\nSOMBRAS {0} mesa(s) escolhida(s).\n", mesas.Count));
+            if (!ClivusExtension.TemInterface()) return;
+
+            JanelaDeSombras.Abrir(documento);
+            JanelaDeSombras.DefinirMesas(documento, mesas);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao escolher as mesas das sombras.", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui escolher as mesas: {0}\n", erro.Message));
+        }
+    }
+
     [CommandMethod(PluginInfo.ComandoSombraPorQueAutomatico)]
     public static void SombraPorQueAutomatico()
     {
@@ -644,8 +702,8 @@ public static class SombrasCommands
     // ------------------------------------------------------------ gerar
 
     /// <summary>O botão da janela: o mesmo cálculo, fora de comando, com o vigia calado.</summary>
-    internal static RelatoDasSombras GerarPelaJanela(Document documento, PeriodoDeSombra periodo, ShadowScope escopo) =>
-        EscritaForaDeComando.Fazer(documento, () => GerarComAndamento(documento, periodo, escopo, null));
+    internal static RelatoDasSombras GerarPelaJanela(Document documento, PeriodoDeSombra periodo, ShadowScope escopo, ShadowCasters? queFaz = null) =>
+        EscritaForaDeComando.Fazer(documento, () => GerarComAndamento(documento, periodo, escopo, null, queFaz));
 
     /// <summary>
     /// Gera com a janela de andamento (05/10/2026, Renan: "quero um modal que
@@ -658,9 +716,10 @@ public static class SombrasCommands
     /// <param name="periodo">O período.</param>
     /// <param name="escopo">O que calcular.</param>
     /// <param name="dono">A janela de sombras (travada enquanto isso), ou null no comando.</param>
-    internal static RelatoDasSombras GerarComAndamento(Document documento, PeriodoDeSombra periodo, ShadowScope escopo, System.Windows.Window? dono)
+    /// <param name="fazem">O que faz sombra (a janela pode desligar mesas, árvores ou relevo); null: tudo.</param>
+    internal static RelatoDasSombras GerarComAndamento(Document documento, PeriodoDeSombra periodo, ShadowScope escopo, System.Windows.Window? dono, ShadowCasters? fazem = null)
     {
-        if (!ClivusExtension.TemInterface()) return Gerar(documento, periodo, escopo);
+        if (!ClivusExtension.TemInterface()) return Gerar(documento, periodo, escopo, queFaz: fazem);
 
         JanelaDeProgresso? janela = null;
         try
@@ -676,13 +735,13 @@ public static class SombrasCommands
                 janela = null;
             }
 
-            if (janela is null) return Gerar(documento, periodo, escopo);
+            if (janela is null) return Gerar(documento, periodo, escopo, queFaz: fazem);
 
             return Gerar(documento, periodo, escopo, (p, texto) =>
             {
                 janela.Avancar(p, texto);
                 return !janela.Cancelado;
-            }, () => janela.PodeCancelar(false));
+            }, () => janela.PodeCancelar(false), fazem);
         }
         finally
         {
@@ -708,8 +767,12 @@ public static class SombrasCommands
     /// <param name="escopo">O que calcular.</param>
     /// <param name="avancar">O andamento (porcentagem, o que está sendo feito); devolve false para cancelar. Cancelado, nada é desenhado.</param>
     /// <param name="semVolta">Chamado antes de gravar no desenho: dali em diante não se cancela.</param>
-    internal static RelatoDasSombras Gerar(Document documento, PeriodoDeSombra periodo, ShadowScope escopo, Func<double, string, bool>? avancar = null, Action? semVolta = null)
+    /// <param name="queFaz">O que faz sombra (42.3); null: tudo.</param>
+    internal static RelatoDasSombras Gerar(Document documento, PeriodoDeSombra periodo, ShadowScope escopo, Func<double, string, bool>? avancar = null, Action? semVolta = null, ShadowCasters? queFaz = null)
     {
+        queFaz ??= ShadowCasters.All;
+        if (queFaz.None) return new RelatoDasSombras(Tr.T("Nada marcado em \"Fazem sombra\": marque as mesas, as árvores ou o relevo."));
+
         var database = documento.Database;
         var terreno = TerrainCache.Get(documento);
 
@@ -728,7 +791,7 @@ public static class SombrasCommands
         if (mesas.All(m => m.Faces.Count == 0)) return new RelatoDasSombras(Tr.T("Não há módulo gerado pelo plugin no desenho."));
 
         var areas = AreasDoDesenho.Varrer(database);
-        var arvores = LerArvores(database);
+        var arvores = queFaz.Trees ? LerArvores(database) : [];
         var tin = terreno.Mesh;
         double? Chao(double x, double y) => tin.TryGetZ(x, y, out var z) ? z : null;
 
@@ -792,12 +855,13 @@ public static class SombrasCommands
         var regiao = plano.Ground.SelectMany(p => p.Rings).ToList();
         var alcance = TerrainShadow.Reach(tin.MaxZ, minimo, elevacaoMinima, AlcanceMaximoDoRelevo);
         var declive = TerrainShadow.MaxSlope(tin, caixa.MinX - alcance, caixa.MinY - alcance, caixa.MaxX + alcance, caixa.MaxY + alcance);
-        var relevo = declive > Math.Tan(elevacaoMinima * Math.PI / 180)
+        var relevo = queFaz.Terrain && declive > Math.Tan(elevacaoMinima * Math.PI / 180)
             ? new TerrainShadow(Chao, regiao, recebem.Select(k => mesas[k].Contorno).ToList(), alcance, regiao.Sum(ShadowUnion.Area) > 250_000 ? 2 : 1)
             : null;
 
-        var modelo = new ShadingModel(faces, cilindros, receivers: recebeFace, terrain: relevo);
-        var mancha = new ShadowFootprint(cilindros, fazem.Select(k => mesas[k].Contorno).ToList(), Chao, receivers: fazem.Select(k => plano.Receives[k]).ToList(), groundBounds: caixa);
+        // Sem as mesas em "Fazem sombra", elas só recebem: nem umas nas outras, nem no chão.
+        var modelo = new ShadingModel(faces, cilindros, tablesCastShadow: queFaz.Tables, receivers: recebeFace, terrain: relevo);
+        var mancha = new ShadowFootprint(cilindros, fazem.Select(k => mesas[k].Contorno).ToList(), Chao, tablesCastShadow: queFaz.Tables, receivers: fazem.Select(k => plano.Receives[k]).ToList(), groundBounds: caixa);
 
         var relogio = System.Diagnostics.Stopwatch.StartNew();
         using var cancelar = new CancellationTokenSource();
@@ -927,8 +991,16 @@ public static class SombrasCommands
             recebem.Count, fazem.Count, arvoresQueFazem, pior.Instants, pior.InstantsWithSun));
         detalhe.Append(Tr.F("{0} módulo(s) com sombra: {1} por árvore, {2} por outra mesa, {3} pelo terreno.", porModulo.Count, Por(ShadowCause.Object), Por(ShadowCause.Table), Por(ShadowCause.Terrain)));
 
+        if (!queFaz.Tables || !queFaz.Trees || !queFaz.Terrain)
+            detalhe.Append(Tr.F(" Desligado em \"Fazem sombra\": {0}.", string.Join(", ", new[]
+            {
+                queFaz.Tables ? null : Tr.T("as mesas"),
+                queFaz.Trees ? null : Tr.T("as árvores"),
+                queFaz.Terrain ? null : Tr.T("o relevo"),
+            }.Where(t => t is not null))));
+
         detalhe.Append(relevo is null
-            ? Tr.T(" O relevo não tem como fazer sombra no período (o sol fica mais alto que o chão mais íngreme).")
+            ? queFaz.Terrain ? Tr.T(" O relevo não tem como fazer sombra no período (o sol fica mais alto que o chão mais íngreme).") : string.Empty
             : relevo.AnyShadow
                 ? Tr.F(" O relevo fez sombra (conferido em {0} de {1} passo(s)).", relevo.SweptSteps, relevo.Steps)
                 : Tr.F(" O relevo não fez sombra (conferido em {0} de {1} passo(s)).", relevo.SweptSteps, relevo.Steps));

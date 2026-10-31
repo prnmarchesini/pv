@@ -109,6 +109,12 @@
 ; 42.3: o 3D leva o momento da analise (07:30) e a pior sombra de cada modulo.
 (command "CLIVUS_3D_AUTO" "{{HTML}}")
 
+; 42.3: "Fazem sombra" so com as arvores (este desenho nao tem): sem as mesas
+; e sem o relevo, a Usina fica sem sombra nenhuma, pelo caminho da janela.
+(princ "\nCLIVUS_ESCOPO_SEM_MESAS")
+(clivus-sombras-pela-janela "21/06/2026" "07:30" "-3" "AREA" "Usina" "-" "arvores")
+(clivus:par "SEM_MESAS")
+
 ; 42.4: a exportacao para o PVsyst pelo mesmo escopo. A ordem das linhas
 ; EXPORTAR_MESAS e a desta lista: Oeste, as duas, a F1.1, tudo e a Usina.
 (command "CLIVUS_EXPORTAR_ESCOPO_AUTO" "AREA" "Area Oeste" "-" (strcat "{{DAE}}" "oeste.dae"))

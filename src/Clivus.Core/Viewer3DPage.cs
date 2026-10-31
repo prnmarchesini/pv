@@ -561,7 +561,6 @@ public static class Viewer3DPage
             .Replace("{{TXT_MESAS}}", H(Tr.T("Mesas")), StringComparison.Ordinal)
             .Replace("{{TXT_PILARES}}", H(Tr.T("Pilares")), StringComparison.Ordinal)
             .Replace("{{TXT_ARVORES}}", H(Tr.T("Árvores")), StringComparison.Ordinal)
-            .Replace("{{TXT_SOMBRAS}}", H(Tr.T("Sombras")), StringComparison.Ordinal)
             .Replace("{{TXT_CANALETAS}}", H(Tr.T("Canaletas, carport e estrutura do biposte")), StringComparison.Ordinal)
             .Replace("{{TXT_EXAGERO}}", H(Tr.T("Exagero vertical")), StringComparison.Ordinal)
             .Replace("{{TXT_ENQUADRAR}}", H(Tr.T("Enquadrar")), StringComparison.Ordinal)
@@ -664,12 +663,12 @@ public static class Viewer3DPage
   #solHoraTexto { font-variant-numeric: tabular-nums; }
   #solPainel .marcos button { font-size: 12px; padding: 1px 6px; }
   #solMomentos { margin: 4px 0 6px; }
-  #solMomentoVer { width: 100%; margin-bottom: 4px; padding: 3px 6px; border: 1px solid #c040c0; border-radius: 4px; background: #fbe3fb; color: #6d106d; cursor: pointer; }
-  #solMomentoVer[aria-pressed="true"] { background: #f3b6f3; }
+  #solMomentoVer { width: 100%; margin-bottom: 4px; padding: 3px 6px; border: 1px solid #3b6ea8; border-radius: 4px; background: #e8f0fa; color: var(--texto); cursor: pointer; }
+  #solMomentoVer[aria-pressed="true"] { background: #cfe0f5; }
   #solMomentos .linha { flex-wrap: nowrap; }
   #solMomentos .linha button:disabled { opacity: .35; }
   #solMomento { flex: 1 1 auto; min-width: 0; }
-  #solMomentoTexto { color: #8a1f8a; }
+  #solMomentoTexto { color: var(--suave); }
   #solTocarIcone { display: inline-block; min-width: 1.1em; }
   #resumoQuadro { top: 12px; right: 12px; padding: 6px 10px 8px; max-height: calc(100% - 90px); overflow-y: auto; font-size: 12px; }
   #resumoQuadro caption { text-align: left; font-weight: 600; font-size: 13px; padding-bottom: 2px; }
@@ -691,7 +690,6 @@ public static class Viewer3DPage
     <label><input type="checkbox" id="vMesas" checked> {{TXT_MESAS}}</label>
     <label><input type="checkbox" id="vPilares" checked> {{TXT_PILARES}}</label>
     <label><input type="checkbox" id="vArvores" checked> {{TXT_ARVORES}}</label>
-    <label><input type="checkbox" id="vSombras" checked> {{TXT_SOMBRAS}}</label>
     <label><input type="checkbox" id="vCanaletas" checked> {{TXT_CANALETAS}}</label>
     <label id="itemResumo" hidden><input type="checkbox" id="vResumo" checked> {{TXT_QUADRO}}</label>
   </div>
@@ -729,166 +727,6 @@ public static class Viewer3DPage
 <script>
 {{SOL}}
 {{RESUMO_JS}}
-// ------------------------------------------- as hachuras de sombra do CAD
-// (31/10/2026). Cada anel de cena.sombras é [x,y,z, x,y,z, ...], o primeiro
-// ponto às vezes repetido no fim; cena.sombrasGrupo diz a hachura de cada um.
-// Os anéis de uma hachura estão num plano: ele sai pelo método de Newell, os
-// pontos vão a 2D nele e a three triangula (ShapeUtils.triangulateShape).
-// Anel dentro de um número ímpar de outros do grupo é furo do menor que o
-// contém (a hachura do chão tem furo onde há mesa). Sem sombrasGrupo (a cena
-// de antes), cada anel sozinho. O anel que não serve (menos de 3 pontos
-// distintos, área quase zero, triangulação vazia) fica de fora, sem quebrar
-// a página.
-
-const AREA_MINIMA = 1e-4;                // m²: abaixo disso, o anel é uma linha
-const perto = (a, b) => Math.abs(a[0] - b[0]) < 1e-4 && Math.abs(a[1] - b[1]) < 1e-4 && Math.abs(a[2] - b[2]) < 1e-4;
-
-/** O anel que serve: os pontos distintos, a normal (Newell) e a área; senão null. */
-function anel(c) {
-  if (!Array.isArray(c)) return null;
-  const pts = [];
-  for (let k = 0; k + 2 < c.length; k += 3) {
-    const p = [c[k], c[k + 1], c[k + 2]];
-    if (!p.every(Number.isFinite)) return null;
-    if (!pts.length || !perto(pts[pts.length - 1], p)) pts.push(p);
-  }
-  while (pts.length > 1 && perto(pts[0], pts[pts.length - 1])) pts.pop();
-  if (pts.length < 3) return null;
-
-  // Newell, a partir do primeiro ponto (os números pequenos não perdem casas):
-  // a normal com o tamanho do dobro da área.
-  const o = pts[0];
-  let nx = 0, ny = 0, nz = 0;
-  for (let i = 0; i < pts.length; i++) {
-    const a = pts[i], b = pts[(i + 1) % pts.length];
-    const ax = a[0] - o[0], ay = a[1] - o[1], az = a[2] - o[2], bx = b[0] - o[0], by = b[1] - o[1], bz = b[2] - o[2];
-    nx += (ay - by) * (az + bz);
-    ny += (az - bz) * (ax + bx);
-    nz += (ax - bx) * (ay + by);
-  }
-  const dobro = Math.hypot(nx, ny, nz);
-  if (!(dobro > 2 * AREA_MINIMA)) return null;
-  return { pts, normal: [nx / dobro, ny / dobro, nz / dobro], area: dobro / 2 };
-}
-
-/** Dois eixos do plano de normal n (unitária). */
-function eixosDoPlano(n) {
-  const r = Math.abs(n[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
-  const d = r[0] * n[0] + r[1] * n[1] + r[2] * n[2];
-  const u = [r[0] - d * n[0], r[1] - d * n[1], r[2] - d * n[2]], lu = Math.hypot(u[0], u[1], u[2]);
-  u[0] /= lu; u[1] /= lu; u[2] /= lu;
-  return [u, [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]]];
-}
-
-/** Se o ponto 2D cai dentro do polígono (a regra do raio). */
-function dentro(p, poli) {
-  let d = false;
-  for (let i = 0, j = poli.length - 1; i < poli.length; j = i++) {
-    const a = poli[i], b = poli[j];
-    if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) d = !d;
-  }
-  return d;
-}
-
-/** Um ponto bem dentro do anel: o centro do maior triângulo dele (vale com o anel encostado em outro). */
-function pontoDeDentro(a) {
-  let melhor = null, maior = 0;
-  for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(a.p2.slice(), [])) {
-    const p = a.p2[i], q = a.p2[j], r = a.p2[k];
-    const area = Math.abs((q.x - p.x) * (r.y - p.y) - (r.x - p.x) * (q.y - p.y));
-    if (area > maior) { maior = area; melhor = new THREE.Vector2((p.x + q.x + r.x) / 3, (p.y + q.y + r.y) / 3); }
-  }
-  return melhor;
-}
-
-/** Se o anel b contém o anel a (os dois no 2D do mesmo plano). */
-function contem(b, a) {
-  const ca = a.caixa, cb = b.caixa, f = 1e-6;
-  if (ca[0] < cb[0] - f || ca[1] < cb[1] - f || ca[2] > cb[2] + f || ca[3] > cb[3] + f) return false;
-  if (a.dentro) return dentro(a.dentro, b.p2);
-  // Sem o ponto de dentro (triangulação vazia): a maioria dos cantos.
-  let sim = 0;
-  for (const p of a.p2) if (dentro(p, b.p2)) sim++;
-  return 2 * sim > a.p2.length;
-}
-
-/**
- * Os triângulos e o contorno das hachuras, já na three (P): { triangulos:
- * [x,y,z, ...] de 3 em 3 pontos, linhas: [x,y,z, ...] de 2 em 2 }.
- */
-function hachuras(sombras, grupos, P) {
-  const triangulos = [], linhas = [];
-  if (!Array.isArray(sombras)) return { triangulos, linhas };
-  const comGrupo = Array.isArray(grupos) && grupos.length === sombras.length;
-
-  const porGrupo = new Map();
-  sombras.forEach((c, i) => {
-    const a = anel(c);
-    if (!a) return;
-    // Sem o grupo, o anel vai sozinho (a chave negativa não bate com grupo nenhum).
-    const chave = comGrupo && Number.isInteger(grupos[i]) && grupos[i] >= 0 ? grupos[i] : -1 - i;
-    if (porGrupo.has(chave)) porGrupo.get(chave).push(a);
-    else porGrupo.set(chave, [a]);
-  });
-
-  for (const aneis of porGrupo.values()) {
-    try {
-      grupo(aneis, P, triangulos, linhas);
-    } catch (e) { /* a hachura que não se deixa triangular fica de fora; as outras seguem */ }
-  }
-
-  return { triangulos, linhas };
-}
-
-/** Uma hachura (os anéis de um grupo) em triângulos e no contorno. */
-function grupo(aneis, P, triangulos, linhas) {
-  // O plano do grupo é o do maior anel; todos vão a 2D nele.
-  const maior = aneis.reduce((a, b) => (b.area > a.area ? b : a));
-  const [u, w] = eixosDoPlano(maior.normal), o = maior.pts[0];
-  for (const a of aneis) {
-    a.p2 = a.pts.map(p => {
-      const x = p[0] - o[0], y = p[1] - o[1], z = p[2] - o[2];
-      return new THREE.Vector2(x * u[0] + y * u[1] + z * u[2], x * w[0] + y * w[1] + z * w[2]);
-    });
-    a.caixa = [Infinity, Infinity, -Infinity, -Infinity];
-    for (const p of a.p2) {
-      a.caixa[0] = Math.min(a.caixa[0], p.x); a.caixa[1] = Math.min(a.caixa[1], p.y);
-      a.caixa[2] = Math.max(a.caixa[2], p.x); a.caixa[3] = Math.max(a.caixa[3], p.y);
-    }
-    a.area2 = Math.abs(THREE.ShapeUtils.area(a.p2));
-    a.furos = [];
-  }
-
-  // Quem contém quem (só o maior contém o menor): dentro de um número ímpar
-  // de outros, é furo do menor que o contém.
-  if (aneis.length > 1) {
-    for (const a of aneis) a.dentro = pontoDeDentro(a);
-    for (const a of aneis) {
-      const donos = aneis.filter(b => b !== a && b.area2 > a.area2 && contem(b, a));
-      if (donos.length % 2 === 1) {
-        a.furo = true;
-        a.pai = donos.reduce((x, y) => (y.area2 < x.area2 ? y : x));
-      }
-    }
-    for (const a of aneis) if (a.furo && !a.pai.furo) a.pai.furos.push(a);
-  }
-
-  // Cada contorno com os furos dele; o triângulo usa os pontos 3D do anel.
-  for (const a of aneis) {
-    if (a.furo) continue;
-    const faces = THREE.ShapeUtils.triangulateShape(a.p2.slice(), a.furos.map(f => f.p2.slice()));
-    const pts = a.pts.concat(...a.furos.map(f => f.pts));
-    for (const face of faces) {
-      if (face.length === 3 && face.every(q => pts[q])) for (const q of face) triangulos.push(...P(...pts[q]));
-    }
-  }
-
-  // O contorno de todos os anéis, furos também.
-  for (const a of aneis) {
-    for (let i = 0; i < a.pts.length; i++) linhas.push(...P(...a.pts[i]), ...P(...a.pts[(i + 1) % a.pts.length]));
-  }
-}
-
 const D = {{CENA}};
 const cena = new THREE.Scene();
 cena.background = new THREE.Color(0xcfe3f3);
@@ -1030,39 +868,6 @@ if (tin && Array.isArray(tin.v) && Array.isArray(tin.t) && tin.v.length >= 9 && 
   }
 }
 
-// Sombras do CAD (31/10/2026): as hachuras da análise de sombras, em magenta
-// translúcido com o contorno, 3 a 4 cm acima do terreno e dos módulos (o
-// polygonOffset resolve a distância que a profundidade não separa). Não
-// fazem nem recebem a sombra do sol (userData.semSombra; o sol.js respeita).
-{
-  const s = camada('sombras'), { triangulos, linhas } = hachuras(D.sombras, D.sombrasGrupo, P);
-  if (triangulos.length) {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(triangulos, 3));
-    const preenchimento = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
-      color: 0xff00ff, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide,
-      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
-    }));
-    preenchimento.userData.semSombra = true;
-    preenchimento.renderOrder = 1;
-    s.add(preenchimento);
-  }
-  if (linhas.length) {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(linhas, 3));
-    const contorno = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.9, depthWrite: false }));
-    // A linha não tem polygonOffset: o mesmo empurrão para a câmera vai no
-    // shader (uns 4 passos da profundidade de 24 bits), senão o contorno
-    // briga com o terreno visto de longe.
-    contorno.material.onBeforeCompile = shader => {
-      shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n\tgl_Position.z -= 5.0e-7 * gl_Position.w;');
-    };
-    contorno.userData.semSombra = true;
-    contorno.renderOrder = 2;
-    s.add(contorno);
-  }
-}
-
 // Canaletas da drenagem: a parede de concreto em triângulos. A face quase
 // deitada vai com a normal para cima: a de cima precisa dela para a sombra,
 // e a de baixo não pega sol de qualquer jeito.
@@ -1107,8 +912,14 @@ function enquadrar() {
   controles.target.copy(centro); controles.update();
 }
 
-for (const [id, nome] of [['vTerreno', 'terreno'], ['vMesas', 'mesas'], ['vPilares', 'pilares'], ['vArvores', 'arvores'], ['vSombras', 'sombras'], ['vCanaletas', 'canaletas']]) {
-  document.getElementById(id).onchange = e => { if (camadas[nome]) camadas[nome].visible = e.target.checked; if (sombraDoSol) sombraDoSol.refazer(); };
+// Cada camada começa como a caixa dela está. A das hachuras da análise de
+// sombras vem desligada (31/10/2026, Renan: "3D cagado, está pintado de rosa,
+// sendo que também é gerada a sombra, em cinza"): no período inteiro ela é a
+// soma das sombras de todas as horas, parada, e brigava com a sombra do sol.
+for (const [id, nome] of [['vTerreno', 'terreno'], ['vMesas', 'mesas'], ['vPilares', 'pilares'], ['vArvores', 'arvores'], ['vCanaletas', 'canaletas']]) {
+  const caixa = document.getElementById(id);
+  if (camadas[nome]) camadas[nome].visible = caixa.checked;
+  caixa.onchange = e => { if (camadas[nome]) camadas[nome].visible = e.target.checked; if (sombraDoSol) sombraDoSol.refazer(); };
 }
 document.getElementById('exagero').onchange = e => { mundo.scale.set(1, Number(e.target.value), 1); enquadrar(); if (sombraDoSol) sombraDoSol.refazer(); };
 document.getElementById('enquadrar').onclick = enquadrar;

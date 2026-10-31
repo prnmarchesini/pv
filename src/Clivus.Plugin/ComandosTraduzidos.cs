@@ -687,6 +687,18 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_SOMBRAS_BORRAR")]
     public static void CLIVUS_SOMBRAS_BORRAR() => SombrasCommands.SombrasApagar();
 
+    [CommandMethod("CLIVUS_SHADOWS_AREA")]
+    public static void CLIVUS_SHADOWS_AREA() => SombrasCommands.SombrasArea();
+
+    [CommandMethod("CLIVUS_SOMBRAS_AREA_ELEGIR")]
+    public static void CLIVUS_SOMBRAS_AREA_ELEGIR() => SombrasCommands.SombrasArea();
+
+    [CommandMethod("CLIVUS_SHADOWS_TABLES", CommandFlags.UsePickSet)]
+    public static void CLIVUS_SHADOWS_TABLES() => SombrasCommands.SombrasMesas();
+
+    [CommandMethod("CLIVUS_SOMBRAS_MESAS_ELEGIR", CommandFlags.UsePickSet)]
+    public static void CLIVUS_SOMBRAS_MESAS_ELEGIR() => SombrasCommands.SombrasMesas();
+
     [CommandMethod("CLIVUS_SHADOWS_SHOW")]
     public static void CLIVUS_SHADOWS_SHOW() => SombrasCommands.SombrasMostrar();
 

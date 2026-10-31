@@ -418,76 +418,23 @@
     // momento que causa sombras"): os instantes, no relógio da usina, em que
     // módulos tiveram a pior sombra na análise do CAD. O sol vai para o
     // momento escolhido e os módulos dele (a face com f[13] = o índice do
-    // momento) ficam em magenta: a sombra do sol tem de cair sobre eles.
+    // momento) são os que a sombra do sol tem de cobrir. Sem magenta no 3D
+    // (31/10/2026, Renan: "a web ja tem sombra propria"): só o sol vai ao
+    // momento e o texto diz quantos módulos.
     const momentos = lerMomentos(o.D.momentos);
     const cMomentos = el('solMomentos'), cMomento = el('solMomento'), cVer = el('solMomentoVer'),
       cAntes = el('solMomentoAntes'), cDepois = el('solMomentoDepois'), cMomentoTexto = el('solMomentoTexto');
     const comMomentos = momentos.length > 0 && !!(cMomentos && cMomento && cVer);
-    let destaque = null, atual = 0;
+    let atual = 0;
 
-    // As faces de cada momento, juntadas uma vez.
-    const facesDoMomento = new Map();
-    if (comMomentos) {
-      for (const f of (Array.isArray(o.D.faces) ? o.D.faces : [])) {
-        if (!Array.isArray(f) || f.length < 15 || !Number.isInteger(f[13])) continue;
-        const lista = facesDoMomento.get(f[13]);
-        if (lista) lista.push(f);
-        else facesDoMomento.set(f[13], [f]);
-      }
-    }
-
-    // O destaque: magenta translúcido por cima das faces (polygonOffset mais
-    // forte que o delas) e o contorno de cada módulo, sem fazer nem receber
-    // sombra, na camada das mesas (some com elas). O preenchimento é leve: a
-    // sombra do sol no módulo tem de aparecer por baixo dele.
-    const materiaisDoDestaque = comMomentos
-      ? [new THREE.MeshBasicMaterial({
-        color: 0xff00ff, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide,
-        polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
-      }), new THREE.LineBasicMaterial({ color: 0xff40ff, depthWrite: false })]
-      : null;
-    // A linha não tem polygonOffset: o mesmo empurrão para a câmera vai no
-    // shader (uns 4 passos da profundidade de 24 bits), senão o contorno some
-    // dentro do módulo visto de longe.
-    if (comMomentos) {
-      materiaisDoDestaque[1].onBeforeCompile = shader => {
-        shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n\tgl_Position.z -= 5.0e-7 * gl_Position.w;');
-      };
-    }
-
-    /** Tira o destaque e o texto dele (a pessoa mexeu no dia, na hora ou na animação). */
+    /** Tira o texto do momento (a pessoa mexeu no dia, na hora ou na animação). */
     function apagarDestaque() {
-      if (destaque) {
-        destaque.parent.remove(destaque);
-        destaque.traverse(x => { if (x.geometry) x.geometry.dispose(); });
-        destaque = null;
-      }
       if (cMomentoTexto) cMomentoTexto.hidden = true;
       if (comMomentos) cVer.setAttribute('aria-pressed', 'false');
     }
 
-    /** Destaca os módulos do momento m e escreve quantos são. */
+    /** Escreve quantos módulos têm a pior sombra no momento m (a sombra do sol mostra onde). */
     function destacar(m) {
-      apagarDestaque();
-
-      const pos = [], bordas = [];
-      for (const f of facesDoMomento.get(m.indice) || []) {
-        // Desenho (x leste, y norte, z cima) -> three (x, z, -y), como a cena.
-        const v = [0, 1, 2, 3].map(k => [f[3 * k], f[3 * k + 2], -f[3 * k + 1]]);
-        for (const k of [0, 1, 2, 0, 2, 3]) pos.push(v[k][0], v[k][1], v[k][2]);
-        for (const k of [0, 1, 1, 2, 2, 3, 3, 0]) bordas.push(v[k][0], v[k][1], v[k][2]);
-      }
-
-      if (pos.length) {
-        const g = new THREE.BufferGeometry(), b = new THREE.BufferGeometry();
-        g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-        b.setAttribute('position', new THREE.Float32BufferAttribute(bordas, 3));
-        destaque = new THREE.Group();
-        destaque.add(new THREE.Mesh(g, materiaisDoDestaque[0]), new THREE.LineSegments(b, materiaisDoDestaque[1]));
-        destaque.traverse(x => { x.userData.semSombra = true; x.renderOrder = 2; });
-        ((o.camadas && o.camadas.mesas) || mundo).add(destaque);
-      }
-
       if (cMomentoTexto) {
         const t = cMomentos.dataset;
         cMomentoTexto.textContent = preencher(m.modulos === 1 ? t.destaqueum : t.destaque, { n: inteiro.format(m.modulos) });

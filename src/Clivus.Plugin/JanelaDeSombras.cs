@@ -42,6 +42,11 @@ internal sealed class JanelaDeSombras : Window
     // O que calcular (a mesma escolha da exportação para o PVsyst, 42.4).
     private readonly SeletorDeEscopo _seletor;
 
+    // O que faz sombra (42.3: "escolher o que eu quero (mesas, arvores, etc)").
+    private readonly CheckBox _porMesas = new() { Content = Tr.T("Mesas"), IsChecked = true, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 2, 14, 2), ToolTip = Tr.T("As mesas fazem sombra umas nas outras e no chão.") };
+    private readonly CheckBox _porArvores = new() { Content = Tr.T("Árvores e objetos"), IsChecked = true, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 2, 14, 2), ToolTip = Tr.T("As árvores e os objetos de Sombreamento > Objetos.") };
+    private readonly CheckBox _porRelevo = new() { Content = Tr.T("Relevo (barranco)"), IsChecked = true, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 2, 14, 2), ToolTip = Tr.T("O próprio terreno: o barranco que esconde o sol.") };
+
     // O período.
     private readonly ComboBox _modo = new() { Width = 260, ToolTip = Tr.T("Um instante; um dia inteiro; o mesmo horário em cada dia de um período; ou todas as horas de um período. No período, a sombra desenhada é a de todos os passos juntos e cada módulo guarda o pior caso dele.") };
     private readonly DatePicker _de = new() { Width = 130, ToolTip = Tr.T("O dia (ou o primeiro dia do período).") };
@@ -54,6 +59,9 @@ internal sealed class JanelaDeSombras : Window
     private readonly TextBox _altura = new() { Width = 40, Text = "20", ToolTip = Tr.T("A altura solar mínima, em graus: só contam sombras com o sol acima dela.") };
     private readonly TextBlock _fuso = new() { VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Gray };
     private readonly double _fusoDoLugar;
+
+    // O pior dia do ano no lugar do desenho, para o rótulo do atalho; sem localização, sem data.
+    private readonly DateOnly? _piorDia;
 
     private readonly TextBlock _recado = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
 
@@ -99,12 +107,15 @@ internal sealed class JanelaDeSombras : Window
             return b;
         }
 
-        // ---- o que calcular (abre em "Uma área", o jeito de não travar o PC
-        // numa usina grande; sem área no desenho, no desenho inteiro)
+        // ---- o que calcular: as áreas (uma caixa cada, à vista), o desenho
+        // inteiro e as mesas escolhidas no desenho (42.3: "uma area pintou e na
+        // outra nao [...] cade o botão de escolher area"). Abre com a primeira
+        // área que tem mesa, o jeito de não travar o PC numa usina grande. Os
+        // botões de escolher no desenho vão como comando: a janela fica aberta.
 
-        _seletor = new SeletorDeEscopo(documento, Tr.T("Calcular"),
-            Tr.T("O que calcular: as mesas escolhidas no desenho, uma área, uma área e mais as mesas escolhidas, várias áreas ou o desenho inteiro. Fazem sombra também as mesas, as árvores e o relevo em volta."),
-            Recado, Tentar);
+        _seletor = new SeletorDeEscopo(documento, Tr.T("Calcular"), Recado, Tentar,
+            escolherArea: () => PedirAoDesenho(PluginInfo.ComandoSombrasArea),
+            escolherMesas: () => PedirAoDesenho(PluginInfo.ComandoSombrasMesas));
 
         // ---- o período
 
@@ -119,6 +130,9 @@ internal sealed class JanelaDeSombras : Window
         // O fuso vem do lugar do desenho (Terreno > Resumo > Localização), não desta janela.
         _fusoDoLugar = SombrasCommands.FusoDoLugar(documento);
         _fuso.Text = Tr.F("Fuso {0:+0.#;-0.#;0} h, do lugar do desenho (Terreno > Resumo).", _fusoDoLugar);
+        _piorDia = SombrasCommands.Lugar(documento) is { IsValid: true } doDesenho
+            ? SolarCalculator.WorstShadowDay(doDesenho.Latitude, doDesenho.Longitude, hoje.Year, _fusoDoLugar)
+            : null;
 
         _criterio.Items.Add(Tr.T("Janela de horário"));
         _criterio.Items.Add(Tr.T("Sol acima de"));
@@ -130,15 +144,27 @@ internal sealed class JanelaDeSombras : Window
 
         var pilha = new StackPanel { Margin = new Thickness(12) };
 
-        pilha.Children.Add(_seletor.Linha);
-        pilha.Children.Add(_seletor.Caixas);
-        pilha.Children.Add(Linha(R(Tr.T("Modo"), 70), _modo));
-        pilha.Children.Add(Linha(R(Tr.T("Dias"), 70), _de, R(Tr.T("  a")), _ate, R(Tr.T("   a cada")), _dias, R(Tr.T(" dia(s)"))));
-        pilha.Children.Add(Linha(R(Tr.T("Considerar"), 70), _criterio, R(" "), _altura, R("°")));
-        pilha.Children.Add(Linha(R(Tr.T("Horário"), 70), _horaDe, R(Tr.T("  às")), _horaAte, R(Tr.T("   passo")), _passo, R(Tr.T(" min")), R("  "), _fuso));
+        pilha.Children.Add(_seletor.Painel);
+        pilha.Children.Add(Linha(R(Tr.T("Fazem sombra"), 88), _porMesas, _porArvores, _porRelevo));
+        pilha.Children.Add(Linha(R(Tr.T("Modo"), 88), _modo));
+        pilha.Children.Add(Linha(R(Tr.T("Dias"), 88), _de, R(Tr.T("  a")), _ate, R(Tr.T("   a cada")), _dias, R(Tr.T(" dia(s)"))));
+        pilha.Children.Add(Linha(R(Tr.T("Considerar"), 88), _criterio, R(" "), _altura, R("°")));
+        pilha.Children.Add(Linha(R(Tr.T("Horário"), 88), _horaDe, R(Tr.T("  às")), _horaAte, R(Tr.T("   passo")), _passo, R(Tr.T(" min")), R("  "), _fuso));
         pilha.Children.Add(Linha(
-            R(Tr.T("Atalhos"), 70),
-            Atalho(Tr.T("Solstício de inverno"), Tr.T("21 de junho, das 9h às 15h de meia em meia hora: o critério usual (sem sombra das 9h às 15h no dia de sombra mais longa do ano no Brasil)."), () => Preencher(1, new DateTime(hoje.Year, 6, 21), new DateTime(hoje.Year, 6, 21), "09:00", "15:00", "30", "1")),
+            R(Tr.T("Atalhos"), 88),
+            // O pior dia do lugar do desenho (42.3: "Solsticio de inverno para
+            // quem?"): junho no hemisfério sul, dezembro no norte.
+            Atalho(_piorDia is { } pior ? Tr.F("Pior dia do ano ({0:dd/MM})", pior) : Tr.T("Pior dia do ano"),
+                Tr.T("O dia de sombra mais longa no lugar do desenho (o sol mais baixo ao meio-dia): no hemisfério sul, como no Brasil, é o solstício de junho; no norte, como no Panamá, o de dezembro. Das 9h às 15h, de meia em meia hora: o critério usual (nenhuma sombra das 9h às 15h no pior dia do ano)."),
+                () =>
+                {
+                    var lugar = SombrasCommands.Lugar(_documento);
+                    if (lugar is not { IsValid: true })
+                        throw new InvalidOperationException(Tr.T("O desenho não tem localização: defina em Terreno > Resumo > Localização para saber o pior dia do ano do lugar."));
+
+                    var dia = SolarCalculator.WorstShadowDay(lugar.Latitude, lugar.Longitude, (_de.SelectedDate ?? hoje).Year, _fusoDoLugar).ToDateTime(TimeOnly.MinValue);
+                    Preencher(1, dia, dia, "09:00", "15:00", "30", "1");
+                }),
             Atalho(Tr.T("Este mês"), Tr.T("Todos os dias do mês do primeiro dia, das 9h às 15h, de hora em hora."), () =>
             {
                 var d = _de.SelectedDate ?? hoje;
@@ -159,7 +185,7 @@ internal sealed class JanelaDeSombras : Window
 
         pilha.Children.Add(new TextBlock
         {
-            Text = Tr.T("Fazem sombra as mesas, as árvores (Sombreamento > Objetos) e o relevo. A sombra é desenhada em magenta no chão (acompanhando o terreno) e sobre os módulos, até onde ela pega; cada escopo troca só as sombras dele, e as áreas convivem no desenho."),
+            Text = Tr.T("A sombra é desenhada em magenta no chão (acompanhando o terreno) e sobre os módulos, até onde ela pega; num dia ou período, é a soma das sombras de todos os passos. Cada cálculo troca só as sombras do que foi marcado, e as áreas convivem no desenho."),
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brushes.Gray,
             Margin = new Thickness(0, 8, 0, 0),
@@ -203,8 +229,6 @@ internal sealed class JanelaDeSombras : Window
 
         Content = pilha;
 
-        // Sem área no desenho, o seletor já abriu no desenho inteiro: o aviso de "nenhuma área" não vale.
-        if (_seletor.Tipo == ShadowScopeKind.Drawing) _recado.Text = string.Empty;
 
         // O roxo da versão antiga sai ao abrir (42.3): ele não é a sombra de
         // hoje, o Ocultar não o escondia e o 3D o mostrava como sombra.
@@ -221,6 +245,34 @@ internal sealed class JanelaDeSombras : Window
         Tentar(MostrarCamadas);
     }
 
+    /// <summary>Pede ao desenho (a área pelo clique, as mesas pela seleção) por um comando: a janela é solta e fica aberta.</summary>
+    private void PedirAoDesenho(string comando)
+    {
+        if (!ClivusExtension.TemInterface()) return;
+        if (AcadApp.DocumentManager.MdiActiveDocument != _documento)
+        {
+            Recado(Tr.T("Este desenho não é o ativo: clique nele e repita."), true);
+            return;
+        }
+
+        _documento.SendStringToExecute($"_{comando} ", true, false, false);
+    }
+
+    /// <summary>A área escolhida no desenho (CLIVUS_SOMBRAS_AREA) fica marcada na janela aberta.</summary>
+    internal static void MarcarArea(Document documento, Guid area)
+    {
+        if (Abertas.TryGetValue(documento, out var janela)) janela.Tentar(() => janela._seletor.MarcarArea(area));
+    }
+
+    /// <summary>As mesas escolhidas no desenho (CLIVUS_SOMBRAS_MESAS) entram na janela aberta.</summary>
+    internal static void DefinirMesas(Document documento, IEnumerable<Guid> mesas)
+    {
+        if (Abertas.TryGetValue(documento, out var janela)) janela.Tentar(() => janela._seletor.DefinirMesas(mesas));
+    }
+
+    /// <summary>O que faz sombra, pelas três caixas.</summary>
+    private ShadowCasters QueFazSombra() => new(_porMesas.IsChecked == true, _porArvores.IsChecked == true, _porRelevo.IsChecked == true);
+
     /// <summary>O botão de ligar diz o que vai fazer: Ocultar com as sombras à vista, Mostrar com elas escondidas.</summary>
     private void MostrarCamadas()
     {
@@ -235,7 +287,7 @@ internal sealed class JanelaDeSombras : Window
         if (Abertas.TryGetValue(documento, out var aberta))
         {
             if (aberta.WindowState == WindowState.Minimized) aberta.WindowState = WindowState.Normal;
-            aberta.Tentar(aberta._seletor.LerAreas);
+            aberta.Tentar(() => aberta._seletor.LerAreas());
             aberta.Activate();
             return;
         }
@@ -289,7 +341,7 @@ internal sealed class JanelaDeSombras : Window
                 ?? throw new ArgumentException(porque);
 
             // Com o andamento e o Cancelar (05/10/2026); esta janela fica travada enquanto isso.
-            return SombrasCommands.GerarComAndamento(_documento, periodo, escopo, this);
+            return SombrasCommands.GerarComAndamento(_documento, periodo, escopo, this, QueFazSombra());
         });
     }
 

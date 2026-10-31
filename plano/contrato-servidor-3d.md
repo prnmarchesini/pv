@@ -78,7 +78,11 @@ CANAL.md). A página local continua com a origem verdadeira.
   sombra.
 - `arvores`: o pé e as medidas; tronco e copa são cilindros (a copa começa
   onde o tronco acaba).
-- `sombras`: contornos fechados das sombras desenhadas, já no terreno.
+- `sombras`: contornos fechados das sombras desenhadas, já no terreno. Desde a
+  0.1.4 (31/10/2026, Renan: "Nao quero que leve o magenta no 3d web, a web ja tem
+  sombra propria") o plugin manda a lista vazia, sem `sombrasGrupo`, e o
+  visualizador não desenha hachura nenhuma: a sombra do 3D é a do sol. Da análise
+  de sombras do CAD vão só os `momentos` (e o momento e a fração nas `faces`).
 - `canaletas` (opcional, desde 28/10/2026): triângulos prontos
   `[x1,y1,z1, x2,y2,z2, x3,y3,z3, corRGB]` — as canaletas da drenagem e o
   carport (aço, bases e módulos com espessura). O servidor guarda como vem; o

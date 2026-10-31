@@ -80,7 +80,12 @@ public static class GanchosDeTeste
             return null;
         }
 
-        documento.Editor.WriteMessage($"\n{SombrasCommands.GerarPelaJanela(documento, periodo, escopo)}\n");
+        // O sétimo, as caixas de "Fazem sombra" (42.3): "mesas,arvores,relevo", ou parte delas.
+        var queFaz = valores.Length >= 7
+            ? new ShadowCasters(valores[6].Contains("mesas", StringComparison.OrdinalIgnoreCase), valores[6].Contains("arvores", StringComparison.OrdinalIgnoreCase), valores[6].Contains("relevo", StringComparison.OrdinalIgnoreCase))
+            : ShadowCasters.All;
+
+        documento.Editor.WriteMessage($"\n{SombrasCommands.GerarPelaJanela(documento, periodo, escopo, queFaz)}\n");
         return true;
     }
 

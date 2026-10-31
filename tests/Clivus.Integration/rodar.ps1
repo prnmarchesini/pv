@@ -4356,6 +4356,11 @@ function Testar-SombrasEscopo {
         elseif ($facesComSombra -lt 1 -or $facesComSombra -ne $lista[0].modulos) { $erros += "o 3D da Usina tem $facesComSombra face(s) com sombra e o momento diz $($lista[0].modulos) modulo(s)" }
     }
 
+    # 42.3: "Fazem sombra" sem as mesas e sem o relevo (so arvores, que o desenho nao tem): nada.
+    $semMesas = Par 'SEM_MESAS'
+    if ($t -notmatch 'Desligado em "Fazem sombra": as mesas, o relevo') { $erros += 'o calculo sem as mesas e sem o relevo nao diz o que foi desligado' }
+    elseif ($null -eq $semMesas -or $semMesas.Oeste -ne 0 -or $semMesas.Leste -ne 0) { $erros += "sem as mesas e sem o relevo, a Usina devia ficar sem sombra (Oeste $(if ($semMesas) { $semMesas.Oeste }), Leste $(if ($semMesas) { $semMesas.Leste }))" }
+
     # 42.3: o roxo da versao antiga sai ao abrir a janela (o mesmo caminho, fora de comando).
     if ($t -notmatch 'CLIVUS_PINTURA_ANTIGA pintou=5 mudou=1 tirou=5 voltou=1 de_novo=0 fim') {
         $linha = [regex]::Match($t, 'CLIVUS_PINTURA_ANTIGA [^\r\n]*').Value
@@ -4456,7 +4461,9 @@ function Testar-Ver3D {
     if (@($cena.pilares).Count -ne $pilares) { $erros += "$(@($cena.pilares).Count) pilares na pagina e $pilares no desenho" }
     if (@($cena.arvores).Count -ne 1) { $erros += "$(@($cena.arvores).Count) arvores (esperava 1)" }
     # Desde 05/10/2026 tronco e copa viram uma mancha so no chao (a uniao).
-    if (@($cena.sombras).Count -lt 1 -or @($cena.sombras | Where-Object { @($_).Count -lt 9 }).Count -gt 0) { $erros += "$(@($cena.sombras).Count) sombras (esperava a mancha da arvore, cada uma com 3 pontos ou mais)" }
+    # Desde 31/10/2026 as hachuras de sombra do CAD nao vao para o 3D (Renan: "Nao quero que
+    # leve o magenta no 3d web, a web ja tem sombra propria"): a sombra e a do sol.
+    if (@($cena.sombras).Count -ne 0) { $erros += "$(@($cena.sombras).Count) contorno(s) de sombra do CAD no 3D (nao vai mais magenta nenhum)" }
     if ($null -eq $cena.terreno -or @($cena.terreno.z | Where-Object { $null -ne $_ }).Count -lt 100) { $erros += 'terreno vazio' }
 
     # 42.3: o TIN de verdade vai junto com a grade (a grade cobria o canto de modulos no pe do talude).
@@ -4472,7 +4479,7 @@ function Testar-Ver3D {
 
     # 42.3: cada anel de sombra com a hachura dele; a face com sombra aponta um momento que existe.
     $grupos = Campo $cena 'sombrasGrupo'
-    if ($null -eq $grupos -or @($grupos).Count -ne @($cena.sombras).Count) { $erros += "sombrasGrupo com $(@($grupos).Count) item(ns) para $(@($cena.sombras).Count) anel(is)" }
+    if ($null -ne $grupos) { $erros += "sombrasGrupo com $(@($grupos).Count) item(ns), sem hachura no 3D" }
     $comSombra = @($cena.faces | Where-Object { @($_).Count -gt 13 })
     $momentos = @(Campo $cena 'momentos' | Where-Object { $null -ne $_ })
     if ($comSombra.Count -gt 0 -and ($momentos.Count -lt 1 -or @($comSombra | Where-Object { @($_).Count -ne 15 -or $_[13] -lt 0 -or $_[13] -ge $momentos.Count -or $_[14] -le 0 -or $_[14] -gt 1 }).Count -gt 0)) {

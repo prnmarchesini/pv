@@ -2,28 +2,28 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Autodesk.AutoCAD.ApplicationServices;
-using Autodesk.AutoCAD.EditorInput;
 using Clivus.Core;
 
 namespace Clivus.Plugin;
 
 /// <summary>
-/// A escolha do que entra: as mesas escolhidas no desenho, uma área, uma área
-/// e mais as mesas escolhidas, várias áreas ou o desenho inteiro. Nasceu na
-/// janela das sombras (42.1, Renan, 31/10/2026: "Seleção, tudo de uma area,
-/// tudo de uma area mais seleção, varias areas, desenho inteiro") e serve
-/// também à exportação para o PVsyst (42.4: "tenho que ter a liberdade de
-/// exportar uma area, varias, todas, e pode selecionar as mesas que eu quero
-/// se for o caso").
+/// A escolha do que entra: as áreas (uma, várias ou o desenho inteiro) e as
+/// mesas escolhidas no desenho. Nasceu na janela das sombras (42.1, Renan,
+/// 31/10/2026: "Seleção, tudo de uma area, tudo de uma area mais seleção,
+/// varias areas, desenho inteiro") e serve também à exportação para o PVsyst
+/// (42.4).
 /// <para>
-/// A área leva as que estão dentro dela (<see cref="ShadowScopePlan"/>), e a
-/// lista diz com quantas mesas cada uma vai; abre na primeira que tem mesa
-/// (42.3: a "Area 1" do Aurora abria escolhida e não tinha mesa).
+/// Desde a tela de 31/10/2026 à tarde ("uma area pintou e na outra nao [...]
+/// cade o botão de escolher area ou escolher o que eu quero"), tudo à vista:
+/// uma caixa por área, com quantas mesas ela leva (a área leva as que estão
+/// dentro dela, <see cref="ShadowScopePlan"/>), "Desenho inteiro", e os botões
+/// "Escolher no desenho…" para a área (clique dentro dela) e para as mesas.
+/// Áreas e mesas somam: área marcada e mesas escolhidas é a área mais as mesas.
 /// </para>
 /// </summary>
 internal sealed class SeletorDeEscopo
 {
-    /// <summary>Uma área na lista: o GUID, o nome e quantas mesas ela leva (com as áreas dentro dela).</summary>
+    /// <summary>Uma área: o GUID, o nome e quantas mesas ela leva.</summary>
     private sealed record AreaDaLista(Guid Id, string Nome, int Mesas)
     {
         public override string ToString() => Mesas > 0 ? Tr.F("{0} · {1} mesa(s)", Nome, Mesas) : Tr.F("{0} · nenhuma mesa", Nome);
@@ -31,65 +31,83 @@ internal sealed class SeletorDeEscopo
 
     private readonly Document _documento;
     private readonly Action<string, bool> _recado;
+    private readonly Action<Action> _tentar;
 
-    private readonly ComboBox _escopo = new() { Width = 150 };
-    private readonly ComboBox _area = new() { Width = 220, Margin = new Thickness(6, 0, 0, 0), ToolTip = Tr.T("A área: as mesas com o centro nela (e nas áreas dentro dela) e o chão dela.") };
-    private readonly WrapPanel _areas = new() { Margin = new Thickness(76, 2, 0, 2) };
-    private readonly Button _pegar;
-    private readonly TextBlock _selecao = new() { VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Gray, Margin = new Thickness(6, 0, 0, 0) };
+    private readonly CheckBox _tudo = new() { Content = Tr.T("Desenho inteiro"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 2, 14, 2), ToolTip = Tr.T("Todas as mesas do desenho, dentro e fora das áreas.") };
+    private readonly WrapPanel _areas = new() { Orientation = Orientation.Horizontal };
+    private readonly TextBlock _selecao = new() { VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Gray, Margin = new Thickness(0, 0, 8, 0) };
+    private readonly Button _limpar;
     private HashSet<Guid> _mesasEscolhidas = [];
 
     /// <param name="documento">O desenho.</param>
-    /// <param name="rotulo">O rótulo da linha ("Calcular", "Exportar").</param>
-    /// <param name="dica">A dica da lista dos tipos.</param>
+    /// <param name="rotulo">O rótulo da linha das áreas ("Calcular", "Exportar").</param>
     /// <param name="recado">Escreve o recado na janela (o texto e se é erro).</param>
     /// <param name="tentar">Roda o manipulador protegido (exceção solta no WPF fecha o Civil 3D).</param>
-    /// <param name="mesas">As mesas já escolhidas (a seleção feita antes do botão); com elas, abre em Seleção.</param>
-    internal SeletorDeEscopo(Document documento, string rotulo, string dica, Action<string, bool> recado, Action<Action> tentar, IEnumerable<Guid>? mesas = null)
+    /// <param name="escolherArea">O botão da área no desenho (a janela sabe se pede por comando ou escondendo-se).</param>
+    /// <param name="escolherMesas">O botão das mesas no desenho.</param>
+    /// <param name="mesas">As mesas já escolhidas (a seleção feita antes do botão); com elas, nenhuma área vem marcada.</param>
+    internal SeletorDeEscopo(Document documento, string rotulo, Action<string, bool> recado, Action<Action> tentar, Action escolherArea, Action escolherMesas, IEnumerable<Guid>? mesas = null)
     {
         _documento = documento;
         _recado = recado;
-        _escopo.ToolTip = dica;
-
-        _pegar = new Button { Content = Tr.T("Pegar seleção"), Height = 26, Padding = new Thickness(8, 0, 8, 0), Margin = new Thickness(6, 0, 0, 0), ToolTip = Tr.T("Usa as mesas selecionadas agora no desenho (clique nelas com a janela aberta e depois aqui).") };
-        _pegar.Click += (_, _) => tentar(PegarSelecao);
-
-        foreach (var k in ShadowScope.Kinds) _escopo.Items.Add(ShadowScope.Name(k));
+        _tentar = tentar;
         _mesasEscolhidas = mesas?.ToHashSet() ?? [];
-        _escopo.SelectedIndex = ShadowScope.Kinds.ToList().IndexOf(_mesasEscolhidas.Count > 0 ? ShadowScopeKind.Selection : ShadowScopeKind.Area);
-        _escopo.SelectionChanged += (_, _) => tentar(Aplicar);
-        _area.DropDownOpened += (_, _) => tentar(LerAreas);
 
-        var linha = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 3) };
-        linha.Children.Add(new TextBlock { Text = rotulo, Width = 70, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
-        linha.Children.Add(_escopo);
-        linha.Children.Add(_area);
-        linha.Children.Add(_pegar);
-        linha.Children.Add(_selecao);
-        Linha = linha;
+        Button Botao(string texto, string dica, Action acao)
+        {
+            var b = new Button { Content = texto, Height = 24, Padding = new Thickness(8, 0, 8, 0), Margin = new Thickness(0, 2, 6, 2), ToolTip = dica };
+            b.Click += (_, _) => tentar(acao);
+            return b;
+        }
 
-        // Abre em "Uma área" (ou na seleção feita antes); sem área no desenho, no desenho inteiro.
-        tentar(LerAreas);
-        if (_area.Items.Count == 0 && _mesasEscolhidas.Count == 0)
-            _escopo.SelectedIndex = ShadowScope.Kinds.ToList().IndexOf(ShadowScopeKind.Drawing);
+        var areaNoDesenho = Botao(Tr.T("Escolher área no desenho…"), Tr.T("Clique dentro de uma área (ou na linha dela) no desenho: ela fica marcada aqui."), escolherArea);
+        var mesasNoDesenho = Botao(Tr.T("Escolher mesas no desenho…"), Tr.T("Selecione as mesas no desenho (janela, cruzamento ou clique): elas entram junto com as áreas marcadas."), escolherMesas);
+        _limpar = Botao(Tr.T("Limpar"), Tr.T("Tira as mesas escolhidas."), () => DefinirMesas([]));
+
+        _tudo.Checked += (_, _) => tentar(Aplicar);
+        _tudo.Unchecked += (_, _) => tentar(Aplicar);
+
+        var linhaDasAreas = new DockPanel { Margin = new Thickness(0, 3, 0, 3) };
+        var r1 = new TextBlock { Text = rotulo, Width = 88, Margin = new Thickness(0, 4, 6, 0), VerticalAlignment = VerticalAlignment.Top };
+        DockPanel.SetDock(r1, Dock.Left);
+        linhaDasAreas.Children.Add(r1);
+        var dasAreas = new WrapPanel { Orientation = Orientation.Horizontal };
+        dasAreas.Children.Add(_tudo);
+        dasAreas.Children.Add(_areas);
+        dasAreas.Children.Add(areaNoDesenho);
+        linhaDasAreas.Children.Add(dasAreas);
+
+        var linhaDasMesas = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 3) };
+        linhaDasMesas.Children.Add(new TextBlock { Text = Tr.T("Mesas"), Width = 88, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+        linhaDasMesas.Children.Add(_selecao);
+        linhaDasMesas.Children.Add(mesasNoDesenho);
+        linhaDasMesas.Children.Add(_limpar);
+
+        var painel = new StackPanel();
+        painel.Children.Add(linhaDasAreas);
+        painel.Children.Add(linhaDasMesas);
+        Painel = painel;
+
+        // Abre com a primeira área que tem mesa marcada (ou com as mesas já
+        // escolhidas); sem área no desenho, no desenho inteiro.
+        tentar(() => LerAreas(primeira: _mesasEscolhidas.Count == 0));
+        if (_areas.Children.Count == 0 && _mesasEscolhidas.Count == 0) _tudo.IsChecked = true;
 
         tentar(Aplicar);
     }
 
-    /// <summary>A linha do rótulo, do tipo, da área e da seleção.</summary>
-    internal UIElement Linha { get; }
+    /// <summary>As duas linhas: as áreas e as mesas.</summary>
+    internal UIElement Painel { get; }
 
-    /// <summary>As caixas das várias áreas (logo abaixo da linha).</summary>
-    internal UIElement Caixas => _areas;
+    /// <summary>Se o desenho inteiro está marcado.</summary>
+    internal bool DesenhoInteiro => _tudo.IsChecked == true;
 
-    /// <summary>O tipo escolhido.</summary>
-    internal ShadowScopeKind Tipo => _escopo.SelectedIndex >= 0 ? ShadowScope.Kinds[_escopo.SelectedIndex] : ShadowScopeKind.Area;
+    private IEnumerable<CheckBox> Caixas => _areas.Children.OfType<CheckBox>();
 
-    /// <summary>Lê as áreas do desenho para a lista e as caixas, mantendo as escolhidas.</summary>
-    internal void LerAreas()
+    /// <summary>Lê as áreas do desenho para as caixas, mantendo as marcadas; com <paramref name="primeira"/>, marca a primeira que tem mesa.</summary>
+    internal void LerAreas(bool primeira = false)
     {
-        var antes = (_area.SelectedItem as AreaDaLista)?.Id;
-        var marcadas = _areas.Children.OfType<CheckBox>().Where(c => c.IsChecked == true).Select(c => ((AreaDaLista)c.Tag).Id).ToHashSet();
+        var marcadas = Caixas.Where(c => c.IsChecked == true).Select(c => ((AreaDaLista)c.Tag).Id).ToHashSet();
 
         var doDesenho = AreasDoDesenho.Varrer(_documento.Database);
         var mesas = SombrasCommands.MesasPorArea(_documento.Database, doDesenho);
@@ -97,62 +115,71 @@ internal sealed class SeletorDeEscopo
             .Select(a => new AreaDaLista(a.Identity.Id, a.Identity.DisplayName, mesas.TryGetValue(a.Identity.Id, out var n) ? n : 0))
             .ToList();
 
-        _area.ItemsSource = areas;
-        _area.SelectedItem = areas.FirstOrDefault(a => a.Id == antes) ?? areas.FirstOrDefault(a => a.Mesas > 0) ?? areas.FirstOrDefault();
+        if (primeira && marcadas.Count == 0 && areas.FirstOrDefault(a => a.Mesas > 0) is { } comMesa) marcadas.Add(comMesa.Id);
 
         _areas.Children.Clear();
         foreach (var a in areas)
-            _areas.Children.Add(new CheckBox { Content = a.ToString(), Tag = a, IsChecked = marcadas.Contains(a.Id), Margin = new Thickness(0, 2, 14, 2) });
+        {
+            var caixa = new CheckBox { Content = a.ToString(), Tag = a, IsChecked = marcadas.Contains(a.Id), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 2, 14, 2) };
+            caixa.Checked += (_, _) => _tentar(() => { _tudo.IsChecked = false; });
+            _areas.Children.Add(caixa);
+        }
 
-        if (areas.Count == 0 && Tipo is not (ShadowScopeKind.Selection or ShadowScopeKind.Drawing))
-            _recado(Tr.T("Nenhuma área neste desenho: use Seleção ou Desenho inteiro (ou crie a área com o botão Área)."), true);
+        Aplicar();
     }
 
-    /// <summary>O tipo mostra só o que vale nele.</summary>
-    internal void Aplicar()
+    /// <summary>Marca a área (escolhida no desenho) e desmarca o desenho inteiro.</summary>
+    internal void MarcarArea(Guid id)
     {
-        var tipo = Tipo;
+        if (!Caixas.Any(c => ((AreaDaLista)c.Tag).Id == id)) LerAreas();
 
-        _area.Visibility = tipo is ShadowScopeKind.Area or ShadowScopeKind.AreaAndSelection ? Visibility.Visible : Visibility.Collapsed;
-        _areas.Visibility = tipo == ShadowScopeKind.Areas ? Visibility.Visible : Visibility.Collapsed;
+        var caixa = Caixas.FirstOrDefault(c => ((AreaDaLista)c.Tag).Id == id);
+        if (caixa is null)
+        {
+            _recado(Tr.T("Essa área não está na lista (ela tem polilinha de área do Clivus?)."), true);
+            return;
+        }
 
-        var selecao = tipo is ShadowScopeKind.Selection or ShadowScopeKind.AreaAndSelection;
-        _pegar.Visibility = selecao ? Visibility.Visible : Visibility.Collapsed;
-        _selecao.Visibility = selecao ? Visibility.Visible : Visibility.Collapsed;
-        MostrarSelecao();
+        _tudo.IsChecked = false;
+        caixa.IsChecked = true;
+        _recado(Tr.F("Área marcada: {0}.", ((AreaDaLista)caixa.Tag).ToString()), false);
     }
 
-    /// <summary>As mesas selecionadas agora no desenho.</summary>
-    internal void PegarSelecao()
+    /// <summary>As mesas escolhidas no desenho (vazio: nenhuma).</summary>
+    internal void DefinirMesas(IEnumerable<Guid> mesas)
     {
-        var implicita = _documento.Editor.SelectImplied();
-        var ids = implicita.Status == PromptStatus.OK ? implicita.Value.GetObjectIds() : [];
-        _mesasEscolhidas = SelecaoCommands.MesasTocadas(_documento, ids);
-        MostrarSelecao();
-
-        if (_mesasEscolhidas.Count == 0) _recado(Tr.T("Nenhuma mesa selecionada no desenho: clique nas mesas (com a janela aberta) e use Pegar seleção."), true);
-        else _recado(string.Empty, false);
+        _mesasEscolhidas = mesas.ToHashSet();
+        if (_mesasEscolhidas.Count > 0) _tudo.IsChecked = false;
+        Aplicar();
     }
 
-    private void MostrarSelecao() =>
+    /// <summary>O desenho inteiro tira a escolha das áreas e das mesas (fica tudo).</summary>
+    private void Aplicar()
+    {
+        var tudo = DesenhoInteiro;
+        foreach (var c in Caixas) c.IsEnabled = !tudo;
+
         _selecao.Text = _mesasEscolhidas.Count == 0 ? Tr.T("nenhuma mesa escolhida") : Tr.F("{0} mesa(s) escolhida(s)", _mesasEscolhidas.Count);
+        _limpar.Visibility = _mesasEscolhidas.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
 
-    /// <summary>O escopo escolhido; sem seleção guardada, a do desenho agora. Lança <see cref="ArgumentException"/> com o que falta.</summary>
+    /// <summary>O escopo escolhido. Lança <see cref="ArgumentException"/> com o que falta.</summary>
     internal ShadowScope Escopo()
     {
-        var tipo = Tipo;
+        if (DesenhoInteiro) return ShadowScope.WholeDrawing;
 
-        if (tipo is ShadowScopeKind.Selection or ShadowScopeKind.AreaAndSelection && _mesasEscolhidas.Count == 0) PegarSelecao();
+        var areas = Caixas.Where(c => c.IsChecked == true).Select(c => ((AreaDaLista)c.Tag).Id).ToList();
+        var mesas = _mesasEscolhidas.ToList();
 
-        IReadOnlyList<Guid> areas = tipo switch
+        var escopo = (areas.Count, mesas.Count) switch
         {
-            ShadowScopeKind.Area or ShadowScopeKind.AreaAndSelection => _area.SelectedItem is AreaDaLista a ? [a.Id] : [],
-            ShadowScopeKind.Areas => _areas.Children.OfType<CheckBox>().Where(c => c.IsChecked == true).Select(c => ((AreaDaLista)c.Tag).Id).ToList(),
-            _ => [],
+            (0, 0) => throw new ArgumentException(Tr.T("Marque uma área (ou o desenho inteiro), ou escolha mesas no desenho.")),
+            (0, _) => new ShadowScope(ShadowScopeKind.Selection, [], mesas),
+            (1, 0) => new ShadowScope(ShadowScopeKind.Area, areas, []),
+            (_, 0) => new ShadowScope(ShadowScopeKind.Areas, areas, []),
+            _ => new ShadowScope(ShadowScopeKind.AreaAndSelection, areas, mesas),
         };
 
-        var comSelecao = tipo is ShadowScopeKind.Selection or ShadowScopeKind.AreaAndSelection;
-        var escopo = new ShadowScope(tipo, areas, comSelecao ? [.. _mesasEscolhidas] : []);
         return escopo.WhyInvalid() is { } falta ? throw new ArgumentException(falta) : escopo;
     }
 }

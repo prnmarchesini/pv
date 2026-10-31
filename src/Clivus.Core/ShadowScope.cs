@@ -51,11 +51,11 @@ public sealed record ShadowScope(ShadowScopeKind Kind, IReadOnlyList<Guid> Areas
     /// <summary>Se o escopo usa as mesas escolhidas.</summary>
     public bool UsesSelection => Kind is ShadowScopeKind.Selection or ShadowScopeKind.AreaAndSelection;
 
-    /// <summary>O que falta para o escopo valer, ou null se vale.</summary>
+    /// <summary>O que falta para o escopo valer, ou null se vale. A área mais a seleção aceita várias áreas (a janela soma o que estiver marcado, 42.3).</summary>
     public string? WhyInvalid() => Kind switch
     {
-        ShadowScopeKind.Area or ShadowScopeKind.AreaAndSelection when Areas.Count != 1 => Tr.T("Escolha uma área."),
-        ShadowScopeKind.Areas when Areas.Count == 0 => Tr.T("Escolha pelo menos uma área."),
+        ShadowScopeKind.Area when Areas.Count != 1 => Tr.T("Escolha uma área."),
+        ShadowScopeKind.Areas or ShadowScopeKind.AreaAndSelection when Areas.Count == 0 => Tr.T("Escolha pelo menos uma área."),
         ShadowScopeKind.Selection or ShadowScopeKind.AreaAndSelection when Tables.Count == 0 => Tr.T("Selecione as mesas no desenho (clique nelas) e use Pegar seleção."),
         _ => null,
     };
@@ -80,6 +80,20 @@ public sealed record ShadowScope(ShadowScopeKind Kind, IReadOnlyList<Guid> Areas
         "TUDO" or "DESENHO" or "ALL" or "DRAWING" => ShadowScopeKind.Drawing,
         _ => null,
     };
+}
+
+/// <summary>
+/// O que faz sombra no cálculo (42.3, Renan, 31/10/2026: "cade o botão de
+/// [...] escolher o que eu quero (mesas, arvores, etc)"): as mesas umas nas
+/// outras e no chão, as árvores e o relevo. Por padrão, tudo.
+/// </summary>
+public sealed record ShadowCasters(bool Tables = true, bool Trees = true, bool Terrain = true)
+{
+    /// <summary>Tudo faz sombra.</summary>
+    public static ShadowCasters All { get; } = new();
+
+    /// <summary>Se nada faz sombra (não há o que calcular).</summary>
+    public bool None => !Tables && !Trees && !Terrain;
 }
 
 /// <summary>Uma área de implantação para o escopo: o GUID, o nome e o contorno.</summary>
