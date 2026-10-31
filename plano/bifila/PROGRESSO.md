@@ -36,6 +36,10 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 40.1 Reconhecer as mesas do cliente: VALIDADO (automático) — `FieldObjects`, 21 testes; nos 641 objetos do Aurora: 609 mesas em 101 fileiras, 18 repetidos e 14 sobrepostos
 - 40.2 Gerar conforme objetos em campo: AGUARDANDO VALIDAÇÃO — reprovado na tela em 30/10/2026 (nada era gerado: pelo Z, os objetos olhavam para o sul e o projeto para o norte) e refeito: só X e Y, alinhamento Direita/Centro/Esquerda, o lado da ponta baixa do projeto; nível 2 `clivus-campo` (rodar.ps1 -SoCampo)
 
+## Etapa 41: as áreas da usina
+
+- 41.1 A janela Áreas (Implantação): a lista das áreas com o resumo de cada uma, zoom, hachura, renomear e o Excel por área: AGUARDANDO VALIDAÇÃO — `AreaSummary`, `AreaHatch`, `AreaReport`, 34 testes; nível 2 `clivus-areas` (rodar.ps1 -SoAreas)
+
 ## Observações
 
 - 37.1 (30/10/2026), o que assumi:
@@ -460,8 +464,41 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     do projeto nos dois sentidos, o alinhamento pela direita, centro e esquerda com o projeto
     olhando para o sul e para o norte, a direita no leste, a mesa de tamanho mais perto. No
     nível 2, `clivus-campo` de novo (os objetos com Z 9999).
+  - O reconhecimento do 40.1 também passou a ser em planta: os números dele nos 641 objetos
+    do Aurora (609 mesas, 18 repetidos, 14 sobrepostos) eram do 3D e se conferem de novo na
+    tela (roteiro 6).
+- 41.1 (30/10/2026), o que assumi. Pedido do Renan: "em implantação, eu quero ter um botão,
+  pequeno, de lista de áreas, pq nesse caso real vou ter 7 áreas [...] quero ver elas, quero
+  ter a opção do sistema listar o resumo de cada área, de marcar cada área com hachura, do
+  resumo sair por área, enfim, algo completo". Feito por um subagente numa worktree isolada
+  (branch `areas`) e juntado aqui.
+  - O botão pequeno **Áreas** em Implantação é o `CLIVUS_AREAS`, que já existia (a lista na
+    linha de comando): com a interface ele abre a janela; no Core Console, a lista continua
+    igual (os três casos `clivus-area-*` do nível 2 leem ela).
+  - A janela é solta, uma por desenho, e fecha com ele. Uma linha por área (a cor, o nome,
+    ha, mesas, módulos, kWp, pilares, os tipos de mesa, se segue os objetos, se está
+    hachurada), a linha "Fora das áreas" quando houver e o Total. A área escolhida mostra o
+    resumo: por tipo de mesa, os pilares (quantidade, metros, pendentes, na divisa) e a
+    ocupação (área dos módulos sobre a área em planta). Botões: Zoom (e duplo clique),
+    Hachurar e Tirar hachura, Hachurar todas e Tirar todas, Renomear (recusa o nome de outra
+    área), Exportar Excel (a aba Resumo, uma linha por área e o Total, e uma aba por área) e
+    Atualizar.
+  - A mesa que atravessa duas áreas conta uma vez, na área do centro dela (na menor, se o
+    centro cai em duas, como os inversores); com canto fora, aparece "na divisa". Centro fora
+    de toda área vai para "Fora das áreas", e o Total bate com o Recontar.
+  - A hachura é sólida, 70 % transparente, na camada `CLIVUS_AREAS_HACHURA`, com o nome no
+    meio, na cor da paleta dos inversores pela ordem de criação da área. Fica 0,30 m acima do
+    ponto mais alto do terreno e das mesas da área (plana, por cima de tudo, como a marca do
+    grupo), nunca no Z de clique; não acompanha a área se ela for editada (hachurar de novo).
+  - Fica de fora: a janela não se atualiza sozinha (botão Atualizar); apagar uma área muda a
+    cor das seguintes no próximo "Hachurar todas"; o Exportar geral da Saída não tem as abas
+    por área.
+  - Testes: 34 no Core (`AreaSummary`, `AreaHatch`, `AreaReport`: contagens por tipo, kWp,
+    pilares, ocupação, a mesa na divisa, a área vazia, o total de várias, a cota da hachura)
+    e o nível 2 `clivus-areas` (duas áreas, o total igual ao Recontar, as hachuras acima das
+    mesas, renomear, tirar e o Excel).
 
-## Roteiro de tela (38.1 a 40.2)
+## Roteiro de tela (38.1 a 41.1)
 
 1. **Nova estrutura (38.1 e 38.5):** Configurações › Estruturas › Nova estrutura… › **Fixa**.
    A janela de Mesa abre na aba "Perfil e módulo"; clicar no cartão **Biposte** abre a aba
@@ -484,12 +521,14 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 5. **3D (39.1):** Ver 3D numa área bifila: a estrutura aparece em cinza aço embaixo dos
    módulos.
 6. **Mesas conforme os objetos (40.2):** no `PLAT A_Perfiles.dwg` (Panamá), criar a área
-   pelo contorno de `_CONTORNO`, marcar só o biposte (GC800) na Escolha das estruturas, pôr
-   o azimute olhando para o sul (Configurações › Parâmetros) e a faixa da PB em 0,84 a
-   1,60. Processar › Conforme objetos › Todos. Conferir no relatório quantos objetos viram
-   mesa e as divergências (no Aurora: objetos repetidos e "CELDAS NUEVAS" em cima das
-   antigas); as marcas vermelhas na camada CLIVUS_DIVERGENCIAS; cada mesa em cima do seu
-   objeto. Depois Regerar área: refaz pelos objetos.
+   pelo contorno de `_CONTORNO`, marcar só o biposte (GC800) na Escolha das estruturas e
+   pôr o azimute no **Sul** (Configurações › Parâmetros, botão Sul; com Norte aparece o aviso
+   do hemisfério). Processar › Conforme objetos › Escolher (os objetos) › **Direita**, Centro
+   ou Esquerda: é a única pergunta. As mesas saem em cima dos objetos, com a cota do terreno
+   (o Z dos objetos não conta); com Direita, a ponta leste de cada mesa na ponta leste do
+   objeto. O relatório diz quantos objetos viram mesa, as divergências (os repetidos), para
+   onde as mesas olham e quanto a mesa tem a mais que o objeto. Depois Regerar área: refaz
+   pelos objetos, com o mesmo alinhamento.
 7. **Tudo com biposte (39.2):** numa área com o biposte em uso (faixa da PB 0,84 a 1,60),
    passar por tudo e comparar com uma área monoposte:
    - Processar: Usina, Regerar área, Regerar todas;
@@ -513,18 +552,18 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
    JAM66D46-720/LB", as medidas 2,384 × 1,303 × 0,033, a potência 720 e os dados elétricos
    enchem; a pergunta "Cadastrar agora, com o PAN?" › Sim: o módulo entra na lista. Fechar e
    abrir a janela, escolher esse módulo na lista: os dados elétricos vêm junto.
-9. **Fabricantes e altura básica (38.7):** em Configurações › Parâmetros › Ponta baixa do
-   módulo, altura livre mínima de 84 cm e máxima de 160; abrir a janela de Mesa. Aba
-   **Fabricantes**: dois cartões da Arctech, cada um com as peças, a altura livre e os
-   pilares de catálogo. "Usar esta estrutura" na GC800: abre a aba Biposte com as mãos
-   francesas de 1,244 e 1,209, tirantes nos vãos 2 e 4, e o Pórtico começa com **P1 3,066**
-   e **P2 3,595** (0,866 e 1,395 acima do chão). O catálogo diz 3,059 porque cota os 0,80 m
-   livres exatos; o motor assenta a mesa na grade de 1 cm, em 84. No corte, o chão na altura
-   certa e as cotas P1, P2 e T3. Usar a GC1000: as mãos francesas mudam e aparece o recado
-   de que os pilares de catálogo dela pedem 104 cm. Voltar à primeira aba, Monoposte e
-   Biposte de novo: a GC1000 continua na aba. Mudar a altura livre mínima e reabrir a
-   janela: o P1 e o P2 acompanham. O cartão Biposte de uma mesa monoposte abre o genérico,
-   sem T3: o enterro é o do projeto.
+9. **Fabricantes, P1 e P2 (38.9):** janela de Mesa › aba **Fabricantes**: o primeiro
+   cartão é o biposte genérico, depois as duas da Arctech. "Usar esta estrutura" na GC800: a
+   aba Biposte abre com o nome "Arctech 2P14 GC800" (o campo Nome está no alto da aba) e, no
+   Pórtico, **P1 3,059**, MF1 1,244 (prende a 0,447 do topo do P1), **P2 3,888**, MF2 1,209
+   (a 0,773). Embaixo: a ponta baixa a 0,833 (0,800 livres sob o módulo), a faixa que vale na
+   usina e a folga do P2 (10 % para trás). A vista lateral mostra cada peça com o nome e a
+   medida, o chão caindo e o enterro cortado. Mudar o P1 para 3,2: a ponta baixa sobe, e a
+   vista acompanha. Apagar só o P1: o recado pede os dois juntos. Usar a GC1000: P1 3,259,
+   P2 4,388, 20 % para trás. "Usar este" no genérico: as peças de referência, sem tirante, e
+   o nome não muda. Salvar no desenho, fechar e reabrir: o P1 e o P2 continuam. Processar
+   uma área: a linha "Altura da estrutura" diz a faixa pelo P1, e os pilares dianteiros saem
+   com o P1 ou mais.
 10. **Módulos no servidor do Clivus (38.8):** sem `CLIVUS_SERVICO` e com a
     `CLIVUS_SERVIDOR_CHAVE`, abrir a janela de Mesa: embaixo do modelo, "Módulos do servidor
     do Clivus: 3". Carregar .PAN › `JAM66D46-720_LB.PAN` › "Cadastrar agora?" › Sim: o recado
@@ -536,3 +575,16 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     ("Módulos do servidor do Clivus: 4"), e escolher ele traz os dados elétricos. Sem a
     chave (outro usuário do Windows): o recado do .PAN diz que o módulo vale só na janela, e
     "Cadastrar módulo..." diz que falta a `CLIVUS_SERVIDOR_CHAVE`.
+11. **Norte ou sul (38.9):** Configurações › Parâmetros: os botões Norte e Sul ao lado do
+    azimute. No desenho do Panamá, com Norte, aparece em vermelho o aviso do hemisfério
+    norte; com Sul, some. Na janela de Mesa, embaixo da inclinação, a frase diz para onde os
+    módulos olham.
+12. **A lista de estruturas (38.9):** Configurações › Estruturas: Remover "Mesa 28 módulos 2
+    2" (e as outras que voltavam), Salvar no desenho. A linha de comando diz que ela saiu
+    também da biblioteca. Reabrir as Configurações: não volta.
+13. **Áreas (41.1):** num desenho com várias áreas e mesas (o Aurora com as 7), Implantação ›
+    botão pequeno **Áreas**: uma linha por área e o Total, que bate com Edição › Recontar.
+    Clicar numa área: o resumo embaixo (tipos de mesa, pilares e metros, ocupação). Zoom (ou
+    duplo clique). Hachurar todas: cada área com a cor da amostra, as mesas visíveis por
+    baixo, o nome no meio; Tirar hachura numa só; Renomear (o nome de outra área é recusado);
+    Exportar Excel: a aba Resumo e uma aba por área; Tirar todas.
