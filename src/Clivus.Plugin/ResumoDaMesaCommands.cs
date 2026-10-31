@@ -1,6 +1,7 @@
 using System.Globalization;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using Clivus.Core;
 using Clivus.Geo;
@@ -32,8 +33,9 @@ public static class ResumoDaMesaCommands
 
         try
         {
-            var mesa = RecalcularCommands.MesaDaSelecao(editor, documento)
-                ?? RecalcularCommands.MesaClicada(editor, documento, Tr.T("\nClique numa peça da mesa: "));
+            // A da seleção (o botão direito); com várias, a primeira, e o comando diz.
+            var (mesa, naSelecao) = MesasDaSelecao(editor, documento);
+            mesa ??= RecalcularCommands.MesaClicada(editor, documento, Tr.T("\nClique numa peça da mesa: "), Tr.T("\nRESUMO Isso não é uma peça de mesa do plugin.\n"));
             if (mesa is null) return;
 
             if (Montar(documento, mesa.Value) is not { } resumo)
@@ -41,6 +43,9 @@ public static class ResumoDaMesaCommands
                 editor.WriteMessage(Tr.T("\nRESUMO Não achei essa mesa no desenho.\n"));
                 return;
             }
+
+            if (naSelecao > 1)
+                editor.WriteMessage(Tr.F("\nRESUMO A seleção tem {0} mesas; o resumo é da {1}. Para outra, selecione só ela.\n", naSelecao, resumo.Label));
 
             editor.WriteMessage("\n" + resumo.Describe() + "\n");
 
@@ -55,16 +60,38 @@ public static class ResumoDaMesaCommands
     }
 
     /// <summary>
+    /// As mesas da seleção feita antes do comando: a primeira e quantas são
+    /// (a seleção é solta, como no Recalcular).
+    /// </summary>
+    private static (Guid? Primeira, int Quantas) MesasDaSelecao(Editor editor, Document documento)
+    {
+        var selecao = editor.SelectImplied();
+        if (selecao.Status != PromptStatus.OK) return (null, 0);
+
+        var mesas = new List<Guid>();
+        using (var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction())
+        {
+            foreach (var id in selecao.Value.GetObjectIds())
+                if (transacao.GetObject(id, OpenMode.ForRead) is Entity entidade && LayoutScan.TableOf(entidade) is { } guid && !mesas.Contains(guid)) mesas.Add(guid);
+        }
+
+        if (mesas.Count > 0) editor.SetImpliedSelection([]);
+        return (mesas.Count > 0 ? mesas[0] : null, mesas.Count);
+    }
+
+    /// <summary>
     /// O resumo de uma mesa do desenho: a identidade, as faces dos módulos, os
     /// pilares, o tipo (e o módulo dele), o terreno e o lugar. Null se a mesa
-    /// não está no desenho.
+    /// não está no desenho. O terreno pelo Garantir, como no TermoVision
+    /// (revisão do 42.9: só da memória, sem ele sumiam o terreno e o azimute
+    /// do PVsyst, que vem do lugar do terreno).
     /// </summary>
     internal static TableSummary? Montar(Document documento, Guid mesa)
     {
         var database = documento.Database;
         var tipos = MesasDoDesenho.Ler(database);
         var carports = CarportsDoDesenho.Ler(database);
-        var terreno = TerrainCache.Get(documento);
+        var terreno = TerrenoDoDesenho.Garantir(documento);
         var lugar = SombrasCommands.Lugar(documento);
 
         using var transacao = database.TransactionManager.StartOpenCloseTransaction();

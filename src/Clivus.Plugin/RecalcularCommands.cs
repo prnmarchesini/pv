@@ -386,7 +386,7 @@ public static class RecalcularCommands
         return null;
     }
 
-    internal static Guid? MesaClicada(Editor editor, Document documento, string? pergunta = null)
+    internal static Guid? MesaClicada(Editor editor, Document documento, string? pergunta = null, string? recusa = null)
     {
         var opcoes = new PromptEntityOptions(pergunta ?? Tr.T("\nClique numa peça da mesa a recalcular: "));
         opcoes.SetRejectMessage(Tr.T("\nIsso não é uma peça de mesa do plugin."));
@@ -400,7 +400,7 @@ public static class RecalcularCommands
         var entidade = (Entity)transacao.GetObject(resposta.ObjectId, OpenMode.ForRead);
         var guid = LayoutScan.TableOf(entidade);
 
-        if (guid is null) editor.WriteMessage(Tr.T("\nRECALCULAR Isso não é uma peça de mesa do plugin.\n"));
+        if (guid is null) editor.WriteMessage(recusa ?? Tr.T("\nRECALCULAR Isso não é uma peça de mesa do plugin.\n"));
 
         return guid;
     }

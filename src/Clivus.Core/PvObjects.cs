@@ -57,17 +57,20 @@ public static class PvObjects
 
     /// <summary>
     /// A árvore: o tronco e a copa, cilindros com o pé em (x, y, chão), como
-    /// <see cref="TreeSpec.Cylinders"/> os dá para a sombra.
+    /// <see cref="TreeSpec.Cylinders"/> os dá para a sombra. <paramref name="copy"/>
+    /// separa as árvores de mesmo GUID (copiadas com o Clivus fechado, sem o
+    /// vigia para dar GUID novo): a segunda vira "arvore-GUID-2-tronco".
     /// </summary>
-    public static IReadOnlyList<PvObject> Tree(Guid id, string name, double x, double y, double ground, TreeSpec spec)
+    public static IReadOnlyList<PvObject> Tree(Guid id, string name, double x, double y, double ground, TreeSpec spec, int copy = 1)
     {
         ArgumentNullException.ThrowIfNull(spec);
 
         var cilindros = spec.Cylinders(x, y, ground);
+        var raiz = copy <= 1 ? $"arvore-{id:N}" : $"arvore-{id:N}-{copy}";
         return
         [
-            Cylinder($"arvore-{id:N}-tronco", name, PvObjectKind.TreeTrunk, cilindros[0]),
-            Cylinder($"arvore-{id:N}-copa", name, PvObjectKind.TreeCrown, cilindros[1]),
+            Cylinder(raiz + "-tronco", name, PvObjectKind.TreeTrunk, cilindros[0]),
+            Cylinder(raiz + "-copa", name, PvObjectKind.TreeCrown, cilindros[1]),
         ];
     }
 
@@ -167,31 +170,54 @@ public static class PvObjects
         return cruzadas.OrderByDescending(c => c.Area).ToList();
     }
 
-    /// <summary>
-    /// Os pontos do terreno a até <paramref name="margin"/> da caixa das
-    /// mesas, um por vértice do TIN (repetidos ao milímetro saem uma vez).
-    /// </summary>
-    public static IReadOnlyList<Point3> TerrainPoints(IEnumerable<Triangle> triangles, (double MinX, double MinY, double MaxX, double MaxY) extent, double margin = Margin)
-    {
-        ArgumentNullException.ThrowIfNull(triangles);
+    /// <summary>O espaçamento da grade do terreno, em metro: o do "_terrain.csv" do PVcase (triangular, 5 m).</summary>
+    public const double TerrainSpacing = 5.0;
 
-        var vistos = new HashSet<(long, long, long)>();
+    /// <summary>Mais pontos que isto, a grade abre (o PVsyst simplifica acima de 100 mil faces de qualquer jeito).</summary>
+    public const int MaxTerrainPoints = 1_000_000;
+
+    /// <summary>
+    /// O terreno a até <paramref name="margin"/> da caixa das mesas numa grade
+    /// triangular, como o "_terrain.csv" do PVcase: pontos a
+    /// <see cref="TerrainSpacing"/> m numa linha, linhas a 5·√3/2 m, cada
+    /// linha deslocada meio passo. A grade é presa às coordenadas (múltiplos
+    /// do passo), para duas exportações darem os mesmos pontos. Só vai o ponto
+    /// que tem terreno embaixo. Numa caixa enorme, o passo cresce até caber em
+    /// <see cref="MaxTerrainPoints"/>; o passo usado volta junto.
+    /// </summary>
+    public static (IReadOnlyList<Point3> Points, double Spacing) TerrainGrid(
+        Func<double, double, double?> terrainZ, (double MinX, double MinY, double MaxX, double MaxY) extent, double margin = Margin)
+    {
+        ArgumentNullException.ThrowIfNull(terrainZ);
+
+        var (x0, y0, x1, y1) = (extent.MinX - margin, extent.MinY - margin, extent.MaxX + margin, extent.MaxY + margin);
+        var passo = TerrainSpacing;
+        var estimativa = (x1 - x0) * (y1 - y0) / (passo * passo * Math.Sqrt(3) / 2);
+        if (estimativa > MaxTerrainPoints) passo *= Math.Sqrt(estimativa / MaxTerrainPoints);
+
+        var entreLinhas = passo * Math.Sqrt(3) / 2;
         var pontos = new List<Point3>();
 
-        foreach (var t in triangles)
-            foreach (var p in new[] { t.A, t.B, t.C })
-            {
-                if (!p.IsFinite || p.X < extent.MinX - margin || p.X > extent.MaxX + margin || p.Y < extent.MinY - margin || p.Y > extent.MaxY + margin) continue;
-                if (vistos.Add(((long)Math.Round(p.X * 1000), (long)Math.Round(p.Y * 1000), (long)Math.Round(p.Z * 1000)))) pontos.Add(p);
-            }
+        for (var j = (long)Math.Ceiling(y0 / entreLinhas); j * entreLinhas <= y1; j++)
+        {
+            var y = j * entreLinhas;
+            var meio = (j & 1) == 0 ? 0 : passo / 2;
 
-        return pontos;
+            for (var i = (long)Math.Ceiling((x0 - meio) / passo); i * passo + meio <= x1; i++)
+            {
+                var x = i * passo + meio;
+                if (terrainZ(x, y) is { } z && double.IsFinite(z)) pontos.Add(new Point3(x, y, z));
+            }
+        }
+
+        return (pontos, passo);
     }
 
     /// <summary>
     /// O CSV do terreno, como o PVsyst importa ("Import ground data", e como o
     /// "_terrain.csv" do PVcase): uma linha por ponto, X Y Z em metro separados
-    /// por espaço, relativos à mesma origem local do PV Collada, Z para cima.
+    /// por espaço, relativos à mesma origem local do PV Collada, Z para cima,
+    /// com o fim de linha do Windows, como o modelo do PVsyst e o do PVcase.
     /// </summary>
     public static string TerrainCsv(IReadOnlyList<Point3> points, Point3 origin)
     {
@@ -202,7 +228,7 @@ public static class PvObjects
         {
             texto.Append((p.X - origin.X).ToString("0.###", CultureInfo.InvariantCulture)).Append(' ')
                 .Append((p.Y - origin.Y).ToString("0.###", CultureInfo.InvariantCulture)).Append(' ')
-                .Append((p.Z - origin.Z).ToString("0.###", CultureInfo.InvariantCulture)).Append('\n');
+                .Append((p.Z - origin.Z).ToString("0.###", CultureInfo.InvariantCulture)).Append("\r\n");
         }
 
         return texto.ToString();

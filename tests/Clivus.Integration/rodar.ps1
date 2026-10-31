@@ -1948,6 +1948,19 @@ function Testar-ExportarPvc {
                 $xy = @($linhas | ForEach-Object { $p = $_ -split ' '; , @([double]::Parse($p[0], $inv), [double]::Parse($p[1], $inv)) })
                 $longe = @($xy | Where-Object { [math]::Abs($_[0]) -gt 2000 -or [math]::Abs($_[1]) -gt 2000 }).Count
                 if ($longe -gt 0) { $erros += "o CSV do terreno tem $longe ponto(s) longe da origem do PVC" }
+
+                # Na origem do PVC de verdade (revisao do 42.8): o ponto do CSV mais perto
+                # do pe da arvore (que esta no terreno) fica a menos de 5 m dele em planta
+                # (a grade e de 5 m) e a menos de 1 m na cota.
+                if ($null -ne $pe) {
+                    $rel = @(($pe[0] - $oE), ($pe[1] - $oN), ($pe[2] - $oZ))
+                    $perto = $linhas | ForEach-Object { $q = $_ -split ' '; [pscustomobject]@{ X = [double]::Parse($q[0], $inv); Y = [double]::Parse($q[1], $inv); Z = [double]::Parse($q[2], $inv) } } |
+                        Sort-Object { [math]::Pow($_.X - $rel[0], 2) + [math]::Pow($_.Y - $rel[1], 2) } | Select-Object -First 1
+                    $dxy = [math]::Sqrt([math]::Pow($perto.X - $rel[0], 2) + [math]::Pow($perto.Y - $rel[1], 2))
+                    if ($dxy -gt 5 -or [math]::Abs($perto.Z - $rel[2]) -gt 1.0) {
+                        $erros += "o ponto do CSV mais perto do pe da arvore esta a $([math]::Round($dxy, 2)) m dele e $([math]::Round($perto.Z - $rel[2], 3)) m na cota: o CSV nao esta na origem do PVC"
+                    }
+                }
             }
         }
     }

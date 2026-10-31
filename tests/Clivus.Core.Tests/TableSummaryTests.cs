@@ -146,6 +146,42 @@ public class TableSummaryTests
     public void OAzimuteDoPVsyst(double rumo, bool sul, double esperado) =>
         Assert.Equal(esperado, TableSummaries.PvsystAzimuth(rumo, sul), 9);
 
+    /// <summary>
+    /// A mesa voltada para o norte no Brasil (o comprimento para o oeste, os
+    /// módulos subindo para o sul): "norte (0°)", nunca "360°", e 0,0° no
+    /// PVsyst, nunca "-0,0" (revisão do 42.9); mesa nivelada e terreno plano
+    /// dizem isso, e a pendente diz "PENDENTE" como o resto do Clivus.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "42")]
+    public void ANorteNoBrasilENivelada()
+    {
+        var entrada = Entrada(Mesa(15, 270), latitude: -23, terreno: (_, _) => 100) with { Dirty = true, DirtyReason = "movida" };
+        var r = TableSummaries.Build(entrada);
+
+        Assert.Equal(0, TableSummaries.PvsystAzimuth(r.FacingDegrees!.Value, true), 6);
+        var linhas = r.Sections().SelectMany(s => s.Lines).ToList();
+        string Valor(string rotulo, int qual = 0) => linhas.Where(l => l.Label == rotulo).ElementAt(qual).Value;
+
+        Assert.Contains("(0°)", Valor("Voltada para"));
+        Assert.DoesNotContain("360", Valor("Voltada para"));
+        Assert.DoesNotContain("-0", Valor("Azimute no PVsyst"));
+        Assert.Equal("nivelada", Valor("Ao longo da mesa"));
+        Assert.Equal("plano", Valor("Inclinação"));
+        Assert.Contains("PENDENTE", Valor("Estado"));
+    }
+
+    /// <summary>O terreno que sobe para o norte sob a mesa voltada para o sul sobe para a ponta alta dos módulos.</summary>
+    [Fact]
+    [Trait("Etapa", "42")]
+    public void NaLarguraOTerrenoSobeParaAPontaAlta()
+    {
+        var r = TableSummaries.Build(Entrada(Mesa(15, 90), terreno: (_, y) => 100 + 0.1 * (y - 800)));
+
+        Assert.Equal(10, r.TerrainAcrossRisePercent!.Value, 6);
+        Assert.StartsWith("sobe 10", r.Sections().SelectMany(s => s.Lines).Single(l => l.Label == "Na largura").Value);
+    }
+
     /// <summary>O texto do resumo tem o letreiro e as seções, com a orientação primeiro.</summary>
     [Fact]
     [Trait("Etapa", "42")]

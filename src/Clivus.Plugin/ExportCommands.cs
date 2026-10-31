@@ -389,9 +389,14 @@ public static class ExportCommands
         }
 
         // O que vai junto (42.8, "quero exportar todos objetos"): as árvores e os
-        // equipamentos em campo perto das mesas, e o terreno num CSV ao lado.
+        // equipamentos em campo perto das mesas, e o terreno num CSV ao lado. O
+        // terreno pelo Garantir, como no TermoVision (revisão do 42.8: só da
+        // memória, ele sumia quando a carga ao abrir não tinha rodado).
         var caixa = PvObjects.Extent(fiadas.Lista)!.Value;
-        var (objetos, arvores, equipamentos) = MontarObjetos(database, caixa);
+        var doDesenho = AcadApp.DocumentManager.MdiActiveDocument is { } aberto && aberto.Database == database ? aberto : null;
+        var terreno = doDesenho is null ? null : TerrenoDoDesenho.Garantir(doDesenho);
+        Func<double, double, double?>? cotaDoTerreno = terreno is null ? null : (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null;
+        var (objetos, arvores, equipamentos) = MontarObjetos(database, caixa, cotaDoTerreno);
         var cruzadas = PvObjects.Crossings(fiadas.Lista);
 
         var origem = PvColladaWriter.LocalOrigin(fiadas.Lista, objetos);
@@ -408,12 +413,35 @@ public static class ExportCommands
 
         var tamanho = new FileInfo(caminho).Length;
 
-        // O terreno, como o "_terrain.csv" do PVcase: os pontos do TIN perto das mesas, na mesma origem.
-        var doDesenho = AcadApp.DocumentManager.MdiActiveDocument is { } aberto && aberto.Database == database ? aberto : null;
-        var terreno = doDesenho is null ? null : TerrainCache.Get(doDesenho);
-        var pontos = terreno is null ? [] : PvObjects.TerrainPoints(terreno.Mesh.Triangles, caixa);
+        // O terreno, como o "_terrain.csv" do PVcase: uma grade triangular de 5 m
+        // perto das mesas, na mesma origem. O PVC já está gravado: um CSV que não
+        // grava (aberto no Excel) só vira aviso, e um CSV de uma exportação
+        // anterior, sem terreno agora, não fica ao lado do PVC novo.
+        IReadOnlyList<Point3> pontos = [];
+        var passo = PvObjects.TerrainSpacing;
+        if (cotaDoTerreno is not null) (pontos, passo) = PvObjects.TerrainGrid(cotaDoTerreno, caixa);
+
         var csv = Path.Combine(pasta ?? string.Empty, Path.GetFileNameWithoutExtension(caminho) + "_terreno.csv");
-        if (pontos.Count >= 3) File.WriteAllText(csv, PvObjects.TerrainCsv(pontos, origem), new System.Text.UTF8Encoding(false));
+        string? falhaDoCsv = null;
+        var csvAntigoApagado = false;
+
+        try
+        {
+            if (pontos.Count >= 3)
+            {
+                File.WriteAllText(csv, PvObjects.TerrainCsv(pontos, origem), new System.Text.UTF8Encoding(false));
+            }
+            else if (File.Exists(csv))
+            {
+                File.Delete(csv);
+                csvAntigoApagado = true;
+            }
+        }
+        catch (System.Exception erro) when (erro is IOException or UnauthorizedAccessException)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao gravar o CSV do terreno do PVsyst.", erro);
+            falhaDoCsv = erro.Message;
+        }
 
         // As medidas que foram, sem repetir: "14 × 2 módulos de 1,134 × 2,456 m, vãos 0,02 e 0,02 m".
         var arranjos = fiadas.Lista
@@ -438,9 +466,14 @@ public static class ExportCommands
 
         editor.WriteMessage(Tr.F("  + {0} árvore(s) e {1} equipamento(s) em campo, até {2:0} m das mesas.\n", arvores, equipamentos, PvObjects.Margin));
 
-        editor.WriteMessage(pontos.Count >= 3
-            ? Tr.F("  terreno: {0} ponto(s) em {1} (no PVsyst: Ficheiro › Importar › dados do terreno, CSV).\n", pontos.Count, csv)
-            : Tr.T("  terreno: o desenho não tem terreno processado perto das mesas; o CSV do terreno não saiu.\n"));
+        if (falhaDoCsv is not null)
+            editor.WriteMessage(Tr.F("  terreno: o CSV {0} não foi gravado ({1}); ele está aberto em outro programa?\n", csv, falhaDoCsv));
+        else if (pontos.Count >= 3)
+            editor.WriteMessage(Tr.F("  terreno: {0} ponto(s) numa grade de {1:0.#} m em {2} (no PVsyst: Ficheiro › Importar › dados do terreno, CSV).\n", pontos.Count, passo, csv));
+        else
+            editor.WriteMessage(csvAntigoApagado
+                ? Tr.T("  terreno: o desenho não tem terreno processado perto das mesas; o CSV do terreno não saiu, e o de uma exportação anterior foi apagado.\n")
+                : Tr.T("  terreno: o desenho não tem terreno processado perto das mesas; o CSV do terreno não saiu.\n"));
 
         // Mesa atravessando mesa (a F16.4 e a F16.5 do Aurora, 31/10/2026): o
         // PVsyst não aceita, e no campo elas não cabem. A exportação sai igual;
@@ -460,7 +493,7 @@ public static class ExportCommands
         {
             var inv = CultureInfo.InvariantCulture;
             editor.WriteMessage($"  PVC_FIADAS {fiadas.Lista.Count} MESAS {fiadas.Mesas} MODULOS {fiadas.Modulos} PEDACOS {fiadas.EmPedacos} FORA_DA_GRADE {fiadas.ModuloAModulo} DE_FORA {fiadas.DeFora.Count}\n");
-            editor.WriteMessage($"  PVC_OBJETOS ARVORES {arvores} EQUIPAMENTOS {equipamentos} TERRENO {(pontos.Count >= 3 ? pontos.Count : 0)} CRUZADAS {cruzadas.Count}\n");
+            editor.WriteMessage($"  PVC_OBJETOS ARVORES {arvores} EQUIPAMENTOS {equipamentos} TERRENO {(pontos.Count >= 3 && falhaDoCsv is null ? pontos.Count : 0)} CRUZADAS {cruzadas.Count}\n");
             editor.WriteMessage($"  ORIGEM E={origem.X.ToString("R", inv)} N={origem.Y.ToString("R", inv)} Z={origem.Z.ToString("R", inv)}\n");
         }
     }
@@ -468,10 +501,12 @@ public static class ExportCommands
     /// <summary>
     /// Os objetos que fazem sombra perto das mesas (42.8): as árvores, como os
     /// dois cilindros da sombra, e os equipamentos em campo, como a caixa do
-    /// bloco de cada um (as cópias de um COPY também: estão no campo).
+    /// bloco de cada um, no chão (as cópias de um COPY também: estão no campo;
+    /// e as árvores de mesmo GUID, copiadas com o Clivus fechado, cada uma com
+    /// o seu id).
     /// </summary>
     private static (List<PvObject> Objetos, int Arvores, int Equipamentos) MontarObjetos(
-        Database database, (double MinX, double MinY, double MaxX, double MaxY) caixa)
+        Database database, (double MinX, double MinY, double MaxX, double MaxY) caixa, Func<double, double, double?>? cotaDoTerreno)
     {
         var objetos = new List<PvObject>();
         int arvores = 0, equipamentos = 0;
@@ -479,11 +514,14 @@ public static class ExportCommands
 
         using var transacao = database.TransactionManager.StartOpenCloseTransaction();
 
+        var vezes = new Dictionary<Guid, int>();
+
         foreach (var (_, pe, arvore) in ArvoreCommands.Ler(transacao, database))
         {
             if (!PvObjects.Near(caixa, [new Point3(pe.X, pe.Y, pe.Z)])) continue;
 
-            objetos.AddRange(PvObjects.Tree(arvore.Id, Tr.T("Árvore"), pe.X, pe.Y, pe.Z, arvore.Spec));
+            var copia = vezes[arvore.Id] = vezes.GetValueOrDefault(arvore.Id) + 1;
+            objetos.AddRange(PvObjects.Tree(arvore.Id, Tr.T("Árvore"), pe.X, pe.Y, pe.Z, arvore.Spec, copia));
             arvores++;
         }
 
@@ -494,7 +532,7 @@ public static class ExportCommands
 
             foreach (var referencia in referencias.OrderBy(r => r.Handle.Value))
             {
-                if (transacao.GetObject(referencia, OpenMode.ForRead) is not BlockReference bloco || CaixaDoEquipamento(transacao, bloco) is not { } caixaDele) continue;
+                if (transacao.GetObject(referencia, OpenMode.ForRead) is not BlockReference bloco || CaixaDoEquipamento(transacao, bloco, cotaDoTerreno) is not { } caixaDele) continue;
                 if (!PvObjects.Near(caixa, caixaDele.Baixo)) continue;
 
                 objetos.Add(PvObjects.Box($"equipamento-{tipo}-{id:N}-{++copia}", nome, PvObjectKind.Station, caixaDele.Baixo, caixaDele.Alto));
@@ -507,11 +545,16 @@ public static class ExportCommands
     }
 
     /// <summary>
-    /// A caixa do equipamento no desenho: o sólido do bloco (a caixa do
-    /// cadastro, de pé na base), levado pela posição e pelo giro da referência.
-    /// Os quatro cantos de baixo e os quatro de cima, na mesma ordem.
+    /// A caixa do equipamento no campo: o sólido do bloco (a caixa do cadastro,
+    /// de pé na base), levado pela posição e pelo giro da referência, e posto
+    /// no chão. No desenho a base flutua <see cref="EquipmentFootprint.FloatHeight"/>
+    /// acima do terreno, que é símbolo (revisão do 42.8: no PVsyst o inversor
+    /// ia voando, sem a sombra dos 0,80 m de baixo): o topo desce isso, e cada
+    /// canto de baixo vai à cota do terreno embaixo dele. Os quatro cantos de
+    /// baixo e os quatro de cima, na mesma ordem.
     /// </summary>
-    private static (IReadOnlyList<Point3> Baixo, IReadOnlyList<Point3> Alto)? CaixaDoEquipamento(Transaction transacao, BlockReference bloco)
+    private static (IReadOnlyList<Point3> Baixo, IReadOnlyList<Point3> Alto)? CaixaDoEquipamento(
+        Transaction transacao, BlockReference bloco, Func<double, double, double?>? cotaDoTerreno)
     {
         var definicao = (BlockTableRecord)transacao.GetObject(bloco.BlockTableRecord, OpenMode.ForRead);
 
@@ -530,8 +573,11 @@ public static class ExportCommands
             }
 
             var (a, b) = (e.MinPoint, e.MaxPoint);
-            return ([Canto(a.X, a.Y, a.Z), Canto(b.X, a.Y, a.Z), Canto(b.X, b.Y, a.Z), Canto(a.X, b.Y, a.Z)],
-                    [Canto(a.X, a.Y, b.Z), Canto(b.X, a.Y, b.Z), Canto(b.X, b.Y, b.Z), Canto(a.X, b.Y, b.Z)]);
+            Point3[] baixo = [Canto(a.X, a.Y, a.Z), Canto(b.X, a.Y, a.Z), Canto(b.X, b.Y, a.Z), Canto(a.X, b.Y, a.Z)];
+            Point3[] alto = [Canto(a.X, a.Y, b.Z), Canto(b.X, a.Y, b.Z), Canto(b.X, b.Y, b.Z), Canto(a.X, b.Y, b.Z)];
+
+            return ([.. baixo.Select(p => p with { Z = cotaDoTerreno?.Invoke(p.X, p.Y) ?? p.Z - EquipmentFootprint.FloatHeight })],
+                    [.. alto.Select(p => p with { Z = p.Z - EquipmentFootprint.FloatHeight })]);
         }
 
         return null;

@@ -237,15 +237,15 @@ public static partial class PluginInfo
     /// <summary>Muda a altura das pontas de uma mesa à mão (uma travada, ou as duas).</summary>
     public const string ComandoPontas = "CLIVUS_PONTAS";
 
+    /// <summary>O mesmo, por letreiro e alturas na linha de comando, sem clique (nível 2).</summary>
+    public const string ComandoPontasAutomatico = "CLIVUS_PONTAS_AUTO";
+
     /// <summary>
     /// Comando que mostra o resumo da mesa escolhida (42.9, pelo botão direito):
     /// o tilt, para onde ela olha, o azimute do PVsyst, o terreno sob ela, os
     /// módulos, a potência, a estrutura e os pilares.
     /// </summary>
     public const string ComandoResumoMesa = "CLIVUS_RESUMO_MESA";
-
-    /// <summary>O mesmo, por letreiro e alturas na linha de comando, sem clique (nível 2).</summary>
-    public const string ComandoPontasAutomatico = "CLIVUS_PONTAS_AUTO";
 
     /// <summary>A tela dos parâmetros das análises (faixa, lombo, degraus, declividade, cores).</summary>
     public const string ComandoAnalisesParametros = "CLIVUS_ANALISES_PARAMETROS";

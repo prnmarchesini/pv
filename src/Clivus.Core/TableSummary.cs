@@ -90,7 +90,11 @@ public sealed record TableSummary(
             ? Math.Abs(v.Max - v.Min) < 0.0005 ? Tr.F("{0:0.00} {1}", v.Min, unidade) : Tr.F("{0:0.00} a {1:0.00} {2}", v.Min, v.Max, unidade)
             : "—";
 
-        static string Lado(double? graus) => graus is { } g ? Tr.F("{0} ({1:0}°)", TableSummaries.Cardinal(g), g) : "—";
+        // 359,8° é o norte, "0°", e nunca "-0" (revisão do 42.9: a mesa voltada
+        // para o sul no Panamá saía "-0,0°" no PVsyst, e a para o norte "360°").
+        static double SemMenosZero(double v) => v + 0.0;
+        static string Lado(double? graus) => graus is { } g ? Tr.F("{0} ({1:0}°)", TableSummaries.Cardinal(g), SemMenosZero(Math.Round(g) % 360)) : "—";
+        const double Plano = 0.05;
 
         var mesa = new List<(string, string)>
         {
@@ -98,7 +102,8 @@ public sealed record TableSummary(
             (Tr.T("Estrutura"), Structure),
             (Tr.T("Arranjo"), Tr.F("{0} coluna(s) × {1} fileira(s) de módulos", Columns, Rows)),
             (Tr.T("Tamanho"), Length is { } l && Depth is { } d ? Tr.F("{0:0.000} × {1:0.000} m (comprimento × largura)", l, d) : "—"),
-            (Tr.T("Estado"), Marked ? Tr.F("não coube: {0}", MarkReason ?? "?") : Dirty ? Tr.F("suja: {0}", DirtyReason ?? "?") : Tr.T("em dia")),
+            // Como no resto do Clivus (TableIdentity.DescribeState): "PENDENTE (movida)".
+            (Tr.T("Estado"), Marked ? Tr.F("não coube: {0}", Tr.T(MarkReason ?? "?")) : Dirty ? Tr.F("PENDENTE ({0})", Tr.T(DirtyReason ?? "?")) : Tr.T("limpa")),
         };
 
         var modulos = new List<(string, string)>
@@ -113,23 +118,26 @@ public sealed record TableSummary(
             (Tr.T("Tilt dos módulos"), TiltDegrees is { } t ? Tr.F("{0:0.0}° (o do projeto: {1:0.0}°)", t, DesignTiltDegrees) : "—"),
             (Tr.T("Voltada para"), Lado(FacingDegrees)),
             (Tr.T("Azimute no PVsyst"), PvsystAzimuthDegrees is { } a
-                ? Tr.F("{0:0.0}° ({1})", a, SouthernHemisphere == true ? Tr.T("hemisfério sul: 0° é o norte, + é oeste") : Tr.T("hemisfério norte: 0° é o sul, + é oeste"))
+                ? Tr.F("{0:0.0}° ({1})", SemMenosZero(Math.Round(a, 1)), SouthernHemisphere == true ? Tr.T("hemisfério sul: 0° é o norte, + é oeste") : Tr.T("hemisfério norte: 0° é o sul, + é oeste"))
                 : "—"),
             (Tr.T("Ao longo da mesa"), AxisSlopePercent is { } p
-                ? Tr.F("{0:0.0} % ({1:0.0}°), desce para o {2}", Math.Abs(p), Math.Atan(Math.Abs(p) / 100) * 180 / Math.PI, AxisDownhillDegrees is { } g ? TableSummaries.Cardinal(g) : "—")
+                ? Math.Abs(p) < Plano ? Tr.T("nivelada")
+                    : Tr.F("{0:0.0} % ({1:0.0}°), desce para o {2}", Math.Abs(p), Math.Atan(Math.Abs(p) / 100) * 180 / Math.PI, AxisDownhillDegrees is { } g ? TableSummaries.Cardinal(g) : "—")
                 : "—"),
         };
 
         var terreno = new List<(string, string)>
         {
             (Tr.T("Inclinação"), TerrainSlopePercent is { } s
-                ? Tr.F("{0:0.0} % ({1:0.0}°), desce para o {2}", s, Math.Atan(s / 100) * 180 / Math.PI, Lado(TerrainDownhillDegrees))
+                ? s < Plano ? Tr.T("plano")
+                    : Tr.F("{0:0.0} % ({1:0.0}°), desce para o {2}", s, Math.Atan(s / 100) * 180 / Math.PI, Lado(TerrainDownhillDegrees))
                 : Tr.T("sem terreno sob a mesa")),
             (Tr.T("Ao longo da mesa"), TerrainAlongPercent is { } ao
-                ? Tr.F("{0:0.0} %, desce para o {1}", ao, TerrainAlongDownhillDegrees is { } g2 ? TableSummaries.Cardinal(g2) : "—")
+                ? ao < Plano ? Tr.T("plano") : Tr.F("{0:0.0} %, desce para o {1}", ao, TerrainAlongDownhillDegrees is { } g2 ? TableSummaries.Cardinal(g2) : "—")
                 : "—"),
             (Tr.T("Na largura"), TerrainAcrossRisePercent is { } la
-                ? la >= 0 ? Tr.F("sobe {0:0.0} % para a ponta alta dos módulos", la) : Tr.F("desce {0:0.0} % para a ponta alta dos módulos", -la)
+                ? Math.Abs(la) < Plano ? Tr.T("plano")
+                    : la > 0 ? Tr.F("sobe {0:0.0} % para a ponta alta dos módulos", la) : Tr.F("desce {0:0.0} % para a ponta alta dos módulos", -la)
                 : "—"),
         };
 

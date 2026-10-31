@@ -57,8 +57,8 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 42.6 As análises por escopo, o fundo e a borda dos textos e as colunas do biposte (31/10/2026, tarde: "Em analise eu tbm quero poder escolher o que analisar, uma area ou todas, isso para TODAS analises"; "texto ruim de ver, falta opção do texto de colocar o fundo e borda, isso para TODAS analises"; "em pilar, deveria ter a opção de analisar AMBOS pilares, cada um tem uma altura [...] uma coluna para cada pilar o da frente e o de traz, a cor pode ser o mesmo para ambos"): AGUARDANDO VALIDAÇÃO — `LineLimits`, `ThresholdRule.ForLine`, `AnalysisTally` V2 (o lugar e as linhas), `AnalysisTextLook`, `ThresholdForm`, 26 testes da etapa 42; nível 2 `clivus-analises-escopo` (rodar.ps1 -Caso Testar-AnalisesEscopo)
 - 42.5 e 42.6, a segunda rodada (31/10/2026, 14h40, na tela com a 0.1.5): "nao funciona o renomear. o F2 nao funciona tbm" (a coluna do nome, ligada só de ida, era só leitura para o DataGrid); "o texto fica por traz" (nas vistas sombreadas os módulos cobriam o texto: agora ele fica deitado no plano dos módulos, 0,15 m acima, como a seta da declividade); "TEM QUE EXISTIR ALINHAMENTO" (as áreas do seletor em colunas da mesma largura); "o botão direito anda muito devagar, o zoom, muito devagar" (a caixa do kWp e o menu do botão direito liam toda a seleção a cada pan e a cada clique): AGUARDANDO VALIDAÇÃO — nível 2 `clivus-areas` pelo F2 e pelo menu da linha (conferido que o teste pega o bug antigo)
 - 42.7 O PVsyst por mesa, como o PVcase (31/10/2026, noite, na tela com a 0.1.7: "tem um erro na exportação do PVsyst, é preciso exportar como mesa, exportar como modulo, vai me dificultar a modelagem"; "aqui é como o pvcase exporta", "agora vc consegue fazer igual"; é o 6.5 do plano principal): cada mesa vai como uma fiada do PVsyst com os módulos dentro (a medida do módulo e os vãos), num `.pvc` com a forma do arquivo do PVcase: AGUARDANDO VALIDAÇÃO — `PvFrames`, `PvColladaWriter`, 27 testes da etapa 6; nível 2 `clivus-exportar-pvc` (rodar.ps1 -Caso Testar-ExportarPvc), o PVC das duas áreas no `clivus-sombras-escopo` e o PVC da monoposte igual ao do biposte, 14 × 2 por mesa, no `-SoEstruturas`
-- 42.8 O PVsyst com todos os objetos e as mesas que se cruzam (31/10/2026, noite: "mano, faça tudo, quero exportar todos objetos"; e, com a 0.1.8 no PVsyst do Aurora, "veio um erro" com o print de uma mesa atravessada na vizinha): vão junto, como o PVcase manda, as árvores (o tronco e a copa, os cilindros da sombra, no "Tree_trunk" e no "Tree_crown"), os equipamentos em campo (subestação, trafo, inversor, combiner: a caixa do bloco, na "Station") até 100 m das mesas exportadas, e o terreno num CSV ao lado (`<arquivo>_terreno.csv`, X Y Z na origem do PVC); e a exportação avisa as mesas que se cruzam em planta: AGUARDANDO VALIDAÇÃO — `PvObjects`, `PvColladaWriter` com objetos, 7 testes da etapa 6; nível 2 `clivus-exportar-pvc` com a árvore e o CSV, e as estruturas com a árvore e os 2 inversores
-- 42.9 O resumo da mesa no botão direito (31/10/2026, noite: "quero poder clicar com o botão direito, no menu Clivus de um objeto, quero ter resumo e aí quero que me mostre a inclinação da mesa em relação ao azimute (o tilt), a inclinação do terreno e para qual lado, quantos módulos, potência, tipo de estrutura, enfim, crie um resumo completo e legal"; "eu queria ver a inclinação de uma mesa, o tilt, e não sabia como ver"): Clivus Solar › "Resumo da mesa…" (`CLIVUS_RESUMO_MESA`) abre a janela com a orientação (o tilt dos módulos e o do projeto, para onde a mesa olha, o azimute do PVsyst pelo hemisfério, o giro ao longo da mesa), o terreno sob a mesa (inclinação e para que lado desce, ao longo e na largura), a mesa (tipo, estrutura, arranjo, tamanho, estado), os módulos (modelo, quantidade, kWp) e os pilares (quantos, livre, enterro, comprimento, as pontas ao chão), com Copiar: AGUARDANDO VALIDAÇÃO — `TableSummaries`, 14 testes da etapa 42; nível 2 no `clivus-exportar-pvc` (pelo botão direito, o tilt e o rumo iguais aos da fiada no PVC, e a janela num PNG)
+- 42.8 O PVsyst com todos os objetos e as mesas que se cruzam (31/10/2026, noite: "mano, faça tudo, quero exportar todos objetos"; e, com a 0.1.8 no PVsyst do Aurora, "veio um erro" com o print de uma mesa atravessada na vizinha): vão junto, como o PVcase manda, as árvores (o tronco e a copa, os cilindros da sombra, no "Tree_trunk" e no "Tree_crown"), os equipamentos em campo (subestação, trafo, inversor, combiner: a caixa do bloco, na "Station") até 100 m das mesas exportadas, e o terreno num CSV ao lado (`<arquivo>_terreno.csv`, X Y Z na origem do PVC); e a exportação avisa as mesas que se cruzam em planta: AGUARDANDO VALIDAÇÃO — `PvObjects`, `PvColladaWriter` com objetos, 8 testes da etapa 6; nível 2 `clivus-exportar-pvc` com a árvore e o CSV, e as estruturas com a árvore e os 2 inversores
+- 42.9 O resumo da mesa no botão direito (31/10/2026, noite: "quero poder clicar com o botão direito, no menu Clivus de um objeto, quero ter resumo e aí quero que me mostre a inclinação da mesa em relação ao azimute (o tilt), a inclinação do terreno e para qual lado, quantos módulos, potência, tipo de estrutura, enfim, crie um resumo completo e legal"; "eu queria ver a inclinação de uma mesa, o tilt, e não sabia como ver"): Clivus Solar › "Resumo da mesa…" (`CLIVUS_RESUMO_MESA`) abre a janela com a orientação (o tilt dos módulos e o do projeto, para onde a mesa olha, o azimute do PVsyst pelo hemisfério, o giro ao longo da mesa), o terreno sob a mesa (inclinação e para que lado desce, ao longo e na largura), a mesa (tipo, estrutura, arranjo, tamanho, estado), os módulos (modelo, quantidade, kWp) e os pilares (quantos, livre, enterro, comprimento, as pontas ao chão), com Copiar: AGUARDANDO VALIDAÇÃO — `TableSummaries`, 16 testes da etapa 42; nível 2 no `clivus-exportar-pvc` (pelo botão direito, o tilt e o rumo iguais aos da fiada no PVC, e a janela num PNG)
 
 ## Observações
 
@@ -1159,6 +1159,34 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     menor e o maior); sem tipo no desenho, o módulo é o do perfil que fez a mesa (o da janela de Mesa,
     como no TermoVision), só se a medida dele bate com a das faces; o resumo também sai na linha de
     comando, e o Copiar leva o texto.
+- A revisão do 42.8 e do 42.9 (subagente em worktree, no a8be028) não achou bloqueante; achou e eu
+  corrigi:
+  - o equipamento ia flutuando 0,80 m no PVsyst (no desenho a base flutua acima do terreno, que é
+    símbolo): agora o topo desce os 0,80 m e cada canto de baixo vai à cota do terreno embaixo dele;
+  - com o CSV aberto no Excel, a exportação dizia "não consegui exportar" com o PVC já gravado: agora
+    o CSV que não grava vira um aviso e o relato segue; sem terreno, o CSV de uma exportação anterior
+    não fica ao lado do PVC novo (é apagado, e a linha de comando diz);
+  - duas árvores de mesmo GUID (copiadas com o Clivus fechado) derrubavam a exportação inteira: agora
+    a segunda vai como "arvore-GUID-2";
+  - o resumo mostrava "-0,0°" no azimute do PVsyst da mesa voltada para o sul no Panamá e "norte
+    (360°)" na voltada para o norte: agora 0° e nunca "-0"; mesa nivelada diz "nivelada" e terreno
+    plano diz "plano" (antes "0,0 %, desce para o leste"); o estado diz "PENDENTE (motivo)", como o
+    resto do Clivus, com o motivo traduzido;
+  - o terreno vinha só da memória (sem a carga ao abrir, o CSV não saía e o resumo perdia o terreno e
+    o azimute do PVsyst): agora pelo `TerrenoDoDesenho.Garantir`, como no TermoVision;
+  - o terreno ia com os vértices crus do TIN (812 mil pontos num TIN de 2 milhões de triângulos):
+    agora numa grade triangular de 5 m, como o "_terrain.csv" do PVcase, presa aos múltiplos do passo,
+    que abre numa caixa enorme para caber em 1 milhão de pontos; o CSV com o fim de linha do Windows,
+    como o modelo do PVsyst;
+  - o resumo com várias mesas na seleção pegava a primeira sem avisar, e clicar fora respondia
+    "RECALCULAR Isso não é...": agora diz quantas eram e de qual é, e "RESUMO Isso não é...";
+  - testes: a grade do terreno, a árvore repetida, mesas cruzadas giradas e de sentidos opostos, a
+    mesa voltada para o norte no Brasil, nivelada, plano e pendente, o terreno subindo para a ponta
+    alta; o nível 2 confere que o ponto do CSV mais perto do pé da árvore está nele (cota e planta).
+  - Ficou como está, de propósito: o "Ficheiro" da linha de comando é o menu do PVsyst do Renan, que
+    está em português de Portugal (o print dele mostra "Ficheiro"). A giro e a escala do bloco do
+    equipamento não têm teste próprio (o `BlockTransform` do AutoCAD cuida dos dois; o nível 2 conta
+    os equipamentos).
 
 ## Roteiro de tela (38.1 a 42.9)
 

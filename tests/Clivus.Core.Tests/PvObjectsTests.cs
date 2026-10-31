@@ -43,6 +43,9 @@ public class PvObjectsTests
 
         Confere(partes[0], 0.2, 50, 53);
         Confere(partes[1], 3, 53, 58);
+
+        // A segunda árvore de mesmo GUID (copiada com o Clivus fechado) tem o id dela.
+        Assert.Equal([$"arvore-{id:N}-2-tronco", $"arvore-{id:N}-2-copa"], PvObjects.Tree(id, "Árvore", 1010, 2000, 50, spec, copy: 2).Select(p => p.Id));
     }
 
     /// <summary>A caixa do equipamento tem os oito cantos e os doze triângulos na ordem das caixas do PVcase.</summary>
@@ -83,23 +86,60 @@ public class PvObjectsTests
         Assert.Empty(PvObjects.Crossings([Fiada(mesa, "G #1", 0), Fiada(mesa, "G #2", 10)]));
     }
 
-    /// <summary>Os pontos do terreno são os vértices do TIN até 100 m da caixa das mesas, sem repetir.</summary>
+    /// <summary>
+    /// Duas fiadas giradas 33°, uma anti-horária e a outra horária (a mesa
+    /// espelhada), a segunda entrando 0,5 m na primeira: a área é a do
+    /// retângulo em comum, qualquer que seja o sentido dos cantos.
+    /// </summary>
     [Fact]
     [Trait("Etapa", "6")]
-    public void OsPontosDoTerrenoSaoOsDoTinPertoDasMesas()
+    public void MesasGiradasEEmSentidosOpostosSeCruzamPelaArea()
     {
-        var caixa = (MinX: 0.0, MinY: 0.0, MaxX: 50.0, MaxY: 20.0);
-        Triangle[] tin =
-        [
-            new(new Point3(-10, -10, 1), new Point3(60, -10, 2), new Point3(60, 30, 3)),
-            new(new Point3(-10, -10, 1), new Point3(60, 30, 3), new Point3(-10, 30, 4)),
-            new(new Point3(500, 500, 9), new Point3(600, 500, 9), new Point3(600, 600, 9)),
-        ];
+        var a = Math.PI * 33 / 180;
+        Point3 Giro(double s, double t) => new(434000 + s * Math.Cos(a) - t * Math.Sin(a), 907000 + s * Math.Sin(a) + t * Math.Cos(a), 100);
+        PvFrame Retangulo(Guid id, string nome, double s0, bool horario)
+        {
+            Point3[] c = [Giro(s0, 0), Giro(s0 + 18.502, 0), Giro(s0 + 18.502, 4.788), Giro(s0, 4.788)];
+            return new PvFrame(id, nome, horario ? [c[3], c[2], c[1], c[0]] : c, 14, 2, 1.303, 2.384, 0.02, 0.02, 0.035);
+        }
 
-        var pontos = PvObjects.TerrainPoints(tin, caixa);
+        var cruzada = Assert.Single(PvObjects.Crossings([Retangulo(Guid.NewGuid(), "A", 0, false), Retangulo(Guid.NewGuid(), "B", 18.002, true)]));
+        Assert.Equal(0.5 * 4.788, cruzada.Area, 6);
+    }
 
-        Assert.Equal(4, pontos.Count);
-        Assert.DoesNotContain(pontos, p => p.X > 200);
+    /// <summary>
+    /// O terreno vai numa grade triangular de 5 m, como o "_terrain.csv" do
+    /// PVcase: 5 m numa linha, as linhas a 5·√3/2, cada uma deslocada meio
+    /// passo, presa aos múltiplos do passo; só onde há terreno, até 100 m das
+    /// mesas.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "6")]
+    public void OTerrenoVaiNumaGradeTriangularDe5m()
+    {
+        var caixa = (MinX: 1000.0, MinY: 2000.0, MaxX: 1050.0, MaxY: 2020.0);
+        double? Cota(double x, double y) => x < 1060 ? 100 + 0.01 * x : null;
+
+        var (pontos, passo) = PvObjects.TerrainGrid(Cota, caixa);
+
+        Assert.Equal(PvObjects.TerrainSpacing, passo);
+        Assert.All(pontos, p => Assert.InRange(p.X, 900, 1060));
+        Assert.All(pontos, p => Assert.InRange(p.Y, 1900, 2120));
+        Assert.All(pontos, p => Assert.Equal(100 + 0.01 * p.X, p.Z, 9));
+
+        var linhas = pontos.GroupBy(p => Math.Round(p.Y / (5 * Math.Sqrt(3) / 2))).OrderBy(g => g.Key).ToList();
+        Assert.Equal(5 * Math.Sqrt(3) / 2, linhas[1].First().Y - linhas[0].First().Y, 9);
+        foreach (var linha in linhas)
+        {
+            var xs = linha.Select(p => p.X).OrderBy(x => x).ToList();
+            Assert.All(xs.Zip(xs.Skip(1)), par => Assert.Equal(5, par.Second - par.First, 9));
+            var meio = (long)linha.Key % 2 == 0 ? 0 : 2.5;
+            Assert.All(xs, x => Assert.Equal(0, Math.Abs((x - meio) % 5), 9));
+        }
+
+        // Uma caixa enorme abre a grade para caber no teto.
+        var (muitos, largo) = PvObjects.TerrainGrid((_, _) => 0, (0, 0, 20000, 20000), 0);
+        Assert.True(largo > 5 && muitos.Count <= PvObjects.MaxTerrainPoints * 1.05, $"passo {largo}, {muitos.Count} pontos");
     }
 
     /// <summary>O CSV do terreno: uma linha "X Y Z" por ponto, em metro, relativa à origem do PVC, com ponto mesmo em pt-BR.</summary>
@@ -113,7 +153,7 @@ public class PvObjectsTests
             CultureInfo.CurrentCulture = new CultureInfo("pt-BR");
             var csv = PvObjects.TerrainCsv([new Point3(434030.5, 907540.25, 96.125), new Point3(434027, 907539, 95)], new Point3(434026, 907539, 95));
 
-            Assert.Equal("4.5 1.25 1.125\n1 0 0\n", csv);
+            Assert.Equal("4.5 1.25 1.125\r\n1 0 0\r\n", csv);
         }
         finally
         {
