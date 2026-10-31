@@ -16,7 +16,8 @@ Este arquivo é o contrato entre os dois. Mudança aqui é combinada antes.
   `Content-Encoding: gzip` (o terreno de uma área grande passa de alguns MB).
 - `Authorization: Bearer {chave}`: no começo uma chave só, combinada e lida
   de variável de ambiente nos dois lados (`CLIVUS_SERVIDOR_CHAVE`). Depois,
-  o token do login.
+  o token do login. Desde a etapa 43, sem a chave, `Authorization: Licenca
+  {a licença}` (seção "Etapa 43", no fim).
 - Tamanho máximo aceito: 50 MB descomprimido (recusar com 413 acima disso).
 
 Corpo:
@@ -153,8 +154,9 @@ existia no serviço local (`servidor/`, `tools\servico-local.ps1`, rotas sem o
   gate `validate_modulos` do servidor confere.
 - `GET /api/v1/modulos/{id}` e `GET /api/v1/modulos/{id}/pan` (o .PAN como foi
   enviado): só os aprovados.
-- `POST /api/v1/modulos` com `Authorization: Bearer {CLIVUS_SERVIDOR_CHAVE}`,
-  o corpo de `ModuleLibrary.ToServiceJson` (até 1,2 MB, com o .PAN):
+- `POST /api/v1/modulos` com `Authorization: Bearer {CLIVUS_SERVIDOR_CHAVE}`
+  (ou, sem a chave, `Licenca {a licença}`, etapa 43), o corpo de
+  `ModuleLibrary.ToServiceJson` (até 1,2 MB, com o .PAN):
   - `201`: o módulo da lista mais `"situacao": "pendente"` (exemplo em
     `tests/dados/servidor-modulo-pendente.json`). Ele só entra na lista
     pública depois que uma pessoa da gestão confere o .PAN e aprova em
@@ -182,3 +184,81 @@ segue o `Accept-Language` do pedido: `pt*` → português, `es*` → espanhol,
 outro → inglês. Sem o cabeçalho, português, com o mesmo texto de antes (o
 plugin antigo não muda nada). Status, rotas e campos não mudam com o idioma.
 O plugin manda `Accept-Language: pt-BR`, `en` ou `es` conforme o idioma dele.
+
+## Etapa 43: a licença no servidor e a versão publicada (31/10/2026)
+
+Combinado entre o plugin e o servidor para o primeiro cliente
+(`plano/clientes/LEIA-PRIMEIRO.md`). O mesmo texto está em
+`plano/contrato-ativacao.md` e em `plano/contrato-servidor-3d.md`; mudança
+aqui se avisa antes.
+
+### 1. O plugin do cliente se identifica pela licença
+
+- Em `POST {servidor}/api/v1/cenas` e em `POST {servidor}/api/v1/modulos`
+  (as rotas que levavam só `Authorization: Bearer <CLIVUS_SERVIDOR_CHAVE>`),
+  o plugin manda `Authorization: Licenca <a licença>`. A licença é o texto
+  `{payload}.{assinatura}` exatamente como está no `licenca.txt`
+  (`%LOCALAPPDATA%\Clivus Solar\licenca.txt`), sem espaço nem quebra de
+  linha.
+- Vale quando não há `CLIVUS_SERVIDOR_CHAVE` e há licença válida: o plugin
+  confere a assinatura, a máquina e o prazo (`Valid`, ou `Revalidate`, que
+  ainda vale). Com a chave definida (o PC do Renan, a conta Develop),
+  continua o `Bearer`. Sem nenhuma das duas, o plugin não manda
+  `Authorization`.
+- Quem decide se a licença vale é o servidor (a assinatura pela chave do
+  `kid` e o que mais a conta pedir); o que chega com ela vai para a conta
+  dela, como o da chave vai para a conta Develop.
+- Os erros chegam como hoje, `{"erro": "..."}`: 401 ou 403 com a mensagem do
+  servidor, que o plugin mostra como veio. Sem o `erro` (um proxy no
+  caminho), o plugin diz o que conferir conforme o que mandou: a chave, ou
+  ativar de novo.
+- Como a chave, a licença só vai por HTTPS (http só em localhost, para teste).
+- As rotas públicas (`GET /api/v1/modulos`, `GET /api/v1/versao`) não levam
+  `Authorization`.
+
+### 2. A versão publicada
+
+`GET {servidor}/api/v1/versao`, público. O plugin manda `Accept-Language`.
+
+```json
+{
+  "versao": "0.1.1",
+  "url": "https://.../baixar/ClivusSolar-Setup-0.1.1.exe",
+  "sha256": "…(64 hex)",
+  "tamanho": 6500000,
+  "notas": "…",
+  "publicada_em": "2026-11-01T12:00:00Z",
+  "obrigatoria": false
+}
+```
+
+ou `404` sem versão publicada (o plugin entende "nada a fazer", não erro).
+Outro status: o plugin registra o `erro` e não oferece nada.
+
+O que o plugin exige (fora disso, ignora a versão e registra o erro):
+
+- `versao`: semver `MAIOR.MENOR.CORRECAO` (pré-versão como `-beta.1` vale).
+  O plugin oferece só se ela for maior que a instalada.
+- `url`: absoluta e HTTPS, no mesmo host (e porta) do servidor
+  (`CLIVUS_SERVIDOR` ou o de produção) ou do site de download
+  (`PluginInfo.SiteDeDownload`, hoje
+  `https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io`, o `$site` do
+  `tools/gerar-instalador.ps1`). Redirecionamento: até 3, cada endereço novo
+  pela mesma regra. Outro host, o plugin recusa: um servidor comprometido
+  não manda rodar um executável de qualquer lugar. Trocar o site de download
+  pede uma versão do plugin que saia antes (as instaladas só baixam do host
+  que conhecem ou do próprio servidor).
+- `sha256`: 64 dígitos hexadecimais do `.exe` (maiúsculas ou minúsculas);
+  `tamanho`: bytes, número inteiro, de 1 a 200 MB. O plugin baixa, confere
+  os dois e, se diferem, apaga o arquivo e avisa.
+- `notas` (texto, opcional; a janela mostra até 8000 caracteres),
+  `publicada_em` (ISO 8601 UTC, opcional) e `obrigatoria` (opcional, padrão
+  `false`). Com `true`, a janela diz que a atualização é obrigatória e o
+  aviso volta a cada abertura do Civil 3D, em vez de uma vez por dia; o
+  plugin não trava nada.
+
+Quando o plugin consulta: ao abrir o Civil 3D com interface, no máximo uma
+vez por dia (em segundo plano, com 5 s de tempo-limite; a última consulta
+fica nas preferências do usuário), e no comando `CLIVUS_ATUALIZAR`. O
+instalador baixado roda com `/aguardar-civil3d`: espera o Civil 3D fechar
+(até 12 horas), instala como no silencioso e avisa numa janela do Windows.
