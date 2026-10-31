@@ -166,6 +166,32 @@ public class FieldObjectsTests
         Assert.Equal(0, levantamento.TableCount);
     }
 
+    /// <summary>
+    /// O retângulo 3D perfeito, inclinado numa rampa, é um paralelogramo
+    /// visto de cima, e passa (revisão do 38.9: a 20° com 15 % de rampa, os 3°
+    /// de folga de antes o recusavam com 86,9°).
+    /// </summary>
+    [Theory]
+    [Trait("Etapa", "40")]
+    [InlineData(10, 0.076)]
+    [InlineData(20, 0.15)]
+    [InlineData(25, 0.15)]
+    [InlineData(30, 0.10)]
+    [InlineData(30, 0.15)]
+    public void ORetangulo3DNaRampaPassaComoMesa(double graus, double rampa)
+    {
+        var g = Math.Atan(rampa);
+        var t = graus * Grau;
+        var u = new Point3(18.502 * Math.Cos(g), 0, 18.502 * Math.Sin(g));
+        var v = new Point3(4.788 * Math.Sin(t) * Math.Sin(g), -4.788 * Math.Cos(t), -4.788 * Math.Sin(t) * Math.Cos(g));
+        var objeto = new FieldObject("R", "L", [new(0, 0, 0), new(u.X, u.Y, u.Z), new(u.X + v.X, u.Y + v.Y, u.Z + v.Z), new(v.X, v.Y, v.Z)]);
+
+        var f = FieldObjects.Footprint(objeto, out var porQue);
+
+        Assert.Null(porQue);
+        Assert.Equal(4.788 * Math.Cos(t), f!.Width, 6);
+    }
+
     [Fact]
     [Trait("Etapa", "40")]
     public void LosangoNaoViraMesa()

@@ -30,6 +30,18 @@ public sealed record ChainTable(
     double LastStation,
     double? LastGround)
 {
+    /// <summary>
+    /// A ponta baixa mínima desta mesa, quando ela tem a sua (o biposte com P1,
+    /// 38.9); null, a da configuração. Cada mesa da corrente é julgada pela
+    /// sua faixa, e a junta entre duas, pela mais exigente das duas: assim a
+    /// fileira e a mesa processada sozinha (o Pintar, o Recalcular) dão o
+    /// mesmo veredito (revisão do 38.9).
+    /// </summary>
+    public double? MinLowEdge { get; init; }
+
+    /// <summary>A ponta baixa máxima desta mesa, quando ela tem a sua; null, a da configuração.</summary>
+    public double? MaxLowEdge { get; init; }
+
     /// <summary>Se a mesa tem terreno em tudo que o motor olha: módulos e as duas pontas.</summary>
     public bool HasGround =>
         Modules.Count > 0 && Modules.All(m => m.Ground is { } g && double.IsFinite(g))
@@ -316,7 +328,7 @@ public static class RowSolver
 
         if (cotas.Count == 0) return new SolvedTable(mesa.Label, 0, 0, mesa.Modules.Count, true, motivo, Seated: true);
 
-        var cota = cotas.Max() + config.MinLowEdge;
+        var cota = cotas.Max() + (mesa.MinLowEdge ?? config.MinLowEdge);
 
         return new SolvedTable(mesa.Label, cota, cota, mesa.Modules.Count, true, motivo, Seated: true);
     }
@@ -332,10 +344,14 @@ public static class RowSolver
         var razao = passo < PassoGrosso ? (long)Math.Max(1, Math.Round(PassoGrosso / passo)) : 1;
         var grosso = passo * razao;
 
+        // A grade cobre as faixas de todas as mesas do trecho.
+        var menor = mesas.Min(m => m.MinLowEdge ?? config.MinLowEdge);
+        var maior = mesas.Max(m => m.MaxLowEdge ?? config.MaxLowEdge);
+
         for (var margem = Margem; ; margem *= 2)
         {
-            var lo = (long)Math.Floor((config.MinLowEdge - margem) / grosso);
-            var hi = (long)Math.Ceiling((config.MaxLowEdge + margem) / grosso);
+            var lo = (long)Math.Floor((menor - margem) / grosso);
+            var hi = (long)Math.Ceiling((maior + margem) / grosso);
             var faixas = Enumerable.Repeat((Lo: lo, Hi: hi), mesas.Count + 1).ToArray();
             Prender(faixas, primeira, ultima, grosso, exata: false);
 
@@ -425,20 +441,42 @@ public static class RowSolver
     /// </summary>
     private static long[]? Corrente(List<ChainTable> mesas, SystemConfiguration config, ChainWeights w, double passo, (long Lo, long Hi)[] faixas)
     {
-        var min = config.MinLowEdge;
-        var max = config.MaxLowEdge;
+        // A faixa de cada mesa: a dela (o biposte com P1) ou a da configuração.
+        (double Min, double Max) Faixa(int i) =>
+            (mesas[i].MinLowEdge ?? config.MinLowEdge, mesas[i].MaxLowEdge ?? config.MaxLowEdge);
 
         // A declividade: o limite configurado (sen(limite) sobre o vão entre
         // as pontas) é custo, não parede; a parede é física, nove décimos
         // (desnível maior que o comprimento não é mesa).
         var seno = config.MaxLongitudinalSlope is { } limite ? Math.Min(Math.Sin(limite), SenoFisico) : SenoFisico;
 
+        // A junta j é o fim da mesa j − 1 e o começo da mesa j: vale o custo
+        // da mais exigente das duas (com a mesma faixa, o de sempre).
+        double CustoDaPonta(int j, double pb)
+        {
+            var custo = 0.0;
+
+            if (j > 0)
+            {
+                var (min, max) = Faixa(j - 1);
+                custo = w.TipCost(pb, min, max);
+            }
+
+            if (j < mesas.Count)
+            {
+                var (min, max) = Faixa(j);
+                custo = Math.Max(custo, w.TipCost(pb, min, max));
+            }
+
+            return custo;
+        }
+
         double[] CustoDasPontas(int j)
         {
             var (lo, hi) = faixas[j];
             var custos = new double[hi - lo + 1];
 
-            for (var k = 0; k < custos.Length; k++) custos[k] = w.TipCost((lo + k) * passo, min, max);
+            for (var k = 0; k < custos.Length; k++) custos[k] = CustoDaPonta(j, (lo + k) * passo);
 
             return custos;
         }
@@ -458,6 +496,7 @@ public static class RowSolver
 
             var fracoes = mesa.Modules.Select(m => (m.Station - a) / vao).ToArray();
             var chaos = mesa.Modules.Select(m => m.Ground!.Value).ToArray();
+            var (min, max) = Faixa(i);
 
             var lo0 = faixas[i].Lo;
             var lo1 = faixas[i + 1].Lo;
@@ -548,13 +587,14 @@ public static class RowSolver
         var fora = 0;
         var enterrados = new List<int>();
         var maisEnterrado = 0.0;
+        var (min, max) = (mesa.MinLowEdge ?? config.MinLowEdge, mesa.MaxLowEdge ?? config.MaxLowEdge);
 
         for (var k = 0; k < mesa.Modules.Count; k++)
         {
             var m = mesa.Modules[k];
             var c = z0 + (z1 - z0) * m.Station / mesa.Length - m.Ground!.Value;
 
-            if (c > config.MaxLowEdge + 1e-9 || c < config.MinLowEdge - 1e-9) fora++;
+            if (c > max + 1e-9 || c < min - 1e-9) fora++;
 
             if (c < 0)
             {

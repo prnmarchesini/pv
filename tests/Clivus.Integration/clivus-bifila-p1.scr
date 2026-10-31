@@ -6,11 +6,11 @@
 ; proprio desenho.
 ;
 ; O que se confere em LISP: os pilares dianteiros e traseiros, o menor
-; dianteiro inteiro (a escala Z do bloco, do topo ao pe) e o menor traseiro,
-; e P3 = topo - terreno em cada um. Com a altura vinda do P1, os dianteiros
-; ficam perto dele (com a do projeto, 0,30, sairiam com uns 2,5 m); o
-; bifila.ps1 confere, pelo relatorio de cada mesa, que nas mesas dentro da
-; faixa nenhum pilar fica abaixo do P1.
+; dianteiro inteiro (a escala Z do bloco, do topo ao pe), a media deles, o
+; menor traseiro, e P3 = topo - terreno em cada um. Com a altura vinda do P1,
+; os dianteiros ficam em volta dele (com a do projeto, 0,30, sairiam com uns
+; 2,5 m). Pilar por pilar nao: o motor segura a ponta baixa na borda do
+; modulo, e com o chao subindo para tras o dianteiro sai menor que o P1.
 ;
 ; O OSNAP e desligado para os pontos digitados chegarem crus.
 
@@ -32,13 +32,13 @@
 
 (setq clivus:pilares (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_PILAR"))))
 (setq clivus:np (clivus:conta clivus:pilares) clivus:frente 0 clivus:tras 0 clivus:p3ok 0 clivus:p3total 0
-      clivus:p1min 1e99 clivus:p2min 1e99 clivus:i 0)
+      clivus:p1min 1e99 clivus:p2min 1e99 clivus:p1soma 0.0 clivus:i 0)
 (while (< clivus:i clivus:np)
   (setq clivus:en (ssname clivus:pilares clivus:i) clivus:e (entget clivus:en))
   (setq clivus:z (caddr (cdr (assoc 10 clivus:e))) clivus:inteiro (cdr (assoc 43 clivus:e)))
   (setq clivus:xd (clivus:xdata clivus:en) clivus:linha "")
   (if clivus:xd (setq clivus:linha (clivus:campo clivus:xd 11)))
-  (if (= clivus:linha "Front") (setq clivus:frente (1+ clivus:frente) clivus:p1min (min clivus:p1min clivus:inteiro)))
+  (if (= clivus:linha "Front") (setq clivus:frente (1+ clivus:frente) clivus:p1min (min clivus:p1min clivus:inteiro) clivus:p1soma (+ clivus:p1soma clivus:inteiro)))
   (if (= clivus:linha "Rear") (setq clivus:tras (1+ clivus:tras) clivus:p2min (min clivus:p2min clivus:inteiro)))
   (if (and clivus:xd (> (strlen (clivus:campo clivus:xd 6)) 0) (> (strlen (clivus:campo clivus:xd 8)) 0))
     (progn
@@ -49,6 +49,7 @@
 
 (princ (strcat "\nCLIVUS_BIFILA_P1 pilares=" (itoa clivus:np) " frente=" (itoa clivus:frente) " tras=" (itoa clivus:tras)
                " p1min=" (rtos clivus:p1min 2 4) " p2min=" (rtos clivus:p2min 2 4)
+               " p1media=" (rtos (if (> clivus:frente 0) (/ clivus:p1soma clivus:frente) 0.0) 2 4)
                " p3ok=" (itoa clivus:p3ok) " p3total=" (itoa clivus:p3total)))
 (setvar "SECURELOAD" clivus:secureload)
 (princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))

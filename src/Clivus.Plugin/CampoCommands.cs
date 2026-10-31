@@ -33,7 +33,7 @@ public static class CampoCommands
     /// <summary>O registro, no dicionário da área, de que ela segue os objetos.</summary>
     private const string ChaveDoRegistro = PluginInfo.PrefixoDeDados + "_CAMPO";
 
-    /// <summary>Versão 2 (revisão de tela do 40.2): o alinhamento. A 1 é lida com o centro.</summary>
+    /// <summary>Versão 2 (revisão de tela do 40.2): o alinhamento pela ponta. A 1 é o centro, e é a que sai com ele.</summary>
     private const int VersaoDoRegistro = 2;
 
     /// <summary>Como os objetos foram escolhidos; o Regerar área escolhe do mesmo jeito.</summary>
@@ -143,10 +143,19 @@ public static class CampoCommands
         UsinaCommands.AvisarAltura(editor, settings, tipos);
 
         // Para onde as mesas olham é do projeto: o objeto em 2D não diz (e o
-        // Z dele não vale). O lado errado do hemisfério é avisado, não barrado.
-        var latitude = area.Vertices.Count > 0
-            ? GeoStore.Read(database, new Point3d(area.Vertices[0].X, area.Vertices[0].Y, area.Vertices[0].Z))?.Latitude
-            : null;
+        // Z dele não vale). O lado errado do hemisfério é avisado, não barrado;
+        // um aviso que falha não derruba o comando (revisão do 38.9).
+        double? latitude = null;
+        try
+        {
+            if (area.Vertices.Count > 0)
+                latitude = GeoStore.Read(database, new Point3d(area.Vertices[0].X, area.Vertices[0].Y, area.Vertices[0].Z))?.Latitude;
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui ler a latitude para o aviso do hemisfério.", erro);
+        }
+
         if (FacingFromLine.HemisphereWarning(latitude, settings.Configuration.FacingAzimuthRadians) is { } hemisferio)
             editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", hemisferio));
 
@@ -198,11 +207,16 @@ public static class CampoCommands
         UsinaCommands.Desenhar(editor, documento, new UsinaCommands.PlanoDaUsina(
             settings, usina.Geometries[0], tipos[0], usina.Plant.Layout, usina.Plant, tiposDoDesenho));
 
-        problemas.AddRange(usina.Issues.Where(i => i.Kind == FieldIssueKind.Deviation));
+        // O que só se vê depois do motor: a mesa longe do lugar e a mesa que
+        // entrou na vizinha (o objeto mais curto que ela; revisão do 38.9).
+        var depoisDoMotor = usina.Issues.Where(i => i.Kind is FieldIssueKind.Deviation or FieldIssueKind.TableOverlap).ToList();
+        problemas.AddRange(depoisDoMotor);
         var desvios = usina.DeviationByObject.Values.ToList();
         if (desvios.Count > 0)
             editor.WriteMessage(Tr.F("\n{0} As mesas ficaram a no máximo {1:0.000} m do lugar no objeto (média {2:0.000} m).\n", prefixo, desvios.Max(), desvios.Average()));
-        foreach (var p in usina.Issues.Where(i => i.Kind == FieldIssueKind.Deviation).Take(30)) editor.WriteMessage($"    {p.Message}\n");
+        if (depoisDoMotor.Count(i => i.Kind == FieldIssueKind.TableOverlap) is var sobrepostas and > 0)
+            editor.WriteMessage(Tr.F("\n{0} ATENÇÃO: {1} mesa(s) entraram na vizinha da fileira: os objetos são mais curtos que a mesa. Estão marcadas no desenho.\n", prefixo, sobrepostas));
+        foreach (var p in depoisDoMotor.Take(30)) editor.WriteMessage($"    {p.Message}\n");
 
         Marcar(editor, database, area, problemas, centros, terreno.Mesh, levantamento.ReferenceAxis);
         Lembrar(database, area.Id, escolha);
@@ -477,10 +491,12 @@ public static class CampoCommands
                 ? Tr.F("  {0} × {1} (o objeto é a área dos módulos)\n", porTipo.Count(), tipos[porTipo.Key.Kind].Name)
                 : Tr.F("  {0} × {1} (o objeto é a mesa inteira, com as sobras)\n", porTipo.Count(), tipos[porTipo.Key.Kind].Name));
 
-            // A diferença típica (a mediana), quando passa de 1 cm.
-            var diferencas = porTipo.Select(c => c.LengthDifference).OrderBy(d => d).ToList();
-            var tipica = diferencas[diferencas.Count / 2];
-            if (Math.Abs(tipica) > 0.01)
+            // A diferença típica (a mediana), quando passa da folga da rampa:
+            // o objeto 3D numa rampa é mais curto em planta e é a mesma mesa
+            // (revisão do 38.9: o D6D4 do Aurora dava "0,053 m a mais").
+            var mediana = porTipo.OrderBy(c => c.LengthDifference).ElementAt(porTipo.Count() / 2);
+            var tipica = mediana.LengthDifference;
+            if (!FieldObjects.SameLength(mediana.Footprint.Length, mediana.Footprint.Length - tipica))
             {
                 editor.WriteMessage(tipica < 0
                     ? Tr.F("    a mesa tem {0:0.000} m a mais que o objeto\n", -tipica)
@@ -512,6 +528,7 @@ public static class CampoCommands
         FieldIssueKind.ProfileSize => Tr.T("mesa de outro tamanho"),
         FieldIssueKind.NoProfile => Tr.T("sem mesa do tamanho"),
         FieldIssueKind.Deviation => Tr.T("mesa deslocada"),
+        FieldIssueKind.TableOverlap => Tr.T("mesa em cima da vizinha"),
         _ => tipo.ToString(),
     };
 
@@ -595,11 +612,15 @@ public static class CampoCommands
 
         var dicionario = (DBDictionary)transacao.GetObject(area.ExtensionDictionary, OpenMode.ForWrite);
 
+        // O centro sai na versão 1, que o plugin de antes lê; só o alinhamento
+        // pela ponta pede a 2 (revisão do 38.9: o plugin de antes, sem ler a
+        // 2, esquecia que a área segue os objetos).
+        var pelaPonta = escolha.Alinhamento != FieldAlignment.Center;
         using var dados = new ResultBuffer(
-            new TypedValue((int)DxfCode.Int32, VersaoDoRegistro),
+            new TypedValue((int)DxfCode.Int32, pelaPonta ? VersaoDoRegistro : 1),
             new TypedValue((int)DxfCode.Text, escolha.Modo),
-            new TypedValue((int)DxfCode.Text, escolha.Camada),
-            new TypedValue((int)DxfCode.Text, escolha.Alinhamento.ToString()));
+            new TypedValue((int)DxfCode.Text, escolha.Camada));
+        if (pelaPonta) dados.Add(new TypedValue((int)DxfCode.Text, escolha.Alinhamento.ToString()));
         foreach (var handle in escolha.Handles) dados.Add(new TypedValue((int)DxfCode.Text, handle));
 
         if (dicionario.Contains(ChaveDoRegistro))

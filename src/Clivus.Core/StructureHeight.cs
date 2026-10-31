@@ -34,6 +34,21 @@ public static class StructureHeight
     }
 
     /// <summary>
+    /// O P1 que dá esta ponta baixa no chão plano, com este enterro: a conta de
+    /// <see cref="LowEdge"/> ao contrário. É o que a altura livre digitada vira
+    /// (38.9; Renan, 30/10/2026: "não consigo chegar nesses 80cm").
+    /// </summary>
+    /// <param name="geometry">A mesa em coordenadas locais.</param>
+    /// <param name="tiltRadians">A inclinação da mesa.</param>
+    /// <param name="lowEdge">A ponta baixa: a face de cima do módulo na ponta baixa, acima do chão.</param>
+    /// <param name="embedment">O enterro T3.</param>
+    public static double FrontPillarFor(TableGeometry geometry, double tiltRadians, double lowEdge, double embedment)
+    {
+        ArgumentNullException.ThrowIfNull(geometry);
+        return lowEdge + embedment - geometry.PillarTopDrop + geometry.PillarRow * Math.Sin(tiltRadians);
+    }
+
+    /// <summary>
     /// O P2 que o chão plano pede com o P1 da estrutura (sem folga nenhuma), ou
     /// null sem P1. O P2 da estrutura menos este é a folga para o chão caindo
     /// para trás.
@@ -51,9 +66,11 @@ public static class StructureHeight
     }
 
     /// <summary>
-    /// O declive do chão caindo para trás (fração) que a folga do P2 cobre: a
-    /// folga sobre a distância entre os pilares em planta. Zero sem folga;
-    /// null sem P1.
+    /// O declive do chão caindo para trás (fração) que a folga do P2 cobre,
+    /// como o fabricante cota: a folga sobre a distância entre os pilares em
+    /// planta, girando no pé do P1 (os 10 % da GC800). Na usina o motor segura
+    /// a ponta baixa na borda do módulo, mais à frente que o P1, e a mesma
+    /// folga cobre um pouco menos (revisão do 38.9). Zero sem folga; null sem P1.
     /// </summary>
     public static double? RearSlopeAllowance(TableGeometry geometry, double tiltRadians, double? fallbackEmbedment = null)
     {

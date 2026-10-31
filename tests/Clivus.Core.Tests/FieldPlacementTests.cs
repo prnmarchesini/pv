@@ -194,6 +194,73 @@ public class FieldPlacementTests
         Assert.All(usina.DeviationByObject.Values, d => Assert.True(d < 0.005, $"desvio de {d:0.000} m"));
     }
 
+    /// <summary>
+    /// Objetos 1 m mais curtos que a área dos módulos, com 0,35 m entre eles
+    /// (revisão do 38.9): a mesa inteira (com as sobras de 5 cm) entra 0,752 m
+    /// na vizinha em todo alinhamento, e isso sai como divergência de cada
+    /// uma, e não calado. Com 10 cm a menos, o vão cabe a diferença e nada é
+    /// apontado.
+    /// </summary>
+    [Theory]
+    [Trait("Etapa", "40")]
+    [InlineData(FieldAlignment.Center, 17.5, 2)]
+    [InlineData(FieldAlignment.Right, 17.5, 2)]
+    [InlineData(FieldAlignment.Left, 17.5, 2)]
+    [InlineData(FieldAlignment.Center, 18.4, 0)]
+    [InlineData(FieldAlignment.Right, 18.4, 0)]
+    public void AMesaQueEntraNaVizinhaEApontada(FieldAlignment alinhamento, double comprimento, int sobrepostas)
+    {
+        var passo = comprimento + 0.35;
+        List<FieldObject> objetos = [Objeto("A1", 0, 0, comprimento: comprimento), Objeto("A2", passo, 0, comprimento: comprimento), Objeto("A3", 2 * passo, 0, comprimento: comprimento)];
+
+        var usina = FieldPlacement.Process(FieldObjects.Survey(objetos), [Gc800], Terreno((_, _) => 700), ParaOSul, alignment: alinhamento);
+
+        var apontadas = usina.Issues.Where(i => i.Kind == FieldIssueKind.TableOverlap).ToList();
+        Assert.Equal(sobrepostas, apontadas.Count);
+        Assert.All(apontadas, i => Assert.False(i.Skips));
+        if (sobrepostas > 0) Assert.Matches(@"0[,.]752", apontadas[0].Message);
+        Assert.Equal(3, usina.Plant.Rows.Sum(r => r.Tables.Count));
+    }
+
+    /// <summary>
+    /// Fileira norte-sul com o ruído de desenho no eixo (89,99° e 90,01°;
+    /// revisão do 38.9): a direita é a mesma ponta, a norte, nas três mesas.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "40")]
+    public void NaFileiraNorteSulADireitaEAMesmaPontaEmTodas()
+    {
+        var largura = 4.788 * Math.Cos(10 * Grau);
+        FieldObject Girado(string id, double cy, double rumo)
+        {
+            var (ux, uy) = (Math.Cos(rumo * Grau), Math.Sin(rumo * Grau));
+            var (hx, hy) = (-uy, ux);
+            var (l, w) = (18.202 / 2, largura / 2);
+            return new FieldObject(id, "CELDAS",
+            [
+                new(-ux * l - hx * w, cy - uy * l - hy * w, 0),
+                new(ux * l - hx * w, cy + uy * l - hy * w, 0),
+                new(ux * l + hx * w, cy + uy * l + hy * w, 0),
+                new(-ux * l + hx * w, cy - uy * l + hy * w, 0),
+            ]);
+        }
+
+        List<FieldObject> objetos = [Girado("N1", 0, 89.99), Girado("N2", 19.0, 90.01), Girado("N3", 38.0, 89.99)];
+        var olhaParaOLeste = ParaOSul with { Configuration = ParaOSul.Configuration with { FacingAzimuthRadians = Math.PI / 2 } };
+
+        var usina = FieldPlacement.Process(FieldObjects.Survey(objetos), [Gc800], Terreno((_, _) => 700), olhaParaOLeste, alignment: FieldAlignment.Right);
+
+        // Cada mesa com a ponta norte dos módulos na ponta norte do objeto.
+        var nortes = usina.Plant.Rows.SelectMany(r => r.Tables)
+            .Select(m => usina.Geometries[m.Cell.Kind].Modules.SelectMany(p => p.TopFace).Select(m.Pillars.Placement.Apply).Max(p => p.Y))
+            .OrderBy(y => y)
+            .ToList();
+        Assert.Equal(3, nortes.Count);
+        Assert.Equal(0 + 18.202 / 2, nortes[0], 2);
+        Assert.Equal(19.0 + 18.202 / 2, nortes[1], 2);
+        Assert.Equal(38.0 + 18.202 / 2, nortes[2], 2);
+    }
+
     /// <summary>A direita é o leste na planta, desenhada a fileira num sentido ou no outro; na fileira norte-sul, o norte.</summary>
     [Fact]
     [Trait("Etapa", "40")]

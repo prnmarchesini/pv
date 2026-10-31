@@ -417,6 +417,23 @@ internal sealed class CorteDaMesa : FrameworkElement
         CotaInclinada(tela, No(sobra, -38), No(sobra + t1, -38), Tr.F("tesoura T1 {0}", Medida(t1)), Verde);
         CotaInclinada(tela, No(sobra, -58), No(frenteEm, -58), Tr.F("T2 {0}", Medida(frenteEm - sobra)), Laranja);
 
+        // O T3: o do P1 do chão plano; o do P2, do chão caindo que ele
+        // alcança. Sem T3 na mesa, o enterro que vale é o do projeto, e a cota
+        // diz isso (revisão do 38.7). O do P1 à esquerda dele (à direita fica
+        // o nome do chão caindo), antes das outras cotas: a do P1 inteiro vai
+        // por fora do texto dele (revisão do 38.9: sem a MF1, as duas caíam na
+        // mesma linha).
+        var nomeDoEnterro = _enterro is { } escrito ? $"T3 {Medida(escrito)}"
+            : _basica is { } doProjeto ? Tr.F("enterro {0} (projeto)", Medida(doProjeto.Embedment))
+            : null;
+
+        var foraDoT3 = xFrente - 12;
+        if (nomeDoEnterro is not null)
+        {
+            foraDoT3 = CotaVertical(tela, xFrente - 12, ySolo, yPe, nomeDoEnterro, Terra, aEsquerda: true);
+            if (folga > 0.0005) CotaVertical(tela, xTras - 12, yChaoAtras, yPeTras, nomeDoEnterro, Terra, aEsquerda: true);
+        }
+
         // Os pilares inteiros e onde as mãos francesas prendem: do P1 para a
         // esquerda, do P2 para a direita, de dentro para fora.
         if (_basica is { } alturaBasica)
@@ -424,9 +441,10 @@ internal sealed class CorteDaMesa : FrameworkElement
             var topoFrente = Tela(frenteEm * cos, frenteEm * sen - bifila.PillarTopDrop);
             var topoTras = Tela(trasEm * cos, trasEm * sen - bifila.PillarTopDrop);
 
-            var xEsquerdaDoP1 = xFrente - 12;
+            var foraDaMao = xFrente - 12;
             if (prende.TryGetValue(true, out var yMf1))
-                xEsquerdaDoP1 = CotaVertical(tela, xEsquerdaDoP1, topoFrente.Y, yMf1, Medida(bifila.FrontBraceBelowTop), Claro, aEsquerda: true) - 10;
+                foraDaMao = CotaVertical(tela, xFrente - 12, topoFrente.Y, yMf1, Medida(bifila.FrontBraceBelowTop), Claro, aEsquerda: true);
+            var xEsquerdaDoP1 = Math.Min(foraDaMao, foraDoT3) - 10;
             CotaVertical(tela, xEsquerdaDoP1, topoFrente.Y, yPe, $"P1 {Milimetro(alturaBasica.P1)}", Laranja, aEsquerda: true, fracaoDoTexto: 0.8);
 
             var xDireitaDoP2 = xTras + 12;
@@ -454,20 +472,6 @@ internal sealed class CorteDaMesa : FrameworkElement
 
         CotaHorizontal(tela, xFrente, xTras, Math.Max(yPe, yPeTras) + 12, Milimetro((trasEm - frenteEm) * cos), Laranja);
 
-        // O T3: o do P1 do chão plano; o do P2, do chão caindo que ele
-        // alcança. Sem T3 na mesa, o enterro que vale é o do projeto, e a cota
-        // diz isso (revisão do 38.7).
-        var nomeDoEnterro = _enterro is { } escrito ? $"T3 {Medida(escrito)}"
-            : _basica is { } doProjeto ? Tr.F("enterro {0} (projeto)", Medida(doProjeto.Embedment))
-            : null;
-
-        // O do P1 à esquerda dele (à direita fica o nome do chão caindo).
-        if (nomeDoEnterro is not null)
-        {
-            CotaVertical(tela, xFrente - 12, ySolo, yPe, nomeDoEnterro, Terra, aEsquerda: true);
-            if (folga > 0.0005) CotaVertical(tela, xTras - 12, yChaoAtras, yPeTras, nomeDoEnterro, Terra, aEsquerda: true);
-        }
-
         EscreverEmBaixo(
             tela,
             (_basica is { } doProjetoSemP1 && bifila.FrontPillar is null
@@ -475,7 +479,7 @@ internal sealed class CorteDaMesa : FrameworkElement
                     Milimetro(doProjetoSemP1.LowEdge))
                 : _basica is { } basica
                 ? (folga > 0.0005
-                    ? Tr.F("Medidas em metro. Chão plano na altura do P1 (ponta baixa a {0} m); tracejado: o chão caindo {1} % para trás, que o P2 alcança com o enterro. Na usina, cada pilar sai com o comprimento que o terreno pede.",
+                    ? Tr.F("Medidas em metro. Chão plano na altura do P1 (ponta baixa a {0} m); tracejado: o chão caindo {1} % do P1 ao P2, a folga do catálogo, que o P2 alcança com o enterro. Na usina, cada pilar sai com o comprimento que o terreno pede.",
                         Milimetro(basica.LowEdge), Medida(Math.Round(declive * 100, 1)))
                     : Tr.F("Medidas em metro. Chão plano na altura do P1 (ponta baixa a {0} m). Na usina, cada pilar sai com o comprimento que o terreno pede.",
                         Milimetro(basica.LowEdge)))

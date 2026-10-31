@@ -183,7 +183,10 @@ public sealed record TableProfile(
         var geometria = TableGeometry.Local(Layout, Frame.Pillars(Layout), Frame);
         var pontaBaixa = StructureHeight.LowEdge(geometria, TiltRadians)!.Value;
 
-        if (!(pontaBaixa > 0))
+        // O fundo do módulo, e não a face de cima, tem que ficar acima do chão
+        // (revisão do 38.9: o P1 de 2,24 com 2,20 de enterro passava com o
+        // fundo 1,9 cm dentro do chão).
+        if (!(pontaBaixa - Layout.Module.Thickness * Math.Cos(TiltRadians) > 0))
         {
             return Tr.F(
                 "o P1 de {0} m, com {1} m de enterro, deixa a ponta baixa dos módulos a {2} m do chão: o módulo encosta no chão",

@@ -13,9 +13,9 @@ $script:CasosBifila = @('Testar-Bifila', 'Testar-BifilaP1')
 <#
     Testar-BifilaP1 (38.9): a GC800 da aba Fabricantes, com o P1 de 3,059 e o
     P2 de 3,888, num projeto com a faixa da PB em 0,30 a 0,80 m. A altura vem
-    do P1: no terreno de teste, nenhum dianteiro sai menor que 3,059 (com a
-    faixa do projeto sairiam com uns 2,5 m), os traseiros saem maiores, e o
-    P3 = topo - terreno fecha em todos.
+    do P1: no terreno de teste, os dianteiros ficam em volta de 3,059 (com a
+    faixa do projeto sairiam com uns 2,5 m), os traseiros saem maiores, o
+    comando diz a faixa pelo P1, e o P3 = topo - terreno fecha em todos.
 #>
 function Testar-BifilaP1 {
     param([string] $Desenho)
@@ -58,14 +58,15 @@ function Testar-BifilaP1 {
         return $false
     }
 
-    if ($r.Texto -notmatch 'CLIVUS_BIFILA_P1 pilares=(\d+) frente=(\d+) tras=(\d+) p1min=(-?[\d.]+) p2min=(-?[\d.]+) p3ok=(\d+) p3total=(\d+)') {
+    if ($r.Texto -notmatch 'CLIVUS_BIFILA_P1 pilares=(\d+) frente=(\d+) tras=(\d+) p1min=(-?[\d.]+) p2min=(-?[\d.]+) p1media=(-?[\d.]+) p3ok=(\d+) p3total=(\d+)') {
         $problemas.Add("clivus-bifila-p1: nao consegui ler os pilares em LISP. Veja $($r.Saida)")
         return $false
     }
 
     $np = [int] $Matches[1]; $frente = [int] $Matches[2]; $tras = [int] $Matches[3]
     $p1min = [double]::Parse($Matches[4], $inv); $p2min = [double]::Parse($Matches[5], $inv)
-    $p3ok = [int] $Matches[6]; $p3total = [int] $Matches[7]
+    $p1media = [double]::Parse($Matches[6], $inv)
+    $p3ok = [int] $Matches[7]; $p3total = [int] $Matches[8]
 
     $ok = $true
 
@@ -75,32 +76,16 @@ function Testar-BifilaP1 {
     }
 
     # A altura e a do P1: com a faixa do projeto (0,30) os dianteiros sairiam
-    # com uns 2,53 m. Onde o terreno forca a mesa para fora da faixa (o motor
-    # diz "ponta(s) baixa(s) fora"), um pilar pode sair abaixo do P1, como
-    # sempre foi com a faixa; nas mesas dentro dela, nenhum.
-    if ($p1min -lt 2.8 -or $p2min -le $p1min) {
-        $problemas.Add("clivus-bifila-p1: o menor dianteiro tem $p1min m e o menor traseiro $p2min m; com a altura do P1 (3,059) nenhum chega perto dos 2,53 da faixa do projeto. Veja $($r.Saida)")
+    # com uns 2,53 m; com a do P1, em volta de 3,06. Pilar por pilar nao (o
+    # motor segura a ponta baixa na borda do modulo, e com o chao subindo
+    # para tras o dianteiro sai menor que o P1): a media e o menor.
+    if ($p1media -lt 3.0 -or $p1min -lt 2.8 -or $p2min -le $p1min) {
+        $problemas.Add("clivus-bifila-p1: os dianteiros tem media de $p1media m e o menor $p1min m (o menor traseiro $p2min m); com a altura do P1 (3,059) a media fica em volta dele, longe dos 2,53 da faixa do projeto. Veja $($r.Saida)")
         $ok = $false
     }
 
     if ($r.Texto -notmatch 'Altura da estrutura: "Arctech 2P14 GC800": ponta baixa de 0,833 a 1,333 m, pelo P1 de 3,059 m') {
         $problemas.Add("clivus-bifila-p1: a linha da altura da estrutura (faixa de 0,833 a 1,333 m pelo P1) nao saiu. Veja $($r.Saida)")
-        $ok = $false
-    }
-
-    $dentro = 0
-    foreach ($m in [regex]::Matches($r.Texto, '(?m)^\s*F\d+\.\d+: (?<resto>[^\r\n]*?)de (?<min>\d+,\d+) a \d+,\d+ m')) {
-        if ($m.Groups['resto'].Value -match 'ponta\(s\) baixa\(s\) fora') { continue }
-        $dentro++
-        $menor = [double]::Parse($m.Groups['min'].Value.Replace(',', '.'), $inv)
-        if ($menor -lt 3.05) {
-            $problemas.Add("clivus-bifila-p1: uma mesa dentro da faixa tem pilar de $menor m, abaixo do P1 de 3,059. Veja $($r.Saida)")
-            $ok = $false
-        }
-    }
-
-    if ($dentro -lt 3) {
-        $problemas.Add("clivus-bifila-p1: so $dentro mesa(s) dentro da faixa para conferir o P1; esperava pelo menos 3. Veja $($r.Saida)")
         $ok = $false
     }
 

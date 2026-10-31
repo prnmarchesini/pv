@@ -139,14 +139,14 @@ public static class RowPipeline
         if (row.Tables.Count == 0)
             throw new ArgumentException("A fileira não tem mesa.", nameof(row));
 
-        // A altura de cada estrutura (38.9): o biposte com P1 traz a ponta
-        // baixa mínima dele. A corrente é uma só para a fileira, então ela
-        // resolve com a faixa mais exigente das suas mesas; na fileira de um
-        // tipo só, que é a de sempre, é a faixa dele.
+        // A altura de cada estrutura (38.9): o biposte com P1 traz a faixa da
+        // ponta baixa dele, e cada mesa da corrente é julgada pela sua (a
+        // junta, pela mais exigente das duas). É a mesma faixa que o Pintar e
+        // o Recalcular usam com a mesa sozinha (revisão do 38.9: com a faixa
+        // da fileira, a monoposte ao lado de um biposte saía certa aqui e
+        // marcada no Pintar).
         var config = settings.Configuration;
         var porMesa = geometries.Select(g => config.ForStructure(g, tiltRadians)).ToList();
-        if (porMesa.Any(c => c.MinLowEdge != config.MinLowEdge || c.MaxLowEdge != config.MaxLowEdge))
-            config = config with { MinLowEdge = porMesa.Max(c => c.MinLowEdge), MaxLowEdge = porMesa.Max(c => c.MaxLowEdge) };
 
         // 5.1 → 5.2, mesa a mesa: a orientação e o terreno na posição sem giro.
         var orientacoes = new List<RowOrientation>();
@@ -211,7 +211,11 @@ public static class RowPipeline
                 elos.Add(new ChainTable(
                     row.Tables[i].Label, vaos[i], geometries[i].Length,
                     amostras[i].LowEdge.Select(m => new ChainModule(m.Station, m.GroundZ)).ToList(),
-                    primeiroPilar[i], Chao(primeiroPilar[i]), ultimoPilar[i], Chao(ultimoPilar[i])));
+                    primeiroPilar[i], Chao(primeiroPilar[i]), ultimoPilar[i], Chao(ultimoPilar[i]))
+                {
+                    MinLowEdge = porMesa[i].MinLowEdge,
+                    MaxLowEdge = porMesa[i].MaxLowEdge,
+                });
             }
 
             solucao = RowSolver.Solve(elos, config, firstTip: firstTip, lastTip: lastTip);
@@ -238,7 +242,7 @@ public static class RowPipeline
             if (mudou < 0.005) break;
         }
 
-        var viaveis = semGiro.Select((a, i) => ViableElevations.Compute(a, geometries[i].Length, config, step)).ToList();
+        var viaveis = semGiro.Select((a, i) => ViableElevations.Compute(a, geometries[i].Length, porMesa[i], step)).ToList();
 
         // A mesa marcada diz o porquê com número; quando é um lombo que
         // nenhuma inclinação vence, diz também isso.
@@ -256,8 +260,9 @@ public static class RowPipeline
         {
             // O enterro T3 é da estrutura de CADA mesa (38.3): numa usina
             // mista, a bifila de 2,20 m e a monoposte de 1,50 não dividem o
-            // enterro do primeiro tipo. Tipo sem T3 fica com o da usina.
-            var daMesa = config.WithEmbedmentOf(geometries[i].Frame);
+            // enterro do primeiro tipo. Tipo sem T3 fica com o da usina. A
+            // faixa da ponta baixa também é a dela (38.9).
+            var daMesa = porMesa[i];
 
             var pilares = PillarCalculator.Compute(
                 geometries[i], row.Tables[i], orientacoes[i], tiltRadians, resolvidas[i], terrain, daMesa);

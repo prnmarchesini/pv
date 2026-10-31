@@ -432,8 +432,48 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     inteiro assentando a mesa na altura do P1 com a faixa do projeto abaixo dela, os P1/P2
     que não fecham (cada um com o motivo), o perfil v5 de ida e volta (e o v4 sem eles), o
     genérico com as peças, a biblioteca que guarda o removido e o aviso do hemisfério. No
-    nível 2, `clivus-bifila-p1`: a GC800 com P1 num projeto de 0,30 a 0,80; nas mesas dentro
-    da faixa nenhum pilar abaixo do P1, e a linha da altura da estrutura.
+    nível 2, `clivus-bifila-p1`: a GC800 com P1 num projeto de 0,30 a 0,80; os dianteiros
+    em volta do P1 (a média; com a faixa do projeto seriam uns 2,5 m), e a linha da altura
+    da estrutura.
+  - Pedidos durante a tela, no mesmo dia: "não consigo chegar nesses 80cm" (ele estava na
+    GC1000, cujo P1 dá 1,000 livre) — o campo **Livre sob o módulo** no Pórtico, ligado ao
+    P1: digitar 0,8 dá o P1 de 3,059; mudar o P1 muda o livre; o P2 fica. E "quero apagar as
+    mesas da biblioteca, tem duas inúteis lá" — o botão **Apagar da biblioteca** ao lado de
+    "Perfil salvo" (o arquivo vai para a subpasta "removidos").
+  - Revisão (subagente, worktree isolada), corrigido:
+    - O objeto mais curto que a mesa fazia a mesa entrar na vizinha sem aviso (três objetos
+      de 17,5 m com 0,35 m entre eles: 0,752 m de uma em cima da outra). Agora sai a
+      divergência "mesa em cima da vizinha", marcada no desenho, com o quanto e o conselho
+      de trocar o alinhamento.
+    - A fileira resolvia com a faixa mais exigente das suas mesas, e o Pintar e o Recalcular
+      com a da mesa: numa fileira mista (monoposte ao lado de biposte com P1) a monoposte
+      saía certa na fileira e com 14 módulos fora no Pintar. Agora cada mesa da corrente tem
+      a sua faixa (`ChainTable.MinLowEdge/MaxLowEdge`), e a junta é julgada pela mais
+      exigente das duas: a fileira e a mesa sozinha contam os mesmos módulos fora. Na
+      fileira de um tipo só, nada muda.
+    - Na fileira norte-sul, o ruído de desenho no eixo (89,99° e 90,01°) trocava a "direita"
+      de ponta entre as mesas: a direita agora sai uma só, do eixo da maioria.
+    - "O P1 é o dianteiro mais curto" era falso: o motor segura a ponta baixa na borda do
+      módulo, e com o chão subindo para trás o dianteiro sai menor que o P1 (2,98 com 10 %).
+      As frases dizem isso agora, e o nível 2 confere a média dos dianteiros, e não pilar por
+      pilar.
+    - "Os 0,300 cobrem o chão caindo até 10 %" é o critério do catálogo, medido do P1 ao P2;
+      na usina, com a ponta baixa presa na borda do módulo, a folga cobre um pouco menos (uns
+      7,8 %). As frases dizem que é a folga do catálogo.
+    - O ângulo reto em planta com 3° de folga recusava retângulo 3D perfeito inclinado na
+      rampa (20° com 15 % dava 86,9°): a folga é 8°, e o losango continua recusado.
+    - "A mesa tem 0,053 m a mais que o objeto" saía para o objeto 3D na rampa (o D6D4), que é
+      a mesma mesa: a diferença só aparece fora da folga da rampa.
+    - O P1 que deixava o fundo do módulo dentro do chão passava (2,24 com 2,20 de enterro): a
+      conferência é pelo fundo do módulo.
+    - A latitude no Conforme objetos ganhou a proteção que tem nas Configurações; o registro
+      da área sai na versão 1 com o centro (o plugin de antes lê); sem a MF1, a cota do P1 e
+      a do T3 caíam na mesma linha do corte.
+    - "Usar esta estrutura" não troca mais o nome da mesa sozinho (a mesa do desenho é achada
+      pelo nome do perfil): o recado diz onde mudar.
+    - Notado e mantido: o genérico com T3 de 2,20 (o P1 inclui o enterro; quem tem outro
+      solo muda o T3 e o P1) e o Remover tirando o perfil da biblioteca (é o que o Renan
+      pediu; o recado avisa).
 - 40.2, refeito depois da tela (30/10/2026). O Renan escolheu 80 objetos: 78 viravam mesa e
   "Nada foi gerado", porque pelo Z deles os objetos olhavam para o sul e o projeto para o
   norte. Pedidos: "o objeto do cliente está em 2D, o eixo Z deve estar cagado, então gere a
@@ -554,16 +594,15 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
    abrir a janela, escolher esse módulo na lista: os dados elétricos vêm junto.
 9. **Fabricantes, P1 e P2 (38.9):** janela de Mesa › aba **Fabricantes**: o primeiro
    cartão é o biposte genérico, depois as duas da Arctech. "Usar esta estrutura" na GC800: a
-   aba Biposte abre com o nome "Arctech 2P14 GC800" (o campo Nome está no alto da aba) e, no
-   Pórtico, **P1 3,059**, MF1 1,244 (prende a 0,447 do topo do P1), **P2 3,888**, MF2 1,209
-   (a 0,773). Embaixo: a ponta baixa a 0,833 (0,800 livres sob o módulo), a faixa que vale na
-   usina e a folga do P2 (10 % para trás). A vista lateral mostra cada peça com o nome e a
-   medida, o chão caindo e o enterro cortado. Mudar o P1 para 3,2: a ponta baixa sobe, e a
-   vista acompanha. Apagar só o P1: o recado pede os dois juntos. Usar a GC1000: P1 3,259,
-   P2 4,388, 20 % para trás. "Usar este" no genérico: as peças de referência, sem tirante, e
-   o nome não muda. Salvar no desenho, fechar e reabrir: o P1 e o P2 continuam. Processar
-   uma área: a linha "Altura da estrutura" diz a faixa pelo P1, e os pilares dianteiros saem
-   com o P1 ou mais.
+   aba Biposte abre (o nome não muda sozinho; o campo Nome está no alto da aba) e, no
+   Pórtico, **P1 3,059**, **Livre sob o módulo 0,800**, MF1 1,244 (prende a 0,447 do topo do
+   P1), **P2 3,888**, MF2 1,209 (a 0,773). Embaixo, a faixa que vale na usina. A vista lateral
+   mostra cada peça com o nome e a medida, a altura livre, o chão caindo da folga do P2 e o
+   enterro cortado. Na GC1000 (livre 1,000), digitar 0,8 no Livre: o P1 vira 3,059. Mudar o
+   P1 para 3,2: o Livre sobe junto, e a vista acompanha. Apagar só o P1: o recado pede os
+   dois juntos. "Usar este" no genérico: as peças de referência, sem tirante. Salvar no
+   desenho, fechar e reabrir: o P1 e o P2 continuam. Processar uma área: a linha "Altura da
+   estrutura" diz a faixa pelo P1.
 10. **Módulos no servidor do Clivus (38.8):** sem `CLIVUS_SERVICO` e com a
     `CLIVUS_SERVIDOR_CHAVE`, abrir a janela de Mesa: embaixo do modelo, "Módulos do servidor
     do Clivus: 3". Carregar .PAN › `JAM66D46-720_LB.PAN` › "Cadastrar agora?" › Sim: o recado
@@ -579,9 +618,11 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     azimute. No desenho do Panamá, com Norte, aparece em vermelho o aviso do hemisfério
     norte; com Sul, some. Na janela de Mesa, embaixo da inclinação, a frase diz para onde os
     módulos olham.
-12. **A lista de estruturas (38.9):** Configurações › Estruturas: Remover "Mesa 28 módulos 2
-    2" (e as outras que voltavam), Salvar no desenho. A linha de comando diz que ela saiu
-    também da biblioteca. Reabrir as Configurações: não volta.
+12. **A lista de estruturas e a biblioteca (38.9):** Configurações › Estruturas: Remover
+    "Mesa 28 módulos 2 2" (e as outras que voltavam), Salvar no desenho. A linha de comando
+    diz que ela saiu também da biblioteca. Reabrir as Configurações: não volta. Na janela de
+    Mesa, primeira aba: escolher um perfil em "Perfil salvo" › **Apagar da biblioteca**: ele
+    some da lista.
 13. **Áreas (41.1):** num desenho com várias áreas e mesas (o Aurora com as 7), Implantação ›
     botão pequeno **Áreas**: uma linha por área e o Total, que bate com Edição › Recontar.
     Clicar numa área: o resumo embaixo (tipos de mesa, pilares e metros, ocupação). Zoom (ou

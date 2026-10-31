@@ -174,6 +174,27 @@ internal sealed class JanelaDeMesa : Window
     private readonly TextBox _bfP2 = Campo();
     private readonly TextBlock _bfAlturaBasica = new() { FontSize = 11, Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap };
 
+    // A altura livre sob o módulo, na ponta baixa (38.9; Renan, 30/10/2026:
+    // "não consigo chegar nesses 80cm"): o mesmo grau de liberdade do P1, dito
+    // como o fabricante (a GC800 é a de 0,800). Digitar nela muda o P1; mudar
+    // o P1 muda ela. O P2 fica como está.
+    private readonly TextBox _bfLivre = Campo();
+
+    /// <summary>O último perfil que fechou, para a conta da altura livre enquanto o usuário digita.</summary>
+    private TableProfile? _ultimoPerfil;
+
+    // Apagar o perfil escolhido da biblioteca (Renan, 30/10/2026: "quero
+    // apagar as mesas da biblioteca, tem duas inúteis lá e não consigo
+    // apagar"). O arquivo vai para a subpasta dos removidos, não some.
+    private readonly Button _apagarSalvo = new()
+    {
+        Content = Tr.T("Apagar da biblioteca"),
+        Height = 24,
+        Padding = new Thickness(8, 0, 8, 0),
+        HorizontalAlignment = HorizontalAlignment.Left,
+        ToolTip = Tr.T("Tira o perfil escolhido em \"Perfil salvo\" da biblioteca da pasta do usuário: ele some desta lista e da lista das Configurações. O arquivo vai para a subpasta \"removidos\", de onde pode voltar à mão."),
+    };
+
     /// <summary>A configuração do projeto: a faixa da ponta baixa, o enterro e para onde as mesas olham.</summary>
     private readonly SystemConfiguration _projeto;
 
@@ -275,7 +296,7 @@ internal sealed class JanelaDeMesa : Window
         // Mais larga e mais alta (38.9): o biposte cabe em duas colunas e a
         // vista lateral, com as peças cotadas, fica legível.
         Width = 1400;
-        Height = 860;
+        Height = 900;
         MinWidth = 1100;
         MinHeight = 600;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -614,10 +635,11 @@ internal sealed class JanelaDeMesa : Window
 
     /// <summary>
     /// Uma estrutura de fabricante (38.7) na aba do biposte, como se o cartão
-    /// do biposte tivesse sido clicado: a monoposte fica guardada. O nome passa
-    /// a ser o da estrutura (e muda na aba, 38.9); o módulo não muda, e os vãos
-    /// escritos do fabricante só ficam com a largura do módulo dele, senão a
-    /// mesa vai pelo vão-alvo, como a semente do 38.5.
+    /// do biposte tivesse sido clicado: a monoposte fica guardada. O nome não
+    /// muda sozinho (a mesa do desenho é achada pelo nome; revisão do 38.9):
+    /// muda-se no campo Nome da aba. O módulo também não, e os vãos escritos do
+    /// fabricante só ficam com a largura do módulo dele, senão a mesa vai pelo
+    /// vão-alvo, como a semente do 38.5.
     /// </summary>
     private void UsarDoFabricante(VendorStructure estrutura)
     {
@@ -627,11 +649,11 @@ internal sealed class JanelaDeMesa : Window
 
         if (!mesmaLargura) perfil = perfil with { Frame = perfil.Frame with { PillarSpans = null } };
 
-        UsarNoBiposte(perfil, perfil.Name);
+        UsarNoBiposte(perfil, nome: null);
 
         _recadoDosFabricantes.Text = mesmaLargura
-            ? Tr.F("A {0} está na aba Biposte, com o nome \"{1}\": mude lá o que for seu.", estrutura.Name, perfil.Name)
-            : Tr.F("A {0} está na aba Biposte, com o nome \"{1}\" e o vão-alvo: os vãos dela são para o módulo de {2} m de largura.", estrutura.Name, perfil.Name, Numero(estrutura.Profile.Layout.Module.Width));
+            ? Tr.F("A {0} está na aba Biposte; o nome continua \"{1}\" (mude no campo Nome, no alto da aba).", estrutura.Name, _nome.Text)
+            : Tr.F("A {0} está na aba Biposte, com o vão-alvo: os vãos dela são para o módulo de {1} m de largura. O nome continua \"{2}\" (mude no campo Nome).", estrutura.Name, Numero(estrutura.Profile.Layout.Module.Width), _nome.Text);
     }
 
     /// <summary>O biposte genérico (38.9) na aba do biposte; o nome fica o que estava.</summary>
@@ -804,6 +826,7 @@ internal sealed class JanelaDeMesa : Window
 
         Secao(Tr.T("Perfil"));
         Linha(Tr.T("Perfil salvo"), _salvos);
+        pilha.Children.Add(_apagarSalvo);
         Linha(Tr.T("Nome"), _nome);
 
         Secao(Tr.T("Módulo"));
@@ -888,7 +911,8 @@ internal sealed class JanelaDeMesa : Window
         // francesa MF1, pilar P2, Mão francesa MF2, aí tem as terças, as
         // tesouras"), com o P1 e o P2 digitados: a altura é da estrutura.
         Secao(Tr.T("Pórtico: pilares e mãos francesas"));
-        Linha(Tr.T("P1: pilar dianteiro, o menor (m)"), _bfP1, Tr.T("O pilar dianteiro inteiro, com o enterro T3, como o fabricante cota no chão plano (ex.: 3,059). É a altura da estrutura: na usina, a ponta baixa nunca fica abaixo da que ele dá, e cada pilar sai com o comprimento que o terreno pede. Em branco, com o P2: a altura vem da faixa do projeto."));
+        Linha(Tr.T("P1: pilar dianteiro, o menor (m)"), _bfP1, Tr.T("O pilar dianteiro inteiro, com o enterro T3, como o fabricante cota no chão plano (ex.: 3,059). É a altura da estrutura: na usina, a faixa da ponta baixa começa na que ele dá, e cada pilar sai com o comprimento que o terreno pede. Em branco, com o P2: a altura vem da faixa do projeto."));
+        Linha(Tr.T("Livre sob o módulo (m)"), _bfLivre, Tr.T("A altura livre do chão plano ao fundo do módulo, na ponta baixa, como o fabricante dá o nome à estrutura (a GC800 é a de 0,800). É o mesmo que o P1: digitar aqui muda o P1, e mudar o P1 muda aqui. O P2 fica como está."));
         Linha(Tr.T("MF1: mão francesa do P1 (m)"), _bfMaoFrente, Tr.T("O comprimento da mão francesa do pilar dianteiro (ex.: 1,244). Zero: sem mão francesa."));
         Linha(Tr.T("MF1: abaixo do topo do P1 (m)"), _bfMaoFrenteAbaixo, Tr.T("Onde a MF1 prende no P1, medido do topo do pilar para baixo (ex.: 0,447). A outra ponta vai na tesoura, onde o comprimento alcança. A vista lateral mostra a cota."));
         Linha(Tr.T("P2: pilar traseiro, o maior (m)"), _bfP2, Tr.T("O pilar traseiro inteiro, como o fabricante cota (ex.: 3,888). No chão plano ele precisa do P1 mais a subida da tesoura entre os dois; o que passar disso é a folga para o chão caindo para trás."));
@@ -935,6 +959,8 @@ internal sealed class JanelaDeMesa : Window
         foreach (var (campo, _) in CamposDaBifila()) campo.TextChanged += (_, _) => Recalcular();
         _bfP1.TextChanged += (_, _) => Recalcular();
         _bfP2.TextChanged += (_, _) => Recalcular();
+        _bfLivre.TextChanged += (_, _) => Protegido(LivreMudou, Tr.T("mudar a altura livre"));
+        _apagarSalvo.Click += (_, _) => Protegido(ApagarSalvo, Tr.T("apagar o perfil da biblioteca"));
         _bfTiranteVaos.TextChanged += (_, _) => Recalcular();
 
         // O nome é um só, nas duas abas (38.9).
@@ -1243,6 +1269,62 @@ internal sealed class JanelaDeMesa : Window
             RegistroDeDiagnostico.Registrar($"Não consegui abrir o perfil \"{nome}\".", erro);
             Avisar(Tr.F("Não consegui abrir o perfil \"{0}\": {1}", nome, erro.Message));
         }
+    }
+
+    /// <summary>
+    /// O perfil escolhido em "Perfil salvo" sai da biblioteca (Renan,
+    /// 30/10/2026: "quero apagar as mesas da biblioteca"): o arquivo vai para a
+    /// subpasta dos removidos. A mesa que está nos campos fica como está.
+    /// </summary>
+    private void ApagarSalvo()
+    {
+        if ((_salvos.SelectedItem as ComboBoxItem)?.Tag is not string nome)
+        {
+            Avisar(Tr.T("Escolha em \"Perfil salvo\" o perfil que sai da biblioteca."));
+            return;
+        }
+
+        if (!_perfis.MoveToRemoved(nome))
+        {
+            Avisar(Tr.F("O perfil \"{0}\" já não está na biblioteca.", nome));
+            ListarSalvos();
+            return;
+        }
+
+        _preenchendo = true;
+        try
+        {
+            ListarSalvos();
+        }
+        finally
+        {
+            _preenchendo = false;
+        }
+
+        _recado.Text = Tr.F("O perfil \"{0}\" saiu da biblioteca (o arquivo foi para a subpasta \"{1}\"). A mesa nos campos continua como está.", nome, TableProfileStore.PastaDosRemovidos);
+    }
+
+    /// <summary>
+    /// A altura livre digitada vira o P1 (38.9): o P1 que dá essa altura no
+    /// chão plano, com o T3, a inclinação e o módulo da mesa. Só quando é o
+    /// usuário que digita nela; quando a janela a enche pelo P1, nada.
+    /// </summary>
+    private void LivreMudou()
+    {
+        if (_preenchendo || !_bfLivre.IsKeyboardFocusWithin) return;
+        if (_ultimoPerfil is not { Frame.Bifila: not null } perfil || perfil.Frame.MinEmbedment is not { } t3) return;
+        if (!NumberInput.TryParseMeasure(_bfLivre.Text, out var livre) || livre <= 0) return;
+
+        var geometria = TableGeometry.Local(perfil.Layout, perfil.Frame.Pillars(perfil.Layout), perfil.Frame);
+        var pontaBaixa = livre + perfil.Layout.Module.Thickness * Math.Cos(perfil.TiltRadians);
+        var p1 = StructureHeight.FrontPillarFor(geometria, perfil.TiltRadians, pontaBaixa, t3);
+
+        // Sem P2 ainda (o biposte de antes do 38.9), o do chão plano: o P1
+        // mais a subida da tesoura entre os dois pilares.
+        if (string.IsNullOrWhiteSpace(_bfP2.Text) && geometria.RearPillarRow is { } tras)
+            _bfP2.Text = Numero(Math.Round(p1 + (tras - geometria.PillarRow) * Math.Sin(perfil.TiltRadians), 3));
+
+        _bfP1.Text = Numero(Math.Round(p1, 3));
     }
 
     private void Preencher(TableProfile perfil)
@@ -1560,6 +1642,7 @@ internal sealed class JanelaDeMesa : Window
             var pilares = perfil.Frame.Pillars(perfil.Layout);
             var geometria = TableGeometry.Local(perfil.Layout, pilares, perfil.Frame);
 
+            _ultimoPerfil = perfil;
             var basica = AlturaBasica(perfil);
 
             _planta.Mostrar(geometria);
@@ -2064,6 +2147,11 @@ internal sealed class JanelaDeMesa : Window
         {
             var basica = perfil.PillarsAtBasicHeight(_projeto);
 
+            // A altura livre acompanha o P1, menos quando é ela que está sendo
+            // digitada (o P1 é que acompanha ela).
+            if (!_bfLivre.IsKeyboardFocusWithin)
+                _bfLivre.Text = Milimetro(basica.LowEdge - perfil.Layout.Module.Thickness * Math.Cos(perfil.TiltRadians));
+
             if (b.FrontPillar is { } p1 && b.RearPillar is { } p2 && basica.P2 is { } p2NoPlano)
             {
                 var geometria = TableGeometry.Local(perfil.Layout, perfil.Frame.Pillars(perfil.Layout), perfil.Frame);
@@ -2072,18 +2160,22 @@ internal sealed class JanelaDeMesa : Window
 
                 // O recado curto embaixo do pórtico (o formulário cabe em duas
                 // colunas e a vista lateral fica larga); a conta inteira na dica.
+                // O P1 é o pilar do chão plano: no terreno, o motor segura a
+                // ponta baixa na borda do módulo, e o dianteiro sai menor que
+                // o P1 com o chão subindo para trás (revisão do 38.9).
                 var texto = Tr.F(
-                    "No chão plano, o P1 de {0} m com {1} m enterrados põe a ponta baixa a {2} m do chão ({3} m livres sob o módulo). Na usina, a ponta baixa vai de {4} a {5} m, e cada pilar sai com o comprimento que o terreno pede: o P1 é o dianteiro mais curto.",
+                    "No chão plano, o P1 de {0} m com {1} m enterrados põe a ponta baixa a {2} m do chão ({3} m livres sob o módulo). Na usina, a ponta baixa vai de {4} a {5} m, e cada pilar sai com o comprimento que o terreno pede: com o chão subindo para trás, o dianteiro sai menor que o P1; caindo, maior.",
                     Milimetro(p1), Numero(basica.Embedment), Milimetro(basica.LowEdge), Milimetro(livre), Milimetro(naUsina.MinLowEdge), Milimetro(naUsina.MaxLowEdge));
 
                 var folga = p2 - p2NoPlano > 0.0005 && StructureHeight.RearSlopeAllowance(geometria, perfil.TiltRadians) is { } declive
-                    ? (Tr.F("No chão plano o P2 precisa de {0} m; os {1} m a mais cobrem o chão caindo até {2} % para trás.", Milimetro(p2NoPlano), Milimetro(p2 - p2NoPlano), Numero(Math.Round(declive * 100, 1))),
-                        Tr.F("P2: folga para o chão caindo {0} % para trás.", Numero(Math.Round(declive * 100, 1))))
+                    ? (Tr.F("No chão plano o P2 precisa de {0} m; os {1} m a mais são a folga do catálogo para o chão caindo {2} % para trás, medido do P1 ao P2. Na usina, cada pilar sai com o comprimento que o terreno pede.", Milimetro(p2NoPlano), Milimetro(p2 - p2NoPlano), Numero(Math.Round(declive * 100, 1))),
+                        Tr.F("P2: folga do catálogo, {0} % de chão caindo do P1 ao P2.", Numero(Math.Round(declive * 100, 1))))
                     : (Tr.T("O P2 é o do chão plano, sem folga para o chão caindo para trás."), Tr.T("P2: o do chão plano, sem folga."));
 
-                _bfAlturaBasica.Text = Tr.F("Ponta baixa a {0} m ({1} m livres); na usina, de {2} a {3} m.", Milimetro(basica.LowEdge), Milimetro(livre), Milimetro(naUsina.MinLowEdge), Milimetro(naUsina.MaxLowEdge))
-                    + " " + folga.Item2;
-                _bfAlturaBasica.ToolTip = texto + " " + folga.Item1;
+                // Uma linha só: o formulário cabe em duas colunas e a vista
+                // lateral fica larga; a folga do P2 está na dica e no desenho.
+                _bfAlturaBasica.Text = Tr.F("Na usina, a ponta baixa vai de {0} a {1} m.", Milimetro(naUsina.MinLowEdge), Milimetro(naUsina.MaxLowEdge));
+                _bfAlturaBasica.ToolTip = texto + " " + folga.Item1 + " " + folga.Item2;
             }
             else
             {

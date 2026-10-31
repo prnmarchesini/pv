@@ -337,9 +337,85 @@ public class VendorStructuresTests
         Assert.Contains("maior que o P1", Com(3.059, 3.0).WhyInvalid, StringComparison.Ordinal);
         Assert.Contains("T3", (Com(3.059, 3.888) with { Frame = Com(3.059, 3.888).Frame with { MinEmbedment = null } }).WhyInvalid, StringComparison.Ordinal);
         Assert.Contains("encosta no chão", Com(2.0, 3.0).WhyInvalid, StringComparison.Ordinal);
+
+        // O fundo do módulo, e não a face de cima (revisão do 38.9): o P1 de
+        // 2,24 dá a face a 1,4 cm do chão e o fundo 1,9 cm dentro dele.
+        Assert.Contains("encosta no chão", Com(2.24, 3.0).WhyInvalid, StringComparison.Ordinal);
         Assert.Contains("não alcança", Com(3.059, 3.5).WhyInvalid, StringComparison.Ordinal);
         Assert.Null(Com(3.059, 3.588).WhyInvalid);
         Assert.Null(Com(3.2, 4.5).WhyInvalid);
+    }
+
+    /// <summary>
+    /// A altura livre digitada vira o P1 (38.9: "não consigo chegar nesses
+    /// 80cm"): 0,800 sob o módulo é o P1 de 3,059 da GC800, e a conta volta.
+    /// </summary>
+    [Theory]
+    [Trait("Etapa", "38")]
+    [InlineData(0.800, 3.059)]
+    [InlineData(1.000, 3.259)]
+    public void AAlturaLivreViraOP1(double livre, double p1)
+    {
+        var perfil = VendorStructures.All[0].Profile;
+        var geometria = TableGeometry.Local(perfil.Layout, perfil.Frame.Pillars(perfil.Layout), perfil.Frame);
+        var pontaBaixa = livre + perfil.Layout.Module.Thickness * Math.Cos(perfil.TiltRadians);
+
+        var calculado = StructureHeight.FrontPillarFor(geometria, perfil.TiltRadians, pontaBaixa, 2.2);
+
+        Assert.Equal(p1, calculado, Ouro);
+        var comEsse = perfil with { Frame = perfil.Frame with { Bifila = perfil.Frame.Bifila! with { FrontPillar = calculado } } };
+        var geometriaDele = TableGeometry.Local(comEsse.Layout, comEsse.Frame.Pillars(comEsse.Layout), comEsse.Frame);
+        Assert.Equal(pontaBaixa, StructureHeight.LowEdge(geometriaDele, comEsse.TiltRadians)!.Value, 12);
+    }
+
+    /// <summary>
+    /// Fileira mista, a monoposte sem P1 ao lado da GC800 com P1, projeto de
+    /// 0,30 a 0,80 (revisão do 38.9): cada mesa é julgada pela sua faixa, e a
+    /// mesa resolvida sozinha com as cotas da fileira (o Pintar) conta os
+    /// mesmos módulos fora da faixa que a fileira. Antes a fileira usava a
+    /// faixa do P1 para as duas: a monoposte saía sem módulo fora na fileira e
+    /// com 14 no Pintar. (A marca em magenta segue as regras de cada um: na
+    /// fileira, módulo enterrado; no Pintar, a regra 4.)
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void NaFileiraMistaCadaMesaEJulgadaPelaSuaFaixa()
+    {
+        var gc800 = VendorStructures.All[0].Profile;
+        var mono = BifilaReference.Profile(BifilaVariant.Gc800) with { Name = "mono", Frame = new TableFrame(3.00, 1.50, 0.15, 0.07, 3.50, 0.851) };
+        var tilt = gc800.TiltRadians;
+        var g0 = TableGeometry.Local(mono.Layout, mono.Frame.Pillars(mono.Layout), mono.Frame);
+        var g1 = TableGeometry.Local(gc800.Layout, gc800.Frame.Pillars(gc800.Layout), gc800.Frame);
+        var fundo = g0.Depth * Math.Cos(tilt);
+
+        PlacedTable Celula(int n, double x0, int tipo, double comprimento)
+        {
+            Point3[] cantos = [new(x0, 0, 0), new(x0 + comprimento, 0, 0), new(x0 + comprimento, -fundo, 0), new(x0, -fundo, 0)];
+            return new PlacedTable(1, n, cantos[0], 0, comprimento, fundo, cantos, PartlyOutside: false, Kind: tipo);
+        }
+
+        var a = Celula(1, 0, 0, g0.Length);
+        var b = Celula(2, g0.Length + 0.5, 1, g1.Length);
+        var projeto = ProjectSettings.Default with
+        {
+            Configuration = ProjectSettings.Default.Configuration with { FacingAzimuthRadians = 0, MinLowEdge = 0.30, MaxLowEdge = 0.80 },
+        };
+
+        Point3 P(double x, double y) => new(x, y, 700 + 0.03 * x);
+        var terreno = new Tin([new Triangle(P(-100, -100), P(400, -100), P(400, 400)), new Triangle(P(-100, -100), P(400, 400), P(-100, 400))]);
+
+        var fileira = RowPipeline.ProcessRow(new PlanRow(1, [a, b]), [g0, g1], tilt, terreno, projeto);
+        var naFileira = fileira.Tables[0];
+        var sozinha = RowPipeline.ProcessFixed(a, g0, tilt, terreno, projeto.ForTable(mono.Frame),
+            naFileira.Solved.StartElevation, naFileira.Solved.EndElevation, null, naFileira.Solved.Marked).Tables[0];
+
+        Assert.Equal(naFileira.Report.ModulesOutsideBand, sozinha.Report.ModulesOutsideBand);
+
+        // E a GC800 da fileira fica na faixa do P1.
+        var daGc800 = fileira.Tables[1];
+        var sozinhaGc800 = RowPipeline.ProcessFixed(b, g1, tilt, terreno, projeto.ForTable(gc800.Frame),
+            daGc800.Solved.StartElevation, daGc800.Solved.EndElevation, null, daGc800.Solved.Marked).Tables[0];
+        Assert.Equal(daGc800.Report.ModulesOutsideBand, sozinhaGc800.Report.ModulesOutsideBand);
     }
 
     /// <summary>O perfil com o P1 e o P2 sai na versão 5 e volta igual; sem eles, na 4, como antes.</summary>

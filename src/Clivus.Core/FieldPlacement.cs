@@ -190,6 +190,17 @@ public static class FieldPlacement
         // c1 quando corre contra (TablePlacement.Montar).
         bool XComEixo(FieldFootprint f) => (sy * f.AxisVector.X - sx * f.AxisVector.Y) > 0;
 
+        // A direita é uma só para a usina, a do eixo da maioria: com ela por
+        // pegada, numa fileira norte-sul o ruído de desenho (89,99° e 90,01°)
+        // trocava a ponta de uma mesa para a outra (revisão do 38.9). Cada
+        // pegada anda no sentido do seu eixo mais perto dela.
+        var direita = RightDirection(survey.ReferenceAxis);
+        (double X, double Y) DireitaDe(FieldFootprint f)
+        {
+            var (ax, ay) = f.AxisVector;
+            return ax * direita.X + ay * direita.Y >= 0 ? (ax, ay) : (-ax, -ay);
+        }
+
         // O lugar, em coordenadas locais, que tem que cair no ponto de
         // alinhamento do objeto: o meio, ou a ponta da direita ou da esquerda
         // (da área dos módulos, quando o objeto é ela).
@@ -199,7 +210,7 @@ public static class FieldPlacement
             var layout = kinds[c.Kind].Layout;
             var (inicio, fim) = c.ModulesOnly ? (layout.LeftMargin, g.Length - layout.RightMargin) : (0.0, g.Length);
 
-            var (rx, ry) = RightDirection(c.Footprint.Axis);
+            var (rx, ry) = DireitaDe(c.Footprint);
             var (ax, ay) = c.Footprint.AxisVector;
             var xLocalParaADireita = XComEixo(c.Footprint) == (rx * ax + ry * ay > 0);
 
@@ -216,7 +227,7 @@ public static class FieldPlacement
         // O ponto de alinhamento do objeto, em planta.
         Point3 NoObjeto(FieldFootprint f)
         {
-            var (rx, ry) = RightDirection(f.Axis);
+            var (rx, ry) = DireitaDe(f);
             var lado = alignment switch { FieldAlignment.Right => 1, FieldAlignment.Left => -1, _ => 0 };
             return new Point3(f.Center.X + lado * rx * f.Length / 2, f.Center.Y + lado * ry * f.Length / 2, 0);
         }
@@ -285,7 +296,56 @@ public static class FieldPlacement
             }
         }
 
+        problemas.AddRange(Sobrepostas(usina, fileiras, porId, geometrias));
+
         return new FieldPlant(usina, geometrias, problemas, rotulos, desvios);
+    }
+
+    /// <summary>Acima disto, duas mesas vizinhas contam como uma em cima da outra: 1 cm.</summary>
+    public const double OverlapTolerance = 0.01;
+
+    /// <summary>
+    /// As mesas que ficaram uma em cima da outra na fileira (revisão do 38.9):
+    /// com o objeto mais curto que a mesa, a diferença sobra para o lado do
+    /// alinhamento, e se o vão entre os objetos for menor que ela, a mesa
+    /// entra na vizinha. Em planta, pelo comprimento inteiro de cada mesa ao
+    /// longo do eixo da fileira.
+    /// </summary>
+    private static IEnumerable<FieldIssue> Sobrepostas(
+        ProcessedPlant usina, IReadOnlyList<FieldRow> fileiras, IReadOnlyDictionary<string, FieldMatch> porId, IReadOnlyList<TableGeometry> geometrias)
+    {
+        for (var r = 0; r < fileiras.Count && r < usina.Rows.Count; r++)
+        {
+            var mesas = usina.Rows[r].Tables;
+            if (mesas.Count < 2) continue;
+
+            var (ux, uy) = porId[fileiras[r].Tables[0].Id].Footprint.AxisVector;
+
+            // O trecho que cada mesa ocupa ao longo do eixo, com o objeto dela.
+            var trechos = new List<(double De, double Ate, string Id, string Rotulo)>();
+            for (var n = 0; n < mesas.Count && n < fileiras[r].Tables.Count; n++)
+            {
+                var g = geometrias[porId[fileiras[r].Tables[n].Id].Kind];
+                var ao = new[] { new Point3(0, 0, 0), new Point3(g.Length, 0, 0), new Point3(g.Length, g.Depth, 0), new Point3(0, g.Depth, 0) }
+                    .Select(mesas[n].Pillars.Placement.Apply)
+                    .Select(p => p.X * ux + p.Y * uy)
+                    .ToList();
+                trechos.Add((ao.Min(), ao.Max(), fileiras[r].Tables[n].Id, mesas[n].Cell.Label));
+            }
+
+            trechos.Sort((a, b) => a.De.CompareTo(b.De));
+
+            for (var n = 1; n < trechos.Count; n++)
+            {
+                var emCima = trechos[n - 1].Ate - trechos[n].De;
+                if (emCima <= OverlapTolerance) continue;
+
+                var f = porId[trechos[n].Id].Footprint;
+                yield return new FieldIssue(trechos[n].Id, FieldIssueKind.TableOverlap, Tr.F(
+                    "{0} ({1}): a mesa {2} entra {3:0.000} m na mesa {4}: os objetos são mais curtos que a mesa e o vão entre eles não cabe a diferença. Troque o alinhamento ou confira os objetos.",
+                    trechos[n].Id, f.Layer, trechos[n].Rotulo, emCima, trechos[n - 1].Rotulo));
+            }
+        }
     }
 
     /// <summary>

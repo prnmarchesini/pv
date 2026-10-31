@@ -82,6 +82,9 @@ public enum FieldIssueKind
 
     /// <summary>A mesa desenhada ficou longe do lugar no objeto (40.2): o motor a sentou no terreno com outra rampa.</summary>
     Deviation,
+
+    /// <summary>A mesa entrou na vizinha da fileira (o objeto mais curto que ela, revisão do 38.9): ela sai, com aviso.</summary>
+    TableOverlap,
 }
 
 /// <summary>Uma divergência: o objeto (ou "*" quando é de todos), o tipo e a frase.</summary>
@@ -122,7 +125,7 @@ public sealed record FieldSurvey(
 /// retângulo 3D (18,502 × 4,788 m, 10° em torno do eixo, o eixo acompanhando
 /// a rampa da fileira): visto de cima, ele tem 4,715 m de largura e é um
 /// paralelogramo, e não um retângulo, quando a fileira tem rampa. Por isso a
-/// largura é a distância entre os lados maiores, e o ângulo reto tem folga
+/// largura é a distância entre os lados maiores, e o ângulo reto tem a folga
 /// de <see cref="RightAngleTolerance"/>.
 /// </summary>
 public static class FieldObjects
@@ -145,12 +148,14 @@ public static class FieldObjects
     public const double AngleTolerance = 0.5 * Math.PI / 180;
 
     /// <summary>
-    /// Quanto o retângulo pode fugir do ângulo reto em planta: três graus. O
+    /// Quanto o retângulo pode fugir do ângulo reto em planta: oito graus. O
     /// retângulo 3D inclinado na rampa da fileira aparece de cima como
-    /// paralelogramo, e o desvio cresce com a rampa (um grau a 10 %, com a
-    /// mesa a 10°).
+    /// paralelogramo, e o desvio cresce com a inclinação e a rampa: 1° com a
+    /// mesa a 10° numa rampa de 10 %, 3,1° a 20° com 15 %, 4,9° a 30° com 15 %
+    /// (a revisão do 38.9 achou os três últimos recusados com os 3° de antes).
+    /// Um losango de verdade passa longe disso.
     /// </summary>
-    public const double RightAngleTolerance = 3.0 * Math.PI / 180;
+    public const double RightAngleTolerance = 8.0 * Math.PI / 180;
 
     /// <summary>Dois objetos com o centro a menos disto são o mesmo lugar: 5 cm.</summary>
     public const double SamePlace = 0.05;
