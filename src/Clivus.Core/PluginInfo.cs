@@ -542,6 +542,13 @@ public static partial class PluginInfo
     public const string ComandoBifilaExemploAutomatico = "CLIVUS_BIFILA_EXEMPLO_AUTO";
 
     /// <summary>
+    /// Só para o nível 2 (38.9): a Arctech GC800 da aba Fabricantes, com o P1
+    /// e o P2 de catálogo, em uso e sozinha, e a faixa da PB do projeto em
+    /// 0,30 a 0,80 m, abaixo da altura dela: a altura tem que vir do P1.
+    /// </summary>
+    public const string ComandoBifilaP1Automatico = "CLIVUS_BIFILA_P1_AUTO";
+
+    /// <summary>
     /// A prova da 39.2: a mesma mesa da Arctech 2P14 GC800 (módulos, arranjo,
     /// inclinação, vãos e T3), com estrutura monoposte, sozinha e em uso, com a
     /// mesma faixa da PB. Para o nível 2 comparar monoposte e biposte.

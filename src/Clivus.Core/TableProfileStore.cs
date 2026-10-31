@@ -148,6 +148,37 @@ public sealed class TableProfileStore
         return true;
     }
 
+    /// <summary>A subpasta onde vão os perfis tirados da biblioteca pela janela de Configurações.</summary>
+    public const string PastaDosRemovidos = "removidos";
+
+    /// <summary>
+    /// Tira o perfil da biblioteca guardando o arquivo na subpasta
+    /// <see cref="PastaDosRemovidos"/>, e devolve se havia algo para tirar
+    /// (Renan, 30/10/2026: "eu já apaguei esses satanás umas 10x vezes, eu
+    /// clico em salvar no desenho e aí abro de novo essa merda volta"). A
+    /// lista das Configurações junta o desenho e a biblioteca, e a mesa
+    /// removida voltava da pasta. O arquivo não some: pode voltar à mão.
+    /// </summary>
+    public bool MoveToRemoved(string nome)
+    {
+        var caminho = Caminho(nome);
+
+        if (!File.Exists(caminho)) return false;
+
+        var pasta = Path.Combine(_pasta, PastaDosRemovidos);
+        Directory.CreateDirectory(pasta);
+
+        var destino = Path.Combine(pasta, Path.GetFileName(caminho));
+        if (File.Exists(destino))
+        {
+            var semExtensao = Path.GetFileName(caminho)[..^Extensao.Length];
+            destino = Path.Combine(pasta, $"{semExtensao} {DateTime.Now.ToString("yyyy-MM-dd HHmmss", System.Globalization.CultureInfo.InvariantCulture)}{Extensao}");
+        }
+
+        File.Move(caminho, destino);
+        return true;
+    }
+
     /// <summary>
     /// O caminho do arquivo deste perfil.
     /// </summary>

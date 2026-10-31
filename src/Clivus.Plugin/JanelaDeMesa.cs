@@ -167,21 +167,26 @@ internal sealed class JanelaDeMesa : Window
     private readonly TextBox _bfMao = Campo();
     private readonly TextBox _bfTiranteDiametro = Campo();
 
-    // P1 e P2 na altura básica (38.7): só leitura, saem dos outros campos e
-    // da ponta baixa mínima do projeto.
-    private readonly TextBox _bfP1 = Leitura();
-    private readonly TextBox _bfP2 = Leitura();
+    // P1 e P2 (38.9; Renan, 30/10/2026: "porque raios eu não consigo alterar
+    // as alturas? A altura está no print, 3059 P1 e 3888 P2"): a altura é da
+    // estrutura, digitada. Em branco os dois, ela vem da faixa do projeto.
+    private readonly TextBox _bfP1 = Campo();
+    private readonly TextBox _bfP2 = Campo();
     private readonly TextBlock _bfAlturaBasica = new() { FontSize = 11, Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap };
 
-    /// <summary>A configuração do projeto: a ponta baixa mínima e o enterro da altura básica (38.7).</summary>
+    /// <summary>A configuração do projeto: a faixa da ponta baixa, o enterro e para onde as mesas olham.</summary>
     private readonly SystemConfiguration _projeto;
+
+    // O nome também na aba do tipo (38.9: "eu escolho um modelo e edito ela,
+    // onde posso dar outro nome"), o mesmo da primeira aba.
+    private readonly TextBox _nomeNaAba = Campo();
+
+    // Para onde os módulos olham, embaixo da inclinação: é do projeto (38.9).
+    private readonly TextBlock _olhaPara = new() { FontSize = 11, Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) };
 
     // A aba Fabricantes (38.7): as estruturas prontas, que vão para a aba do biposte.
     private readonly TabItem _abaDosFabricantes = new();
     private readonly TextBlock _recadoDosFabricantes = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
-
-    /// <summary>A estrutura de fabricante que encheu a aba do biposte por último, para o recado da altura livre dela.</summary>
-    private VendorStructure? _doFabricante;
 
     private readonly Button _botaoDosVaos = new()
     {
@@ -324,10 +329,13 @@ internal sealed class JanelaDeMesa : Window
 
         // As seções do biposte viraram GroupBox no layout compacto: são elas
         // que aparecem e somem com o tipo da mesa.
-        foreach (var campo in new Control[] { _bfEntrePilares, _bfMaoFrente, _bfTercaBorda, _bfTiranteVaos, _bfViga })
+        foreach (var campo in new Control[] { _bfP1, _bfTercaBorda, _bfTiranteVaos, _bfViga })
         {
-            if (Caixa(campo) is { } caixa) _secoesDoBiposte.Add(caixa);
+            if (Caixa(campo) is { } caixa && !_secoesDoBiposte.Contains(caixa)) _secoesDoBiposte.Add(caixa);
         }
+
+        _olhaPara.Text = Tr.F("{0}: é do projeto, em Configurações › Parâmetros (botões Norte e Sul).",
+            Maiuscula(FacingFromLine.Describe(_projeto.FacingAzimuthDegrees)));
 
         ListarSalvos();
 
@@ -362,15 +370,9 @@ internal sealed class JanelaDeMesa : Window
 
     private static TextBox Campo() => new() { Margin = new Thickness(0, 2, 0, 6), Height = 24 };
 
-    /// <summary>Um número que a janela calcula: na grade dos campos, mas sem cursor e com o fundo de controle.</summary>
-    private static TextBox Leitura() => new()
-    {
-        Margin = new Thickness(0, 2, 0, 6),
-        Height = 24,
-        IsReadOnly = true,
-        IsTabStop = false,
-        Background = SystemColors.ControlBrush,
-    };
+    /// <summary>A frase com a primeira letra maiúscula.</summary>
+    private static string Maiuscula(string frase) =>
+        string.IsNullOrEmpty(frase) ? frase : char.ToUpper(frase[0], Tr.Culture) + frase[1..];
 
     private UIElement Montar()
     {
@@ -460,9 +462,11 @@ internal sealed class JanelaDeMesa : Window
         // não mostra que o Renan pediu para ver.
         var desenhos = new Grid();
 
-        desenhos.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.15, GridUnitType.Star) });
+        // A planta é comprida e baixa: cabe em menos altura. A vista lateral do
+        // biposte, com os pilares e as cotas, precisa de mais (38.9).
+        desenhos.RowDefinitions.Add(new RowDefinition { Height = new GridLength(0.8, GridUnitType.Star) });
         desenhos.RowDefinitions.Add(new RowDefinition { Height = new GridLength(10) });
-        desenhos.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        desenhos.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.25, GridUnitType.Star) });
 
         var emCima = Emoldurar(Tr.T("PLANTA BAIXA"), _planta);
         var embaixo = Emoldurar(Tr.T("VISTA LATERAL — na direção da inclinação"), _corte);
@@ -482,10 +486,11 @@ internal sealed class JanelaDeMesa : Window
     }
 
     /// <summary>
-    /// A aba Fabricantes (38.7): um cartão por estrutura pronta, com as peças,
-    /// a altura livre e os pilares de catálogo. "Usar esta estrutura" enche a
-    /// aba do biposte; o genérico, para montar o seu, é o cartão Biposte da
-    /// primeira aba.
+    /// A aba Fabricantes (38.7): o biposte genérico, para montar o seu, e um
+    /// cartão por estrutura pronta, com as peças, a altura livre e os pilares
+    /// de catálogo. "Usar" enche a aba do biposte, onde tudo se muda, o nome
+    /// também (38.9: "em fabricante, não tem a porra de genérico, ou então, eu
+    /// escolho um modelo e edito ela, onde posso dar outro nome").
     /// </summary>
     private UIElement AbaDosFabricantes()
     {
@@ -493,13 +498,14 @@ internal sealed class JanelaDeMesa : Window
 
         pilha.Children.Add(new TextBlock
         {
-            Text = Tr.T("Estruturas prontas, com as medidas dos desenhos do fabricante. Usar uma enche a aba do biposte: a mesa, o pórtico, as mãos francesas, as terças e os tirantes. O módulo e o nome continuam os da primeira aba. Para montar o seu, use o cartão Biposte da primeira aba: ele abre o biposte genérico."),
+            Text = Tr.T("O biposte genérico, para montar o seu, e as estruturas prontas, com as medidas dos desenhos do fabricante. \"Usar\" enche a aba Biposte (o pórtico com P1, MF1, P2 e MF2, a tesoura, as terças e os tirantes), e lá tudo se muda, o nome também. O módulo continua o da primeira aba."),
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 10),
         });
 
         var cartoes = new WrapPanel();
+        cartoes.Children.Add(CartaoDoGenerico());
         foreach (var estrutura in VendorStructures.All) cartoes.Children.Add(CartaoDoFabricante(estrutura));
 
         pilha.Children.Add(cartoes);
@@ -514,21 +520,56 @@ internal sealed class JanelaDeMesa : Window
     }
 
     /// <summary>O cartão de uma estrutura de fabricante: o desenho do pórtico, o nome, as peças, o catálogo e o botão.</summary>
-    private Border CartaoDoFabricante(VendorStructure estrutura)
+    private Border CartaoDoFabricante(VendorStructure estrutura) => CartaoDeEstrutura(
+        estrutura.Manufacturer,
+        estrutura.Model,
+        [estrutura.Describe(), estrutura.DescribeCatalog()],
+        estrutura.DescribeSource(),
+        Tr.T("Usar esta estrutura"),
+        () => UsarDoFabricante(estrutura),
+        estrutura.Name);
+
+    /// <summary>
+    /// O cartão do biposte genérico (38.9), o primeiro da aba: as peças do
+    /// pórtico de referência, para mudar na aba Biposte.
+    /// </summary>
+    private Border CartaoDoGenerico()
+    {
+        var generico = BifilaReference.Generic();
+        var b = generico.Frame.Bifila!;
+
+        return CartaoDeEstrutura(
+            Tr.T("Para montar o seu"),
+            Tr.T("Biposte genérico"),
+            [
+                Tr.F("P1 de {0} m, MF1 de {1} m, P2 de {2} m, MF2 de {3} m, tesoura de {4} m e {5} m enterrados; terças nas bordas dos módulos, sem tirante.",
+                    Numero(b.FrontPillar ?? 0), Numero(b.FrontBraceLength), Numero(b.RearPillar ?? 0), Numero(b.RearBraceLength),
+                    Numero(generico.Frame.RafterLength), Numero(generico.Frame.MinEmbedment ?? 0)),
+                Tr.T("Tudo se muda na aba Biposte: as peças, as medidas e o nome."),
+            ],
+            null,
+            Tr.T("Usar este"),
+            UsarGenerico,
+            Tr.T("o biposte genérico"));
+    }
+
+    /// <summary>Um cartão da aba Fabricantes: o desenho do pórtico, as linhas de texto e o botão.</summary>
+    private Border CartaoDeEstrutura(string emCima, string titulo, IReadOnlyList<string> linhas, string? fonte, string botao, Action usar, string nomeParaOErro)
     {
         var figura = FiguraDoTipo(bifila: true);
         DockPanel.SetDock(figura, Dock.Left);
 
         var textos = new StackPanel { Margin = new Thickness(10, 0, 0, 0) };
-        textos.Children.Add(new TextBlock { Text = estrutura.Manufacturer, FontSize = 11, Foreground = Brushes.Gray });
-        textos.Children.Add(new TextBlock { Text = estrutura.Model, FontSize = 13.5, FontWeight = FontWeights.SemiBold });
-        textos.Children.Add(new TextBlock { Text = estrutura.Describe(), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
-        textos.Children.Add(new TextBlock { Text = estrutura.DescribeCatalog(), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
-        textos.Children.Add(new TextBlock { Text = estrutura.DescribeSource(), FontSize = 10.5, Foreground = Brushes.Gray, Margin = new Thickness(0, 4, 0, 0) });
+        textos.Children.Add(new TextBlock { Text = emCima, FontSize = 11, Foreground = Brushes.Gray });
+        textos.Children.Add(new TextBlock { Text = titulo, FontSize = 13.5, FontWeight = FontWeights.SemiBold });
+        foreach (var linha in linhas)
+            textos.Children.Add(new TextBlock { Text = linha, FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
+        if (fonte is not null)
+            textos.Children.Add(new TextBlock { Text = fonte, FontSize = 10.5, Foreground = Brushes.Gray, Margin = new Thickness(0, 4, 0, 0) });
 
-        var usar = new Button
+        var botaoUsar = new Button
         {
-            Content = Tr.T("Usar esta estrutura"),
+            Content = botao,
             Height = 26,
             Padding = new Thickness(10, 0, 10, 0),
             HorizontalAlignment = HorizontalAlignment.Left,
@@ -536,22 +577,22 @@ internal sealed class JanelaDeMesa : Window
             ToolTip = Tr.T("Enche a aba do biposte com esta estrutura e abre a aba. O que estava nela é substituído; a monoposte fica guardada."),
         };
 
-        usar.Click += (_, _) =>
+        botaoUsar.Click += (_, _) =>
         {
             // Manipulador de evento do WPF: exceção solta aqui fecha o Civil 3D.
             try
             {
-                UsarDoFabricante(estrutura);
+                usar();
             }
             catch (Exception erro)
             {
                 _preenchendo = false;
-                RegistroDeDiagnostico.Registrar("Falha ao usar a estrutura de fabricante.", erro);
-                Avisar(Tr.F("Não consegui usar a estrutura {0}: {1}", estrutura.Name, erro.Message));
+                RegistroDeDiagnostico.Registrar("Falha ao usar a estrutura da aba Fabricantes.", erro);
+                Avisar(Tr.F("Não consegui usar a estrutura {0}: {1}", nomeParaOErro, erro.Message));
             }
         };
 
-        textos.Children.Add(usar);
+        textos.Children.Add(botaoUsar);
 
         var conteudo = new DockPanel { Margin = new Thickness(10) };
         conteudo.Children.Add(figura);
@@ -570,9 +611,10 @@ internal sealed class JanelaDeMesa : Window
 
     /// <summary>
     /// Uma estrutura de fabricante (38.7) na aba do biposte, como se o cartão
-    /// do biposte tivesse sido clicado: a monoposte fica guardada. O módulo e o
-    /// nome não mudam; os vãos escritos do fabricante só ficam com a largura do
-    /// módulo dele, senão a mesa vai pelo vão-alvo, como a semente do 38.5.
+    /// do biposte tivesse sido clicado: a monoposte fica guardada. O nome passa
+    /// a ser o da estrutura (e muda na aba, 38.9); o módulo não muda, e os vãos
+    /// escritos do fabricante só ficam com a largura do módulo dele, senão a
+    /// mesa vai pelo vão-alvo, como a semente do 38.5.
     /// </summary>
     private void UsarDoFabricante(VendorStructure estrutura)
     {
@@ -582,22 +624,36 @@ internal sealed class JanelaDeMesa : Window
 
         if (!mesmaLargura) perfil = perfil with { Frame = perfil.Frame with { PillarSpans = null } };
 
+        UsarNoBiposte(perfil, perfil.Name);
+
+        _recadoDosFabricantes.Text = mesmaLargura
+            ? Tr.F("A {0} está na aba Biposte, com o nome \"{1}\": mude lá o que for seu.", estrutura.Name, perfil.Name)
+            : Tr.F("A {0} está na aba Biposte, com o nome \"{1}\" e o vão-alvo: os vãos dela são para o módulo de {2} m de largura.", estrutura.Name, perfil.Name, Numero(estrutura.Profile.Layout.Module.Width));
+    }
+
+    /// <summary>O biposte genérico (38.9) na aba do biposte; o nome fica o que estava.</summary>
+    private void UsarGenerico()
+    {
+        UsarNoBiposte(BifilaReference.Generic(), nome: null);
+        _recadoDosFabricantes.Text = Tr.T("O biposte genérico está na aba Biposte: mude lá as peças, as medidas e o nome.");
+    }
+
+    /// <summary>A estrutura na aba do biposte, que abre; a monoposte fica guardada.</summary>
+    /// <param name="nome">O nome que a mesa passa a ter, ou null para ficar com o atual.</param>
+    private void UsarNoBiposte(TableProfile perfil, string? nome)
+    {
         if (!_bifila) _rascunhos[false] = Capturar();
 
         _preenchendo = true;
         try
         {
             PreencherEstrutura(perfil);
+            if (nome is not null) _nome.Text = nome;
         }
         finally
         {
             _preenchendo = false;
         }
-
-        _doFabricante = estrutura;
-        _recadoDosFabricantes.Text = mesmaLargura
-            ? Tr.F("A {0} está na aba Biposte.", estrutura.Name)
-            : Tr.F("A {0} está na aba Biposte, com o vão-alvo: os vãos dela são para o módulo de {1} m de largura.", estrutura.Name, Numero(estrutura.Profile.Layout.Module.Width));
 
         Recalcular();
         _abas.SelectedItem = _abaDaEstrutura;
@@ -800,6 +856,7 @@ internal sealed class JanelaDeMesa : Window
         void Linha(string rotulo, Control campo, string? dica = null, TextBlock? texto = null) => JanelaDeMesa.Linha(pilha, rotulo, campo, dica, texto);
 
         Secao(Tr.T("Mesa"));
+        Linha(Tr.T("Nome"), _nomeNaAba, Tr.T("O nome da estrutura, o mesmo da primeira aba: é com ele que ela aparece na lista das Configurações e na Escolha das estruturas."));
         Linha(Tr.T("Módulos"), _quantidade);
         Linha(Tr.T("Arranjo"), _arranjo);
         Linha(Tr.T("Espaçamento entre módulos (m)"), _espacamentoH);
@@ -807,6 +864,7 @@ internal sealed class JanelaDeMesa : Window
         Linha(Tr.T("Sobra da esquerda (m)"), _sobraEsquerda);
         Linha(Tr.T("Sobra da direita (m)"), _sobraDireita);
         Linha(Tr.T("Inclinação (graus)"), _inclinacao);
+        pilha.Children.Add(_olhaPara);
 
         // T1 e T2 mudam de nome no biposte (MostrarTipo): viga, e pilar dianteiro.
         Secao(Tr.T("Estrutura"));
@@ -823,20 +881,19 @@ internal sealed class JanelaDeMesa : Window
         // O biposte (38.1): dois pilares por pórtico. O T2 de cima é o do
         // dianteiro; o traseiro sai da distância entre os dois na horizontal,
         // que é como o fornecedor cota. Cada parte tem a sua seção (38.5).
-        // Na frente, o P1 e o P2 na altura básica (38.7): "P1 que é o pilar
-        // menor e P2 que é o pilar maior, e aí o resto".
-        Secao(Tr.T("Pórtico"));
-        Linha(Tr.T("P1: pilar menor, o dianteiro (m)"), _bfP1, Tr.T("O pilar dianteiro inteiro, com o enterro, na altura básica: chão plano e ponta baixa na mínima do projeto. Sai da ponta baixa, do T2, da inclinação, do topo abaixo dos módulos e do T3."));
-        Linha(Tr.T("P2: pilar maior, o traseiro (m)"), _bfP2, Tr.T("O pilar traseiro inteiro, na altura básica: o P1 mais a distância entre os pilares vezes a tangente da inclinação. O catálogo do fabricante pode trazer um P2 maior, com folga para o chão caindo para trás."));
+        // O pórtico peça por peça (38.9; Renan, 30/10/2026: "é PILAR P1, Mão
+        // francesa MF1, pilar P2, Mão francesa MF2, aí tem as terças, as
+        // tesouras"), com o P1 e o P2 digitados: a altura é da estrutura.
+        Secao(Tr.T("Pórtico: pilares e mãos francesas"));
+        Linha(Tr.T("P1: pilar dianteiro, o menor (m)"), _bfP1, Tr.T("O pilar dianteiro inteiro, com o enterro T3, como o fabricante cota no chão plano (ex.: 3,059). É a altura da estrutura: na usina, a ponta baixa nunca fica abaixo da que ele dá, e cada pilar sai com o comprimento que o terreno pede. Em branco, com o P2: a altura vem da faixa do projeto."));
+        Linha(Tr.T("MF1: mão francesa do P1 (m)"), _bfMaoFrente, Tr.T("O comprimento da mão francesa do pilar dianteiro (ex.: 1,244). Zero: sem mão francesa."));
+        Linha(Tr.T("MF1: prende no P1 a quanto do topo (m)"), _bfMaoFrenteAbaixo, Tr.T("Onde a MF1 prende no P1, medido do topo do pilar para baixo (ex.: 0,447). A outra ponta vai na tesoura, onde o comprimento alcança. A vista lateral mostra a cota."));
+        Linha(Tr.T("P2: pilar traseiro, o maior (m)"), _bfP2, Tr.T("O pilar traseiro inteiro, como o fabricante cota (ex.: 3,888). No chão plano ele precisa do P1 mais a subida da tesoura entre os dois; o que passar disso é a folga para o chão caindo para trás."));
+        Linha(Tr.T("MF2: mão francesa do P2 (m)"), _bfMaoTras, Tr.T("O comprimento da mão francesa do pilar traseiro (ex.: 1,209). Zero: sem mão francesa."));
+        Linha(Tr.T("MF2: prende no P2 a quanto do topo (m)"), _bfMaoTrasAbaixo, Tr.T("Onde a MF2 prende no P2, medido do topo do pilar para baixo (ex.: 0,773)."));
+        Linha(Tr.T("Entre P1 e P2, na horizontal (m)"), _bfEntrePilares, Tr.T("Distância entre os eixos do P1 e do P2, em planta (ex.: 3,00). O T2 da seção Estrutura é onde o P1 encosta na tesoura."));
+        Linha(Tr.T("Topo dos pilares abaixo dos módulos (m)"), _bfTopo, Tr.T("Na vertical, da face de cima dos módulos ao topo dos pilares: módulo, terça e tesoura (ex.: 0,126)."));
         pilha.Children.Add(_bfAlturaBasica);
-        Linha(Tr.T("Entre pilares, na horizontal (m)"), _bfEntrePilares, Tr.T("Distância entre os eixos do pilar dianteiro e do traseiro, em planta (ex.: 3,00). O T2 acima é o do dianteiro."));
-        Linha(Tr.T("Topo do pilar abaixo dos módulos (m)"), _bfTopo, Tr.T("Na vertical, da face de cima dos módulos ao topo dos pilares: módulo, terça e viga (ex.: 0,126)."));
-
-        Secao(Tr.T("Mãos francesas"));
-        Linha(Tr.T("Dianteira (m)"), _bfMaoFrente, Tr.T("Comprimento da mão francesa do pilar dianteiro. Zero: sem mão francesa."));
-        Linha(Tr.T("…pega no dianteiro, abaixo do topo (m)"), _bfMaoFrenteAbaixo, Tr.T("Onde a mão francesa dianteira pega no pilar, medido do topo dele."));
-        Linha(Tr.T("Traseira (m)"), _bfMaoTras, Tr.T("Comprimento da mão francesa do pilar traseiro. Zero: sem mão francesa."));
-        Linha(Tr.T("…pega no traseiro, abaixo do topo (m)"), _bfMaoTrasAbaixo, Tr.T("Onde a mão francesa traseira pega no pilar, medido do topo dele."));
 
         Secao(Tr.T("Terças"));
         Linha(Tr.T("A partir da borda do módulo (m)"), _bfTercaBorda, Tr.T("Duas terças por fileira de módulos, cada uma a esta distância de uma borda (ex.: 0,492)."));
@@ -873,7 +930,19 @@ internal sealed class JanelaDeMesa : Window
 
         foreach (var campo in CamposEletricos()) campo.TextChanged += (_, _) => Recalcular();
         foreach (var (campo, _) in CamposDaBifila()) campo.TextChanged += (_, _) => Recalcular();
+        _bfP1.TextChanged += (_, _) => Recalcular();
+        _bfP2.TextChanged += (_, _) => Recalcular();
         _bfTiranteVaos.TextChanged += (_, _) => Recalcular();
+
+        // O nome é um só, nas duas abas (38.9).
+        _nome.TextChanged += (_, _) =>
+        {
+            if (_nomeNaAba.Text != _nome.Text) _nomeNaAba.Text = _nome.Text;
+        };
+        _nomeNaAba.TextChanged += (_, _) =>
+        {
+            if (_nome.Text != _nomeNaAba.Text) _nome.Text = _nomeNaAba.Text;
+        };
         foreach (var secao in new[] { _bfViga, _bfTerca, _bfMao }) secao.TextChanged += (_, _) => Recalcular();
         _bfTiranteLinha.SelectionChanged += (_, _) => Recalcular();
     }
@@ -926,15 +995,15 @@ internal sealed class JanelaDeMesa : Window
         yield return (_balanco, Tr.T("Balanço nas pontas"));
     }
 
-    /// <summary>Os campos de número da bifila e o nome de cada um, para a mensagem de erro.</summary>
+    /// <summary>Os campos de número da bifila e o nome de cada um, para a mensagem de erro (o P1 e o P2, que podem ficar em branco, à parte).</summary>
     private IEnumerable<(TextBox Campo, string Nome)> CamposDaBifila()
     {
-        yield return (_bfEntrePilares, Tr.T("Entre pilares, na horizontal"));
-        yield return (_bfTopo, Tr.T("Topo do pilar abaixo dos módulos"));
-        yield return (_bfMaoFrente, Tr.T("Mão francesa dianteira"));
-        yield return (_bfMaoFrenteAbaixo, Tr.T("Mão francesa dianteira: abaixo do topo"));
-        yield return (_bfMaoTras, Tr.T("Mão francesa traseira"));
-        yield return (_bfMaoTrasAbaixo, Tr.T("Mão francesa traseira: abaixo do topo"));
+        yield return (_bfEntrePilares, Tr.T("Entre P1 e P2, na horizontal"));
+        yield return (_bfTopo, Tr.T("Topo dos pilares abaixo dos módulos"));
+        yield return (_bfMaoFrente, Tr.T("MF1: mão francesa do P1"));
+        yield return (_bfMaoFrenteAbaixo, Tr.T("MF1: prende no P1 a quanto do topo"));
+        yield return (_bfMaoTras, Tr.T("MF2: mão francesa do P2"));
+        yield return (_bfMaoTrasAbaixo, Tr.T("MF2: prende no P2 a quanto do topo"));
         yield return (_bfTercaBorda, Tr.T("Terça a partir da borda do módulo"));
         yield return (_bfTercaBarra, Tr.T("Barra máxima da terça"));
         yield return (_bfTiranteCima, Tr.T("Tirante: ponto de cima"));
@@ -957,6 +1026,8 @@ internal sealed class JanelaDeMesa : Window
         // Ao milímetro: a volta pela tesoura dava 2,9997 no lugar dos 3,000.
         _bfEntrePilares.Text = Numero(Math.Round(perfil.BifilaHorizontalSpacing ?? 0, 3));
         _bfTopo.Text = Numero(b.PillarTopDrop);
+        _bfP1.Text = b.FrontPillar is { } p1 ? Numero(p1) : string.Empty;
+        _bfP2.Text = b.RearPillar is { } p2 ? Numero(p2) : string.Empty;
         PreencherMaos(b);
         _bfTercaBorda.Text = Numero(b.PurlinFromModuleEdge);
         _bfTercaBarra.Text = Numero(b.PurlinMaxBar);
@@ -1066,6 +1137,27 @@ internal sealed class JanelaDeMesa : Window
             return false;
         }
 
+        // O P1 e o P2 (38.9): os dois em branco é a altura da faixa do
+        // projeto; um só escrito não fecha.
+        double? p1 = null;
+        double? p2 = null;
+
+        if (!string.IsNullOrWhiteSpace(_bfP1.Text) || !string.IsNullOrWhiteSpace(_bfP2.Text))
+        {
+            foreach (var (campo, nome) in new[] { (_bfP1, Tr.T("P1: pilar dianteiro")), (_bfP2, Tr.T("P2: pilar traseiro")) })
+            {
+                if (NumberInput.TryParseMeasure(campo.Text, out _)) continue;
+
+                motivo = string.IsNullOrWhiteSpace(campo.Text)
+                    ? Tr.F("o campo \"{0}\" está em branco: o P1 e o P2 andam juntos (os dois em branco, a altura vem da faixa do projeto).", nome)
+                    : Tr.F("não consigo ler o número do campo \"{0}\".", nome);
+                return false;
+            }
+
+            p1 = Valor(_bfP1);
+            p2 = Valor(_bfP2);
+        }
+
         bifila = new BifilaFrame(
             BifilaFrame.RearAlongRafter(t2, Valor(_bfEntrePilares), tiltRadians),
             Valor(_bfTopo),
@@ -1082,7 +1174,11 @@ internal sealed class JanelaDeMesa : Window
             viga,
             terca,
             mao,
-            Valor(_bfTiranteDiametro));
+            Valor(_bfTiranteDiametro))
+        {
+            FrontPillar = p1,
+            RearPillar = p2,
+        };
 
         motivo = string.Empty;
         return true;
@@ -1154,14 +1250,9 @@ internal sealed class JanelaDeMesa : Window
         _nome.Text = perfil.Name;
         _arquivoDoPan = null;
 
-        // Um biposte carregado substitui a aba do biposte, e com ela a
-        // estrutura de fabricante; uma monoposte deixa a aba do biposte como
-        // estava, e o fabricante continua valendo para ela (revisão do 38.7).
-        if (perfil.IsBifila)
-        {
-            _doFabricante = null;
-            _recadoDosFabricantes.Text = string.Empty;
-        }
+        // Um biposte carregado substitui a aba do biposte, e com ela o recado
+        // do fabricante; uma monoposte deixa a aba do biposte como estava.
+        if (perfil.IsBifila) _recadoDosFabricantes.Text = string.Empty;
 
         _altura.Text = Numero(perfil.Layout.Module.Height);
         _largura.Text = Numero(perfil.Layout.Module.Width);
@@ -1492,9 +1583,9 @@ internal sealed class JanelaDeMesa : Window
                     : Tr.T(", com o pilar na ponta da estrutura"))
                 + "\n"
                 + (geometria.RearPillarRow is { } tras && basica?.P2 is { } p2
-                    ? Tr.F("Pilar dianteiro a {0} m da ponta baixa do módulo e traseiro a {1} m ({2} m entre eles na horizontal). Na altura básica, P1 de {3} m e P2 de {4} m, com {5} m enterrados.",
+                    ? Tr.F("P1 a {0} m da ponta baixa do módulo e P2 a {1} m ({2} m entre eles na horizontal). P1 de {3} m e P2 de {4} m, com {5} m enterrados.",
                         Numero(geometria.PillarRow), Numero(tras), Numero(perfil.BifilaHorizontalSpacing ?? 0),
-                        Milimetro(basica.P1), Milimetro(p2), Numero(basica.Embedment))
+                        Milimetro(basica.P1), Milimetro(perfil.Frame.Bifila?.RearPillar ?? p2), Numero(basica.Embedment))
                     : geometria.RearPillarRow is { } traseiro
                     ? Tr.F("Pilar dianteiro a {0} m da ponta baixa do módulo e traseiro a {1} m ({2} m entre eles na horizontal).",
                         Numero(geometria.PillarRow), Numero(traseiro), Numero(perfil.BifilaHorizontalSpacing ?? 0))
@@ -1956,60 +2047,58 @@ internal sealed class JanelaDeMesa : Window
     }
 
     /// <summary>
-    /// O P1 e o P2 na altura básica (38.7), nos campos de leitura e no recado
-    /// embaixo deles. Null na monoposte, ou se a conta não fechar: aí os
-    /// campos ficam com um traço e o resto da janela segue.
+    /// Os pilares no chão plano e o recado embaixo do pórtico. Com o P1 e o
+    /// P2 (38.9): a ponta baixa que o P1 dá, a faixa da usina e a folga do P2.
+    /// Sem eles: o P1 e o P2 da faixa do projeto (38.7). Null na monoposte, ou
+    /// se a conta não fechar: aí o recado diz por quê e o resto da janela segue.
     /// </summary>
     private BasicPillars? AlturaBasica(TableProfile perfil)
     {
-        if (!perfil.IsBifila) return null;
+        if (perfil.Frame.Bifila is not { } b) return null;
 
         try
         {
             var basica = perfil.PillarsAtBasicHeight(_projeto);
 
-            _bfP1.Text = Milimetro(basica.P1);
-            _bfP2.Text = basica.P2 is { } p2 ? Milimetro(p2) : "—";
-
-            var enterro = perfil.Frame.MinEmbedment is null
-                ? Tr.F("{0} m enterrados, o mínimo do projeto", Numero(basica.Embedment))
-                : Tr.F("{0} m enterrados, o T3", Numero(basica.Embedment));
-
-            var texto = Tr.F(
-                "No chão plano, com a ponta baixa em {0} m (a mínima do projeto, na grade de 1 cm do motor) e {1}: {2} m e {3} m acima do chão. No terreno, cada pilar sai com o seu comprimento.",
-                Numero(basica.LowEdge), enterro, Milimetro(basica.FrontFree), Milimetro(basica.RearFree ?? 0));
-
-            // Os pilares do catálogo do fabricante são para a altura livre
-            // dele, que é configuração do projeto: a janela avisa, não muda.
-            // A conta é com o módulo e a inclinação desta mesa, e na grade do
-            // motor, como a altura básica (revisão do 38.7).
-            if (_doFabricante is { } fabricante)
+            if (b.FrontPillar is { } p1 && b.RearPillar is { } p2 && basica.P2 is { } p2NoPlano)
             {
-                var pedida = ViableElevations.FlatGroundLowEdge(_projeto with { MinLowEdge = fabricante.LowEdgeFor(perfil) });
+                var geometria = TableGeometry.Local(perfil.Layout, perfil.Frame.Pillars(perfil.Layout), perfil.Frame);
+                var naUsina = _projeto.ForStructure(geometria, perfil.TiltRadians);
+                var livre = basica.LowEdge - perfil.Layout.Module.Thickness * Math.Cos(perfil.TiltRadians);
 
-                if (Math.Abs(pedida - basica.LowEdge) > 1e-6)
-                {
-                    texto += " " + Tr.F(
-                        "Os pilares de catálogo da {0} são para {1} m livres sob o módulo: no projeto, altura livre mínima de {2} cm (hoje {3} cm; Configurações › Parâmetros › Ponta baixa do módulo).",
-                        fabricante.Name, Numero(fabricante.ClearanceUnderModule), Numero(pedida * 100), Numero(_projeto.MinLowEdge * 100));
-                }
+                var texto = Tr.F(
+                    "No chão plano, o P1 de {0} m com {1} m enterrados põe a ponta baixa a {2} m do chão ({3} m livres sob o módulo). Na usina, a ponta baixa vai de {4} a {5} m, e cada pilar sai com o comprimento que o terreno pede: o P1 é o dianteiro mais curto.",
+                    Milimetro(p1), Numero(basica.Embedment), Milimetro(basica.LowEdge), Milimetro(livre), Milimetro(naUsina.MinLowEdge), Milimetro(naUsina.MaxLowEdge));
+
+                texto += " " + (p2 - p2NoPlano > 0.0005 && StructureHeight.RearSlopeAllowance(geometria, perfil.TiltRadians) is { } declive
+                    ? Tr.F("No chão plano o P2 precisa de {0} m; os {1} m a mais cobrem o chão caindo até {2} % para trás.", Milimetro(p2NoPlano), Milimetro(p2 - p2NoPlano), Numero(Math.Round(declive * 100, 1)))
+                    : Tr.T("O P2 é o do chão plano, sem folga para o chão caindo para trás."));
+
+                _bfAlturaBasica.Text = texto;
+            }
+            else
+            {
+                var enterro = perfil.Frame.MinEmbedment is null
+                    ? Tr.F("{0} m enterrados, o mínimo do projeto", Numero(basica.Embedment))
+                    : Tr.F("{0} m enterrados, o T3", Numero(basica.Embedment));
+
+                _bfAlturaBasica.Text = Tr.F(
+                    "P1 e P2 em branco: a altura vem da faixa do projeto. No chão plano, com a ponta baixa em {0} m (a mínima do projeto, Configurações › Parâmetros) e {1}, o P1 dá {2} m e o P2 {3} m.",
+                    Numero(basica.LowEdge), enterro, Milimetro(basica.P1), Milimetro(basica.P2 ?? 0));
             }
 
-            _bfAlturaBasica.Text = texto;
             return basica;
         }
         catch (Exception erro) when (erro is ArgumentException or InvalidOperationException)
         {
-            RegistroDeDiagnostico.Registrar("Não consegui a altura básica dos pilares.", erro);
-            _bfP1.Text = _bfP2.Text = "—";
-            _bfAlturaBasica.Text = Tr.F("Sem a altura básica: {0}", erro.Message);
+            RegistroDeDiagnostico.Registrar("Não consegui a altura dos pilares.", erro);
+            _bfAlturaBasica.Text = Tr.F("Sem a altura dos pilares: {0}", erro.Message);
             return null;
         }
     }
 
     private void NaoDeu(string motivo)
     {
-        _bfP1.Text = _bfP2.Text = "—";
         _bfAlturaBasica.Text = string.Empty;
         _planta.Dizer(Tr.T("A mesa ainda não fecha."));
         _corte.Dizer(Tr.T("A mesa ainda não fecha."));

@@ -8,7 +8,114 @@
     tipo, e a cota de cada solido dentro da faixa do terreno (o alinhamento
     vem com Z 9999 de proposito: peca no Z do clique sai dali).
 #>
-$script:CasosBifila = @('Testar-Bifila')
+$script:CasosBifila = @('Testar-Bifila', 'Testar-BifilaP1')
+
+<#
+    Testar-BifilaP1 (38.9): a GC800 da aba Fabricantes, com o P1 de 3,059 e o
+    P2 de 3,888, num projeto com a faixa da PB em 0,30 a 0,80 m. A altura vem
+    do P1: no terreno de teste, nenhum dianteiro sai menor que 3,059 (com a
+    faixa do projeto sairiam com uns 2,5 m), os traseiros saem maiores, e o
+    P3 = topo - terreno fecha em todos.
+#>
+function Testar-BifilaP1 {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-bifila-p1--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'clivus-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'cotaMin=(-?[\d.]+) cotaMax=(-?[\d.]+) pontos=\d+ centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("clivus-bifila-p1: nao achei o terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[3], $inv)
+    $centroY = [double]::Parse($Matches[4], $inv)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($inv, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-bifila-p1' `
+        -Script (Join-Path $PSScriptRoot 'clivus-bifila-p1.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 9999)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("clivus-bifila-p1 terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'BIFILA_P1 Arctech 2P14 GC800 no desenho') {
+        $problemas.Add("clivus-bifila-p1: a GC800 com P1 nao foi gravada no desenho. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($r.Texto -notmatch 'CLIVUS_BIFILA_P1 pilares=(\d+) frente=(\d+) tras=(\d+) p1min=(-?[\d.]+) p2min=(-?[\d.]+) p3ok=(\d+) p3total=(\d+)') {
+        $problemas.Add("clivus-bifila-p1: nao consegui ler os pilares em LISP. Veja $($r.Saida)")
+        return $false
+    }
+
+    $np = [int] $Matches[1]; $frente = [int] $Matches[2]; $tras = [int] $Matches[3]
+    $p1min = [double]::Parse($Matches[4], $inv); $p2min = [double]::Parse($Matches[5], $inv)
+    $p3ok = [int] $Matches[6]; $p3total = [int] $Matches[7]
+
+    $ok = $true
+
+    if ($np -lt 36 -or $frente -ne $tras -or $frente * 2 -ne $np) {
+        $problemas.Add("clivus-bifila-p1: $np pilar(es), $frente dianteiro(s) e $tras traseiro(s); esperava pelo menos 3 mesas de 12. Veja $($r.Saida)")
+        $ok = $false
+    }
+
+    # A altura e a do P1: com a faixa do projeto (0,30) os dianteiros sairiam
+    # com uns 2,53 m. Onde o terreno forca a mesa para fora da faixa (o motor
+    # diz "ponta(s) baixa(s) fora"), um pilar pode sair abaixo do P1, como
+    # sempre foi com a faixa; nas mesas dentro dela, nenhum.
+    if ($p1min -lt 2.8 -or $p2min -le $p1min) {
+        $problemas.Add("clivus-bifila-p1: o menor dianteiro tem $p1min m e o menor traseiro $p2min m; com a altura do P1 (3,059) nenhum chega perto dos 2,53 da faixa do projeto. Veja $($r.Saida)")
+        $ok = $false
+    }
+
+    if ($r.Texto -notmatch 'Altura da estrutura: "Arctech 2P14 GC800": ponta baixa de 0,833 a 1,333 m, pelo P1 de 3,059 m') {
+        $problemas.Add("clivus-bifila-p1: a linha da altura da estrutura (faixa de 0,833 a 1,333 m pelo P1) nao saiu. Veja $($r.Saida)")
+        $ok = $false
+    }
+
+    $dentro = 0
+    foreach ($m in [regex]::Matches($r.Texto, '(?m)^\s*F\d+\.\d+: (?<resto>[^\r\n]*?)de (?<min>\d+,\d+) a \d+,\d+ m')) {
+        if ($m.Groups['resto'].Value -match 'ponta\(s\) baixa\(s\) fora') { continue }
+        $dentro++
+        $menor = [double]::Parse($m.Groups['min'].Value.Replace(',', '.'), $inv)
+        if ($menor -lt 3.05) {
+            $problemas.Add("clivus-bifila-p1: uma mesa dentro da faixa tem pilar de $menor m, abaixo do P1 de 3,059. Veja $($r.Saida)")
+            $ok = $false
+        }
+    }
+
+    if ($dentro -lt 3) {
+        $problemas.Add("clivus-bifila-p1: so $dentro mesa(s) dentro da faixa para conferir o P1; esperava pelo menos 3. Veja $($r.Saida)")
+        $ok = $false
+    }
+
+    if ($p3total -eq 0 -or $p3ok -ne $p3total) {
+        $problemas.Add("clivus-bifila-p1: P3 = topo - terreno fechou em $p3ok de $p3total pilar(es). Veja $($r.Saida)")
+        $ok = $false
+    }
+
+    if ($r.Texto -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) {
+        $problemas.Add("clivus-bifila-p1: o SECURELOAD nao voltou ao que era. Veja $($r.Saida)")
+        return $false
+    }
+
+    return $ok
+}
 
 function Testar-Bifila {
     param([string] $Desenho)

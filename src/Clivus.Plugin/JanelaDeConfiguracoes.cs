@@ -46,6 +46,16 @@ internal sealed class JanelaDeConfiguracoes : Window
     /// </summary>
     private bool _mesasMudaram;
 
+    /// <summary>
+    /// Os nomes das mesas que o Remover tirou da lista. Ao salvar, saem também
+    /// da biblioteca da pasta do usuário (30/10/2026: a lista junta o desenho
+    /// e a biblioteca, e a mesa removida voltava na abertura seguinte).
+    /// </summary>
+    private readonly List<string> _removidas = [];
+
+    /// <summary>As mesas removidas da lista nesta janela, para sair também da biblioteca ao salvar.</summary>
+    internal IReadOnlyList<string> Removidas => _removidas;
+
     /// <summary>O que o usuário mandou salvar, ou null se fechou sem salvar.</summary>
     internal (IReadOnlyList<DrawingTable> Mesas, ProjectSettings Parametros, ProjectStyles Estilos, IReadOnlyList<DrawingCarport> Carports)? Salvo { get; private set; }
 
@@ -60,6 +70,7 @@ internal sealed class JanelaDeConfiguracoes : Window
     /// <param name="carports">Os carports do desenho (35.1), ou null.</param>
     /// <param name="pegarAzimute">Pede a linha de apoio do azimute no desenho (28/10/2026), ou null.</param>
     /// <param name="editarCarport">Abre a janela do carport com o perfil dado; o perfil confirmado, ou null. Sem ela, Nova estrutura é só a mesa.</param>
+    /// <param name="latitude">A latitude do terreno, em graus, para o aviso do hemisfério (38.9), ou null.</param>
     internal JanelaDeConfiguracoes(
         IReadOnlyList<DrawingTable> mesas,
         ProjectSettings parametros,
@@ -71,7 +82,8 @@ internal sealed class JanelaDeConfiguracoes : Window
         Func<List<DrawingTable>, DrawingTable, (int Mesas, double Watts, string Frase)>? atualizarPotencia = null,
         IReadOnlyList<DrawingCarport>? carports = null,
         Func<CarportProfile, CarportProfile?>? editarCarport = null,
-        Func<Window, double, double?>? pegarAzimute = null)
+        Func<Window, double, double?>? pegarAzimute = null,
+        double? latitude = null)
     {
         _mesas = [.. mesas];
         _editarMesa = editarMesa;
@@ -88,7 +100,7 @@ internal sealed class JanelaDeConfiguracoes : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        _parametros = new JanelaDeConfiguracao(parametros, aviso, soAnalises: false, embutida: true) { PegarAzimute = pegarAzimute };
+        _parametros = new JanelaDeConfiguracao(parametros, aviso, soAnalises: false, embutida: true) { PegarAzimute = pegarAzimute, Latitude = latitude };
         _estilos = new PainelDeEstilos(estilos.Textos, estilos.Cotas, estilos.Chamadas, estilos.Atuais);
 
         var abas = new TabControl { Margin = new Thickness(10, 10, 10, 0) };
@@ -618,8 +630,10 @@ internal sealed class JanelaDeConfiguracoes : Window
         }
 
         _mesas.RemoveAt(_lista.SelectedIndex);
+        _removidas.Add(mesa.Name);
         _mesasMudaram = true;
         Atualizar();
+        _recado.Text = Tr.F("\"{0}\" saiu da lista. Ao salvar no desenho, sai também da biblioteca da pasta do usuário, para não voltar na próxima abertura.", mesa.Name);
     }
 
     private string NomeLivre(string desejado)

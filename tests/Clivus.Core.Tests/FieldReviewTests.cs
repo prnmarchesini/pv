@@ -48,9 +48,7 @@ public class FieldReviewTests
 
         var levantamento = FieldObjects.Survey([a1, a2, a3]);
 
-        Assert.DoesNotContain(levantamento.Issues, i => i.Kind == FieldIssueKind.Facing);
-        Assert.Equal(-Math.PI / 2, levantamento.LowSideDirection!.Value, 3);
-        Assert.Null(FieldPlacement.FacingIssue(levantamento, ParaOSul.Configuration));
+        Assert.Empty(levantamento.Issues);
         var fileira = Assert.Single(levantamento.Rows);
         Assert.Equal(["A1", "A2", "A3"], fileira.Tables.Select(t => t.Id));
 

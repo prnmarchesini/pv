@@ -106,6 +106,26 @@ public sealed record BifilaFrame(
 
     private readonly int[] _vaos = Ordenar(RodSpans);
 
+    /// <summary>
+    /// P1: o pilar dianteiro (o menor) inteiro, com o enterro, como o
+    /// fabricante cota no chão plano (3,059 na Arctech GC800). É a altura da
+    /// estrutura: com o enterro T3, ele põe a ponta baixa dos módulos onde ela
+    /// fica no chão plano (<see cref="StructureHeight.LowEdge"/>), e essa é a
+    /// ponta baixa mínima das mesas desta estrutura na usina. Null: a altura
+    /// vem da faixa do projeto, como nos perfis gravados antes do 38.9.
+    /// Renan, 30/10/2026: "porque raios eu não consigo alterar as alturas? A
+    /// altura está no print, 3059 P1 e 3888 P2".
+    /// </summary>
+    public double? FrontPillar { get; init; }
+
+    /// <summary>
+    /// P2: o pilar traseiro (o maior) inteiro, como o fabricante cota. No chão
+    /// plano ele precisa do P1 mais a subida entre os dois pilares; o que
+    /// passa disso é a folga para o chão caindo para trás (os 0,300 da GC800
+    /// são 10 % em 3 m). Vem junto com o P1.
+    /// </summary>
+    public double? RearPillar { get; init; }
+
     /// <inheritdoc cref="BifilaFrame" path="/param[@name='RodSpans']"/>
     public IReadOnlyList<int> RodSpans
     {
@@ -149,6 +169,18 @@ public sealed record BifilaFrame(
 
             if (!double.IsFinite(PillarTopDrop) || PillarTopDrop < 0 || PillarTopDrop > MaiorQueda)
                 return Tr.F("o topo do pilar abaixo dos módulos precisa ficar entre 0 e {0:0} m", MaiorQueda);
+
+            if (FrontPillar is null != RearPillar is null)
+                return Tr.T("o P1 e o P2 andam juntos: escreva os dois, ou deixe os dois em branco");
+
+            if (FrontPillar is { } p1 && (!double.IsFinite(p1) || p1 <= 0 || p1 > MaiorMedida))
+                return Tr.F("o pilar P1 precisa ter de 0 a {0:0} m (o campo é em metro)", MaiorMedida);
+
+            if (RearPillar is { } p2 && (!double.IsFinite(p2) || p2 <= 0 || p2 > MaiorMedida))
+                return Tr.F("o pilar P2 precisa ter de 0 a {0:0} m (o campo é em metro)", MaiorMedida);
+
+            if (FrontPillar is { } menor && RearPillar is { } maior && maior <= menor)
+                return Tr.T("o P2 (o traseiro) tem que ser maior que o P1 (o dianteiro)");
 
             if (PorQueAMaoNaoServe(FrontBraceLength, FrontBraceBelowTop, Tr.T("dianteiro")) is { } frente) return frente;
             if (PorQueAMaoNaoServe(RearBraceLength, RearBraceBelowTop, Tr.T("traseiro")) is { } tras) return tras;
@@ -220,9 +252,13 @@ public sealed record BifilaFrame(
             _ => Tr.T("sem tirante"),
         };
 
-        return Tr.F(
+        var descricao = Tr.F(
             "biposte: pilar traseiro a {0} m na tesoura, topo dos pilares {1} m abaixo dos módulos, {2}, terças a {3} m da borda dos módulos, {4}",
             Texto(RearPillarAlongRafter), Texto(PillarTopDrop), maos, Texto(PurlinFromModuleEdge), tirantes);
+
+        return FrontPillar is { } p1 && RearPillar is { } p2
+            ? descricao + Tr.F(", P1 de {0} m e P2 de {1} m", Texto(p1), Texto(p2))
+            : descricao;
     }
 
     /// <summary>Igualdade campo a campo, com os vãos do tirante comparados pelo valor.</summary>
@@ -243,7 +279,9 @@ public sealed record BifilaFrame(
         && Equals(Beam, outra.Beam)
         && Equals(Purlin, outra.Purlin)
         && Equals(Brace, outra.Brace)
-        && RodDiameter.Equals(outra.RodDiameter);
+        && RodDiameter.Equals(outra.RodDiameter)
+        && Nullable.Equals(FrontPillar, outra.FrontPillar)
+        && Nullable.Equals(RearPillar, outra.RearPillar);
 
     /// <inheritdoc/>
     public override int GetHashCode()
@@ -266,6 +304,8 @@ public sealed record BifilaFrame(
         codigo.Add(Purlin);
         codigo.Add(Brace);
         codigo.Add(RodDiameter);
+        codigo.Add(FrontPillar);
+        codigo.Add(RearPillar);
 
         return codigo.ToHashCode();
     }
@@ -362,11 +402,13 @@ public static class BifilaReference
     /// <summary>
     /// O biposte genérico, para montar o seu (38.7; Renan, 30/10/2026: "se for
     /// um biposte específico do fabricante, crie uma aba de fabricantes e aí um
-    /// genérico, para a pessoa montar o biposte dela"). A mesa e o pórtico de
-    /// referência, sem mão francesa e sem tirante, que são do fabricante (quem
-    /// tiver os põe), com o vão-alvo no lugar dos vãos escritos, que só fecham
-    /// com o módulo de referência, e sem T3: o enterro é o do projeto, que
-    /// sabe o solo (o 2,20 da Arctech é do solo do Aurora; revisão do 38.7).
+    /// genérico, para a pessoa montar o biposte dela"). Desde o 38.9 ("é PILAR
+    /// P1, Mão francesa MF1, pilar P2, Mão francesa MF2, aí tem as terças, as
+    /// tesouras") ele vem com as peças do pórtico de referência, todas para
+    /// mudar: P1 e P2 de chão plano (sem folga de declive) com o enterro de
+    /// 2,20, e as duas mãos francesas. Sem tirante, porque os vãos travados
+    /// dependem do comprimento da mesa, e com o vão-alvo no lugar dos vãos
+    /// escritos, que só fecham com o módulo de referência.
     /// </summary>
     public static TableProfile Generic()
     {
@@ -378,15 +420,12 @@ public static class BifilaReference
             Frame = referencia.Frame with
             {
                 PillarSpans = null,
-                MinEmbedment = null,
                 Bifila = Frame(BifilaVariant.Gc800) with
                 {
-                    FrontBraceLength = 0,
-                    FrontBraceBelowTop = 0,
-                    RearBraceLength = 0,
-                    RearBraceBelowTop = 0,
                     RodLine = BifilaRodLine.None,
                     RodSpans = [],
+                    FrontPillar = 3.059,
+                    RearPillar = 3.588,
                 },
             },
         };

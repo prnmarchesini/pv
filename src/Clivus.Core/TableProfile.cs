@@ -88,6 +88,15 @@ public sealed record TableProfile(
     public const int VersaoBifila = 4;
 
     /// <summary>
+    /// A versão do formato do biposte com o P1 e o P2 (38.9): a altura passa a
+    /// ser da estrutura, em <c>frame.bifila.frontPillar</c> e
+    /// <c>rearPillar</c>. O biposte sem eles continua saindo na 4, igual a
+    /// antes; plugin antigo recusa a 5 com o motivo, em vez de abrir a mesa
+    /// sem a altura dela.
+    /// </summary>
+    public const int VersaoBifilaComPilares = 5;
+
+    /// <summary>
     /// Os dados elétricos do módulo desta estrutura (lidos do .PAN do PVsyst
     /// ou digitados no cadastro), ou null quando a estrutura ainda não os
     /// tem: aí as tensões e correntes da rota ficam em branco. É a fonte
@@ -153,9 +162,56 @@ public sealed record TableProfile(
             // ela aqui, um perfil errado só explodiria na hora de desenhar,
             // com o projetista já tendo escolhido a área. Chamar a de lá, em
             // vez de repetir a regra, é o que impede as duas divergirem.
-            return Frame.WhyDoesNotFit(Layout);
+            if (Frame.WhyDoesNotFit(Layout) is { } naoCabe) return naoCabe;
+
+            return PorQueOsPilaresNaoServem();
         }
     }
+
+    /// <summary>
+    /// O P1 e o P2 do biposte (38.9) com a mesa montada: o P1 tem que deixar
+    /// os módulos acima do chão, e o P2 tem que alcançar a viga no chão plano.
+    /// O P1 é o pilar inteiro, com o enterro, então ele pede o T3.
+    /// </summary>
+    private string? PorQueOsPilaresNaoServem()
+    {
+        if (Frame.Bifila is not { FrontPillar: { } p1, RearPillar: { } p2 }) return null;
+
+        if (Frame.MinEmbedment is not { } t3)
+            return Tr.T("o P1 é o pilar inteiro, com o enterro: escreva o enterro mínimo T3 da estrutura");
+
+        var geometria = TableGeometry.Local(Layout, Frame.Pillars(Layout), Frame);
+        var pontaBaixa = StructureHeight.LowEdge(geometria, TiltRadians)!.Value;
+
+        if (!(pontaBaixa > 0))
+        {
+            return Tr.F(
+                "o P1 de {0} m, com {1} m de enterro, deixa a ponta baixa dos módulos a {2} m do chão: o módulo encosta no chão",
+                Texto(p1), Texto(t3), Texto(pontaBaixa));
+        }
+
+        var plano = StructureHeight.FlatRearPillar(geometria, TiltRadians)!.Value;
+
+        if (p2 < plano - 0.001)
+        {
+            return Tr.F(
+                "o P2 de {0} m não alcança a viga: no chão plano o pilar traseiro precisa de {1} m (o P1 mais a subida da viga entre os dois pilares)",
+                Texto(p2), Texto(plano));
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// A ponta baixa que o P1 da estrutura dá no chão plano (38.9), ou null
+    /// quando ela não tem P1 ou o perfil não serve.
+    /// </summary>
+    public double? StructureLowEdge =>
+        Frame?.Bifila?.FrontPillar is null || WhyInvalid is not null
+            ? null
+            : StructureHeight.LowEdge(TableGeometry.Local(Layout, Frame.Pillars(Layout), Frame), TiltRadians);
+
+    private static string Texto(double valor) => valor.ToString("0.###", Tr.Culture);
 
     /// <summary>
     /// A inclinação em graus, como ela vai para o arquivo e para a tela.
@@ -219,16 +275,20 @@ public sealed record TableProfile(
     /// <summary>
     /// Os pilares na altura básica (38.7; Renan, 30/10/2026: "cadê a altura
     /// básica das duas pernas da mesa? ... P1 que é o pilar menor e P2 que é o
-    /// pilar maior"): no chão plano, com a ponta baixa onde o motor assenta a
-    /// mesa no plano (a mínima do projeto na grade de cotas,
-    /// <see cref="ViableElevations.FlatGroundLowEdge"/>) e o enterro T3 da mesa
-    /// (sem T3, o mínimo do projeto). No terreno, cada pilar sai com o seu.
+    /// pilar maior"): no chão plano e com o enterro T3 da mesa (sem T3, o
+    /// mínimo do projeto). Com o P1 da estrutura (38.9), a ponta baixa é a que
+    /// ele dá, exata: o P1 sai o que o projetista escreveu. Sem P1, a ponta
+    /// baixa é onde o motor assenta a mesa no plano (a mínima do projeto na
+    /// grade de cotas, <see cref="ViableElevations.FlatGroundLowEdge"/>). No
+    /// terreno, cada pilar sai com o seu.
     /// </summary>
     /// <param name="projeto">A configuração do projeto: a ponta baixa mínima e o enterro.</param>
     /// <exception cref="InvalidOperationException">Com o perfil inválido.</exception>
     public BasicPillars PillarsAtBasicHeight(SystemConfiguration projeto)
     {
         ArgumentNullException.ThrowIfNull(projeto);
+
+        if (StructureLowEdge is { } daEstrutura) return PillarsOnFlatGround(daEstrutura, Frame.MinEmbedment!.Value);
 
         return PillarsOnFlatGround(ViableElevations.FlatGroundLowEdge(projeto), projeto.WithEmbedmentOf(Frame).MinEmbedment);
     }
@@ -289,7 +349,7 @@ public sealed record TableProfile(
 
         var arquivo = new Arquivo
         {
-            FormatVersion = Frame.Bifila is not null ? VersaoBifila
+            FormatVersion = Frame.Bifila is { } bifila ? (bifila.FrontPillar is null ? VersaoBifila : VersaoBifilaComPilares)
                 : ModuleElectrical is null ? VersaoDoFormato : VersaoComEletrica,
             // Sem Trim: trimar só na gravação faria o perfil voltar diferente
             // do que entrou, que é exatamente o que este arquivo existe para
@@ -340,6 +400,8 @@ public sealed record TableProfile(
                         Purlin = SecaoNoArquivo.De(b.Purlin),
                         Brace = SecaoNoArquivo.De(b.Brace),
                         RodDiameter = b.RodDiameter,
+                        FrontPillar = b.FrontPillar,
+                        RearPillar = b.RearPillar,
                     }
                     : null,
             },
@@ -395,10 +457,10 @@ public sealed record TableProfile(
         if (arquivo.FormatVersion is not { } versao)
             throw new InvalidOperationException(Tr.T("O perfil de mesa não diz de que versão do formato é."));
 
-        if (versao != VersaoDoFormato && versao != VersaoComEletrica && versao != VersaoBifila)
+        if (versao != VersaoDoFormato && versao != VersaoComEletrica && versao != VersaoBifila && versao != VersaoBifilaComPilares)
         {
             throw new InvalidOperationException(
-                Tr.F("O perfil de mesa é da versão {0} do formato, e este plugin lê a versão {1}.", versao, VersaoBifila));
+                Tr.F("O perfil de mesa é da versão {0} do formato, e este plugin lê a versão {1}.", versao, VersaoBifilaComPilares));
         }
 
         // Os dados elétricos entraram na versão 3: um perfil que diz ser da 2
@@ -409,13 +471,18 @@ public sealed record TableProfile(
         if (versao == VersaoComEletrica && arquivo.ModuleElectrical is null)
             throw new InvalidOperationException(Tr.F("O perfil de mesa não traz o campo \"{0}\".", "moduleElectrical"));
 
-        // A bifila entrou na versão 4, e só ela sai na 4: os dois lados
-        // precisam bater, senão o arquivo foi mexido à mão.
-        if (versao == VersaoBifila && arquivo.Frame?.Bifila is null)
-            throw new InvalidOperationException(Tr.T("O perfil de mesa é da versão 4 do formato e não traz a estrutura do biposte (frame.bifila)."));
+        // A bifila entrou na versão 4, e só ela sai na 4 (ou na 5, com o P1 e
+        // o P2): os dois lados precisam bater, senão o arquivo foi mexido à mão.
+        var ehBifila = versao is VersaoBifila or VersaoBifilaComPilares;
 
-        if (versao != VersaoBifila && arquivo.Frame?.Bifila is not null)
+        if (ehBifila && arquivo.Frame?.Bifila is null)
+            throw new InvalidOperationException(Tr.F("O perfil de mesa é da versão {0} do formato e não traz a estrutura do biposte (frame.bifila).", versao));
+
+        if (!ehBifila && arquivo.Frame?.Bifila is not null)
             throw new InvalidOperationException(Tr.F("O perfil de mesa é da versão {0} do formato e traz a estrutura do biposte, que só existe na versão 4.", versao));
+
+        if (versao == VersaoBifila && (arquivo.Frame?.Bifila?.FrontPillar is not null || arquivo.Frame?.Bifila?.RearPillar is not null))
+            throw new InvalidOperationException(Tr.T("O perfil de mesa é da versão 4 do formato e traz o P1 e o P2 do biposte, que só existem na versão 5."));
 
         if (arquivo.Layout is null) throw new InvalidOperationException(Tr.T("O perfil de mesa não traz a mesa."));
         if (arquivo.Frame is null) throw new InvalidOperationException(Tr.T("O perfil de mesa não traz a estrutura."));
@@ -458,7 +525,7 @@ public sealed record TableProfile(
                 // o vão-alvo e o enterro da configuração, como sempre abriu.
                 PillarSpans = arquivo.Frame.PillarSpans,
                 MinEmbedment = arquivo.Frame.MinEmbedment,
-                Bifila = arquivo.Frame.Bifila is { } b ? LerBifila(b) : null,
+                Bifila = arquivo.Frame.Bifila is { } b ? LerBifila(b, comPilares: versao == VersaoBifilaComPilares) : null,
             },
             Exigir(arquivo.TiltDegrees, "tiltDegrees") * Math.PI / 180)
         {
@@ -487,8 +554,9 @@ public sealed record TableProfile(
     /// <summary>
     /// A parte bifila do arquivo, com cada campo exigido pelo nome: na bifila
     /// nada é opcional, e zero é valor legítimo (mão francesa zero é "sem").
+    /// O P1 e o P2 só existem na versão 5, e nela são exigidos.
     /// </summary>
-    private static BifilaFrame LerBifila(BifilaNoArquivo b)
+    private static BifilaFrame LerBifila(BifilaNoArquivo b, bool comPilares)
     {
         // Pelo nome exato, e não pelo conversor do .NET, que aceita "1" entre
         // aspas e "Rear, Front" como se fossem nomes.
@@ -515,7 +583,11 @@ public sealed record TableProfile(
             LerSecao(b.Beam, "frame.bifila.beam"),
             LerSecao(b.Purlin, "frame.bifila.purlin"),
             LerSecao(b.Brace, "frame.bifila.brace"),
-            Exigir(b.RodDiameter, "frame.bifila.rodDiameter"));
+            Exigir(b.RodDiameter, "frame.bifila.rodDiameter"))
+        {
+            FrontPillar = comPilares ? Exigir(b.FrontPillar, "frame.bifila.frontPillar") : null,
+            RearPillar = comPilares ? Exigir(b.RearPillar, "frame.bifila.rearPillar") : null,
+        };
     }
 
     private static BarSection LerSecao(SecaoNoArquivo? secao, string campo)
@@ -642,6 +714,12 @@ public sealed record TableProfile(
         public SecaoNoArquivo? Purlin { get; init; }
         public SecaoNoArquivo? Brace { get; init; }
         public double? RodDiameter { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double? FrontPillar { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double? RearPillar { get; init; }
     }
 
     private sealed class SecaoNoArquivo

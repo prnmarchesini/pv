@@ -114,7 +114,7 @@ public static class ConfiguracoesCommands
         }
 
         janela = new JanelaDeConfiguracoes(mesas, parametros, aviso, estilos, EditarMesa, divergencias: Divergencias, atualizarPotencia: AtualizarPotencia,
-            carports: carports, editarCarport: EditarCarport, pegarAzimute: PegarAzimute);
+            carports: carports, editarCarport: EditarCarport, pegarAzimute: PegarAzimute, latitude: LatitudeDoTerreno(database));
 
         if (AcadApp.ShowModalWindow(janela) != true || janela.Salvo is not { } salvo)
         {
@@ -139,6 +139,18 @@ public static class ConfiguracoesCommands
 
         var antes = MesasDoDesenho.Ler(database);
         Gravar(Tr.N("as mesas do desenho"), () => MesasDoDesenho.Gravar(database, salvo.Mesas));
+
+        // A mesa removida sai também da biblioteca (30/10/2026: "eu clico em
+        // salvar no desenho e aí abro de novo essa merda volta"). A que voltou
+        // para a lista antes de salvar (outra com o mesmo nome) fica.
+        foreach (var nome in janela.Removidas.Distinct().Where(n => DrawingTables.Find(salvo.Mesas, n) is null))
+        {
+            Gravar(Tr.N("a biblioteca de mesas"), () =>
+            {
+                if (biblioteca.MoveToRemoved(nome))
+                    editor.WriteMessage(Tr.F("\n  \"{0}\" saiu também da biblioteca (o arquivo foi para a subpasta \"{1}\" de {2}).\n", nome, TableProfileStore.PastaDosRemovidos, MesaCommands.PastaDosPerfis));
+            });
+        }
         if (salvo.Carports.Count > 0 || carports.Count > 0)
             Gravar(Tr.N("os carports do desenho"), () => CarportsDoDesenho.Gravar(database, salvo.Carports, salvo.Mesas));
 
@@ -156,6 +168,29 @@ public static class ConfiguracoesCommands
             : Tr.F("\nCONFIGURAÇÕES gravadas no desenho: {0} mesa(s), o motor usa, nesta prioridade: {1}; {2}.\n", salvo.Mesas.Count, string.Join(", ", emUso.Select(m => m.Name)), salvo.Parametros.Describe()));
         if (repintadas > 0) editor.WriteMessage(Tr.F("  {0} mesa(s) desenhada(s) com a cor nova do tipo.\n", repintadas));
         editor.WriteMessage(Tr.T("  Elas vão junto com o arquivo: salve o desenho. Para a usina seguir as outras mudanças, use Regerar área.\n"));
+    }
+
+    /// <summary>
+    /// A latitude do terreno para o aviso do hemisfério (38.9): a gravada pelo
+    /// plugin, ou a da geolocalização do desenho no meio dele; null sem
+    /// nenhuma das duas.
+    /// </summary>
+    internal static double? LatitudeDoTerreno(Autodesk.AutoCAD.DatabaseServices.Database database)
+    {
+        try
+        {
+            var (minimo, maximo) = (database.Extmin, database.Extmax);
+            var meio = minimo.X < maximo.X && minimo.Y < maximo.Y && Math.Abs(minimo.X) < 1e15
+                ? new Autodesk.AutoCAD.Geometry.Point3d((minimo.X + maximo.X) / 2, (minimo.Y + maximo.Y) / 2, 0)
+                : Autodesk.AutoCAD.Geometry.Point3d.Origin;
+
+            return GeoStore.Read(database, meio)?.Latitude;
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui ler a latitude do terreno para o aviso do hemisfério.", erro);
+            return null;
+        }
     }
 
     /// <summary>

@@ -68,8 +68,21 @@ internal sealed class CorteDaMesa : FrameworkElement
 
     private const double Margem = 30;
 
+    /// <summary>Quanto do enterro o biposte mostra antes da quebra (38.9): o resto só na cota.</summary>
+    private const double EnterroDesenhado = 0.6;
+
     private static readonly Pen MaoFrancesa =
         Congelar(new Pen(Congelar(new SolidColorBrush(Color.FromRgb(0xB8, 0xC4, 0xD0))), 3));
+
+    /// <summary>O chão caindo para trás que o P2 de catálogo alcança (38.9), tracejado.</summary>
+    private static readonly Pen ChaoCaindo =
+        Congelar(new Pen(Congelar(new SolidColorBrush(Color.FromRgb(0x9C, 0x7A, 0x52))), 1.5)
+        {
+            DashStyle = new DashStyle([6, 4], 0),
+        });
+
+    private static readonly Brush Terca = Congelar(new SolidColorBrush(Color.FromRgb(0x63, 0xD9, 0xC4)));
+    private static readonly Brush Claro = Congelar(new SolidColorBrush(Color.FromRgb(0xE6, 0xEB, 0xF0)));
 
     private TableGeometry? _mesa;
     private double _tilt;
@@ -137,21 +150,32 @@ internal sealed class CorteDaMesa : FrameworkElement
         // O solo é símbolo: fica a um vão fixo abaixo da ponta baixa, e o
         // pilar entra nele o T3 (ou um T3 de mostra, sem cota, sem T3 escrito).
         // No biposte com a altura básica (38.7), é o chão plano de verdade: a
-        // ponta baixa mínima do projeto abaixo dela, e o enterro que vale.
+        // ponta baixa que o P1 dá (ou a mínima do projeto) abaixo dela, e o
+        // enterro que vale.
         var vaoAteOSolo = _basica?.LowEdge ?? 0.35;
         var t3 = _basica?.Embedment ?? _enterro ?? 0.6;
+
+        // No biposte (38.9): o P2 com folga desce além do chão plano, e o
+        // desenho reserva a folga embaixo, as cotas da tesoura em cima e as
+        // dos pilares dos lados. O enterro sai cortado (a quebra): os 2,20 m
+        // achatavam o desenho todo; as cotas dizem o valor certo.
+        var folgaDoP2 = FolgaDoP2();
+        var t3Desenhado = _bifila is null ? t3 : Math.Min(t3, EnterroDesenhado);
+        var emCima = _bifila is null ? 0 : 70;
+        var (ladoEsquerdo, ladoDireito) = _bifila is null ? (46.0, 12.0) : (124.0, 112.0);
 
         // A caixa do desenho vai da ponta baixa até a ponta alta, mais o
         // pedaço abaixo dela até o pé do pilar dentro do solo.
         var largura = Math.Max(0.001, m2 * cos);
-        var altura = Math.Max(0.001, alto + vaoAteOSolo + t3 + 0.05);
+        var altura = Math.Max(0.001, alto + vaoAteOSolo + folgaDoP2 + t3Desenhado + 0.05);
 
-        var disponivelX = Math.Max(1, ActualWidth - 2 * Margem - 58);
-        var disponivelY = Math.Max(1, ActualHeight - 2 * Margem - 26);
+        var disponivelX = Math.Max(1, ActualWidth - 2 * Margem - ladoEsquerdo - ladoDireito);
+        var disponivelY = Math.Max(1, ActualHeight - 2 * Margem - 26 - emCima - (_bifila is null ? 0 : 36));
         var k = Math.Min(disponivelX / largura, disponivelY / altura);
 
-        var x0 = Margem + 46;
-        var yBaixa = Margem + alto * k;
+        // O biposte fica no meio da largura que sobra.
+        var x0 = Margem + ladoEsquerdo + (_bifila is null ? 0 : Math.Max(0, (disponivelX - largura * k) / 2));
+        var yBaixa = Margem + emCima + alto * k;
 
         // Ponto sobre o plano dos módulos, a distância d da ponta baixa.
         Point No(double d, double recuo = 0) => new(
@@ -177,11 +201,11 @@ internal sealed class CorteDaMesa : FrameworkElement
         // do solo, o T3.
         var encosto = No(pilarEm, 11);
         var ySolo = yBaixa + vaoAteOSolo * k;
-        var yPe = ySolo + t3 * k;
+        var yPe = ySolo + t3Desenhado * k;
 
         if (_bifila is { } bifila && _mesa.RearPillarRow is { } trasEm)
         {
-            DesenharBifila(tela, bifila, pilarEm, trasEm, sobra, t1, x0, yBaixa, k, ySolo, yPe, m2);
+            DesenharBifila(tela, bifila, pilarEm, trasEm, sobra, t1, x0, yBaixa, k, ySolo, yPe, m2, t3 > t3Desenhado + 1e-9);
             return;
         }
 
@@ -215,15 +239,24 @@ internal sealed class CorteDaMesa : FrameworkElement
             new Point(Margem, ActualHeight - 16));
     }
 
+    /// <summary>Quanto o P2 escrito passa do P2 do chão plano: a folga para o chão caindo para trás (38.9). Zero sem ela.</summary>
+    private double FolgaDoP2() =>
+        _bifila?.RearPillar is { } p2 && _basica?.P2 is { } plano ? Math.Max(0, p2 - plano) : 0;
+
     /// <summary>
-    /// A bifila (38.1): os dois pilares com o topo abaixo dos módulos, a viga
-    /// (o eixo dela, debaixo da terça), as mãos francesas pelo comprimento da
-    /// peça e as cotas que o fornecedor dá: T2 e T2t na tesoura e a
-    /// distância entre os pilares na horizontal.
+    /// O biposte peça por peça, como o desenho do fabricante (38.9; Renan,
+    /// 30/10/2026: "é PILAR P1, Mão francesa MF1, pilar P2, Mão francesa MF2,
+    /// aí tem as terças, as tesouras"): os dois pilares inteiros, do topo ao
+    /// pé, com o nome e o comprimento; as mãos francesas com o nome, o
+    /// comprimento e onde prendem no pilar; a tesoura e as terças; o chão
+    /// plano na altura que o P1 dá e, com a folga do P2, o chão caindo para
+    /// trás que ele alcança. As cotas da tesoura vão em cima dos módulos, as
+    /// dos pilares do lado de fora deles.
     /// </summary>
+    /// <param name="quebrado">Se o enterro saiu cortado (mais fundo que <see cref="EnterroDesenhado"/>): os pilares e as cotas levam a quebra.</param>
     private void DesenharBifila(
         DrawingContext tela, BifilaFrame bifila, double frenteEm, double trasEm, double sobra, double t1,
-        double x0, double yBaixa, double k, double ySolo, double yPe, double m2)
+        double x0, double yBaixa, double k, double ySolo, double yPe, double m2, bool quebrado)
     {
         var cos = Math.Cos(_tilt);
         var sen = Math.Sin(_tilt);
@@ -231,16 +264,57 @@ internal sealed class CorteDaMesa : FrameworkElement
         // Em metro, com a origem na ponta baixa do módulo: h para o lado alto,
         // v para cima. A tela é só a escala.
         Point Tela(double h, double v) => new(x0 + h * k, yBaixa - v * k);
+        Point No(double d, double recuo = 0) => new(x0 + d * cos * k + sen * recuo, yBaixa - d * sen * k + cos * recuo);
 
         var espessura = _mesa!.Modules.Count > 0 ? -_mesa.Modules[0].Solid.Min(p => p.Z) : 0;
         var eixoDaViga = espessura + bifila.Purlin.Depth + bifila.Beam.Depth / 2;
 
         (double H, double V) NaViga(double d) => (d * cos + sen * eixoDaViga, d * sen - cos * eixoDaViga);
 
-        // A viga.
+        var folga = _basica is null ? 0 : FolgaDoP2();
+        var xFrente = Tela(frenteEm * cos, 0).X;
+        var xTras = Tela(trasEm * cos, 0).X;
+        var yPeTras = yPe + folga * k;
+
+        // O chão plano, na altura que o P1 dá; com a folga do P2, o chão
+        // caindo para trás, girando no pé do P1, até onde o P2 alcança.
+        DesenharChao(tela, ySolo);
+        var yChaoAtras = ySolo;
+        var declive = 0.0;
+
+        if (folga > 0.0005 && xTras - xFrente > 1)
+        {
+            // O tracejado para logo depois do P2, antes das cotas dele; o
+            // nome vai no começo, longe do T3 do P2.
+            declive = folga / ((trasEm - frenteEm) * cos);
+            var xFim = xTras + 8;
+            tela.DrawLine(ChaoCaindo, new Point(xFrente, ySolo), new Point(xFim, ySolo + (xFim - xFrente) * declive));
+            yChaoAtras = ySolo + folga * k;
+
+            // Embaixo da linha em toda a largura do texto: a altura é a do
+            // fim dele, onde a linha já desceu mais.
+            var rotulo = Formatar(Tr.F("chão caindo {0} % para trás", Medida(Math.Round(declive * 100, 1))), 10.5, Terra);
+            var xRotulo = xFrente + 14;
+            tela.DrawText(rotulo, new Point(xRotulo, ySolo + (xRotulo + rotulo.Width - xFrente) * declive + 3));
+        }
+
+        // A tesoura (a viga do pórtico), embaixo das terças.
         var (ha, va) = NaViga(sobra);
         var (hb, vb) = NaViga(sobra + t1);
         tela.DrawLine(Tesoura, Tela(ha, va), Tela(hb, vb));
+
+        // As terças: duas por fileira de módulos, cada uma a esta distância
+        // de uma borda, entre os módulos e a tesoura.
+        var meioDaTerca = espessura + bifila.Purlin.Depth / 2;
+        var ladoDaTerca = Math.Max(6, bifila.Purlin.Depth * k);
+        foreach (var faixa in Fileiras())
+        {
+            foreach (var d in new[] { faixa.De + bifila.PurlinFromModuleEdge, faixa.Ate - bifila.PurlinFromModuleEdge })
+            {
+                var c = Tela(d * cos + sen * meioDaTerca, d * sen - cos * meioDaTerca);
+                tela.DrawRectangle(Terca, null, new Rect(c.X - ladoDaTerca / 2, c.Y - ladoDaTerca / 2, ladoDaTerca, ladoDaTerca));
+            }
+        }
 
         // Meia seção do pilar na inclinação, para a cabeça da mão francesa ficar
         // entre a face deste pilar e a do outro, como o Core confere.
@@ -248,6 +322,9 @@ internal sealed class CorteDaMesa : FrameworkElement
             ? (_mesa.Pillars[0].Footprint.Max(p => p.Y) - _mesa.Pillars[0].Footprint.Min(p => p.Y)) / 2
             : 0;
         var recusadas = new List<string>();
+
+        // Onde cada mão francesa prende no pilar (na tela), para a cota.
+        var prende = new Dictionary<bool, double>();
 
         foreach (var (em, outroEm, comprimento, abaixo, paraTras) in new[]
         {
@@ -259,22 +336,18 @@ internal sealed class CorteDaMesa : FrameworkElement
             var vTopo = em * sen - bifila.PillarTopDrop;
             var topo = Tela(hp, vTopo);
 
-            tela.DrawLine(Pilar, topo, new Point(topo.X, yBaixa));
-            tela.DrawLine(PilarSemFim, new Point(topo.X, yBaixa), new Point(topo.X, ySolo));
-            tela.DrawLine(Pilar, new Point(topo.X, ySolo), new Point(topo.X, yPe));
-            DesenharSolo(tela, ySolo, topo.X);
-
-            // Com a altura básica, o pilar inteiro, do pé ao topo: P1 o
-            // dianteiro (o menor), P2 o traseiro (38.7). Sem ela, a subida
-            // acima da ponta baixa, como antes.
-            if (_basica is { } alturaBasica)
+            // O pilar inteiro, do topo ao pé; sem a altura (a conta não
+            // fechou), cheio até a ponta baixa, tracejado até o solo.
+            if (_basica is not null)
             {
-                var inteiro = paraTras ? alturaBasica.P1 : alturaBasica.P2 ?? alturaBasica.P1;
-                CotaVertical(tela, topo.X + 22, topo.Y, yPe, $"{(paraTras ? "P1" : "P2")} {Milimetro(inteiro)}", Laranja);
+                tela.DrawLine(Pilar, topo, new Point(topo.X, paraTras ? yPe : yPeTras));
             }
             else
             {
-                CotaVertical(tela, topo.X + 22, topo.Y, yBaixa, Medida(vTopo), Laranja);
+                tela.DrawLine(Pilar, topo, new Point(topo.X, yBaixa));
+                tela.DrawLine(PilarSemFim, new Point(topo.X, yBaixa), new Point(topo.X, ySolo));
+                tela.DrawLine(Pilar, new Point(topo.X, ySolo), new Point(topo.X, yPe));
+                CotaVertical(tela, topo.X + (paraTras ? -22 : 22), topo.Y, yBaixa, Medida(vTopo), Laranja, aEsquerda: paraTras);
             }
 
             if (comprimento <= 0) continue;
@@ -324,42 +397,141 @@ internal sealed class CorteDaMesa : FrameworkElement
                 continue;
             }
 
-            tela.DrawLine(MaoFrancesa, Tela(hp, pv), Tela(hc, vc));
-        }
+            var pe = Tela(hp, pv);
+            var cabeca = Tela(hc, vc);
+            tela.DrawLine(MaoFrancesa, pe, cabeca);
+            prende[paraTras] = pe.Y;
 
-        if (recusadas.Count > 0)
-            Escrever(tela, string.Join(" · ", recusadas), Laranja, 10.5, new Point(Margem, ActualHeight - 32));
+            // O nome da peça e o comprimento, embaixo do meio dela, longe dos
+            // módulos e da tesoura.
+            Rotulo(tela, $"{(paraTras ? "MF1" : "MF2")} {Milimetro(comprimento)}", Claro,
+                new Point((pe.X + cabeca.X) / 2, Math.Max(pe.Y, cabeca.Y) + 10));
+        }
 
         Angulo(tela, Tela(0, 0), k);
 
-        Point No(double d, double recuo = 0) => new(x0 + d * cos * k + sen * recuo, yBaixa - d * sen * k + cos * recuo);
+        // Em cima dos módulos, ao longo da inclinação: os módulos, a tesoura
+        // e onde o P1 encosta nela (o P2 sai da distância entre os pilares,
+        // cotada embaixo).
+        CotaInclinada(tela, No(0, -18), No(m2, -18), Tr.F("módulos {0}", Medida(m2)), Texto);
+        CotaInclinada(tela, No(sobra, -38), No(sobra + t1, -38), Tr.F("tesoura T1 {0}", Medida(t1)), Verde);
+        CotaInclinada(tela, No(sobra, -58), No(frenteEm, -58), Tr.F("T2 {0}", Medida(frenteEm - sobra)), Laranja);
 
-        CotaInclinada(tela, No(0, -26), No(m2, -26), $"M2 {Medida(m2)}", Texto);
-        CotaInclinada(tela, No(sobra, 36), No(sobra + t1, 36), $"T1 {Medida(t1)}", Verde);
-        CotaInclinada(tela, No(sobra, 58), No(frenteEm, 58), $"T2 {Medida(frenteEm - sobra)}", Laranja);
-        CotaInclinada(tela, No(sobra, 80), No(trasEm, 80), $"T2t {Medida(trasEm - sobra)}", Laranja);
+        // Os pilares inteiros e onde as mãos francesas prendem: do P1 para a
+        // esquerda, do P2 para a direita, de dentro para fora.
+        if (_basica is { } alturaBasica)
+        {
+            var topoFrente = Tela(frenteEm * cos, frenteEm * sen - bifila.PillarTopDrop);
+            var topoTras = Tela(trasEm * cos, trasEm * sen - bifila.PillarTopDrop);
 
-        var xFrente = Tela(frenteEm * cos, 0).X;
-        var xTras = Tela(trasEm * cos, 0).X;
-        CotaHorizontal(tela, xFrente, xTras, yPe + 12, Medida((trasEm - frenteEm) * cos), Laranja);
+            var xEsquerdaDoP1 = xFrente - 12;
+            if (prende.TryGetValue(true, out var yMf1))
+                xEsquerdaDoP1 = CotaVertical(tela, xEsquerdaDoP1, topoFrente.Y, yMf1, Medida(bifila.FrontBraceBelowTop), Claro, aEsquerda: true) - 10;
+            CotaVertical(tela, xEsquerdaDoP1, topoFrente.Y, yPe, $"P1 {Milimetro(alturaBasica.P1)}", Laranja, aEsquerda: true, fracaoDoTexto: 0.8);
 
-        // O T3 é o da mesa; sem ele, o enterro que vale é o do projeto, e a
-        // cota diz isso (revisão do 38.7).
-        if (_enterro is { } escrito)
-            CotaVertical(tela, xFrente - 26, ySolo, yPe, $"T3 {Medida(escrito)}", Terra, aEsquerda: true);
-        else if (_basica is { } doProjeto)
-            CotaVertical(tela, xFrente - 26, ySolo, yPe, Tr.F("enterro {0} (projeto)", Medida(doProjeto.Embedment)), Terra, aEsquerda: true);
+            var xDireitaDoP2 = xTras + 12;
+            if (prende.TryGetValue(false, out var yMf2))
+                xDireitaDoP2 = CotaVertical(tela, xDireitaDoP2, topoTras.Y, yMf2, Medida(bifila.RearBraceBelowTop), Claro) + 10;
+            CotaVertical(tela, xDireitaDoP2, topoTras.Y, yPeTras, $"P2 {Milimetro(bifila.RearPillar ?? alturaBasica.P2 ?? alturaBasica.P1)}", Laranja, fracaoDoTexto: 0.8);
 
-        Escrever(
+            // A altura livre sob o módulo, na ponta baixa, do chão plano.
+            var fundo = Tela(espessura * sen, -espessura * cos);
+            CotaVertical(tela, x0 - 12, ySolo, fundo.Y, Tr.F("livre {0}", Milimetro(alturaBasica.LowEdge - espessura * cos)), Texto, aEsquerda: true);
+
+            // A quebra do enterro cortado, nos pilares e nas cotas que passam por ela.
+            if (quebrado)
+            {
+                var yQuebra = (ySolo + yPe) / 2;
+                var yQuebraTras = yQuebra + folga * k;
+                Quebra(tela, xFrente, yQuebra);
+                Quebra(tela, xTras, yQuebraTras);
+                Quebra(tela, xFrente - 12, yQuebra);
+                if (folga > 0.0005) Quebra(tela, xTras - 12, yQuebraTras);
+                Quebra(tela, xEsquerdaDoP1, yQuebra);
+                Quebra(tela, xDireitaDoP2, yQuebraTras);
+            }
+        }
+
+        CotaHorizontal(tela, xFrente, xTras, Math.Max(yPe, yPeTras) + 12, Milimetro((trasEm - frenteEm) * cos), Laranja);
+
+        // O T3: o do P1 do chão plano; o do P2, do chão caindo que ele
+        // alcança. Sem T3 na mesa, o enterro que vale é o do projeto, e a cota
+        // diz isso (revisão do 38.7).
+        var nomeDoEnterro = _enterro is { } escrito ? $"T3 {Medida(escrito)}"
+            : _basica is { } doProjeto ? Tr.F("enterro {0} (projeto)", Medida(doProjeto.Embedment))
+            : null;
+
+        // O do P1 à esquerda dele (à direita fica o nome do chão caindo).
+        if (nomeDoEnterro is not null)
+        {
+            CotaVertical(tela, xFrente - 12, ySolo, yPe, nomeDoEnterro, Terra, aEsquerda: true);
+            if (folga > 0.0005) CotaVertical(tela, xTras - 12, yChaoAtras, yPeTras, nomeDoEnterro, Terra, aEsquerda: true);
+        }
+
+        EscreverEmBaixo(
             tela,
-            _basica is { } basica
-                ? Tr.F("biposte na altura básica: chão plano, ponta baixa {0} m (a mínima do projeto na grade de 1 cm) · tracejado: a parte livre, que muda com o terreno",
-                    Medida(basica.LowEdge))
+            (_basica is { } doProjetoSemP1 && bifila.FrontPillar is null
+                ? Tr.F("Medidas em metro. Chão plano com a ponta baixa na mínima do projeto ({0} m): sem o P1 e o P2, a altura vem da faixa do projeto. Na usina, cada pilar sai com o comprimento que o terreno pede.",
+                    Milimetro(doProjetoSemP1.LowEdge))
+                : _basica is { } basica
+                ? (folga > 0.0005
+                    ? Tr.F("Medidas em metro. Chão plano na altura do P1 (ponta baixa a {0} m); tracejado: o chão caindo {1} % para trás, que o P2 alcança com o enterro. Na usina, cada pilar sai com o comprimento que o terreno pede.",
+                        Milimetro(basica.LowEdge), Medida(Math.Round(declive * 100, 1)))
+                    : Tr.F("Medidas em metro. Chão plano na altura do P1 (ponta baixa a {0} m). Na usina, cada pilar sai com o comprimento que o terreno pede.",
+                        Milimetro(basica.LowEdge)))
                 : Tr.F("biposte: pilares a {0} m na horizontal, topo {1} m abaixo dos módulos · tracejado: o resto depende do terreno",
-                    Medida((trasEm - frenteEm) * cos), Medida(bifila.PillarTopDrop)),
-            Fraco,
-            10.5,
-            new Point(Margem, ActualHeight - 16));
+                    Medida((trasEm - frenteEm) * cos), Medida(bifila.PillarTopDrop)))
+            + (quebrado ? " " + Tr.T("O enterro sai cortado; as cotas dão o comprimento inteiro.") : string.Empty),
+            recusadas);
+    }
+
+    /// <summary>
+    /// A legenda embaixo do desenho, quebrada na largura dele, e as mãos
+    /// francesas recusadas logo acima dela.
+    /// </summary>
+    private void EscreverEmBaixo(DrawingContext tela, string legenda, IReadOnlyList<string> recusadas)
+    {
+        var texto = Formatar(legenda, 10.5, Fraco);
+        texto.MaxTextWidth = Math.Max(50, ActualWidth - 2 * Margem);
+        var y = ActualHeight - 6 - texto.Height;
+        tela.DrawText(texto, new Point(Margem, y));
+
+        if (recusadas.Count > 0)
+            Escrever(tela, string.Join(" · ", recusadas), Laranja, 10.5, new Point(Margem, y - 16));
+    }
+
+    /// <summary>O chão plano de ponta a ponta do desenho, com os riscos por baixo (38.9).</summary>
+    private void DesenharChao(DrawingContext tela, double y)
+    {
+        var de = Margem;
+        var ate = ActualWidth - Margem;
+
+        tela.DrawLine(Solo, new Point(de, y), new Point(ate, y));
+
+        for (var x = de + 4; x < ate; x += 9)
+            tela.DrawLine(Solo, new Point(x, y), new Point(x - 6, y + 6));
+
+        Escrever(tela, Tr.T("chão plano"), Fraco, 10, new Point(de, y - 15));
+    }
+
+    /// <summary>
+    /// A quebra de uma linha cortada (38.9): o fundo apaga um pedaço dela, e
+    /// dois riscos inclinados marcam o corte, como nos desenhos de fabricante.
+    /// </summary>
+    private static void Quebra(DrawingContext tela, double x, double y)
+    {
+        tela.DrawRectangle(Fundo, null, new Rect(x - 6, y - 3, 12, 6));
+        tela.DrawLine(Cota, new Point(x - 7, y - 1), new Point(x + 7, y - 5));
+        tela.DrawLine(Cota, new Point(x - 7, y + 5), new Point(x + 7, y + 1));
+    }
+
+    /// <summary>Um texto centrado no ponto, com o fundo do desenho por trás, para não brigar com as linhas.</summary>
+    private void Rotulo(DrawingContext tela, string texto, Brush cor, Point centro)
+    {
+        var formatado = Formatar(texto, 11, cor);
+        var caixa = new Rect(centro.X - formatado.Width / 2 - 3, centro.Y - formatado.Height / 2, formatado.Width + 6, formatado.Height);
+        tela.DrawRectangle(Fundo, null, caixa);
+        tela.DrawText(formatado, new Point(caixa.X + 3, caixa.Y));
     }
 
     private void CotaHorizontal(DrawingContext tela, double de, double ate, double y, string texto, Brush cor)
@@ -412,9 +584,12 @@ internal sealed class CorteDaMesa : FrameworkElement
         arco.Freeze();
         tela.DrawGeometry(null, Cota, arco);
 
+        // Com o fundo por trás: no biposte o número cai em cima dos módulos.
         var graus = _tilt * 180 / Math.PI;
-        Escrever(tela, $"{graus.ToString("0.#", Cultura)}°", Fraco, 11,
-            new Point(origem.X + raio + 4, origem.Y - raio * 0.55));
+        var texto = Formatar($"{graus.ToString("0.#", Cultura)}°", 11, Fraco);
+        var onde = new Point(origem.X + raio + 4, origem.Y - raio * 0.55);
+        tela.DrawRectangle(Fundo, null, new Rect(onde.X - 2, onde.Y, texto.Width + 4, texto.Height));
+        tela.DrawText(texto, onde);
     }
 
     /// <summary>
@@ -449,9 +624,15 @@ internal sealed class CorteDaMesa : FrameworkElement
         tela.DrawText(formatado, new Point(meio.X - formatado.Width / 2, meio.Y - formatado.Height / 2));
     }
 
-    private void CotaVertical(DrawingContext tela, double x, double de, double ate, string texto, Brush cor, bool aEsquerda = false)
+    /// <summary>
+    /// Cota vertical com o texto ao lado. Devolve a borda de fora do texto
+    /// (a esquerda dele, ou a direita), para a cota seguinte ir depois dela;
+    /// sem espaço para a cota, devolve o próprio x.
+    /// </summary>
+    /// <param name="fracaoDoTexto">Onde o texto fica, de <paramref name="de"/> (0) a <paramref name="ate"/> (1): no meio, ou mais embaixo para fugir do chão.</param>
+    private double CotaVertical(DrawingContext tela, double x, double de, double ate, string texto, Brush cor, bool aEsquerda = false, double fracaoDoTexto = 0.5)
     {
-        if (Math.Abs(ate - de) < 18) return;
+        if (Math.Abs(ate - de) < 18) return x;
 
         tela.DrawLine(Cota, new Point(x, de), new Point(x, ate));
         tela.DrawLine(Cota, new Point(x - 4, de), new Point(x + 4, de));
@@ -459,7 +640,9 @@ internal sealed class CorteDaMesa : FrameworkElement
 
         var formatado = Formatar(texto, 10.5, cor);
         var xTexto = aEsquerda ? x - 6 - formatado.Width : x + 6;
-        tela.DrawText(formatado, new Point(xTexto, (de + ate) / 2 - formatado.Height / 2));
+        tela.DrawText(formatado, new Point(xTexto, de + (ate - de) * fracaoDoTexto - formatado.Height / 2));
+
+        return aEsquerda ? xTexto : xTexto + formatado.Width;
     }
 
     /// <summary>

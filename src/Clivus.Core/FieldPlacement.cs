@@ -4,10 +4,31 @@ namespace Clivus.Core;
 
 /// <summary>
 /// O tipo de mesa que vai num objeto do cliente (40.2): o índice na lista de
-/// mesas em uso e se o objeto é a área dos módulos (sem as sobras) ou a mesa
-/// inteira.
+/// mesas em uso, se o objeto é a área dos módulos (sem as sobras) ou a mesa
+/// inteira, e quanto o objeto é mais comprido que ela (negativo: mais curto).
 /// </summary>
-public sealed record FieldMatch(FieldFootprint Footprint, int Kind, bool ModulesOnly);
+public sealed record FieldMatch(FieldFootprint Footprint, int Kind, bool ModulesOnly, double LengthDifference = 0);
+
+/// <summary>
+/// Por onde a mesa se alinha no objeto quando os dois não têm o mesmo
+/// comprimento (revisão de tela do 40.2; Renan, 30/10/2026: "respeitar qual
+/// eixo: Direita, centro ou esquerda [...] se eu escolher direita, ele alinha
+/// na direita e estoura a esquerda, na esquerda estoura a direita, e se eu
+/// escolher centro, estoura centralizado, um pouco para cada lado"). Direita
+/// e esquerda como se vê na planta com o norte para cima
+/// (<see cref="FieldPlacement.RightDirection"/>).
+/// </summary>
+public enum FieldAlignment
+{
+    /// <summary>O meio da mesa no meio do objeto.</summary>
+    Center,
+
+    /// <summary>A ponta da direita da mesa na ponta da direita do objeto.</summary>
+    Right,
+
+    /// <summary>A ponta da esquerda da mesa na ponta da esquerda do objeto.</summary>
+    Left,
+}
 
 /// <summary>
 /// As mesas conforme os objetos (40.2): a usina processada pelo motor, o que
@@ -27,13 +48,15 @@ public sealed record FieldPlant(
 /// "ele segue eles e faz a alocação").
 ///
 /// A mesa é a do Clivus, sentada no terreno pelo mesmo motor da geração
-/// automática: o objeto dá o lugar em planta (o centro, o eixo da fileira e o
-/// lado da ponta baixa), nunca a cota (regra 5).
+/// automática: o objeto dá só o lugar em planta (o centro e o eixo da
+/// fileira), nunca a cota (regra 5) nem o lado da ponta baixa, que é o do
+/// azimute do projeto. Quando o objeto não tem o comprimento da mesa, a
+/// diferença sobra do lado que o <see cref="FieldAlignment"/> manda.
 ///
 /// O motor ancora a mesa no canto da ponta baixa e encurta a planta pelo giro
-/// que ele escolhe para acompanhar o terreno; o centro, então, anda. Por isso
-/// são duas passadas: a primeira com a rampa do próprio objeto, a segunda com
-/// a célula corrigida pelo que a primeira mediu. O que ainda sobra de
+/// que ele escolhe para acompanhar o terreno; o ponto de alinhamento, então,
+/// anda. Por isso são duas passadas: a primeira sem giro, a segunda com a
+/// célula corrigida pelo que a primeira mediu. O que ainda sobra de
 /// diferença sai como divergência.
 /// </summary>
 public static class FieldPlacement
@@ -41,13 +64,19 @@ public static class FieldPlacement
     /// <summary>Acima disto a mesa desenhada conta como fora do objeto: 5 cm.</summary>
     public const double DeviationTolerance = 0.05;
 
-    /// <summary>Quanto o azimute do projeto pode fugir da ponta baixa dos objetos: 45°.</summary>
-    public const double FacingTolerance = Math.PI / 4;
+    /// <summary>
+    /// Quanto o objeto pode diferir da mesa e ainda ser ela: 15 % do
+    /// comprimento e da largura. O que sobra é do alinhamento (Renan: "Se o
+    /// objeto não tiver 100% a mesma medida da mesa, algum lugar vai
+    /// estourar"); mais que isso é outra mesa, ou não é mesa (cerca, lote).
+    /// </summary>
+    public const double MatchTolerance = 0.15;
 
     /// <summary>
-    /// O tipo de cada pegada: o primeiro da lista de mesas em uso cujo
-    /// tamanho (a área dos módulos ou a mesa inteira) e inclinação batem.
-    /// As que não batem com nenhuma saem em <paramref name="issues"/>.
+    /// O tipo de cada pegada: a mesa em uso de tamanho mais perto (a área dos
+    /// módulos ou a mesa inteira; a largura em planta ou na inclinação), até
+    /// <see cref="MatchTolerance"/>; no empate, a primeira da lista. As que não
+    /// chegam perto de nenhuma saem em <paramref name="issues"/>.
     /// </summary>
     public static IReadOnlyList<FieldMatch> Match(
         IEnumerable<FieldFootprint> footprints, IReadOnlyList<TableProfile> kinds, out IReadOnlyList<FieldIssue> issues)
@@ -61,23 +90,29 @@ public static class FieldPlacement
         foreach (var f in footprints)
         {
             FieldMatch? achada = null;
+            var melhor = double.PositiveInfinity;
 
-            for (var k = 0; k < kinds.Count && achada is null; k++)
+            for (var k = 0; k < kinds.Count; k++)
             {
                 var layout = kinds[k].Layout;
                 var modulos = layout.Length - layout.LeftMargin - layout.RightMargin;
 
-                // O objeto plano (2D) pode ter sido desenhado com a largura em
-                // planta, e não a da inclinação (revisão do 40.2).
+                // O objeto 3D visto de cima tem a largura em planta; o plano
+                // pode ter sido desenhado com a da inclinação (revisão do 40.2).
                 var emPlanta = layout.Depth * Math.Cos(kinds[k].TiltRadians);
-                if (Math.Abs(f.Width - layout.Depth) > FieldObjects.SizeTolerance
-                    && (f.Tilt is not null || Math.Abs(f.Width - emPlanta) > FieldObjects.SizeTolerance)) continue;
-                if (f.Tilt is { } t && Math.Abs(t - kinds[k].TiltRadians) > FieldObjects.AngleTolerance) continue;
+                var largura = Math.Min(Math.Abs(f.Width - emPlanta), Math.Abs(f.Width - layout.Depth));
+                if (largura > MatchTolerance * emPlanta) continue;
 
-                if (Math.Abs(f.Length - modulos) <= FieldObjects.SizeTolerance)
-                    achada = new FieldMatch(f, k, ModulesOnly: true);
-                else if (Math.Abs(f.Length - layout.Length) <= FieldObjects.SizeTolerance)
-                    achada = new FieldMatch(f, k, ModulesOnly: false);
+                var soModulos = Math.Abs(f.Length - modulos) <= Math.Abs(f.Length - layout.Length);
+                var daMesa = soModulos ? modulos : layout.Length;
+                var comprimento = Math.Abs(f.Length - daMesa);
+                if (comprimento > MatchTolerance * daMesa) continue;
+
+                if (comprimento + largura < melhor - 1e-9)
+                {
+                    melhor = comprimento + largura;
+                    achada = new FieldMatch(f, k, soModulos, f.Length - daMesa);
+                }
             }
 
             if (achada is not null)
@@ -87,8 +122,8 @@ public static class FieldPlacement
             }
 
             problemas.Add(new FieldIssue(f.Id, FieldIssueKind.NoProfile, Tr.F(
-                "{0} ({1}) tem {2:0.###} × {3:0.###} m{4}: nenhuma mesa em uso tem esse tamanho, e ele não vira mesa.",
-                f.Id, f.Layer, f.Length, f.Width, f.Tilt is { } i ? Tr.F(" a {0:0.#}°", i * 180 / Math.PI) : string.Empty)));
+                "{0} ({1}) tem {2:0.###} × {3:0.###} m: nenhuma mesa em uso chega perto desse tamanho, e ele não vira mesa.",
+                f.Id, f.Layer, f.Length, f.Width)));
         }
 
         issues = problemas;
@@ -96,28 +131,14 @@ public static class FieldPlacement
     }
 
     /// <summary>
-    /// A ponta baixa dos objetos contra o azimute do projeto: o motor vira a
-    /// mesa para o lado da configuração, e um projeto olhando para o norte com
-    /// objetos olhando para o sul daria as mesas de costas. Null quando batem,
-    /// ou quando os objetos são planos (sem lado).
+    /// O sentido "para a direita" de um eixo, como se vê na planta com o norte
+    /// para cima: o que anda para o leste (+X); no eixo norte-sul, o que anda
+    /// para o norte.
     /// </summary>
-    public static FieldIssue? FacingIssue(FieldSurvey survey, SystemConfiguration configuration)
+    public static (double X, double Y) RightDirection(double axis)
     {
-        ArgumentNullException.ThrowIfNull(survey);
-        ArgumentNullException.ThrowIfNull(configuration);
-
-        if (survey.LowSideDirection is not { } baixo) return null;
-
-        // O azimute (norte = 0, horário) para onde as mesas olham, no ângulo
-        // de matemática (leste = 0, anti-horário).
-        var olha = Math.PI / 2 - configuration.FacingAzimuthRadians;
-        var diferenca = Math.Abs(Math.Atan2(Math.Sin(olha - baixo), Math.Cos(olha - baixo)));
-
-        if (diferenca <= FacingTolerance) return null;
-
-        return new FieldIssue("*", FieldIssueKind.ProjectFacing, Tr.F(
-            "os objetos têm a ponta baixa para {0}, e o projeto olha para {1}: o Clivus viraria as mesas. Ajuste o azimute em Configurações › Parâmetros (ou pela linha de apoio) e gere de novo.",
-            Rumo(baixo), Rumo(olha)));
+        var (x, y) = (Math.Cos(axis), Math.Sin(axis));
+        return x > 1e-9 || (Math.Abs(x) <= 1e-9 && y > 0) ? (x, y) : (-x, -y);
     }
 
     /// <summary>O rumo (ângulo de matemática) em palavras: norte, sul, leste, oeste e os do meio.</summary>
@@ -132,15 +153,17 @@ public static class FieldPlacement
 
     /// <summary>
     /// Processa as mesas nos objetos: casa os tipos, monta as fileiras, roda o
-    /// motor, corrige o centro e roda de novo.
+    /// motor, corrige o ponto de alinhamento e roda de novo.
     /// </summary>
     /// <param name="kinds">As mesas em uso, na ordem de prioridade (todas com a mesma inclinação).</param>
+    /// <param name="alignment">Por onde a mesa se alinha no objeto quando os comprimentos diferem.</param>
     public static FieldPlant Process(
         FieldSurvey survey,
         IReadOnlyList<TableProfile> kinds,
         Tin terrain,
         ProjectSettings settings,
-        Action<int, int>? progress = null)
+        Action<int, int>? progress = null,
+        FieldAlignment alignment = FieldAlignment.Center)
     {
         ArgumentNullException.ThrowIfNull(survey);
         ArgumentNullException.ThrowIfNull(kinds);
@@ -161,25 +184,51 @@ public static class FieldPlacement
 
         var geometrias = kinds.Select(k => TableGeometry.Local(k.Layout, k.Frame.Pillars(k.Layout), k.Frame)).ToList();
         var inclinacao = kinds[0].TiltRadians;
+        var (sx, sy) = (Math.Sin(config.UpslopeAzimuthRadians), Math.Cos(config.UpslopeAzimuthRadians));
 
-        // O lugar, em coordenadas locais, que tem que cair no centro do objeto.
+        // O motor parte do canto c0 quando o X local corre com o eixo, e de
+        // c1 quando corre contra (TablePlacement.Montar).
+        bool XComEixo(FieldFootprint f) => (sy * f.AxisVector.X - sx * f.AxisVector.Y) > 0;
+
+        // O lugar, em coordenadas locais, que tem que cair no ponto de
+        // alinhamento do objeto: o meio, ou a ponta da direita ou da esquerda
+        // (da área dos módulos, quando o objeto é ela).
         Point3 Alvo(FieldMatch c)
         {
             var g = geometrias[c.Kind];
             var layout = kinds[c.Kind].Layout;
-            var x = c.ModulesOnly ? layout.LeftMargin + (layout.Length - layout.LeftMargin - layout.RightMargin) / 2 : g.Length / 2;
+            var (inicio, fim) = c.ModulesOnly ? (layout.LeftMargin, g.Length - layout.RightMargin) : (0.0, g.Length);
+
+            var (rx, ry) = RightDirection(c.Footprint.Axis);
+            var (ax, ay) = c.Footprint.AxisVector;
+            var xLocalParaADireita = XComEixo(c.Footprint) == (rx * ax + ry * ay > 0);
+
+            var x = alignment switch
+            {
+                FieldAlignment.Right => xLocalParaADireita ? fim : inicio,
+                FieldAlignment.Left => xLocalParaADireita ? inicio : fim,
+                _ => (inicio + fim) / 2,
+            };
+
             return new Point3(x, g.Depth / 2, 0);
         }
 
-        // Primeira passada: a célula pela rampa do próprio objeto.
+        // O ponto de alinhamento do objeto, em planta.
+        Point3 NoObjeto(FieldFootprint f)
+        {
+            var (rx, ry) = RightDirection(f.Axis);
+            var lado = alignment switch { FieldAlignment.Right => 1, FieldAlignment.Left => -1, _ => 0 };
+            return new Point3(f.Center.X + lado * rx * f.Length / 2, f.Center.Y + lado * ry * f.Length / 2, 0);
+        }
+
+        // Primeira passada: a célula sem giro.
         var celulas = new Dictionary<string, PlacedTable>();
         for (var r = 0; r < fileiras.Count; r++)
         {
             for (var n = 0; n < fileiras[r].Tables.Count; n++)
             {
                 var c = porId[fileiras[r].Tables[n].Id];
-                var cosGiro = c.Footprint.Length > 0 ? Math.Clamp(c.Footprint.PlanLength / c.Footprint.Length, 0.5, 1) : 1;
-                celulas[c.Footprint.Id] = Celula(c, r + 1, n + 1, geometrias[c.Kind], inclinacao, Alvo(c).X * cosGiro, config.UpslopeAzimuthRadians);
+                celulas[c.Footprint.Id] = Celula(c, r + 1, n + 1, geometrias[c.Kind], inclinacao, Alvo(c).X, NoObjeto(c.Footprint), XComEixo(c.Footprint), config.UpslopeAzimuthRadians);
             }
         }
 
@@ -201,7 +250,8 @@ public static class FieldPlacement
                 {
                     var c = porId[fileiras[r].Tables[n].Id];
                     var caiu = usina.Rows[r].Tables[n].Pillars.Placement.Apply(Alvo(c));
-                    erros[c.Footprint.Id] = (c.Footprint.Center.X - caiu.X, c.Footprint.Center.Y - caiu.Y);
+                    var alvo = NoObjeto(c.Footprint);
+                    erros[c.Footprint.Id] = (alvo.X - caiu.X, alvo.Y - caiu.Y);
                 }
             }
 
@@ -230,8 +280,8 @@ public static class FieldPlacement
             {
                 var f = porId[id].Footprint;
                 problemas.Add(new FieldIssue(id, FieldIssueKind.Deviation, Tr.F(
-                    "{0} ({1}): a mesa {2} ficou a {3:0.00} m do objeto; o motor a sentou no terreno com outra rampa (o objeto tem {4:0.#} %).",
-                    id, f.Layer, celula.Label, desvio, Math.Abs(f.RowSlope ?? 0) * 100)));
+                    "{0} ({1}): a mesa {2} ficou a {3:0.00} m do lugar no objeto; o motor a sentou no terreno com a rampa dele.",
+                    id, f.Layer, celula.Label, desvio)));
             }
         }
 
@@ -241,10 +291,13 @@ public static class FieldPlacement
     /// <summary>
     /// A célula da mesa no objeto: o comprimento é o da mesa do Clivus (o
     /// motor exige), o eixo é o do objeto, e o canto de onde o motor parte
-    /// fica onde o alvo cai no centro com o giro estimado.
+    /// fica onde o alvo cai no ponto de alinhamento do objeto.
     /// </summary>
     /// <param name="alvoAoLongo">Onde, ao longo do eixo em planta, o alvo fica a partir do canto de partida.</param>
-    private static PlacedTable Celula(FieldMatch c, int fileira, int numero, TableGeometry g, double inclinacao, double alvoAoLongo, double subidaAzimute)
+    /// <param name="noObjeto">O ponto de alinhamento do objeto, em planta (o meio dele na largura).</param>
+    /// <param name="xComEixo">Se o X local da mesa corre no sentido do eixo do objeto.</param>
+    private static PlacedTable Celula(
+        FieldMatch c, int fileira, int numero, TableGeometry g, double inclinacao, double alvoAoLongo, Point3 noObjeto, bool xComEixo, double subidaAzimute)
     {
         var f = c.Footprint;
         var (dx, dy) = f.AxisVector;
@@ -258,10 +311,7 @@ public static class FieldPlacement
         var comprimento = g.Length;
         var fundo = g.Depth * Math.Cos(inclinacao);
 
-        // O motor parte do canto c0 quando o X local corre com o eixo, e de
-        // c1 quando corre contra (TablePlacement.Montar).
-        var xComEixo = (sy * dx - sx * dy) > 0;
-        var (bx, by) = (f.Center.X - nx * fundo / 2, f.Center.Y - ny * fundo / 2);
+        var (bx, by) = (noObjeto.X - nx * fundo / 2, noObjeto.Y - ny * fundo / 2);
 
         var (c0x, c0y) = xComEixo
             ? (bx - dx * alvoAoLongo, by - dy * alvoAoLongo)

@@ -1,0 +1,55 @@
+; Teste de nivel 2 da altura do biposte pelo P1 (passo 38.9). Processa o
+; terreno, grava a Arctech GC800 da aba Fabricantes (P1 3,059 e P2 3,888) no
+; desenho, sozinha e em uso, com a faixa da PB do projeto em 0,30 a 0,80 m,
+; abaixo da altura dela. Traca area e alinhamento (o ponto do alinhamento com Z
+; 9999: peca no Z do clique sai dali), processa a fileira 1 e le os pilares do
+; proprio desenho.
+;
+; O que se confere em LISP: os pilares dianteiros e traseiros, o menor
+; dianteiro inteiro (a escala Z do bloco, do topo ao pe) e o menor traseiro,
+; e P3 = topo - terreno em cada um. Com a altura vinda do P1, os dianteiros
+; ficam perto dele (com a do projeto, 0,30, sairiam com uns 2,5 m); o
+; bifila.ps1 confere, pelo relatorio de cada mesa, que nas mesas dentro da
+; faixa nenhum pilar fica abaixo do P1.
+;
+; O OSNAP e desligado para os pontos digitados chegarem crus.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(command "CLIVUS_BIFILA_P1_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area do P1")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento do P1")
+(command "CLIVUS_FILEIRA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+
+(setq clivus:pilares (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_PILAR"))))
+(setq clivus:np (clivus:conta clivus:pilares) clivus:frente 0 clivus:tras 0 clivus:p3ok 0 clivus:p3total 0
+      clivus:p1min 1e99 clivus:p2min 1e99 clivus:i 0)
+(while (< clivus:i clivus:np)
+  (setq clivus:en (ssname clivus:pilares clivus:i) clivus:e (entget clivus:en))
+  (setq clivus:z (caddr (cdr (assoc 10 clivus:e))) clivus:inteiro (cdr (assoc 43 clivus:e)))
+  (setq clivus:xd (clivus:xdata clivus:en) clivus:linha "")
+  (if clivus:xd (setq clivus:linha (clivus:campo clivus:xd 11)))
+  (if (= clivus:linha "Front") (setq clivus:frente (1+ clivus:frente) clivus:p1min (min clivus:p1min clivus:inteiro)))
+  (if (= clivus:linha "Rear") (setq clivus:tras (1+ clivus:tras) clivus:p2min (min clivus:p2min clivus:inteiro)))
+  (if (and clivus:xd (> (strlen (clivus:campo clivus:xd 6)) 0) (> (strlen (clivus:campo clivus:xd 8)) 0))
+    (progn
+      (setq clivus:p3total (1+ clivus:p3total))
+      (if (< (abs (- (- clivus:z (atof (clivus:campo clivus:xd 8))) (atof (clivus:campo clivus:xd 6)))) 0.001)
+        (setq clivus:p3ok (1+ clivus:p3ok)))))
+  (setq clivus:i (1+ clivus:i)))
+
+(princ (strcat "\nCLIVUS_BIFILA_P1 pilares=" (itoa clivus:np) " frente=" (itoa clivus:frente) " tras=" (itoa clivus:tras)
+               " p1min=" (rtos clivus:p1min 2 4) " p2min=" (rtos clivus:p2min 2 4)
+               " p3ok=" (itoa clivus:p3ok) " p3total=" (itoa clivus:p3total)))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

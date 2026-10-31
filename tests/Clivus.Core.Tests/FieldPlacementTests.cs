@@ -116,19 +116,124 @@ public class FieldPlacementTests
         Assert.True(p.Skips);
     }
 
+    /// <summary>
+    /// O lado da ponta baixa é do projeto, e nada é recusado por ele (revisão
+    /// de tela do 40.2: os objetos em 2D não dizem o lado, e o Z deles não
+    /// vale). Os mesmos objetos com o projeto olhando para o sul e para o
+    /// norte: as mesas saem nos dois, no lugar dos objetos, com a ponta baixa
+    /// do lado de cada projeto.
+    /// </summary>
     [Fact]
     [Trait("Etapa", "40")]
-    public void ProjetoOlhandoParaONorteComObjetosParaOSulEhRecusado()
+    public void OLadoDaPontaBaixaEDoProjeto()
     {
-        var levantamento = FieldObjects.Survey(DuasFileiras());
+        var objetos = DuasFileiras();
+        var paraONorte = ParaOSul with { Configuration = ParaOSul.Configuration with { FacingAzimuthRadians = 0 } };
 
-        var problema = FieldPlacement.FacingIssue(levantamento, ProjectSettings.Default.Configuration);
+        foreach (var (projeto, pontaBaixaAoSul) in new[] { (ParaOSul, true), (paraONorte, false) })
+        {
+            var usina = FieldPlacement.Process(FieldObjects.Survey(objetos), [Gc800], Terreno((_, _) => 700), projeto);
 
-        Assert.NotNull(problema);
-        Assert.Equal(FieldIssueKind.ProjectFacing, problema.Kind);
-        Assert.Contains("o sul", problema.Message);
-        Assert.Contains("o norte", problema.Message);
-        Assert.Null(FieldPlacement.FacingIssue(levantamento, ParaOSul.Configuration));
+            Assert.Equal(6, usina.Plant.Rows.Sum(r => r.Tables.Count));
+            Assert.All(usina.DeviationByObject.Values, d => Assert.True(d < 0.005, $"desvio de {d:0.000} m"));
+
+            foreach (var mesa in usina.Plant.Rows.SelectMany(r => r.Tables))
+            {
+                var g = usina.Geometries[mesa.Cell.Kind];
+                var baixa = mesa.Pillars.Placement.Apply(new Point3(g.Length / 2, 0, 0));
+                var alta = mesa.Pillars.Placement.Apply(new Point3(g.Length / 2, g.Depth, 0));
+                Assert.Equal(pontaBaixaAoSul, baixa.Y < alta.Y);
+            }
+        }
+    }
+
+    /// <summary>
+    /// O objeto 30 cm mais curto que os módulos (Renan: "se eu escolher
+    /// direita, ele alinha na direita e estoura a esquerda, na esquerda estoura
+    /// a direita, e se eu escolher centro, estoura centralizado"): a ponta
+    /// escolhida dos módulos cai na do objeto, e a diferença sobra do outro
+    /// lado. Com o projeto olhando para o sul e para o norte, que viram o X
+    /// local da mesa.
+    /// </summary>
+    [Theory]
+    [Trait("Etapa", "40")]
+    [InlineData(FieldAlignment.Right, true)]
+    [InlineData(FieldAlignment.Left, true)]
+    [InlineData(FieldAlignment.Center, true)]
+    [InlineData(FieldAlignment.Right, false)]
+    [InlineData(FieldAlignment.Left, false)]
+    [InlineData(FieldAlignment.Center, false)]
+    public void AMesaSeAlinhaNoObjetoPeloLadoEscolhido(FieldAlignment alinhamento, bool paraOSul)
+    {
+        var objeto = Objeto("A", 10, 0, comprimento: 18.202);
+        var projeto = paraOSul ? ParaOSul : ParaOSul with { Configuration = ParaOSul.Configuration with { FacingAzimuthRadians = 0 } };
+
+        var usina = FieldPlacement.Process(FieldObjects.Survey([objeto]), [Gc800], Terreno((_, _) => 700), projeto, alignment: alinhamento);
+
+        var mesa = Assert.Single(usina.Plant.Rows.SelectMany(r => r.Tables));
+        var g = usina.Geometries[mesa.Cell.Kind];
+        var xs = g.Modules.SelectMany(m => m.TopFace).Select(mesa.Pillars.Placement.Apply).Select(p => p.X).ToList();
+        var (oeste, leste) = (xs.Min(), xs.Max());
+
+        switch (alinhamento)
+        {
+            case FieldAlignment.Right:
+                Assert.Equal(10 + 18.202, leste, 3);
+                Assert.Equal(10 - 0.3, oeste, 3);
+                break;
+            case FieldAlignment.Left:
+                Assert.Equal(10, oeste, 3);
+                Assert.Equal(10 + 18.202 + 0.3, leste, 3);
+                break;
+            default:
+                Assert.Equal(10 - 0.15, oeste, 3);
+                Assert.Equal(10 + 18.202 + 0.15, leste, 3);
+                break;
+        }
+
+        Assert.All(usina.DeviationByObject.Values, d => Assert.True(d < 0.005, $"desvio de {d:0.000} m"));
+    }
+
+    /// <summary>A direita é o leste na planta, desenhada a fileira num sentido ou no outro; na fileira norte-sul, o norte.</summary>
+    [Fact]
+    [Trait("Etapa", "40")]
+    public void ADireitaEOLesteNaPlanta()
+    {
+        Assert.Equal(1.0, FieldPlacement.RightDirection(0).X, 9);
+        Assert.Equal(1.0, FieldPlacement.RightDirection(Math.PI - 1e-6).X, 6);
+        Assert.True(FieldPlacement.RightDirection(2.5).X > 0);
+
+        var (x, y) = FieldPlacement.RightDirection(Math.PI / 2);
+        Assert.Equal(0, x, 9);
+        Assert.Equal(1, y, 9);
+    }
+
+    /// <summary>
+    /// O objeto vira a mesa de tamanho mais perto, até 15 %: 30 cm mais curto
+    /// ainda é a 2P14 (a diferença fica no alinhamento), o de 9,3 m é a 1P14
+    /// quando ela está em uso, e longe de todas não vira mesa.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "40")]
+    public void OObjetoViraAMesaDeTamanhoMaisPerto()
+    {
+        var meia = Gc800 with
+        {
+            Name = "1P14",
+            Layout = Gc800.Layout with { ModuleCount = 14 },
+            Frame = Gc800.Frame with { PillarSpans = null },
+        };
+
+        var curto = FieldObjects.Footprint(Objeto("C", 0, 0, comprimento: 18.202), out _)!;
+        var metade = FieldObjects.Footprint(Objeto("M", 0, 0, comprimento: 9.3), out _)!;
+        var cerca = FieldObjects.Footprint(Objeto("X", 0, 0, comprimento: 40), out _)!;
+
+        var casadas = FieldPlacement.Match([curto, metade, cerca], [Gc800, meia], out var problemas);
+
+        Assert.Equal(0, casadas.Single(c => c.Footprint.Id == "C").Kind);
+        Assert.Equal(-0.3, casadas.Single(c => c.Footprint.Id == "C").LengthDifference, 6);
+        Assert.Equal(1, casadas.Single(c => c.Footprint.Id == "M").Kind);
+        Assert.Equal("X", Assert.Single(problemas).Id);
     }
 
     /// <summary>No plano, a mesa cai no objeto, e cada objeto vira a mesa da fileira e da posição dele.</summary>

@@ -366,4 +366,35 @@ public sealed class TableProfileStoreTests : IDisposable
         // Nenhum provisório ficou para trás.
         Assert.Single(Directory.GetFiles(_pasta));
     }
+
+    /// <summary>
+    /// A mesa removida nas Configurações sai da biblioteca (30/10/2026: "eu
+    /// clico em salvar no desenho e aí abro de novo essa merda volta"): some da
+    /// lista e da leitura, e o arquivo fica guardado na subpasta, sem apagar o
+    /// que já estava lá com o mesmo nome.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void OPerfilRemovidoSaiDaListaEFicaGuardado()
+    {
+        var pasta = Pasta();
+        pasta.Save(Perfil("Mesa 28 módulos 2 2"));
+        pasta.Save(Perfil("Fica"));
+
+        Assert.True(pasta.MoveToRemoved("Mesa 28 módulos 2 2"));
+
+        Assert.Equal(["Fica"], pasta.List());
+        Assert.False(pasta.Exists("Mesa 28 módulos 2 2"));
+        Assert.Throws<FileNotFoundException>(() => pasta.Load("Mesa 28 módulos 2 2"));
+
+        var guardados = Path.Combine(_pasta, TableProfileStore.PastaDosRemovidos);
+        Assert.Single(Directory.GetFiles(guardados));
+
+        // A segunda remoção do mesmo nome não apaga a primeira.
+        pasta.Save(Perfil("Mesa 28 módulos 2 2"));
+        Assert.True(pasta.MoveToRemoved("Mesa 28 módulos 2 2"));
+        Assert.Equal(2, Directory.GetFiles(guardados).Length);
+
+        Assert.False(pasta.MoveToRemoved("Não existe"));
+    }
 }

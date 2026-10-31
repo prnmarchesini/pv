@@ -14,10 +14,11 @@ namespace Clivus.Core;
 /// </summary>
 /// <param name="Manufacturer">O fabricante.</param>
 /// <param name="Model">O modelo, como o fabricante escreve.</param>
-/// <param name="Profile">A mesa, com o nome que vai para o desenho.</param>
+/// <param name="Profile">
+/// A mesa, com o nome que vai para o desenho e, desde o 38.9, o P1 e o P2 do
+/// catálogo na estrutura (a altura é dela).
+/// </param>
 /// <param name="ClearanceUnderModule">A altura livre que o fabricante cota, do chão ao fundo do módulo, na ponta baixa.</param>
-/// <param name="CatalogP1">O pilar menor (o dianteiro) do catálogo, inteiro.</param>
-/// <param name="CatalogP2">O pilar maior (o traseiro) do catálogo, inteiro, já com a folga do declive.</param>
 /// <param name="CatalogSlope">O declive do chão caindo para trás (fração) para o qual o P2 de catálogo foi feito.</param>
 /// <param name="Project">O projeto dos desenhos de onde vieram as medidas.</param>
 /// <param name="Revision">A revisão dos desenhos, como o fabricante escreve.</param>
@@ -26,14 +27,18 @@ public sealed record VendorStructure(
     string Model,
     TableProfile Profile,
     double ClearanceUnderModule,
-    double CatalogP1,
-    double CatalogP2,
     double CatalogSlope,
     string Project,
     string Revision)
 {
     /// <summary>O fabricante e o modelo, como aparecem na aba Fabricantes.</summary>
     public string Name => $"{Manufacturer} {Model}";
+
+    /// <summary>O pilar menor (o dianteiro) do catálogo, inteiro: o P1 da estrutura.</summary>
+    public double CatalogP1 => Profile.Frame.Bifila?.FrontPillar ?? 0;
+
+    /// <summary>O pilar maior (o traseiro) do catálogo, inteiro, já com a folga do declive: o P2 da estrutura.</summary>
+    public double CatalogP2 => Profile.Frame.Bifila?.RearPillar ?? 0;
 
     /// <summary>
     /// A ponta baixa do Clivus (a face de cima do módulo) que dá a altura
@@ -125,13 +130,17 @@ public static class VendorStructures
             _ => throw new ArgumentOutOfRangeException(nameof(variante), variante, null),
         };
 
+        var referencia = BifilaReference.Profile(variante);
+
         return new VendorStructure(
             "Arctech",
             modelo,
-            BifilaReference.Profile(variante) with { Name = $"Arctech {curto}" },
+            referencia with
+            {
+                Name = $"Arctech {curto}",
+                Frame = referencia.Frame with { Bifila = referencia.Frame.Bifila! with { FrontPillar = p1, RearPillar = p2 } },
+            },
             livre,
-            p1,
-            p2,
             declive,
             "Aurora (Panamá)",
             revisao);

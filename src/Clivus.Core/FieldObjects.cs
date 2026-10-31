@@ -11,38 +11,34 @@ namespace Clivus.Core;
 public sealed record FieldObject(string Id, string Layer, IReadOnlyList<Point3> Vertices);
 
 /// <summary>
-/// A mesa que um objeto marca: o retângulo (os módulos) em 3D, o eixo da
-/// fileira em planta e para que lado fica a ponta baixa.
+/// A mesa que um objeto marca, em planta: o retângulo visto de cima e o eixo
+/// da fileira. Só X e Y (40.2, Renan 30/10/2026: "o objeto ... está em 2D, o
+/// eixo Z deve estar cagado, então vc vai gerar a mesa respeitando apenas a
+/// posição X e Y e encaixar a Z no terreno conforme topografia"): a cota, a
+/// inclinação e o lado da ponta baixa não saem do objeto. A inclinação é a da
+/// mesa do Clivus, e o lado da ponta baixa, o do azimute do projeto.
 /// </summary>
-/// <param name="Center">O centro do retângulo; o Z é o do objeto, que o Clivus não usa (a mesa senta no terreno).</param>
+/// <param name="Center">O centro do retângulo em planta (Z zero; a mesa senta no terreno).</param>
 /// <param name="Axis">O rumo do eixo da fileira em planta, em radianos, de +X no sentido anti-horário, em [0, π).</param>
-/// <param name="Length">O lado maior, em 3D (ao longo da fileira).</param>
-/// <param name="Width">O lado menor, em 3D (na inclinação).</param>
-/// <param name="PlanLength">O lado maior visto de cima.</param>
-/// <param name="Tilt">A inclinação em torno do eixo, em radianos; null quando o objeto é plano.</param>
-/// <param name="LowSide">+1: a ponta baixa fica à esquerda do eixo (olhando no sentido de <paramref name="Axis"/>); −1: à direita; null: objeto plano.</param>
-/// <param name="RowSlope">A rampa do eixo (sobe/anda em planta, no sentido de <paramref name="Axis"/>); null quando plano.</param>
+/// <param name="Length">O lado maior, em planta (ao longo da fileira).</param>
+/// <param name="Width">A largura em planta: a distância entre os dois lados maiores.</param>
 public sealed record FieldFootprint(
     string Id,
     string Layer,
     Point3 Center,
     double Axis,
     double Length,
-    double Width,
-    double PlanLength,
-    double? Tilt,
-    int? LowSide,
-    double? RowSlope)
+    double Width)
 {
     /// <summary>O versor do eixo em planta.</summary>
     public (double X, double Y) AxisVector => (Math.Cos(Axis), Math.Sin(Axis));
 
     /// <summary>Os quatro cantos em planta (Z zero), em ordem, a partir do canto de trás-esquerda.</summary>
-    public IReadOnlyList<Point3> PlanCorners(double planWidth)
+    public IReadOnlyList<Point3> PlanCorners()
     {
         var (ux, uy) = AxisVector;
         var (hx, hy) = (-uy, ux);
-        var (a, b) = (PlanLength / 2, planWidth / 2);
+        var (a, b) = (Length / 2, Width / 2);
 
         return
         [
@@ -66,12 +62,6 @@ public enum FieldIssueKind
     /// <summary>Rumo diferente da maioria.</summary>
     Axis,
 
-    /// <summary>Inclinação diferente da maioria.</summary>
-    Tilt,
-
-    /// <summary>A ponta baixa do outro lado.</summary>
-    Facing,
-
     /// <summary>Outro objeto no mesmo lugar: só um vira mesa.</summary>
     Duplicate,
 
@@ -87,17 +77,11 @@ public enum FieldIssueKind
     /// <summary>A mesa do Clivus não tem o tamanho dos objetos.</summary>
     ProfileSize,
 
-    /// <summary>A mesa do Clivus não tem a inclinação dos objetos.</summary>
-    ProfileTilt,
-
-    /// <summary>Nenhuma mesa em uso tem o tamanho e a inclinação do objeto: ele não vira mesa (40.2).</summary>
+    /// <summary>Nenhuma mesa em uso tem perto do tamanho do objeto: ele não vira mesa (40.2).</summary>
     NoProfile,
 
-    /// <summary>A mesa desenhada ficou longe do objeto (40.2): o motor a sentou no terreno com outra rampa.</summary>
+    /// <summary>A mesa desenhada ficou longe do lugar no objeto (40.2): o motor a sentou no terreno com outra rampa.</summary>
     Deviation,
-
-    /// <summary>A ponta baixa dos objetos não bate com o azimute do projeto (40.2): nada é gerado.</summary>
-    ProjectFacing,
 }
 
 /// <summary>Uma divergência: o objeto (ou "*" quando é de todos), o tipo e a frase.</summary>
@@ -121,20 +105,10 @@ public sealed record FieldSurvey(
     IReadOnlyList<FieldIssue> Issues,
     double ReferenceLength,
     double ReferenceWidth,
-    double ReferenceAxis,
-    double? ReferenceTilt,
-    int? ReferenceLowSide)
+    double ReferenceAxis)
 {
     /// <summary>Quantas mesas saem (os objetos que entraram nas fileiras).</summary>
     public int TableCount => Rows.Sum(r => r.Tables.Count);
-
-    /// <summary>
-    /// O rumo para onde a ponta baixa olha, em planta (radianos, de +X no
-    /// sentido anti-horário), ou null quando os objetos são planos.
-    /// </summary>
-    public double? LowSideDirection => ReferenceLowSide is { } lado
-        ? Math.Atan2(Math.Sin(ReferenceAxis + lado * Math.PI / 2), Math.Cos(ReferenceAxis + lado * Math.PI / 2))
-        : null;
 }
 
 /// <summary>
@@ -143,22 +117,40 @@ public sealed record FieldSurvey(
 /// mesas' [...] Se tiver divergência ele deve apontar, em teoria todos objetos
 /// devem ser iguais").
 ///
-/// O objeto de referência é o do desenho do projeto Aurora: a área dos módulos
-/// de uma 2P14 como retângulo 3D (18,502 × 4,788 m, 10° em torno do eixo, o
-/// eixo acompanhando a rampa da fileira), cuja projeção em planta é um
-/// paralelogramo, e não um retângulo. Por isso o tamanho e o ângulo reto são
-/// medidos em 3D; o eixo e o lado da ponta baixa, em planta.
+/// Tudo em planta, só com X e Y (revisão de tela do 40.2: "o eixo Z deve
+/// estar cagado"). O objeto do Aurora é a área dos módulos de uma 2P14 como
+/// retângulo 3D (18,502 × 4,788 m, 10° em torno do eixo, o eixo acompanhando
+/// a rampa da fileira): visto de cima, ele tem 4,715 m de largura e é um
+/// paralelogramo, e não um retângulo, quando a fileira tem rampa. Por isso a
+/// largura é a distância entre os lados maiores, e o ângulo reto tem folga
+/// de <see cref="RightAngleTolerance"/>.
 /// </summary>
 public static class FieldObjects
 {
     /// <summary>Diferença de tamanho que conta como outro objeto: 2 cm.</summary>
     public const double SizeTolerance = 0.02;
 
-    /// <summary>Diferença de rumo e de inclinação que conta: meio grau.</summary>
+    /// <summary>
+    /// No comprimento em planta, a folga é 1,5 % dele: a rampa da fileira
+    /// encurta o objeto 3D visto de cima (5 cm no D6D4 do Aurora, 1,1 % a 15 %
+    /// de rampa), e 2 cm apontariam quase todo objeto como de outro tamanho.
+    /// </summary>
+    public const double PlanLengthTolerance = 0.015;
+
+    /// <summary>Se dois comprimentos em planta são o mesmo, com a folga da rampa.</summary>
+    public static bool SameLength(double a, double b) =>
+        Math.Abs(a - b) <= Math.Max(SizeTolerance, PlanLengthTolerance * Math.Max(a, b));
+
+    /// <summary>Diferença de rumo que conta: meio grau.</summary>
     public const double AngleTolerance = 0.5 * Math.PI / 180;
 
-    /// <summary>Quanto o retângulo pode fugir do ângulo reto (em 3D): um grau.</summary>
-    public const double RightAngleTolerance = 1.0 * Math.PI / 180;
+    /// <summary>
+    /// Quanto o retângulo pode fugir do ângulo reto em planta: três graus. O
+    /// retângulo 3D inclinado na rampa da fileira aparece de cima como
+    /// paralelogramo, e o desvio cresce com a rampa (um grau a 10 %, com a
+    /// mesa a 10°).
+    /// </summary>
+    public const double RightAngleTolerance = 3.0 * Math.PI / 180;
 
     /// <summary>Dois objetos com o centro a menos disto são o mesmo lugar: 5 cm.</summary>
     public const double SamePlace = 0.05;
@@ -176,29 +168,27 @@ public static class FieldObjects
     /// </summary>
     public static double DefaultRowBreak => SystemConfiguration.Default.MaxGapBeforeBreak;
 
-    /// <summary>Abaixo disto de diferença de Z o objeto é plano: 1 mm.</summary>
-    private const double Flat = 0.001;
-
     /// <summary>
-    /// A pegada do objeto, ou null com o motivo quando ele não é um
-    /// retângulo de 4 vértices (o vértice repetido no fim não conta).
+    /// A pegada do objeto em planta, ou null com o motivo quando ele não é um
+    /// retângulo de 4 vértices (o vértice repetido no fim não conta). O Z dos
+    /// vértices não entra em nada: pode vir 0, 9999 ou torto.
     /// </summary>
     public static FieldFootprint? Footprint(FieldObject objeto, out string? whyNot)
     {
         ArgumentNullException.ThrowIfNull(objeto);
 
-        var p = objeto.Vertices.ToList();
+        if (objeto.Vertices.Any(q => !double.IsFinite(q.X) || !double.IsFinite(q.Y)))
+        {
+            whyNot = Tr.T("tem coordenada inválida");
+            return null;
+        }
+
+        var p = objeto.Vertices.Select(q => new Point3(q.X, q.Y, 0)).ToList();
         if (p.Count == 5 && Distance(p[0], p[4]) < 1e-6) p.RemoveAt(4);
 
         if (p.Count != 4)
         {
             whyNot = Tr.F("tem {0} vértices; a mesa é um retângulo de 4", p.Count);
-            return null;
-        }
-
-        if (p.Any(q => !double.IsFinite(q.X) || !double.IsFinite(q.Y) || !double.IsFinite(q.Z)))
-        {
-            whyNot = Tr.T("tem coordenada inválida");
             return null;
         }
 
@@ -208,7 +198,10 @@ public static class FieldObjects
         var u = Minus(p[1], p[0]);
         var v = Minus(p[3], p[0]);
         var comprimento = (Distance(p[0], p[1]) + Distance(p[3], p[2])) / 2;
-        var largura = (Distance(p[0], p[3]) + Distance(p[1], p[2])) / 2;
+
+        // A largura é a distância entre os lados maiores: no paralelogramo do
+        // retângulo 3D visto de cima, a altura dele, e não o lado.
+        var largura = comprimento < 0.05 ? 0 : Math.Abs(u.X * v.Y - u.Y * v.X) / Norm(u);
 
         if (largura < 0.05)
         {
@@ -216,8 +209,8 @@ public static class FieldObjects
             return null;
         }
 
-        // Paralelogramo (p2 = p1 + v) e ângulo reto em 3D.
-        var p2Esperado = new Point3(p[1].X + v.X, p[1].Y + v.Y, p[1].Z + v.Z);
+        // Paralelogramo (p2 = p1 + v) e ângulo reto, com a folga do inclinado.
+        var p2Esperado = new Point3(p[1].X + v.X, p[1].Y + v.Y, 0);
         if (Distance(p2Esperado, p[2]) > SizeTolerance)
         {
             whyNot = Tr.T("os lados opostos não são paralelos e iguais");
@@ -231,59 +224,16 @@ public static class FieldObjects
             return null;
         }
 
-        var planoU = Math.Sqrt(u.X * u.X + u.Y * u.Y);
-        if (planoU < 0.05)
-        {
-            whyNot = Tr.T("está em pé: o lado maior não aparece em planta");
-            return null;
-        }
-
-        // O eixo em [0, π): o sentido de u acompanha o rumo escolhido.
+        // O eixo em [0, π).
         var rumo = Math.Atan2(u.Y, u.X);
-        if (rumo < 0 || rumo >= Math.PI - 1e-12)
-        {
-            rumo = Math.Atan2(-u.Y, -u.X);
-            u = new Point3(-u.X, -u.Y, -u.Z);
-        }
-
+        if (rumo < 0 || rumo >= Math.PI - 1e-12) rumo = Math.Atan2(-u.Y, -u.X);
         if (rumo < 0) rumo += Math.PI;
         if (rumo >= Math.PI) rumo -= Math.PI;
 
-        var centro = new Point3(p.Average(q => q.X), p.Average(q => q.Y), p.Average(q => q.Z));
-        var planoComprimento = (PlanDistance(p[0], p[1]) + PlanDistance(p[3], p[2])) / 2;
-
-        double? inclinacao = null;
-        int? ladoBaixo = null;
-        double? rampa = null;
-
-        if (p.Max(q => q.Z) - p.Min(q => q.Z) >= Flat)
-        {
-            // h: a horizontal perpendicular ao eixo, à esquerda; w completa o
-            // terno com o eixo. A inclinação é o giro de v em torno do eixo.
-            var un = Scale(u, 1 / Norm(u));
-            var h = new Point3(-Math.Sin(rumo), Math.Cos(rumo), 0);
-            var w = Cross(un, h);
-            inclinacao = Math.Atan2(Math.Abs(Dot(v, w)), Math.Abs(Dot(v, h)));
-            rampa = u.Z / planoU;
-
-            // A ponta baixa é o lado maior mais baixo; de que lado do eixo ele fica.
-            var zDeTras = (p[0].Z + p[1].Z) / 2;
-            var zDaFrente = (p[3].Z + p[2].Z) / 2;
-
-            if (Math.Abs(zDeTras - zDaFrente) >= Flat)
-            {
-                var (baixoA, baixoB) = zDeTras < zDaFrente ? (p[0], p[1]) : (p[3], p[2]);
-                var meio = new Point3((baixoA.X + baixoB.X) / 2 - centro.X, (baixoA.Y + baixoB.Y) / 2 - centro.Y, 0);
-                ladoBaixo = Dot(meio, h) >= 0 ? 1 : -1;
-            }
-            else
-            {
-                inclinacao = 0;
-            }
-        }
+        var centro = new Point3(p.Average(q => q.X), p.Average(q => q.Y), 0);
 
         whyNot = null;
-        return new FieldFootprint(objeto.Id, objeto.Layer, centro, rumo, comprimento, largura, planoComprimento, inclinacao, ladoBaixo, rampa);
+        return new FieldFootprint(objeto.Id, objeto.Layer, centro, rumo, comprimento, largura);
     }
 
     /// <summary>
@@ -312,7 +262,7 @@ public static class FieldObjects
         }
 
         if (pegadas.Count == 0)
-            return new FieldSurvey(pegadas, [], problemas, 0, 0, 0, null, null);
+            return new FieldSurvey(pegadas, [], problemas, 0, 0, 0);
 
         // A referência: o que a maioria tem.
         var (refL, refW) = pegadas
@@ -322,36 +272,22 @@ public static class FieldObjects
             .GroupBy(f => Math.Round(f.Axis * 180 / Math.PI, 1) % 180)
             .OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First().Key * Math.PI / 180;
         // O eixo sai em [0, π): a 179,98° e a 0,02° são a mesma fileira em
-        // sentidos opostos. Cada pegada passa para o sentido da referência
-        // (o lado baixo e a rampa trocam de sinal), senão o lado baixo da
-        // maioria, as fileiras e as células saem viradas (revisão do 40.2).
+        // sentidos opostos. Cada pegada passa para o sentido da referência,
+        // senão as fileiras e as células saem viradas (revisão do 40.2).
         pegadas = [.. pegadas.Select(f => Math.Cos(f.Axis - refRumo) >= 0 ? f : f with
         {
             Axis = Math.Atan2(Math.Sin(f.Axis + Math.PI), Math.Cos(f.Axis + Math.PI)),
-            LowSide = -f.LowSide,
-            RowSlope = -f.RowSlope,
         })];
-
-        var inclinadas = pegadas.Where(f => f.Tilt is not null).Select(f => f.Tilt!.Value).OrderBy(t => t).ToList();
-        double? refInclinacao = inclinadas.Count == 0 ? null : inclinadas[inclinadas.Count / 2];
-        var lados = pegadas.Where(f => f.LowSide is not null).GroupBy(f => f.LowSide!.Value).OrderByDescending(g => g.Count()).ThenByDescending(g => g.Key).ToList();
-        int? refLado = lados.Count == 0 ? null : lados[0].Key;
 
         var pulados = new HashSet<string>();
 
         foreach (var f in pegadas)
         {
-            if (Math.Abs(f.Length - refL) > SizeTolerance || Math.Abs(f.Width - refW) > SizeTolerance)
-                problemas.Add(new FieldIssue(f.Id, FieldIssueKind.Size, Tr.F("{0} ({1}) tem {2:0.###} × {3:0.###} m; a maioria tem {4:0.###} × {5:0.###} m.", f.Id, f.Layer, f.Length, f.Width, refL, refW)));
+            if (!SameLength(f.Length, refL) || Math.Abs(f.Width - refW) > SizeTolerance)
+                problemas.Add(new FieldIssue(f.Id, FieldIssueKind.Size,Tr.F("{0} ({1}) tem {2:0.###} × {3:0.###} m; a maioria tem {4:0.###} × {5:0.###} m.", f.Id, f.Layer, f.Length, f.Width, refL, refW)));
 
             if (AxisDifference(f.Axis, refRumo) > AngleTolerance)
                 problemas.Add(new FieldIssue(f.Id, FieldIssueKind.Axis, Tr.F("{0} ({1}) está a {2:0.#}° da direção da maioria das fileiras.", f.Id, f.Layer, AxisDifference(f.Axis, refRumo) * 180 / Math.PI)));
-
-            if (f.Tilt is { } t && refInclinacao is { } rt && Math.Abs(t - rt) > AngleTolerance)
-                problemas.Add(new FieldIssue(f.Id, FieldIssueKind.Tilt, Tr.F("{0} ({1}) tem {2:0.#}° de inclinação; a maioria tem {3:0.#}°.", f.Id, f.Layer, t * 180 / Math.PI, rt * 180 / Math.PI)));
-
-            if (f.LowSide is { } lado && refLado is { } rl && SameSide(f, lado, refRumo) != rl)
-                problemas.Add(new FieldIssue(f.Id, FieldIssueKind.Facing, Tr.F("{0} ({1}) tem a ponta baixa do outro lado.", f.Id, f.Layer)));
 
             if (area is { Count: >= 3 })
             {
@@ -370,7 +306,7 @@ public static class FieldObjects
         // Dois objetos no mesmo lugar, ou um em cima do outro: fica o primeiro.
         // Os do tamanho da maioria primeiro: um retângulo que não é mesa
         // (cerca, lote) não tira o lugar das mesas que cobre (revisão do 40.2).
-        bool DaMaioria(FieldFootprint f) => Math.Abs(f.Length - refL) <= SizeTolerance && Math.Abs(f.Width - refW) <= SizeTolerance;
+        bool DaMaioria(FieldFootprint f) => SameLength(f.Length, refL) && Math.Abs(f.Width - refW) <= SizeTolerance;
         var ordem = pegadas.Where(f => !pulados.Contains(f.Id)).OrderBy(f => DaMaioria(f) ? 0 : 1).ToList();
         for (var i = 0; i < ordem.Count; i++)
         {
@@ -381,7 +317,7 @@ public static class FieldObjects
                 var (a, b) = (ordem[i], ordem[j]);
                 if (pulados.Contains(b.Id)) continue;
 
-                var alcance = Math.Max(a.PlanLength, b.PlanLength) + Math.Max(a.Width, b.Width);
+                var alcance = Math.Max(a.Length, b.Length) + Math.Max(a.Width, b.Width);
                 if (Math.Abs(a.Center.X - b.Center.X) > alcance || Math.Abs(a.Center.Y - b.Center.Y) > alcance) continue;
 
                 if (PlanDistance(a.Center, b.Center) < SamePlace && Math.Abs(a.Length - b.Length) <= SizeTolerance && Math.Abs(a.Width - b.Width) <= SizeTolerance)
@@ -397,41 +333,37 @@ public static class FieldObjects
             }
         }
 
-        if (profile is not null) problemas.AddRange(ProfileIssues(profile, refL, refW, refInclinacao));
+        if (profile is not null) problemas.AddRange(ProfileIssues(profile, refL, refW));
 
         var aceitas = pegadas.Where(f => !pulados.Contains(f.Id)).ToList();
         var fileiras = RowsByAxis(aceitas, rowBreak ?? DefaultRowBreak);
 
-        return new FieldSurvey(pegadas, fileiras, problemas, refL, refW, refRumo, refInclinacao, refLado);
+        return new FieldSurvey(pegadas, fileiras, problemas, refL, refW, refRumo);
     }
 
     /// <summary>
-    /// A mesa do Clivus e os objetos: o objeto pode ser a área dos módulos ou
-    /// a mesa inteira (com as sobras); a inclinação tem que ser a mesma.
+    /// A mesa do Clivus e os objetos, em planta: o objeto pode ser a área dos
+    /// módulos ou a mesa inteira (com as sobras), e a largura pode ser a de
+    /// planta ou a da inclinação (o retângulo plano desenhado com a largura
+    /// dos módulos).
     /// </summary>
-    public static IReadOnlyList<FieldIssue> ProfileIssues(TableProfile profile, double length, double width, double? tilt)
+    public static IReadOnlyList<FieldIssue> ProfileIssues(TableProfile profile, double length, double width)
     {
         ArgumentNullException.ThrowIfNull(profile);
 
         var problemas = new List<FieldIssue>();
         var layout = profile.Layout;
         var modulos = layout.Length - layout.LeftMargin - layout.RightMargin;
+        var emPlanta = layout.Depth * Math.Cos(profile.TiltRadians);
 
-        var bateComprimento = Math.Abs(length - modulos) <= SizeTolerance || Math.Abs(length - layout.Length) <= SizeTolerance;
-        var bateLargura = Math.Abs(width - layout.Depth) <= SizeTolerance;
+        var bateComprimento = SameLength(length, modulos) || SameLength(length, layout.Length);
+        var bateLargura = Math.Abs(width - emPlanta) <= SizeTolerance || Math.Abs(width - layout.Depth) <= SizeTolerance;
 
         if (!bateComprimento || !bateLargura)
         {
             problemas.Add(new FieldIssue("*", FieldIssueKind.ProfileSize, Tr.F(
-                "a mesa \"{0}\" tem {1:0.###} m de módulos ({2:0.###} m com as sobras) × {3:0.###} m; os objetos têm {4:0.###} × {5:0.###} m.",
-                profile.Name, modulos, layout.Length, layout.Depth, length, width)));
-        }
-
-        if (tilt is { } t && Math.Abs(t - profile.TiltRadians) > AngleTolerance)
-        {
-            problemas.Add(new FieldIssue("*", FieldIssueKind.ProfileTilt, Tr.F(
-                "a mesa \"{0}\" tem {1:0.#}° de inclinação; os objetos têm {2:0.#}°.",
-                profile.Name, profile.TiltDegrees, t * 180 / Math.PI)));
+                "a mesa \"{0}\" tem {1:0.###} m de módulos ({2:0.###} m com as sobras) × {3:0.###} m em planta; os objetos têm {4:0.###} × {5:0.###} m.",
+                profile.Name, modulos, layout.Length, emPlanta, length, width)));
         }
 
         return problemas;
@@ -496,7 +428,7 @@ public static class FieldObjects
             var atual = new List<FieldFootprint> { linha[0].Pegada };
             for (var k = 1; k < linha.Count; k++)
             {
-                var folga = linha[k].Ao - linha[k - 1].Ao - (linha[k].Pegada.PlanLength + linha[k - 1].Pegada.PlanLength) / 2;
+                var folga = linha[k].Ao - linha[k - 1].Ao - (linha[k].Pegada.Length + linha[k - 1].Pegada.Length) / 2;
                 if (folga > quebra)
                 {
                     fileiras.Add(new FieldRow(atual));
@@ -512,10 +444,6 @@ public static class FieldObjects
         return fileiras;
     }
 
-    /// <summary>O lado da ponta baixa medido contra o eixo de referência (o eixo da pegada pode estar a 180°).</summary>
-    private static int SameSide(FieldFootprint f, int lado, double refRumo) =>
-        Math.Cos(f.Axis - refRumo) >= 0 ? lado : -lado;
-
     /// <summary>A diferença entre dois rumos de eixo (sem sentido), em [0, π/2].</summary>
     private static double AxisDifference(double a, double b)
     {
@@ -523,9 +451,8 @@ public static class FieldObjects
         return Math.Min(d, Math.PI - d);
     }
 
-    /// <summary>Os cantos em planta com a largura vista de cima.</summary>
-    private static IReadOnlyList<Point3> Corners(FieldFootprint f) =>
-        f.PlanCorners(f.Tilt is { } t ? f.Width * Math.Cos(t) : f.Width);
+    /// <summary>Os cantos em planta.</summary>
+    private static IReadOnlyList<Point3> Corners(FieldFootprint f) => f.PlanCorners();
 
     private static double DistanceToContour(IReadOnlyList<Point3> area, Point3 p)
     {
@@ -581,11 +508,7 @@ public static class FieldObjects
 
     private static Point3 Minus(Point3 a, Point3 b) => new(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
 
-    private static Point3 Scale(Point3 a, double k) => new(a.X * k, a.Y * k, a.Z * k);
-
     private static double Dot(Point3 a, Point3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
-
-    private static Point3 Cross(Point3 a, Point3 b) => new(a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
 
     private static double Norm(Point3 a) => Math.Sqrt(Dot(a, a));
 

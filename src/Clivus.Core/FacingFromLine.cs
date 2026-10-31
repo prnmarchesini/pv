@@ -51,6 +51,32 @@ public static class FacingFromLine
             : (g >= 270 ? Tr.F("a mesa olha {0:0.###}° para oeste do norte", 360 - g) : Tr.F("a mesa olha {0:0.###}° para oeste do sul", g - 180));
     }
 
+    /// <summary>
+    /// O aviso de que a mesa olha para o lado errado do hemisfério do terreno
+    /// (38.9; Renan, 30/10/2026: "tá faltando também a inclinação da mesa, dos
+    /// módulos para o norte ou sul, depende do local"): no hemisfério norte a
+    /// mesa olha para o sul, no sul para o norte. Null quando bate, perto do
+    /// equador (menos de 1°) ou sem a latitude.
+    /// </summary>
+    /// <param name="latitude">A latitude do terreno, em graus (negativa no sul), ou null.</param>
+    /// <param name="facingAzimuthRadians">Para onde a mesa olha, do norte no sentido horário.</param>
+    public static string? HemisphereWarning(double? latitude, double facingAzimuthRadians)
+    {
+        if (latitude is not { } lat || !double.IsFinite(lat) || Math.Abs(lat) < 1 || !double.IsFinite(facingAzimuthRadians)) return null;
+
+        // Olhando mais para o norte que para o sul (o cosseno do azimute), ou o contrário.
+        var olhaParaONorte = Math.Cos(facingAzimuthRadians) > 1e-9;
+        var olhaParaOSul = Math.Cos(facingAzimuthRadians) < -1e-9;
+
+        if (lat > 0 && olhaParaONorte)
+            return Tr.F("o terreno fica no hemisfério norte ({0:0.#}° N) e as mesas olham para o norte: lá o sol passa pelo sul. Para olhar para o sul, ponha o azimute em 180° (Configurações › Parâmetros, botão Sul)", lat);
+
+        if (lat < 0 && olhaParaOSul)
+            return Tr.F("o terreno fica no hemisfério sul ({0:0.#}° S) e as mesas olham para o sul: lá o sol passa pelo norte. Para olhar para o norte, ponha o azimute em 0° (Configurações › Parâmetros, botão Norte)", -lat);
+
+        return null;
+    }
+
     private static double Normalizar(double a)
     {
         var dois = 2 * Math.PI;

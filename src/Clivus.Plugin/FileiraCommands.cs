@@ -159,6 +159,7 @@ public static class FileiraCommands
 
         var doProjeto = ConfigCommands.Inicial(documento, out var avisoDaConfig);
         if (doProjeto.EmbedmentNote(perfil.Frame) is { } notaDoT3) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", notaDoT3));
+        UsinaCommands.AvisarAltura(editor, doProjeto, emUso.Count > 0 ? [.. emUso.Select(m => m.Profile)] : [perfil]);
         // O motor aplica o T3 de cada mesa (WithEmbedmentOf); entregar o
         // ForTable de um tipo só passava o T3 dele para os outros (38.3).
         var settings = doProjeto;

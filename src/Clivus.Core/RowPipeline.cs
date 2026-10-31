@@ -139,7 +139,14 @@ public static class RowPipeline
         if (row.Tables.Count == 0)
             throw new ArgumentException("A fileira não tem mesa.", nameof(row));
 
+        // A altura de cada estrutura (38.9): o biposte com P1 traz a ponta
+        // baixa mínima dele. A corrente é uma só para a fileira, então ela
+        // resolve com a faixa mais exigente das suas mesas; na fileira de um
+        // tipo só, que é a de sempre, é a faixa dele.
         var config = settings.Configuration;
+        var porMesa = geometries.Select(g => config.ForStructure(g, tiltRadians)).ToList();
+        if (porMesa.Any(c => c.MinLowEdge != config.MinLowEdge || c.MaxLowEdge != config.MaxLowEdge))
+            config = config with { MinLowEdge = porMesa.Max(c => c.MinLowEdge), MaxLowEdge = porMesa.Max(c => c.MaxLowEdge) };
 
         // 5.1 → 5.2, mesa a mesa: a orientação e o terreno na posição sem giro.
         var orientacoes = new List<RowOrientation>();
@@ -309,7 +316,8 @@ public static class RowPipeline
         if (!double.IsFinite(startElevation) || !double.IsFinite(endElevation))
             throw new ArgumentOutOfRangeException(nameof(startElevation), "As cotas da mesa precisam ser números.");
 
-        var config = settings.Configuration;
+        // A altura da estrutura (38.9), como na fileira.
+        var config = settings.Configuration.ForStructure(geometry, tiltRadians);
         var orientacao = RowOrientation.Resolve(cell, config.UpslopeAzimuthRadians);
         var amostra = TerrainSampler.Sample(geometry, TablePlacement.Plan(cell, orientacao, tiltRadians, 0), terrain);
         var viavel = ViableElevations.Compute(amostra, geometry.Length, config);

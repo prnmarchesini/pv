@@ -63,4 +63,36 @@ public class FacingFromLineTests
             Assert.InRange(az, 0, 2 * Math.PI - 1e-12);
         }
     }
+
+    /// <summary>
+    /// O lado errado do hemisfério é avisado (38.9; Renan, 30/10/2026: "a
+    /// inclinação da mesa, dos módulos para o norte ou sul, depende do
+    /// local"): o Panamá olhando para o norte, o Brasil olhando para o sul.
+    /// Perto do equador, sem latitude ou no lado certo, nada.
+    /// </summary>
+    [Theory]
+    [Trait("Etapa", "38")]
+    [InlineData(8.9, 0, true)]
+    [InlineData(8.9, 180, false)]
+    [InlineData(8.9, 300, true)]
+    [InlineData(-23.5, 180, true)]
+    [InlineData(-23.5, 0, false)]
+    [InlineData(-23.5, 90, false)]
+    [InlineData(0.5, 0, false)]
+    [InlineData(-0.5, 180, false)]
+    public void OLadoErradoDoHemisferioEAvisado(double latitude, double azimute, bool avisa)
+    {
+        var aviso = FacingFromLine.HemisphereWarning(latitude, azimute * Math.PI / 180);
+
+        Assert.Equal(avisa, aviso is not null);
+        if (avisa) Assert.Contains(latitude > 0 ? "Sul" : "Norte", aviso, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void SemLatitudeNaoHaAviso()
+    {
+        Assert.Null(FacingFromLine.HemisphereWarning(null, 0));
+        Assert.Null(FacingFromLine.HemisphereWarning(double.NaN, 0));
+    }
 }

@@ -130,6 +130,47 @@ public sealed record SystemConfiguration(
             ? this with { MinEmbedment = t3, MaxEmbedment = Math.Max(MaxEmbedment, t3) }
             : this;
 
+    /// <summary>
+    /// A configuração para uma mesa desta estrutura: o T3 dela
+    /// (<see cref="WithEmbedmentOf"/>) e, no biposte com P1 (38.9), a ponta
+    /// baixa mínima que o P1 dá no chão plano (<see cref="StructureHeight.LowEdge"/>)
+    /// no lugar da mínima do projeto: a altura é da estrutura. A máxima é a do
+    /// projeto, mas com pelo menos a folga que a faixa do projeto tem: com a
+    /// faixa de 0,30 a 0,80 e o P1 dando 0,833, a mesa vai de 0,833 a 1,333;
+    /// com 0,84 a 1,60, de 0,833 a 1,60. Sem P1, só o T3.
+    /// </summary>
+    /// <param name="geometry">A mesa em coordenadas locais, com a estrutura.</param>
+    /// <param name="tiltRadians">A inclinação da mesa.</param>
+    public SystemConfiguration ForStructure(TableGeometry geometry, double tiltRadians)
+    {
+        ArgumentNullException.ThrowIfNull(geometry);
+
+        var comT3 = WithEmbedmentOf(geometry.Frame);
+
+        if (StructureHeight.LowEdge(geometry, tiltRadians, comT3.MinEmbedment) is not { } minima || !double.IsFinite(minima) || minima <= 0)
+            return comT3;
+
+        return comT3 with { MinLowEdge = minima, MaxLowEdge = Math.Max(MaxLowEdge, minima + (MaxLowEdge - MinLowEdge)) };
+    }
+
+    /// <summary>
+    /// A frase para a linha de comando quando o P1 da estrutura muda a faixa
+    /// da ponta baixa (38.9), ou null quando não muda.
+    /// </summary>
+    /// <param name="name">O nome da mesa.</param>
+    public string? HeightNote(TableGeometry geometry, double tiltRadians, string name)
+    {
+        ArgumentNullException.ThrowIfNull(geometry);
+
+        var daEstrutura = ForStructure(geometry, tiltRadians);
+        if (daEstrutura.MinLowEdge == WithEmbedmentOf(geometry.Frame).MinLowEdge) return null;
+
+        return Tr.F(
+            "\"{0}\": ponta baixa de {1} a {2} m, pelo P1 de {3} m (a faixa do projeto é de {4} a {5} m)",
+            name, Texto(daEstrutura.MinLowEdge), Texto(daEstrutura.MaxLowEdge), Texto(geometry.Frame!.Bifila!.FrontPillar!.Value),
+            Texto(MinLowEdge), Texto(MaxLowEdge));
+    }
+
     public static readonly SystemConfiguration Default = new(
         FacingAzimuthRadians: 0,            // Renan: mesa olhando para o norte
         Pitch: 6.0,                         // meu

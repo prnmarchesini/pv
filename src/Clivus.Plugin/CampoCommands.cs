@@ -33,13 +33,15 @@ public static class CampoCommands
     /// <summary>O registro, no dicionário da área, de que ela segue os objetos.</summary>
     private const string ChaveDoRegistro = PluginInfo.PrefixoDeDados + "_CAMPO";
 
-    private const int VersaoDoRegistro = 1;
+    /// <summary>Versão 2 (revisão de tela do 40.2): o alinhamento. A 1 é lida com o centro.</summary>
+    private const int VersaoDoRegistro = 2;
 
     /// <summary>Como os objetos foram escolhidos; o Regerar área escolhe do mesmo jeito.</summary>
     /// <param name="Modo"><see cref="Todos"/>, <see cref="PelaCamada"/> ou <see cref="Escolhidos"/>.</param>
     /// <param name="Camada">A camada, no modo <see cref="PelaCamada"/>.</param>
     /// <param name="Handles">Os objetos, no modo <see cref="Escolhidos"/>.</param>
-    internal sealed record Escolha(string Modo, string Camada, IReadOnlyList<string> Handles)
+    /// <param name="Alinhamento">Por onde a mesa se alinha no objeto quando os comprimentos diferem.</param>
+    internal sealed record Escolha(string Modo, string Camada, IReadOnlyList<string> Handles, FieldAlignment Alinhamento = FieldAlignment.Center)
     {
         internal const string Todos = "Todos";
         internal const string PelaCamada = "Camada";
@@ -69,7 +71,12 @@ public static class CampoCommands
             var escolha = EscolherObjetos(editor, documento);
             if (escolha is null) return;
 
-            Executar(editor, documento, terreno, area, escolha, FileiraCommands.PerfilDaMesa(editor), perguntar: true, Tr.T("OBJETOS"));
+            // A única pergunta depois dos objetos (Renan, 30/10/2026: "no
+            // máximo o sistema tem que pedir 'respeitar qual eixo: Direita,
+            // centro ou esquerda'").
+            if (EscolherAlinhamento(editor) is not { } alinhamento) return;
+
+            Executar(editor, documento, terreno, area, escolha with { Alinhamento = alinhamento }, FileiraCommands.PerfilDaMesa(editor), Tr.T("OBJETOS"));
         }
         catch (System.Exception erro)
         {
@@ -99,7 +106,7 @@ public static class CampoCommands
                 return;
             }
 
-            Executar(editor, documento, terreno, area, new Escolha(Escolha.Todos, string.Empty, []), MesaCommands.MesaDeExemplo(), perguntar: false, Tr.T("OBJETOS"));
+            Executar(editor, documento, terreno, area, new Escolha(Escolha.Todos, string.Empty, []), MesaCommands.MesaDeExemplo(), Tr.T("OBJETOS"));
         }
         catch (System.Exception erro)
         {
@@ -110,13 +117,14 @@ public static class CampoCommands
 
     /// <summary>
     /// Lê os objetos, aponta as divergências, troca as mesas da área pelas dos
-    /// objetos e guarda a escolha na área. Devolve se gerou.
+    /// objetos e guarda a escolha na área. Devolve se gerou. Não pergunta nada
+    /// (revisão de tela do 40.2: a única pergunta é o alinhamento, antes); as
+    /// mesas que a área tinha saem, e o U as devolve.
     /// </summary>
     /// <param name="perfil">A mesa quando o desenho não tem nenhuma marcada para uso.</param>
-    /// <param name="perguntar">Confirmar antes de trocar as mesas (fora do nível 2 e do Regerar).</param>
     /// <param name="prefixo">O começo das linhas do relatório (OBJETOS, REFAZER).</param>
     internal static bool Executar(
-        Editor editor, Document documento, ProcessedTerrain terreno, Area area, Escolha escolha, TableProfile perfil, bool perguntar, string prefixo)
+        Editor editor, Document documento, ProcessedTerrain terreno, Area area, Escolha escolha, TableProfile perfil, string prefixo)
     {
         var database = documento.Database;
 
@@ -132,6 +140,15 @@ public static class CampoCommands
         if (aviso is not null) editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
         foreach (var nota in tipos.Select(t => t.Frame).Select(settings.EmbedmentNote).OfType<string>().Distinct())
             editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", nota));
+        UsinaCommands.AvisarAltura(editor, settings, tipos);
+
+        // Para onde as mesas olham é do projeto: o objeto em 2D não diz (e o
+        // Z dele não vale). O lado errado do hemisfério é avisado, não barrado.
+        var latitude = area.Vertices.Count > 0
+            ? GeoStore.Read(database, new Point3d(area.Vertices[0].X, area.Vertices[0].Y, area.Vertices[0].Z))?.Latitude
+            : null;
+        if (FacingFromLine.HemisphereWarning(latitude, settings.Configuration.FacingAzimuthRadians) is { } hemisferio)
+            editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", hemisferio));
 
         var objetos = LerObjetos(database, area, escolha);
 
@@ -146,40 +163,19 @@ public static class CampoCommands
 
         var casadosIds = casadas.Select(c => c.Footprint.Id).ToHashSet();
         var problemas = levantamento.Issues.Where(i => i.Kind != FieldIssueKind.Size || !casadosIds.Contains(i.Id)).Concat(semMesa).ToList();
-        if (FieldPlacement.FacingIssue(levantamento, settings.Configuration) is { } virada) problemas.Insert(0, virada);
 
         // Onde marcar cada objeto: o centro da pegada, ou a média dos vértices de quem não virou pegada.
         var centros = levantamento.Footprints.ToDictionary(f => f.Id, f => f.Center);
         foreach (var o in objetos.Where(o => !centros.ContainsKey(o.Id) && o.Vertices.Count > 0))
             centros[o.Id] = new Point3(o.Vertices.Average(p => p.X), o.Vertices.Average(p => p.Y), 0);
 
-        Relatar(editor, prefixo, area, objetos.Count, levantamento, casadas, tipos, problemas);
+        Relatar(editor, prefixo, area, objetos.Count, levantamento, casadas, tipos, problemas, settings.Configuration, escolha.Alinhamento);
 
-        if (problemas.Any(p => p.Kind == FieldIssueKind.ProjectFacing) || casadas.Count == 0)
+        if (casadas.Count == 0)
         {
             Marcar(editor, database, area, problemas, centros, terreno.Mesh, levantamento.ReferenceAxis);
-            editor.WriteMessage(casadas.Count == 0
-                ? Tr.F("\n{0} Nenhum objeto casa com as mesas em uso: nada foi gerado.\n", prefixo)
-                : Tr.F("\n{0} Nada foi gerado.\n", prefixo));
+            editor.WriteMessage(Tr.F("\n{0} Nenhum objeto casa com as mesas em uso: nada foi gerado.\n", prefixo));
             return false;
-        }
-
-        var jaTem = MesasNaArea(database, area.Vertices);
-
-        if (perguntar)
-        {
-            var pergunta = jaTem > 0
-                ? Tr.F("\nA área já tem {0} mesa(s) do Clivus: elas saem, e entram {1} mesa(s) nos objetos. Continuar?", jaTem, casadas.Count)
-                : Tr.F("\nGerar {0} mesa(s) nos objetos?", casadas.Count);
-
-            var resposta = editor.GetKeywords(new PromptKeywordOptions(pergunta + " [Sim/Não] <Sim>", "Sim Não") { AllowNone = true });
-
-            if (resposta.Status == PromptStatus.Cancel || (resposta.Status == PromptStatus.OK && resposta.StringResult == "Não"))
-            {
-                Marcar(editor, database, area, problemas, centros, terreno.Mesh, levantamento.ReferenceAxis);
-                editor.WriteMessage(Tr.F("\n{0} Nada foi gerado.\n", prefixo));
-                return false;
-            }
         }
 
         editor.WriteMessage(Tr.F("\nProcessando {0} mesa(s) em {1} fileira(s), conforme os objetos...\n", casadas.Count, levantamento.Rows.Count));
@@ -190,7 +186,7 @@ public static class CampoCommands
         }
 
         // Processa ANTES de apagar: se o motor falhar, as mesas da área ficam.
-        var usina = FieldPlacement.Process(levantamento, tipos, terreno.Mesh, settings, Progresso);
+        var usina = FieldPlacement.Process(levantamento, tipos, terreno.Mesh, settings, Progresso, escolha.Alinhamento);
 
         var apagadas = LayoutEraser.ApagarDentro(database, area.Vertices);
         CarportCommands.LimparFilasSemVao(database);
@@ -205,7 +201,7 @@ public static class CampoCommands
         problemas.AddRange(usina.Issues.Where(i => i.Kind == FieldIssueKind.Deviation));
         var desvios = usina.DeviationByObject.Values.ToList();
         if (desvios.Count > 0)
-            editor.WriteMessage(Tr.F("\n{0} As mesas ficaram a no máximo {1:0.000} m do centro dos objetos (média {2:0.000} m).\n", prefixo, desvios.Max(), desvios.Average()));
+            editor.WriteMessage(Tr.F("\n{0} As mesas ficaram a no máximo {1:0.000} m do lugar no objeto (média {2:0.000} m).\n", prefixo, desvios.Max(), desvios.Average()));
         foreach (var p in usina.Issues.Where(i => i.Kind == FieldIssueKind.Deviation).Take(30)) editor.WriteMessage($"    {p.Message}\n");
 
         Marcar(editor, database, area, problemas, centros, terreno.Mesh, levantamento.ReferenceAxis);
@@ -327,6 +323,33 @@ public static class CampoCommands
     }
 
     /// <summary>
+    /// "Alinhar a mesa no objeto pela [Direita/Centro/Esquerda] &lt;Centro&gt;":
+    /// quando o objeto não tem o comprimento da mesa, a diferença sobra do
+    /// outro lado (no centro, metade para cada lado). Direita e esquerda como
+    /// se vê na planta com o norte para cima. Null se a pessoa cancelou.
+    /// </summary>
+    private static FieldAlignment? EscolherAlinhamento(Editor editor)
+    {
+        var direita = Tr.T("Direita");
+        var centro = Tr.T("Centro");
+        var esquerda = Tr.T("Esquerda");
+
+        var opcoes = new PromptKeywordOptions(
+            Tr.F("\nAlinhar a mesa no objeto pela [{0}/{1}/{2}] <{1}>: ", direita, centro, esquerda), $"{direita} {centro} {esquerda}")
+        {
+            AllowNone = true,
+        };
+
+        var resposta = editor.GetKeywords(opcoes);
+        if (resposta.Status == PromptStatus.Cancel) return null;
+        if (resposta.Status != PromptStatus.OK) return FieldAlignment.Center;
+
+        return resposta.StringResult == direita ? FieldAlignment.Right
+            : resposta.StringResult == esquerda ? FieldAlignment.Left
+            : FieldAlignment.Center;
+    }
+
+    /// <summary>
     /// Os objetos da escolha. Em Todos e Camada, só as polilinhas fechadas de
     /// 4 vértices com o centro dentro da área; em Escolher, tudo o que foi
     /// escolhido (o que não é retângulo sai como divergência). As polilinhas
@@ -419,32 +442,33 @@ public static class CampoCommands
         }
     }
 
-    /// <summary>Quantas mesas do Clivus a área tem (pelo contorno, como o apagar por área).</summary>
-    private static int MesasNaArea(Database database, IReadOnlyList<Point3> area)
-    {
-        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
-
-        return LayoutScan.Tables(transacao, database).Values.Count(mesa => mesa.Contours.Any(id =>
-            transacao.GetObject(id, OpenMode.ForRead) is Polyline3d contorno
-            && contorno.Cast<ObjectId>().Select(v => ((PolylineVertex3d)transacao.GetObject(v, OpenMode.ForRead)).Position).Any(p => Polygons.Contains(area, p.X, p.Y))));
-    }
-
     // --------------------------------------------------------- relatório
 
     private static void Relatar(
         Editor editor, string prefixo, Area area, int lidos, FieldSurvey levantamento, IReadOnlyList<FieldMatch> casadas,
-        IReadOnlyList<TableProfile> tipos, IReadOnlyList<FieldIssue> problemas)
+        IReadOnlyList<TableProfile> tipos, IReadOnlyList<FieldIssue> problemas, SystemConfiguration configuracao, FieldAlignment alinhamento)
     {
         editor.WriteMessage(Tr.F("\n{0} {1}: {2} objeto(s) lido(s), {3} viram mesa.\n", prefixo, area.Nome, lidos, casadas.Count));
 
         if (levantamento.Footprints.Count > 0)
         {
-            editor.WriteMessage(Tr.F("  A maioria tem {0:0.###} × {1:0.###} m{2}{3}; o eixo das fileiras está a {4:0.#}° do leste.\n",
-                levantamento.ReferenceLength,
-                levantamento.ReferenceWidth,
-                levantamento.ReferenceTilt is { } t ? Tr.F(", {0:0.#}° de inclinação", t * 180 / Math.PI) : string.Empty,
-                levantamento.LowSideDirection is { } baixo ? Tr.F(", ponta baixa para {0}", FieldPlacement.Rumo(baixo)) : string.Empty,
-                levantamento.ReferenceAxis * 180 / Math.PI));
+            editor.WriteMessage(Tr.F("  A maioria tem {0:0.###} × {1:0.###} m em planta; o eixo das fileiras está a {2:0.#}° do leste.\n",
+                levantamento.ReferenceLength, levantamento.ReferenceWidth, levantamento.ReferenceAxis * 180 / Math.PI));
+
+            // O que o objeto em 2D não diz, e de onde veio: a cota é do
+            // terreno, o lado da ponta baixa é do azimute do projeto.
+            var (rx, ry) = FieldPlacement.RightDirection(levantamento.ReferenceAxis);
+            var ponta = FieldPlacement.Rumo(Math.Atan2(ry, rx));
+            var oposta = FieldPlacement.Rumo(Math.Atan2(-ry, -rx));
+
+            editor.WriteMessage(Tr.F("  Só X e Y dos objetos: a cota vem do terreno, e {0} (o azimute do projeto, em Configurações › Parâmetros).\n",
+                FacingFromLine.Describe(configuracao.FacingAzimuthDegrees)));
+            editor.WriteMessage(alinhamento switch
+            {
+                FieldAlignment.Right => Tr.F("  Alinhadas pela direita: a ponta da mesa mais para {0} fica na do objeto, e a diferença de comprimento sobra para {1}.\n", ponta, oposta),
+                FieldAlignment.Left => Tr.F("  Alinhadas pela esquerda: a ponta da mesa mais para {0} fica na do objeto, e a diferença de comprimento sobra para {1}.\n", oposta, ponta),
+                _ => Tr.T("  Alinhadas pelo centro: a diferença de comprimento sobra metade para cada lado.\n"),
+            });
         }
 
         foreach (var porTipo in casadas.GroupBy(c => (c.Kind, c.ModulesOnly)))
@@ -452,6 +476,16 @@ public static class CampoCommands
             editor.WriteMessage(porTipo.Key.ModulesOnly
                 ? Tr.F("  {0} × {1} (o objeto é a área dos módulos)\n", porTipo.Count(), tipos[porTipo.Key.Kind].Name)
                 : Tr.F("  {0} × {1} (o objeto é a mesa inteira, com as sobras)\n", porTipo.Count(), tipos[porTipo.Key.Kind].Name));
+
+            // A diferença típica (a mediana), quando passa de 1 cm.
+            var diferencas = porTipo.Select(c => c.LengthDifference).OrderBy(d => d).ToList();
+            var tipica = diferencas[diferencas.Count / 2];
+            if (Math.Abs(tipica) > 0.01)
+            {
+                editor.WriteMessage(tipica < 0
+                    ? Tr.F("    a mesa tem {0:0.000} m a mais que o objeto\n", -tipica)
+                    : Tr.F("    a mesa tem {0:0.000} m a menos que o objeto\n", tipica));
+            }
         }
 
         if (problemas.Count == 0)
@@ -471,17 +505,13 @@ public static class CampoCommands
         FieldIssueKind.NotRectangle => Tr.T("não é retângulo"),
         FieldIssueKind.Size => Tr.T("tamanho diferente"),
         FieldIssueKind.Axis => Tr.T("rumo diferente"),
-        FieldIssueKind.Tilt => Tr.T("inclinação diferente"),
-        FieldIssueKind.Facing => Tr.T("ponta baixa trocada"),
         FieldIssueKind.Duplicate => Tr.T("repetido"),
         FieldIssueKind.Overlap => Tr.T("sobreposto"),
         FieldIssueKind.OutsideArea => Tr.T("fora da área"),
         FieldIssueKind.CrossesArea => Tr.T("atravessa a área"),
         FieldIssueKind.ProfileSize => Tr.T("mesa de outro tamanho"),
-        FieldIssueKind.ProfileTilt => Tr.T("mesa de outra inclinação"),
         FieldIssueKind.NoProfile => Tr.T("sem mesa do tamanho"),
         FieldIssueKind.Deviation => Tr.T("mesa deslocada"),
-        FieldIssueKind.ProjectFacing => Tr.T("projeto virado"),
         _ => tipo.ToString(),
     };
 
@@ -568,7 +598,8 @@ public static class CampoCommands
         using var dados = new ResultBuffer(
             new TypedValue((int)DxfCode.Int32, VersaoDoRegistro),
             new TypedValue((int)DxfCode.Text, escolha.Modo),
-            new TypedValue((int)DxfCode.Text, escolha.Camada));
+            new TypedValue((int)DxfCode.Text, escolha.Camada),
+            new TypedValue((int)DxfCode.Text, escolha.Alinhamento.ToString()));
         foreach (var handle in escolha.Handles) dados.Add(new TypedValue((int)DxfCode.Text, handle));
 
         if (dicionario.Contains(ChaveDoRegistro))
@@ -595,12 +626,22 @@ public static class CampoCommands
 
         using var dados = ((Xrecord)transacao.GetObject(dicionario.GetAt(ChaveDoRegistro), OpenMode.ForRead)).Data;
         var valores = dados?.AsArray() ?? [];
-        if (valores.Length < 3 || valores[0].Value is not int versao || versao != VersaoDoRegistro) return null;
+        if (valores.Length < 3 || valores[0].Value is not int versao || versao is not (1 or VersaoDoRegistro)) return null;
 
         var modo = valores[1].Value as string ?? string.Empty;
         if (modo is not (Escolha.Todos or Escolha.PelaCamada or Escolha.Escolhidos)) return null;
 
-        return new Escolha(modo, valores[2].Value as string ?? string.Empty, [.. valores.Skip(3).Select(v => v.Value as string).OfType<string>()]);
+        // A versão 1 não tinha o alinhamento: era o centro.
+        var alinhamento = FieldAlignment.Center;
+        var handles = valores.Skip(3);
+
+        if (versao == VersaoDoRegistro)
+        {
+            if (valores.Length < 4 || !Enum.TryParse(valores[3].Value as string, ignoreCase: false, out alinhamento) || !Enum.IsDefined(alinhamento)) return null;
+            handles = valores.Skip(4);
+        }
+
+        return new Escolha(modo, valores[2].Value as string ?? string.Empty, [.. handles.Select(v => v.Value as string).OfType<string>()], alinhamento);
     }
 
     /// <summary>
@@ -631,7 +672,7 @@ public static class CampoCommands
     {
         if (PelosObjetos(documento.Database, vertices) is not { } campo) return null;
 
-        return Executar(editor, documento, terreno, campo.Area, campo.Escolha, perfil(), perguntar: false, Tr.T("REFAZER"));
+        return Executar(editor, documento, terreno, campo.Area, campo.Escolha, perfil(), Tr.T("REFAZER"));
     }
 
     /// <summary>

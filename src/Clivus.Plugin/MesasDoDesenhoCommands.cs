@@ -72,6 +72,39 @@ public static class MesasDoDesenhoCommands
     }
 
     /// <summary>
+    /// CLIVUS_BIFILA_P1_AUTO (38.9): a Arctech GC800 da aba Fabricantes, com o
+    /// P1 de 3,059 e o P2 de 3,888, sozinha e em uso, e a faixa da PB do
+    /// projeto em 0,30 a 0,80 m: abaixo da altura dela, que tem que vir do P1.
+    /// Para o nível 2.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoBifilaP1Automatico)]
+    public static void BifilaComP1()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        try
+        {
+            var bifila = VendorStructures.All[0].Profile;
+            MesasDoDesenho.Gravar(documento.Database, [new DrawingTable(bifila, DrawingTables.NextColor([]), true)]);
+
+            var atual = ConfigCommands.Inicial(documento, out _);
+            SettingsStore.Save(documento.Database, atual with
+            {
+                Configuration = atual.Configuration with { MinLowEdge = 0.30, MaxLowEdge = 0.80 },
+            });
+
+            documento.Editor.WriteMessage(Tr.F("\nBIFILA_P1 {0} no desenho, em uso, P1 {1} e P2 {2}; PB do projeto de 0,30 a 0,80 m.\n",
+                bifila.Name, bifila.Frame.Bifila!.FrontPillar, bifila.Frame.Bifila.RearPillar));
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no CLIVUS_BIFILA_P1_AUTO.", erro);
+            documento.Editor.WriteMessage(Tr.F("\nNão consegui gravar o biposte: {0}\n", erro.Message));
+        }
+    }
+
+    /// <summary>
     /// CLIVUS_MONO_2P14_AUTO (39.2): a mesma mesa da GC800, com estrutura
     /// monoposte (um pilar por pórtico, nas mesmas estações e com o mesmo T3),
     /// sozinha e em uso, com a faixa da PB do biposte. O nível 2 roda a mesma

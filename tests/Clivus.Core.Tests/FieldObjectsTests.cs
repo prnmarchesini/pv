@@ -4,7 +4,9 @@ namespace Clivus.Core.Tests;
 
 /// <summary>
 /// As mesas do cliente (40.1): o objeto de 4 vértices vira pegada, as pegadas
-/// viram fileiras, e o que diverge sai com o motivo.
+/// viram fileiras, e o que diverge sai com o motivo. Tudo em planta, só com X
+/// e Y (revisão de tela do 40.2, Renan 30/10/2026: "o eixo Z deve estar
+/// cagado, então vc vai gerar a mesa respeitando apenas a posição X e Y").
 /// </summary>
 public class FieldObjectsTests
 {
@@ -44,32 +46,54 @@ public class FieldObjectsTests
 
     private static TableProfile Gc800 => BifilaReference.Profile(BifilaVariant.Gc800);
 
+    /// <summary>
+    /// O D6D4 visto de cima: o comprimento é o de planta (a rampa de 7,6 %
+    /// encurta os 18,502 em 5 cm) e a largura é a distância entre os lados
+    /// maiores (4,788·cos 10°), num paralelogramo que passa por retângulo.
+    /// </summary>
     [Fact]
     [Trait("Etapa", "40")]
-    public void OObjetoDoClienteEAAreaDosModulosDeUma2P14()
+    public void OObjetoDoClienteEmPlanta()
     {
         var f = FieldObjects.Footprint(DoCliente(), out var porQue);
 
         Assert.Null(porQue);
         Assert.NotNull(f);
-        Assert.Equal(18.502, f.Length, 3);
-        Assert.Equal(4.788, f.Width, 3);
+        Assert.Equal(18.4486, f.Length, 3);
+        Assert.Equal(4.7152, f.Width, 4);
         Assert.Equal(0, f.Axis, 6);
-        Assert.Equal(10.0, f.Tilt!.Value / Grau, 1);
-        Assert.Equal(-1, f.LowSide);
-        Assert.Equal(-1.4056 / 18.4486, f.RowSlope!.Value, 4);
-        Assert.Equal(18.4486, f.PlanLength, 3);
+        Assert.Equal(0, f.Center.Z);
     }
 
-    /// <summary>A ponta baixa à direita de um eixo para o leste: ela olha para o sul.</summary>
+    /// <summary>
+    /// O Z do objeto não conta (Renan, 30/10/2026: "o objeto que vou
+    /// selecionar do cliente, ele está em 2D, o eixo Z deve estar cagado"): o
+    /// mesmo objeto achatado, a 9999 m ou com cada vértice numa cota
+    /// qualquer dá a mesma pegada.
+    /// </summary>
     [Fact]
     [Trait("Etapa", "40")]
-    public void APontaBaixaDoClienteOlhaParaOSul()
+    public void OZDoObjetoNaoMudaNada()
     {
-        var levantamento = FieldObjects.Survey([DoCliente()]);
+        var o = DoCliente();
+        var referencia = FieldObjects.Footprint(o, out _)!;
+        var cotas = new[] { 0.0, 9999.0, -37.25, 1e6 };
 
-        Assert.Equal(-Math.PI / 2, levantamento.LowSideDirection!.Value, 9);
-        Assert.Equal(10.0, levantamento.ReferenceTilt!.Value / Grau, 1);
+        var variantes = new[]
+        {
+            o with { Vertices = [.. o.Vertices.Select(p => new Point3(p.X, p.Y, 0))] },
+            o with { Vertices = [.. o.Vertices.Select(p => new Point3(p.X, p.Y, 9999))] },
+            o with { Vertices = [.. o.Vertices.Select((p, i) => new Point3(p.X, p.Y, cotas[i]))] },
+            o with { Vertices = [.. o.Vertices.Select(p => new Point3(p.X, p.Y, double.NaN))] },
+        };
+
+        foreach (var variante in variantes)
+        {
+            var f = FieldObjects.Footprint(variante, out var porQue);
+
+            Assert.Null(porQue);
+            Assert.Equal(referencia, f);
+        }
     }
 
     [Fact]
@@ -85,9 +109,8 @@ public class FieldObjectsTests
             var f = FieldObjects.Footprint(variante, out _)!;
 
             Assert.Equal(0, f.Axis, 6);
-            Assert.Equal(-1, f.LowSide);
-            Assert.Equal(18.502, f.Length, 3);
-            Assert.Equal(10.0, f.Tilt!.Value / Grau, 1);
+            Assert.Equal(18.4486, f.Length, 3);
+            Assert.Equal(4.7152, f.Width, 3);
         }
     }
 
@@ -108,20 +131,24 @@ public class FieldObjectsTests
         var f = FieldObjects.Footprint(Mesa("A", 10, 20, rumo: 30), out _)!;
 
         Assert.Equal(30, f.Axis / Grau, 6);
-        Assert.Equal(-1, f.LowSide);
-        Assert.Equal(10.0, f.Tilt!.Value / Grau, 6);
+        Assert.Equal(18.502, f.Length, 6);
+        Assert.Equal(4.788 * Math.Cos(10 * Grau), f.Width, 6);
     }
 
+    /// <summary>O retângulo 3D inclinado e o plano com a largura de planta são a mesma mesa.</summary>
     [Fact]
     [Trait("Etapa", "40")]
-    public void ORetanguloPlanoNaoTemPontaBaixa()
+    public void ORetanguloPlanoEOInclinadoDaoAMesmaPegada()
     {
-        var plano = new FieldObject("P", "L", [new(0, 0, 5), new(18.5, 0, 5), new(18.5, 4.7, 5), new(0, 4.7, 5)]);
-        var f = FieldObjects.Footprint(plano, out _)!;
+        var largura = 4.788 * Math.Cos(10 * Grau);
+        var plano = new FieldObject("P", "L", [new(0, 0, 5), new(18.502, 0, 5), new(18.502, -largura, 5), new(0, -largura, 5)]);
 
-        Assert.Null(f.Tilt);
-        Assert.Null(f.LowSide);
-        Assert.Null(FieldObjects.Survey([plano]).LowSideDirection);
+        var doPlano = FieldObjects.Footprint(plano, out _)!;
+        var doInclinado = FieldObjects.Footprint(Mesa("I", 0, 0), out _)!;
+
+        Assert.Equal(doInclinado.Length, doPlano.Length, 9);
+        Assert.Equal(doInclinado.Width, doPlano.Width, 9);
+        Assert.Equal(doInclinado.Center, doPlano.Center);
     }
 
     [Theory]
@@ -231,27 +258,44 @@ public class FieldObjectsTests
         Assert.Equal(3, levantamento.TableCount);
     }
 
+    /// <summary>
+    /// O rumo diferente é apontado; a inclinação diferente aparece só como a
+    /// largura em planta que ela dá (o Z não conta).
+    /// </summary>
     [Fact]
     [Trait("Etapa", "40")]
-    public void RumoEInclinacaoDiferentesSaoApontados()
+    public void RumoDiferenteEApontadoEAInclinacaoSoPelaLargura()
     {
         var levantamento = FieldObjects.Survey([Mesa("A", 0, 0), Mesa("B", 0, -7), Mesa("C", 0, -14, graus: 15), Mesa("D", 40, 0, rumo: 3)]);
 
-        Assert.Contains(levantamento.Issues, i => i.Id == "C" && i.Kind == FieldIssueKind.Tilt);
+        Assert.Contains(levantamento.Issues, i => i.Id == "C" && i.Kind == FieldIssueKind.Size);
         Assert.Contains(levantamento.Issues, i => i.Id == "D" && i.Kind == FieldIssueKind.Axis);
     }
 
+    /// <summary>O mesmo retângulo desenhado no sentido contrário (eixo a 180°) é a mesma mesa: em planta não há lado de ponta baixa.</summary>
     [Fact]
     [Trait("Etapa", "40")]
-    public void APontaBaixaDoOutroLadoEApontada()
+    public void OEixoDesenhadoAoContrarioNaoEDivergencia()
     {
-        // B: o mesmo retângulo com a ponta baixa do lado de lá (eixo virado 180°).
         var b = Mesa("B", 18.502, -20, rumo: 180);
         var levantamento = FieldObjects.Survey([Mesa("A", 0, 0), Mesa("C", 0, -7), b]);
 
-        var problema = Assert.Single(levantamento.Issues);
-        Assert.Equal(FieldIssueKind.Facing, problema.Kind);
-        Assert.Equal("B", problema.Id);
+        Assert.Empty(levantamento.Issues);
+        Assert.Equal(3, levantamento.TableCount);
+    }
+
+    /// <summary>A rampa da fileira encurta o objeto 3D em planta: até 1,5 % não é "tamanho diferente".</summary>
+    [Fact]
+    [Trait("Etapa", "40")]
+    public void ARampaQueEncurtaAPlantaNaoEDivergencia()
+    {
+        var naRampa = DoCliente("RAMPA");
+        var curto = Mesa("CURTO", 0, 20, comprimento: 18.0);
+
+        var levantamento = FieldObjects.Survey([Mesa("PLANO1", 0, 10), Mesa("PLANO2", 0, 30), naRampa, curto]);
+
+        Assert.DoesNotContain(levantamento.Issues, i => i.Id == "RAMPA");
+        Assert.Contains(levantamento.Issues, i => i.Id == "CURTO" && i.Kind == FieldIssueKind.Size);
     }
 
     [Fact]
@@ -278,7 +322,7 @@ public class FieldObjectsTests
 
     [Fact]
     [Trait("Etapa", "40")]
-    public void MesaDeOutroTamanhoEOutraInclinacaoEApontada()
+    public void MesaDeOutroTamanhoEApontada()
     {
         var modulo = new SolarModule("Risen", "RSM132-8-720BHDG", 720, 2.384, 1.303, 0.033);
         var outra = new TableProfile(
@@ -290,7 +334,6 @@ public class FieldObjectsTests
         var levantamento = FieldObjects.Survey([DoCliente()], profile: outra);
 
         Assert.Contains(levantamento.Issues, i => i.Id == "*" && i.Kind == FieldIssueKind.ProfileSize);
-        Assert.Contains(levantamento.Issues, i => i.Id == "*" && i.Kind == FieldIssueKind.ProfileTilt);
     }
 
     /// <summary>O objeto pode ser a mesa inteira, com as sobras: também bate.</summary>

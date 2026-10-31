@@ -91,6 +91,20 @@ public static class UsinaCommands
     }
 
     /// <summary>
+    /// A linha de cada biposte com P1 (38.9): a faixa da ponta baixa que vale
+    /// para ele, que é a da altura dele e não a do projeto.
+    /// </summary>
+    internal static void AvisarAltura(Editor editor, ProjectSettings projeto, IReadOnlyList<TableProfile> mesas)
+    {
+        foreach (var mesa in mesas.Where(m => m.Frame.Bifila?.FrontPillar is not null && m.IsValid))
+        {
+            var geometria = TableGeometry.Local(mesa.Layout, mesa.Frame.Pillars(mesa.Layout), mesa.Frame);
+            if (projeto.Configuration.HeightNote(geometria, mesa.TiltRadians, mesa.Name) is { } nota)
+                editor.WriteMessage(Tr.F("\n  Altura da estrutura: {0}.\n", nota));
+        }
+    }
+
+    /// <summary>
     /// As mesas do desenho em uso (8.5/8.6), na ordem da lista (a
     /// prioridade). Lista vazia: nenhuma em uso, vale o perfil de sempre. Null,
     /// com a mensagem dada: em uso, mas com inclinações diferentes.
@@ -201,6 +215,7 @@ public static class UsinaCommands
         var estruturas = doDesenho.Count > 0 ? doDesenho.Select(m => m.Profile.Frame) : [perfil.Frame];
         foreach (var notaDoT3 in estruturas.Select(doProjeto.EmbedmentNote).OfType<string>().Distinct())
             editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}.\n", notaDoT3));
+        AvisarAltura(editor, doProjeto, doDesenho.Count > 0 ? [.. doDesenho.Select(m => m.Profile)] : [perfil]);
         // O motor aplica o T3 de cada mesa (WithEmbedmentOf); entregar o
         // ForTable de um tipo só passava o T3 dele para os outros (38.3).
         var settings = doProjeto;

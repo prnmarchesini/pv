@@ -47,14 +47,18 @@ public class VendorStructuresTests
         });
     }
 
+    /// <summary>A estrutura de fabricante é a mesa de referência com outro nome e, desde o 38.9, o P1 e o P2 do catálogo.</summary>
     [Fact]
     [Trait("Etapa", "38")]
-    public void AEstruturaDeFabricanteEhAMesaDeReferenciaComOutroNome()
+    public void AEstruturaDeFabricanteEhAMesaDeReferenciaComOutroNomeEOsPilaresDoCatalogo()
     {
         var gc800 = VendorStructures.All.Single(e => e.Model.Contains("GC800", StringComparison.Ordinal));
         var referencia = BifilaReference.Profile(BifilaVariant.Gc800);
+        var comPilares = referencia.Frame with { Bifila = referencia.Frame.Bifila! with { FrontPillar = 3.059, RearPillar = 3.888 } };
 
-        Assert.Equal(referencia with { Name = gc800.Profile.Name }, gc800.Profile);
+        Assert.Equal(referencia with { Name = gc800.Profile.Name, Frame = comPilares }, gc800.Profile);
+        Assert.Equal(3.059, gc800.CatalogP1, 12);
+        Assert.Equal(3.888, gc800.CatalogP2, 12);
         Assert.Equal(0.800 + 0.033 * Math.Cos(10 * Grau), gc800.LowEdge, 9);
     }
 
@@ -122,18 +126,22 @@ public class VendorStructuresTests
         { "Genérico", 0.305 },
     };
 
+    /// <summary>A mesa sem o P1 e o P2 (a altura da faixa do projeto, como nos perfis de antes do 38.9).</summary>
+    private static TableProfile SemPilares(TableProfile perfil) =>
+        perfil with { Frame = perfil.Frame with { Bifila = perfil.Frame.Bifila! with { FrontPillar = null, RearPillar = null } } };
+
     /// <summary>
-    /// O P1 e o P2 da janela são os pilares que o motor inteiro desenha no
-    /// chão plano, com a ponta baixa fora da grade inclusive.
+    /// Sem o P1 e o P2, os pilares da janela são os que o motor inteiro
+    /// desenha no chão plano, com a ponta baixa fora da grade inclusive.
     /// </summary>
     [Theory]
     [Trait("Etapa", "38")]
     [MemberData(nameof(Bipostes))]
-    public void NoBiposteOP1EOP2SaoOsDoMotorNoChaoPlano(string mesa, double minima)
+    public void SemP1OP1EOP2SaoOsDoMotorNoChaoPlano(string mesa, double minima)
     {
-        var perfil = mesa == "Genérico"
+        var perfil = SemPilares(mesa == "Genérico"
             ? BifilaReference.Generic()
-            : VendorStructures.All.Single(e => e.Model.Contains(mesa + "MM", StringComparison.Ordinal)).Profile;
+            : VendorStructures.All.Single(e => e.Model.Contains(mesa + "MM", StringComparison.Ordinal)).Profile);
         var projeto = Projeto(minima);
 
         var basica = perfil.PillarsAtBasicHeight(projeto);
@@ -144,6 +152,90 @@ public class VendorStructuresTests
         Assert.All(pilares.Where(p => p.Line == PillarLine.Rear), p => Assert.Equal(basica.P2!.Value, p.Length!.Value, Motor));
         Assert.Contains(pilares, p => p.Line == PillarLine.Rear);
         Assert.True(basica.P2 > basica.P1);
+    }
+
+    /// <summary>
+    /// Com o P1 (38.9), a altura é da estrutura, qualquer que seja a faixa do
+    /// projeto: o motor inteiro assenta a mesa no chão plano na ponta baixa
+    /// que o P1 dá (subida para a grade de 1 cm, nunca abaixo), e os pilares
+    /// saem o P1 e o P2 de chão plano, com menos de 1 cm a mais. Com a faixa de
+    /// 0,30 a 0,80 (abaixo do P1), a mesa não fica sem folga.
+    /// </summary>
+    [Theory]
+    [Trait("Etapa", "38")]
+    [InlineData("GC800", 0.30, 0.80)]
+    [InlineData("GC800", 0.84, 1.60)]
+    [InlineData("GC1000", 0.30, 0.80)]
+    [InlineData("Genérico", 1.50, 2.00)]
+    public void ComP1OMotorAssentaAMesaNaAlturaDaEstrutura(string mesa, double minima, double maxima)
+    {
+        var perfil = mesa == "Genérico"
+            ? BifilaReference.Generic()
+            : VendorStructures.All.Single(e => e.Model.Contains(mesa + "MM", StringComparison.Ordinal)).Profile;
+        var projeto = Projeto(minima) with { MaxLowEdge = maxima };
+
+        var daEstrutura = perfil.StructureLowEdge!.Value;
+        var basica = perfil.PillarsAtBasicHeight(projeto);
+        var (pontasBaixas, pilares) = PeloMotor(perfil, projeto);
+
+        Assert.Equal(perfil.Frame.Bifila!.FrontPillar!.Value, basica.P1, Motor);
+        Assert.Equal(daEstrutura, basica.LowEdge, Motor);
+        Assert.All(pontasBaixas, pb => Assert.InRange(pb, daEstrutura - 1e-9, daEstrutura + 0.01));
+        Assert.All(pilares.Where(p => p.Line == PillarLine.Front), p => Assert.InRange(p.Length!.Value, basica.P1 - 1e-9, basica.P1 + 0.01));
+        Assert.All(pilares.Where(p => p.Line == PillarLine.Rear), p => Assert.InRange(p.Length!.Value, basica.P2!.Value - 1e-9, basica.P2!.Value + 0.01));
+    }
+
+    /// <summary>
+    /// O P1 de catálogo dá a altura livre do fabricante, e a folga do P2 de
+    /// catálogo é o declive dele: 10 % na GC800 e 20 % na GC1000.
+    /// </summary>
+    [Theory]
+    [Trait("Etapa", "38")]
+    [InlineData("GC800", 0.800, 0.10)]
+    [InlineData("GC1000", 1.000, 0.20)]
+    public void OP1DaAAlturaLivreEOP2ODecliveDoCatalogo(string modelo, double livre, double declive)
+    {
+        var estrutura = VendorStructures.All.Single(e => e.Model.Contains(modelo + "MM", StringComparison.Ordinal));
+        var perfil = estrutura.Profile;
+        var geometria = TableGeometry.Local(perfil.Layout, perfil.Frame.Pillars(perfil.Layout), perfil.Frame);
+
+        Assert.Equal(livre + perfil.Layout.Module.Thickness * Math.Cos(perfil.TiltRadians), perfil.StructureLowEdge!.Value, Ouro);
+        Assert.Equal(declive, StructureHeight.RearSlopeAllowance(geometria, perfil.TiltRadians)!.Value, 0.001);
+
+        // A volta: o P1 que a ponta baixa dele dá é ele mesmo, e o P2 de chão
+        // plano é o da conta da janela.
+        var noPlano = perfil.PillarsOnFlatGround(perfil.StructureLowEdge!.Value, perfil.Frame.MinEmbedment!.Value);
+        Assert.Equal(estrutura.CatalogP1, noPlano.P1, Motor);
+        Assert.Equal(StructureHeight.FlatRearPillar(geometria, perfil.TiltRadians)!.Value, noPlano.P2!.Value, Motor);
+    }
+
+    /// <summary>
+    /// A faixa da ponta baixa de uma mesa com P1: a mínima é a do P1; a máxima,
+    /// a do projeto, mas nunca com menos folga que a faixa do projeto tem. Sem
+    /// P1, a do projeto (com o T3 da mesa).
+    /// </summary>
+    [Theory]
+    [Trait("Etapa", "38")]
+    [InlineData(0.30, 0.80, 0.50)]
+    [InlineData(0.30, 1.00, 0.70)]
+    [InlineData(0.84, 1.60, -1)]
+    [InlineData(1.20, 1.30, -1)]
+    public void AFaixaDaMesaComP1(double minima, double maxima, double folga)
+    {
+        var perfil = VendorStructures.All[0].Profile;
+        var geometria = TableGeometry.Local(perfil.Layout, perfil.Frame.Pillars(perfil.Layout), perfil.Frame);
+        var projeto = Projeto(minima) with { MaxLowEdge = maxima };
+
+        var daMesa = projeto.ForStructure(geometria, perfil.TiltRadians);
+        var p1 = perfil.StructureLowEdge!.Value;
+
+        Assert.Equal(p1, daMesa.MinLowEdge, 12);
+        Assert.Equal(folga < 0 ? maxima : p1 + folga, daMesa.MaxLowEdge, 9);
+        Assert.Null(daMesa.WhyInvalid);
+
+        var semP1 = SemPilares(perfil);
+        var geometriaSemP1 = TableGeometry.Local(semP1.Layout, semP1.Frame.Pillars(semP1.Layout), semP1.Frame);
+        Assert.Equal(projeto.WithEmbedmentOf(semP1.Frame), projeto.ForStructure(geometriaSemP1, semP1.TiltRadians));
     }
 
     [Theory]
@@ -199,29 +291,79 @@ public class VendorStructuresTests
     // ----------------------------------------------------------- genérico
 
     /// <summary>
-    /// O genérico é para montar o seu: sem fabricante no nome, sem mão
-    /// francesa, sem tirante, pelo vão-alvo e sem T3 (o enterro do projeto,
-    /// que sabe o solo; a revisão do 38.7 o achou com os 2,20 m da Arctech).
+    /// O genérico é para montar o seu (38.9: "é PILAR P1, Mão francesa MF1,
+    /// pilar P2, Mão francesa MF2, aí tem as terças, as tesouras"): sem
+    /// fabricante no nome, com as peças do pórtico de referência (P1 e P2 de
+    /// chão plano, sem folga de declive, o enterro e as duas mãos francesas),
+    /// sem tirante e pelo vão-alvo.
     /// </summary>
     [Fact]
     [Trait("Etapa", "38")]
-    public void OBiposteGenericoNaoTemNadaDeFabricante()
+    public void OBiposteGenericoTemAsPecasDoPorticoESemFabricante()
     {
         var generico = BifilaReference.Generic();
         var b = generico.Frame.Bifila!;
+        var geometria = TableGeometry.Local(generico.Layout, generico.Frame.Pillars(generico.Layout), generico.Frame);
 
         Assert.Null(generico.WhyInvalid);
         Assert.Equal("Biposte", generico.Name);
-        Assert.Equal(0, b.FrontBraceLength);
-        Assert.Equal(0, b.RearBraceLength);
+        Assert.DoesNotContain(VendorStructures.All, e => generico.Name.Contains(e.Manufacturer, StringComparison.Ordinal));
+        Assert.Equal(3.059, b.FrontPillar);
+        Assert.Equal(3.588, b.RearPillar);
+        Assert.Equal(2.2, generico.Frame.MinEmbedment);
+        Assert.Equal(1.244, b.FrontBraceLength);
+        Assert.Equal(1.209, b.RearBraceLength);
         Assert.Equal(BifilaRodLine.None, b.RodLine);
         Assert.Empty(b.RodSpans);
         Assert.Null(generico.Frame.PillarSpans);
-        Assert.Null(generico.Frame.MinEmbedment);
-        Assert.Contains(Tr.T("sem mão francesa"), b.Describe(), StringComparison.Ordinal);
+        Assert.Equal(0, StructureHeight.RearSlopeAllowance(geometria, generico.TiltRadians)!.Value, 3);
+    }
 
-        // Com o enterro de 0,90 do projeto, o pilar não leva os 2,20 da Arctech.
-        Assert.Equal(0.9, generico.PillarsAtBasicHeight(Projeto(0.30) with { MinEmbedment = 0.9 }).Embedment, 12);
+    /// <summary>
+    /// O P1 e o P2 que não fecham: um sem o outro, o P2 menor que o P1, o P1
+    /// sem o T3, o P1 que encosta o módulo no chão e o P2 que não alcança a
+    /// viga. Cada um com o motivo.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void OP1EOP2QueNaoFechamSaoRecusadosComOMotivo()
+    {
+        var gc800 = VendorStructures.All[0].Profile;
+        TableProfile Com(double? p1, double? p2) =>
+            gc800 with { Frame = gc800.Frame with { Bifila = gc800.Frame.Bifila! with { FrontPillar = p1, RearPillar = p2 } } };
+
+        Assert.Contains("juntos", Com(3.059, null).WhyInvalid, StringComparison.Ordinal);
+        Assert.Contains("juntos", Com(null, 3.888).WhyInvalid, StringComparison.Ordinal);
+        Assert.Contains("maior que o P1", Com(3.059, 3.0).WhyInvalid, StringComparison.Ordinal);
+        Assert.Contains("T3", (Com(3.059, 3.888) with { Frame = Com(3.059, 3.888).Frame with { MinEmbedment = null } }).WhyInvalid, StringComparison.Ordinal);
+        Assert.Contains("encosta no chão", Com(2.0, 3.0).WhyInvalid, StringComparison.Ordinal);
+        Assert.Contains("não alcança", Com(3.059, 3.5).WhyInvalid, StringComparison.Ordinal);
+        Assert.Null(Com(3.059, 3.588).WhyInvalid);
+        Assert.Null(Com(3.2, 4.5).WhyInvalid);
+    }
+
+    /// <summary>O perfil com o P1 e o P2 sai na versão 5 e volta igual; sem eles, na 4, como antes.</summary>
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void OPerfilComP1EP2VaiNaVersao5EVoltaIgual()
+    {
+        var comPilares = VendorStructures.All[0].Profile;
+        var semPilares = SemPilares(comPilares);
+
+        var json = comPilares.ToJson();
+        Assert.Contains("\"formatVersion\": 5", json, StringComparison.Ordinal);
+        Assert.Contains("\"frontPillar\": 3.059", json, StringComparison.Ordinal);
+        Assert.Contains("\"rearPillar\": 3.888", json, StringComparison.Ordinal);
+        Assert.Equal(comPilares, TableProfile.Parse(json));
+
+        var antigo = semPilares.ToJson();
+        Assert.Contains("\"formatVersion\": 4", antigo, StringComparison.Ordinal);
+        Assert.DoesNotContain("frontPillar", antigo, StringComparison.Ordinal);
+        Assert.Equal(semPilares, TableProfile.Parse(antigo));
+
+        // Mexido à mão: a 4 com os pilares, a 5 sem eles.
+        Assert.Throws<InvalidOperationException>(() => TableProfile.Parse(json.Replace("\"formatVersion\": 5", "\"formatVersion\": 4", StringComparison.Ordinal)));
+        Assert.Throws<InvalidOperationException>(() => TableProfile.Parse(antigo.Replace("\"formatVersion\": 4", "\"formatVersion\": 5", StringComparison.Ordinal)));
     }
 
     // ------------------------------------------------------------- apoio

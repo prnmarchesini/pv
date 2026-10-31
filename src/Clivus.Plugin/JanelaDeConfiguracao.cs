@@ -63,6 +63,30 @@ internal sealed class JanelaDeConfiguracao : Window
         ToolTip = Tr.T("Esconde a janela e pede dois pontos no desenho: a linha de apoio, na direção das fileiras. A mesa olha para a perpendicular do lado do azimute atual. A linha não fica no desenho."),
     };
     private readonly TextBlock _azimuteEmPalavras = new() { Foreground = Brushes.Gray, FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 6) };
+
+    // Norte e Sul num clique (38.9; Renan, 30/10/2026: "tá faltando também a
+    // inclinação da mesa, dos módulos para o norte ou sul, depende do local,
+    // não sei se eu defino na mesa ou em outro lugar"): é do projeto, aqui.
+    private readonly Button _olhaNorte = new() { Content = Tr.T("Norte"), Height = 24, Padding = new Thickness(10, 0, 10, 0), Margin = new Thickness(0, 0, 6, 6), ToolTip = Tr.T("As mesas olham para o norte (azimute 0°): o normal no hemisfério sul, como no Brasil.") };
+    private readonly Button _olhaSul = new() { Content = Tr.T("Sul"), Height = 24, Padding = new Thickness(10, 0, 10, 0), Margin = new Thickness(0, 0, 8, 6), ToolTip = Tr.T("As mesas olham para o sul (azimute 180°): o normal no hemisfério norte, como no Panamá.") };
+    private readonly TextBlock _avisoDoHemisferio = new() { Foreground = Brushes.Firebrick, FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6), Visibility = Visibility.Collapsed };
+    private double? _latitude;
+
+    /// <summary>
+    /// A latitude do terreno, em graus (negativa no sul), ou null sem ela: com
+    /// ela, a janela avisa quando as mesas olham para o lado errado do
+    /// hemisfério.
+    /// </summary>
+    internal double? Latitude
+    {
+        get => _latitude;
+        set
+        {
+            _latitude = value;
+            AvisarHemisferio();
+        }
+    }
+
     private Func<Window, double, double?>? _pegarAzimute;
 
     /// <summary>
@@ -305,6 +329,17 @@ internal sealed class JanelaDeConfiguracao : Window
         Margin = new Thickness(0, 0, 0, 8),
     };
 
+    /// <summary>O aviso do hemisfério embaixo do azimute, quando a latitude é conhecida e o lado não bate.</summary>
+    private void AvisarHemisferio()
+    {
+        var aviso = NumberInput.TryParseMeasure(_azimute.Text, out var graus)
+            ? FacingFromLine.HemisphereWarning(_latitude, graus * Math.PI / 180)
+            : null;
+
+        _avisoDoHemisferio.Text = aviso is null ? string.Empty : char.ToUpper(aviso[0], Tr.Culture) + aviso[1..] + ".";
+        _avisoDoHemisferio.Visibility = aviso is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     private UIElement FormularioDoSistema()
     {
         var pilha = new StackPanel { Margin = new Thickness(0, 0, 10, 0) };
@@ -320,13 +355,21 @@ internal sealed class JanelaDeConfiguracao : Window
             pilha.Children.Add(Secao(Tr.T("Orientação")));
             Linha(Tr.T("Azimute para onde a mesa olha (graus, 0 = norte)"), _azimute);
 
-            var linhaDoAzimute = new StackPanel { Orientation = Orientation.Horizontal };
+            var linhaDoAzimute = new WrapPanel { Orientation = Orientation.Horizontal };
+            linhaDoAzimute.Children.Add(_olhaNorte);
+            linhaDoAzimute.Children.Add(_olhaSul);
             linhaDoAzimute.Children.Add(_azimutePelaLinha);
             linhaDoAzimute.Children.Add(_azimuteEmPalavras);
             pilha.Children.Add(linhaDoAzimute);
+            pilha.Children.Add(_avisoDoHemisferio);
             _azimutePelaLinha.Click += (_, _) => PegarAzimutePelaLinha();
-            _azimute.TextChanged += (_, _) => _azimuteEmPalavras.Text =
-                NumberInput.TryParseMeasure(_azimute.Text, out var graus) ? FacingFromLine.Describe(graus) : string.Empty;
+            _olhaNorte.Click += (_, _) => _azimute.Text = 0.ToString(Tr.Culture);
+            _olhaSul.Click += (_, _) => _azimute.Text = 180.ToString(Tr.Culture);
+            _azimute.TextChanged += (_, _) =>
+            {
+                _azimuteEmPalavras.Text = NumberInput.TryParseMeasure(_azimute.Text, out var graus) ? FacingFromLine.Describe(graus) : string.Empty;
+                AvisarHemisferio();
+            };
         }
 
         pilha.Children.Add(Secao(_soAnalises ? Tr.T("Degrau entre mesas vizinhas") : Tr.T("Mesas")));
