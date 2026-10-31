@@ -669,7 +669,8 @@ public static class LocalDosInversores
     /// Zoom na caixa (com folga: o retângulo ocupa um terço da tela, para ver
     /// em volta). Só com interface (no Core Console não há vista).
     /// </summary>
-    internal static void Zoom(Editor editor, Extents3d caixa)
+    /// <param name="folga">Quantas vezes a tela é maior que a caixa (3: um terço; a área inteira na tela, 1,15).</param>
+    internal static void Zoom(Editor editor, Extents3d caixa, double folga = 3)
     {
         if (!ClivusExtension.TemInterface()) return;
 
@@ -681,8 +682,8 @@ public static class LocalDosInversores
                 * Matrix3d.PlaneToWorld(vista.ViewDirection)).Inverse();
             var a = caixa.MinPoint.TransformBy(paraTela);
             var b = caixa.MaxPoint.TransformBy(paraTela);
-            var largura = Math.Max(Math.Abs(b.X - a.X), 1) * 3;
-            var altura = Math.Max(Math.Abs(b.Y - a.Y), 1) * 3;
+            var largura = Math.Max(Math.Abs(b.X - a.X), 1) * folga;
+            var altura = Math.Max(Math.Abs(b.Y - a.Y), 1) * folga;
             var proporcao = vista.Width / Math.Max(vista.Height, 1e-9);
             if (largura / altura < proporcao) largura = altura * proporcao;
             else altura = largura / proporcao;

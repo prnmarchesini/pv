@@ -110,7 +110,30 @@ public static class QuantityReport
         ArgumentNullException.ThrowIfNull(planilha);
         ArgumentNullException.ThrowIfNull(t);
 
-        var nome = new string(t.Title.Where(c => ":\\/?*[]".IndexOf(c) < 0).ToArray()).Trim();
+        var unico = SheetName(planilha, t.Title);
+        var aba = planilha.Sheet(unico);
+        aba.Add([.. t.Header]);
+        foreach (var r in t.Rows) aba.Add([.. r]);
+        foreach (var g in t.GroupRows ?? []) aba.SectionRows.Add(g + 1);
+        if (t.Total.Count > 0) aba.AddTotal([.. t.Total]);
+        if (t.Notes.Count == 0) return unico;
+        aba.Add([]);
+        foreach (var n in t.Notes) aba.AddNote(n);
+        return unico;
+    }
+
+    /// <summary>
+    /// Um nome de aba que o Excel aceita, a partir de um título (o de uma
+    /// tabela, o de uma área): sem os caracteres proibidos, até 31 letras, e
+    /// único na planilha (o repetido ganha " (2)", " (3)"... dentro das 31).
+    /// A aba não é criada.
+    /// </summary>
+    public static string SheetName(XlsxWriter planilha, string titulo)
+    {
+        ArgumentNullException.ThrowIfNull(planilha);
+        ArgumentNullException.ThrowIfNull(titulo);
+
+        var nome = new string(titulo.Where(c => ":\\/?*[]".IndexOf(c) < 0).ToArray()).Trim();
         if (nome.Length > 31) nome = nome[..31];
         if (nome.Length == 0) nome = Tr.T("Tabela");
 
@@ -122,14 +145,6 @@ public static class QuantityReport
             unico = (nome.Length + sufixo.Length > 31 ? nome[..(31 - sufixo.Length)] : nome) + sufixo;
         }
 
-        var aba = planilha.Sheet(unico);
-        aba.Add([.. t.Header]);
-        foreach (var r in t.Rows) aba.Add([.. r]);
-        foreach (var g in t.GroupRows ?? []) aba.SectionRows.Add(g + 1);
-        if (t.Total.Count > 0) aba.AddTotal([.. t.Total]);
-        if (t.Notes.Count == 0) return unico;
-        aba.Add([]);
-        foreach (var n in t.Notes) aba.AddNote(n);
         return unico;
     }
 

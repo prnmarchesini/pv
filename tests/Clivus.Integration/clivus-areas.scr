@@ -1,0 +1,118 @@
+; Teste de nivel 2 da janela Areas (etapa 41) pelo caminho dos botoes: o
+; gancho (clivus-areas-pela-janela ...), so no build Debug, chama os mesmos
+; metodos que os botoes chamam, fora de comando (documento travado, vigia
+; calado). Duas areas lado a lado, a fileira 1 so na Oeste.
+;
+; O que se confere em LISP, e nao pelo relatorio do plugin:
+;   - as hachuras e os nomes na camada CLIVUS_AREAS_HACHURA, quantos;
+;   - a cota de cada hachura (grupo 10 do HATCH) na faixa do terreno, e o
+;     nome da Oeste acima do topo das mesas dela (regra sagrada 5);
+;   - nenhum modulo vermelho de pendente depois de um REGEN (o vigia nao
+;     tomou a hachura por edicao);
+;   - o nome novo no XData da polilinha da area e no letreiro;
+;   - tirar a hachura de uma, depois de todas.
+;
+; O OSMODE e desligado para os pontos digitados chegarem crus.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area Oeste")
+(command "CLIVUS_AREA" "{{B1}}" "{{B2}}" "{{B3}}" "{{B4}}" "" "Area Leste")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento das areas")
+(command "CLIVUS_FILEIRA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_RECONTAR")
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:num (x) (if x (rtos x 2 3) "nil"))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:hachuras () (ssget "_X" '((0 . "HATCH") (8 . "CLIVUS_AREAS_HACHURA"))))
+(defun clivus:nomes () (ssget "_X" '((0 . "MTEXT") (8 . "CLIVUS_AREAS_HACHURA"))))
+
+; A cota de cada hachura: o Z do ponto de elevacao (o primeiro grupo 10).
+(defun clivus:cotas (ss / i l)
+  (setq i 0 l nil)
+  (while (< i (clivus:conta ss))
+    (setq l (cons (caddr (cdr (assoc 10 (entget (ssname ss i))))) l) i (1+ i)))
+  l)
+
+; A cota do letreiro com este texto, ou nil.
+(defun clivus:nome (texto / ss i e r)
+  (setq ss (clivus:nomes) i 0 r nil)
+  (while (< i (clivus:conta ss))
+    (setq e (entget (ssname ss i)))
+    (if (= (cdr (assoc 1 e)) texto) (setq r (cadddr (assoc 10 e))))
+    (setq i (1+ i)))
+  r)
+
+; A cota mais alta dos contornos das mesas (XData "Mesa").
+(defun clivus:topo-mesas ( / ss i e v z)
+  (setq ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) i 0 z nil)
+  (while (< i (clivus:conta ss))
+    (setq e (ssname ss i))
+    (if (= (cdr (nth 0 (clivus:xdata e))) "Mesa")
+      (progn
+        (setq v (entnext e))
+        (while (and v (= (cdr (assoc 0 (entget v))) "VERTEX"))
+          (setq z (if z (max z (cadddr (assoc 10 (entget v)))) (cadddr (assoc 10 (entget v)))) v (entnext v)))))
+    (setq i (1+ i)))
+  z)
+
+; Modulos vermelhos de pendente.
+(defun clivus:vermelhos ( / ss i n)
+  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_MOD*"))) i 0 n 0)
+  (while (< i (clivus:conta ss))
+    (if (= (cdr (assoc 420 (entget (ssname ss i)))) 16711680) (setq n (1+ n)))
+    (setq i (1+ i)))
+  n)
+
+; Quantas polilinhas de area tem este nome no XData.
+(defun clivus:areas-com-nome (nome / ss i xd n)
+  (setq ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) i 0 n 0)
+  (while (< i (clivus:conta ss))
+    (setq xd (clivus:xdata (ssname ss i)))
+    (if (and (= (cdr (nth 0 xd)) "Area") (= (cdr (nth 3 xd)) nome)) (setq n (1+ n)))
+    (setq i (1+ i)))
+  n)
+
+(princ "\nCLIVUS_AREAS_LER1")
+(clivus-areas-pela-janela "ler")
+(princ "\nCLIVUS_AREAS_FIM_LER1")
+
+(clivus-areas-pela-janela "hachurar-todas")
+(command "_.REGEN")
+(princ "\nCLIVUS_AREAS_DEPOIS_HACHURA")
+(setq clivus:cs (clivus:cotas (clivus:hachuras)))
+(princ (strcat "\nCLIVUS_AREAS_HACHURA hachuras=" (itoa (clivus:conta (clivus:hachuras)))
+               " nomes=" (itoa (clivus:conta (clivus:nomes)))
+               " cotamin=" (clivus:num (if clivus:cs (apply 'min clivus:cs)))
+               " cotamax=" (clivus:num (if clivus:cs (apply 'max clivus:cs)))
+               " oeste=" (clivus:num (clivus:nome "Area Oeste"))
+               " topo=" (clivus:num (clivus:topo-mesas))
+               " vermelhos=" (itoa (clivus:vermelhos)) " fim"))
+
+(princ "\nCLIVUS_AREAS_LER2")
+(clivus-areas-pela-janela "ler")
+(princ "\nCLIVUS_AREAS_FIM_LER2")
+
+(clivus-areas-pela-janela "renomear" "Area Leste" "Area Leste 2")
+(princ (strcat "\nCLIVUS_AREAS_RENOMEAR novo=" (itoa (clivus:areas-com-nome "Area Leste 2"))
+               " velho=" (itoa (clivus:areas-com-nome "Area Leste"))
+               " letreiro=" (if (clivus:nome "Area Leste 2") "1" "0") " fim"))
+
+(clivus-areas-pela-janela "tirar" "Area Oeste")
+(princ (strcat "\nCLIVUS_AREAS_TIRAR hachuras=" (itoa (clivus:conta (clivus:hachuras))) " nomes=" (itoa (clivus:conta (clivus:nomes)))
+               " oeste=" (if (clivus:nome "Area Oeste") "1" "0") " fim"))
+
+(clivus-areas-pela-janela "excel" "{{XLSX}}")
+
+(clivus-areas-pela-janela "tirar-todas")
+(princ (strcat "\nCLIVUS_AREAS_TIRAR_TODAS hachuras=" (itoa (clivus:conta (clivus:hachuras))) " nomes=" (itoa (clivus:conta (clivus:nomes))) " fim"))
+
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

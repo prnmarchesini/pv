@@ -57,8 +57,11 @@ public static partial class PluginInfo
     public const string ComandoArea = "CLIVUS_AREA";
 
     /// <summary>
-    /// Comando que lista as áreas do desenho, lendo a identidade de cada
-    /// polilinha. É por onde se confere que o GUID sobreviveu ao arquivo.
+    /// Comando das áreas do desenho. Com interface, o botão Áreas da
+    /// Implantação (etapa 41): a janela com o resumo de cada área, a hachura,
+    /// o renomear e o Excel por área. Sem interface (Core Console), lista a
+    /// identidade de cada polilinha: é por onde o nível 2 confere que o GUID
+    /// sobreviveu ao arquivo.
     /// </summary>
     public const string ComandoAreas = "CLIVUS_AREAS";
 

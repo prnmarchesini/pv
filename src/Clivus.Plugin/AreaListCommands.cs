@@ -11,14 +11,18 @@ namespace Clivus.Plugin;
 /// <summary>
 /// Lista as áreas do desenho.
 ///
-/// Mostra o que o registro central diz e o que as próprias entidades dizem,
-/// lado a lado. Os dois podem divergir — o registro não viaja na cópia entre
-/// desenhos, e o XData viaja — e ver a divergência é o que permite saber que
-/// falta reindexar.
+/// Com a interface do Civil 3D (o botão Áreas da Implantação, etapa 41), abre
+/// a janela das áreas (<see cref="JanelaDeAreas"/>): o resumo de cada uma, a
+/// hachura, o renomear e o Excel por área. Sem interface (Core Console, o
+/// nível 2), lista na linha de comando o que o registro central diz e o que
+/// as próprias entidades dizem, lado a lado. Os dois podem divergir — o
+/// registro não viaja na cópia entre desenhos, e o XData viaja — e ver a
+/// divergência é o que permite saber que falta reindexar; a janela avisa o
+/// mesmo.
 /// </summary>
 public static class AreaListCommands
 {
-    /// <summary>CLIVUS_AREAS: lista as áreas registradas e as encontradas no desenho.</summary>
+    /// <summary>CLIVUS_AREAS: a janela das áreas; sem interface, a lista das registradas e das encontradas no desenho.</summary>
     [CommandMethod(PluginInfo.ComandoAreas)]
     public static void Areas()
     {
@@ -26,6 +30,21 @@ public static class AreaListCommands
         if (documento is null) return;
 
         var editor = documento.Editor;
+
+        if (ClivusExtension.TemInterface())
+        {
+            try
+            {
+                AbrirJanela(documento);
+            }
+            catch (System.Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao abrir a janela das áreas.", erro);
+                editor.WriteMessage(Tr.F("\nNão consegui abrir a janela das áreas: {0}\n", erro.Message));
+            }
+
+            return;
+        }
 
         try
         {
@@ -59,6 +78,10 @@ public static class AreaListCommands
             editor.WriteMessage(Tr.F("\nNão consegui listar as áreas: {0}\n", erro.Message));
         }
     }
+
+    /// <summary>A janela é WPF: só com interface, por um método que não é embutido no comando.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void AbrirJanela(Autodesk.AutoCAD.ApplicationServices.Document documento) => JanelaDeAreas.Abrir(documento);
 
     /// <summary>
     /// As áreas encontradas varrendo o desenho pelo XData.
