@@ -305,10 +305,28 @@ function Testar-Estruturas {
     }
     else {
         foreach ($p in $cenas[0].PSObject.Properties.Name) {
-            if ($p -in @('pilares', 'canaletas')) { continue }
+            if ($p -in @('pilares', 'canaletas', 'resumo')) { continue }
             $a = $cenas[0].$p | ConvertTo-Json -Depth 8 -Compress
             $b = $cenas[1].$p | ConvertTo-Json -Depth 8 -Compress
             if ($a -ne $b) { $problemas.Add("${rotulo}: o 3D mudou com a estrutura em '$p'."); $ok = $false }
+        }
+
+        # O resumo do 3D (42.2): as duas cenas o trazem, com mesas; o total e as
+        # áreas iguais (mesas, módulos e kWp); por tipo, o nome é o da
+        # estrutura, então só as somas.
+        foreach ($c in $cenas) {
+            if ($null -eq $c.resumo -or [int] $c.resumo.total.mesas -le 0 -or @($c.resumo.tipos).Count -lt 1) {
+                $problemas.Add("${rotulo}: o 3D saiu sem o resumo (ou com o resumo vazio)."); $ok = $false
+            }
+        }
+        foreach ($parte in @('total', 'areas')) {
+            $a = $cenas[0].resumo.$parte | ConvertTo-Json -Depth 8 -Compress
+            $b = $cenas[1].resumo.$parte | ConvertTo-Json -Depth 8 -Compress
+            if ($a -ne $b) { $problemas.Add("${rotulo}: o resumo do 3D mudou com a estrutura em '$parte'."); $ok = $false }
+        }
+        $somas = foreach ($c in $cenas) { (@($c.resumo.tipos) | ForEach-Object { "$($_.mesas)/$($_.modulos)/$($_.kwp)" } | Sort-Object) -join ' ' }
+        if (@($cenas[0].resumo.tipos).Count -ne @($cenas[1].resumo.tipos).Count -or $somas[0] -ne $somas[1]) {
+            $problemas.Add("${rotulo}: o resumo do 3D por tipo mudou com a estrutura ($($somas[0]); $($somas[1]))."); $ok = $false
         }
     }
 

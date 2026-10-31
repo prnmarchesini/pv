@@ -26,6 +26,15 @@
     <!-- A three.js (MIT) da página 3D do passo 9.9: a página sai num arquivo só, sem internet. -->
     <EmbeddedResource Include="Visualizador3D/three.min.js" LogicalName="Clivus.Core.three.min.js" />
     <EmbeddedResource Include="Visualizador3D\OrbitControls.js" LogicalName="Clivus.Core.OrbitControls.js" />
+    <!--
+      Passo 42.2: o sol e o resumo da pagina 3D (os mesmos arquivos vao para o
+      servidor, em app/estatico do repositorio clivussolar) e o logo, copia de
+      src/Clivus.Plugin/Resources/Branding/clivus-logo-horizontal-escuro.svg
+      (o Core nao enxerga o plugin).
+    -->
+    <EmbeddedResource Include="Visualizador3D\sol.js" LogicalName="Clivus.Core.sol.js" />
+    <EmbeddedResource Include="Visualizador3D\resumo.js" LogicalName="Clivus.Core.resumo.js" />
+    <EmbeddedResource Include="Visualizador3D\clivus-logo.svg" LogicalName="Clivus.Core.clivus-logo.svg" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Clipper2" Version="2.0.0" />
