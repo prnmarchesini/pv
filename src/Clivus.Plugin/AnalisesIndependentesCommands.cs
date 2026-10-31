@@ -164,14 +164,13 @@ public static class AnalisesIndependentesCommands
                             SetaDeDeclividade.Gravar(database, SetaDeDeclividade.Ler(database).Ligada, escolha.Value.Unidade);
                             unidade = escolha.Value.Unidade;
 
-                            if (AnalisesIndependentes.Apagar(database, tipo) > 0)
-                            {
-                                AnalisesIndependentes.Inserir(database, tipo, unidade);
+                            if (AnalisesIndependentes.Reinserir(database, tipo, unidade) > 0)
                                 editor.WriteMessage(Tr.T("\n  Unidade da declividade trocada: os textos foram inseridos de novo nela.\n"));
-                            }
                         }
 
-                        regra = escolha.Value.Regra;
+                        // A pergunta da linha de comando não tem as colunas do
+                        // biposte: os limites das linhas gravados ficam.
+                        regra = escolha.Value.Regra with { Front = regra.Front, Rear = regra.Rear };
                         GravarRegra(database, tipo, regra);
                     }
 
@@ -202,13 +201,16 @@ public static class AnalisesIndependentesCommands
                 case Acao.Quantificar:
                 {
                     var regra = Regra(database, tipo);
-                    var (pontos, modulos, biposte) = AnalisesIndependentes.Quantificar(database, tipo, regra, unidade);
+                    var (pontos, modulos, biposte, linhas) = AnalisesIndependentes.Quantificar(database, tipo, regra, unidade);
 
-                    QuantificacaoGravada.Gravar(database, tipo, regra, unidade, pontos, modulos);
+                    QuantificacaoGravada.Gravar(database, tipo, regra, unidade, pontos, modulos, Tr.T("desenho inteiro"), linhas);
 
                     editor.WriteMessage(Tr.F("\nQUANTIFICAR {0} — em {1}.\n",
                         IndependentAnalysis.Describe(tipo, regra, pontos, unidade),
                         IndependentAnalysis.CountedIn(tipo, biposte)));
+
+                    foreach (var l in linhas ?? [])
+                        editor.WriteMessage(Tr.F("  {0}.\n", IndependentAnalysis.DescribeLine(tipo, regra, l.Line, l.Count, unidade)));
 
                     if (modulos is not null)
                         editor.WriteMessage(Tr.F("  módulos: {0}.\n", IndependentAnalysis.Describe(tipo, regra, modulos, unidade)));

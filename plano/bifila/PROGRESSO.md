@@ -52,6 +52,8 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 42.3 As correções da tela: o Mostrar à vista (um botão só, Ocultar ou Mostrar sombras, e as linhas da janela quebram em vez de cortar); a área leva as que estão dentro dela (a "Area 1" do Aurora dava "Nenhuma mesa"); a lista diz quantas mesas cada área leva e abre na primeira que tem; o roxo da versão antiga sai ao abrir a janela; o 3D com o terreno de verdade (o TIN), sem o roxo antigo, com a sombra do CAD em magenta e o botão "Ver o momento que causa sombra": AGUARDANDO VALIDAÇÃO
 - 42.3, a segunda rodada (31/10/2026, tarde; 0.1.4): "Solsticio de inverno para quem? [...] o projeto é no panama" virou **Pior dia do ano (dd/mm)**, o dia do sol mais baixo ao meio-dia no lugar do desenho (`SolarCalculator.WorstShadowDay`: dezembro no norte, junho no sul); "uma area pintou e na outra nao [...] cade o botão de escolher area ou escolher o que eu quero (mesas, arvores, etc)" virou as áreas em caixas de marcar (com "· N mesas" e "Desenho inteiro"), "Escolher área no desenho…" (`CLIVUS_SOMBRAS_AREA`, clique dentro da área), "Escolher mesas no desenho…" (`CLIVUS_SOMBRAS_MESAS`), áreas e mesas somando, e a linha **Fazem sombra** (Mesas, Árvores e objetos, Relevo; `ShadowCasters`); "Nao quero que leve o magenta no 3d web, a web ja tem sombra propria": o 3D (servidor clivussolar 8fc8fb0 e a página local) não desenha mais as hachuras do CAD nem pinta os módulos do momento, e o plugin não as manda (o botão do momento só leva o sol à hora da análise e diz quantos módulos): AGUARDANDO VALIDAÇÃO
 - 42.4 A exportação para o PVsyst por escopo (31/10/2026: "tenho que ter a liberdade de exportar uma area, varias, todas, e pode selecionar as mesas que eu quero se for o caso"): a mesma escolha da janela das sombras (`SeletorDeEscopo`), numa janela antes de pedir o arquivo: AGUARDANDO VALIDAÇÃO
+- 42.5 A janela Áreas com as ações na linha (31/10/2026, tarde: "eu clico em apagar area e nao apaga. As ações precisam estar na linha"): dois cliques dá zoom, a lixeira (ou Del) apaga com aviso, F2 ou o segundo clique devagar renomeia, o botão direito tem o resto; embaixo, "Todas as áreas" (Hachurar, Tirar hachura, Limpar, Regerar, Apagar); o Apagar área, o Limpar e o Recalcular só com as mesas DA área. E o CLIVUS_3D com a janela de andamento e o Cancelar ("trava gostoso [...] sem MATAR MEU CAD"): AGUARDANDO VALIDAÇÃO — bc9b912; nível 2 `clivus-areas-acoes` (rodar.ps1 -SoAreas)
+- 42.6 As análises por escopo, o fundo e a borda dos textos e as colunas do biposte (31/10/2026, tarde: "Em analise eu tbm quero poder escolher o que analisar, uma area ou todas, isso para TODAS analises"; "texto ruim de ver, falta opção do texto de colocar o fundo e borda, isso para TODAS analises"; "em pilar, deveria ter a opção de analisar AMBOS pilares, cada um tem uma altura [...] uma coluna para cada pilar o da frente e o de traz, a cor pode ser o mesmo para ambos"): AGUARDANDO VALIDAÇÃO — `LineLimits`, `ThresholdRule.ForLine`, `AnalysisTally` V2 (o lugar e as linhas), `AnalysisTextLook`, 20 testes da etapa 42; nível 2 `clivus-analises-escopo` (rodar.ps1 -Caso Testar-AnalisesEscopo)
 
 ## Observações
 
@@ -898,8 +900,60 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
   `CLIVUS_EXPORTAR_ESCOPO_AUTO` (escopo, áreas, letreiros e o arquivo), conferido no
   `clivus-sombras-escopo`: a Oeste, as duas, a F1.1, tudo e a Usina (a Usina = as duas, a F1.1
   = 1 mesa).
+- 42.5 (31/10/2026, tarde), as áreas e o 3D. O que achei: o Apagar área da janela mandava o
+  comando, que perguntava "Apagar? [Sim/Não]" na linha de comando, que o Renan não via; e a
+  pergunta dizia que a "Area 1" (1 m maior que a "area1", por fora) ia levar as 78 mesas da
+  outra. Agora o Apagar área, o Limpar mesas e o Recalcular usam as mesas DA área, pela regra
+  da própria janela (o centro dentro; dentro de duas, a menor: `AreaAcoesCommands.MesasDaArea`),
+  e a pergunta é da janela. O "Walk and Fly" que aparecia no clique do meio não é do Clivus: é
+  o modo de navegação do AutoCAD que ficou gravado (teclas 6 e 7 dentro do 3DORBIT); a saída é
+  3DORBIT, botão direito, Other Navigation Modes, Constrained Orbit (ou a tecla 1), Esc. Não
+  mexi no registro. O 3D: a leitura do desenho fica na linha do AutoCAD (é a regra da API),
+  avisando a janela a cada 4000 objetos; a cena em JSON, a compressão e o envio em pedaços de
+  64 kB correm em outra linha, e o Cancelar para o envio (nada é publicado).
+- 42.6 (31/10/2026, tarde), as análises. O que assumi:
+  - O escopo fica em cima da janela, um só para as seis abas, e abre no **desenho inteiro**
+    (as análises sempre foram do desenho inteiro); é o seletor das sombras (as áreas com
+    "· N mesas", Desenho inteiro, as mesas escolhidas, os botões de escolher no desenho).
+    Cada botão mexe só nas mesas do escopo: inserir apaga e escreve os textos delas, apagar e
+    tirar cores só nelas, analisar refaz a pintura só nelas (a pintura de fora continua
+    gravada e o Tirar cores dela continua funcionando), quantificar conta só elas. O texto
+    sem mesa (a mesa foi apagada) só sai no desenho inteiro.
+  - Os "Escolher área/mesas no desenho…" viraram dois comandos que servem às duas janelas
+    soltas: `CLIVUS_ESCOLHER_AREA` e `CLIVUS_ESCOLHER_MESAS` (inglês CLIVUS_PICK_AREA e
+    _TABLES, espanhol CLIVUS_ELEGIR_AREA e _MESAS); o seletor que pediu recebe a escolha. Os
+    `CLIVUS_SOMBRAS_AREA` e `_MESAS` da 0.1.4 saíram.
+  - A quantificação grava o lugar ("desenho inteiro", "Area Oeste", "12 mesa(s)
+    escolhida(s)"): a aba Quantidades e a coluna nova **Onde** do Excel dizem de onde é cada
+    número. As gravadas antes são do desenho inteiro.
+  - Fundo e borda: duas caixas na seção Textos de cada aba ("Texto com Fundo Borda"), cada
+    análise com as suas. Fundo é a máscara na cor da tela (a mesma das tags, 05/10); borda é
+    o quadro do próprio texto, na cor dele. Marcar ou desmarcar muda já os textos dessa
+    análise no desenho todo (não só no escopo) e os próximos. O padrão é com fundo e sem
+    borda; os textos que já estavam no desenho ganham o fundo na primeira vez que a janela
+    abre (a caixa nasce marcada e o desenho fica igual a ela). Com fundo, os textos vão para
+    a frente na ordem de desenho, senão a máscara não esconde o módulo redesenhado depois.
+  - As colunas do biposte: nas três análises de pilar (livre, enterrado, total), quando o
+    desenho tem biposte, os limites viram uma grade com uma coluna por linha de pilar
+    (Pilar da frente, Pilar de trás e, se o desenho também tem monoposte, Monoposte); a cor
+    de cada lado é uma só ("a cor pode ser o mesmo para ambos"). Com colunas, a caixa vazia é
+    "sem limite nessa linha"; precisa de pelo menos um limite numa coluna. Cada texto de pilar
+    guarda a linha dele (XData `TextoAnalise` versão 2, só no biposte) e cada pilar é pintado
+    pelo limite da linha dele. A quantificação conta cada linha pelos limites dela; na janela,
+    no Excel (uma linha por linha de pilar: "pilares da frente", "pilares de trás") e na
+    linha de comando. A ponta baixa, a ponta alta e a declividade não têm linha: no biposte
+    elas já são uma por pórtico.
+  - A unidade da declividade trocada reinsere só nas mesas que já tinham texto (antes
+    reinseria no desenho inteiro, o que espalharia a análise de uma área).
+  - O nível 2 `clivus-analises-escopo`: a usina biposte com a Usina, a Area Oeste e a Area
+    Leste; inserir na Oeste (só lá, um texto por pilar, com fundo), na Leste (a Oeste igual),
+    fundo e borda em todos, analisar a Oeste com a frente acima de 100 m e a trás acima de
+    0 m (só os 288 textos e pilares de trás da Oeste), quantificar a Oeste por linha, tirar
+    as cores da Leste (a Oeste fica) e da Oeste, apagar a Oeste (a Leste fica), a declividade
+    só na Leste e a janela desenhada num PNG (conferida: a grade com Pilar da frente e Pilar
+    de trás).
 
-## Roteiro de tela (38.1 a 42.2)
+## Roteiro de tela (38.1 a 42.6)
 
 1. **Nova estrutura (38.1 e 38.5):** Configurações › Estruturas › Nova estrutura… › **Fixa**.
    A janela de Mesa abre na aba "Perfil e módulo"; clicar no cartão **Biposte** abre a aba
@@ -1084,3 +1138,24 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     arquivo; a linha de comando diz "EXPORTAR N mesa(s) de ..." e o arquivo abre no PVsyst só
     com aquelas mesas. Selecionar umas mesas antes de clicar o botão: a janela abre em Seleção
     com elas.
+31. **A janela Áreas (42.5):** na linha de uma área, dois cliques dá zoom nela; F2 (ou o
+    segundo clique devagar no nome) renomeia ali mesmo; o botão direito tem Zoom, Renomear,
+    Hachurar, Tirar hachura, Limpar mesas, Regerar, Recalcular, Apagar área; a lixeira (ou
+    Del) pergunta e apaga. No Aurora, apagar a "Area 1" (a de fora, quase igual à "area1"):
+    a pergunta diz que ela não tem mesa dela, e as mesas da "area1" ficam. Embaixo, "Todas as
+    áreas": Limpar, Regerar e Apagar perguntam antes; U desfaz.
+32. **O 3D com andamento (42.5):** Publicar 3D no Aurora: a janela "Exportando o 3D para a
+    web" com a barra e o texto (lendo o desenho, comprimindo, enviando X de Y MB); o CAD não
+    congela. Cancelar no meio: a linha de comando diz "3D cancelado: nada foi publicado.".
+33. **As análises por escopo (42.6), no Aurora:** abrir Análises:
+    - em cima, "O que analisar", com Desenho inteiro marcado e as áreas com "· N mesa(s)";
+      marcar só uma área (ou "Escolher área no desenho…" e clicar dentro dela) e, em Pilar
+      livre, Inserir textos: só as mesas dessa área ganham texto; a frase diz o nome da área;
+    - os textos já têm fundo (o módulo atrás não aparece); marcar Borda põe o quadro em todos
+      os textos dessa análise; desmarcar Fundo tira a máscara;
+    - Pilar livre, Pilar enterrado e Pilar total mostram duas colunas, Pilar da frente e Pilar
+      de trás; pôr Maior que 1,5 na frente e 2,5 atrás, Analisar: cada pilar pinta pelo
+      limite da linha dele; Quantificar diz "pilares da frente: ..." e "pilares de trás: ...";
+    - marcar outra área e Tirar cores: a primeira continua pintada; Apagar textos só na
+      área marcada;
+    - aba Quantidades e o Excel (aba Análises): a coluna Onde diz a área.

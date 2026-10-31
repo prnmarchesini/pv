@@ -159,8 +159,16 @@ public static class GanchosDeTeste
         {
             "pvsyst" => new JanelaDoPvsyst(documento, []),
             "areas" => new JanelaDeAreas(documento),
+            "analises" => new JanelaDeAnalises(documento, () => { }),
             _ => new JanelaDeSombras(documento),
         };
+
+        // A aba das análises a mostrar: (clivus-renderizar-janela "analises" "caminho.png" largura "PillarAbove").
+        if (janela is JanelaDeAnalises && valores.Length >= 4 && Enum.TryParse<IndependentKind>(valores[3], out var aba)
+            && ((System.Windows.Controls.DockPanel)janela.Content).Children.OfType<System.Windows.Controls.TabControl>().FirstOrDefault() is { } abas)
+        {
+            abas.SelectedIndex = Array.IndexOf(JanelaDeAnalises.Analises, aba);
+        }
         var conteudo = (System.Windows.FrameworkElement)janela.Content;
         conteudo.Measure(new System.Windows.Size(largura, double.PositiveInfinity));
         conteudo.Arrange(new System.Windows.Rect(0, 0, largura, conteudo.DesiredSize.Height));
@@ -183,6 +191,97 @@ public static class GanchosDeTeste
         janela.Close();
         documento.Editor.WriteMessage($"\nRENDER {valores[0]} {w}x{h} em {valores[1]}\n");
         return true;
+    }
+
+    /// <summary>
+    /// Os botões da janela de análises, fora de comando, pelo mesmo caminho
+    /// (<see cref="OperacoesDeAnalise"/>): (clivus-analises-pela-janela "ação"
+    /// "análise" "escopo" "áreas" "mesas" ["regra"|"fundo,borda"]). A ação é
+    /// inserir, apagar, analisar, tirar-cores, quantificar ou aparencia; a
+    /// análise, o nome do IndependentKind (PillarAbove...); o escopo, como nas
+    /// sombras (TUDO, AREA...). A regra: "baixo;cima", e "F=baixo;cima",
+    /// "T=baixo;cima" (as linhas do biposte) e "P" (pintar as peças),
+    /// separados por espaço; vazio é sem limite. (clivus-analises-pela-janela
+    /// "linhas") diz as linhas de pilar do desenho. Escreve a frase e devolve T.
+    /// </summary>
+    [LispFunction("CLIVUS-ANALISES-PELA-JANELA")]
+    public static object? AnalisesPelaJanela(ResultBuffer argumentos)
+    {
+        var valores = Valores(argumentos);
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (valores.Length < 1 || documento is null) return null;
+
+        var database = documento.Database;
+
+        if (valores[0] == "linhas")
+        {
+            documento.Editor.WriteMessage($"\nANALISES_LINHAS {string.Join(",", AnalisesIndependentes.Linhas(database).OrderBy(l => l))} fim\n");
+            return true;
+        }
+
+        if (valores.Length < 5 || !Enum.TryParse<IndependentKind>(valores[1], out var tipo))
+        {
+            documento.Editor.WriteMessage($"\nANALISES ação recusada: {string.Join(" ", valores)}\n");
+            return null;
+        }
+
+        var escopo = SombrasCommands.EscopoPelosNomes(database, valores[2], valores[3], valores[4], out var porque);
+        if (escopo is null)
+        {
+            documento.Editor.WriteMessage($"\nANALISES {porque}\n");
+            return null;
+        }
+
+        var unidade = AnalisesIndependentesCommands.Unidade(database);
+        var extra = valores.Length >= 6 ? valores[5] : string.Empty;
+
+        string frase;
+        try
+        {
+            frase = EscritaForaDeComando.Fazer(documento, () =>
+            {
+                var (mesas, onde) = OperacoesDeAnalise.Resolver(database, escopo);
+
+                return valores[0] switch
+                {
+                    "inserir" => OperacoesDeAnalise.Inserir(database, tipo, unidade, mesas, onde),
+                    "apagar" => OperacoesDeAnalise.Apagar(database, tipo, mesas, onde),
+                    "analisar" => OperacoesDeAnalise.Analisar(database, tipo, Regra(extra), unidade, mesas, onde),
+                    "tirar-cores" => OperacoesDeAnalise.TirarCores(database, tipo, mesas, onde),
+                    "quantificar" => OperacoesDeAnalise.Quantificar(database, tipo, Regra(extra), unidade, mesas, onde),
+                    "aparencia" => OperacoesDeAnalise.Aparencia(database, tipo, new AnalysisTextLook(extra.Contains("fundo", StringComparison.Ordinal), extra.Contains("borda", StringComparison.Ordinal))),
+                    _ => throw new ArgumentException($"ação {valores[0]} não existe"),
+                };
+            });
+        }
+        catch (System.Exception erro)
+        {
+            documento.Editor.WriteMessage($"\nANALISES falhou: {erro.Message}\n");
+            return null;
+        }
+
+        documento.Editor.WriteMessage($"\nANALISES {frase.Replace('\n', ' ')}\n");
+        return true;
+    }
+
+    /// <summary>A regra do gancho das análises: vermelho abaixo, azul acima.</summary>
+    private static ThresholdRule Regra(string texto)
+    {
+        static LineLimits Limites(string par)
+        {
+            var partes = par.Split(';');
+            double? Numero(string s) => s.Length == 0 ? null : double.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
+            return new LineLimits(Numero(partes[0]), partes.Length > 1 ? Numero(partes[1]) : null);
+        }
+
+        var pedacos = texto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var monoposte = pedacos.FirstOrDefault(p => !p.StartsWith("F=", StringComparison.Ordinal) && !p.StartsWith("T=", StringComparison.Ordinal) && p != "P") is { } m ? Limites(m) : new LineLimits(null, null);
+
+        return new ThresholdRule(monoposte.Below, RgbColor.Red, monoposte.Above, RgbColor.Blue, pedacos.Contains("P"))
+        {
+            Front = pedacos.FirstOrDefault(p => p.StartsWith("F=", StringComparison.Ordinal)) is { } f ? Limites(f[2..]) : null,
+            Rear = pedacos.FirstOrDefault(p => p.StartsWith("T=", StringComparison.Ordinal)) is { } t ? Limites(t[2..]) : null,
+        };
     }
 
     /// <summary>(clivus-sombras-modulos): os handles dos blocos dos módulos com sombra no registro dos motivos, ou nil.</summary>

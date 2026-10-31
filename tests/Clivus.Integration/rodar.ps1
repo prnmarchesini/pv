@@ -4268,6 +4268,120 @@ function Testar-Sombras {
     (F1.1) desenha so perto dela; ocultar e mostrar; as analises; nenhum
     modulo repintado; apagar tudo.
 #>
+function Testar-AnalisesEscopo {
+    param([string] $Desenho)
+
+    # 42.6 (31/10/2026): as analises por escopo, o fundo e a borda dos textos
+    # e as colunas do biposte, pelo caminho da janela.
+    $terreno = Sondar-TerrenoDasSombras -Desenho $Desenho -Rotulo 'clivus-analises-escopo'
+    if ($null -eq $terreno) { return $false }
+
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    function P([double] $dx, [double] $dy) { [string]::Format($inv, '{0:0.###},{1:0.###},0', $terreno.X + $dx, $terreno.Y + $dy) }
+
+    $png = Join-Path $saida 'clivus-analises-escopo-janela.png'
+    if (Test-Path $png) { Remove-Item $png -Force }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-analises-escopo' -Script (Join-Path $PSScriptRoot 'clivus-analises-escopo.scr') -Substituicoes @{
+        '{{U1}}' = (P -50 -50); '{{U2}}' = (P 50 -50); '{{U3}}' = (P 50 50); '{{U4}}' = (P -50 50)
+        '{{A1}}' = (P -50 -50); '{{A2}}' = (P 0 -50); '{{A3}}' = (P 0 50); '{{A4}}' = (P -50 50)
+        '{{B1}}' = (P 0 -50); '{{B2}}' = (P 50 -50); '{{B3}}' = (P 50 50); '{{B4}}' = (P 0 50)
+        '{{L1}}' = (P -50 -50); '{{L2}}' = (P -50 50); '{{LADO}}' = (P 0 0)
+        '{{CX}}' = [string]::Format($inv, '{0:0.###}', $terreno.X)
+        '{{PNG}}' = ($png -replace '\\', '/')
+    }
+
+    if ($r.Estourou -or $r.Codigo -ne 0 -or $r.Texto -notmatch 'CLIVUS_AN_ESCOPO_FIM') {
+        $problemas.Add("clivus-analises-escopo terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    $t = $r.Texto
+
+    if ($t -notmatch 'CLIVUS_AN_ESCOPO_PILARES oeste=(\d+),(\d+),(\d+), leste=(\d+),(\d+),(\d+), mesas_oeste=(\d+) mesas_leste=(\d+) fora=(\d+) fim') {
+        $problemas.Add("clivus-analises-escopo: nao li os pilares de cada lado. Veja $($r.Saida)")
+        return $false
+    }
+
+    $oeste = [pscustomobject]@{ Pilares = [int] $Matches[1]; Frente = [int] $Matches[2]; Tras = [int] $Matches[3]; Mesas = [int] $Matches[7] }
+    $leste = [pscustomobject]@{ Pilares = [int] $Matches[4]; Frente = [int] $Matches[5]; Tras = [int] $Matches[6]; Mesas = [int] $Matches[8] }
+
+    if ($oeste.Frente -eq 0 -or $oeste.Tras -eq 0 -or $leste.Frente -eq 0 -or $leste.Tras -eq 0) {
+        $problemas.Add("clivus-analises-escopo: a usina biposte nao deu pilares da frente e de tras nos dois lados (oeste $($oeste.Frente)/$($oeste.Tras), leste $($leste.Frente)/$($leste.Tras)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($t -notmatch 'ANALISES_LINHAS Front,Rear fim') {
+        $problemas.Add("clivus-analises-escopo: as linhas de pilar do desenho nao deram frente e tras (as colunas da janela). Veja $($r.Saida)")
+        return $false
+    }
+
+    function Estado([string] $rotulo) {
+        $m = [regex]::Match($t, "CLIVUS_AN_ESCOPO $rotulo oeste=(\d+),(\d+),(\d+),(\d+), leste=(\d+),(\d+),(\d+),(\d+), azuis_oeste=(\d+),(\d+), azuis_leste=(\d+),(\d+), fim")
+        if (-not $m.Success) { return $null }
+        $g = $m.Groups
+        return [pscustomobject]@{
+            O = [pscustomobject]@{ N = [int] $g[1].Value; Pintados = [int] $g[2].Value; Fundo = [int] $g[3].Value; Borda = [int] $g[4].Value }
+            L = [pscustomobject]@{ N = [int] $g[5].Value; Pintados = [int] $g[6].Value; Fundo = [int] $g[7].Value; Borda = [int] $g[8].Value }
+            AzuisOeste = @([int] $g[9].Value, [int] $g[10].Value)
+            AzuisLeste = @([int] $g[11].Value, [int] $g[12].Value)
+        }
+    }
+
+    $etapas = [ordered]@{}
+    foreach ($rotulo in 'INS_OESTE', 'INS_LESTE', 'FUNDO_BORDA', 'ANALISAR_OESTE', 'TIRAR_LESTE', 'TIRAR_OESTE', 'APAGAR_OESTE', 'DECL_LESTE') {
+        $etapas[$rotulo] = Estado $rotulo
+        if ($null -eq $etapas[$rotulo]) {
+            $problemas.Add("clivus-analises-escopo: nao li a etapa $rotulo. Veja $($r.Saida)")
+            return $false
+        }
+    }
+
+    $falhas = New-Object System.Collections.Generic.List[string]
+    function Conferir([bool] $ok, [string] $porque) { if (-not $ok) { $falhas.Add($porque) } }
+
+    $e = $etapas['INS_OESTE']
+    Conferir ($e.O.N -eq $oeste.Pilares -and $e.L.N -eq 0) "inserir na Oeste deu $($e.O.N) texto(s) na Oeste ($($oeste.Pilares) pilares) e $($e.L.N) na Leste (0)"
+    Conferir ($e.O.Fundo -eq $e.O.N -and $e.O.Borda -eq 0) "os textos novos sairam com fundo $($e.O.Fundo) e borda $($e.O.Borda) de $($e.O.N) (o padrao e com fundo, sem borda)"
+
+    $e = $etapas['INS_LESTE']
+    Conferir ($e.O.N -eq $oeste.Pilares -and $e.L.N -eq $leste.Pilares) "inserir na Leste deixou $($e.O.N) na Oeste ($($oeste.Pilares)) e $($e.L.N) na Leste ($($leste.Pilares))"
+
+    $e = $etapas['FUNDO_BORDA']
+    Conferir ($e.O.Fundo -eq $e.O.N -and $e.O.Borda -eq $e.O.N -and $e.L.Fundo -eq $e.L.N -and $e.L.Borda -eq $e.L.N) "fundo e borda pela aba: Oeste $($e.O.Fundo)/$($e.O.Borda) de $($e.O.N), Leste $($e.L.Fundo)/$($e.L.Borda) de $($e.L.N)"
+
+    $e = $etapas['ANALISAR_OESTE']
+    Conferir ($e.O.Pintados -eq $oeste.Tras -and $e.L.Pintados -eq 0) "analisar a Oeste (frente acima de 100 m, tras acima de 0 m) pintou $($e.O.Pintados) texto(s) na Oeste (esperava os $($oeste.Tras) de tras) e $($e.L.Pintados) na Leste"
+    Conferir ($e.AzuisOeste[0] -eq 0 -and $e.AzuisOeste[1] -eq $oeste.Tras -and $e.AzuisLeste[0] + $e.AzuisLeste[1] -eq 0) "os pilares pintados: Oeste frente $($e.AzuisOeste[0]) e tras $($e.AzuisOeste[1]) (esperava 0 e $($oeste.Tras)), Leste $($e.AzuisLeste[0] + $e.AzuisLeste[1])"
+
+    $frente = [regex]::Match($t, 'pilares da frente: (\d+) dentro, 0 acima de 100,00 m(?:, \d+ sem valor)? \(total (\d+)\)')
+    $tras = [regex]::Match($t, 'pilares de tr.s: 0 dentro, (\d+) acima de 0,00 m(?:, \d+ sem valor)? \(total (\d+)\)')
+    Conferir ($frente.Success -and [int] $frente.Groups[2].Value -eq $oeste.Frente) "a quantificacao da Oeste nao contou os $($oeste.Frente) pilares da frente pelos limites deles"
+    Conferir ($tras.Success -and [int] $tras.Groups[1].Value -eq $oeste.Tras) "a quantificacao da Oeste nao deu os $($oeste.Tras) pilares de tras acima de 0 m"
+
+    $e = $etapas['TIRAR_LESTE']
+    Conferir ($e.O.Pintados -eq $oeste.Tras -and $e.AzuisOeste[1] -eq $oeste.Tras) "tirar as cores da Leste mexeu na Oeste: $($e.O.Pintados) texto(s) e $($e.AzuisOeste[1]) pilar(es) ainda pintados (esperava $($oeste.Tras))"
+
+    $e = $etapas['TIRAR_OESTE']
+    Conferir ($e.O.Pintados -eq 0 -and $e.AzuisOeste[0] + $e.AzuisOeste[1] -eq 0) "tirar as cores da Oeste deixou $($e.O.Pintados) texto(s) e $($e.AzuisOeste[0] + $e.AzuisOeste[1]) pilar(es) pintados"
+
+    $e = $etapas['APAGAR_OESTE']
+    Conferir ($e.O.N -eq 0 -and $e.L.N -eq $leste.Pilares) "apagar a Oeste deixou $($e.O.N) na Oeste e $($e.L.N) na Leste ($($leste.Pilares))"
+
+    $e = $etapas['DECL_LESTE']
+    Conferir ($e.L.N -eq $leste.Mesas -and $e.O.N -eq 0) "a declividade na Leste deu $($e.L.N) texto(s) ($($leste.Mesas) mesas) e $($e.O.N) na Oeste"
+
+    Conferir ($t -match 'RENDER analises \d+x\d+' -and (Test-Path $png)) "a janela das analises nao foi desenhada em $png"
+
+    if ($falhas.Count -gt 0) {
+        foreach ($f in $falhas) { $problemas.Add("clivus-analises-escopo: $f. Veja $($r.Saida)") }
+        return $false
+    }
+
+    Escrever-Linha 'clivus-analises-escopo' "oeste $($oeste.Pilares) pilares ($($oeste.Tras) de tras), leste $($leste.Pilares)" 'OK'
+    return $true
+}
+
 function Testar-SombrasEscopo {
     param([string] $Desenho)
 
@@ -5023,6 +5137,10 @@ else {
     # Analises independentes (8.9 a 8.11).
     $total++
     if (Testar-Analises -Desenho $desenhos[0]) { $passaram++ }
+
+    # As analises por escopo, o fundo e a borda e as colunas do biposte (42.6).
+    $total++
+    if (Testar-AnalisesEscopo -Desenho $desenhos[0]) { $passaram++ }
 
     # Resumo do terreno (8.15).
     $total++

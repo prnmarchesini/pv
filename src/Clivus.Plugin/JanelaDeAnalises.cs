@@ -1,7 +1,7 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Clivus.Core;
 
@@ -18,6 +18,21 @@ namespace Clivus.Plugin;
 ///
 /// Cada botão faz uma operação no desenho (as mesmas dos comandos CLIVUS_AN_*)
 /// e o desenho atualiza atrás da janela.
+///
+/// 31/10/2026, três pedidos do Renan na tela do Aurora:
+/// <list type="bullet">
+/// <item><description>em cima, o que analisar, para todas as abas ("Em analise
+/// eu tbm quero poder escolher o que analisar, uma area ou todas, isso para
+/// TODAS analises"): o seletor das sombras, que abre no desenho inteiro, como
+/// era;</description></item>
+/// <item><description>nos textos, o fundo e a borda ("texto ruim de ver, falta
+/// opção do texto de colocar o fundo e borda, isso para TODAS
+/// analises");</description></item>
+/// <item><description>nas análises de pilar com biposte, uma coluna de limites
+/// por linha de pilar ("cada um tem uma altura [...] uma coluna para cada
+/// pilar o da frente e o de traz, a cor pode ser o mesmo para
+/// ambos").</description></item>
+/// </list>
 /// </summary>
 internal sealed class JanelaDeAnalises : Window
 {
@@ -25,25 +40,48 @@ internal sealed class JanelaDeAnalises : Window
     private readonly Autodesk.AutoCAD.EditorInput.Editor _editor;
     private readonly Action _atualizarTela;
     private readonly StackPanel _quantidades = new();
+    private readonly SeletorDeEscopo _seletor;
+    private readonly TextBlock _recadoDoEscopo = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0), Visibility = System.Windows.Visibility.Collapsed };
 
-    internal JanelaDeAnalises(Database database, Autodesk.AutoCAD.EditorInput.Editor editor, Action atualizarTela)
+    internal JanelaDeAnalises(Document documento, Action atualizarTela)
     {
-        _database = database;
-        _editor = editor;
+        _database = documento.Database;
+        _editor = documento.Editor;
         _atualizarTela = atualizarTela;
 
         Title = Tr.T("Clivus Solar — Análises");
         Width = 760;
-        Height = 640;
+        Height = 660;
         MinWidth = 560;
-        MinHeight = 520;
+        MinHeight = 560;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
+
+        // O que analisar: vale para todas as abas. Abre no desenho inteiro,
+        // como era antes da escolha.
+        _seletor = new SeletorDeEscopo(documento, Tr.T("Analisar"), RecadoDoEscopo, Tentar, desenhoInteiro: true);
+        var escopo = new StackPanel();
+        escopo.Children.Add(_seletor.Painel);
+        escopo.Children.Add(_recadoDoEscopo);
+        var oQue = new GroupBox
+        {
+            Header = new TextBlock { Text = Tr.T("O que analisar"), FontWeight = FontWeights.SemiBold },
+            Content = escopo,
+            Padding = new Thickness(8, 4, 8, 4),
+            Margin = new Thickness(10, 10, 10, 0),
+            ToolTip = Tr.T("Vale para todas as abas: inserir, apagar, analisar, tirar cores e quantificar mexem só nas mesas escolhidas aqui."),
+        };
+
+        // As linhas de pilar do desenho: com biposte, as análises de pilar
+        // têm uma coluna de limites para cada linha.
+        IReadOnlySet<PillarLine> linhas = new HashSet<PillarLine>();
+        Tentar(() => linhas = AnalisesIndependentes.Linhas(_database));
+        Tentar(() => DarFundoAosTextosAntigos(documento));
 
         var abas = new TabControl { Margin = new Thickness(10) };
 
         foreach (var tipo in Analises)
-            abas.Items.Add(new TabItem { Header = Titulo(tipo), Content = new PainelDeAnalise(this, tipo), ToolTip = Tr.F("Análise de {0}.", IndependentAnalysis.Name(tipo)) });
+            abas.Items.Add(new TabItem { Header = Titulo(tipo), Content = new PainelDeAnalise(this, tipo, linhas), ToolTip = Tr.F("Análise de {0}.", IndependentAnalysis.Name(tipo)) });
 
         abas.Items.Add(new TabItem { Header = Tr.T("Quantidades"), Content = AbaQuantidades(), ToolTip = Tr.T("As quantificações feitas, como vão para o Excel.") });
         abas.SelectionChanged += (_, e) => { if (e.Source == abas) AtualizarQuantidades(); };
@@ -55,6 +93,8 @@ internal sealed class JanelaDeAnalises : Window
         fechar.Click += (_, _) => Close();
 
         var raiz = new DockPanel();
+        DockPanel.SetDock(oQue, Dock.Top);
+        raiz.Children.Add(oQue);
         DockPanel.SetDock(fechar, Dock.Bottom);
         raiz.Children.Add(fechar);
         raiz.Children.Add(abas);
@@ -62,7 +102,7 @@ internal sealed class JanelaDeAnalises : Window
     }
 
     /// <summary>As análises, na ordem das abas.</summary>
-    private static readonly IndependentKind[] Analises =
+    internal static readonly IndependentKind[] Analises =
     [
         IndependentKind.LowEdge, IndependentKind.HighEdge, IndependentKind.Slope,
         IndependentKind.PillarAbove, IndependentKind.PillarBuried, IndependentKind.PillarLength,
@@ -79,6 +119,41 @@ internal sealed class JanelaDeAnalises : Window
     };
 
     internal Database Database => _database;
+
+    /// <summary>A janela já aberta, chamada de novo pela ribbon, lê de novo as áreas do desenho (as marcadas ficam).</summary>
+    internal void LerAreas() => Tentar(() => _seletor.LerAreas());
+
+    /// <summary>O escopo marcado em cima, ou null com o que falta no recado da seção.</summary>
+    internal ShadowScope? Escopo(TextBlock recado)
+    {
+        try
+        {
+            return _seletor.Escopo();
+        }
+        catch (ArgumentException falta)
+        {
+            Dizer(recado, false, falta.Message);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Os textos inseridos antes do fundo e da borda (31/10/2026: "texto ruim
+    /// de ver") ganham o fundo na primeira vez que a janela abre: a caixa
+    /// Fundo nasce marcada e o desenho fica igual a ela. Depois disso vale o
+    /// que o usuário marcar em cada aba.
+    /// </summary>
+    private void DarFundoAosTextosAntigos(Document documento)
+    {
+        EscritaForaDeComando.Fazer(documento, () =>
+        {
+            foreach (var tipo in Analises)
+            {
+                if (AnalisesIndependentes.AparenciaGravada(_database, tipo) is not null) continue;
+                if (AnalisesIndependentes.AplicarAparencia(_database, tipo) > 0) AnalisesIndependentes.GravarAparencia(_database, tipo, AnalysisTextLook.Default);
+            }
+        });
+    }
 
     /// <summary>
     /// Roda a operação, atualiza o desenho e devolve a frase (ou o erro) para a seção mostrar.
@@ -113,6 +188,27 @@ internal sealed class JanelaDeAnalises : Window
         }
     }
 
+    /// <summary>O recado do seletor (a área marcada, ou o que não deu).</summary>
+    private void RecadoDoEscopo(string texto, bool erro)
+    {
+        _recadoDoEscopo.Visibility = System.Windows.Visibility.Visible;
+        Dizer(_recadoDoEscopo, !erro, texto);
+    }
+
+    /// <summary>Roda o manipulador protegido: exceção solta num clique de WPF fecharia o Civil 3D.</summary>
+    private void Tentar(Action acao)
+    {
+        try
+        {
+            acao();
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha na janela de análises.", erro);
+            RecadoDoEscopo(Tr.F("Não consegui: {0}", erro.Message), true);
+        }
+    }
+
     // --------------------------------------------------------- quantidades
 
     private UIElement AbaQuantidades()
@@ -121,7 +217,7 @@ internal sealed class JanelaDeAnalises : Window
 
         pilha.Children.Add(new TextBlock
         {
-            Text = Tr.T("A última quantificação de cada análise (o botão Quantificar de cada aba). É o que vai para o Excel, junto com o quantitativo de mesas, módulos e pilares."),
+            Text = Tr.T("A última quantificação de cada análise (o botão Quantificar de cada aba), com o lugar onde foi feita. É o que vai para o Excel, junto com o quantitativo de mesas, módulos e pilares."),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 10),
         });
@@ -151,9 +247,11 @@ internal sealed class JanelaDeAnalises : Window
             {
                 Text = q is null
                     ? Tr.T("ainda não quantificada")
-                    : IndependentAnalysis.Describe(tipo, q.Rule, q.Points, q.Unit)
+                    : (q.Lines is { Count: > 0 } linhas
+                        ? string.Join("\n", linhas.Select(l => IndependentAnalysis.DescribeLine(tipo, q.Rule, l.Line, l.Count, q.Unit)))
+                        : IndependentAnalysis.Describe(tipo, q.Rule, q.Points, q.Unit))
                       + (q.Modules is { } m ? Tr.F("\nmódulos — {0}", IndependentAnalysis.Describe(tipo, q.Rule, m, q.Unit)) : "")
-                      + Tr.F("\n(em {0:dd/MM/yyyy HH:mm})", q.When),
+                      + Tr.F("\n({0}, em {1:dd/MM/yyyy HH:mm})", q.Where, q.When),
                 Foreground = q is null ? Brushes.Gray : Brushes.Black,
                 TextWrapping = TextWrapping.Wrap,
             });
@@ -164,6 +262,7 @@ internal sealed class JanelaDeAnalises : Window
     {
         alvo.Foreground = ok ? Brushes.ForestGreen : Brushes.Firebrick;
         alvo.Text = frase;
+        alvo.Visibility = System.Windows.Visibility.Visible;
     }
 }
 
@@ -173,37 +272,81 @@ internal sealed class PainelDeAnalise : ScrollViewer
     private readonly JanelaDeAnalises _janela;
     private readonly IndependentKind _tipo;
 
+    /// <summary>
+    /// As colunas dos limites: uma só, ou, nas análises de pilar de um
+    /// desenho com biposte, uma por linha de pilar que o desenho tem (a
+    /// monoposte, se houver, a da frente e a de trás).
+    /// </summary>
+    private readonly IReadOnlyList<PillarLine> _colunas;
+
+    /// <summary>A regra gravada quando a janela abriu: os limites da linha que não tem coluna ficam como estavam.</summary>
+    private readonly ThresholdRule _gravada;
+
+    private readonly Dictionary<PillarLine, (TextBox Abaixo, TextBox Acima)> _limites = [];
+
     private readonly CheckBox _usarAbaixo = new() { Content = Tr.T("Menor que"), VerticalAlignment = VerticalAlignment.Center, Width = 90, ToolTip = Tr.T("Desmarcado: nada é pintado por ser menor.") };
-    private readonly TextBox _abaixo = new() { Width = 70, Height = 24, Margin = new Thickness(4, 0, 8, 0) };
     private readonly ComboBox _corAbaixo;
     private readonly CheckBox _usarAcima = new() { Content = Tr.T("Maior que"), VerticalAlignment = VerticalAlignment.Center, Width = 90, ToolTip = Tr.T("Desmarcado: nada é pintado por ser maior.") };
-    private readonly TextBox _acima = new() { Width = 70, Height = 24, Margin = new Thickness(4, 0, 8, 0) };
     private readonly ComboBox _corAcima;
     private readonly CheckBox _pecas = new() { Margin = new Thickness(0, 8, 0, 0) };
     private readonly ComboBox _unidade = new() { Width = 150, Height = 24 };
+
+    private readonly CheckBox _fundo = new()
+    {
+        Content = Tr.T("Fundo"),
+        VerticalAlignment = VerticalAlignment.Center,
+        Margin = new Thickness(0, 0, 12, 0),
+        ToolTip = Tr.T("Uma máscara na cor do fundo da tela atrás do texto: o módulo e as linhas de trás somem e o texto fica legível. Vale já para os textos desta análise no desenho e para os próximos."),
+    };
+
+    private readonly CheckBox _borda = new()
+    {
+        Content = Tr.T("Borda"),
+        VerticalAlignment = VerticalAlignment.Center,
+        ToolTip = Tr.T("Um quadro em volta do texto, na cor dele (a da regra, depois de Analisar). Vale já para os textos desta análise no desenho e para os próximos."),
+    };
 
     private readonly TextBlock _recadoTextos = Recado();
     private readonly TextBlock _recadoCores = Recado();
     private readonly TextBlock _recadoQuantidade = Recado();
 
-    internal PainelDeAnalise(JanelaDeAnalises janela, IndependentKind tipo)
+    internal PainelDeAnalise(JanelaDeAnalises janela, IndependentKind tipo, IReadOnlySet<PillarLine> linhas)
     {
         _janela = janela;
         _tipo = tipo;
 
         var regra = AnalisesIndependentesCommands.Regra(janela.Database, tipo);
         var unidade = AnalisesIndependentesCommands.Unidade(janela.Database);
+        var aparencia = AnalisesIndependentes.Aparencia(janela.Database, tipo);
         var nome = IndependentAnalysis.Name(tipo);
         var emMetro = tipo != IndependentKind.Slope;
 
+        _gravada = regra;
+        _colunas = IndependentAnalysis.IsPillar(tipo) && (linhas.Contains(PillarLine.Front) || linhas.Contains(PillarLine.Rear))
+            ? new[] { PillarLine.Single, PillarLine.Front, PillarLine.Rear }.Where(linhas.Contains).ToList()
+            : [PillarLine.Single];
+
         _corAbaixo = PaletaDeCores.Caixa(regra.BelowColor, Tr.T("Cor de quem fica abaixo do limite."));
         _corAcima = PaletaDeCores.Caixa(regra.AboveColor, Tr.T("Cor de quem fica acima do limite."));
-        _abaixo.ToolTip = Tr.F("Limite de baixo{0}. Igual ao limite conta como dentro.", emMetro ? " (m)" : "");
-        _acima.ToolTip = Tr.F("Limite de cima{0}. Igual ao limite conta como dentro.", emMetro ? " (m)" : "");
-        _usarAbaixo.IsChecked = regra.Below is not null;
-        _abaixo.Text = regra.Below is { } b ? b.ToString("0.###", Tr.Culture) : "";
-        _usarAcima.IsChecked = regra.Above is not null;
-        _acima.Text = regra.Above is { } a ? a.ToString("0.###", Tr.Culture) : "";
+
+        foreach (var linha in _colunas)
+        {
+            var daLinha = regra.ForLine(linha);
+            var naLinha = _colunas.Count == 1 ? "" : linha switch
+            {
+                PillarLine.Front => Tr.T(" do pilar da frente"),
+                PillarLine.Rear => Tr.T(" do pilar de trás"),
+                _ => Tr.T(" da monoposte"),
+            };
+            var vazio = _colunas.Count > 1 ? Tr.T(" Vazio: sem limite nesta linha.") : "";
+
+            _limites[linha] = (
+                Caixa(daLinha.Below, Tr.F("Limite de baixo{0}{1}. Igual ao limite conta como dentro.{2}", naLinha, emMetro ? " (m)" : "", vazio)),
+                Caixa(daLinha.Above, Tr.F("Limite de cima{0}{1}. Igual ao limite conta como dentro.{2}", naLinha, emMetro ? " (m)" : "", vazio)));
+        }
+
+        _usarAbaixo.IsChecked = _colunas.Any(l => regra.ForLine(l).Below is not null);
+        _usarAcima.IsChecked = _colunas.Any(l => regra.ForLine(l).Above is not null);
         _pecas.IsChecked = regra.PaintPieces;
         _pecas.Content = tipo switch
         {
@@ -218,6 +361,15 @@ internal sealed class PainelDeAnalise : ScrollViewer
         _unidade.SelectedIndex = unidade == SlopeUnit.Degrees ? 1 : 0;
         _unidade.ToolTip = Tr.T("A unidade dos textos e dos limites da declividade.");
 
+        // O fundo e a borda mudam já os textos que estão no desenho: os
+        // eventos entram depois do valor inicial, senão abrir a janela mexia.
+        _fundo.IsChecked = aparencia.Background;
+        _borda.IsChecked = aparencia.Border;
+        _fundo.Checked += (_, _) => MudarAparencia();
+        _fundo.Unchecked += (_, _) => MudarAparencia();
+        _borda.Checked += (_, _) => MudarAparencia();
+        _borda.Unchecked += (_, _) => MudarAparencia();
+
         var pilha = new StackPanel { Margin = new Thickness(12) };
 
         pilha.Children.Add(new TextBlock
@@ -230,9 +382,16 @@ internal sealed class PainelDeAnalise : ScrollViewer
 
         // 1. Textos
         var textos = new StackPanel();
-        textos.Children.Add(Botoes(
-            (Tr.T("Inserir textos"), Tr.F("Escreve {0} em todas as mesas; os textos desta análise que já existiam saem antes.", nome), Inserir),
-            (Tr.T("Apagar textos"), Tr.F("Apaga os textos de {0}. As outras análises ficam.", nome), Apagar)));
+        var linhaDosTextos = new WrapPanel { Orientation = Orientation.Horizontal };
+        linhaDosTextos.Children.Add(Botoes(
+            (Tr.T("Inserir textos"), Tr.F("Escreve {0} nas mesas marcadas em cima (O que analisar); os textos desta análise que já existiam nelas saem antes.", nome), Inserir),
+            (Tr.T("Apagar textos"), Tr.F("Apaga os textos de {0} nas mesas marcadas em cima. As outras análises ficam.", nome), Apagar)));
+        var aparenciaDoTexto = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 4, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        aparenciaDoTexto.Children.Add(new TextBlock { Text = Tr.T("Texto com"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+        aparenciaDoTexto.Children.Add(_fundo);
+        aparenciaDoTexto.Children.Add(_borda);
+        linhaDosTextos.Children.Add(aparenciaDoTexto);
+        textos.Children.Add(linhaDosTextos);
         textos.Children.Add(_recadoTextos);
         pilha.Children.Add(Secao(Tr.T("1. Textos"), textos));
 
@@ -246,18 +405,17 @@ internal sealed class PainelDeAnalise : ScrollViewer
             cores.Children.Add(linha);
         }
 
-        cores.Children.Add(Faixa(_usarAbaixo, _abaixo, _corAbaixo, emMetro, tipo));
-        cores.Children.Add(Faixa(_usarAcima, _acima, _corAcima, emMetro, tipo));
+        cores.Children.Add(Faixas(emMetro));
         cores.Children.Add(_pecas);
         cores.Children.Add(Botoes(
-            (Tr.T("Analisar"), Tr.T("Grava a regra no desenho e pinta quem sai da faixa (refaz a pintura anterior desta análise)."), Analisar),
-            (Tr.T("Tirar cores"), Tr.T("Volta à cor de antes (da camada, do tipo de mesa ou magenta) o que esta análise pintou; as cores das outras análises ficam."), TirarCores)));
+            (Tr.T("Analisar"), Tr.T("Grava a regra no desenho e pinta quem sai da faixa nas mesas marcadas em cima (refaz a pintura anterior desta análise nelas)."), Analisar),
+            (Tr.T("Tirar cores"), Tr.T("Volta à cor de antes (da camada, do tipo de mesa ou magenta) o que esta análise pintou nas mesas marcadas em cima; as cores das outras análises ficam."), TirarCores)));
         cores.Children.Add(_recadoCores);
         pilha.Children.Add(Secao(Tr.T("2. Cores"), cores));
 
         // 3. Quantidades
         var quantidades = new StackPanel();
-        quantidades.Children.Add(Botoes((Tr.T("Quantificar"), Tr.T("Conta quantos ficaram abaixo, dentro e acima da faixa (com a regra acima); fica gravado para o Excel."), Quantificar)));
+        quantidades.Children.Add(Botoes((Tr.T("Quantificar"), Tr.T("Conta, nas mesas marcadas em cima, quantos ficaram abaixo, dentro e acima da faixa (com a regra acima); fica gravado para o Excel, com o lugar."), Quantificar)));
         quantidades.Children.Add(_recadoQuantidade);
         pilha.Children.Add(Secao(Tr.T("3. Quantidades"), quantidades));
 
@@ -275,7 +433,8 @@ internal sealed class PainelDeAnalise : ScrollViewer
         _ => Tr.T("A parte LIVRE de cada pilar (P): do terreno até o topo, fora da terra. Escrita no topo dele."),
     };
 
-    private static TextBlock Recado() => new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+    // O recado só ocupa lugar quando tem o que dizer (02/10/2026: "nada de espaço em branco").
+    private static TextBlock Recado() => new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0), Visibility = System.Windows.Visibility.Collapsed };
 
     private static GroupBox Secao(string titulo, UIElement conteudo) => new()
     {
@@ -285,7 +444,79 @@ internal sealed class PainelDeAnalise : ScrollViewer
         Margin = new Thickness(0, 0, 0, 10),
     };
 
-    private static StackPanel Faixa(CheckBox usar, TextBox valor, ComboBox cor, bool emMetro, IndependentKind tipo)
+    private static TextBox Caixa(double? valor, string dica) => new()
+    {
+        Width = 70,
+        Height = 24,
+        Margin = new Thickness(4, 0, 4, 0),
+        Text = valor is { } v ? v.ToString("0.###", Tr.Culture) : "",
+        ToolTip = dica,
+    };
+
+    /// <summary>
+    /// As duas faixas (menor que, maior que). Uma coluna: a linha de sempre.
+    /// Com biposte nos pilares, uma grade: uma coluna de limites para cada
+    /// linha de pilar, e a cor no fim, a mesma para todas.
+    /// </summary>
+    private UIElement Faixas(bool emMetro)
+    {
+        if (_colunas.Count == 1)
+        {
+            var (abaixo, acima) = _limites[_colunas[0]];
+            var faixas = new StackPanel();
+            faixas.Children.Add(Faixa(_usarAbaixo, abaixo, _corAbaixo, emMetro));
+            faixas.Children.Add(Faixa(_usarAcima, acima, _corAcima, emMetro));
+            return faixas;
+        }
+
+        var grade = new Grid { Margin = new Thickness(0, 0, 0, 2) };
+        for (var c = 0; c < _colunas.Count + 3; c++) grade.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        for (var r = 0; r < 3; r++) grade.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        void Por(UIElement e, int linha, int coluna)
+        {
+            Grid.SetRow(e, linha);
+            Grid.SetColumn(e, coluna);
+            grade.Children.Add(e);
+        }
+
+        for (var i = 0; i < _colunas.Count; i++)
+        {
+            Por(new TextBlock { Text = IndependentAnalysis.LineName(_colunas[i]), FontWeight = FontWeights.SemiBold, Margin = new Thickness(4, 0, 12, 2) }, 0, 1 + i);
+
+            var (abaixo, acima) = _limites[_colunas[i]];
+            Por(ComUnidade(abaixo, emMetro), 1, 1 + i);
+            Por(ComUnidade(acima, emMetro), 2, 1 + i);
+        }
+
+        Por(_usarAbaixo, 1, 0);
+        Por(_usarAcima, 2, 0);
+
+        var pintarAbaixo = new TextBlock { Text = Tr.T("pintar de"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+        var pintarAcima = new TextBlock { Text = Tr.T("pintar de"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+        Por(pintarAbaixo, 1, _colunas.Count + 1);
+        Por(pintarAcima, 2, _colunas.Count + 1);
+        Por(_corAbaixo, 1, _colunas.Count + 2);
+        Por(_corAcima, 2, _colunas.Count + 2);
+
+        // A margem de cada linha, como na faixa de uma coluna.
+        foreach (UIElement e in grade.Children)
+        {
+            if (e is FrameworkElement f && Grid.GetRow(f) > 0) f.Margin = new Thickness(f.Margin.Left, 3, f.Margin.Right, 3);
+        }
+
+        return grade;
+    }
+
+    private static StackPanel ComUnidade(TextBox caixa, bool emMetro)
+    {
+        var celula = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 8, 0) };
+        celula.Children.Add(caixa);
+        celula.Children.Add(new TextBlock { Text = emMetro ? "m" : "", VerticalAlignment = VerticalAlignment.Center, Width = 14 });
+        return celula;
+    }
+
+    private static StackPanel Faixa(CheckBox usar, TextBox valor, ComboBox cor, bool emMetro)
     {
         var linha = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 3) };
         linha.Children.Add(usar);
@@ -317,21 +548,35 @@ internal sealed class PainelDeAnalise : ScrollViewer
     /// <summary>A regra dos campos, ou null com o motivo no recado das cores.</summary>
     private ThresholdRule? LerRegra()
     {
-        double? abaixo = null, acima = null;
+        var usarAbaixo = _usarAbaixo.IsChecked == true;
+        var usarAcima = _usarAcima.IsChecked == true;
+        var lidos = new Dictionary<PillarLine, LineLimits>();
 
-        if (_usarAbaixo.IsChecked == true)
+        foreach (var linha in _colunas)
         {
-            if (!NumberInput.TryParseMeasure(_abaixo.Text, out var v)) { JanelaDeAnalises.Dizer(_recadoCores, false, Tr.T("Não consigo ler o limite de baixo.")); return null; }
-            abaixo = v;
+            var (caixaAbaixo, caixaAcima) = _limites[linha];
+            if (!Limite(caixaAbaixo, usarAbaixo, linha, Tr.T("não consigo ler o limite de baixo"), out var abaixo)) return null;
+            if (!Limite(caixaAcima, usarAcima, linha, Tr.T("não consigo ler o limite de cima"), out var acima)) return null;
+            lidos[linha] = new LineLimits(abaixo, acima);
         }
 
-        if (_usarAcima.IsChecked == true)
+        if (_colunas.Count > 1 && lidos.Values.All(l => l.Below is null && l.Above is null))
         {
-            if (!NumberInput.TryParseMeasure(_acima.Text, out var v)) { JanelaDeAnalises.Dizer(_recadoCores, false, Tr.T("Não consigo ler o limite de cima.")); return null; }
-            acima = v;
+            JanelaDeAnalises.Dizer(_recadoCores, false, Tr.T("Preencha pelo menos um limite (de uma das colunas)."));
+            return null;
         }
 
-        var regra = new ThresholdRule(abaixo, PaletaDeCores.Cor(_corAbaixo), acima, PaletaDeCores.Cor(_corAcima), _pecas.IsChecked == true);
+        // A linha sem coluna (a monoposte num desenho só de biposte) fica
+        // com o limite gravado; desmarcar o lado desliga em todas.
+        var monoposte = lidos.TryGetValue(PillarLine.Single, out var lida)
+            ? lida
+            : new LineLimits(usarAbaixo ? _gravada.Below : null, usarAcima ? _gravada.Above : null);
+
+        var regra = new ThresholdRule(monoposte.Below, PaletaDeCores.Cor(_corAbaixo), monoposte.Above, PaletaDeCores.Cor(_corAcima), _pecas.IsChecked == true)
+        {
+            Front = lidos.TryGetValue(PillarLine.Front, out var frente) ? frente : _gravada.Front,
+            Rear = lidos.TryGetValue(PillarLine.Rear, out var tras) ? tras : _gravada.Rear,
+        };
 
         if (regra.WhyInvalid is { } motivo)
         {
@@ -342,7 +587,29 @@ internal sealed class PainelDeAnalise : ScrollViewer
         return regra;
     }
 
-    /// <summary>Se a unidade da declividade mudou, grava e reinsere os textos nela.</summary>
+    /// <summary>
+    /// O limite de uma caixa: desligado, nenhum. Numa coluna só, ligado e
+    /// vazio é erro (como sempre foi); com as colunas do biposte, vazio é a
+    /// linha sem limite desse lado.
+    /// </summary>
+    private bool Limite(TextBox caixa, bool ligado, PillarLine linha, string erro, out double? valor)
+    {
+        valor = null;
+        if (!ligado || (_colunas.Count > 1 && string.IsNullOrWhiteSpace(caixa.Text))) return true;
+
+        if (!NumberInput.TryParseMeasure(caixa.Text, out var lido))
+        {
+            JanelaDeAnalises.Dizer(_recadoCores, false, _colunas.Count > 1
+                ? Tr.F("{0}: {1}.", IndependentAnalysis.LineName(linha), erro)
+                : char.ToUpper(erro[0], Tr.Culture) + erro[1..] + ".");
+            return false;
+        }
+
+        valor = lido;
+        return true;
+    }
+
+    /// <summary>Se a unidade da declividade mudou, grava e reinsere nela os textos que existiam.</summary>
     private void AplicarUnidade()
     {
         if (_tipo != IndependentKind.Slope) return;
@@ -352,18 +619,18 @@ internal sealed class PainelDeAnalise : ScrollViewer
         if (nova == atual) return;
 
         SetaDeDeclividade.Gravar(_janela.Database, SetaDeDeclividade.Ler(_janela.Database).Ligada, nova);
-        if (AnalisesIndependentes.Apagar(_janela.Database, _tipo) > 0) AnalisesIndependentes.Inserir(_janela.Database, _tipo, nova);
+        AnalisesIndependentes.Reinserir(_janela.Database, _tipo, nova);
     }
 
     private void Inserir()
     {
+        if (_janela.Escopo(_recadoTextos) is not { } escopo) return;
+
         var (ok, frase) = _janela.Fazer(Tr.N("inserir os textos"), () =>
         {
             AplicarUnidade();
-            var (criados, mesas, ignoradas) = AnalisesIndependentes.Inserir(_janela.Database, _tipo, Unidade());
-            return mesas == 0
-                ? Tr.T("O desenho não tem mesa gerada pelo plugin; nada inserido.")
-                : Tr.F("{0} texto(s) em {1} mesa(s).", criados, mesas) + (ignoradas > 0 ? Tr.F(" {0} mesa(s) com contorno deformado ficaram de fora.", ignoradas) : "");
+            var (mesas, onde) = OperacoesDeAnalise.Resolver(_janela.Database, escopo);
+            return OperacoesDeAnalise.Inserir(_janela.Database, _tipo, Unidade(), mesas, onde);
         });
 
         JanelaDeAnalises.Dizer(_recadoTextos, ok, frase);
@@ -371,21 +638,34 @@ internal sealed class PainelDeAnalise : ScrollViewer
 
     private void Apagar()
     {
-        var (ok, frase) = _janela.Fazer(Tr.N("apagar os textos"), () => Tr.F("{0} texto(s) apagado(s).", AnalisesIndependentes.Apagar(_janela.Database, _tipo)));
+        if (_janela.Escopo(_recadoTextos) is not { } escopo) return;
+
+        var (ok, frase) = _janela.Fazer(Tr.N("apagar os textos"), () =>
+        {
+            var (mesas, onde) = OperacoesDeAnalise.Resolver(_janela.Database, escopo);
+            return OperacoesDeAnalise.Apagar(_janela.Database, _tipo, mesas, onde);
+        });
+
+        JanelaDeAnalises.Dizer(_recadoTextos, ok, frase);
+    }
+
+    private void MudarAparencia()
+    {
+        var aparencia = new AnalysisTextLook(_fundo.IsChecked == true, _borda.IsChecked == true);
+        var (ok, frase) = _janela.Fazer(Tr.N("mudar o fundo e a borda dos textos"), () => OperacoesDeAnalise.Aparencia(_janela.Database, _tipo, aparencia));
         JanelaDeAnalises.Dizer(_recadoTextos, ok, frase);
     }
 
     private void Analisar()
     {
+        if (_janela.Escopo(_recadoCores) is not { } escopo) return;
         if (LerRegra() is not { } regra) return;
 
         var (ok, frase) = _janela.Fazer(Tr.N("analisar"), () =>
         {
             AplicarUnidade();
-            AnalisesIndependentesCommands.GravarRegra(_janela.Database, _tipo, regra);
-            var (textos, pecas) = AnalisesIndependentes.Analisar(_janela.Database, _tipo, regra, Unidade());
-            return (regra.PaintPieces ? Tr.F("{0} texto(s) pintado(s), {1} peça(s) pintada(s).", textos, pecas) : Tr.F("{0} texto(s) pintado(s).", textos))
-                + (textos == 0 && !regra.PaintPieces ? Tr.T(" Nenhum texto desta análise no desenho: insira os textos primeiro.") : "");
+            var (mesas, onde) = OperacoesDeAnalise.Resolver(_janela.Database, escopo);
+            return OperacoesDeAnalise.Analisar(_janela.Database, _tipo, regra, Unidade(), mesas, onde);
         });
 
         JanelaDeAnalises.Dizer(_recadoCores, ok, frase);
@@ -393,26 +673,118 @@ internal sealed class PainelDeAnalise : ScrollViewer
 
     private void TirarCores()
     {
-        var (ok, frase) = _janela.Fazer(Tr.N("tirar as cores"), () => Tr.F("{0} entidade(s) de volta à cor de antes.", AnalisesIndependentes.TirarCores(_janela.Database, _tipo)));
+        if (_janela.Escopo(_recadoCores) is not { } escopo) return;
+
+        var (ok, frase) = _janela.Fazer(Tr.N("tirar as cores"), () =>
+        {
+            var (mesas, onde) = OperacoesDeAnalise.Resolver(_janela.Database, escopo);
+            return OperacoesDeAnalise.TirarCores(_janela.Database, _tipo, mesas, onde);
+        });
+
         JanelaDeAnalises.Dizer(_recadoCores, ok, frase);
     }
 
     private void Quantificar()
     {
+        if (_janela.Escopo(_recadoQuantidade) is not { } escopo) return;
         if (LerRegra() is not { } regra) return;
 
         var (ok, frase) = _janela.Fazer(Tr.N("quantificar"), () =>
         {
-            var unidade = Unidade();
-            var (pontos, modulos, biposte) = AnalisesIndependentes.Quantificar(_janela.Database, _tipo, regra, unidade);
-            QuantificacaoGravada.Gravar(_janela.Database, _tipo, regra, unidade, pontos, modulos);
-
-            var descricao = IndependentAnalysis.Describe(_tipo, regra, pontos, unidade);
-            return Tr.F("Em {0}: {1}", IndependentAnalysis.CountedIn(_tipo, biposte), descricao)
-                + (modulos is not null ? Tr.F("\nEm módulos: {0}", IndependentAnalysis.Describe(_tipo, regra, modulos, unidade)) : "");
+            var (mesas, onde) = OperacoesDeAnalise.Resolver(_janela.Database, escopo);
+            return OperacoesDeAnalise.Quantificar(_janela.Database, _tipo, regra, Unidade(), mesas, onde);
         });
 
         JanelaDeAnalises.Dizer(_recadoQuantidade, ok, frase);
         _janela.AtualizarQuantidades();
+    }
+}
+
+/// <summary>
+/// O que cada botão da janela de análises faz, com o escopo já resolvido
+/// nas mesas: a janela e o gancho de teste do nível 2 passam pelo mesmo
+/// caminho. Cada operação devolve a frase da seção.
+/// </summary>
+internal static class OperacoesDeAnalise
+{
+    /// <summary>
+    /// As mesas do escopo (null no desenho inteiro: o caminho de sempre, que
+    /// leva também o texto que ficou sem mesa) e o nome do lugar.
+    /// </summary>
+    internal static (IReadOnlySet<Guid>? Mesas, string Onde) Resolver(Database database, ShadowScope escopo)
+    {
+        if (escopo.Kind == ShadowScopeKind.Drawing) return (null, Tr.T("desenho inteiro"));
+
+        var (mesas, _) = SombrasCommands.MesasDoEscopo(database, escopo);
+        return (mesas, Onde(escopo, AreasDoDesenho.Varrer(database)));
+    }
+
+    /// <summary>O lugar para a frase e para o Excel: "Área 1", "Área 1, Área 2", "12 mesa(s) escolhida(s)".</summary>
+    internal static string Onde(ShadowScope escopo, IReadOnlyList<AreaNoDesenho> areas)
+    {
+        var nomes = string.Join(", ", escopo.Areas.Select(id => areas.FirstOrDefault(a => a.Identity.Id == id)?.Identity.DisplayName ?? "?"));
+
+        return escopo.Kind switch
+        {
+            ShadowScopeKind.Selection => Tr.F("{0} mesa(s) escolhida(s)", escopo.Tables.Count),
+            ShadowScopeKind.Area or ShadowScopeKind.Areas => nomes,
+            ShadowScopeKind.AreaAndSelection => Tr.F("{0} e {1} mesa(s) escolhida(s)", nomes, escopo.Tables.Count),
+            _ => Tr.T("desenho inteiro"),
+        };
+    }
+
+    private static string Lugar(string onde) => onde.Length == 0 ? onde : char.ToUpper(onde[0], Tr.Culture) + onde[1..];
+
+    internal static string Inserir(Database database, IndependentKind tipo, SlopeUnit unidade, IReadOnlySet<Guid>? mesas, string onde)
+    {
+        var (criados, contadas, ignoradas) = AnalisesIndependentes.Inserir(database, tipo, unidade, mesas);
+
+        if (contadas == 0)
+            return mesas is null ? Tr.T("O desenho não tem mesa gerada pelo plugin; nada inserido.") : Tr.F("{0}: nenhuma mesa; nada inserido.", Lugar(onde));
+
+        return Tr.F("{0}: {1} texto(s) em {2} mesa(s).", Lugar(onde), criados, contadas)
+            + (ignoradas > 0 ? Tr.F(" {0} mesa(s) com contorno deformado ficaram de fora.", ignoradas) : "");
+    }
+
+    internal static string Apagar(Database database, IndependentKind tipo, IReadOnlySet<Guid>? mesas, string onde) =>
+        Tr.F("{0}: {1} texto(s) apagado(s).", Lugar(onde), AnalisesIndependentes.Apagar(database, tipo, mesas));
+
+    /// <summary>Grava a regra (vale para as próximas vezes) e pinta as mesas do escopo.</summary>
+    internal static string Analisar(Database database, IndependentKind tipo, ThresholdRule regra, SlopeUnit unidade, IReadOnlySet<Guid>? mesas, string onde)
+    {
+        AnalisesIndependentesCommands.GravarRegra(database, tipo, regra);
+        var (textos, pecas) = AnalisesIndependentes.Analisar(database, tipo, regra, unidade, mesas);
+
+        return Tr.F("{0}: ", Lugar(onde))
+            + (regra.PaintPieces ? Tr.F("{0} texto(s) pintado(s), {1} peça(s) pintada(s).", textos, pecas) : Tr.F("{0} texto(s) pintado(s).", textos))
+            + (textos == 0 && !regra.PaintPieces ? Tr.T(" Nenhum texto desta análise aqui: insira os textos primeiro.") : "");
+    }
+
+    internal static string TirarCores(Database database, IndependentKind tipo, IReadOnlySet<Guid>? mesas, string onde) =>
+        Tr.F("{0}: {1} entidade(s) de volta à cor de antes.", Lugar(onde), AnalisesIndependentes.TirarCores(database, tipo, mesas));
+
+    /// <summary>Conta, grava para o Excel (com o lugar e, no biposte, a conta de cada linha de pilar) e descreve.</summary>
+    internal static string Quantificar(Database database, IndependentKind tipo, ThresholdRule regra, SlopeUnit unidade, IReadOnlySet<Guid>? mesas, string onde)
+    {
+        var (pontos, modulos, biposte, linhas) = AnalisesIndependentes.Quantificar(database, tipo, regra, unidade, mesas);
+        QuantificacaoGravada.Gravar(database, tipo, regra, unidade, pontos, modulos, onde, linhas);
+
+        if (linhas is { Count: > 0 })
+            return Tr.F("{0}, {1}:", Lugar(onde), IndependentAnalysis.Name(tipo))
+                + string.Concat(linhas.Select(l => "\n" + IndependentAnalysis.DescribeLine(tipo, regra, l.Line, l.Count, unidade)));
+
+        return Tr.F("{0}, em {1}: {2}", Lugar(onde), IndependentAnalysis.CountedIn(tipo, biposte), IndependentAnalysis.Describe(tipo, regra, pontos, unidade))
+            + (modulos is not null ? Tr.F("\nEm módulos: {0}", IndependentAnalysis.Describe(tipo, regra, modulos, unidade)) : "");
+    }
+
+    /// <summary>Grava o fundo e a borda da análise e põe nos textos dela que já estão no desenho.</summary>
+    internal static string Aparencia(Database database, IndependentKind tipo, AnalysisTextLook aparencia)
+    {
+        AnalisesIndependentes.GravarAparencia(database, tipo, aparencia);
+        var textos = AnalisesIndependentes.AplicarAparencia(database, tipo);
+
+        return textos == 0
+            ? Tr.T("Fundo e borda gravados: valem para os próximos textos.")
+            : Tr.F("Fundo e borda postos em {0} texto(s) desta análise.", textos);
     }
 }

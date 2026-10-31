@@ -1,0 +1,127 @@
+; Teste de nivel 2 das analises por escopo, do fundo e da borda dos textos e
+; das colunas do biposte (42.6, Renan, 31/10/2026, na tela do Aurora: "Em
+; analise eu tbm quero poder escolher o que analisar, uma area ou todas, isso
+; para TODAS analises", "texto ruim de ver, falta opção do texto de colocar o
+; fundo e borda" e "em pilar, deveria ter a opção de analisar AMBOS pilares,
+; cada um tem uma altura").
+;
+; A area Usina (100 x 100 m) com a usina biposte gerada e, dentro dela, a Area
+; Oeste e a Area Leste (as duas metades): a mesa conta na menor area que tem o
+; centro dela. Pelo caminho da janela (o gancho clivus-analises-pela-janela,
+; so no build Debug), e conferido em LISP pelo XData de cada texto (a mesa) e
+; pelo lado da mesa (a media do X dos pilares dela, a oeste ou a leste do
+; centro {{CX}}):
+;   - as linhas de pilar do desenho sao a da frente e a de tras;
+;   - inserir a parte livre na Oeste escreve so na Oeste, um texto por pilar,
+;     com fundo e sem borda (o padrao); na Leste depois, a Oeste fica igual;
+;   - o fundo e a borda ligados pela aba valem para todos os textos;
+;   - analisar a Oeste com a frente acima de 100 m e a tras acima de 0 m
+;     pinta so os textos e os pilares de tras da Oeste;
+;   - tirar as cores da Leste nao mexe na Oeste; da Oeste, volta tudo;
+;   - apagar a Oeste deixa a Leste;
+;   - a declividade so na Leste, um texto por mesa;
+;   - e a janela desenhada num PNG, na aba da parte livre.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(command "CLIVUS_BIFILA_EXEMPLO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{U1}}" "{{U2}}" "{{U3}}" "{{U4}}" "" "Usina")
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area Oeste")
+(command "CLIVUS_AREA" "{{B1}}" "{{B2}}" "{{B3}}" "{{B4}}" "" "Area Leste")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento analises")
+(command "CLIVUS_USINA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:pintada (e / d) (setq d (entget e)) (or (assoc 420 d) (and (assoc 62 d) (/= (cdr (assoc 62 d)) 256))))
+
+; As mesas e o lado de cada uma, pelos pilares: (guid soma-de-x quantos frente tras).
+(setq clivus:mesas nil)
+(setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_PILAR") (list -3 (list "CLIVUS")))) i 0)
+(while (< i (clivus:conta ss))
+  (setq e (ssname ss i) xd (clivus:xdata e) mesa (cdr (nth 3 xd)) x (cadr (assoc 10 (entget e))) linha (if (nth 13 xd) (cdr (nth 13 xd)) "Single"))
+  (setq achada (assoc mesa clivus:mesas))
+  (setq clivus:mesas (cons (list mesa (+ x (if achada (nth 1 achada) 0.0)) (1+ (if achada (nth 2 achada) 0))
+                                 (+ (if (= linha "Front") 1 0) (if achada (nth 3 achada) 0))
+                                 (+ (if (= linha "Rear") 1 0) (if achada (nth 4 achada) 0)))
+                           (vl-remove achada clivus:mesas)))
+  (setq i (1+ i)))
+(defun clivus:lado (mesa / m) (setq m (assoc mesa clivus:mesas)) (cond ((null m) "fora") ((< (/ (nth 1 m) (nth 2 m)) {{CX}}) "oeste") (t "leste")))
+
+; Os pilares de cada lado: (todos frente tras), e as mesas de cada lado.
+(defun clivus:pilares (lado / n f r)
+  (setq n 0 f 0 r 0)
+  (foreach m clivus:mesas (if (= (clivus:lado (car m)) lado) (setq n (+ n (nth 2 m)) f (+ f (nth 3 m)) r (+ r (nth 4 m)))))
+  (list n f r))
+(defun clivus:nmesas (lado / n) (setq n 0) (foreach m clivus:mesas (if (= (clivus:lado (car m)) lado) (setq n (1+ n)))) n)
+
+; Os textos (MTEXT) de uma analise num lado: (quantos pintados com-fundo com-borda).
+(defun clivus:textos (tipo lado / ss i e d xd f n p fu bo)
+  (setq ss (ssget "_X" (list (cons 0 "MTEXT") (list -3 (list "CLIVUS")))) i 0 n 0 p 0 fu 0 bo 0)
+  (while (< i (clivus:conta ss))
+    (setq e (ssname ss i) d (entget e) xd (clivus:xdata e))
+    (if (and (= (cdr (nth 0 xd)) "TextoAnalise") (= (cdr (nth 4 xd)) tipo) (= (clivus:lado (cdr (nth 3 xd))) lado))
+      (progn
+        (setq n (1+ n) f (if (assoc 90 d) (cdr (assoc 90 d)) 0))
+        (if (clivus:pintada e) (setq p (1+ p)))
+        (if (= 1 (logand f 1)) (setq fu (1+ fu)))
+        (if (= 16 (logand f 16)) (setq bo (1+ bo)))))
+    (setq i (1+ i)))
+  (list n p fu bo))
+
+; Os pilares de um lado pintados de azul (o acima da regra do gancho): (frente tras).
+(defun clivus:pilares-azuis (lado / ss i e xd f r)
+  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_PILAR") (list -3 (list "CLIVUS")))) i 0 f 0 r 0)
+  (while (< i (clivus:conta ss))
+    (setq e (ssname ss i) xd (clivus:xdata e))
+    (if (and (= (cdr (assoc 420 (entget e))) 255) (= (clivus:lado (cdr (nth 3 xd))) lado))
+      (if (= (cdr (nth 13 xd)) "Rear") (setq r (1+ r)) (setq f (1+ f))))
+    (setq i (1+ i)))
+  (list f r))
+
+(defun clivus:i (l) (apply 'strcat (mapcar '(lambda (n) (strcat (itoa n) ",")) l)))
+(defun clivus:estado (rotulo tipo)
+  (princ (strcat "\nCLIVUS_AN_ESCOPO " rotulo " oeste=" (clivus:i (clivus:textos tipo "oeste")) " leste=" (clivus:i (clivus:textos tipo "leste"))
+                 " azuis_oeste=" (clivus:i (clivus:pilares-azuis "oeste")) " azuis_leste=" (clivus:i (clivus:pilares-azuis "leste")) " fim")))
+
+(princ (strcat "\nCLIVUS_AN_ESCOPO_PILARES oeste=" (clivus:i (clivus:pilares "oeste")) " leste=" (clivus:i (clivus:pilares "leste"))
+               " mesas_oeste=" (itoa (clivus:nmesas "oeste")) " mesas_leste=" (itoa (clivus:nmesas "leste")) " fora=" (itoa (car (clivus:pilares "fora"))) " fim"))
+
+(clivus-analises-pela-janela "linhas")
+
+(clivus-analises-pela-janela "inserir" "PillarAbove" "AREA" "Area Oeste" "-")
+(clivus:estado "INS_OESTE" "PillarAbove")
+
+(clivus-analises-pela-janela "inserir" "PillarAbove" "AREA" "Area Leste" "-")
+(clivus:estado "INS_LESTE" "PillarAbove")
+
+(clivus-analises-pela-janela "aparencia" "PillarAbove" "TUDO" "-" "-" "fundo,borda")
+(clivus:estado "FUNDO_BORDA" "PillarAbove")
+
+(clivus-analises-pela-janela "analisar" "PillarAbove" "AREA" "Area Oeste" "-" "F=;100 T=;0 P")
+(clivus:estado "ANALISAR_OESTE" "PillarAbove")
+
+(clivus-analises-pela-janela "quantificar" "PillarAbove" "AREA" "Area Oeste" "-" "F=;100 T=;0")
+
+(clivus-analises-pela-janela "tirar-cores" "PillarAbove" "AREA" "Area Leste" "-")
+(clivus:estado "TIRAR_LESTE" "PillarAbove")
+
+(clivus-analises-pela-janela "tirar-cores" "PillarAbove" "AREA" "Area Oeste" "-")
+(clivus:estado "TIRAR_OESTE" "PillarAbove")
+
+(clivus-analises-pela-janela "apagar" "PillarAbove" "AREA" "Area Oeste" "-")
+(clivus:estado "APAGAR_OESTE" "PillarAbove")
+
+(clivus-analises-pela-janela "inserir" "Slope" "AREA" "Area Leste" "-")
+(clivus:estado "DECL_LESTE" "Slope")
+
+(clivus-renderizar-janela "analises" "{{PNG}}" "760" "PillarAbove")
+
+(setvar "SECURELOAD" clivus:secureload)
+(princ "\nCLIVUS_AN_ESCOPO_FIM")
+(princ)

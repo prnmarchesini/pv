@@ -240,7 +240,11 @@ public sealed record FaceIdentity(Guid Id, Guid Module, Guid Table, int Column, 
 /// <param name="Table">O GUID da mesa.</param>
 /// <param name="Kind">A análise.</param>
 /// <param name="Value">O valor escrito (m, ou % / ° na declividade); NaN sem terreno.</param>
-public sealed record AnalysisTextIdentity(Guid Id, Guid Table, IndependentKind Kind, double Value)
+/// <param name="Line">
+/// A linha do pilar do texto, nas análises de pilar do biposte (31/10/2026):
+/// cada linha é pintada pelos limites dela. Fora disso, a monoposte.
+/// </param>
+public sealed record AnalysisTextIdentity(Guid Id, Guid Table, IndependentKind Kind, double Value, PillarLine Line = PillarLine.Single)
 {
     /// <summary>O tipo, como vai no XData.</summary>
     public const string Tipo = "TextoAnalise";

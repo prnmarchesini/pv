@@ -61,11 +61,12 @@ public static class JanelasDeAnaliseCommands
         if (Abertas.TryGetValue(documento, out var aberta))
         {
             if (aberta.WindowState == System.Windows.WindowState.Minimized) aberta.WindowState = System.Windows.WindowState.Normal;
+            aberta.LerAreas();
             aberta.Activate();
             return;
         }
 
-        var janela = new JanelaDeAnalises(documento.Database, documento.Editor, Atualizar(documento));
+        var janela = new JanelaDeAnalises(documento, Atualizar(documento));
         Abertas[documento] = janela;
 
         void AoFecharODesenho(object? _, DocumentCollectionEventArgs e)

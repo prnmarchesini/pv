@@ -299,25 +299,53 @@ internal static class LayoutXData
 
     private const int VersaoDoTextoDeAnalise = 1;
 
+    /// <summary>
+    /// Versão 2 (31/10/2026): a linha do pilar no fim, para o pilar do
+    /// biposte ser pintado pelos limites da linha dele. Só o texto do pilar
+    /// da frente ou de trás sai nela; os outros continuam na 1, igual a antes.
+    /// </summary>
+    private const int VersaoDoTextoDeAnaliseBifila = 2;
+
     /// <summary>GUID, mesa, análise, valor.</summary>
     private const int CamposDoTextoDeAnalise = 4;
 
-    internal static void SaveAnalysisText(Transaction transacao, Entity entidade, AnalysisTextIdentity texto) =>
-        PluginXData.Save(
-            transacao, entidade, AnalysisTextIdentity.Tipo, VersaoDoTextoDeAnalise,
+    /// <summary>Os quatro da versão 1 e a linha do pilar (versão 2).</summary>
+    private const int CamposDoTextoDeAnaliseBifila = 5;
+
+    internal static void SaveAnalysisText(Transaction transacao, Entity entidade, AnalysisTextIdentity texto)
+    {
+        string[] campos =
+        [
             texto.Id.ToString("D"), texto.Table.ToString("D"), texto.Kind.ToString(),
-            texto.Value.ToString("R", CultureInfo.InvariantCulture));
+            texto.Value.ToString("R", CultureInfo.InvariantCulture),
+        ];
+
+        if (texto.Line == PillarLine.Single)
+            PluginXData.Save(transacao, entidade, AnalysisTextIdentity.Tipo, VersaoDoTextoDeAnalise, campos);
+        else
+            PluginXData.Save(transacao, entidade, AnalysisTextIdentity.Tipo, VersaoDoTextoDeAnaliseBifila, [.. campos, texto.Line.ToString()]);
+    }
 
     internal static AnalysisTextIdentity? LoadAnalysisText(Entity entidade)
     {
-        var c = PluginXData.Load(entidade, AnalysisTextIdentity.Tipo, VersaoDoTextoDeAnalise, CamposDoTextoDeAnalise);
+        var bifila = PluginXData.Load(entidade, AnalysisTextIdentity.Tipo, VersaoDoTextoDeAnaliseBifila, CamposDoTextoDeAnaliseBifila);
+        var c = bifila ?? PluginXData.Load(entidade, AnalysisTextIdentity.Tipo, VersaoDoTextoDeAnalise, CamposDoTextoDeAnalise);
         if (c is null) return null;
+
+        // Na versão 2 a linha é a da frente ou a de trás, pelo nome, como no pilar.
+        var linha = PillarLine.Single;
+        if (bifila is not null)
+        {
+            if (bifila[4] == nameof(PillarLine.Front)) linha = PillarLine.Front;
+            else if (bifila[4] == nameof(PillarLine.Rear)) linha = PillarLine.Rear;
+            else return null;
+        }
 
         if (!Guid.TryParse(c[0], out var id) || !Guid.TryParse(c[1], out var mesa)) return null;
         if (!Enum.TryParse<IndependentKind>(c[2], out var tipo)) return null;
         if (!double.TryParse(c[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var valor)) return null;
 
-        var texto = new AnalysisTextIdentity(id, mesa, tipo, valor);
+        var texto = new AnalysisTextIdentity(id, mesa, tipo, valor, linha);
 
         return texto.IsValid ? texto : null;
     }

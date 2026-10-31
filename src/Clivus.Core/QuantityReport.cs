@@ -169,12 +169,21 @@ public static class QuantityReport
     private static string Analises(XlsxWriter planilha, IReadOnlyList<AnalysisTally> quantificacoes, bool biposte)
     {
         var analises = planilha.Sheet(Tr.T("Análises"));
-        analises.Add([Tr.T("Análise"), Tr.T("Contado em"), Tr.T("Abaixo de"), Tr.T("Qtde abaixo"), Tr.T("Dentro"), Tr.T("Acima de"), Tr.T("Qtde acima"), Tr.T("Sem valor"), Tr.T("Total"), Tr.T("Quando")]);
+        analises.Add([Tr.T("Análise"), Tr.T("Contado em"), Tr.T("Abaixo de"), Tr.T("Qtde abaixo"), Tr.T("Dentro"), Tr.T("Acima de"), Tr.T("Qtde acima"), Tr.T("Sem valor"), Tr.T("Total"), Tr.T("Quando"), Tr.T("Onde")]);
 
         foreach (var q in quantificacoes.OrderBy(q => q.Kind))
         {
-            Linha(analises, q, q.Points, IndependentAnalysis.CountedIn(q.Kind, biposte));
-            if (q.Modules is not null) Linha(analises, q, q.Modules, Tr.T("módulos"));
+            // No biposte, cada linha de pilar com os limites dela (31/10/2026).
+            if (q.Lines is { Count: > 0 } linhas)
+            {
+                foreach (var l in linhas) Linha(analises, q, q.Rule.ForLine(l.Line), l.Count, IndependentAnalysis.CountedIn(l.Line));
+            }
+            else
+            {
+                Linha(analises, q, q.Rule, q.Points, IndependentAnalysis.CountedIn(q.Kind, biposte));
+            }
+
+            if (q.Modules is not null) Linha(analises, q, q.Rule, q.Modules, Tr.T("módulos"));
         }
 
         return Tr.T("Análises");
@@ -222,21 +231,22 @@ public static class QuantityReport
         return Tr.T("Compra de pilares");
     }
 
-    private static void Linha(List<object?[]> aba, AnalysisTally q, BandCount c, string unidade)
+    private static void Linha(List<object?[]> aba, AnalysisTally q, ThresholdRule regra, BandCount c, string unidade)
     {
         var sufixo = q.Kind == IndependentKind.Slope ? (q.Unit == SlopeUnit.Degrees ? " °" : " %") : " m";
 
         aba.Add([
             IndependentAnalysis.Name(q.Kind),
             unidade,
-            q.Rule.Below is { } b ? b.ToString("0.###", Tr.Culture) + sufixo : "—",
+            regra.Below is { } b ? b.ToString("0.###", Tr.Culture) + sufixo : "—",
             c.Below,
             c.Inside,
-            q.Rule.Above is { } a ? a.ToString("0.###", Tr.Culture) + sufixo : "—",
+            regra.Above is { } a ? a.ToString("0.###", Tr.Culture) + sufixo : "—",
             c.Above,
             c.Missing,
             c.Total,
             q.When.ToString("dd/MM/yyyy HH:mm", Tr.Culture),
+            q.Where,
         ]);
     }
 

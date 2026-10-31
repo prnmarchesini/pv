@@ -6,9 +6,11 @@ namespace Clivus.Plugin;
 /// <summary>A última quantificação de cada análise, no dicionário do desenho (passo 8.12).</summary>
 internal static class QuantificacaoGravada
 {
-    internal static void Gravar(Database database, IndependentKind tipo, ThresholdRule regra, SlopeUnit unidade, BandCount pontos, BandCount? modulos)
+    /// <param name="onde">Onde foi contada ("desenho inteiro", o nome da área...), para a tela e o Excel.</param>
+    /// <param name="linhas">No biposte, a contagem de cada linha de pilar.</param>
+    internal static void Gravar(Database database, IndependentKind tipo, ThresholdRule regra, SlopeUnit unidade, BandCount pontos, BandCount? modulos, string onde, IReadOnlyList<LineCount>? linhas)
     {
-        var registro = new AnalysisTally(tipo, regra, unidade, pontos, modulos, DateTime.Now);
+        var registro = new AnalysisTally(tipo, regra, unidade, pontos, modulos, DateTime.Now, onde, linhas);
 
         PluginDictionary.Save(database, AnalysisTally.StorageKey(tipo), new ResultBuffer(
             registro.Encode().Select(c => new TypedValue((int)DxfCode.Text, c)).ToArray()));

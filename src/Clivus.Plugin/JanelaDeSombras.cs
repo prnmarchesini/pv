@@ -113,9 +113,7 @@ internal sealed class JanelaDeSombras : Window
         // área que tem mesa, o jeito de não travar o PC numa usina grande. Os
         // botões de escolher no desenho vão como comando: a janela fica aberta.
 
-        _seletor = new SeletorDeEscopo(documento, Tr.T("Calcular"), Recado, Tentar,
-            escolherArea: () => PedirAoDesenho(PluginInfo.ComandoSombrasArea),
-            escolherMesas: () => PedirAoDesenho(PluginInfo.ComandoSombrasMesas));
+        _seletor = new SeletorDeEscopo(documento, Tr.T("Calcular"), Recado, Tentar);
 
         // ---- o período
 
@@ -243,31 +241,6 @@ internal sealed class JanelaDeSombras : Window
         });
 
         Tentar(MostrarCamadas);
-    }
-
-    /// <summary>Pede ao desenho (a área pelo clique, as mesas pela seleção) por um comando: a janela é solta e fica aberta.</summary>
-    private void PedirAoDesenho(string comando)
-    {
-        if (!ClivusExtension.TemInterface()) return;
-        if (AcadApp.DocumentManager.MdiActiveDocument != _documento)
-        {
-            Recado(Tr.T("Este desenho não é o ativo: clique nele e repita."), true);
-            return;
-        }
-
-        _documento.SendStringToExecute($"_{comando} ", true, false, false);
-    }
-
-    /// <summary>A área escolhida no desenho (CLIVUS_SOMBRAS_AREA) fica marcada na janela aberta.</summary>
-    internal static void MarcarArea(Document documento, Guid area)
-    {
-        if (Abertas.TryGetValue(documento, out var janela)) janela.Tentar(() => janela._seletor.MarcarArea(area));
-    }
-
-    /// <summary>As mesas escolhidas no desenho (CLIVUS_SOMBRAS_MESAS) entram na janela aberta.</summary>
-    internal static void DefinirMesas(Document documento, IEnumerable<Guid> mesas)
-    {
-        if (Abertas.TryGetValue(documento, out var janela)) janela.Tentar(() => janela._seletor.DefinirMesas(mesas));
     }
 
     /// <summary>O que faz sombra, pelas três caixas.</summary>

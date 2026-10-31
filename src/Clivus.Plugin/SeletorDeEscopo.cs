@@ -2,7 +2,12 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Autodesk.AutoCAD.ApplicationServices;
+using Autodesk.AutoCAD.EditorInput;
+using Autodesk.AutoCAD.Runtime;
 using Clivus.Core;
+using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
+
+[assembly: CommandClass(typeof(Clivus.Plugin.EscopoCommands))]
 
 namespace Clivus.Plugin;
 
@@ -19,6 +24,12 @@ namespace Clivus.Plugin;
 /// dentro dela, <see cref="ShadowScopePlan"/>), "Desenho inteiro", e os botões
 /// "Escolher no desenho…" para a área (clique dentro dela) e para as mesas.
 /// Áreas e mesas somam: área marcada e mesas escolhidas é a área mais as mesas.
+/// </para>
+/// <para>
+/// Serve também à janela das análises (31/10/2026: "Em analise eu tbm quero
+/// poder escolher o que analisar, uma area ou todas, isso para TODAS
+/// analises"). Na janela solta, o "Escolher no desenho…" vai por comando
+/// (<see cref="EscopoCommands"/>), que entrega a escolha ao seletor que pediu.
 /// </para>
 /// </summary>
 internal sealed class SeletorDeEscopo
@@ -43,10 +54,18 @@ internal sealed class SeletorDeEscopo
     /// <param name="rotulo">O rótulo da linha das áreas ("Calcular", "Exportar").</param>
     /// <param name="recado">Escreve o recado na janela (o texto e se é erro).</param>
     /// <param name="tentar">Roda o manipulador protegido (exceção solta no WPF fecha o Civil 3D).</param>
-    /// <param name="escolherArea">O botão da área no desenho (a janela sabe se pede por comando ou escondendo-se).</param>
-    /// <param name="escolherMesas">O botão das mesas no desenho.</param>
+    /// <param name="escolherArea">
+    /// O botão da área no desenho. A janela modal pede escondendo-se; sem
+    /// ele (a janela solta), o seletor pede por comando e a janela fica aberta.
+    /// </param>
+    /// <param name="escolherMesas">O botão das mesas no desenho (o mesmo).</param>
     /// <param name="mesas">As mesas já escolhidas (a seleção feita antes do botão); com elas, nenhuma área vem marcada.</param>
-    internal SeletorDeEscopo(Document documento, string rotulo, Action<string, bool> recado, Action<Action> tentar, Action escolherArea, Action escolherMesas, IEnumerable<Guid>? mesas = null)
+    /// <param name="desenhoInteiro">
+    /// Abre no desenho inteiro (as análises, que eram sempre do desenho
+    /// inteiro); sem ele, na primeira área que tem mesa (as sombras, que
+    /// travavam o PC numa usina grande).
+    /// </param>
+    internal SeletorDeEscopo(Document documento, string rotulo, Action<string, bool> recado, Action<Action> tentar, Action? escolherArea = null, Action? escolherMesas = null, IEnumerable<Guid>? mesas = null, bool desenhoInteiro = false)
     {
         _documento = documento;
         _recado = recado;
@@ -60,8 +79,8 @@ internal sealed class SeletorDeEscopo
             return b;
         }
 
-        var areaNoDesenho = Botao(Tr.T("Escolher área no desenho…"), Tr.T("Clique dentro de uma área (ou na linha dela) no desenho: ela fica marcada aqui."), escolherArea);
-        var mesasNoDesenho = Botao(Tr.T("Escolher mesas no desenho…"), Tr.T("Selecione as mesas no desenho (janela, cruzamento ou clique): elas entram junto com as áreas marcadas."), escolherMesas);
+        var areaNoDesenho = Botao(Tr.T("Escolher área no desenho…"), Tr.T("Clique dentro de uma área (ou na linha dela) no desenho: ela fica marcada aqui."), escolherArea ?? (() => PedirAoDesenho(PluginInfo.ComandoEscolherArea)));
+        var mesasNoDesenho = Botao(Tr.T("Escolher mesas no desenho…"), Tr.T("Selecione as mesas no desenho (janela, cruzamento ou clique): elas entram junto com as áreas marcadas."), escolherMesas ?? (() => PedirAoDesenho(PluginInfo.ComandoEscolherMesas)));
         _limpar = Botao(Tr.T("Limpar"), Tr.T("Tira as mesas escolhidas."), () => DefinirMesas([]));
 
         _tudo.Checked += (_, _) => tentar(Aplicar);
@@ -90,8 +109,8 @@ internal sealed class SeletorDeEscopo
 
         // Abre com a primeira área que tem mesa marcada (ou com as mesas já
         // escolhidas); sem área no desenho, no desenho inteiro.
-        tentar(() => LerAreas(primeira: _mesasEscolhidas.Count == 0));
-        if (_areas.Children.Count == 0 && _mesasEscolhidas.Count == 0) _tudo.IsChecked = true;
+        tentar(() => LerAreas(primeira: !desenhoInteiro && _mesasEscolhidas.Count == 0));
+        if (desenhoInteiro || (_areas.Children.Count == 0 && _mesasEscolhidas.Count == 0)) _tudo.IsChecked = true;
 
         tentar(Aplicar);
     }
@@ -153,6 +172,29 @@ internal sealed class SeletorDeEscopo
         Aplicar();
     }
 
+    /// <summary>O seletor que pediu ao desenho, por desenho: o comando entrega a escolha a ele.</summary>
+    private static readonly Dictionary<Document, SeletorDeEscopo> Pedintes = [];
+
+    /// <summary>Pede ao desenho (a área pelo clique, as mesas pela seleção) por um comando: a janela é solta e fica aberta.</summary>
+    private void PedirAoDesenho(string comando)
+    {
+        if (!ClivusExtension.TemInterface()) return;
+        if (AcadApp.DocumentManager.MdiActiveDocument != _documento)
+        {
+            _recado(Tr.T("Este desenho não é o ativo: clique nele e repita."), true);
+            return;
+        }
+
+        Pedintes[_documento] = this;
+        _documento.SendStringToExecute($"_{comando} ", true, false, false);
+    }
+
+    /// <summary>O seletor que pediu ao desenho (e que deixa de esperar), ou null.</summary>
+    internal static SeletorDeEscopo? QuemPediu(Document documento) => Pedintes.Remove(documento, out var seletor) ? seletor : null;
+
+    /// <summary>Entrega a escolha do desenho ao seletor, protegida como um clique da janela.</summary>
+    internal void Receber(Action escolha) => _tentar(escolha);
+
     /// <summary>O desenho inteiro tira a escolha das áreas e das mesas (fica tudo).</summary>
     private void Aplicar()
     {
@@ -181,5 +223,71 @@ internal sealed class SeletorDeEscopo
         };
 
         return escopo.WhyInvalid() is { } falta ? throw new ArgumentException(falta) : escopo;
+    }
+}
+
+/// <summary>
+/// O "Escolher no desenho…" das janelas soltas (sombras, análises): o clique
+/// na área ou a seleção das mesas, entregue ao seletor que pediu. Sem janela
+/// esperando (fechada no meio, ou o comando digitado), só diz o que escolheu.
+/// </summary>
+public static class EscopoCommands
+{
+    /// <summary>CLIVUS_ESCOLHER_AREA: clique dentro de uma área e ela fica marcada na janela que pediu.</summary>
+    [CommandMethod(PluginInfo.ComandoEscolherArea)]
+    public static void EscolherArea()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var seletor = SeletorDeEscopo.QuemPediu(documento);
+
+        try
+        {
+            if (EscolhaDeArea.Pedir(documento.Editor, documento) is not { } area) return;
+
+            if (seletor is null)
+            {
+                documento.Editor.WriteMessage(Tr.F("\nÁrea {0}: nenhuma janela esperando a escolha.\n", area.Identity.DisplayName));
+                return;
+            }
+
+            seletor.Receber(() => seletor.MarcarArea(area.Identity.Id));
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao escolher a área no desenho.", erro);
+            documento.Editor.WriteMessage(Tr.F("\nNão consegui escolher a área: {0}\n", erro.Message));
+        }
+    }
+
+    /// <summary>
+    /// CLIVUS_ESCOLHER_MESAS: selecione mesas no desenho e elas entram na
+    /// janela que pediu (com a seleção feita antes, ela vale direto).
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoEscolherMesas, CommandFlags.UsePickSet)]
+    public static void EscolherMesas()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+        var seletor = SeletorDeEscopo.QuemPediu(documento);
+
+        try
+        {
+            var selecao = editor.GetSelection(new PromptSelectionOptions { MessageForAdding = Tr.T("\nEscolha as mesas: ") });
+            if (selecao.Status != PromptStatus.OK) return;
+
+            var mesas = SelecaoCommands.MesasTocadas(documento, selecao.Value.GetObjectIds());
+            editor.WriteMessage(Tr.F("\n{0} mesa(s) escolhida(s).\n", mesas.Count));
+
+            seletor?.Receber(() => seletor.DefinirMesas(mesas));
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao escolher as mesas no desenho.", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui escolher as mesas: {0}\n", erro.Message));
+        }
     }
 }

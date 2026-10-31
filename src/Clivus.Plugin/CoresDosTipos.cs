@@ -83,7 +83,7 @@ internal static class CoresDosTipos
             if (pecas.Count == 0 || !pecas.Any(p => trocadas.ContainsKey(PecasPintadas.Texto(p.Antes)))) continue;
 
             PecasPintadas.Gravar(database, tipo, pecas
-                .Select(p => (p.Id, trocadas.TryGetValue(PecasPintadas.Texto(p.Antes), out var nova) ? nova : p.Antes, p.Pintura ?? p.Antes))
+                .Select(p => (p.Id, trocadas.TryGetValue(PecasPintadas.Texto(p.Antes), out var nova) ? nova : p.Antes, (Color?)(p.Pintura ?? p.Antes)))
                 .ToList());
         }
     }

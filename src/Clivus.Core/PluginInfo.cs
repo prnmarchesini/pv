@@ -367,11 +367,14 @@ public static partial class PluginInfo
     /// <summary>Clica num módulo e diz por que ele está marcado de sombra: quanto, o quê e quando (05/10/2026).</summary>
     public const string ComandoSombraPorQue = "CLIVUS_SOMBRA_PORQUE";
 
-    /// <summary>Clica dentro de uma área e ela fica marcada na janela das sombras (42.3, o "Escolher área no desenho…").</summary>
-    public const string ComandoSombrasArea = "CLIVUS_SOMBRAS_AREA";
+    /// <summary>
+    /// Clica dentro de uma área e ela fica marcada na janela que pediu (o
+    /// "Escolher área no desenho…" das sombras, 42.3, e das análises, 31/10/2026).
+    /// </summary>
+    public const string ComandoEscolherArea = "CLIVUS_ESCOLHER_AREA";
 
-    /// <summary>Seleciona mesas no desenho e elas entram na janela das sombras (42.3, o "Escolher mesas no desenho…").</summary>
-    public const string ComandoSombrasMesas = "CLIVUS_SOMBRAS_MESAS";
+    /// <summary>Seleciona mesas no desenho e elas entram na janela que pediu (o "Escolher mesas no desenho…").</summary>
+    public const string ComandoEscolherMesas = "CLIVUS_ESCOLHER_MESAS";
 
     /// <summary>O porquê da sombra pelo handle do bloco do módulo. Para o nível 2.</summary>
     public const string ComandoSombraPorQueAutomatico = "CLIVUS_SOMBRA_PORQUE_AUTO";

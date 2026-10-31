@@ -26,6 +26,12 @@ namespace Clivus.Plugin;
 /// A identidade de cada texto vai no XData (<see cref="AnalysisTextIdentity"/>),
 /// com o valor; a camada própria de cada análise é só para ligar e desligar.
 /// Uma transação e uma varredura do desenho por operação do usuário.
+///
+/// Desde 31/10/2026 ("Em analise eu tbm quero poder escolher o que analisar,
+/// uma area ou todas, isso para TODAS analises"), cada operação recebe as
+/// mesas do escopo (null: o desenho inteiro, como antes) e só mexe nelas: o
+/// texto pela mesa dele, a peça pintada pela mesa dela. O que é de fora fica
+/// como estava, inclusive na lista das peças pintadas.
 /// </summary>
 internal static class AnalisesIndependentes
 {
@@ -106,15 +112,18 @@ internal static class AnalisesIndependentes
     // ------------------------------------------------------------- inserir
 
     /// <summary>
-    /// Insere os textos da análise em todas as mesas. Os que já existiam
-    /// (desta análise) saem antes, na mesma transação: inserir de novo não
-    /// empilha texto, e se a inserção falhar os antigos ficam.
+    /// Insere os textos da análise nas mesas do escopo (null: todas). Os que
+    /// já existiam nelas (desta análise) saem antes, na mesma transação:
+    /// inserir de novo não empilha texto, e se a inserção falhar os antigos
+    /// ficam. Os textos saem com o fundo e a borda escolhidos para a análise.
     /// </summary>
-    internal static (int Criados, int Mesas, int Ignoradas) Inserir(Database database, IndependentKind tipo, SlopeUnit unidade)
+    internal static (int Criados, int Mesas, int Ignoradas) Inserir(Database database, IndependentKind tipo, SlopeUnit unidade, IReadOnlySet<Guid>? soEstas = null)
     {
+        var aparencia = Aparencia(database, tipo);
+
         using var transacao = database.TransactionManager.StartTransaction();
 
-        var leitura = Ler(transacao, database);
+        var leitura = Ler(transacao, database, soEstas);
 
         foreach (var (id, texto) in leitura.Textos)
         {
@@ -123,7 +132,12 @@ internal static class AnalisesIndependentes
 
         var espaco = Espaco(transacao, database, OpenMode.ForWrite);
         var camada = LayoutLayers.Garantir(transacao, database, IndependentAnalysis.LayerName(tipo), CorDaCamada(tipo));
-        var estilo = EstiloDoProjeto.PrepararTexto(transacao, database);
+        var doProjeto = EstiloDoProjeto.PrepararTexto(transacao, database);
+        Action<MText> estilo = t =>
+        {
+            doProjeto(t);
+            NumeracaoDesenho.Emoldurar(t, aparencia.Background, aparencia.Border);
+        };
         var criados = 0;
 
         foreach (var mesa in leitura.Mesas)
@@ -186,7 +200,8 @@ internal static class AnalisesIndependentes
                         // A cota é a do topo do pilar, que acompanha o terreno (regra 5).
                         var onde = new Point3(topo.X + ux * desvio, topo.Y + uy * desvio, topo.Z);
 
-                        Texto(transacao, espaco, camada, mesa.Id, tipo, valor, onde, mesa.Rumo, unidade, estilo);
+                        // A linha do pilar vai no texto: no biposte, cada linha é pintada pelos limites dela.
+                        Texto(transacao, espaco, camada, mesa.Id, tipo, valor, onde, mesa.Rumo, unidade, estilo, pilar.Line);
                         criados++;
                     }
 
@@ -201,7 +216,7 @@ internal static class AnalisesIndependentes
 
     private static void Texto(
         Transaction transacao, BlockTableRecord espaco, string camada, Guid mesa, IndependentKind tipo,
-        double valor, Point3 onde, double rumo, SlopeUnit unidade, Action<MText> estilo)
+        double valor, Point3 onde, double rumo, SlopeUnit unidade, Action<MText> estilo, PillarLine linha = PillarLine.Single)
     {
         var conteudo = double.IsFinite(valor)
             ? IndependentAnalysis.Label(tipo, valor, unidade)
@@ -222,19 +237,19 @@ internal static class AnalisesIndependentes
 
         // Depois do AppendEntity: o texto anotativo precisa do banco.
         estilo(texto);
-        LayoutXData.SaveAnalysisText(transacao, texto, new AnalysisTextIdentity(Guid.NewGuid(), mesa, tipo, valor));
+        LayoutXData.SaveAnalysisText(transacao, texto, new AnalysisTextIdentity(Guid.NewGuid(), mesa, tipo, valor, linha));
     }
 
     // -------------------------------------------------------------- apagar
 
-    /// <summary>Apaga os textos desta análise (só desta). Quantas entidades apagou.</summary>
-    internal static int Apagar(Database database, IndependentKind tipo)
+    /// <summary>Apaga os textos desta análise (só desta) nas mesas do escopo (null: todas). Quantas entidades apagou.</summary>
+    internal static int Apagar(Database database, IndependentKind tipo, IReadOnlySet<Guid>? soEstas = null)
     {
         using var transacao = database.TransactionManager.StartTransaction();
 
         var apagadas = 0;
 
-        foreach (var (id, _) in Textos(transacao, database, tipo))
+        foreach (var (id, _) in Textos(transacao, database, tipo, soEstas))
         {
             ((Entity)transacao.GetObject(id, OpenMode.ForWrite)).Erase();
             apagadas++;
@@ -242,6 +257,107 @@ internal static class AnalisesIndependentes
 
         transacao.Commit();
         return apagadas;
+    }
+
+    /// <summary>
+    /// Insere de novo, na unidade dada, os textos desta análise que já
+    /// existiam (a unidade da declividade trocada): só nas mesas que tinham
+    /// texto, para a análise de uma área não se espalhar pelo desenho. Em
+    /// quantas mesas.
+    /// </summary>
+    internal static int Reinserir(Database database, IndependentKind tipo, SlopeUnit unidade)
+    {
+        HashSet<Guid> comTexto;
+
+        using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
+        {
+            comTexto = Textos(transacao, database, tipo).Select(t => t.Texto.Table).ToHashSet();
+            transacao.Commit();
+        }
+
+        if (Apagar(database, tipo) == 0 || comTexto.Count == 0) return 0;
+
+        return Inserir(database, tipo, unidade, comTexto).Mesas;
+    }
+
+    // ---------------------------------------------------- fundo e borda
+
+    /// <summary>O fundo e a borda escolhidos para os textos da análise, ou o padrão (com fundo).</summary>
+    internal static AnalysisTextLook Aparencia(Database database, IndependentKind tipo) => AparenciaGravada(database, tipo) ?? AnalysisTextLook.Default;
+
+    /// <summary>O fundo e a borda gravados no desenho; null se o usuário nunca escolheu.</summary>
+    internal static AnalysisTextLook? AparenciaGravada(Database database, IndependentKind tipo)
+    {
+        using var dados = PluginDictionary.Load(database, AnalysisTextLook.StorageKey(tipo));
+        return AnalysisTextLook.Decode(dados?.AsArray().Select(v => v.Value as string ?? string.Empty).ToList());
+    }
+
+    internal static void GravarAparencia(Database database, IndependentKind tipo, AnalysisTextLook aparencia) =>
+        PluginDictionary.Save(database, AnalysisTextLook.StorageKey(tipo), new ResultBuffer(
+            aparencia.Encode().Select(c => new TypedValue((int)DxfCode.Text, c)).ToArray()));
+
+    /// <summary>
+    /// Põe o fundo e a borda gravados nos textos desta análise que já estão
+    /// no desenho (31/10/2026: "texto ruim de ver"): o valor e a cor não
+    /// mudam. Com fundo, os textos vão para a frente das mesas, senão a
+    /// máscara não esconde o módulo que foi redesenhado depois. Quantos.
+    /// </summary>
+    internal static int AplicarAparencia(Database database, IndependentKind tipo)
+    {
+        var aparencia = Aparencia(database, tipo);
+
+        using var transacao = database.TransactionManager.StartTransaction();
+
+        var textos = new ObjectIdCollection();
+
+        foreach (var (id, _) in Textos(transacao, database, tipo))
+        {
+            if (transacao.GetObject(id, OpenMode.ForRead) is not MText texto) continue;
+
+            texto.UpgradeOpen();
+            NumeracaoDesenho.Emoldurar(texto, aparencia.Background, aparencia.Border);
+            textos.Add(id);
+        }
+
+        if (aparencia.Background && textos.Count > 0)
+        {
+            var espaco = Espaco(transacao, database, OpenMode.ForRead);
+            ((DrawOrderTable)transacao.GetObject(espaco.DrawOrderTableId, OpenMode.ForWrite)).MoveToTop(textos);
+        }
+
+        transacao.Commit();
+        return textos.Count;
+    }
+
+    /// <summary>
+    /// As linhas de pilar das mesas do desenho: a monoposte e, com biposte, a
+    /// da frente e a de trás. A janela abre uma coluna de limites para cada
+    /// uma nas análises de pilar (31/10/2026).
+    /// </summary>
+    internal static IReadOnlySet<PillarLine> Linhas(Database database)
+    {
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+
+        var linhas = new HashSet<PillarLine>();
+
+        foreach (var partes in LayoutScan.TablesSemCarport(transacao, database).Values)
+        {
+            switch (LayoutScan.Biposte(transacao, partes))
+            {
+                case true:
+                    linhas.Add(PillarLine.Front);
+                    linhas.Add(PillarLine.Rear);
+                    break;
+                case false:
+                    linhas.Add(PillarLine.Single);
+                    break;
+            }
+
+            if (linhas.Count == 3) break;
+        }
+
+        transacao.Commit();
+        return linhas;
     }
 
     // ------------------------------------------------------------ analisar
@@ -254,13 +370,13 @@ internal static class AnalisesIndependentes
     /// pintada guarda a cor de antes, para Tirar cores devolvê-la. Quantos
     /// textos e quantas peças ficaram pintados.
     /// </summary>
-    internal static (int Textos, int Pecas) Analisar(Database database, IndependentKind tipo, ThresholdRule regra, SlopeUnit unidade)
+    internal static (int Textos, int Pecas) Analisar(Database database, IndependentKind tipo, ThresholdRule regra, SlopeUnit unidade, IReadOnlySet<Guid>? soEstas = null)
     {
         ArgumentNullException.ThrowIfNull(regra);
 
         using var transacao = database.TransactionManager.StartTransaction();
 
-        var leitura = Ler(transacao, database);
+        var leitura = Ler(transacao, database, soEstas);
         var textos = 0;
 
         foreach (var (id, identidade) in leitura.Textos)
@@ -268,8 +384,9 @@ internal static class AnalisesIndependentes
             if (identidade.Kind != tipo) continue;
 
             // O texto é desta análise só: dentro da faixa ele volta à cor da
-            // camada, que ninguém mais pinta.
-            var cor = double.IsFinite(identidade.Value) ? regra.ColorOf(identidade.Value) : null;
+            // camada, que ninguém mais pinta. O pilar do biposte, pelos
+            // limites da linha dele.
+            var cor = double.IsFinite(identidade.Value) ? regra.ForLine(identidade.Line).ColorOf(identidade.Value) : null;
             Colorir(transacao, id, cor);
             if (cor is not null) textos++;
         }
@@ -281,75 +398,104 @@ internal static class AnalisesIndependentes
         var originais = DasOutras(database, tipo).ToDictionary(p => p.Id, p => p.Antes);
 
         // A pintura anterior desta análise sai antes da nova: mudar a regra
-        // não deixa peça com a cor de antes.
-        DesfazerPecas(transacao, database, tipo);
+        // não deixa peça com a cor de antes. Com escopo, só a das mesas dele;
+        // a de fora fica, e continua na lista.
+        DesfazerPecas(transacao, database, tipo, soEstas is null ? null : PecasDas(leitura.Mesas), out var pintadas);
 
-        var pintadas = new List<(ObjectId, Color, Color)>();
+        var novas = 0;
 
         if (regra.PaintPieces)
         {
-            foreach (var (peca, valor) in PecasComValor(leitura.Mesas, tipo, unidade, incluirMarcadas: true))
+            foreach (var (peca, valor, linha) in PecasComValor(leitura.Mesas, tipo, unidade, incluirMarcadas: true))
             {
-                if (!double.IsFinite(valor) || regra.ColorOf(valor) is not { } cor) continue;
+                if (!double.IsFinite(valor) || regra.ForLine(linha).ColorOf(valor) is not { } cor) continue;
                 if (peca.IsErased || transacao.GetObject(peca, OpenMode.ForRead) is not Entity entidade) continue;
 
                 var antes = originais.TryGetValue(peca, out var original) ? original : entidade.Color;
                 var pintura = Color.FromRgb(cor.R, cor.G, cor.B);
                 Colorir(transacao, peca, pintura);
                 pintadas.Add((peca, antes, pintura));
+                novas++;
             }
         }
 
         PecasPintadas.Gravar(database, tipo, pintadas);
 
         transacao.Commit();
-        return (textos, pintadas.Count);
+        return (textos, novas);
     }
 
     /// <summary>
-    /// Tira as cores desta análise: os textos dela e as peças que ela pintou
-    /// voltam à cor de antes (a da camada, a do tipo ou magenta). Peça
-    /// pintada também por outra análise fica com a cor da outra.
+    /// Tira as cores desta análise nas mesas do escopo (null: todas): os
+    /// textos dela e as peças que ela pintou voltam à cor de antes (a da
+    /// camada, a do tipo ou magenta). Peça pintada também por outra análise
+    /// fica com a cor da outra.
     /// </summary>
-    internal static int TirarCores(Database database, IndependentKind tipo)
+    internal static int TirarCores(Database database, IndependentKind tipo, IReadOnlySet<Guid>? soEstas = null)
     {
         using var transacao = database.TransactionManager.StartTransaction();
 
         var mexidas = 0;
 
-        foreach (var (id, _) in Textos(transacao, database, tipo))
+        foreach (var (id, _) in Textos(transacao, database, tipo, soEstas))
         {
             if (Colorir(transacao, id, (RgbColor?)null)) mexidas++;
         }
 
-        mexidas += DesfazerPecas(transacao, database, tipo);
+        var pecas = soEstas is null ? null : PecasDas(Ler(transacao, database, soEstas).Mesas);
+        mexidas += DesfazerPecas(transacao, database, tipo, pecas, out var ficam);
+        PecasPintadas.Gravar(database, tipo, ficam);
 
         transacao.Commit();
         return mexidas;
     }
 
     /// <summary>
-    /// As peças que esta análise pintou da última vez voltam à cor de antes;
-    /// a lista é zerada. Se outra análise também pintou a peça, ela fica
-    /// com a cor dessa outra.
+    /// As peças que esta análise pintou da última vez voltam à cor de antes
+    /// (com <paramref name="soEstas"/>, só elas). Se outra análise também
+    /// pintou a peça, ela fica com a cor dessa outra. <paramref name="ficam"/>
+    /// são as da lista que não foram desfeitas: quem chama grava a lista nova.
     /// </summary>
-    private static int DesfazerPecas(Transaction transacao, Database database, IndependentKind tipo)
+    private static int DesfazerPecas(
+        Transaction transacao, Database database, IndependentKind tipo, IReadOnlySet<ObjectId>? soEstas,
+        out List<(ObjectId Id, Color Antes, Color? Pintura)> ficam)
     {
         var desfeitas = 0;
         var dasOutras = new Dictionary<ObjectId, Color>();
+        ficam = [];
 
         foreach (var p in DasOutras(database, tipo))
         {
             if (p.Pintura is { } pintura) dasOutras[p.Id] = pintura;
         }
 
-        foreach (var (id, antes, _) in PecasPintadas.Ler(database, tipo))
+        foreach (var p in PecasPintadas.Ler(database, tipo))
         {
-            if (Colorir(transacao, id, dasOutras.TryGetValue(id, out var daOutra) ? daOutra : antes)) desfeitas++;
+            if (soEstas is not null && !soEstas.Contains(p.Id))
+            {
+                ficam.Add(p);
+                continue;
+            }
+
+            if (Colorir(transacao, p.Id, dasOutras.TryGetValue(p.Id, out var daOutra) ? daOutra : p.Antes)) desfeitas++;
         }
 
-        PecasPintadas.Gravar(database, tipo, []);
         return desfeitas;
+    }
+
+    /// <summary>Todas as peças que uma análise pode pintar nestas mesas (o contorno, os pilares e os módulos).</summary>
+    private static HashSet<ObjectId> PecasDas(IEnumerable<MesaLida> mesas)
+    {
+        var pecas = new HashSet<ObjectId>();
+
+        foreach (var mesa in mesas)
+        {
+            pecas.Add(mesa.Contorno);
+            foreach (var (_, bloco) in mesa.Pilares) pecas.Add(bloco);
+            foreach (var (_, bloco) in mesa.Modulos) pecas.Add(bloco);
+        }
+
+        return pecas;
     }
 
     /// <summary>As peças pintadas pelas outras análises (a mesma peça pode aparecer em mais de uma: vale a primeira).</summary>
@@ -377,11 +523,31 @@ internal static class AnalisesIndependentes
     /// alguma mesa contada tem pilar de linha (dianteiro ou traseiro): a PB e
     /// a PA contam pórticos (39.2), pelos mesmos pilares lidos aqui.
     /// </summary>
-    internal static (BandCount Pontos, BandCount? Modulos, bool Biposte) Quantificar(Database database, IndependentKind tipo, ThresholdRule regra, SlopeUnit unidade)
+    /// <param name="soEstas">As mesas do escopo; null, todas.</param>
+    /// <returns>
+    /// A contagem; nas análises de pilar com biposte, também a de cada linha
+    /// de pilar pelos limites dela (31/10/2026), e os pontos são a soma.
+    /// </returns>
+    internal static (BandCount Pontos, BandCount? Modulos, bool Biposte, IReadOnlyList<LineCount>? Linhas) Quantificar(
+        Database database, IndependentKind tipo, ThresholdRule regra, SlopeUnit unidade, IReadOnlySet<Guid>? soEstas = null)
     {
         using var transacao = database.TransactionManager.StartOpenCloseTransaction();
 
-        var mesas = Ler(transacao, database).Mesas;
+        var mesas = Ler(transacao, database, soEstas).Mesas;
+        var biposte = mesas.Any(m => m.Pilares.Any(p => p.Pilar.Line != PillarLine.Single));
+
+        if (IndependentAnalysis.IsPillar(tipo))
+        {
+            var linhas = mesas.SelectMany(m => m.Pilares)
+                .GroupBy(p => p.Pilar.Line)
+                .OrderBy(g => g.Key)
+                .Select(g => new LineCount(g.Key, BandCount.Of(regra.ForLine(g.Key), g.Select(p => IndependentAnalysis.PillarValue(tipo, p.Pilar)).ToList())))
+                .ToList();
+
+            transacao.Commit();
+            return (linhas.Aggregate(BandCount.None, (soma, l) => soma.Plus(l.Count)), null, biposte, biposte ? linhas : null);
+        }
+
         var pontos = new List<double>();
 
         foreach (var mesa in mesas)
@@ -390,8 +556,7 @@ internal static class AnalisesIndependentes
             {
                 case IndependentKind.Slope: pontos.Add(mesa.Declividade(unidade)); break;
                 case IndependentKind.LowEdge: pontos.AddRange(mesa.UmPorEstacao.Select(p => p.Pilar.LowEdgeClearance ?? double.NaN)); break;
-                case IndependentKind.HighEdge: pontos.AddRange(mesa.UmPorEstacao.Select(p => p.Pilar.HighEdgeClearance ?? double.NaN)); break;
-                default: pontos.AddRange(mesa.Pilares.Select(p => IndependentAnalysis.PillarValue(tipo, p.Pilar))); break;
+                default: pontos.AddRange(mesa.UmPorEstacao.Select(p => p.Pilar.HighEdgeClearance ?? double.NaN)); break;
             }
         }
 
@@ -400,10 +565,8 @@ internal static class AnalisesIndependentes
         if (tipo is IndependentKind.LowEdge or IndependentKind.HighEdge)
             modulos = BandCount.Of(regra, PecasComValor(mesas, tipo, unidade, incluirMarcadas: true).Select(p => p.Valor).ToList());
 
-        var biposte = mesas.Any(m => m.Pilares.Any(p => p.Pilar.Line != PillarLine.Single));
-
         transacao.Commit();
-        return (BandCount.Of(regra, pontos), modulos, biposte);
+        return (BandCount.Of(regra, pontos), modulos, biposte, null);
     }
 
     // ------------------------------------------------------------- leitura
@@ -417,9 +580,10 @@ internal static class AnalisesIndependentes
     /// <summary>
     /// Uma varredura: as mesas (contorno de quatro cantos, pilares e módulos
     /// com a identidade) e os textos de análise, que o LayoutScan junta às
-    /// notas de cada mesa.
+    /// notas de cada mesa. Com <paramref name="soEstas"/>, só as mesas dele
+    /// (e os textos delas).
     /// </summary>
-    private static Leitura Ler(Transaction transacao, Database database)
+    private static Leitura Ler(Transaction transacao, Database database, IReadOnlySet<Guid>? soEstas = null)
     {
         var mesas = new List<MesaLida>();
         var textos = new List<(ObjectId, AnalysisTextIdentity)>();
@@ -427,6 +591,8 @@ internal static class AnalisesIndependentes
 
         foreach (var (guid, partes) in LayoutScan.TablesSemCarport(transacao, database))
         {
+            if (soEstas is not null && !soEstas.Contains(guid)) continue;
+
             foreach (var id in partes.Notes)
             {
                 if (transacao.GetObject(id, OpenMode.ForRead) is Entity e && LayoutXData.LoadAnalysisText(e) is { } texto)
@@ -465,8 +631,12 @@ internal static class AnalisesIndependentes
         return new Leitura(mesas, textos, ignorados);
     }
 
-    /// <summary>Os textos desta análise (Apagar e Tirar cores não precisam das mesas).</summary>
-    private static List<(ObjectId Id, AnalysisTextIdentity Texto)> Textos(Transaction transacao, Database database, IndependentKind tipo)
+    /// <summary>
+    /// Os textos desta análise (Apagar e Tirar cores não precisam das mesas);
+    /// com <paramref name="soEstas"/>, só os das mesas dele. Sem escopo vem
+    /// também o texto que ficou sem mesa.
+    /// </summary>
+    private static List<(ObjectId Id, AnalysisTextIdentity Texto)> Textos(Transaction transacao, Database database, IndependentKind tipo, IReadOnlySet<Guid>? soEstas = null)
     {
         var achados = new List<(ObjectId, AnalysisTextIdentity)>();
 
@@ -476,7 +646,8 @@ internal static class AnalisesIndependentes
 
             if (transacao.GetObject(id, OpenMode.ForRead) is Entity e
                 && LayoutXData.LoadAnalysisText(e) is { } texto
-                && texto.Kind == tipo)
+                && texto.Kind == tipo
+                && (soEstas is null || soEstas.Contains(texto.Table)))
             {
                 achados.Add((id, texto));
             }
@@ -490,7 +661,7 @@ internal static class AnalisesIndependentes
     /// módulo com o valor do pilar mais perto da coluna dele (sem pilar, sem
     /// valor); na declividade, o contorno; no pilar, o bloco.
     /// </summary>
-    private static IEnumerable<(ObjectId Peca, double Valor)> PecasComValor(
+    private static IEnumerable<(ObjectId Peca, double Valor, PillarLine Linha)> PecasComValor(
         IReadOnlyList<MesaLida> mesas, IndependentKind tipo, SlopeUnit unidade, bool incluirMarcadas)
     {
         foreach (var mesa in mesas)
@@ -500,13 +671,13 @@ internal static class AnalisesIndependentes
             switch (tipo)
             {
                 case IndependentKind.Slope:
-                    yield return (mesa.Contorno, mesa.Declividade(unidade));
+                    yield return (mesa.Contorno, mesa.Declividade(unidade), PillarLine.Single);
                     break;
 
                 case IndependentKind.PillarAbove:
                 case IndependentKind.PillarBuried:
                 case IndependentKind.PillarLength:
-                    foreach (var (pilar, bloco) in mesa.Pilares) yield return (bloco, IndependentAnalysis.PillarValue(tipo, pilar));
+                    foreach (var (pilar, bloco) in mesa.Pilares) yield return (bloco, IndependentAnalysis.PillarValue(tipo, pilar), pilar.Line);
                     break;
 
                 default:
@@ -520,7 +691,7 @@ internal static class AnalisesIndependentes
                     {
                         if (mesa.Pilares.Count == 0)
                         {
-                            yield return (bloco, double.NaN);
+                            yield return (bloco, double.NaN, PillarLine.Single);
                             continue;
                         }
 
@@ -530,7 +701,7 @@ internal static class AnalisesIndependentes
                         var perto = mesa.UmPorEstacao.MinBy(p => Math.Abs(p.Pilar.Station - estacao)).Pilar;
                         var valor = (tipo == IndependentKind.HighEdge ? perto.HighEdgeClearance : perto.LowEdgeClearance) ?? double.NaN;
 
-                        yield return (bloco, valor);
+                        yield return (bloco, valor, PillarLine.Single);
                     }
 
                     break;
@@ -609,11 +780,12 @@ internal static class PecasPintadas
         return pecas;
     }
 
-    internal static void Gravar(Database database, IndependentKind tipo, IReadOnlyList<(ObjectId Id, Color Antes, Color Pintura)> pecas)
+    /// <param name="pecas">Cada peça com a cor de antes e a pintura (a que veio da lista V1 não tem pintura: vai sem).</param>
+    internal static void Gravar(Database database, IndependentKind tipo, IReadOnlyList<(ObjectId Id, Color Antes, Color? Pintura)> pecas)
     {
         // O registro nunca fica vazio: a versão vai sempre na frente.
         var valores = new List<TypedValue> { new((int)DxfCode.Text, Versao) };
-        valores.AddRange(pecas.Select(p => new TypedValue((int)DxfCode.Text, p.Id.Handle + "=" + Texto(p.Antes) + "=" + Texto(p.Pintura))));
+        valores.AddRange(pecas.Select(p => new TypedValue((int)DxfCode.Text, p.Id.Handle + "=" + Texto(p.Antes) + (p.Pintura is { } pintura ? "=" + Texto(pintura) : ""))));
 
         PluginDictionary.Save(database, Chave(tipo), new ResultBuffer(valores.ToArray()));
     }

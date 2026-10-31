@@ -335,64 +335,6 @@ public static class SombrasCommands
         }
     }
 
-    /// <summary>
-    /// CLIVUS_SOMBRAS_AREA: clique dentro de uma área e ela fica marcada na
-    /// janela das sombras (abre a janela, se estiver fechada). O "Escolher
-    /// área no desenho…" da janela (42.3: "cade o botão de escolher area").
-    /// </summary>
-    [CommandMethod(PluginInfo.ComandoSombrasArea)]
-    public static void SombrasArea()
-    {
-        var documento = AcadApp.DocumentManager.MdiActiveDocument;
-        if (documento is null) return;
-
-        try
-        {
-            if (EscolhaDeArea.Pedir(documento.Editor, documento) is not { } area) return;
-            if (!ClivusExtension.TemInterface()) return;
-
-            JanelaDeSombras.Abrir(documento);
-            JanelaDeSombras.MarcarArea(documento, area.Identity.Id);
-        }
-        catch (System.Exception erro)
-        {
-            RegistroDeDiagnostico.Registrar("Falha ao escolher a área das sombras.", erro);
-            documento.Editor.WriteMessage(Tr.F("\nNão consegui escolher a área: {0}\n", erro.Message));
-        }
-    }
-
-    /// <summary>
-    /// CLIVUS_SOMBRAS_MESAS: selecione mesas no desenho e elas entram na
-    /// janela das sombras (com a seleção feita antes, ela vale direto). O
-    /// "Escolher mesas no desenho…" da janela.
-    /// </summary>
-    [CommandMethod(PluginInfo.ComandoSombrasMesas, CommandFlags.UsePickSet)]
-    public static void SombrasMesas()
-    {
-        var documento = AcadApp.DocumentManager.MdiActiveDocument;
-        if (documento is null) return;
-
-        var editor = documento.Editor;
-
-        try
-        {
-            var selecao = editor.GetSelection(new PromptSelectionOptions { MessageForAdding = Tr.T("\nEscolha as mesas para as sombras: ") });
-            if (selecao.Status != PromptStatus.OK) return;
-
-            var mesas = SelecaoCommands.MesasTocadas(documento, selecao.Value.GetObjectIds());
-            editor.WriteMessage(Tr.F("\nSOMBRAS {0} mesa(s) escolhida(s).\n", mesas.Count));
-            if (!ClivusExtension.TemInterface()) return;
-
-            JanelaDeSombras.Abrir(documento);
-            JanelaDeSombras.DefinirMesas(documento, mesas);
-        }
-        catch (System.Exception erro)
-        {
-            RegistroDeDiagnostico.Registrar("Falha ao escolher as mesas das sombras.", erro);
-            editor.WriteMessage(Tr.F("\nNão consegui escolher as mesas: {0}\n", erro.Message));
-        }
-    }
-
     [CommandMethod(PluginInfo.ComandoSombraPorQueAutomatico)]
     public static void SombraPorQueAutomatico()
     {

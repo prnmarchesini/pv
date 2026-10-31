@@ -33,6 +33,14 @@ public enum Band
 }
 
 /// <summary>
+/// Os limites de uma linha de pilares do biposte, nas análises de pilar
+/// (31/10/2026, Renan: "uma coluna para cada pilar o da frente e o de traz,
+/// a cor pode ser o mesmo para ambos"): os números são da linha; as cores e
+/// a pintura, da regra. Os dois null: a linha não é pintada.
+/// </summary>
+public sealed record LineLimits(double? Below, double? Above);
+
+/// <summary>
 /// A regra de uma análise: abaixo de X, uma cor; acima de Y, outra; entre
 /// os dois, sem cor. Qualquer um dos dois lados pode ficar desligado (null).
 /// Melhorias.docx, 01/10/2026: "inferior a X pintar de (escolher cor),
@@ -48,6 +56,31 @@ public enum Band
 /// </param>
 public sealed record ThresholdRule(double? Below, RgbColor BelowColor, double? Above, RgbColor AboveColor, bool PaintPieces)
 {
+    /// <summary>
+    /// Os limites do pilar da frente do biposte, nas análises de pilar
+    /// (31/10/2026, Renan: "em pilar, deveria ter a opção de analisar AMBOS
+    /// pilares, cada um tem uma altura"); null, os da regra, como antes.
+    /// </summary>
+    public LineLimits? Front { get; init; }
+
+    /// <summary>Os limites do pilar de trás do biposte; null, os da regra.</summary>
+    public LineLimits? Rear { get; init; }
+
+    /// <summary>Se a regra tem limites próprios para alguma linha do biposte.</summary>
+    public bool HasLines => Front is not null || Rear is not null;
+
+    /// <summary>
+    /// A regra de uma linha de pilares: os limites dela, com as cores e a
+    /// pintura da regra ("a cor pode ser o mesmo para ambos"). A monoposte,
+    /// e a linha sem limites próprios, usa os da regra.
+    /// </summary>
+    public ThresholdRule ForLine(PillarLine linha) => linha switch
+    {
+        PillarLine.Front when Front is { } f => new ThresholdRule(f.Below, BelowColor, f.Above, AboveColor, PaintPieces),
+        PillarLine.Rear when Rear is { } r => new ThresholdRule(r.Below, BelowColor, r.Above, AboveColor, PaintPieces),
+        _ => this,
+    };
+
     /// <summary>Se a regra serve.</summary>
     public bool IsValid => WhyInvalid is null;
 
@@ -56,12 +89,23 @@ public sealed record ThresholdRule(double? Below, RgbColor BelowColor, double? A
     {
         get
         {
-            if (Below is null && Above is null) return Tr.T("ligue pelo menos um dos dois limites");
-            if (Below is { } b && !double.IsFinite(b)) return Tr.T("o limite de baixo não é um número");
-            if (Above is { } a && !double.IsFinite(a)) return Tr.T("o limite de cima não é um número");
+            var linhas = new (string? Nome, double? Baixo, double? Cima)[]
+            {
+                (null, Below, Above),
+                (Front is null ? null : IndependentAnalysis.LineName(PillarLine.Front), Front?.Below, Front?.Above),
+                (Rear is null ? null : IndependentAnalysis.LineName(PillarLine.Rear), Rear?.Below, Rear?.Above),
+            };
 
-            if (Below is { } baixo && Above is { } cima && baixo > cima)
-                return Tr.T("o limite de baixo é maior que o de cima");
+            if (linhas.All(l => l.Baixo is null && l.Cima is null)) return Tr.T("ligue pelo menos um dos dois limites");
+
+            foreach (var (nome, baixo, cima) in linhas)
+            {
+                string Na(string motivo) => nome is null ? motivo : Tr.F("{0}: {1}", nome, motivo);
+
+                if (baixo is { } b && !double.IsFinite(b)) return Na(Tr.T("o limite de baixo não é um número"));
+                if (cima is { } a && !double.IsFinite(a)) return Na(Tr.T("o limite de cima não é um número"));
+                if (baixo is { } x && cima is { } y && x > y) return Na(Tr.T("o limite de baixo é maior que o de cima"));
+            }
 
             return null;
         }
@@ -89,6 +133,16 @@ public sealed record BandCount(int Below, int Inside, int Above, int Missing)
 {
     /// <summary>Todos, com e sem valor.</summary>
     public int Total => Below + Inside + Above + Missing;
+
+    /// <summary>Nenhum.</summary>
+    public static BandCount None { get; } = new(0, 0, 0, 0);
+
+    /// <summary>As duas contagens somadas (as linhas de pilar do biposte, cada uma pela regra dela).</summary>
+    public BandCount Plus(BandCount outra)
+    {
+        ArgumentNullException.ThrowIfNull(outra);
+        return new BandCount(Below + outra.Below, Inside + outra.Inside, Above + outra.Above, Missing + outra.Missing);
+    }
 
     /// <summary>A contagem de uma lista de valores; NaN conta como sem valor.</summary>
     public static BandCount Of(ThresholdRule regra, IEnumerable<double> valores)
@@ -126,6 +180,9 @@ public static class IndependentAnalysis
 {
     /// <summary>A versão do registro da regra no desenho.</summary>
     private const string Versao = "1";
+
+    /// <summary>A versão com os limites das linhas do biposte (31/10/2026): os seis campos da 1 e mais dois.</summary>
+    private const string VersaoComLinhas = "2";
 
     /// <summary>O nome da análise para o usuário.</summary>
     public static string Name(IndependentKind tipo) => tipo switch
@@ -211,20 +268,32 @@ public static class IndependentAnalysis
         _ => new ThresholdRule(null, RgbColor.Blue, 3.00, RgbColor.Red, PaintPieces: false),
     };
 
-    /// <summary>A regra como texto, campo a campo, para o registro do desenho.</summary>
+    /// <summary>
+    /// A regra como texto, campo a campo, para o registro do desenho. Sem
+    /// limites de linha, a versão 1 de sempre; com eles, a 2, com a frente e
+    /// a trás no fim ("baixo;cima", vazio sem limite próprio).
+    /// </summary>
     public static IReadOnlyList<string> Encode(ThresholdRule regra)
     {
         ArgumentNullException.ThrowIfNull(regra);
 
-        return
-        [
-            Versao,
-            regra.Below is { } b ? b.ToString("R", CultureInfo.InvariantCulture) : "",
+        var campos = new List<string>
+        {
+            regra.HasLines ? VersaoComLinhas : Versao,
+            Numero(regra.Below),
             regra.BelowColor.ToHex(),
-            regra.Above is { } a ? a.ToString("R", CultureInfo.InvariantCulture) : "",
+            Numero(regra.Above),
             regra.AboveColor.ToHex(),
             regra.PaintPieces ? "1" : "0",
-        ];
+        };
+
+        if (regra.HasLines)
+        {
+            campos.Add(Limites(regra.Front));
+            campos.Add(Limites(regra.Rear));
+        }
+
+        return campos;
     }
 
     /// <summary>A regra lida do registro; ilegível ou de outra versão, a padrão do tipo.</summary>
@@ -232,15 +301,54 @@ public static class IndependentAnalysis
     {
         ArgumentNullException.ThrowIfNull(campos);
 
-        if (campos.Count != 6 || campos[0] != Versao) return Default(tipo);
+        var comLinhas = campos.Count == 8 && campos[0] == VersaoComLinhas;
+        if (!comLinhas && (campos.Count != 6 || campos[0] != Versao)) return Default(tipo);
 
         if (!Opcional(campos[1], out var abaixo) || !Opcional(campos[3], out var acima)) return Default(tipo);
         if (!RgbColor.TryParseHex(campos[2], out var corAbaixo) || !RgbColor.TryParseHex(campos[4], out var corAcima)) return Default(tipo);
 
         var regra = new ThresholdRule(abaixo, corAbaixo, acima, corAcima, campos[5] == "1");
 
+        if (comLinhas)
+        {
+            if (!LerLimites(campos[6], out var frente) || !LerLimites(campos[7], out var tras)) return Default(tipo);
+            regra = regra with { Front = frente, Rear = tras };
+        }
+
         return regra.IsValid ? regra : Default(tipo);
     }
+
+    private static string Numero(double? valor) => valor is { } v ? v.ToString("R", CultureInfo.InvariantCulture) : "";
+
+    private static string Limites(LineLimits? limites) => limites is null ? "" : Numero(limites.Below) + ";" + Numero(limites.Above);
+
+    private static bool LerLimites(string texto, out LineLimits? limites)
+    {
+        limites = null;
+        if (texto.Length == 0) return true;
+
+        var partes = texto.Split(';');
+        if (partes.Length != 2 || !Opcional(partes[0], out var abaixo) || !Opcional(partes[1], out var acima)) return false;
+
+        limites = new LineLimits(abaixo, acima);
+        return true;
+    }
+
+    /// <summary>A linha de pilares como coluna da janela: "Pilar da frente", "Pilar de trás", "Monoposte".</summary>
+    public static string LineName(PillarLine linha) => linha switch
+    {
+        PillarLine.Front => Tr.T("Pilar da frente"),
+        PillarLine.Rear => Tr.T("Pilar de trás"),
+        _ => Tr.T("Monoposte"),
+    };
+
+    /// <summary>Em que a quantificação de uma linha de pilares conta (a linha do Excel e da janela).</summary>
+    public static string CountedIn(PillarLine linha) => linha switch
+    {
+        PillarLine.Front => Tr.T("pilares da frente"),
+        PillarLine.Rear => Tr.T("pilares de trás"),
+        _ => Tr.T("pilares da monoposte"),
+    };
 
     /// <summary>
     /// Em que a quantificação conta ("Contado em", 39.2): mesas na
@@ -256,7 +364,17 @@ public static class IndependentAnalysis
     };
 
     /// <summary>A linha da quantificação para o usuário.</summary>
-    public static string Describe(IndependentKind tipo, ThresholdRule regra, BandCount conta, SlopeUnit unidade)
+    public static string Describe(IndependentKind tipo, ThresholdRule regra, BandCount conta, SlopeUnit unidade) =>
+        Tr.F("{0}: {1} (total {2})", Name(tipo), Partes(tipo, regra, conta, unidade), conta.Total);
+
+    /// <summary>A linha da quantificação de uma linha de pilares do biposte, pelos limites dela.</summary>
+    public static string DescribeLine(IndependentKind tipo, ThresholdRule regra, PillarLine linha, BandCount conta, SlopeUnit unidade)
+    {
+        ArgumentNullException.ThrowIfNull(regra);
+        return Tr.F("{0}: {1} (total {2})", CountedIn(linha), Partes(tipo, regra.ForLine(linha), conta, unidade), conta.Total);
+    }
+
+    private static string Partes(IndependentKind tipo, ThresholdRule regra, BandCount conta, SlopeUnit unidade)
     {
         ArgumentNullException.ThrowIfNull(regra);
         ArgumentNullException.ThrowIfNull(conta);
@@ -268,7 +386,7 @@ public static class IndependentAnalysis
         if (regra.Above is { } a) partes.Add(Tr.F("{0} acima de {1}", conta.Above, Limite(tipo, a, unidade)));
         if (conta.Missing > 0) partes.Add(Tr.F("{0} sem valor", conta.Missing));
 
-        return Tr.F("{0}: {1} (total {2})", Name(tipo), string.Join(", ", partes), conta.Total);
+        return string.Join(", ", partes);
     }
 
     private static string Limite(IndependentKind tipo, double valor, SlopeUnit unidade) =>
@@ -287,4 +405,31 @@ public static class IndependentAnalysis
         valor = lido;
         return true;
     }
+}
+
+/// <summary>
+/// Como saem os textos de uma análise (31/10/2026, Renan, com o print de um
+/// "13,2%" vermelho sobre os módulos: "texto ruim de ver, falta opção do
+/// texto de colocar o fundo e borda, isso para TODAS analises"): o fundo, a
+/// máscara na cor da tela que esconde o que está atrás do texto, e a borda,
+/// o quadro do próprio texto (na cor dele). Cada análise tem a sua.
+/// </summary>
+public sealed record AnalysisTextLook(bool Background, bool Border)
+{
+    private const string Versao = "1";
+
+    /// <summary>Antes de o usuário escolher: com fundo, que é o que deixa ler, e sem borda.</summary>
+    public static AnalysisTextLook Default { get; } = new(true, false);
+
+    /// <summary>A chave do registro no dicionário do desenho.</summary>
+    public static string StorageKey(IndependentKind tipo) => "ANALISE_TEXTO_" + tipo.ToString().ToUpperInvariant();
+
+    /// <summary>Para o registro.</summary>
+    public IReadOnlyList<string> Encode() => [Versao, Background ? "1" : "0", Border ? "1" : "0"];
+
+    /// <summary>Do registro; null se não há (o usuário nunca escolheu) ou se é ilegível.</summary>
+    public static AnalysisTextLook? Decode(IReadOnlyList<string>? campos) =>
+        campos is { Count: 3 } && campos[0] == Versao && campos[1] is "0" or "1" && campos[2] is "0" or "1"
+            ? new AnalysisTextLook(campos[1] == "1", campos[2] == "1")
+            : null;
 }

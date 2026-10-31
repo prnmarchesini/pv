@@ -471,6 +471,18 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_ELECTRICA_VER", CommandFlags.Modal | CommandFlags.Redraw | CommandFlags.NoUndoMarker)]
     public static void CLIVUS_ELECTRICA_VER() => LocalDosInversores.Ver();
 
+    [CommandMethod("CLIVUS_PICK_AREA")]
+    public static void CLIVUS_PICK_AREA() => EscopoCommands.EscolherArea();
+
+    [CommandMethod("CLIVUS_ELEGIR_AREA")]
+    public static void CLIVUS_ELEGIR_AREA() => EscopoCommands.EscolherArea();
+
+    [CommandMethod("CLIVUS_PICK_TABLES", CommandFlags.UsePickSet)]
+    public static void CLIVUS_PICK_TABLES() => EscopoCommands.EscolherMesas();
+
+    [CommandMethod("CLIVUS_ELEGIR_MESAS", CommandFlags.UsePickSet)]
+    public static void CLIVUS_ELEGIR_MESAS() => EscopoCommands.EscolherMesas();
+
     [CommandMethod("CLIVUS_STATUS", CommandFlags.Modal | CommandFlags.NoUndoMarker)]
     public static void CLIVUS_STATUS() => EstadoCommands.Estado();
 
@@ -704,18 +716,6 @@ public static class ComandosTraduzidos
 
     [CommandMethod("CLIVUS_SOMBRAS_BORRAR")]
     public static void CLIVUS_SOMBRAS_BORRAR() => SombrasCommands.SombrasApagar();
-
-    [CommandMethod("CLIVUS_SHADOWS_AREA")]
-    public static void CLIVUS_SHADOWS_AREA() => SombrasCommands.SombrasArea();
-
-    [CommandMethod("CLIVUS_SOMBRAS_AREA_ELEGIR")]
-    public static void CLIVUS_SOMBRAS_AREA_ELEGIR() => SombrasCommands.SombrasArea();
-
-    [CommandMethod("CLIVUS_SHADOWS_TABLES", CommandFlags.UsePickSet)]
-    public static void CLIVUS_SHADOWS_TABLES() => SombrasCommands.SombrasMesas();
-
-    [CommandMethod("CLIVUS_SOMBRAS_MESAS_ELEGIR", CommandFlags.UsePickSet)]
-    public static void CLIVUS_SOMBRAS_MESAS_ELEGIR() => SombrasCommands.SombrasMesas();
 
     [CommandMethod("CLIVUS_SHADOWS_SHOW")]
     public static void CLIVUS_SHADOWS_SHOW() => SombrasCommands.SombrasMostrar();
