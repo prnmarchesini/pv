@@ -102,6 +102,25 @@ internal static class AreasDoDesenho
         if (repetidas > 0)
             avisos.Add(Tr.F("{0} área(s) com a identidade em mais de uma polilinha (a polilinha da área foi copiada): o Regerar e o Conforme objetos acham só uma delas. Rode Validar.", repetidas));
 
+        // Área em cima de área (30/10/2026, "tinha VÁRIAS linhas sobrepostas").
+        var vistas = new HashSet<ObjectId>();
+        foreach (var area in areas)
+        {
+            if (!vistas.Add(area.Id)) continue;
+
+            var mesmaLinha = EscolhaDeArea.Repetidas(areas, area);
+            foreach (var a in mesmaLinha) vistas.Add(a.Id);
+
+            if (mesmaLinha.Count > 1)
+                avisos.Add(Tr.F("As áreas {0} são a mesma linha, uma em cima da outra: apague as que sobram (Apagar área).", string.Join(", ", mesmaLinha.Select(a => a.Identity.DisplayName))));
+        }
+
+        // O registro que aponta para área que não existe mais (apagada à mão).
+        var noDesenho = areas.Select(a => Chave(a.Identity.Id, a.Handle)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var sumidas = AreaStore.Load(database).Where(r => !noDesenho.Contains(Chave(r.Identity.Id, r.Handle))).Select(r => r.Identity.DisplayName).ToList();
+        if (sumidas.Count > 0)
+            avisos.Add(Tr.F("{0} área(s) do registro não existem mais no desenho ({1}): use {2} para limpar o registro.", sumidas.Count, string.Join(", ", sumidas), PluginInfo.ComandoReindexar));
+
         List<AreaTableInput> mesas;
         List<HachuraDasAreas.Marca> marcas;
         double reserva;

@@ -395,6 +395,10 @@ public static class LocalDosInversores
                     pontos.Add(new Point3(r.X, r.Y, r.Z));
                 }
 
+                // Aberta: a amostragem para antes da ponta, e a reta de volta
+                // ao começo tem de sair dela (a distância da pergunta é dela).
+                if (!p2.Closed) pontos.Add(new Point3(p2.EndPoint.X, p2.EndPoint.Y, p2.EndPoint.Z));
+
                 break;
             default:
                 return null;

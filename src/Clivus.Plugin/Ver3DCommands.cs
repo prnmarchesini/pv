@@ -130,7 +130,53 @@ public static class Ver3DCommands
         if (cena.Faces.Count == 0 && cena.Trees.Count == 0)
             editor.WriteMessage(Tr.T("\n  ATENÇÃO: o desenho não tem módulo nem árvore do plugin; a página mostra só o terreno.\n"));
 
+        AvisarTerrenoMudado(editor, documento, terreno);
+
         return cena;
+    }
+
+    /// <summary>
+    /// As mesas assentadas num terreno diferente do de hoje (30/10/2026: "o 3d
+    /// no navegador cagou forte, no 3d do cad não tem isso"): o 3D mostra o
+    /// terreno de hoje, e onde ele subiu depois que as mesas foram geradas o
+    /// chão aparece por cima delas. Diz quais, e o que fazer.
+    /// </summary>
+    internal static void AvisarTerrenoMudado(Editor editor, Document documento, ProcessedTerrain terreno)
+    {
+        var mudadas = MesasNumTerrenoDiferente(documento.Database, terreno);
+        if (mudadas.Count == 0) return;
+
+        var subiu = mudadas.Max(m => m.MaxRise);
+        var desceu = mudadas.Max(m => m.MaxDrop);
+        var nomes = string.Join(", ", mudadas.Take(12).Select(m => m.Label)) + (mudadas.Count > 12 ? Tr.F(" e mais {0}", mudadas.Count - 12) : string.Empty);
+
+        editor.WriteMessage(Tr.F(
+            "\n  ATENÇÃO: {0} mesa(s) foram assentadas num terreno diferente do de hoje ({1}): o terreno subiu até {2:0.00} m e desceu até {3:0.00} m debaixo dos pilares delas, e no 3D o chão aparece por cima delas ou longe delas. A superfície mudou depois que elas foram geradas (ou o terreno de hoje é outra superfície). Recalcule essas mesas (janela Áreas › Recalcular) ou regere a área: {4}.\n",
+            mudadas.Count, terreno.Summary.SurfaceName, subiu, desceu, nomes));
+    }
+
+    /// <summary>As mesas com pilar cuja cota gravada (o terreno do dia em que foi desenhado) difere do terreno de hoje.</summary>
+    internal static IReadOnlyList<DriftedTable> MesasNumTerrenoDiferente(Database database, ProcessedTerrain terreno)
+    {
+        var pilares = new List<(string, double?, double?)>();
+
+        using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
+        {
+            foreach (var mesa in LayoutScan.Tables(transacao, database).Values)
+            {
+                if (mesa.Identity is not { } identidade) continue;
+
+                foreach (var id in mesa.Pillars)
+                {
+                    if (transacao.GetObject(id, OpenMode.ForRead) is not BlockReference bloco || LayoutXData.LoadPillar(bloco) is not { } pilar) continue;
+
+                    var p = bloco.Position;
+                    pilares.Add((identidade.Label, pilar.GroundZ, terreno.Mesh.TryGetZ(p.X, p.Y, out var z) ? z : null));
+                }
+            }
+        }
+
+        return TerrainDrift.Tables(pilares);
     }
 
     private static string Resumo(Scene3D cena)

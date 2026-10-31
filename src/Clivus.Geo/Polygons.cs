@@ -204,6 +204,60 @@ public static class Polygons
         return px * px + py * py <= Tolerancia * Tolerancia;
     }
 
+    /// <summary>
+    /// A distância em planta do ponto ao contorno (à aresta mais perto). É a
+    /// conta do "clicou na linha da área": o clique raramente cai em cima dela.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">Menos de três vértices, ou ponto não finito.</exception>
+    public static double DistanceToEdges(IReadOnlyList<Point3> vertices, double x, double y)
+    {
+        Conferir(vertices);
+
+        if (!double.IsFinite(x) || !double.IsFinite(y))
+            throw new ArgumentOutOfRangeException(nameof(x), "O ponto não é finito.");
+
+        var menor = double.PositiveInfinity;
+        var n = vertices.Count;
+
+        for (int i = 0, j = n - 1; i < n; j = i++)
+            menor = Math.Min(menor, DistanciaAoSegmento(vertices[j], vertices[i], x, y));
+
+        return menor;
+    }
+
+    /// <summary>
+    /// Se os dois contornos são a mesma linha em planta, até a tolerância:
+    /// todo vértice de um está a até ela do contorno do outro, e vice-versa.
+    /// Vértices a mais no meio de uma aresta (a área drapeada no terreno
+    /// ganha um a cada triângulo cruzado) não mudam nada; a ordem e o
+    /// sentido também não. É o "duas áreas uma em cima da outra" (Renan,
+    /// 30/10/2026: "tinha VÁRIAS linhas sobrepostas e aí buga a ferramenta
+    /// [...] isso deveria ser percebido pela ferramenta").
+    /// </summary>
+    public static bool SameOutline(IReadOnlyList<Point3> a, IReadOnlyList<Point3> b, double tolerance)
+    {
+        Conferir(a);
+        Conferir(b);
+
+        if (!(tolerance >= 0)) throw new ArgumentOutOfRangeException(nameof(tolerance), tolerance, "A tolerância não pode ser negativa.");
+
+        return a.All(p => DistanceToEdges(b, p.X, p.Y) <= tolerance)
+            && b.All(p => DistanceToEdges(a, p.X, p.Y) <= tolerance);
+    }
+
+    private static double DistanciaAoSegmento(Point3 a, Point3 b, double x, double y)
+    {
+        var ex = b.X - a.X;
+        var ey = b.Y - a.Y;
+        var comprimento2 = ex * ex + ey * ey;
+
+        var s = comprimento2 <= Tolerancia * Tolerancia ? 0 : Math.Clamp(((x - a.X) * ex + (y - a.Y) * ey) / comprimento2, 0, 1);
+        var px = a.X + s * ex - x;
+        var py = a.Y + s * ey - y;
+
+        return Math.Sqrt(px * px + py * py);
+    }
+
     private static void Conferir(IReadOnlyList<Point3> vertices)
     {
         ArgumentNullException.ThrowIfNull(vertices);

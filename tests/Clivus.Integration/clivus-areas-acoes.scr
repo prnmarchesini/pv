@@ -1,0 +1,80 @@
+; Teste de nivel 2 das acoes por area (30/10/2026, Renan: "quero um botao
+; para APAGAR area, desde que esteja vazia, se nao estiver, o apagar vai
+; apagar as mesas, ai quando tem mesas, quero as opcoes de limpar, regerar,
+; recalcular" e "tinha VARIAS linhas sobrepostas e ai buga a ferramenta [...]
+; isso deveria ser percebido pela ferramenta").
+;
+; Duas areas lado a lado (Oeste e Leste), a fileira 1 so na Oeste, e uma
+; polilinha 3D "do cliente" em cima da linha da Oeste, com cotas estragadas:
+;   - a mesma area de novo e recusada antes do nome;
+;   - o Recalcular, com o clique na linha do cliente por cima da Oeste, acha a
+;     Oeste e recalcula as mesas dela; clicado dentro da Leste, diz que nao ha
+;     mesa;
+;   - o Apagar area na Leste (vazia) apaga sem perguntar;
+;   - na Oeste (com mesas, agora a unica area), pergunta: o Enter (Nao) nao
+;     apaga nada; o Sim apaga a area e as mesas;
+;   - o U devolve a area e as mesas.
+;
+; O OSMODE e desligado para os pontos digitados chegarem crus.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area Oeste")
+(command "CLIVUS_AREA" "{{B1}}" "{{B2}}" "{{B3}}" "{{B4}}" "" "Area Leste")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento das areas")
+(command "CLIVUS_FILEIRA_AUTO")
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:tipo (e) (cdr (assoc 1000 (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))))
+(defun clivus:de-tipo (tipo / ss i n)
+  (setq ss (ssget "X" '((0 . "POLYLINE") (-3 ("CLIVUS")))) i 0 n 0)
+  (while (< i (clivus:conta ss))
+    (if (= (clivus:tipo (ssname ss i)) tipo) (setq n (1+ n)))
+    (setq i (1+ i)))
+  n)
+(defun clivus:contar (rotulo)
+  (princ (strcat "\nCLIVUS_ACOES " rotulo " areas=" (itoa (clivus:de-tipo "Area")) " mesas=" (itoa (clivus:de-tipo "Mesa")))))
+
+(clivus:contar "INICIO")
+
+; A mesma area de novo: recusada antes de pedir o nome.
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "")
+(clivus:contar "REPETIDA")
+
+; A linha do cliente em cima da Oeste (cotas estragadas).
+(command "_.3DPOLY" "{{C1}}" "{{C2}}" "{{C3}}" "{{C4}}" "_C")
+
+(princ "\nCLIVUS_ACOES RECALCULAR_NA_LINHA")
+(command "CLIVUS_AREA_RECALCULAR" "{{NA_LINHA}}")
+(princ "\nCLIVUS_ACOES RECALCULAR_NA_LESTE")
+(command "CLIVUS_AREA_RECALCULAR" "{{DENTRO_LESTE}}")
+(clivus:contar "RECALCULADO")
+
+(princ "\nCLIVUS_ACOES APAGAR_LESTE")
+(command "CLIVUS_AREA_APAGAR" "{{DENTRO_LESTE}}")
+(clivus:contar "SEM_LESTE")
+
+(princ "\nCLIVUS_ACOES APAGAR_OESTE_NAO")
+(command "CLIVUS_AREA_APAGAR" "")
+(clivus:contar "OESTE_FICOU")
+
+(princ "\nCLIVUS_ACOES APAGAR_OESTE_SIM")
+(command "CLIVUS_AREA_APAGAR" "Sim")
+(clivus:contar "SEM_AREAS")
+; O U devolve a area e as mesas; apagada de novo, o registro fica limpo.
+; (Sem linha em branco aqui: no script ela e um Enter, que repete um comando, e o U desfaria esse.)
+(command "_.U")
+(clivus:contar "DEPOIS_DO_U")
+(command "CLIVUS_AREA_APAGAR" "Sim")
+(clivus:contar "DE_NOVO")
+(command "CLIVUS_VALIDAR")
+
+(setvar "OSMODE" clivus:osmode)
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ "\nCLIVUS_FIM")
+(princ)

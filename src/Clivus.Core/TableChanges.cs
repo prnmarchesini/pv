@@ -52,6 +52,17 @@ public sealed record TableRemoval(Guid Id, string Label, DateTime When)
     public string Describe() => Tr.F("{0} removida em {1:dd/MM/yyyy HH:mm}", Label, When.ToLocalTime());
 }
 
+/// <summary>As peças de uma mesa no desenho, contadas por tipo.</summary>
+/// <param name="Modules">Os blocos de módulo.</param>
+/// <param name="Faces">As faces superiores.</param>
+/// <param name="Pillars">Os pilares.</param>
+/// <param name="Bars">As peças da estrutura do biposte.</param>
+public readonly record struct TablePieceCount(int Modules, int Faces, int Pillars, int Bars)
+{
+    /// <summary>Todas as peças somadas.</summary>
+    public int Total => Modules + Faces + Pillars + Bars;
+}
+
 /// <summary>O que o vigia decidiu ao fim de um comando.</summary>
 /// <param name="Dirty">Mesa → motivo da sujeira.</param>
 /// <param name="Removed">Mesas cujo contorno foi apagado.</param>
@@ -133,22 +144,51 @@ public sealed class PendingChanges
     /// salvar o desenho sujava toda mesa com peça sólida (o biposte): o
     /// AutoCAD regrava cada sólido ao salvar e avisa "modificado", e o vigia
     /// via edição ("depois de salvar as mesas ficaram todas vermelhas, bug dos
-    /// bravos"). Pode ser do salvar a pendência "movida ou editada" de mesa
-    /// com sólido que continua onde foi desenhada. Copiada, peça apagada,
-    /// pedido do usuário, mesa sem sólido e mesa sem âncora gravada (não dá
-    /// para saber se saiu do lugar) ficam pendentes.
+    /// bravos"). E cada salvar regravava o motivo como "movida ou editada",
+    /// por cima do que estava (peça apagada, copiada, pedido do usuário): o
+    /// motivo gravado não basta. Pode ser do salvar a pendência "movida ou
+    /// editada" de mesa com sólido, que continua onde foi desenhada (a âncora
+    /// gravada e no lugar), inteira (as peças de uma mesa do mesmo tipo, ver
+    /// <see cref="TypicalPieces"/>) e sozinha no lugar (outra mesa com a
+    /// mesma âncora é cópia colada em cima). O resto fica pendente. O que não
+    /// se distingue: a mesa marcada à mão e a peça mexida sem sair do lugar.
     /// </summary>
     /// <param name="table">A identidade gravada no contorno.</param>
     /// <param name="hasSolids">Se a mesa tem peça sólida (a estrutura do biposte).</param>
     /// <param name="anchorMoved">Se o primeiro vértice do contorno saiu da âncora; null sem âncora.</param>
-    public static bool MayBeFromSave(TableIdentity table, bool hasSolids, bool? anchorMoved)
+    /// <param name="complete">Se a mesa tem as peças de uma mesa inteira do tipo dela.</param>
+    /// <param name="alone">Se nenhuma outra mesa tem a mesma âncora em planta.</param>
+    public static bool MayBeFromSave(TableIdentity table, bool hasSolids, bool? anchorMoved, bool complete, bool alone)
     {
         ArgumentNullException.ThrowIfNull(table);
 
         return table.Dirty
             && string.Equals(table.DirtyReason, ReasonModified, StringComparison.Ordinal)
             && hasSolids
-            && anchorMoved == false;
+            && anchorMoved == false
+            && complete
+            && alone;
+    }
+
+    /// <summary>
+    /// Quantas peças uma mesa inteira tem, por tipo de mesa (o nome do
+    /// perfil): a contagem mais comum entre as mesas do desenho desse tipo;
+    /// no empate, a maior (falta peça, não sobra). Mesa sem nome de perfil
+    /// conta junto com as outras sem nome.
+    /// </summary>
+    public static IReadOnlyDictionary<string, TablePieceCount> TypicalPieces(IEnumerable<(string? Profile, TablePieceCount Count)> tables)
+    {
+        ArgumentNullException.ThrowIfNull(tables);
+
+        return tables
+            .GroupBy(t => t.Profile ?? string.Empty, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => g.GroupBy(t => t.Count)
+                    .OrderByDescending(c => c.Count())
+                    .ThenByDescending(c => c.Key.Total)
+                    .First().Key,
+                StringComparer.Ordinal);
     }
 
     /// <summary>Decide, esvazia o livro e devolve a decisão.</summary>

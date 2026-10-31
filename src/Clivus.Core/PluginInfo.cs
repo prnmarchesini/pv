@@ -65,6 +65,12 @@ public static partial class PluginInfo
     /// </summary>
     public const string ComandoAreas = "CLIVUS_AREAS";
 
+    /// <summary>Comando que apaga uma área (com as mesas dela, depois de perguntar): a janela Áreas e a linha de comando.</summary>
+    public const string ComandoAreaApagar = "CLIVUS_AREA_APAGAR";
+
+    /// <summary>Comando que recalcula, onde estão, todas as mesas de uma área (o terreno e a configuração de hoje).</summary>
+    public const string ComandoAreaRecalcular = "CLIVUS_AREA_RECALCULAR";
+
     /// <summary>
     /// Comando que reconstrói o registro central a partir do XData das
     /// entidades. É o que reconhece uma área copiada de outro desenho.

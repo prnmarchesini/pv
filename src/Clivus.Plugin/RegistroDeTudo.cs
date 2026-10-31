@@ -15,7 +15,9 @@ namespace Clivus.Plugin;
 /// - a linha de comando inteira, do jeito que o usuário viu (as mensagens do
 ///   plugin, os avisos e os erros do próprio AutoCAD): é o log do AutoCAD
 ///   (LOGFILEMODE), ligado aqui com a pasta linha-de-comando, se o usuário
-///   não tinha ligado o dele. Arquivo com mais de 30 dias sai;
+///   não tinha ligado o dele, e desligado no Terminate, com o caminho que ele
+///   tinha (o perfil do AutoCAD não fica mudado). Arquivo com mais de 30
+///   dias sai;
 /// - cada comando no clivus.log: quando começou, em que desenho, quanto
 ///   durou e como acabou (terminou, cancelado, falhou), e os desenhos
 ///   abertos e fechados. Um comando que começou e não terminou é onde o
@@ -30,6 +32,26 @@ internal static class RegistroDeTudo
 
     /// <summary>Quantos dias o log da linha de comando fica.</summary>
     private const int DiasGuardados = 30;
+
+    /// <summary>
+    /// Onde fica o LOGFILEPATH que o usuário tinha, quando foi o plugin quem
+    /// ligou o log: devolvido no Terminate. Em arquivo, e não só na memória,
+    /// porque um AutoCAD que caiu não chama o Terminate, e na volta o log já
+    /// está ligado na nossa pasta.
+    /// </summary>
+    private static string ArquivoDoCaminhoAntes => Path.Combine(PastaDaLinhaDeComando, "caminho-de-antes.txt");
+
+    /// <summary>
+    /// Comandos que abrem ou fecham desenho: o desenho some (ou nasce outro)
+    /// antes do fim deles, e na pilha ficariam como "sem terminar" em todo
+    /// fechamento, que é o sinal de travada ou queda.
+    /// </summary>
+    private static readonly HashSet<string> ComandosDeDesenho = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CLOSE", "CLOSEALL", "QUIT", "EXIT", "OPEN", "NEW", "QNEW", "FILEOPEN",
+    };
+
+    private static bool _logLigadoPorNos;
 
     private static readonly Dictionary<Document, Stack<(string Nome, Stopwatch Relogio)>> EmAndamento = [];
     private static DocumentCollectionEventHandler? _aoCriar;
@@ -64,6 +86,8 @@ internal static class RegistroDeTudo
     {
         if (!_ligado) return;
         _ligado = false;
+
+        DevolverOLogDoUsuario();
 
         try
         {
@@ -129,7 +153,7 @@ internal static class RegistroDeTudo
     {
         if (sender is not Document documento || !EmAndamento.TryGetValue(documento, out var pilha)) return;
 
-        pilha.Push((e.GlobalCommandName, Stopwatch.StartNew()));
+        if (!ComandosDeDesenho.Contains(e.GlobalCommandName)) pilha.Push((e.GlobalCommandName, Stopwatch.StartNew()));
         RegistroDeDiagnostico.Registrar($"comando {e.GlobalCommandName} começou ({Path.GetFileName(documento.Name)})");
     }
 
@@ -143,8 +167,9 @@ internal static class RegistroDeTudo
     {
         if (sender is not Document documento || !EmAndamento.TryGetValue(documento, out var pilha)) return;
 
-        // O do topo é o que acaba (o transparente acaba antes do que ele interrompeu).
-        var segundos = pilha.Count > 0 ? pilha.Pop().Relogio.Elapsed.TotalSeconds : double.NaN;
+        // O do topo é o que acaba (o transparente acaba antes do que ele
+        // interrompeu); o de abrir ou fechar desenho não entrou na pilha.
+        var segundos = pilha.Count > 0 && !ComandosDeDesenho.Contains(e.GlobalCommandName) ? pilha.Pop().Relogio.Elapsed.TotalSeconds : double.NaN;
         var tempo = double.IsNaN(segundos) ? string.Empty : string.Format(System.Globalization.CultureInfo.GetCultureInfo("pt-BR"), " em {0:0.0} s", segundos);
         RegistroDeDiagnostico.Registrar($"comando {e.GlobalCommandName} {como}{tempo}");
     }
@@ -161,9 +186,33 @@ internal static class RegistroDeTudo
         RegistroDeDiagnostico.Registrar("ERRO que escapou de uma janela.", e.Exception);
 
     /// <summary>
+    /// O log da linha de comando volta a desligado, com o LOGFILEPATH que o
+    /// usuário tinha, se foi o plugin quem ligou (Terminate): o perfil do
+    /// AutoCAD não fica mudado, e sem o plugin o log não cresce sozinho.
+    /// </summary>
+    private static void DevolverOLogDoUsuario()
+    {
+        if (!_logLigadoPorNos) return;
+
+        try
+        {
+            AcadApp.SetSystemVariable("LOGFILEMODE", 0);
+            if (File.Exists(ArquivoDoCaminhoAntes) && File.ReadAllText(ArquivoDoCaminhoAntes).Trim() is { Length: > 0 } antes)
+                AcadApp.SetSystemVariable("LOGFILEPATH", antes);
+
+            _logLigadoPorNos = false;
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui devolver o log da linha de comando do AutoCAD.", erro);
+        }
+    }
+
+    /// <summary>
     /// Liga o log da linha de comando do AutoCAD na pasta do plugin, se o
     /// usuário não tinha ligado o dele (aí fica o dele, onde ele quis), e
-    /// tira os arquivos com mais de 30 dias.
+    /// tira os arquivos com mais de 30 dias. O caminho que ele tinha fica
+    /// guardado para o Terminate devolver.
     /// </summary>
     private static void LigarALinhaDeComandoNaFolga(object? sender, EventArgs e)
     {
@@ -186,10 +235,22 @@ internal static class RegistroDeTudo
                 }
             }
 
-            if (Convert.ToInt32(AcadApp.GetSystemVariable("LOGFILEMODE"), System.Globalization.CultureInfo.InvariantCulture) == 0)
+            var nossa = pasta.EndsWith('\\') ? pasta : pasta + "\\";
+            var caminhoAgora = Convert.ToString(AcadApp.GetSystemVariable("LOGFILEPATH"), System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+            var ligado = Convert.ToInt32(AcadApp.GetSystemVariable("LOGFILEMODE"), System.Globalization.CultureInfo.InvariantCulture) != 0;
+
+            if (!ligado)
             {
-                AcadApp.SetSystemVariable("LOGFILEPATH", pasta.EndsWith('\\') ? pasta : pasta + "\\");
+                File.WriteAllText(ArquivoDoCaminhoAntes, caminhoAgora);
+                AcadApp.SetSystemVariable("LOGFILEPATH", nossa);
                 AcadApp.SetSystemVariable("LOGFILEMODE", 1);
+                _logLigadoPorNos = true;
+            }
+            else if (string.Equals(caminhoAgora.TrimEnd('\\'), nossa.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase) && File.Exists(ArquivoDoCaminhoAntes))
+            {
+                // Ligado na nossa pasta e com o caminho de antes guardado: fomos
+                // nós, numa sessão que caiu sem Terminate.
+                _logLigadoPorNos = true;
             }
 
             RegistroDeDiagnostico.Registrar($"linha de comando registrada em {AcadApp.GetSystemVariable("LOGFILEPATH")}");

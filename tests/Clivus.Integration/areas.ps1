@@ -15,7 +15,108 @@
       - renomear: o nome novo no XData da polilinha e no letreiro;
       - tirar a hachura de uma, o Excel por area, tirar todas.
 #>
-$script:CasosAreas = @('Testar-Areas')
+$script:CasosAreas = @('Testar-Areas', 'Testar-AcoesDaArea')
+
+<#
+    Testar-AcoesDaArea (30/10/2026): as acoes por area da janela Areas, pelos
+    comandos que os botoes mandam, e a area achada mesmo com a linha do
+    cliente por cima. A area repetida e recusada; o Recalcular clicado na
+    linha sobreposta acha a Oeste e recalcula as mesas dela; o Apagar area
+    apaga a Leste vazia sem perguntar e a Oeste com mesas so com o Sim; o
+    registro fica limpo (Validar), e o U devolve tudo.
+#>
+function Testar-AcoesDaArea {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-areas-acoes--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'clivus-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("clivus-areas-acoes: nao achei o terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $inv)
+    $centroY = [double]::Parse($Matches[2], $inv)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($inv, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-areas-acoes' `
+        -Script (Join-Path $PSScriptRoot 'clivus-areas-acoes.scr') `
+        -Substituicoes @{
+            '{{A1}}' = (Ponto3 -50 -50 0); '{{A2}}' = (Ponto3 0 -50 0); '{{A3}}' = (Ponto3 0 50 0); '{{A4}}' = (Ponto3 -50 50 0)
+            '{{B1}}' = (Ponto3 0 -50 0); '{{B2}}' = (Ponto3 50 -50 0); '{{B3}}' = (Ponto3 50 50 0); '{{B4}}' = (Ponto3 0 50 0)
+            '{{L1}}' = (Ponto3 -50 -50 0); '{{L2}}' = (Ponto3 -50 50 0); '{{LADO}}' = (Ponto3 -25 0 0)
+            # A linha do cliente em cima da Oeste, com cotas estragadas.
+            '{{C1}}' = (Ponto3 -50 -50 9999); '{{C2}}' = (Ponto3 0 -50 -40); '{{C3}}' = (Ponto3 0 50 777); '{{C4}}' = (Ponto3 -50 50 0)
+            '{{NA_LINHA}}' = (Ponto3 -50 10 0)
+            '{{DENTRO_LESTE}}' = (Ponto3 25 0 0)
+        }
+
+    if ($r.Estourou -or $r.Codigo -ne 0 -or $r.Texto -notmatch 'CLIVUS_FIM') {
+        $problemas.Add("clivus-areas-acoes terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    $t = $r.Texto
+    function Conta([string] $rotulo) {
+        if ($t -match "CLIVUS_ACOES $rotulo areas=(\d+) mesas=(\d+)") { return @([int] $Matches[1], [int] $Matches[2]) }
+        return $null
+    }
+
+    $inicio = Conta 'INICIO'
+    if ($null -eq $inicio -or $inicio[0] -ne 2 -or $inicio[1] -lt 2) {
+        $problemas.Add("clivus-areas-acoes: o comeco nao tem as duas areas e a fileira na Oeste. Veja $($r.Saida)")
+        return $false
+    }
+    $mesas = $inicio[1]
+    $ok = $true
+
+    function Espera([string] $rotulo, [int] $areas, [int] $nMesas, [string] $oQue) {
+        $c = Conta $rotulo
+        if ($null -eq $c -or $c[0] -ne $areas -or $c[1] -ne $nMesas) {
+            $problemas.Add("clivus-areas-acoes: $oQue (esperava $areas area(s) e $nMesas mesa(s); veio $($c -join ' e ')). Veja $($r.Saida)")
+            return $false
+        }
+        return $true
+    }
+
+    if ($t -notmatch 'J. existe a .rea "Area Oeste" com este contorno' -or -not (Espera 'REPETIDA' 2 $mesas 'a area repetida nao foi recusada')) { $ok = $false }
+
+    $naLinha = $t.Substring($t.IndexOf('CLIVUS_ACOES RECALCULAR_NA_LINHA'))
+    if ($naLinha -notmatch '.rea: Area Oeste\.' -or $naLinha -notmatch "RECALCULAR $mesas mesa\(s\) de Area Oeste" -or $naLinha -notmatch "RECALCULAR $mesas de $mesas mesa\(s\) recalculada\(s\)") {
+        $problemas.Add("clivus-areas-acoes: o clique na linha do cliente por cima da Oeste nao achou a Oeste, ou nao recalculou as $mesas mesas dela. Veja $($r.Saida)")
+        $ok = $false
+    }
+
+    if ($t -notmatch 'Nenhuma mesa dentro de Area Leste' -or -not (Espera 'RECALCULADO' 2 $mesas 'o recalcular mudou as areas ou as mesas')) { $ok = $false }
+
+    if ($t -notmatch 'AREA Area Leste apagada' -or -not (Espera 'SEM_LESTE' 1 $mesas 'a Leste vazia nao foi apagada')) { $ok = $false }
+
+    if ($t -notmatch 'Nada foi apagado' -or -not (Espera 'OESTE_FICOU' 1 $mesas 'o Enter (Nao) apagou a Oeste')) { $ok = $false }
+
+    if ($t -notmatch 'AREA Area Oeste apagada' -or -not (Espera 'SEM_AREAS' 0 0 'o Sim nao apagou a Oeste e as mesas')) { $ok = $false }
+
+    if ($t -notmatch 'VALIDAR_TOTAIS areas=0 ') {
+        $problemas.Add("clivus-areas-acoes: depois de apagar, o registro ainda tem area que nao existe (Validar). Veja $($r.Saida)")
+        $ok = $false
+    }
+
+    if (-not (Espera 'DEPOIS_DO_U' 1 $mesas 'o U nao devolveu a Oeste e as mesas')) { $ok = $false }
+    if (-not (Espera 'DE_NOVO' 0 0 'depois do U, a Oeste nao foi apagada de novo')) { $ok = $false }
+
+    if ($t -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) {
+        $problemas.Add("clivus-areas-acoes: o SECURELOAD nao voltou ao que era. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($ok) { Write-Host "  (acoes da area: repetida recusada; clique na linha do cliente achou a Oeste e recalculou $mesas mesa(s); Leste vazia apagada direto; Oeste so com o Sim; registro limpo; U devolveu)" -ForegroundColor DarkGray }
+
+    return $ok
+}
 
 function Testar-Areas {
     param([string] $Desenho)

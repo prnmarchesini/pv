@@ -14,6 +14,32 @@ public class PolygonTests
     /// <summary>Um "L": o retângulo sem o quadrante superior direito.</summary>
     private static readonly Point3[] Ele = [P(0, 0), P(100, 0), P(100, 25), P(50, 25), P(50, 50), P(0, 50)];
 
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void ADistanciaDoCliqueAteABorda()
+    {
+        Assert.Equal(0, Polygons.DistanceToEdges(Retangulo, 50, 0), 9);
+        Assert.Equal(2, Polygons.DistanceToEdges(Retangulo, 50, -2), 9);
+        Assert.Equal(5, Polygons.DistanceToEdges(Retangulo, 50, 45), 9);
+        Assert.Equal(Math.Sqrt(2), Polygons.DistanceToEdges(Retangulo, 101, 51), 9);
+    }
+
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void AreaRepetidaEAMesmaLinhaEmPlanta()
+    {
+        // A mesma linha com vértices a mais no meio das arestas (a área drapeada),
+        // começando noutro canto, no outro sentido e com cota.
+        Point3[] drapeada = [new(100, 50, 7), new(60, 50, 9), new(0, 50, 3), new(0, 0, 1), new(37.5, 0, 2), new(100, 0, 4), new(100, 20, 5)];
+        Assert.True(Polygons.SameOutline(Retangulo, drapeada, 0.05));
+
+        // Deslocada 10 cm, um canto a mais (o L) ou menor: outra linha.
+        Point3[] deslocada = [.. Retangulo.Select(p => P(p.X + 0.1, p.Y))];
+        Assert.False(Polygons.SameOutline(Retangulo, deslocada, 0.05));
+        Assert.False(Polygons.SameOutline(Retangulo, Ele, 0.05));
+        Assert.False(Polygons.SameOutline(Retangulo, [P(0, 0), P(90, 0), P(90, 50), P(0, 50)], 0.05));
+    }
+
     [Theory]
     [Trait("Etapa", "5")]
     [InlineData(50, 25, true)]

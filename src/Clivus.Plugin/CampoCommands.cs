@@ -227,58 +227,13 @@ public static class CampoCommands
 
     // ------------------------------------------------------ área e objetos
 
-    /// <summary>A área selecionada (clique direito nela), a única do desenho, ou a clicada.</summary>
-    private static Area? AreaEscolhida(Editor editor, Document documento)
-    {
-        var database = documento.Database;
-        var implicita = editor.SelectImplied();
-
-        if (implicita.Status == PromptStatus.OK)
-        {
-            using var transacao = database.TransactionManager.StartOpenCloseTransaction();
-
-            foreach (var id in implicita.Value.GetObjectIds())
-            {
-                if (transacao.GetObject(id, OpenMode.ForRead) is not Polyline3d polilinha || AreaXData.Load(polilinha) is not { } identidade) continue;
-
-                editor.SetImpliedSelection([]);
-                editor.WriteMessage(Tr.F("\nÁrea: {0}.\n", identidade.DisplayName));
-                return new Area(id, FileiraCommands.Vertices(polilinha, transacao), identidade.DisplayName);
-            }
-        }
-
-        var areas = AreaStore.Load(database);
-
-        if (areas.Count == 0)
-        {
-            editor.WriteMessage(Tr.T("\nNenhuma área registrada neste desenho. Use o botão Área primeiro.\n"));
-            return null;
-        }
-
-        if (areas.Count == 1)
-        {
-            editor.WriteMessage(Tr.F("\nÁrea: {0}.\n", areas[0].Identity.DisplayName));
-            return LerArea(database, areas[0]);
-        }
-
-        var opcoes = new PromptEntityOptions(Tr.T("\nClique na área de implantação: "));
-        opcoes.SetRejectMessage(Tr.T("\nIsso não é uma polilinha."));
-        opcoes.AddAllowedClass(typeof(Polyline3d), false);
-
-        var resposta = editor.GetEntity(opcoes);
-        if (resposta.Status != PromptStatus.OK) return null;
-
-        using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
-        {
-            var polilinha = (Polyline3d)transacao.GetObject(resposta.ObjectId, OpenMode.ForRead);
-
-            if (AreaXData.Load(polilinha) is { } identidade)
-                return new Area(resposta.ObjectId, FileiraCommands.Vertices(polilinha, transacao), identidade.DisplayName);
-        }
-
-        editor.WriteMessage(Tr.T("\nEssa polilinha não é uma área do plugin.\n"));
-        return null;
-    }
+    /// <summary>
+    /// A área selecionada (clique direito nela), a única do desenho, ou a
+    /// clicada, na linha dela ou dentro dela: a linha do cliente por cima e as
+    /// áreas repetidas não atrapalham mais (<see cref="EscolhaDeArea"/>).
+    /// </summary>
+    private static Area? AreaEscolhida(Editor editor, Document documento) =>
+        EscolhaDeArea.Pedir(editor, documento) is { } area ? new Area(area.Id, area.Contorno, area.Identity.DisplayName) : null;
 
     private static Area? LerArea(Database database, AreaRecord registro)
     {

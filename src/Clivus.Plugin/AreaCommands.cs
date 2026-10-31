@@ -70,6 +70,15 @@ public static class AreaCommands
                 return;
             }
 
+            // A repetida é recusada antes do nome, não depois de digitá-lo.
+            if (Repetida(documento, pontos) is { } existente)
+            {
+                editor.WriteMessage(Tr.F(
+                    "\nJá existe a área \"{0}\" com este contorno: não criei outra em cima dela. Para refazer as mesas dela, use Regerar; para o nome, a janela Áreas.\n",
+                    existente.Identity.DisplayName));
+                return;
+            }
+
             var nome = PerguntarNome(editor);
             if (nome is null) return;
 
@@ -187,9 +196,11 @@ public static class AreaCommands
                 }
             }
 
-            if (contorno is not { Count: >= 3 })
+            // Pela área do polígono, não pela contagem: a reta 2D antiga vira
+            // vários pontos em fila, e com o Enter ela seria uma área sem área.
+            if (contorno is not { Count: >= 3 } || InverterSites.PlanArea(contorno) < 0.01)
             {
-                editor.WriteMessage(Tr.T("\n  Essa polilinha tem menos de três vértices em planta. Escolha outra.\n"));
+                editor.WriteMessage(Tr.T("\n  Essa polilinha não cerca área nenhuma em planta. Escolha outra.\n"));
                 continue;
             }
 
@@ -225,6 +236,16 @@ public static class AreaCommands
     private static string? PerguntarNome(Editor editor) =>
         Perguntas.Nome(editor, Tr.T("área"), Tr.T("A área"));
 
+    /// <summary>A área do desenho com o mesmo contorno em planta, ou null.</summary>
+    private static AreaNoDesenho? Repetida(Document documento, IReadOnlyList<Point3d> pontos)
+    {
+        var contorno = pontos.Select(p => new Point3(p.X, p.Y, p.Z)).ToList();
+        if (contorno.Count < 3) return null;
+
+        return AreasDoDesenho.Varrer(documento.Database)
+            .FirstOrDefault(a => a.Contorno.Count >= 3 && Polygons.SameOutline(a.Contorno, contorno, EscolhaDeArea.MesmaLinha));
+    }
+
     internal static void Criar(
         Editor editor,
         Document documento,
@@ -248,6 +269,17 @@ public static class AreaCommands
         {
             editor.WriteMessage(
                 Tr.T("\nO contorno não fechou uma área: os vértices caíram todos no mesmo\nlugar. Área não criada.\n"));
+            return;
+        }
+
+        // Área em cima de área (30/10/2026: "eu clico em gerar área, e não
+        // gera, mas gerou vários [...] tinha VÁRIAS linhas sobrepostas e aí
+        // buga a ferramenta"): a segunda com o mesmo contorno não nasce.
+        if (Repetida(documento, contorno.Select(p => new Point3d(p.X, p.Y, p.Z)).ToList()) is { } existente)
+        {
+            editor.WriteMessage(Tr.F(
+                "\nJá existe a área \"{0}\" com este contorno: não criei outra em cima dela. Para refazer as mesas dela, use Regerar; para o nome, a janela Áreas.\n",
+                existente.Identity.DisplayName));
             return;
         }
 

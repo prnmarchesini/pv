@@ -209,6 +209,12 @@ internal static class LayoutWatcher
 
         private void AoComecarComando(object? sender, CommandEventArgs e)
         {
+            // Rede de segurança: um salvamento sem SaveComplete nem AbortSave
+            // (o SaveAs de outro plugin que lança no meio) deixaria o vigia
+            // surdo até fechar. O QSAVE começa antes do BeginSave e termina
+            // depois do SaveComplete: zerar aqui e no fim não abre a janela.
+            _salvando = false;
+
             if (!PluginInfo.IsSilencedCommand(e.GlobalCommandName)) return;
 
             if (_calados == 0) _desfazendo = PluginInfo.IsUndoCommand(e.GlobalCommandName);
@@ -280,6 +286,7 @@ internal static class LayoutWatcher
 
         private void AoTerminarComando(object? sender, CommandEventArgs e)
         {
+            _salvando = false;
             var nome = e.GlobalCommandName;
 
             if (PluginInfo.IsSilencedCommand(nome))

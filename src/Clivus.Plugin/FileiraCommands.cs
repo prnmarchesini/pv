@@ -367,42 +367,9 @@ public static class FileiraCommands
             perfil.Frame.Pillars(perfil.Layout),
             perfil.Frame);
 
-    internal static (IReadOnlyList<Point3> Vertices, string Nome)? EscolherArea(Editor editor, Document documento)
-    {
-        var areas = AreaStore.Load(documento.Database);
-
-        if (areas.Count == 0)
-        {
-            editor.WriteMessage(Tr.T("\nNenhuma área registrada neste desenho. Use o botão Área primeiro.\n"));
-            return null;
-        }
-
-        if (areas.Count == 1)
-        {
-            editor.WriteMessage(Tr.F("\nÁrea: {0}.\n", areas[0].Identity.DisplayName));
-            return LerArea(documento.Database, areas[0].Handle);
-        }
-
-        var opcoes = new PromptEntityOptions(Tr.T("\nClique na área de implantação: "));
-        opcoes.SetRejectMessage(Tr.T("\nIsso não é uma polilinha."));
-        opcoes.AddAllowedClass(typeof(Polyline3d), false);
-
-        var resposta = editor.GetEntity(opcoes);
-        if (resposta.Status != PromptStatus.OK) return null;
-
-        using var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction();
-
-        var entidade = (Entity)transacao.GetObject(resposta.ObjectId, OpenMode.ForRead);
-        var identidade = AreaXData.Load(entidade);
-
-        if (identidade is null)
-        {
-            editor.WriteMessage(Tr.T("\nEssa polilinha não é uma área do plugin.\n"));
-            return null;
-        }
-
-        return (Vertices((Polyline3d)entidade, transacao), identidade.DisplayName);
-    }
+    /// <summary>A área do comando (<see cref="EscolhaDeArea"/>): da seleção, a única, ou a do clique na linha ou dentro dela.</summary>
+    internal static (IReadOnlyList<Point3> Vertices, string Nome)? EscolherArea(Editor editor, Document documento) =>
+        EscolhaDeArea.Pedir(editor, documento) is { } area ? (area.Contorno, area.Identity.DisplayName) : null;
 
     internal static (IReadOnlyList<Point3> Vertices, AlignmentIdentity Identidade)? EscolherAlinhamento(Editor editor, Document documento)
     {

@@ -31,6 +31,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 
 - 39.1 3D e TermoVision: AGUARDANDO VALIDAÇÃO
 - 39.2 Tudo funciona com biposte (a prova): AGUARDANDO VALIDAÇÃO — nível 2 `clivus-estruturas` (rodar.ps1 -SoEstruturas)
+- 39.3 O 3D avisa a mesa assentada num terreno diferente do de hoje (o chão por cima das mesas no navegador): AGUARDANDO VALIDAÇÃO — `TerrainDrift`, 2 testes; conferido na cópia do Aurora (118 mesas)
 
 ## Etapa 40: mesas conforme os objetos do cliente
 
@@ -40,6 +41,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 ## Etapa 41: as áreas da usina
 
 - 41.1 A janela Áreas (Implantação): a lista das áreas com o resumo de cada uma, zoom, hachura, renomear e o Excel por área: AGUARDANDO VALIDAÇÃO — `AreaSummary`, `AreaHatch`, `AreaReport`, 34 testes; nível 2 `clivus-areas` (rodar.ps1 -SoAreas)
+- 41.2 As ações por área (Apagar área, Limpar mesas, Regerar, Recalcular), a área repetida recusada e avisada, e a área achada pelo clique mesmo com a linha do cliente por cima: AGUARDANDO VALIDAÇÃO — `EscolhaDeArea`, `CLIVUS_AREA_APAGAR`, `CLIVUS_AREA_RECALCULAR`, `Polygons.SameOutline`; nível 2 `clivus-areas-acoes` (rodar.ps1 -SoAreas)
 
 ## Observações
 
@@ -592,8 +594,81 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     depois não marca nada) e `clivus-area-selecionar` com as duas 3D (a com a ponta no começo
     em outra cota, e a aberta, que pergunta e fecha com o Enter). O `rodar.ps1` ganhou
     `-Caso <função>`, para rodar um caso da lista principal sozinho.
+  - Revisão (subagente, numa worktree isolada), 8 achados, todos corrigidos:
+    - **o conserto ao abrir confiava no motivo gravado**, e o salvar antigo o regravava
+      por cima (uma peça apagada virava "movida ou editada"). Agora a mesa só volta se
+      também estiver **inteira** (as peças da mesa mais comum do tipo dela,
+      `PendingChanges.TypicalPieces`) e **sozinha no lugar** (a cópia colada em cima tem
+      a âncora da original). O que não se distingue (a mesa marcada à mão, a peça mexida
+      sem sair do lugar) a mensagem diz;
+    - camada travada derrubava o conserto inteiro: cada mesa numa transação, aberta mesmo
+      em camada travada; a que falhar continua pendente e é listada;
+    - o silêncio do salvamento é zerado no começo e no fim de todo comando (um
+      salvamento sem `SaveComplete` deixaria o vigia surdo);
+    - a polilinha 2D antiga aberta: a ponta entra, e a que não cerca área é recusada pela
+      área, não pela contagem de vértices;
+    - o log da linha de comando volta a desligado no Terminate, com o caminho que o
+      usuário tinha (guardado em arquivo, para valer depois de uma queda);
+    - abrir e fechar desenho não aparecem mais como comando "sem terminar";
+    - a virada do `clivus.log` que falha não para o log;
+    - a mesa marcada que tentou todas volta roxa, não magenta.
+  - O `clivus-salvar` ganhou as mesas que têm de continuar pendentes: uma com um módulo
+    apagado e depois a cor mudada (o motivo vira "movida ou editada") e uma movida; ao
+    abrir, só a inteira e no lugar volta.
+  - Fica para a tela: o salvamento automático (SAVETIME) e o SAVEAS em DXF não passam no
+    Core Console; o roteiro 14 pede para conferir.
+- 39.3 e 41.2 (30/10/2026, à noite), pedidos da tela: "o 3d no navegador cagou forte, no 3d do
+  cad não tem isso"; "a ferramenta 'conforme objetos' não reconhece a área [...] tinha VÁRIAS
+  linhas sobrepostas e aí buga a ferramenta [...] isso deveria ser percebido pela
+  ferramenta"; "quero um botão para APAGAR área, desde que esteja vazia, se não estiver, o
+  apagar vai apagar as mesas, aí quando tem mesas, quero as opções de limpar, regerar,
+  recalcular". O que achei e assumi:
+  - **O 3D não errou.** Numa cópia do desenho do Aurora (PLAT A_Perfiles, 7 superfícies), o
+    terreno de hoje é o "202605 TN LEV MAYO", reprocessado às 23:24. Na maior parte da usina,
+    a cota que cada pilar gravou ao ser desenhado bate com ele (mediana de 1 mm). Numa
+    região, porém, o terreno de hoje está até 5,3 m acima e 2,6 m abaixo dessa cota: 118
+    mesas foram geradas antes de o terreno mudar ali. O navegador mostra o terreno de hoje,
+    então o chão aparece por cima delas.
+  - O 3D (Ver e Publicar) passa a avisar: quantas mesas, quanto o terreno subiu e desceu,
+    quais, e que se recalculam pela janela Áreas › Recalcular (ou Regerar). A conta é
+    `TerrainDrift`: a cota gravada no pilar (`GroundZ`) contra o terreno de hoje no mesmo
+    X/Y, com 30 cm de tolerância.
+  - **As linhas sobrepostas:** o Conforme objetos, o Regerar, a Usina, a Fileira e o Apagar
+    tudo contavam as áreas pelo **registro** e só aceitavam o clique na polilinha da área. O
+    registro trazia as áreas apagadas à mão (o Validar do Aurora: "4 áreas registradas não
+    estão no desenho"), e o clique na linha do cliente, por cima, era recusado. Agora
+    (`EscolhaDeArea`):
+    - as áreas vêm do desenho, pelo XData;
+    - o clique vale na linha ou dentro da área: a borda mais perto, até 15 pixels (no
+      mínimo 0,5 m), ou a menor área que contém o ponto;
+    - entre áreas repetidas, vale a do registro, com aviso;
+    - a área repetida não nasce: o Área recusa, antes de pedir o nome, um contorno igual
+      ao de uma área que já existe (`Polygons.SameOutline`, 5 cm);
+    - a janela Áreas avisa as repetidas e as do registro que não existem mais (com o
+      Reindexar).
+  - **As ações por área** (janela Áreas, segunda linha de botões):
+    - **Limpar mesas** é o Apagar tudo;
+    - **Regerar** é o Refazer, que pode perguntar o alinhamento;
+    - **Recalcular** (novo, `CLIVUS_AREA_RECALCULAR`) refaz onde estão as mesas com o
+      centro na área;
+    - **Apagar área…** (novo, `CLIVUS_AREA_APAGAR`) apaga direto a área vazia. Com mesas, a
+      janela pergunta e apaga as mesas junto. A repetida sai sozinha (as mesas são da
+      outra). Também saem a hachura, o registro e o "segue os objetos".
+    - Os botões mandam o comando para a linha de comando, com a área pedida pela janela,
+      que vale uma vez, por 15 s; a seleção do AutoCAD não serve porque os ESC a apagam. U
+      desfaz. A lista se lê de novo quando o comando termina.
+  - Testes: no Geo, a distância até a borda e a mesma linha (com os vértices do drapeado, em
+    outro sentido); no Core, `TerrainDrift`. No nível 2, `clivus-areas-acoes`:
+    - a repetida é recusada;
+    - o clique na linha do cliente por cima da Oeste acha a Oeste e recalcula as mesas dela;
+    - a Leste vazia é apagada sem pergunta;
+    - na Oeste com mesas, o Enter não apaga e o Sim apaga;
+    - o U devolve a área e as mesas;
+    - depois o Validar não acha registro sobrando.
+  - Não deu para renderizar a janela Áreas fora do Civil 3D (ela nasce de um Document): os
+    botões novos ficam para a tela.
 
-## Roteiro de tela (38.1 a 41.1, e o 38.10)
+## Roteiro de tela (38.1 a 41.2)
 
 1. **Nova estrutura (38.1 e 38.5):** Configurações › Estruturas › Nova estrutura… › **Fixa**.
    A janela de Mesa abre na aba "Perfil e módulo"; clicar no cartão **Biposte** abre a aba
@@ -701,3 +776,19 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 17. **Logs (38.10):** nada a fazer na tela. Quando aparecer um erro, diga a hora: o
     `%LOCALAPPDATA%\Clivus Solar\clivus.log` tem cada comando com o tempo e os erros com a
     pilha, e a pasta `linha-de-comando`, ao lado, tem a linha de comando inteira.
+18. **Salvamento automático (38.10):** `SAVETIME` 1, deixar o Civil 3D parado dois
+    minutos com o desenho do Aurora aberto: nenhuma linha VIGIA, nada vermelho.
+19. **3D com o terreno mudado (39.3):** no Aurora, Publicar 3D (ou Ver 3D): antes do link, a
+    linha "ATENÇÃO: N mesa(s) foram assentadas num terreno diferente do de hoje", com as
+    mesas. Áreas › a área delas › **Recalcular**; publicar de novo: o aviso some, e no
+    navegador o chão não passa mais por cima das mesas.
+20. **Áreas: apagar, limpar, regerar, recalcular (41.2):** no Aurora, Implantação › Áreas:
+    os avisos embaixo da lista dizem as áreas do registro que não existem mais (rodar o
+    Reindexar) e as repetidas. Numa área vazia, **Apagar área…**: some da lista sem
+    pergunta. Numa com mesas: a pergunta, Não não apaga; Sim apaga a área e as mesas; U
+    devolve. **Limpar mesas**, **Regerar** e **Recalcular** numa área: a linha de comando
+    diz o que fez, e a lista se atualiza sozinha.
+21. **A área pelo clique (41.2):** com a linha do cliente em cima da área, Processar ›
+    Conforme objetos › clicar na linha (ou dentro da área): "Área: ..." e segue. Área › os
+    mesmos vértices de uma área que já existe: "Já existe a área ..." antes de pedir o
+    nome.

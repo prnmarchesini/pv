@@ -232,16 +232,28 @@ internal static class ValidacaoAoAbrir
     {
         try
         {
-            var limpas = PendenciasDoSalvar.Consertar(documento);
-            if (limpas.Count == 0) return;
+            var resultado = PendenciasDoSalvar.Consertar(documento);
 
-            var ordenadas = limpas.OrderBy(l => l, StringComparer.Ordinal).ToList();
-            var mostradas = string.Join(", ", ordenadas.Take(10));
-            if (ordenadas.Count > 10) mostradas = Tr.F("{0} e mais {1}", mostradas, ordenadas.Count - 10);
+            static string Lista(IReadOnlyList<string> letreiros)
+            {
+                var ordenadas = letreiros.OrderBy(l => l, StringComparer.Ordinal).ToList();
+                var mostradas = string.Join(", ", ordenadas.Take(10));
+                return ordenadas.Count > 10 ? Tr.F("{0} e mais {1}", mostradas, ordenadas.Count - 10) : mostradas;
+            }
 
-            documento.Editor.WriteMessage(Tr.F(
-                "\nCLIVUS {0} mesa(s) estavam pendentes só porque o desenho foi salvo (erro corrigido em 30/10/2026). Continuam onde foram desenhadas e voltaram ao normal, sem recalcular: {1}. Se você mexeu numa peça de alguma delas, use Recalcular nela.\n",
-                limpas.Count, mostradas));
+            if (resultado.Limpas.Count > 0)
+            {
+                documento.Editor.WriteMessage(Tr.F(
+                    "\nCLIVUS {0} mesa(s) estavam pendentes só porque o desenho foi salvo (erro corrigido em 30/10/2026). Estão inteiras e onde foram desenhadas, e voltaram ao normal, sem recalcular: {1}. Se alguma tinha uma peça mexida no lugar, ou você a tinha marcado pendente à mão, use Recalcular ou Marcar pendente nela.\n",
+                    resultado.Limpas.Count, Lista(resultado.Limpas)));
+            }
+
+            if (resultado.Falharam.Count > 0)
+            {
+                documento.Editor.WriteMessage(Tr.F(
+                    "\nCLIVUS {0} mesa(s) pendentes pelo salvar não puderam voltar ao normal e continuam pendentes (veja o clivus.log): {1}.\n",
+                    resultado.Falharam.Count, Lista(resultado.Falharam)));
+            }
         }
         catch (System.Exception erro)
         {

@@ -54,27 +54,53 @@ public class TableChangesTests
 
     [Fact]
     [Trait("Etapa", "38")]
-    public void PendenciaDoSalvarSoNaMesaComSolidoQueNaoSaiuDoLugar()
+    public void PendenciaDoSalvarSoNaMesaComSolidoInteiraESozinhaNoLugar()
     {
         var movida = Mesa(PendingChanges.ReasonModified);
 
-        // A do salvar: movida ou editada, com sólido, no lugar.
-        Assert.True(PendingChanges.MayBeFromSave(movida, hasSolids: true, anchorMoved: false));
+        // A do salvar: movida ou editada, com sólido, no lugar, inteira e sozinha.
+        Assert.True(PendingChanges.MayBeFromSave(movida, hasSolids: true, anchorMoved: false, complete: true, alone: true));
 
         // Saiu do lugar, sem sólido (monoposte: salvar nunca a sujou) ou sem âncora para conferir.
-        Assert.False(PendingChanges.MayBeFromSave(movida, hasSolids: true, anchorMoved: true));
-        Assert.False(PendingChanges.MayBeFromSave(movida, hasSolids: false, anchorMoved: false));
-        Assert.False(PendingChanges.MayBeFromSave(movida, hasSolids: true, anchorMoved: null));
+        Assert.False(PendingChanges.MayBeFromSave(movida, hasSolids: true, anchorMoved: true, complete: true, alone: true));
+        Assert.False(PendingChanges.MayBeFromSave(movida, hasSolids: false, anchorMoved: false, complete: true, alone: true));
+        Assert.False(PendingChanges.MayBeFromSave(movida, hasSolids: true, anchorMoved: null, complete: true, alone: true));
+
+        // O salvar antigo regravava o motivo por cima: a peça apagada vira
+        // "movida ou editada", e a cópia colada no lugar tem a âncora da original.
+        Assert.False(PendingChanges.MayBeFromSave(movida, hasSolids: true, anchorMoved: false, complete: false, alone: true));
+        Assert.False(PendingChanges.MayBeFromSave(movida, hasSolids: true, anchorMoved: false, complete: true, alone: false));
     }
 
     [Fact]
     [Trait("Etapa", "38")]
     public void PendenciaDeOutroMotivoNuncaEDoSalvar()
     {
-        Assert.False(PendingChanges.MayBeFromSave(Mesa(null), hasSolids: true, anchorMoved: false));
-        Assert.False(PendingChanges.MayBeFromSave(Mesa(PendingChanges.ReasonAppended), hasSolids: true, anchorMoved: false));
-        Assert.False(PendingChanges.MayBeFromSave(Mesa(PendingChanges.ReasonErased), hasSolids: true, anchorMoved: false));
-        Assert.False(PendingChanges.MayBeFromSave(Mesa("pedido do usuário"), hasSolids: true, anchorMoved: false));
+        Assert.False(PendingChanges.MayBeFromSave(Mesa(null), hasSolids: true, anchorMoved: false, complete: true, alone: true));
+        Assert.False(PendingChanges.MayBeFromSave(Mesa(PendingChanges.ReasonAppended), hasSolids: true, anchorMoved: false, complete: true, alone: true));
+        Assert.False(PendingChanges.MayBeFromSave(Mesa(PendingChanges.ReasonErased), hasSolids: true, anchorMoved: false, complete: true, alone: true));
+        Assert.False(PendingChanges.MayBeFromSave(Mesa("pedido do usuário"), hasSolids: true, anchorMoved: false, complete: true, alone: true));
+    }
+
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void AsPecasDeUmaMesaInteiraSaoAsMaisComunsDoTipo()
+    {
+        var inteira = new TablePieceCount(28, 28, 12, 26);
+        var semModulo = inteira with { Modules = 27, Faces = 27 };
+        var monoposte = new TablePieceCount(28, 28, 6, 0);
+
+        var tipicas = PendingChanges.TypicalPieces([
+            ("GC800", inteira), ("GC800", inteira), ("GC800", semModulo),
+            ("Mono", monoposte),
+            (null, semModulo), (null, inteira),
+        ]);
+
+        Assert.Equal(inteira, tipicas["GC800"]);
+        Assert.Equal(monoposte, tipicas["Mono"]);
+
+        // Empate (uma inteira e uma sem módulo): vale a maior, porque o que acontece é faltar peça.
+        Assert.Equal(inteira, tipicas[string.Empty]);
     }
 
     [Fact]

@@ -80,7 +80,7 @@ public static class ApagarTudoCommands
         }
     }
 
-    private static void Executar(Editor editor, Document documento, (IReadOnlyList<Point3> Vertices, string Nome) area)
+    internal static void Executar(Editor editor, Document documento, (IReadOnlyList<Point3> Vertices, string Nome) area)
     {
         var database = documento.Database;
 

@@ -89,6 +89,22 @@ internal sealed class JanelaDeAreas : Window
     private readonly Button _hachurarTodas;
     private readonly Button _tirarTodas;
 
+    // As ações sobre as mesas da área e a própria área (30/10/2026: "quero um
+    // botão para APAGAR área [...] e quando tem mesas, quero as opções de
+    // limpar, regerar, recalcular"): comandos na linha de comando, com a área
+    // pedida pela janela.
+    private readonly Button _limpar;
+    private readonly Button _regerar;
+    private readonly Button _recalcular;
+    private readonly Button _apagarArea;
+
+    /// <summary>Os comandos que mudam o que a lista mostra: a lista se lê de novo quando um deles termina.</summary>
+    private static readonly HashSet<string> ComandosQueMudamAsAreas = new(StringComparer.OrdinalIgnoreCase)
+    {
+        PluginInfo.ComandoAreaApagar, PluginInfo.ComandoAreaRecalcular, PluginInfo.ComandoApagarTudo, PluginInfo.ComandoRefazer,
+        PluginInfo.ComandoArea, PluginInfo.ComandoUsina, PluginInfo.ComandoFileira, PluginInfo.ComandoReindexar, "U", "UNDO", "REDO", "ERASE",
+    };
+
     private JanelaDeAreas(Document documento)
     {
         _documento = documento;
@@ -123,6 +139,11 @@ internal sealed class JanelaDeAreas : Window
         _hachurarTodas = Botao(Tr.T("Hachurar todas"), Tr.F("Hachura todas as áreas, cada uma com uma cor diferente, na camada {0}.", HachuraDasAreas.Camada), () => Hachurar(todas: true));
         _tirarTodas = Botao(Tr.T("Tirar todas"), Tr.T("Tira todas as hachuras de área do desenho (também as de área que não existe mais)."), () => Tirar(todas: true));
 
+        _limpar = Botao(Tr.T("Limpar mesas"), Tr.T("Apaga as mesas da área escolhida (pilares, módulos, estrutura, strings); a área e o alinhamento ficam, prontos para gerar de novo. U desfaz."), () => Mandar(PluginInfo.ComandoApagarTudo, Tr.T("Limpar mesas")));
+        _regerar = Botao(Tr.T("Regerar"), Tr.T("Apaga as mesas da área escolhida e gera de novo com a configuração e o terreno de hoje (a área que segue os objetos do cliente, pelos mesmos objetos). Pode perguntar o alinhamento na linha de comando."), () => Mandar(PluginInfo.ComandoRefazer, Tr.T("Regerar")));
+        _recalcular = Botao(Tr.T("Recalcular"), Tr.T("Recalcula, onde estão, todas as mesas da área escolhida: pilares e pontas baixas no terreno de hoje, com a configuração atual. Nada muda de lugar."), () => Mandar(PluginInfo.ComandoAreaRecalcular, Tr.T("Recalcular")));
+        _apagarArea = Botao(Tr.T("Apagar área…"), Tr.T("Apaga a área escolhida (a linha, a hachura e o registro). Se ela tem mesas, pergunta antes e as apaga junto; a área repetida (a mesma linha de outra) sai sozinha. U desfaz."), ApagarArea);
+
         var exportar = Botao(Tr.T("Exportar Excel…"), Tr.T("Excel com a aba Resumo (uma linha por área e o total) e uma aba por área com a contagem por tipo de mesa, os pilares e a ocupação."), Exportar);
         var atualizar = Botao(Tr.T("Atualizar"), Tr.T("Lê o desenho de novo (depois de gerar, apagar ou mexer em mesas e áreas com a janela aberta)."), Preencher);
         var fechar = new Button { Content = Tr.T("Fechar"), Height = 26, Width = 80, IsCancel = true, ToolTip = Tr.T("Fecha a janela; as hachuras ficam.") };
@@ -144,6 +165,12 @@ internal sealed class JanelaDeAreas : Window
         botoes.Children.Add(finais);
         botoes.Children.Add(daEscolhida);
 
+        var daArea = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+        daArea.Children.Add(new TextBlock { Text = Tr.T("Mesas da área:"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0), Foreground = Brushes.Gray });
+        foreach (var b in new[] { _limpar, _regerar, _recalcular }) daArea.Children.Add(b);
+        daArea.Children.Add(new Border { Width = 1, Margin = new Thickness(4, 3, 10, 3), Background = Brushes.Silver });
+        daArea.Children.Add(_apagarArea);
+
         var corpo = new StackPanel();
         corpo.Children.Add(_lista);
         corpo.Children.Add(new TextBlock
@@ -157,12 +184,29 @@ internal sealed class JanelaDeAreas : Window
         corpo.Children.Add(_titulo);
         corpo.Children.Add(Detalhe());
         corpo.Children.Add(botoes);
+        corpo.Children.Add(daArea);
         corpo.Children.Add(_recado);
 
         Content = new Border { Padding = new Thickness(12), Child = corpo };
 
         // Lida antes de aparecer: a janela já abre do tamanho da lista.
         Tentar(Preencher);
+
+        // Os comandos que a janela manda (e os que mudam as áreas) terminam
+        // depois do clique: a lista se lê de novo no fim deles.
+        _documento.CommandEnded += AoTerminarComando;
+        Closed += (_, _) =>
+        {
+            try { _documento.CommandEnded -= AoTerminarComando; }
+            catch (Exception erro) { RegistroDeDiagnostico.Registrar("Falha ao soltar a janela das áreas do fim dos comandos.", erro); }
+        };
+    }
+
+    private void AoTerminarComando(object? sender, CommandEventArgs e)
+    {
+        if (!ComandosQueMudamAsAreas.Contains(e.GlobalCommandName)) return;
+
+        Dispatcher.BeginInvoke(new Action(() => Tentar(Preencher)));
     }
 
     /// <summary>Abre a janela do desenho, ou traz para a frente a que já está aberta (lida de novo).</summary>
@@ -398,6 +442,12 @@ internal sealed class JanelaDeAreas : Window
         _tirar.IsEnabled = area is not null && linha!.Hachurada;
         _renomear.IsEnabled = area is not null;
 
+        var comMesas = area is not null && linha!.Resumo.Census.Tables > 0;
+        _limpar.IsEnabled = comMesas;
+        _recalcular.IsEnabled = comMesas;
+        _regerar.IsEnabled = area is not null;
+        _apagarArea.IsEnabled = area is not null;
+
         if (linha is null)
         {
             _titulo.Text = string.Empty;
@@ -511,6 +561,66 @@ internal sealed class JanelaDeAreas : Window
         if (nome == area.Identity.DisplayName) return;
 
         Fazer(() => AreasDoDesenho.Renomear(_documento, leitura.Areas, area, nome));
+    }
+
+    /// <summary>
+    /// Apagar a área escolhida: vazia (ou repetida de outra), vai direto; com
+    /// mesas, pergunta aqui, e o comando não pergunta de novo.
+    /// </summary>
+    private void ApagarArea()
+    {
+        if (_leitura is not { } leitura || Escolhida is not { Area: { } area } linha)
+        {
+            Recado(Tr.T("Escolha uma área na lista."), true);
+            return;
+        }
+
+        var repetida = EscolhaDeArea.Repetidas(leitura.Areas, area).Count > 1;
+        var mesas = linha.Resumo.Census.Tables;
+
+        if (!repetida && mesas > 0)
+        {
+            var pergunta = Tr.F(
+                "A área \"{0}\" tem {1} mesa(s). Apagar a área apaga as mesas, os pilares, a estrutura e as strings dela também (U desfaz).\n\nApagar a área e as mesas?",
+                area.Identity.DisplayName, mesas);
+            if (MessageBox.Show(this, pergunta, Tr.T("Apagar área"), MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+
+            AreaAcoesCommands.ConfirmadaPelaJanela = area.Id;
+        }
+
+        Mandar(PluginInfo.ComandoAreaApagar, Tr.T("Apagar área"));
+    }
+
+    /// <summary>
+    /// Manda o comando para a linha de comando com a área escolhida
+    /// (<see cref="EscolhaDeArea.PedirPelaJanela"/>). Corre como qualquer
+    /// comando: U desfaz, e a lista se lê de novo quando ele termina.
+    /// </summary>
+    private void Mandar(string comando, string oQue)
+    {
+        if (Escolhida?.Area is not { } area)
+        {
+            Recado(Tr.T("Escolha uma área na lista."), true);
+            return;
+        }
+
+        if (AcadApp.DocumentManager.MdiActiveDocument != _documento)
+        {
+            Recado(Tr.T("Este desenho não é o ativo: clique nele e repita."), true);
+            return;
+        }
+
+        EscolhaDeArea.PedirPelaJanela(area.Id);
+
+        // A seleção que estivesse no desenho não fica no lugar da área pedida.
+        using (_documento.LockDocument()) _documento.Editor.SetImpliedSelection([]);
+
+        // Sem interface (Core Console) o SendStringToExecute fora de comando derruba o processo.
+        if (!ClivusExtension.TemInterface()) return;
+
+        var cancelar = string.IsNullOrEmpty(_documento.CommandInProgress) ? string.Empty : "\x03\x03";
+        _documento.SendStringToExecute($"{cancelar}_{comando} ", true, false, false);
+        Recado(Tr.F("{0} de {1}: veja a linha de comando.", oQue, area.Identity.DisplayName), false);
     }
 
     private void Exportar()

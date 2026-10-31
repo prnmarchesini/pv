@@ -95,9 +95,22 @@ function Testar-Salvar {
         $ok = $false
     }
 
-    # O vigia continua valendo para a edicao de verdade, e grava a chave.
-    if ($t -notmatch 'VIGIA F[\d.]+ pendente \(movida ou editada, comando CHPROP\)') {
-        $problemas.Add("clivus-salvar: o CHPROP num solido nao marcou a mesa. Veja $($gravar.Saida)")
+    # O vigia continua valendo para a edicao de verdade, e grava a chave:
+    # A (cor), B (modulo apagado, depois cor) e C (movida).
+    if ($t -notmatch 'CLIVUS_SALVAR_MESAS=(\d+)' -or [int] $Matches[1] -lt 3) {
+        $problemas.Add("clivus-salvar: a fileira nao tem as tres mesas com solido para o teste. Veja $($gravar.Saida)")
+        return $false
+    }
+
+    $chprop = ([regex]::Matches($t, 'VIGIA F[\d.]+ pendente \(movida ou editada, comando CHPROP\)')).Count
+    if ($chprop -ne 2 -or $t -notmatch 'VIGIA F[\d.]+ pendente \(pe.a apagada, comando ERASE\)' -or $t -notmatch 'VIGIA F[\d.]+ pendente \(movida ou editada, comando MOVE\)') {
+        $problemas.Add("clivus-salvar: as edicoes de verdade nao marcaram as mesas (CHPROP em A e B: $chprop; ERASE em B; MOVE em C). Veja $($gravar.Saida)")
+        $ok = $false
+    }
+
+    $editado = $t.Substring($t.IndexOf('CLIVUS_SALVAR_PINTADOS_DEPOIS_DO_CHPROP'))
+    if ($editado -notmatch 'ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), 3 pendente\(s\)') {
+        $problemas.Add("clivus-salvar: depois das tres edicoes, o Estado nao diz tres pendentes. Veja $($gravar.Saida)")
         $ok = $false
     }
 
@@ -106,8 +119,8 @@ function Testar-Salvar {
         $ok = $false
     }
 
-    if ($t -notmatch 'CLIVUS_SALVAR_PINTADOS_DEPOIS_DO_CHPROP=(\d+)' -or [int] $Matches[1] -lt 2) {
-        $problemas.Add("clivus-salvar: a mesa marcada nao pintou os solidos dela. Veja $($gravar.Saida)")
+    if ($t -notmatch 'CLIVUS_SALVAR_PINTADOS_DEPOIS_DO_CHPROP=(\d+)' -or [int] $Matches[1] -lt 6) {
+        $problemas.Add("clivus-salvar: as mesas marcadas nao pintaram os solidos delas. Veja $($gravar.Saida)")
         $ok = $false
     }
 
@@ -131,24 +144,27 @@ function Testar-Salvar {
 
     $a = $abrir.Texto
 
-    if ($a -notmatch 'CLIVUS_SALVAR_ABERTO chave=NAO pintados=(\d+)' -or [int] $Matches[1] -lt 2) {
-        $problemas.Add("clivus-salvar: o desenho nao abriu como a versao antiga deixava (sem chave, com a mesa pintada). Veja $($abrir.Saida)")
+    # Pintadas ao abrir: as tres mesas, com o mesmo numero de solidos cada.
+    $antes = 0
+    if ($a -notmatch 'CLIVUS_SALVAR_ABERTO chave=NAO pintados=(\d+)' -or ($antes = [int] $Matches[1]) -lt 6) {
+        $problemas.Add("clivus-salvar: o desenho nao abriu como a versao antiga deixava (sem chave, com as mesas pintadas). Veja $($abrir.Saida)")
         $ok = $false
     }
 
+    # So a A volta: a B (falta um modulo) e a C (saiu do lugar) continuam.
     if ($a -notmatch 'CLIVUS 1 mesa\(s\) estavam pendentes s. porque o desenho foi salvo') {
-        $problemas.Add("clivus-salvar: ao abrir, a mesa pendente pelo salvar nao foi limpa. Veja $($abrir.Saida)")
+        $problemas.Add("clivus-salvar: ao abrir, nao foi limpa exatamente uma mesa (so a inteira e no lugar). Veja $($abrir.Saida)")
         $ok = $false
     }
 
-    if ($a -notmatch 'CLIVUS_SALVAR_CARREGADO chave=SIM pintados=0') {
-        $problemas.Add("clivus-salvar: depois do conserto, a chave nao ficou gravada ou sobrou solido pintado. Veja $($abrir.Saida)")
+    if ($a -notmatch 'CLIVUS_SALVAR_CARREGADO chave=SIM pintados=(\d+)' -or 3 * ($antes - [int] $Matches[1]) -ne $antes) {
+        $problemas.Add("clivus-salvar: depois do conserto, a chave nao ficou gravada, ou os solidos de volta a cor da camada nao sao os de uma mesa (de $antes pintados). Veja $($abrir.Saida)")
         $ok = $false
     }
 
-    $estados = [regex]::Matches($a, 'ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), 0 pendente\(s\)')
-    if ($estados.Count -lt 2 -or ($estados | Where-Object { $_.Groups[1].Value -ne $_.Groups[2].Value })) {
-        $problemas.Add("clivus-salvar: depois de abrir (e de salvar de novo), o Estado nao diz todas as mesas limpas. Veja $($abrir.Saida)")
+    $estados = [regex]::Matches($a, 'ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), (\d+) pendente\(s\)')
+    if ($estados.Count -lt 2 -or ($estados | Where-Object { $_.Groups[3].Value -ne '2' })) {
+        $problemas.Add("clivus-salvar: depois de abrir (e de salvar de novo), o Estado nao diz as duas que tem de continuar pendentes (a sem modulo e a movida). Veja $($abrir.Saida)")
         $ok = $false
     }
 
@@ -162,7 +178,7 @@ function Testar-Salvar {
         return $false
     }
 
-    if ($ok) { Write-Host '  (salvar: SAVEAS e dois QSAVE sem mesa pendente; o CHPROP ainda marca; ao abrir, a mesa sujada pelo salvar volta limpa e na cor da camada)' -ForegroundColor DarkGray }
+    if ($ok) { Write-Host '  (salvar: SAVEAS e dois QSAVE sem mesa pendente; CHPROP, ERASE e MOVE ainda marcam; ao abrir, so a mesa inteira e no lugar volta limpa e na cor da camada, a sem modulo e a movida continuam pendentes)' -ForegroundColor DarkGray }
 
     return $ok
 }

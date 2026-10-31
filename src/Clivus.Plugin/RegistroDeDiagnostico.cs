@@ -45,8 +45,17 @@ internal static class RegistroDeDiagnostico
                 var pasta = Path.GetDirectoryName(Caminho);
                 if (!string.IsNullOrEmpty(pasta)) Directory.CreateDirectory(pasta);
 
-                if (File.Exists(Caminho) && new FileInfo(Caminho).Length > TamanhoMaximoEmBytes)
-                    File.Move(Caminho, Path.ChangeExtension(Caminho, ".1.log"), overwrite: true);
+                // A virada num try próprio: com o clivus.1.log aberto noutro
+                // programa ela falha, e a linha ainda tem de ser escrita.
+                try
+                {
+                    if (File.Exists(Caminho) && new FileInfo(Caminho).Length > TamanhoMaximoEmBytes)
+                        File.Move(Caminho, Path.ChangeExtension(Caminho, ".1.log"), overwrite: true);
+                }
+                catch (Exception)
+                {
+                    // Fica para a próxima linha.
+                }
 
                 File.AppendAllText(Caminho, linha.AppendLine().ToString(), Encoding.UTF8);
             }

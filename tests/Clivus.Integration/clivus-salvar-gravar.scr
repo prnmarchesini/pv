@@ -5,15 +5,24 @@
 ; solidos ao salvar e avisa "modificado" de cada um, e o vigia nao pode ver
 ; isso como edicao.
 ;
-; Depois prepara a segunda metade (clivus-salvar-abrir.scr): muda a cor de
-; um solido com o CHPROP (o vigia marca a mesa, e isso continua valendo), tira
-; a chave VIGIA_SALVAR do dicionario, como num desenho da versao antiga, e
-; salva. Ao abrir, a mesa tem de voltar a limpa, com a cor da camada.
+; Depois prepara a segunda metade (clivus-salvar-abrir.scr), com tres mesas
+; pendentes por "movida ou editada", como a versao antiga deixava (cada salvar
+; regravava o motivo por cima):
+;   - A: a cor de um solido mudada (CHPROP): inteira e no lugar, tem de voltar
+;     limpa ao abrir;
+;   - B: um modulo apagado e depois a cor de um solido mudada: o motivo vira
+;     "movida ou editada", mas falta peca; tem de continuar pendente;
+;   - C: a mesa inteira movida 5 m (MOVE pelo grupo): tem de continuar pendente.
+; A chave VIGIA_SALVAR (que o vigia corrigido grava ao marcar) sai do
+; dicionario, e o desenho e salvo.
 ;
+; PICKSTYLE 0 para o CHPROP e o ERASE pegarem so a peca (o rodar.ps1 devolve
+; o PICKSTYLE do registro); 1 para o MOVE levar a mesa inteira.
 ; O OSNAP e desligado para os pontos digitados chegarem crus.
 
 (setq clivus:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
+(setq clivus:pickstyle (getvar "PICKSTYLE"))
 (command "_.NETLOAD" "{{DLL}}")
 (command "CLIVUS_TERRENO_AUTO")
 (command "CLIVUS_BIFILA_EXEMPLO_AUTO")
@@ -22,12 +31,16 @@
 (command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area do salvar")
 (command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento do salvar")
 (command "CLIVUS_FILEIRA_AUTO")
-(setvar "OSMODE" clivus:osmode)
 
 (defun clivus:chave (/ d)
   (if (setq d (dictsearch (namedobjdict) "CLIVUS"))
     (if (dictsearch (cdr (assoc -1 d)) "VIGIA_SALVAR") "SIM" "NAO")
     "NAO"))
+
+; Os textos do nosso XData (1000), em ordem: o tipo, o GUID da peca, o da mesa...
+(defun clivus:campos (e / x)
+  (setq x (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+  (mapcar 'cdr (vl-remove-if-not '(lambda (g) (= (car g) 1000)) x)))
 
 ; Solidos com cor propria (62 ou 420): a mesa pendente pinta os dela.
 (defun clivus:pintados (/ ss i n e)
@@ -39,6 +52,16 @@
       (setq i (1+ i))))
   n)
 
+; A primeira entidade do tipo dado (0 do DXF e tipo do XData) da mesa dada.
+(defun clivus:da-mesa (dxf tipo mesa / ss i e c achou)
+  (setq ss (ssget "X" (list (cons 0 dxf) '(-3 ("CLIVUS")))) i 0)
+  (if ss
+    (while (and (not achou) (< i (sslength ss)))
+      (setq e (ssname ss i) c (clivus:campos e))
+      (if (and (= (car c) tipo) (= (if (= tipo "Mesa") (cadr c) (caddr c)) mesa)) (setq achou e))
+      (setq i (1+ i))))
+  achou)
+
 (setvar "FILEDIA" 0)
 (princ "\nCLIVUS_SALVAR_ANTES")
 (command "_.SAVEAS" "2018" "{{SAIDA}}")
@@ -48,11 +71,30 @@
 (command "CLIVUS_ESTADO")
 (princ (strcat "\nCLIVUS_SALVAR_SOLIDOS pintados=" (itoa (clivus:pintados))))
 
-; A segunda metade: uma edicao de verdade, e o desenho como a versao antiga deixava.
-(setq clivus:ss (ssget "X" '((0 . "3DSOLID"))))
-(command "_.CHPROP" (ssname clivus:ss 0) "" "_C" "3" "")
+; As tres mesas, pelos solidos (cada solido diz a mesa dele).
+(setq clivus:ss (ssget "X" '((0 . "3DSOLID") (-3 ("CLIVUS")))) clivus:i 0 clivus:mesas nil)
+(while (< clivus:i (sslength clivus:ss))
+  (setq clivus:m (caddr (clivus:campos (ssname clivus:ss clivus:i))))
+  (if (not (member clivus:m clivus:mesas)) (setq clivus:mesas (append clivus:mesas (list clivus:m))))
+  (setq clivus:i (1+ clivus:i)))
+(setq clivus:a (nth 0 clivus:mesas) clivus:b (nth 1 clivus:mesas) clivus:c (nth 2 clivus:mesas))
+(princ (strcat "\nCLIVUS_SALVAR_MESAS=" (itoa (length clivus:mesas))))
+
+(setvar "PICKSTYLE" 0)
+; A: so a cor de um solido.
+(command "_.CHPROP" (clivus:da-mesa "3DSOLID" "Estrutura" clivus:a) "" "_C" "3" "")
+; B: um modulo apagado, depois a cor de um solido (o motivo vira "movida ou editada").
+(command "_.ERASE" (clivus:da-mesa "INSERT" "Modulo" clivus:b) "")
+(command "_.CHPROP" (clivus:da-mesa "3DSOLID" "Estrutura" clivus:b) "" "_C" "3" "")
+; C: a mesa inteira 5 m para o lado, pelo grupo.
+(setvar "PICKSTYLE" 1)
+(command "_.MOVE" (clivus:da-mesa "POLYLINE" "Mesa" clivus:c) "" "0,0,0" "5,0,0")
+(setvar "PICKSTYLE" clivus:pickstyle)
+(setvar "OSMODE" clivus:osmode)
+
 (princ (strcat "\nCLIVUS_SALVAR_CHAVE_DEPOIS_DO_CHPROP=" (clivus:chave)))
 (princ (strcat "\nCLIVUS_SALVAR_PINTADOS_DEPOIS_DO_CHPROP=" (itoa (clivus:pintados))))
+(command "CLIVUS_ESTADO")
 (dictremove (cdr (assoc -1 (dictsearch (namedobjdict) "CLIVUS"))) "VIGIA_SALVAR")
 (princ (strcat "\nCLIVUS_SALVAR_CHAVE_TIRADA=" (clivus:chave)))
 (command "_.QSAVE")
