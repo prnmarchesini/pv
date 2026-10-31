@@ -79,6 +79,50 @@ public class BundleTests
         Assert.Contains(trocados, a => a.Parent?.Name.LocalName == "ComponentEntry" && a.Name.LocalName == "Version");
     }
 
+    /// <summary>
+    /// Revisao da etapa 43: o teste acima confere o mecanismo; este fecha o
+    /// caminho ate o bundle. O alvo nao tem condicao (roda em todo build) e
+    /// copia o descritor para a saida; nenhum projeto declara outra versao por
+    /// cima do props; e o publicar-bundle.ps1 poe no bundle a copia da saida
+    /// (a do repositorio levaria o $(Version) literal), conferindo o numero.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "43")]
+    public void OBundleLevaODescritorCarimbadoComAVersaoDoProps()
+    {
+        var alvo = XDocument.Load(Repositorio.Caminho("src", "Clivus.Plugin", "Clivus.Plugin.csproj"))
+            .Descendants()
+            .Single(e => e.Name.LocalName == "Target" && (string?)e.Attribute("Name") == "CarimbarPackageContents");
+
+        Assert.Null(alvo.Attribute("Condition"));
+        Assert.All(alvo.Elements(), e => Assert.Null(e.Attribute("Condition")));
+
+        var copia = Assert.Single(alvo.Elements(), e => e.Name.LocalName == "Copy");
+        Assert.Equal("PackageContents.xml", (string?)copia.Attribute("SourceFiles"));
+        Assert.Equal("$(OutDir)", (string?)copia.Attribute("DestinationFolder"));
+
+        // A copia vem antes das trocas (as trocas sao no arquivo copiado).
+        var ordem = alvo.Elements().Select(e => e.Name.LocalName).ToList();
+        Assert.Equal(0, ordem.IndexOf("Copy"));
+
+        // Uma fonte so: nenhum projeto declara versao por cima do props.
+        foreach (var projeto in Directory.EnumerateFiles(Repositorio.Raiz, "*.csproj", SearchOption.AllDirectories)
+                     .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}.claude{Path.DirectorySeparatorChar}", StringComparison.Ordinal)))
+        {
+            var versoes = XDocument.Load(projeto).Descendants()
+                .Where(e => e.Name.LocalName is "Version" or "VersionPrefix" or "AssemblyVersion" or "FileVersion" or "InformationalVersion" && e.Parent?.Name.LocalName == "PropertyGroup")
+                .ToList();
+            Assert.True(versoes.Count == 0, $"{Path.GetFileName(projeto)} declara versao propria: {string.Join(", ", versoes.Select(v => v.Name.LocalName))}");
+        }
+
+        // O publicar-bundle.ps1 copia o descritor da saida do build e confere o numero.
+        var publicar = File.ReadAllText(Repositorio.Caminho("tools", "publicar-bundle.ps1"));
+        Assert.Contains("Join-Path $saidaDoBuild 'PackageContents.xml'", publicar, StringComparison.Ordinal);
+        Assert.DoesNotContain(@"'src\Clivus.Plugin\PackageContents.xml'", publicar, StringComparison.Ordinal);
+        Assert.Contains("Directory.Build.props", publicar, StringComparison.Ordinal);
+        Assert.Contains("GetAttribute('AppVersion') -ne $versao", publicar, StringComparison.Ordinal);
+    }
+
     /// <summary>A versao do Directory.Build.props, a unica fonte (etapa 43).</summary>
     private static string VersaoDoBuild() =>
         XDocument.Load(Repositorio.Caminho("Directory.Build.props"))

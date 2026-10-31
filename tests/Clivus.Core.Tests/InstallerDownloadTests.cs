@@ -24,7 +24,7 @@ public class InstallerDownloadTests
         new(SemanticVersion.Parse("0.1.1")!, url, sha, tamanho, string.Empty, null, false);
 
     private static Task<InstallerDownloadResult> Baixar(Falso servidor, PluginRelease versao, Stream destino, Action<long>? andamento = null, TimeSpan? leitura = null, CancellationToken cancelar = default) =>
-        InstallerDownload.RunAsync(new HttpClient(servidor), versao, Servidor, Site, destino, andamento, leitura ?? Leitura, cancelar);
+        InstallerDownload.RunAsync(new HttpClient(servidor), versao, [Servidor, Site], destino, andamento, leitura ?? Leitura, cancelar);
 
     private static HttpResponseMessage Corpo(string texto) =>
         new(HttpStatusCode.OK) { Content = new ByteArrayContent(Encoding.ASCII.GetBytes(texto)) };
@@ -101,6 +101,36 @@ public class InstallerDownloadTests
         Assert.NotNull(resultado.Error);
         Assert.Equal(InstallerDownload.MaxRedirects + 1, servidor.Pedidos.Count);
         Assert.Equal(0, destino.Length);
+    }
+
+    /// <summary>Revisão: um Location que não se resolve vira erro do download, e não exceção solta.</summary>
+    [Fact]
+    [Trait("Etapa", "43")]
+    public async Task LocationQueNaoSeResolveNaoLanca()
+    {
+        var servidor = new Falso(_ => new HttpResponseMessage(HttpStatusCode.Found) { Headers = { Location = new Uri("//[", UriKind.Relative) } });
+        using var destino = new MemoryStream();
+
+        var resultado = await Baixar(servidor, Versao(), destino);
+
+        Assert.NotNull(resultado.Error);
+        Assert.Single(servidor.Pedidos);
+    }
+
+    /// <summary>O domínio novo do servidor está entre os endereços de download de toda versão instalada a partir daqui.</summary>
+    [Fact]
+    [Trait("Etapa", "43")]
+    public async Task BaixaDoDominioNovoDoServidor()
+    {
+        const string novo = "https://clivus.marcheng.com.br/baixar/ClivusSolar-Setup-0.1.1.exe";
+        var servidor = new Falso(_ => Corpo("abc"));
+        using var destino = new MemoryStream();
+
+        string?[] confiaveis = [Servidor, .. PluginInfo.EnderecosDeDownload];
+        var resultado = await InstallerDownload.RunAsync(new HttpClient(servidor), Versao(url: novo), confiaveis, destino, null, Leitura, default);
+
+        Assert.Null(resultado.Error);
+        Assert.Equal([new Uri(novo)], servidor.Pedidos);
     }
 
     [Fact]

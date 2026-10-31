@@ -146,6 +146,60 @@ public class PluginUpdateTests
         Assert.NotNull(PluginUpdate.ParseReply(200, "[1, 2]").Error);
     }
 
+    /// <summary>Revisão: o corte das notas não parte um caractere de dois códigos.</summary>
+    [Fact]
+    [Trait("Etapa", "43")]
+    public void OCorteDasNotasNaoParteUmEmoji()
+    {
+        // O emoji começa no último caractere que cabe: o corte simples levaria só a metade dele.
+        var notas = new string('x', PluginUpdate.LongestNotes - 1) + "🙂" + new string('y', 50);
+        Assert.True(char.IsHighSurrogate(notas[PluginUpdate.LongestNotes - 1]));
+
+        var lidas = PluginUpdate.ParseReply(200, Resposta(notas: System.Text.Json.JsonSerializer.Serialize(notas))).Release!.Notes;
+
+        Assert.EndsWith("…", lidas, StringComparison.Ordinal);
+        var semReticencias = lidas[..^1];
+        Assert.False(char.IsHighSurrogate(semReticencias[^1]), "o corte deixou meio emoji");
+        Assert.Equal(new string('x', PluginUpdate.LongestNotes - 1), semReticencias);
+    }
+
+    /// <summary>
+    /// Revisão: a consulta conta como a do dia quando o servidor respondeu e
+    /// não há versão obrigatória pendente, pela abertura ou pelo comando.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "43")]
+    public void AObrigatoriaPendenteNaoContaComoAConsultaDoDia()
+    {
+        var comum = PluginUpdate.ParseReply(200, Resposta()).Release!;
+        var obrigatoria = comum with { Required = true };
+
+        Assert.True(PluginUpdate.RecordsCheck(respondeu: true, maisNova: null));
+        Assert.True(PluginUpdate.RecordsCheck(respondeu: true, maisNova: comum));
+        Assert.False(PluginUpdate.RecordsCheck(respondeu: true, maisNova: obrigatoria));
+        Assert.False(PluginUpdate.RecordsCheck(respondeu: false, maisNova: null));
+    }
+
+    /// <summary>
+    /// Revisão: os endereços de download incluem o domínio novo do servidor
+    /// (com eles, o plugin de hoje aceita o instalador servido de lá depois
+    /// da troca) e nenhum domínio que não seja do Renan.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "43")]
+    public void OsEnderecosDeDownloadSaoOSiteEODominioNovo()
+    {
+        Assert.Equal([PluginInfo.SiteDeDownload, "https://clivus.marcheng.com.br"], PluginInfo.EnderecosDeDownload);
+        Assert.All(PluginInfo.EnderecosDeDownload, e => Assert.Null(Viewer3DPage.WhyServerUnsafe(e)));
+        Assert.DoesNotContain(PluginInfo.EnderecosDeDownload, e => e.Contains("clivussolar.com", StringComparison.OrdinalIgnoreCase));
+
+        string?[] confiaveis = [Servidor, .. PluginInfo.EnderecosDeDownload];
+        Assert.Null(PluginUpdate.WhyUrlRejected("https://clivus.marcheng.com.br/baixar/ClivusSolar-Setup-0.1.1.exe", confiaveis));
+        Assert.NotNull(PluginUpdate.WhyUrlRejected("https://marcheng.com.br/baixar/a.exe", confiaveis));
+        Assert.NotNull(PluginUpdate.WhyUrlRejected("https://outro.marcheng.com.br/baixar/a.exe", confiaveis));
+        Assert.NotNull(PluginUpdate.WhyUrlRejected("https://clivussolar.com/baixar/a.exe", confiaveis));
+    }
+
     /// <summary>Versão fora do contrato não vira oferta: nada de baixar sem saber o quê.</summary>
     [Theory]
     [Trait("Etapa", "43")]
@@ -303,6 +357,46 @@ public class PluginUpdateTests
             File.WriteAllText(arquivo, "{\"idioma\": \"en\", \"ultimaConsultaDeVersao\": \"amanhã\"}");
             Assert.Null(UserPreferences.Load(arquivo).LastUpdateCheck);
             Assert.Equal("en", UserPreferences.Load(arquivo).Language);
+        }
+        finally
+        {
+            if (Directory.Exists(pasta)) Directory.Delete(pasta, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Revisão: quem grava sozinho (a consulta do dia) sabe quando o arquivo
+    /// não se leu, para não gravar o padrão por cima do idioma e dos modelos
+    /// apagados do usuário.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "43")]
+    public void AsPreferenciasDizemQuandoNaoSeLeram()
+    {
+        var pasta = Path.Combine(Path.GetTempPath(), "clivus-preferencias-" + Guid.NewGuid().ToString("N"));
+        var arquivo = Path.Combine(pasta, "preferencias.json");
+
+        try
+        {
+            // Sem arquivo: lê (o padrão).
+            Assert.True(UserPreferences.TryLoad(arquivo, out var padrao));
+            Assert.Equal("auto", padrao.Language);
+
+            Directory.CreateDirectory(pasta);
+            File.WriteAllText(arquivo, "{\"idioma\": \"es\"}");
+            Assert.True(UserPreferences.TryLoad(arquivo, out var lidas));
+            Assert.Equal("es", lidas.Language);
+
+            // Estragado (uma gravação pela metade): não leu, e o Load continua dando o padrão.
+            File.WriteAllText(arquivo, "{\"idioma\": \"es\", \"modelosApa");
+            Assert.False(UserPreferences.TryLoad(arquivo, out var estragadas));
+            Assert.Equal("auto", estragadas.Language);
+            Assert.Equal("auto", UserPreferences.Load(arquivo).Language);
+
+            // Preso por outro programa: também não leu.
+            File.WriteAllText(arquivo, "{\"idioma\": \"es\"}");
+            using (new FileStream(arquivo, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                Assert.False(UserPreferences.TryLoad(arquivo, out _));
         }
         finally
         {

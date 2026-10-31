@@ -286,6 +286,16 @@ public static partial class PluginInfo
     /// </summary>
     public const string SiteDeDownload = "https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io";
 
+    /// <summary>
+    /// De onde a atualização aceita baixar o instalador, além do servidor
+    /// configurado: o site de download e o domínio novo do servidor
+    /// (clivus.marcheng.com.br, decisão de 30/10/2026, com HTTPS no ar desde
+    /// 31/10). O plugin instalado hoje fala com o endereço temporário; quando
+    /// o servidor mudar de endereço, o instalador servido de lá continua
+    /// aceito. Domínio que não é do Renan nunca entra aqui.
+    /// </summary>
+    public static readonly IReadOnlyList<string> EnderecosDeDownload = [SiteDeDownload, "https://clivus.marcheng.com.br"];
+
     /// <summary>Troca a mesa clicada por uma ou mais de outro tipo, travando um lado (9.2).</summary>
     public const string ComandoTrocarMesa = "CLIVUS_TROCAR_MESA";
 

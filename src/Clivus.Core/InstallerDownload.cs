@@ -14,7 +14,8 @@ public sealed record InstallerDownloadResult(Uri? From, string? Error, bool Mism
 /// registro: quem chama dá o cliente HTTP (sem redirecionamento automático) e
 /// o fluxo onde gravar, e decide o que fazer com o arquivo. Aqui ficam as
 /// regras, para os testes: o endereço passa por
-/// <see cref="PluginUpdate.WhyUrlRejected"/>, e cada redirecionamento também;
+/// <see cref="PluginUpdate.WhyUrlRejected"/> com os endereços confiáveis, e
+/// cada redirecionamento também;
 /// o tamanho declarado tem de ser o da versão; nada além do tamanho da versão
 /// é gravado; cada leitura tem tempo-limite; no fim, o tamanho e o SHA-256
 /// conferem.
@@ -27,21 +28,22 @@ public static class InstallerDownload
     /// <summary>Baixa a versão para <paramref name="destino"/>.</summary>
     /// <param name="cliente">O cliente HTTP, sem redirecionamento automático (o endereço novo passa pela regra aqui).</param>
     /// <param name="versao">A versão publicada (endereço, tamanho e SHA-256).</param>
-    /// <param name="servidor">O servidor do Clivus configurado.</param>
-    /// <param name="siteDeDownload">O site de download.</param>
+    /// <param name="confiaveis">O servidor do Clivus configurado e os endereços de download (<see cref="PluginInfo.EnderecosDeDownload"/>).</param>
     /// <param name="destino">Onde gravar.</param>
     /// <param name="andamento">Os bytes gravados até agora, a cada pedaço.</param>
     /// <param name="leituraParada">O tempo-limite de cada leitura (e da resposta).</param>
     /// <param name="cancelar">O cancelamento de quem chamou.</param>
     public static async Task<InstallerDownloadResult> RunAsync(
-        HttpClient cliente, PluginRelease versao, string? servidor, string? siteDeDownload, Stream destino,
+        HttpClient cliente, PluginRelease versao, IReadOnlyList<string?> confiaveis, Stream destino,
         Action<long>? andamento, TimeSpan leituraParada, CancellationToken cancelar)
     {
         ArgumentNullException.ThrowIfNull(cliente);
         ArgumentNullException.ThrowIfNull(versao);
+        ArgumentNullException.ThrowIfNull(confiaveis);
         ArgumentNullException.ThrowIfNull(destino);
 
-        if (PluginUpdate.WhyUrlRejected(versao.Url, servidor, siteDeDownload) is { } recusa) return new InstallerDownloadResult(null, recusa, false);
+        var lista = confiaveis.ToArray();
+        if (PluginUpdate.WhyUrlRejected(versao.Url, lista) is { } recusa) return new InstallerDownloadResult(null, recusa, false);
 
         var endereco = new Uri(versao.Url);
         HttpResponseMessage? resposta = null;
@@ -61,13 +63,14 @@ public static class InstallerDownload
                 if (status is < 300 or >= 400) break;
 
                 // Redirecionamento: o endereço novo passa pela mesma regra do primeiro.
-                var novo = resposta.Headers.Location is { } local ? new Uri(endereco, local) : null;
+                Uri? novo = null;
+                if (resposta.Headers.Location is { } local && !Uri.TryCreate(endereco, local, out novo)) novo = null;
                 resposta.Dispose();
                 resposta = null;
 
                 if (novo is null) return new InstallerDownloadResult(endereco, Tr.F("o download respondeu {0}", status), false);
                 if (salto >= MaxRedirects) return new InstallerDownloadResult(endereco, Tr.T("o endereço do instalador redireciona demais"), false);
-                if (PluginUpdate.WhyUrlRejected(novo.ToString(), servidor, siteDeDownload) is { } outraRecusa) return new InstallerDownloadResult(novo, outraRecusa, false);
+                if (PluginUpdate.WhyUrlRejected(novo.ToString(), lista) is { } outraRecusa) return new InstallerDownloadResult(novo, outraRecusa, false);
 
                 endereco = novo;
             }

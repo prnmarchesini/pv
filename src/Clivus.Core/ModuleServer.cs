@@ -41,16 +41,8 @@ public sealed record ModuleServer(string? Address, bool IsClivus, string? Proble
     /// teste), como no Publicar 3D (plano/seguranca.md).
     /// </summary>
     /// <param name="chave">O valor de <c>CLIVUS_SERVIDOR_CHAVE</c>, ou null.</param>
-    public string? WhyCannotRegister(string? chave)
-    {
-        if (Problem is { } problema) return problema;
-        if (!IsClivus) return null;
-        if (Viewer3DPage.WhyServerUnsafe(Address) is { } inseguro) return inseguro;
-
-        return string.IsNullOrWhiteSpace(chave)
-            ? Tr.T("Para mandar o módulo ao servidor do Clivus falta a chave (variável CLIVUS_SERVIDOR_CHAVE).")
-            : null;
-    }
+    public string? WhyCannotRegister(string? chave) =>
+        PorQueNao(!string.IsNullOrWhiteSpace(chave), Tr.T("Para mandar o módulo ao servidor do Clivus falta a chave (variável CLIVUS_SERVIDOR_CHAVE)."));
 
     /// <summary>
     /// O mesmo com a identificação do plugin (etapa 43): no servidor do Clivus
@@ -59,15 +51,24 @@ public sealed record ModuleServer(string? Address, bool IsClivus, string? Proble
     /// vai. A identificação só vai por HTTPS, como a chave.
     /// </summary>
     /// <param name="autorizacao">A identificação escolhida, ou null se não há.</param>
-    public string? WhyCannotSend(ServerAuthorization? autorizacao)
+    public string? WhyCannotSend(ServerAuthorization? autorizacao) =>
+        PorQueNao(autorizacao is not null, Tr.T("Para mandar o módulo ao servidor do Clivus, ative o Clivus Solar neste computador (botão Ativar) ou defina a chave (variável CLIVUS_SERVIDOR_CHAVE)."));
+
+    /// <summary>
+    /// A identificação que vai no cadastro: a do plugin, só para o servidor
+    /// do Clivus; o serviço local não pede nenhuma, e a chave ou a licença
+    /// não saem do computador para ele (etapa 43).
+    /// </summary>
+    public ServerAuthorization? CredentialFor(ServerAuthorization? autorizacao) => IsClivus && Problem is null ? autorizacao : null;
+
+    /// <summary>A regra das duas: o endereço, o HTTPS e, no servidor do Clivus, a identificação.</summary>
+    private string? PorQueNao(bool identificado, string semIdentificacao)
     {
         if (Problem is { } problema) return problema;
         if (!IsClivus) return null;
         if (Viewer3DPage.WhyServerUnsafe(Address) is { } inseguro) return inseguro;
 
-        return autorizacao is null
-            ? Tr.T("Para mandar o módulo ao servidor do Clivus, ative o Clivus Solar neste computador (botão Ativar) ou defina a chave (variável CLIVUS_SERVIDOR_CHAVE).")
-            : null;
+        return identificado ? null : semIdentificacao;
     }
 
     private static bool EhWeb(string endereco) =>

@@ -351,7 +351,20 @@ public static class Viewer3DPage
     /// A resposta do servidor: o link da página 3D, ou o erro em português
     /// que o servidor mandou (ou um nosso, quando a resposta não é do contrato).
     /// </summary>
-    public static (PublishedScene? Publicada, string? Erro) ParseResponse(int status, string? corpo)
+    public static (PublishedScene? Publicada, string? Erro) ParseResponse(int status, string? corpo) =>
+        LerResposta(status, corpo, Tr.T("a chave do servidor não foi aceita (confira CLIVUS_SERVIDOR_CHAVE)"));
+
+    /// <summary>
+    /// O mesmo, sabendo com o que o plugin se identificou (etapa 43): a recusa
+    /// sem o motivo do servidor (401 ou 403 sem <c>{"erro": "..."}</c>, um
+    /// proxy no caminho) diz o que conferir, a chave ou a ativação. Com o
+    /// motivo, ele vai como veio.
+    /// </summary>
+    public static (PublishedScene? Publicada, string? Erro) ParseResponse(int status, string? corpo, ServerAuthorization? autorizacao) =>
+        LerResposta(status, corpo, ServerAuthorization.RefusedMessage(autorizacao));
+
+    /// <summary>As duas acima; <paramref name="recusada"/> é a frase do 401 e do 403 sem o motivo do servidor.</summary>
+    private static (PublishedScene? Publicada, string? Erro) LerResposta(int status, string? corpo, string recusada)
     {
         System.Text.Json.JsonElement raiz = default;
         var temJson = false;
@@ -393,25 +406,10 @@ public static class Viewer3DPage
 
         return (null, status switch
         {
-            401 or 403 => Tr.T("a chave do servidor não foi aceita (confira CLIVUS_SERVIDOR_CHAVE)"),
+            401 or 403 => recusada,
             413 => Tr.T("a usina é grande demais para o servidor"),
             _ => Tr.F("o servidor respondeu {0}", status),
         });
-    }
-
-    /// <summary>
-    /// O mesmo, sabendo com o que o plugin se identificou (etapa 43): a recusa
-    /// sem o motivo do servidor (401 ou 403 fora do contrato, um proxy no
-    /// caminho) diz o que conferir, a chave ou a ativação. Com o motivo
-    /// (<c>{"erro": "..."}</c>), ele vai como veio.
-    /// </summary>
-    public static (PublishedScene? Publicada, string? Erro) ParseResponse(int status, string? corpo, ServerAuthorization? autorizacao)
-    {
-        var resposta = ParseResponse(status, corpo);
-
-        return status is 401 or 403 && ModuleServiceReply.ErrorMessage(corpo ?? string.Empty) is null
-            ? (null, ServerAuthorization.RefusedMessage(autorizacao))
-            : resposta;
     }
 
     /// <summary>

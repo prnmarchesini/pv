@@ -152,14 +152,16 @@ O que o plugin exige (fora disso, ignora a versão e registra o erro):
 - `versao`: semver `MAIOR.MENOR.CORRECAO` (pré-versão como `-beta.1` vale).
   O plugin oferece só se ela for maior que a instalada.
 - `url`: absoluta e HTTPS, no mesmo host (e porta) do servidor
-  (`CLIVUS_SERVIDOR` ou o de produção) ou do site de download
-  (`PluginInfo.SiteDeDownload`, hoje
-  `https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io`, o `$site` do
-  `tools/gerar-instalador.ps1`). Redirecionamento: até 3, cada endereço novo
-  pela mesma regra. Outro host, o plugin recusa: um servidor comprometido
-  não manda rodar um executável de qualquer lugar. Trocar o site de download
-  pede uma versão do plugin que saia antes (as instaladas só baixam do host
-  que conhecem ou do próprio servidor).
+  (`CLIVUS_SERVIDOR` ou o de produção) ou de um dos endereços de download
+  (`PluginInfo.EnderecosDeDownload`): o site de download, hoje
+  `https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io` (o `$site` do
+  `tools/gerar-instalador.ps1`), e o domínio novo do servidor,
+  `https://clivus.marcheng.com.br`. Redirecionamento: até 3, cada endereço
+  novo pela mesma regra. Outro host, o plugin recusa: um servidor
+  comprometido não manda rodar um executável de qualquer lugar. Um site de
+  download novo pede uma versão do plugin que saia antes (as instaladas só
+  baixam dos hosts que conhecem), e só entra domínio que é do Renan: hoje
+  `clivussolar.com` não existe, e uma URL nele é recusada.
 - `sha256`: 64 dígitos hexadecimais do `.exe` (maiúsculas ou minúsculas);
   `tamanho`: bytes, número inteiro, de 1 a 200 MB. O plugin baixa, confere
   os dois e, se diferem, apaga o arquivo e avisa.

@@ -13,6 +13,19 @@ public enum WaitStep
     GiveUp,
 }
 
+/// <summary>Na hora de instalar: instala, ou não precisa mais.</summary>
+public enum InstallDecision
+{
+    /// <summary>Instala.</summary>
+    Install,
+
+    /// <summary>Já está instalada esta versão ou uma mais nova (outra atualização, ou o usuário à mão).</summary>
+    AlreadyCurrent,
+
+    /// <summary>O usuário desinstalou o Clivus Solar enquanto a atualização esperava: não instala de volta.</summary>
+    UninstalledMeanwhile,
+}
+
 /// <summary>O que fazer depois de uma tentativa de instalar.</summary>
 public enum AfterInstallStep
 {
@@ -70,6 +83,15 @@ public static class InstallerWait
     /// <summary>Saída: o Windows está desligando ou saindo da conta; instalar agora poderia ficar pela metade.</summary>
     public const int ExitSessionEnding = 9;
 
+    /// <summary>
+    /// O mutex de toda instalação e desinstalação (a janela, o silencioso e a
+    /// espera): duas ao mesmo tempo, na mesma pasta, misturariam os arquivos.
+    /// </summary>
+    public const string InstallingMutexName = @"Local\ClivusSolar-Instalacao";
+
+    /// <summary>Quanto uma instalação espera outra terminar antes de desistir.</summary>
+    public static readonly TimeSpan InstallingWait = TimeSpan.FromMinutes(2);
+
     /// <summary>O próximo passo.</summary>
     /// <param name="abertos">Quantos processos de <see cref="BlockingProcesses"/> estão abertos.</param>
     /// <param name="esperado">Quanto tempo já esperou.</param>
@@ -90,6 +112,25 @@ public static class InstallerWait
         1 when tentativa < MaxAttempts => AfterInstallStep.Retry,
         _ => AfterInstallStep.Done,
     };
+
+    /// <summary>
+    /// Se instala agora. Depois de uma tentativa que falhou, sempre: ela
+    /// apaga o bundle antes de copiar, e o que ficou pode ser só o começo da
+    /// versão nova (o descritor vem primeiro no pacote), que diria "já está
+    /// instalada". Antes disso: não reinstala o que o usuário desinstalou
+    /// enquanto esperava, nem por cima de versão igual ou mais nova.
+    /// </summary>
+    /// <param name="estaVersao">A versão deste instalador.</param>
+    /// <param name="instalada">A versão do bundle instalado agora, ou null.</param>
+    /// <param name="estavaInstalado">Se o Clivus Solar estava instalado quando a espera começou.</param>
+    /// <param name="estaInstalado">Se está instalado agora.</param>
+    /// <param name="falhasAntes">Quantas tentativas desta espera já falharam.</param>
+    public static InstallDecision Decide(string? estaVersao, string? instalada, bool estavaInstalado, bool estaInstalado, int falhasAntes)
+    {
+        if (falhasAntes > 0) return InstallDecision.Install;
+        if (estavaInstalado && !estaInstalado) return InstallDecision.UninstalledMeanwhile;
+        return ShouldInstallOver(estaVersao, instalada) ? InstallDecision.Install : InstallDecision.AlreadyCurrent;
+    }
 
     /// <summary>
     /// Se instala por cima do que está instalado: não, se o instalado já é

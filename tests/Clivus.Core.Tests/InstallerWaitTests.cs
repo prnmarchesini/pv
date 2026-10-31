@@ -125,6 +125,43 @@ public class InstallerWaitTests
             Assert.Equal(AfterInstallStep.Done, InstallerWait.AfterInstall(codigo, 1));
     }
 
+    /// <summary>
+    /// Revisão: a tentativa que falhou pode ter deixado só o começo da versão
+    /// nova (o descritor vem primeiro no pacote); a seguinte instala de novo,
+    /// em vez de ler "já está instalada" e sair com sucesso e o bundle pela metade.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "43")]
+    public void DepoisDeUmaFalhaInstalaDeNovoMesmoComOMesmoNumero()
+    {
+        Assert.Equal(InstallDecision.AlreadyCurrent, InstallerWait.Decide("0.1.1", "0.1.1", true, true, falhasAntes: 0));
+        Assert.Equal(InstallDecision.Install, InstallerWait.Decide("0.1.1", "0.1.1", true, true, falhasAntes: 1));
+        Assert.Equal(InstallDecision.Install, InstallerWait.Decide("0.1.1", "0.1.1", true, false, falhasAntes: 2));
+    }
+
+    /// <summary>Revisão: o que o usuário desinstalou enquanto a atualização esperava não volta.</summary>
+    [Fact]
+    [Trait("Etapa", "43")]
+    public void NaoInstalaDeVoltaOQueOUsuarioDesinstalou()
+    {
+        Assert.Equal(InstallDecision.UninstalledMeanwhile, InstallerWait.Decide("0.1.1", null, estavaInstalado: true, estaInstalado: false, falhasAntes: 0));
+
+        // Não estava instalado quando a espera começou (instalação nova): instala.
+        Assert.Equal(InstallDecision.Install, InstallerWait.Decide("0.1.1", null, estavaInstalado: false, estaInstalado: false, falhasAntes: 0));
+        Assert.Equal(InstallDecision.Install, InstallerWait.Decide("0.1.1", "0.1.0", estavaInstalado: true, estaInstalado: true, falhasAntes: 0));
+        Assert.Equal(InstallDecision.AlreadyCurrent, InstallerWait.Decide("0.1.1", "0.2.0", estavaInstalado: true, estaInstalado: true, falhasAntes: 0));
+    }
+
+    [Fact]
+    [Trait("Etapa", "43")]
+    public void OsDoisMutexTemNomesDiferentesNaSessao()
+    {
+        Assert.StartsWith(@"Local\", PluginUpdate.WaitingMutexName, StringComparison.Ordinal);
+        Assert.StartsWith(@"Local\", InstallerWait.InstallingMutexName, StringComparison.Ordinal);
+        Assert.NotEqual(PluginUpdate.WaitingMutexName, InstallerWait.InstallingMutexName);
+        Assert.True(InstallerWait.InstallingWait > TimeSpan.Zero);
+    }
+
     [Theory]
     [Trait("Etapa", "43")]
     [InlineData("0.1.1", "0.1.0", true)]

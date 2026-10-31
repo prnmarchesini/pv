@@ -110,6 +110,7 @@ internal static class Atualizacao
             using var resposta = (doComando ? ClienteDoComando : ClienteDaAbertura).Send(pedido);
             using var leitor = new StreamReader(resposta.Content.ReadAsStream(), Encoding.UTF8);
             var (versao, erro) = PluginUpdate.ParseReply((int)resposta.StatusCode, leitor.ReadToEnd());
+            if (erro is not null) RegistroDeDiagnostico.Registrar($"Atualização: {endereco}{PluginUpdate.VersionRoute} respondeu {(int)resposta.StatusCode}: {erro}.");
 
             return new Consulta(erro is null, versao, erro);
         }
@@ -124,12 +125,24 @@ internal static class Atualizacao
     internal static PluginRelease? MaisNova(Consulta consulta) =>
         consulta.Versao is { } versao && SemanticVersion.IsNewer(versao.Version.ToString(), Instalada) ? versao : null;
 
-    /// <summary>Grava agora como a última consulta, nas preferências do usuário.</summary>
-    internal static void GravarConsulta()
+    /// <summary>
+    /// Grava a consulta como a do dia, se ela conta (<see cref="PluginUpdate.RecordsCheck"/>),
+    /// nas preferências do usuário. Preferências que não se leram agora (outro
+    /// Civil 3D gravando) ficam como estão: a consulta conta na próxima.
+    /// </summary>
+    internal static void GravarConsulta(Consulta consulta)
     {
+        if (!PluginUpdate.RecordsCheck(consulta.Respondeu, MaisNova(consulta))) return;
+
         try
         {
-            (UserPreferences.Load(IdiomaDoPlugin.Arquivo) with { LastUpdateCheck = DateTime.UtcNow }).Save(IdiomaDoPlugin.Arquivo);
+            if (!UserPreferences.TryLoad(IdiomaDoPlugin.Arquivo, out var preferencias))
+            {
+                RegistroDeDiagnostico.Registrar("Atualização: as preferências não se leram agora; a consulta não foi gravada.");
+                return;
+            }
+
+            (preferencias with { LastUpdateCheck = DateTime.UtcNow }).Save(IdiomaDoPlugin.Arquivo);
         }
         catch (Exception erro) when (erro is IOException or UnauthorizedAccessException)
         {
@@ -207,7 +220,7 @@ internal static class Atualizacao
         {
             // Conta como a consulta do dia quando o servidor respondeu, menos
             // com versão obrigatória pendente: essa avisa a cada abertura.
-            if (consulta.Respondeu && nova is not { Required: true }) GravarConsulta();
+            GravarConsulta(consulta);
 
             RegistroDeDiagnostico.Registrar(consulta.Erro is { } erro
                 ? $"Atualização: a consulta não deu ({erro})."
@@ -215,7 +228,10 @@ internal static class Atualizacao
                     ? $"Atualização: em dia ({Instalada}; publicada {consulta.Versao?.Version.ToString() ?? "nenhuma"})."
                     : $"Atualização: versão nova {nova.Version} (instalada {Instalada}).");
 
-            if (nova is not null && documento is not null) Avisar(documento, nova);
+            // Plugin de fora da pasta do instalador (o PC de desenvolvimento): só
+            // a linha de comando; a janela, que não deixa atualizar daqui, só
+            // pelo botão Atualizar.
+            if (nova is not null && documento is not null) Avisar(documento, nova, janela: InstaladoPeloInstalador);
         }
         catch (Exception erro)
         {
@@ -223,14 +239,14 @@ internal static class Atualizacao
         }
     }
 
-    /// <summary>O aviso: a linha de comando e, com interface, a janela.</summary>
-    internal static void Avisar(Document documento, PluginRelease versao)
+    /// <summary>O aviso: a linha de comando e, com interface (e <paramref name="janela"/>), a janela.</summary>
+    internal static void Avisar(Document documento, PluginRelease versao, bool janela = true)
     {
         documento.Editor.WriteMessage(Tr.F(
             "\nHá uma versão nova do Clivus Solar: {0} (esta é a {1}). Para atualizar depois, use o botão Atualizar ({2}).\n",
             versao.Version, Instalada, PluginInfo.ComandoAtualizar));
 
-        if (!ClivusExtension.TemInterface()) return;
+        if (!janela || !ClivusExtension.TemInterface()) return;
 
         AcadApp.ShowModalWindow(new JanelaDeAtualizacao(versao));
     }
@@ -257,6 +273,8 @@ internal static class Atualizacao
             return (destino, null);
         }
 
+        var pronto = false;
+
         try
         {
             Directory.CreateDirectory(PastaDoDownload);
@@ -264,26 +282,31 @@ internal static class Atualizacao
             InstallerDownloadResult resultado;
             using (var arquivo = new FileStream(parcial, FileMode.Create, FileAccess.Write, FileShare.None))
             {
+                string?[] confiaveis = [Publicador3D.Endereco, .. PluginInfo.EnderecosDeDownload];
                 resultado = await InstallerDownload.RunAsync(
-                    ClienteDoDownload, versao, Publicador3D.Endereco, PluginInfo.SiteDeDownload, arquivo, andamento, LeituraParada, cancelar).ConfigureAwait(false);
+                    ClienteDoDownload, versao, confiaveis, arquivo, andamento, LeituraParada, cancelar).ConfigureAwait(false);
             }
 
             if (resultado.Error is { } erro)
             {
-                Apagar(parcial);
                 RegistroDeDiagnostico.Registrar($"Atualização: o download de {resultado.From?.ToString() ?? versao.Url} não serve ({erro}).");
                 return (null, resultado.Mismatch ? Tr.F("{0}; apaguei o arquivo", erro) : erro);
             }
 
             File.Move(parcial, destino, overwrite: true);
+            pronto = true;
             RegistroDeDiagnostico.Registrar($"Atualização: {destino} baixado de {resultado.From} e conferido (SHA-256 {versao.Sha256}).");
             return (destino, null);
         }
         catch (Exception erro) when (erro is IOException or UnauthorizedAccessException)
         {
-            Apagar(parcial);
             RegistroDeDiagnostico.Registrar($"Atualização: falha ao gravar o instalador em {parcial}.", erro);
             return (null, Tr.F("não consegui gravar o instalador ({0})", erro.Message));
+        }
+        finally
+        {
+            // O que não virou o instalador conferido não fica no disco, saia como sair.
+            if (!pronto) Apagar(parcial);
         }
     }
 
@@ -299,6 +322,7 @@ internal static class Atualizacao
         }
         catch (Exception erro) when (erro is IOException or UnauthorizedAccessException)
         {
+            RegistroDeDiagnostico.Registrar($"Atualização: não consegui ler {arquivo} para conferir; baixa de novo.", erro);
             return false;
         }
     }
@@ -323,11 +347,15 @@ internal static class Atualizacao
     /// </summary>
     internal static string? Instalar(string arquivo, PluginRelease versao)
     {
-        // Conferido de novo logo antes de rodar: o arquivo esperou na pasta temporária.
-        if (!Conferido(arquivo, versao)) return Tr.T("o instalador baixado mudou depois de conferido; tente de novo");
-
         try
         {
+            // Conferido de novo logo antes de rodar (o arquivo esperou na pasta
+            // temporária), e aberto só para leitura até o Windows começar o
+            // instalador: ninguém troca o arquivo entre conferir e rodar.
+            using var travado = new FileStream(arquivo, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (PluginUpdate.WhyDownloadRejected(travado.Length, PluginUpdate.Sha256Hex(travado), versao) is not null)
+                return Tr.T("o instalador baixado mudou depois de conferido; tente de novo");
+
             Directory.CreateDirectory(RegistroDeDiagnostico.Pasta);
 
             // Pelo Windows (sem herdar nada do Civil 3D, que vai fechar).

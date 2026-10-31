@@ -30,7 +30,8 @@ internal static class Publicador3D
             ? uri.ToString().TrimEnd('/')
             : null;
 
-    internal static string? Chave => Environment.GetEnvironmentVariable("CLIVUS_SERVIDOR_CHAVE") is { Length: > 0 } c ? c.Trim() : null;
+    /// <summary>A chave de CLIVUS_SERVIDOR_CHAVE, ou null (em branco conta como sem chave: aí vale a licença).</summary>
+    internal static string? Chave => Environment.GetEnvironmentVariable("CLIVUS_SERVIDOR_CHAVE") is { } c && !string.IsNullOrWhiteSpace(c) ? c.Trim() : null;
 
     /// <summary>
     /// Com o que o plugin se identifica no servidor do Clivus (3D e módulos):

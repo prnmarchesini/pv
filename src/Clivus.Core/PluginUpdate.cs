@@ -101,7 +101,12 @@ public static class PluginUpdate
         if (!r.TryGetProperty("tamanho", out var t) || t.ValueKind != JsonValueKind.Number || !t.TryGetInt64(out var tamanho) || tamanho is <= 0 or > LargestInstaller) return null;
 
         var notas = Texto("notas")?.Trim() ?? string.Empty;
-        if (notas.Length > LongestNotes) notas = notas[..LongestNotes] + "…";
+        if (notas.Length > LongestNotes)
+        {
+            // Sem partir um caractere de dois códigos (emoji) no corte.
+            var corte = char.IsHighSurrogate(notas[LongestNotes - 1]) ? LongestNotes - 1 : LongestNotes;
+            notas = notas[..corte] + "…";
+        }
 
         DateTime? publicada = Texto("publicada_em") is { } quando
             && DateTime.TryParse(quando, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var data)
@@ -128,16 +133,27 @@ public static class PluginUpdate
         || ultima - agoraUtc > TimeSpan.FromMinutes(5);
 
     /// <summary>
+    /// Se a consulta conta como a do dia (grava nas preferências): o servidor
+    /// respondeu dentro do contrato, e não há versão obrigatória mais nova
+    /// pendente. Essa avisa a cada abertura do Civil 3D até ser instalada,
+    /// venha a consulta da abertura ou do comando Atualizar.
+    /// </summary>
+    /// <param name="respondeu">Se o servidor respondeu (a versão, ou 404 sem versão).</param>
+    /// <param name="maisNova">A versão publicada, quando é mais nova que a instalada; senão null.</param>
+    public static bool RecordsCheck(bool respondeu, PluginRelease? maisNova) =>
+        respondeu && maisNova is not { Required: true };
+
+    /// <summary>
     /// Por que o plugin não baixa deste endereço, ou null se baixa. Só HTTPS
     /// (http só em localhost, o servidor falso dos testes, como no resto do
-    /// plugin) e só do mesmo endereço do servidor do Clivus ou do site de
-    /// download. Sem isso, um servidor comprometido mandaria o plugin rodar
-    /// um executável de qualquer lugar.
+    /// plugin) e só do mesmo esquema, host e porta de um dos endereços
+    /// confiáveis: o servidor do Clivus configurado e os de
+    /// <see cref="PluginInfo.EnderecosDeDownload"/>. Sem isso, um servidor
+    /// comprometido mandaria o plugin rodar um executável de qualquer lugar.
     /// </summary>
     /// <param name="url">O endereço do instalador que a versão trouxe.</param>
-    /// <param name="servidor">O servidor do Clivus configurado (CLIVUS_SERVIDOR ou o de produção).</param>
-    /// <param name="siteDeDownload">O site de download (<see cref="PluginInfo.SiteDeDownload"/>).</param>
-    public static string? WhyUrlRejected(string? url, string? servidor, string? siteDeDownload)
+    /// <param name="confiaveis">Os endereços confiáveis (os vazios não contam).</param>
+    public static string? WhyUrlRejected(string? url, params string?[]? confiaveis)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var endereco) || (endereco.Scheme != Uri.UriSchemeHttps && endereco.Scheme != Uri.UriSchemeHttp))
             return Tr.T("o endereço do instalador não é um endereço web");
@@ -145,8 +161,7 @@ public static class PluginUpdate
         if (endereco.Scheme != Uri.UriSchemeHttps && !endereco.IsLoopback)
             return Tr.T("o instalador só é baixado por HTTPS");
 
-        var confiaveis = new[] { servidor, siteDeDownload }.Where(c => !string.IsNullOrWhiteSpace(c));
-        return confiaveis.Any(c => Viewer3DPage.IsLinkFromServer(endereco.ToString(), c!))
+        return (confiaveis ?? []).Where(c => !string.IsNullOrWhiteSpace(c)).Any(c => Viewer3DPage.IsLinkFromServer(endereco.ToString(), c!))
             ? null
             : Tr.F("o instalador vem de {0}, que não é o servidor nem o site do Clivus", endereco.Host);
     }

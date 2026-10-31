@@ -31,29 +31,59 @@ O contrato com o servidor está nos dois contratos, na seção "Etapa 43"
   `CLIVUS_ACTUALIZAR`) consulta na hora e roda sem licença; botão pequeno
   "Atualizar" no painel Configurações, embaixo do Ativar e do Sobre.
 - **Atualizar agora.** Baixa para `%TEMP%\Clivus Solar\ClivusSolar-Setup-<versão>.exe`
-  com a barra; só de HTTPS no host do servidor ou do site de download
-  (`PluginInfo.SiteDeDownload`), cada redirecionamento pela mesma regra (até
-  3); confere o tamanho e o SHA-256 (diferente: apaga e avisa); roda o
-  instalador com `/aguardar-civil3d` e diz "Feche o Civil 3D: a atualização
-  instala sozinha quando ele fechar". Só troca o plugin que o instalador pôs
-  (`%APPDATA%\Autodesk\ApplicationPlugins\ClivusSolar.bundle`); carregado de
-  outro lugar (Arquivos de Programas, a pasta do build), a janela explica e
+  com a barra; só de HTTPS no host do servidor ou de
+  `PluginInfo.EnderecosDeDownload` (o site de download e
+  `https://clivus.marcheng.com.br`), cada redirecionamento pela mesma regra
+  (até 3); confere o tamanho e o SHA-256 (diferente: apaga e avisa); confere
+  de novo com o arquivo travado para leitura até o Windows começar o
+  instalador; roda com `/aguardar-civil3d` e diz "Feche o Civil 3D: a
+  atualização instala sozinha quando ele fechar". Só troca o plugin que o
+  instalador pôs (`%APPDATA%\Autodesk\ApplicationPlugins\ClivusSolar.bundle`);
+  carregado de outro lugar (Arquivos de Programas, a pasta do build), a
+  abertura só avisa na linha de comando, e a janela (pelo botão) explica e
   não baixa.
+- **O comando.** A consulta vai para outra linha; se demora mais de 0,7 s,
+  abre o "Carregando" com Cancelar (o Civil 3D não fica parado até o
+  tempo-limite de 15 s).
 - **O instalador com `/aguardar-civil3d`.** Sem janela; espera `acad`,
   `accoreconsole` e `Clivus.Link` fecharem (olha a cada 5 s, instala com tudo
-  fechado há 10 s, desiste em 12 h), não instala com o Windows desligando
-  nem por cima de versão igual ou mais nova, tenta de novo até 3 vezes se a
-  cópia falhar, e avisa numa janela simples do Windows. Um só por sessão
-  (mutex). O registro vai para `%LOCALAPPDATA%\Clivus Solar\atualizacao.log`,
-  a última linha como sempre (`{código} {frase}`). Saídas novas: 7 (outro já
-  espera), 8 (passou do limite), 9 (Windows desligando).
+  fechado há 10 s, desiste em 12 h). Não instala com o Windows desligando,
+  nem por cima de versão igual ou mais nova, nem de volta o que o usuário
+  desinstalou enquanto esperava. Se a cópia falha, tenta de novo até 3
+  vezes, sempre por inteiro (a falha pode ter deixado só o começo da versão
+  nova); se não der, o aviso manda reinstalar pela área do cliente. Avisa
+  numa janela simples do Windows, depois de soltar o mutex. Um só por sessão
+  (mutex `ClivusSolar-AtualizacaoEsperando`), e uma instalação de cada vez
+  em todos os modos (mutex `ClivusSolar-Instalacao`: a janela, o silencioso
+  e a espera). O registro vai para `%LOCALAPPDATA%\Clivus Solar\atualizacao.log`,
+  uma linha com a hora por acontecimento; a última traz o código e a frase,
+  como no silencioso. Saídas novas: 7 (outro já espera), 8 (passou do
+  limite), 9 (Windows desligando).
 - **A versão numa fonte só.** O `<Version>` do `Directory.Build.props`. O
   `PackageContents.xml` do repositório traz `$(Version)`, e o build grava a
   cópia com o número na saída (alvo `CarimbarPackageContents`), que o
   `publicar-bundle.ps1` põe no bundle (ele confere o número). Subir para
   0.1.1: trocar o `<Version>` e rodar `tools\gerar-instalador.ps1`.
-- **Traduções:** 53 frases novas sem inglês e espanhol; o
+- **Traduções:** 59 frases novas sem inglês e espanhol; o
   `TranslationCatalogTests` falha até o Renan traduzir.
+- **Revisão (subagente, worktree isolada no `85b43bb`).** Corrigido: a
+  tentativa depois de uma cópia que falhou lia "já está instalada" no
+  descritor novo e saía com sucesso com o bundle pela metade; o comando
+  gravava a consulta do dia com versão obrigatória pendente; a lista de
+  hosts não aguentava a troca de domínio; o comando parava o Civil 3D até
+  15 s; um 401 com `detail` mandava conferir a chave a quem usa licença;
+  chave em branco não caía na licença; a gravação da consulta podia pôr o
+  padrão por cima de preferências que não se leram; o `.parcial` podia
+  sobrar; o mutex ficava preso durante o aviso do fim; a janela abria todo
+  dia no PC de desenvolvimento; o BundleTests não olhava o caminho até o
+  bundle. Cada correção tem teste, conferido com sabotagem.
+- **Para o lado do servidor (avisar a sessão do clivussolar):** o
+  `app/app/services/versoes.py` aceita `0.1` e `1.2.3.4` e recusa
+  `-beta.1`; o plugin só aceita `MAIOR.MENOR.CORRECAO` (com pré-versão
+  opcional) e ignora o resto. E a URL sai de `CLIVUS_SITE_URL` (padrão
+  `https://clivussolar.com`, que não existe): a publicada tem de estar no
+  sslip da landing, no host do app ou em `clivus.marcheng.com.br`, senão o
+  plugin recusa.
 
 Roteiro de tela (43.3 e 43.4), quando o servidor publicar a parte dele:
 
@@ -73,3 +103,8 @@ Roteiro de tela (43.3 e 43.4), quando o servidor publicar a parte dele:
 5. Depois: a janela fecha e só volta no dia seguinte (ou pelo botão).
 6. Publicar no servidor um SHA-256 errado: Atualizar agora diz que o SHA-256
    não confere e apaga o arquivo.
+7. Sem internet, Atualizar: se a resposta demora, o "Carregando" aparece com
+   Cancelar, e Cancelar devolve o Civil 3D na hora.
+8. No PC de desenvolvimento (bundle em Arquivos de Programas ou DLL do build),
+   com a 0.1.1 publicada: a abertura só avisa na linha de comando; o botão
+   Atualizar abre a janela, que explica e não deixa baixar.

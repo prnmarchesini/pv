@@ -87,7 +87,7 @@ internal static class FonteDeModulos
         get
         {
             var servidor = Servidor;
-            return servidor.WhyCannotSend(servidor.IsClivus ? Publicador3D.Autorizacao() : null);
+            return servidor.WhyCannotSend(servidor.CredentialFor(Publicador3D.Autorizacao()));
         }
     }
 
@@ -201,7 +201,7 @@ internal static class FonteDeModulos
 
         // A chave (ou a licença) só vai por HTTPS e só para o servidor do
         // Clivus; o serviço local não pede nenhuma.
-        var autorizacao = servidor.IsClivus ? Publicador3D.Autorizacao() : null;
+        var autorizacao = servidor.CredentialFor(Publicador3D.Autorizacao());
         if (servidor.WhyCannotSend(autorizacao) is { } motivo) return (false, false, motivo);
         var endereco = servidor.Address!;
 

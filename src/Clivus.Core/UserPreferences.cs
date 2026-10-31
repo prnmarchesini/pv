@@ -28,9 +28,23 @@ public sealed record UserPreferences(string Language = "auto", bool ProfileTrack
     /// <summary>Lê o arquivo; o padrão se ele não existe ou está estragado.</summary>
     public static UserPreferences Load(string caminho)
     {
+        TryLoad(caminho, out var preferencias);
+        return preferencias;
+    }
+
+    /// <summary>
+    /// Lê o arquivo. Falso quando ele existe e não se lê (estragado, ou preso
+    /// por outro programa no meio de uma gravação): aí as preferências são o
+    /// padrão, e quem grava sozinho (a consulta da versão, etapa 43) não grava
+    /// o padrão por cima das do usuário. Arquivo que não existe se lê: o padrão.
+    /// </summary>
+    public static bool TryLoad(string caminho, out UserPreferences preferencias)
+    {
+        preferencias = new UserPreferences();
+
         try
         {
-            if (!File.Exists(caminho)) return new UserPreferences();
+            if (!File.Exists(caminho)) return true;
 
             using var doc = JsonDocument.Parse(File.ReadAllText(caminho));
             var idioma = doc.RootElement.TryGetProperty("idioma", out var i) && i.ValueKind == JsonValueKind.String ? i.GetString() : null;
@@ -46,11 +60,13 @@ public sealed record UserPreferences(string Language = "auto", bool ProfileTrack
                 ? quando
                 : null;
 
-            return new UserPreferences(LanguageChoices.Contains(idioma) ? idioma! : "auto", rastreio, apagados, consulta);
+            preferencias = new UserPreferences(LanguageChoices.Contains(idioma) ? idioma! : "auto", rastreio, apagados, consulta);
+            return true;
         }
         catch (Exception erro) when (erro is IOException or JsonException or UnauthorizedAccessException)
         {
-            return new UserPreferences();
+            preferencias = new UserPreferences();
+            return false;
         }
     }
 

@@ -12,48 +12,72 @@ namespace Clivus.Instalador;
 /// <see cref="InstallerWait.Limit"/>; instala como no silencioso e avisa numa
 /// janela simples do Windows (a mesma do Clivus.Link). Um só por sessão (o
 /// mutex de <see cref="PluginUpdate.WaitingMutexName"/>, que o plugin também
-/// olha). Não instala por cima de uma versão igual ou mais nova.
+/// olha), solto antes do aviso do fim. Não instala por cima de uma versão
+/// igual ou mais nova, nem de volta o que o usuário desinstalou enquanto
+/// esperava.
 ///
-/// O registro vai para o <c>/log=</c>: uma linha por acontecimento, e a
-/// última é a de sempre, <c>{código} {frase}</c>. As decisões (esperar,
-/// instalar, desistir, tentar de novo) são do <see cref="InstallerWait"/>, no
-/// Core, com teste; aqui só se olha os processos e se dorme.
+/// O registro vai para o <c>/log=</c>, uma linha com a hora por
+/// acontecimento; a última traz o código e a frase, como no silencioso. As
+/// decisões (esperar, instalar, desistir, tentar de novo) são do
+/// <see cref="InstallerWait"/>, no Core, com teste; aqui só se olha os
+/// processos e se dorme.
 /// </summary>
 internal static class EsperaDoCivil3D
 {
     internal static int Executar(Instalacao instalacao, InstallerOptions opcoes)
     {
-        using var mutex = new Mutex(initiallyOwned: true, PluginUpdate.WaitingMutexName, out var primeiro);
-
-        if (!primeiro)
-        {
-            // Outro instalador já espera nesta sessão: ele instala; este só
-            // acrescenta uma linha ao registro (sem apagar o dele) e sai.
-            Registrar(opcoes.LogFile, $"{InstallerWait.ExitAlreadyWaiting} {Tr.T("Já há uma atualização do Clivus Solar esperando o Civil 3D fechar.")}", acrescentar: true);
-            return InstallerWait.ExitAlreadyWaiting;
-        }
+        Mutex mutex;
+        bool primeiro;
 
         try
         {
-            return Esperar(instalacao, opcoes);
+            mutex = new Mutex(initiallyOwned: true, PluginUpdate.WaitingMutexName, out primeiro);
         }
-        catch (Exception erro)
+        catch (Exception erro) when (erro is IOException or UnauthorizedAccessException or WaitHandleCannotBeOpenedException)
         {
-            var frase = Tr.F("Não consegui instalar: {0}", erro.Message);
-            Registrar(opcoes.LogFile, $"1 {frase}");
-            Avisar(frase, erro: true);
+            Registrar(opcoes.LogFile, $"1 {Tr.F("Não consegui instalar: {0}", erro.Message)}", acrescentar: true);
             return 1;
         }
-        finally
+
+        (int Codigo, string Frase, bool Avisar) fim;
+
+        using (mutex)
         {
-            mutex.ReleaseMutex();
+            if (!primeiro)
+            {
+                // Outro instalador já espera nesta sessão: ele instala; este só
+                // acrescenta uma linha ao registro (sem apagar o dele) e sai.
+                Registrar(opcoes.LogFile, $"{InstallerWait.ExitAlreadyWaiting} {Tr.T("Já há uma atualização do Clivus Solar esperando o Civil 3D fechar.")}", acrescentar: true);
+                return InstallerWait.ExitAlreadyWaiting;
+            }
+
+            try
+            {
+                fim = Esperar(instalacao, opcoes);
+            }
+            catch (Exception erro)
+            {
+                fim = (1, Tr.F("Não consegui instalar: {0}", erro.Message), true);
+                Registrar(opcoes.LogFile, $"{fim.Codigo} {fim.Frase}");
+            }
+            finally
+            {
+                mutex.ReleaseMutex();
+            }
         }
+
+        // O aviso depois de soltar o mutex: enquanto a janela está aberta, o
+        // plugin já não diz que a atualização "espera o Civil 3D fechar".
+        if (fim.Avisar) Avisar(fim.Frase, erro: fim.Codigo != 0);
+        return fim.Codigo;
     }
 
-    private static int Esperar(Instalacao instalacao, InstallerOptions opcoes)
+    /// <summary>Espera e instala. O código, a frase e se ela vai para a janela do fim.</summary>
+    private static (int Codigo, string Frase, bool Avisar) Esperar(Instalacao instalacao, InstallerOptions opcoes)
     {
         var log = opcoes.LogFile;
         var versao = Instalacao.Versao;
+        var estavaInstalado = instalacao.Instalado();
 
         // O registro começa de novo a cada atualização.
         Registrar(log, $"Clivus Solar {versao}: esperando o Civil 3D fechar para instalar (até {InstallerWait.Limit.TotalHours:0} horas).", acrescentar: false);
@@ -61,6 +85,7 @@ internal static class EsperaDoCivil3D
         var desde = Stopwatch.StartNew();
         Stopwatch? fechado = null;
         var tentativa = 0;
+        var falhas = 0;
         var antes = string.Empty;
 
         while (true)
@@ -90,8 +115,7 @@ internal static class EsperaDoCivil3D
                 {
                     var frase = Tr.F("A atualização do Clivus Solar {0} não foi instalada: o Civil 3D ficou aberto por mais de {1:0} horas. Abra o Civil 3D e use o botão Atualizar de novo.", versao, InstallerWait.Limit.TotalHours);
                     Registrar(log, $"{InstallerWait.ExitTimedOut} {frase}");
-                    Avisar(frase, erro: true);
-                    return InstallerWait.ExitTimedOut;
+                    return (InstallerWait.ExitTimedOut, frase, true);
                 }
             }
 
@@ -99,22 +123,36 @@ internal static class EsperaDoCivil3D
             // metade: fica para a próxima (o plugin oferece de novo).
             if (SessaoTerminando())
             {
-                Registrar(log, $"{InstallerWait.ExitSessionEnding} {Tr.T("O Windows está desligando: a atualização do Clivus Solar fica para a próxima vez.")}");
-                return InstallerWait.ExitSessionEnding;
+                var frase = Tr.T("O Windows está desligando: a atualização do Clivus Solar fica para a próxima vez.");
+                Registrar(log, $"{InstallerWait.ExitSessionEnding} {frase}");
+                return (InstallerWait.ExitSessionEnding, frase, false);
             }
 
             var instalada = instalacao.VersaoInstalada();
-            if (!InstallerWait.ShouldInstallOver(versao, instalada))
+            switch (InstallerWait.Decide(versao, instalada, estavaInstalado, instalacao.Instalado(), falhas))
             {
-                Registrar(log, $"0 {Tr.F("O Clivus Solar {0} já está instalado; a atualização para a {1} não foi preciso.", instalada, versao)}");
-                return 0;
+                case InstallDecision.AlreadyCurrent:
+                {
+                    var frase = Tr.F("O Clivus Solar {0} já está instalado; a atualização para a {1} não foi preciso.", instalada, versao);
+                    Registrar(log, $"0 {frase}");
+                    return (0, frase, false);
+                }
+
+                case InstallDecision.UninstalledMeanwhile:
+                {
+                    var frase = Tr.T("O Clivus Solar foi desinstalado enquanto a atualização esperava; ela não instala de volta.");
+                    Registrar(log, $"0 {frase}");
+                    return (0, frase, false);
+                }
             }
 
             tentativa++;
             Registrar(log, $"Instalando (tentativa {tentativa}; instalada antes: {instalada ?? "nenhuma"}).");
             var (codigo, resultado) = Programa.Executar(instalacao, desinstalar: false, opcoes.IgnoreCivil3D, null);
 
-            switch (InstallerWait.AfterInstall(codigo, tentativa))
+            // As tentativas que contam para o máximo são as que falharam; o
+            // Civil 3D que reabriu não gasta tentativa.
+            switch (InstallerWait.AfterInstall(codigo, falhas + 1))
             {
                 case AfterInstallStep.WaitAgain:
                     // O Civil 3D abriu de novo entre a olhada e a instalação.
@@ -123,15 +161,22 @@ internal static class EsperaDoCivil3D
                     continue;
 
                 case AfterInstallStep.Retry:
+                    falhas++;
                     Registrar(log, $"Falhou ({codigo} {resultado}); tenta de novo em {InstallerWait.Grace.TotalSeconds:0} s.");
                     Thread.Sleep(InstallerWait.Grace);
                     continue;
-
-                default:
-                    Registrar(log, $"{codigo} {resultado}");
-                    Avisar(codigo == 0 ? resultado : Tr.F("A atualização do Clivus Solar não foi instalada. {0}", resultado), erro: codigo != 0);
-                    return codigo;
             }
+
+            Registrar(log, $"{codigo} {resultado}");
+
+            if (codigo == 0) return (0, resultado, true);
+
+            // A falha de cópia (1) pode ter levado a versão anterior junto: o
+            // aviso manda instalar de novo. As da regra de versão (2, 3, 4, 6)
+            // param antes de mexer em qualquer arquivo.
+            return (codigo, codigo == 1
+                ? Tr.F("A atualização do Clivus Solar não foi instalada, e o plugin pode ter ficado incompleto: baixe o instalador na área do cliente e rode de novo. {0}", resultado)
+                : Tr.F("A atualização do Clivus Solar não foi instalada. {0}", resultado), true);
         }
     }
 

@@ -135,6 +135,37 @@ public class ServerAuthorizationTests
         Assert.Contains("CLIVUS_SERVIDOR_CHAVE", Viewer3DPage.ParseResponse(status, "").Erro, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Revisão: um 401 com o "detail" do FastAPI (fora do contrato) é recusa
+    /// sem o motivo do contrato: a frase segue a identificação mandada, e não
+    /// manda conferir a chave quem mandou a licença.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "43")]
+    public void NoPublicar3DODetailNaoViraAFraseDaChave()
+    {
+        var licenca = ServerAuthorization.Choose(null, Licenca, LicenseState.Valid);
+
+        Assert.Equal(ServerAuthorization.RefusedMessage(licenca), Viewer3DPage.ParseResponse(401, "{\"detail\": \"Not authenticated\"}", licenca).Erro);
+        Assert.Equal(ServerAuthorization.RefusedMessage(null), Viewer3DPage.ParseResponse(403, "{\"detail\": \"Forbidden\"}", null).Erro);
+    }
+
+    /// <summary>Revisão: a chave ou a licença só vão para o servidor do Clivus; o serviço local não recebe nenhuma.</summary>
+    [Fact]
+    [Trait("Etapa", "43")]
+    public void AIdentificacaoSoVaiParaOServidorDoClivus()
+    {
+        var licenca = ServerAuthorization.Choose(null, Licenca, LicenseState.Valid);
+        var chave = ServerAuthorization.Choose("chave", null, LicenseState.Invalid);
+
+        Assert.Same(licenca, ModuleServer.Resolve(null, Producao).CredentialFor(licenca));
+        Assert.Same(chave, ModuleServer.Resolve(null, Producao).CredentialFor(chave));
+        Assert.Null(ModuleServer.Resolve("http://localhost:8765", Producao).CredentialFor(licenca));
+        Assert.Null(ModuleServer.Resolve("http://192.168.0.10:8765", Producao).CredentialFor(chave));
+        Assert.Null(ModuleServer.Resolve("servico", Producao).CredentialFor(licenca));
+        Assert.Null(ModuleServer.Resolve(null, null).CredentialFor(licenca));
+    }
+
     /// <summary>Contrato da etapa 43: o 401 e o 403 vêm com {"erro": "..."}, e o plugin mostra como veio.</summary>
     [Fact]
     [Trait("Etapa", "43")]

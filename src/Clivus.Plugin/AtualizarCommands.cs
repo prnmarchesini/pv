@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -28,8 +29,14 @@ public static class AtualizarCommands
         {
             editor.WriteMessage(Tr.T("\nProcurando uma versão nova do Clivus Solar...\n"));
 
-            var consulta = Atualizacao.Consultar(doComando: true);
-            if (consulta.Respondeu) Atualizacao.GravarConsulta();
+            if (Consultar() is not { } consulta)
+            {
+                editor.WriteMessage(Tr.T("Procura cancelada.\n"));
+                return;
+            }
+
+            // Versão obrigatória pendente não conta como a consulta do dia: avisa a cada abertura.
+            Atualizacao.GravarConsulta(consulta);
 
             if (consulta.Erro is { } erro)
             {
@@ -41,7 +48,9 @@ public static class AtualizarCommands
             {
                 editor.WriteMessage(consulta.Versao is null
                     ? Tr.F("O servidor ainda não tem versão publicada. Esta é a {0}.\n", Atualizacao.Instalada)
-                    : Tr.F("O Clivus Solar está em dia: versão {0}.\n", Atualizacao.Instalada));
+                    : SemanticVersion.Parse(Atualizacao.Instalada) is null
+                        ? Tr.F("Não sei comparar a versão deste Clivus Solar ({0}) com a publicada ({1}).\n", Atualizacao.Instalada, consulta.Versao.Version)
+                        : Tr.F("O Clivus Solar está em dia: versão {0}.\n", Atualizacao.Instalada));
                 return;
             }
 
@@ -52,6 +61,37 @@ public static class AtualizarCommands
             RegistroDeDiagnostico.Registrar("Falha ao procurar a atualização.", erro);
             editor.WriteMessage(Tr.F("\nNão consegui procurar a atualização: {0}\n", erro.Message));
         }
+    }
+
+    /// <summary>
+    /// A consulta fora da linha do AutoCAD. Quase sempre responde num
+    /// instante; se demora (internet lenta, servidor fora do ar), abre o
+    /// "Carregando" com Cancelar, que deixa a tela viva (sem ele, o Civil 3D
+    /// ficava parado até o tempo-limite). Null se o usuário cancelou.
+    /// </summary>
+    private static Atualizacao.Consulta? Consultar()
+    {
+        var tarefa = Task.Run(() => Atualizacao.Consultar(doComando: true));
+        if (tarefa.Wait(TimeSpan.FromMilliseconds(700)) || !ClivusExtension.TemInterface()) return tarefa.GetAwaiter().GetResult();
+
+        var janela = JanelaDeProgresso.Abrir(null, Tr.T("Atualizar"), podeCancelar: true);
+        var relogio = Stopwatch.StartNew();
+
+        try
+        {
+            while (!tarefa.Wait(100))
+            {
+                // A barra anda pelo tempo-limite da consulta (15 s).
+                janela.Avancar(Math.Min(99, relogio.Elapsed.TotalSeconds / 15 * 100), Tr.T("Consultando o servidor do Clivus..."));
+                if (janela.Cancelado) return null;
+            }
+        }
+        finally
+        {
+            janela.Fechar();
+        }
+
+        return tarefa.GetAwaiter().GetResult();
     }
 }
 
@@ -222,14 +262,22 @@ internal sealed class JanelaDeAtualizacao : Window
 
     private void Andou(long bytes)
     {
-        if (_fechada) return;
+        // Pela fila da janela: exceção solta aqui cairia no Dispatcher do AutoCAD.
+        try
+        {
+            if (_fechada) return;
 
-        var porcento = (int)Math.Clamp(100.0 * bytes / Math.Max(1, _versao.Size), 0, 100);
-        if (porcento == _ultimoPorcento) return;
+            var porcento = (int)Math.Clamp(100.0 * bytes / Math.Max(1, _versao.Size), 0, 100);
+            if (porcento == _ultimoPorcento) return;
 
-        _ultimoPorcento = porcento;
-        _barra.Value = porcento;
-        _andamento.Text = Tr.F("Baixando: {0:0.0} de {1:0.0} MB", bytes / 1024.0 / 1024.0, _versao.Size / 1024.0 / 1024.0);
+            _ultimoPorcento = porcento;
+            _barra.Value = porcento;
+            _andamento.Text = Tr.F("Baixando: {0:0.0} de {1:0.0} MB", bytes / 1024.0 / 1024.0, _versao.Size / 1024.0 / 1024.0);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao mostrar o andamento do download.", erro);
+        }
     }
 
     private void Baixou(Task<(string? Arquivo, string? Erro)> tarefa)

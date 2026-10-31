@@ -46,8 +46,51 @@ internal static class Programa
         return codigo;
     }
 
-    /// <summary>Instala ou desinstala; o código de saída e a frase.</summary>
+    /// <summary>
+    /// Instala ou desinstala; o código de saída e a frase. Uma de cada vez
+    /// (etapa 43): a janela, o silencioso e a atualização que esperava o
+    /// Civil 3D podem cair no mesmo minuto, e duas cópias na mesma pasta
+    /// misturariam os arquivos.
+    /// </summary>
     internal static (int Codigo, string Frase) Executar(Instalacao instalacao, bool desinstalar, bool ignorarCivil, Action<string>? progresso)
+    {
+        Mutex? umaDeCadaVez = null;
+
+        try
+        {
+            umaDeCadaVez = new Mutex(initiallyOwned: false, InstallerWait.InstallingMutexName);
+
+            try
+            {
+                if (!umaDeCadaVez.WaitOne(InstallerWait.InstallingWait))
+                {
+                    umaDeCadaVez.Dispose();
+                    umaDeCadaVez = null;
+                    return (1, Tr.T("Outra instalação do Clivus Solar está em andamento; tente de novo daqui a pouco."));
+                }
+            }
+            catch (AbandonedMutexException)
+            {
+                // A anterior caiu no meio: a vez é desta, que refaz tudo.
+            }
+
+            return ExecutarSozinho(instalacao, desinstalar, ignorarCivil, progresso);
+        }
+        catch (Exception erro) when (erro is IOException or UnauthorizedAccessException or WaitHandleCannotBeOpenedException)
+        {
+            return (1, desinstalar ? Tr.F("Não consegui desinstalar: {0}", erro.Message) : Tr.F("Não consegui instalar: {0}", erro.Message));
+        }
+        finally
+        {
+            if (umaDeCadaVez is not null)
+            {
+                umaDeCadaVez.ReleaseMutex();
+                umaDeCadaVez.Dispose();
+            }
+        }
+    }
+
+    private static (int Codigo, string Frase) ExecutarSozinho(Instalacao instalacao, bool desinstalar, bool ignorarCivil, Action<string>? progresso)
     {
         try
         {

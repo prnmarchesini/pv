@@ -117,7 +117,20 @@ internal sealed class Instalacao
 
         foreach (var nome in InstallerWait.BlockingProcesses)
         {
-            var processos = Process.GetProcessesByName(nome);
+            Process[] processos;
+
+            try
+            {
+                processos = Process.GetProcessesByName(nome);
+            }
+            catch (Exception erro) when (erro is InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                // Sem conseguir olhar, conta como aberto: a espera segue, e o limite dela vale.
+                quantos++;
+                quais.Add($"{nome} ×? ({erro.Message})");
+                continue;
+            }
+
             foreach (var processo in processos) processo.Dispose();
 
             if (processos.Length == 0) continue;
