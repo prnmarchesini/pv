@@ -8,7 +8,7 @@
       instalador e o nome do ClivusSolar-Setup-<versao>.exe. Para subir: mude
       aqui e rode tools\gerar-instalador.ps1.
     -->
-    <Version>0.1.8</Version>
+    <Version>0.1.9</Version>
     <Company>Clivus Solar</Company>
     <Product>Clivus Solar</Product>
 
