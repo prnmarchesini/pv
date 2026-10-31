@@ -656,8 +656,19 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     (`ComP1OMotorAssentaAMesaNaAlturaDaEstrutura`) passou a conferir a estaca de trás pela regra
     nova (a do catálogo, cortada com o máximo ou crescida com o mínimo), e nunca menor que a do
     chão plano.
-  - O perfil de antes abre igual: os campos novos são opcionais no arquivo (gravados só quando
-    escritos).
+  - O perfil de antes abre igual: os campos novos são opcionais no arquivo, e o perfil que tem
+    algum deles sai na versão 6 do formato (os outros continuam na 4 ou na 5, que o plugin anterior
+    lê). Na janela, o perfil sem nominal abre com o nominal escrito igual ao mínimo.
+  - A revisão (subagente em worktree, no 5898cc3) achou e eu corrigi: a herança de trás não era
+    conferida e a regra morava em três lugares (agora um dono só, `TableFrame.EmbedmentFor`, e o
+    `WhyInvalid` confere o de trás com o que herda da frente); com o nominal em branco, mudar o
+    mínimo ainda levantava a estrutura (a janela escreve o nominal ao abrir); o biposte com P1/P2
+    e só o nominal era recusado pedindo o "T3"; o `Equals` das estruturas ignorava os campos
+    novos; o arquivo não subia de versão; as dicas do P2 diziam "o do projeto" (em branco é o da
+    frente); o P2 calculado pelo livre e o resumo ignoravam o nominal de trás; a vista lateral
+    desenhava o pé de trás com o enterro da frente. Testes novos: a estaca de 3,888 da GC800 e a
+    cortada pelo máximo de trás, a monoposte com nominal, os conflitos com a frente, só o nominal,
+    a igualdade e a versão 6.
 - 38.11 (31/10/2026), pedido da tela: "quando o cad abre, ele não tá carregando o terreno,
   isso é erro". O terreno processado só vive na memória. Ao reabrir, os comandos que passam
   pelo `ExigirTerreno` reprocessavam sozinhos. Já Área, Alinhamento, Coordenada, Flechas e as
@@ -1258,3 +1269,6 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     (o "livre" da vista lateral); mudar o nominal muda. Gerar uma fileira no Aurora: em Análises ›
     Pilar enterrado, cada pilar com o enterro que o terreno deu, entre o mínimo e o máximo da
     linha dele; onde nem com o mínimo a estaca alcança, ela cresce (Pilar total maior que o P1/P2).
+    Atenção: com o máximo do projeto em 2,0 m (o padrão) e o mínimo da GC800 em 2,2 m, a faixa
+    fica 2,2/2,2/2,2 e a estaca do catálogo não aparece; escreva o máximo de cada pilar (ou suba o
+    do projeto) para ver o enterro variar.

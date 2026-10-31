@@ -45,9 +45,9 @@ namespace Clivus.Core;
 /// mais isto.
 /// </param>
 /// <param name="MaxEmbedment">
-/// O quanto o pilar pode entrar no chão. Só morde quando o comprimento vem
-/// imposto de fora — o comprimento ideal enterra exatamente o mínimo. Quem o
-/// usa é <see cref="WhyEmbedmentIsWrong"/>.
+/// O quanto o pilar pode entrar no chão: o teto da estaca do catálogo do
+/// biposte (38.12, quando a estrutura não tem o máximo dela) e o limite da
+/// análise do enterro (<see cref="WhyEmbedmentIsWrong"/>).
 /// </param>
 /// <param name="MinStep">Degrau mínimo entre mesas vizinhas.</param>
 /// <param name="MaxStep">Degrau máximo entre mesas vizinhas.</param>
@@ -300,10 +300,9 @@ public sealed record SystemConfiguration(
     /// <summary>
     /// Por que este enterro está fora da faixa, ou null se está dentro.
     ///
-    /// Só faz diferença quando o comprimento do pilar vem imposto de fora: com
-    /// o comprimento ideal, o enterro é exatamente o mínimo. É aqui que
-    /// <see cref="MaxEmbedment"/> ganha uso — sem isto ele seria um campo que
-    /// ninguém lê, que é o defeito que a revisão do 3.5 mandou tirar.
+    /// Faz diferença quando o comprimento do pilar vem imposto de fora (a
+    /// estaca do catálogo do biposte, 38.12): com o comprimento ideal, o
+    /// enterro fica entre o mínimo e o máximo por construção.
     /// </summary>
     public string? WhyEmbedmentIsWrong(double embedment)
     {

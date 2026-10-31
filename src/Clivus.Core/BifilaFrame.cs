@@ -306,7 +306,10 @@ public sealed record BifilaFrame(
         && Equals(Brace, outra.Brace)
         && RodDiameter.Equals(outra.RodDiameter)
         && Nullable.Equals(FrontPillar, outra.FrontPillar)
-        && Nullable.Equals(RearPillar, outra.RearPillar);
+        && Nullable.Equals(RearPillar, outra.RearPillar)
+        && Nullable.Equals(RearMinEmbedment, outra.RearMinEmbedment)
+        && Nullable.Equals(RearNominalEmbedment, outra.RearNominalEmbedment)
+        && Nullable.Equals(RearMaxEmbedment, outra.RearMaxEmbedment);
 
     /// <inheritdoc/>
     public override int GetHashCode()
@@ -328,6 +331,9 @@ public sealed record BifilaFrame(
         codigo.Add(Beam);
         codigo.Add(Purlin);
         codigo.Add(Brace);
+        codigo.Add(RearMinEmbedment);
+        codigo.Add(RearNominalEmbedment);
+        codigo.Add(RearMaxEmbedment);
         codigo.Add(RodDiameter);
         codigo.Add(FrontPillar);
         codigo.Add(RearPillar);

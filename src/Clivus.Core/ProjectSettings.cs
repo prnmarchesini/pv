@@ -63,9 +63,12 @@ public sealed record ProjectSettings(SystemConfiguration Configuration, Analysis
     public string? EmbedmentNote(TableFrame estrutura)
     {
         ArgumentNullException.ThrowIfNull(estrutura);
-        if (estrutura.MinEmbedment is not { } t3 || t3 <= Configuration.MaxEmbedment) return null;
+        // A estrutura com o máximo dela não sobe o do projeto (38.12).
+        if (estrutura.MaxEmbedment is not null) return null;
+        var maior = Math.Max(estrutura.MinEmbedment ?? 0, estrutura.NominalEmbedment ?? 0);
+        if (maior <= 0 || maior <= Configuration.MaxEmbedment) return null;
 
-        return Tr.F("o enterro mínimo da estrutura (T3 = {0:0.###} m) passa do enterro máximo da configuração ({1:0.###} m); o máximo subiu junto para esta mesa", t3, Configuration.MaxEmbedment);
+        return Tr.F("o enterro da estrutura ({0:0.###} m) passa do enterro máximo da configuração ({1:0.###} m); o máximo subiu junto para esta mesa", maior, Configuration.MaxEmbedment);
     }
 
     public ProjectSettings ForTable(TableFrame estrutura)

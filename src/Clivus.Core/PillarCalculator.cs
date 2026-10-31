@@ -102,9 +102,11 @@ public sealed record TablePillars(
 /// É o passo 5.5, com a divergência que o 4.1 já registrou: <b>não há
 /// arredondamento para comprimento comercial</b>. O Renan foi explícito ("vc
 /// deve calcular o pilar ideal apenas"): o comprimento é a altura livre mais
-/// o enterro mínimo, e ele filtra. O enterro é sempre o mínimo, porque é o
-/// comprimento ideal que se entrega; <see cref="SystemConfiguration.MaxEmbedment"/>
-/// só morde quando o comprimento vem imposto de fora, o que não acontece aqui.
+/// o enterro, e ele filtra. Desde o 38.12 o enterro é o da linha do pilar
+/// (<see cref="TableFrame.EmbedmentFor"/>): na monoposte, o nominal; no
+/// biposte com P1/P2, a estaca do catálogo com o enterro que o terreno der,
+/// entre o mínimo e o máximo da linha, crescendo com o mínimo ou cortada com
+/// o máximo fora disso (<see cref="EmbedmentRange.Stake"/>).
 ///
 /// A mesa é colocada com a matriz de verdade — inclinação, giro longitudinal
 /// escolhido pela fileira, azimute, cota — e o pé de cada pilar é

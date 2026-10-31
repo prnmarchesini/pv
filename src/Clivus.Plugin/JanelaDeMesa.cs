@@ -1047,12 +1047,16 @@ internal sealed class JanelaDeMesa : Window
         // francesa MF1, pilar P2, Mão francesa MF2, aí tem as terças, as
         // tesouras"), com o P1 e o P2 digitados: a altura é da estrutura.
         Secao(Tr.T("Pórtico: pilares e mãos francesas"));
-        Linha(Tr.T("P1: pilar dianteiro, o menor (m)"), _bfP1, Tr.T("O pilar dianteiro inteiro, com o enterro T3, como o fabricante cota no chão plano (ex.: 3,059). É a altura da estrutura: na usina, a faixa da ponta baixa começa na que ele dá, e cada pilar sai com o comprimento que o terreno pede. Em branco, com o P2: a altura vem da faixa do projeto."));
+        Linha(Tr.T("P1: pilar dianteiro, o menor (m)"), _bfP1, Tr.T("O pilar dianteiro inteiro, com o enterro nominal, como o fabricante cota no chão plano (ex.: 3,059). É a altura da estrutura: na usina, a faixa da ponta baixa começa na que ele dá, e cada pilar sai com o comprimento que o terreno pede. Em branco, com o P2: a altura vem da faixa do projeto."));
         Linha(Tr.T("Livre sob o módulo (m)"), _bfLivre, Tr.T("A altura livre do chão plano ao fundo do módulo, na ponta baixa, como o fabricante dá o nome à estrutura (a GC800 é a de 0,800). É o mesmo que o P1: digitar aqui muda o P1, e mudar o P1 muda aqui. O P2 fica como está."));
         Linha(Tr.T("MF1: mão francesa do P1 (m)"), _bfMaoFrente, Tr.T("O comprimento da mão francesa do pilar dianteiro (ex.: 1,244). Zero: sem mão francesa."));
         Linha(Tr.T("MF1: abaixo do topo do P1 (m)"), _bfMaoFrenteAbaixo, Tr.T("Onde a MF1 prende no P1, medido do topo do pilar para baixo (ex.: 0,447). A outra ponta vai na tesoura, onde o comprimento alcança. A vista lateral mostra a cota."));
         Linha(Tr.T("P2: pilar traseiro, o maior (m)"), _bfP2, Tr.T("O pilar traseiro inteiro, como o fabricante cota (ex.: 3,888). No chão plano ele precisa do P1 mais a subida da tesoura entre os dois; o que passar disso é a folga para o chão caindo para trás."));
-        Linha(Tr.T("P2: enterro mín. · nominal · máx. (m)"), TresCampos(_enterroTrasMinimo, _enterroTrasNominal, _enterroTrasMaximo),
+        var enterroDoP2 = TresCampos(_enterroTrasMinimo, _enterroTrasNominal, _enterroTrasMaximo);
+        _enterroTrasMinimo.ToolTip = Tr.T("O mínimo que a estaca de trás fica dentro do solo. Em branco, o da frente.");
+        _enterroTrasNominal.ToolTip = Tr.T("O enterro nominal de trás: o do chão plano. Em branco, o da frente (nunca abaixo do mínimo de trás).");
+        _enterroTrasMaximo.ToolTip = Tr.T("O máximo que a estaca de trás pode afundar. Em branco, o da frente.");
+        Linha(Tr.T("P2: enterro mín. · nominal · máx. (m)"), enterroDoP2,
             Tr.T("O enterro do pilar de trás, que pode ser outro que o da frente. Na usina a estaca é a do P2 e o enterro é o que o terreno der, entre o mínimo e o máximo; se nem com o mínimo ela alcança, ela cresce com o mínimo enterrado; se afundaria além do máximo, é cortada. O nominal é o do chão plano. Em branco, os da frente."));
         Linha(Tr.T("MF2: mão francesa do P2 (m)"), _bfMaoTras, Tr.T("O comprimento da mão francesa do pilar traseiro (ex.: 1,209). Zero: sem mão francesa."));
         Linha(Tr.T("MF2: abaixo do topo do P2 (m)"), _bfMaoTrasAbaixo, Tr.T("Onde a MF2 prende no P2, medido do topo do pilar para baixo (ex.: 0,773)."));
@@ -1464,7 +1468,13 @@ internal sealed class JanelaDeMesa : Window
         // Sem P2 ainda (o biposte de antes do 38.9), o do chão plano: o P1
         // mais a subida da tesoura entre os dois pilares.
         if (string.IsNullOrWhiteSpace(_bfP2.Text) && geometria.RearPillarRow is { } tras)
-            _bfP2.Text = Numero(Math.Round(p1 + (tras - geometria.PillarRow) * Math.Sin(perfil.TiltRadians), 3));
+        {
+            // Mais a diferença dos nominais (38.12: cada linha tem o seu).
+            var comAMesa = _projeto.WithEmbedmentOf(perfil.Frame);
+            var diferenca = perfil.Frame.EmbedmentFor(PillarLine.Rear, comAMesa.MinEmbedment, comAMesa.MaxEmbedment).Nominal
+                - perfil.Frame.EmbedmentFor(PillarLine.Front, comAMesa.MinEmbedment, comAMesa.MaxEmbedment).Nominal;
+            _bfP2.Text = Numero(Math.Round(p1 + (tras - geometria.PillarRow) * Math.Sin(perfil.TiltRadians) + diferenca, 3));
+        }
 
         _bfP1.Text = Numero(Math.Round(p1, 3));
     }
@@ -1513,7 +1523,10 @@ internal sealed class JanelaDeMesa : Window
         _vaoAlvo.Text = Numero(perfil.Frame.PillarSpanTarget);
         _balanco.Text = Numero(perfil.Frame.PillarCantilever);
         _enterro.Text = perfil.Frame.MinEmbedment is { } t3 ? Numero(t3) : string.Empty;
-        _enterroNominal.Text = perfil.Frame.NominalEmbedment is { } nominal ? Numero(nominal) : string.Empty;
+        // O perfil de antes do 38.12 não tem nominal: ele era o mínimo. A janela
+        // o escreve, para mudar o mínimo não levantar a estrutura (revisão do
+        // 38.12; Renan: "aqui é o enterro mínimo, não é para levantar a estrutura").
+        _enterroNominal.Text = (perfil.Frame.NominalEmbedment ?? perfil.Frame.MinEmbedment) is { } nominal ? Numero(nominal) : string.Empty;
         _enterroMaximo.Text = perfil.Frame.MaxEmbedment is { } maximo ? Numero(maximo) : string.Empty;
         _vaosEscritos = perfil.Frame.PillarSpans;
 
@@ -1796,7 +1809,11 @@ internal sealed class JanelaDeMesa : Window
             var basica = AlturaBasica(perfil);
 
             _planta.Mostrar(geometria);
-            _corte.Mostrar(geometria, perfil.TiltRadians, perfil.Frame.NominalEmbedment ?? perfil.Frame.MinEmbedment, perfil.Frame.Bifila, basica);
+            var comAMesa = _projeto.WithEmbedmentOf(perfil.Frame);
+            var enterroQueVale = perfil.Frame.MinEmbedment is null && perfil.Frame.NominalEmbedment is null
+                ? (double?)null
+                : perfil.Frame.EmbedmentFor(PillarLine.Front, comAMesa.MinEmbedment, comAMesa.MaxEmbedment).Nominal;
+            _corte.Mostrar(geometria, perfil.TiltRadians, enterroQueVale, perfil.Frame.Bifila, basica);
 
             var potencia = perfil.Layout.ModuleCount * perfil.Layout.Module.PowerWatts / 1000;
 
@@ -1820,9 +1837,12 @@ internal sealed class JanelaDeMesa : Window
                     : Tr.T(", com o pilar na ponta da estrutura"))
                 + "\n"
                 + (geometria.RearPillarRow is { } tras && basica?.P2 is { } p2
-                    ? Tr.F("P1 a {0} m da ponta baixa do módulo e P2 a {1} m ({2} m entre eles na horizontal). P1 de {3} m e P2 de {4} m, com {5} m enterrados.",
+                    ? Tr.F("P1 a {0} m da ponta baixa do módulo e P2 a {1} m ({2} m entre eles na horizontal). P1 de {3} m e P2 de {4} m, com {5} enterrados.",
                         Numero(geometria.PillarRow), Numero(tras), Numero(perfil.BifilaHorizontalSpacing ?? 0),
-                        Milimetro(basica.P1), Milimetro(perfil.Frame.Bifila?.RearPillar ?? p2), Numero(basica.Embedment))
+                        Milimetro(basica.P1), Milimetro(perfil.Frame.Bifila?.RearPillar ?? p2),
+                        basica.RearEmbedment is { } atras && Math.Abs(atras - basica.Embedment) > 0.0005
+                            ? Tr.F("{0} m na frente e {1} m atrás", Numero(basica.Embedment), Numero(atras))
+                            : Tr.F("{0} m", Numero(basica.Embedment)))
                     : geometria.RearPillarRow is { } traseiro
                     ? Tr.F("Pilar dianteiro a {0} m da ponta baixa do módulo e traseiro a {1} m ({2} m entre eles na horizontal).",
                         Numero(geometria.PillarRow), Numero(traseiro), Numero(perfil.BifilaHorizontalSpacing ?? 0))

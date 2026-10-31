@@ -159,4 +159,54 @@ public class EmbedmentRangeTests
         Assert.Equal(a.P1, b.P1, 9);
         Assert.Equal(a.P2!.Value + 0.3, b.P2!.Value, 9);
     }
+
+    /// <summary>
+    /// O de trás com o que ele herda da frente (revisão do 38.12): o nominal
+    /// de trás escrito abaixo do mínimo da frente, ou acima do máximo dela, é
+    /// recusado, e não ajustado calado.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void ODeTrasNaoPodeSairDaFaixaQueHerdaDaFrente()
+    {
+        var gc800 = Gc800();
+        var frente = gc800.Frame with { MinEmbedment = 1.0, NominalEmbedment = 1.2, MaxEmbedment = 1.6 };
+        TableFrame Tras(double? minimo, double? nominal, double? maximo) =>
+            frente with { Bifila = frente.Bifila! with { RearMinEmbedment = minimo, RearNominalEmbedment = nominal, RearMaxEmbedment = maximo } };
+
+        Assert.Contains("trás", Tras(null, 0.8, null).WhyInvalid, StringComparison.Ordinal);
+        Assert.Contains("trás", Tras(null, 2.0, null).WhyInvalid, StringComparison.Ordinal);
+        Assert.Contains("trás", Tras(1.8, null, null).WhyInvalid, StringComparison.Ordinal);
+        Assert.Null(Tras(1.3, null, 2.4).WhyInvalid);
+        Assert.Null(Tras(null, 1.5, 2.0).WhyInvalid);
+    }
+
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void OBiposteComSoONominalServe()
+    {
+        var gc800 = Gc800();
+        var soNominal = gc800 with { Frame = gc800.Frame with { MinEmbedment = null, NominalEmbedment = 2.2 } };
+
+        Assert.Null(soNominal.WhyInvalid);
+        Assert.Equal(gc800.StructureLowEdge!.Value, soNominal.StructureLowEdge!.Value, 9);
+    }
+
+    /// <summary>Dois perfis que só diferem no enterro não são iguais; o perfil com enterro novo vai na versão 6 e volta igual.</summary>
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void OEnterroEntraNaIgualdadeEOArquivoVaiNaVersao6()
+    {
+        var gc800 = Gc800();
+        var comNominal = gc800 with { Frame = gc800.Frame with { NominalEmbedment = 2.3 } };
+        var comTras = gc800 with { Frame = gc800.Frame with { Bifila = gc800.Frame.Bifila! with { RearMaxEmbedment = 2.6 } } };
+
+        Assert.NotEqual(gc800.Frame, comNominal.Frame);
+        Assert.NotEqual(gc800.Frame, comTras.Frame);
+
+        Assert.Contains("\"formatVersion\": 6", comNominal.ToJson(), StringComparison.Ordinal);
+        Assert.Equal(comNominal, TableProfile.Parse(comNominal.ToJson()));
+        Assert.Equal(comTras, TableProfile.Parse(comTras.ToJson()));
+        Assert.DoesNotContain("\"formatVersion\": 6", gc800.ToJson(), StringComparison.Ordinal);
+    }
 }

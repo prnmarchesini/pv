@@ -409,7 +409,8 @@ public class VendorStructuresTests
         Assert.Contains("juntos", Com(3.059, null).WhyInvalid, StringComparison.Ordinal);
         Assert.Contains("juntos", Com(null, 3.888).WhyInvalid, StringComparison.Ordinal);
         Assert.Contains("maior que o P1", Com(3.059, 3.0).WhyInvalid, StringComparison.Ordinal);
-        Assert.Contains("T3", (Com(3.059, 3.888) with { Frame = Com(3.059, 3.888).Frame with { MinEmbedment = null } }).WhyInvalid, StringComparison.Ordinal);
+        // Sem enterro nenhum, pede o nominal (38.12: o campo T3 virou mínimo, nominal e máximo).
+        Assert.Contains("enterro nominal", (Com(3.059, 3.888) with { Frame = Com(3.059, 3.888).Frame with { MinEmbedment = null } }).WhyInvalid, StringComparison.Ordinal);
         Assert.Contains("encosta no chão", Com(2.0, 3.0).WhyInvalid, StringComparison.Ordinal);
 
         // O fundo do módulo, e não a face de cima (revisão do 38.9): o P1 de
@@ -517,6 +518,53 @@ public class VendorStructuresTests
     }
 
     // ------------------------------------------------------------- apoio
+
+    /// <summary>
+    /// 38.12, "Estaca do catálogo", com os números: a GC800 no chão plano, com
+    /// o máximo de 2,5 m do projeto, sai com a estaca de trás inteira (3,888 m)
+    /// e a folga dela enterrada; com o máximo de trás de 2,3 m escrito, a
+    /// estaca é cortada com 2,3 m enterrados.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void NoChaoPlanoAEstacaDeTrasEADoCatalogoOuCortadaPeloMaximoDela()
+    {
+        var gc800 = VendorStructures.All.Single(e => e.Model.Contains("GC800MM", StringComparison.Ordinal)).Profile;
+
+        var (_, inteira) = PeloMotor(gc800, Projeto(0.84));
+        Assert.All(inteira.Where(p => p.Line == PillarLine.Rear), p => Assert.Equal(3.888, p.Length!.Value, Motor));
+
+        var comMaximo = gc800 with { Frame = gc800.Frame with { Bifila = gc800.Frame.Bifila! with { RearMaxEmbedment = 2.3 } } };
+        var (_, cortada) = PeloMotor(comMaximo, Projeto(0.84));
+        Assert.All(cortada.Where(p => p.Line == PillarLine.Rear), p =>
+        {
+            Assert.Equal(2.3, p.Embedment, Motor);
+            Assert.Equal(p.FreeHeight!.Value + 2.3, p.Length!.Value, Motor);
+            Assert.True(p.Length!.Value < 3.888);
+        });
+
+        // A frente não muda: o P1 com o enterro dele.
+        Assert.All(cortada.Where(p => p.Line == PillarLine.Front), p => Assert.Equal(gc800.Frame.Bifila!.FrontPillar!.Value, p.Length!.Value, 0.01));
+    }
+
+    /// <summary>A monoposte (sem estaca de catálogo) enterra o nominal em todo pilar (38.12).</summary>
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void AMonoposteEnterraONominal()
+    {
+        var gc800 = VendorStructures.All.Single(e => e.Model.Contains("GC800MM", StringComparison.Ordinal)).Profile;
+        var monoposte = gc800 with { Frame = gc800.Frame with { Bifila = null, MinEmbedment = 2.2, NominalEmbedment = 2.4 } };
+
+        var (_, pilares) = PeloMotor(monoposte, Projeto(0.84));
+
+        Assert.NotEmpty(pilares);
+        Assert.All(pilares, p =>
+        {
+            Assert.Equal(PillarLine.Single, p.Line);
+            Assert.Equal(2.4, p.Embedment, Motor);
+            Assert.Equal(p.FreeHeight!.Value + 2.4, p.Length!.Value, Motor);
+        });
+    }
 
     private static SystemConfiguration Projeto(double pontaBaixaMinima) =>
         SystemConfiguration.Default with

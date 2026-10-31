@@ -274,7 +274,9 @@ internal sealed class CorteDaMesa : FrameworkElement
         var folga = _basica is null ? 0 : FolgaDoP2();
         var xFrente = Tela(frenteEm * cos, 0).X;
         var xTras = Tela(trasEm * cos, 0).X;
-        var yPeTras = yPe + folga * k;
+        // O pé de trás com o nominal dele (38.12): mais fundo, ou mais raso, que o da frente.
+        var diferencaDoEnterro = (_basica?.RearEmbedment ?? _basica?.Embedment ?? 0) - (_basica?.Embedment ?? 0);
+        var yPeTras = yPe + (folga + diferencaDoEnterro) * k;
 
         // O chão plano, na altura que o P1 dá; com a folga do P2, o chão
         // caindo para trás, girando no pé do P1, até onde o P2 alcança.
@@ -427,8 +429,10 @@ internal sealed class CorteDaMesa : FrameworkElement
             : _basica is { } doProjeto ? Tr.F("enterro {0} (projeto)", Medida(doProjeto.Embedment))
             : null;
 
-        // O P2 com o enterro nominal dele, se a mesa tem um (38.12).
-        var nomeDoEnterroTras = bifila.RearNominalEmbedment is { } nominalTras ? Tr.F("enterro {0}", Medida(nominalTras)) : nomeDoEnterro;
+        // O P2 com o enterro nominal que vale para ele (38.12, a regra da estrutura).
+        var nomeDoEnterroTras = _basica?.RearEmbedment is { } nominalTras && _basica is { } comOsDois && Math.Abs(nominalTras - comOsDois.Embedment) > 0.0005
+            ? Tr.F("enterro {0}", Medida(nominalTras))
+            : nomeDoEnterro;
 
         var foraDoT3 = xFrente - 12;
         if (nomeDoEnterro is not null)

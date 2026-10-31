@@ -32,9 +32,21 @@ public static class StructureHeight
         // O enterro nominal da frente (38.12, Renan: "aqui é o enterro mínimo,
         // não é para levantar a estrutura [...] o nominal, para gerar o
         // desenho"); sem nominal, o mínimo, como antes.
-        if ((geometry.Frame.NominalEmbedment ?? geometry.Frame.MinEmbedment ?? fallbackEmbedment) is not { } enterro) return null;
+        if (Nominal(geometry.Frame, PillarLine.Front, fallbackEmbedment) is not { } enterro) return null;
 
         return p1 - enterro + geometry.PillarTopDrop - geometry.PillarRow * Math.Sin(tiltRadians);
+    }
+
+    /// <summary>
+    /// O enterro nominal de uma linha pela regra da estrutura
+    /// (<see cref="TableFrame.EmbedmentFor"/>, revisão do 38.12: a regra tem
+    /// um dono só), ou null quando nem a estrutura nem o projeto dizem enterro.
+    /// O máximo do projeto não entra: ele nunca baixa o nominal.
+    /// </summary>
+    private static double? Nominal(TableFrame frame, PillarLine linha, double? fallbackEmbedment)
+    {
+        if ((fallbackEmbedment ?? frame.MinEmbedment ?? frame.NominalEmbedment) is not { } minimoDoProjeto) return null;
+        return frame.EmbedmentFor(linha, minimoDoProjeto, 0).Nominal;
     }
 
     /// <summary>
@@ -67,9 +79,8 @@ public static class StructureHeight
         // Os dois topos ficam à mesma distância da face dos módulos: a
         // diferença entre os pilares é a subida da face entre os dois eixos,
         // mais a diferença dos enterros nominais (38.12: cada linha tem o seu).
-        var frente = geometry.Frame.NominalEmbedment ?? geometry.Frame.MinEmbedment ?? fallbackEmbedment ?? 0;
-        var bifila = geometry.Frame.Bifila;
-        var atras = bifila.RearNominalEmbedment ?? (bifila.RearMinEmbedment is { } minimo ? Math.Max(minimo, frente) : frente);
+        var frente = Nominal(geometry.Frame, PillarLine.Front, fallbackEmbedment)!.Value;
+        var atras = Nominal(geometry.Frame, PillarLine.Rear, fallbackEmbedment)!.Value;
         return p1 + (tras - geometry.PillarRow) * Math.Sin(tiltRadians) + (atras - frente);
     }
 

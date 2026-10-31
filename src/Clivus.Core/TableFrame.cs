@@ -107,7 +107,7 @@ public sealed record TableFrame(
             var frente = EmbedmentFor(PillarLine.Front, projectMin, projectMax);
             return EmbedmentRange.Of(
                 bifila.RearMinEmbedment ?? frente.Min,
-                bifila.RearNominalEmbedment ?? (bifila.RearMinEmbedment is { } minimo ? Math.Max(minimo, frente.Nominal) : frente.Nominal),
+                NominalDeTras(bifila, frente.Nominal),
                 bifila.RearMaxEmbedment ?? MaxEmbedment,
                 projectMin,
                 projectMax);
@@ -115,6 +115,14 @@ public sealed record TableFrame(
 
         return EmbedmentRange.Of(MinEmbedment, NominalEmbedment, MaxEmbedment, projectMin, projectMax);
     }
+
+    /// <summary>
+    /// O nominal de trás: o escrito; em branco, o da frente, mas nunca abaixo
+    /// do mínimo de trás escrito. A regra mora só aqui (revisão do 38.12: a
+    /// altura, o motor e a vista lateral tinham cada um a sua cópia).
+    /// </summary>
+    private static double NominalDeTras(BifilaFrame bifila, double nominalDaFrente) =>
+        bifila.RearNominalEmbedment ?? (bifila.RearMinEmbedment is { } minimo ? Math.Max(minimo, nominalDaFrente) : nominalDaFrente);
 
     /// <summary>
     /// O comprimento da estaca do catálogo da linha (38.12): o P1 na frente e
@@ -211,6 +219,19 @@ public sealed record TableFrame(
 
             if (EmbedmentRange.WhyInvalid(MinEmbedment, NominalEmbedment, MaxEmbedment) is { } porOrdem)
                 return Bifila is null ? porOrdem : Tr.F("no pilar da frente, {0}", porOrdem);
+
+            // O de trás com o que ele herda da frente (revisão do 38.12): um
+            // nominal de trás escrito abaixo do mínimo da frente, ou acima do
+            // máximo dela, não pode valer calado.
+            if (Bifila is { } doBiposte && (MinEmbedment ?? NominalEmbedment) is { } minimoDaFrente)
+            {
+                var nominalDaFrente = Math.Max(NominalEmbedment ?? minimoDaFrente, MinEmbedment ?? minimoDaFrente);
+                var minimoDeTras = doBiposte.RearMinEmbedment ?? MinEmbedment;
+                var maximoDeTras = doBiposte.RearMaxEmbedment ?? MaxEmbedment;
+
+                if (EmbedmentRange.WhyInvalid(minimoDeTras, NominalDeTras(doBiposte, nominalDaFrente), maximoDeTras) is { } porTras)
+                    return Tr.F("no pilar de trás (com o que vem do da frente), {0}", porTras);
+            }
 
             if (_vaos is not null)
             {
@@ -365,6 +386,8 @@ public sealed record TableFrame(
         && PillarSpanTarget.Equals(outra.PillarSpanTarget)
         && PillarCantilever.Equals(outra.PillarCantilever)
         && Nullable.Equals(MinEmbedment, outra.MinEmbedment)
+        && Nullable.Equals(NominalEmbedment, outra.NominalEmbedment)
+        && Nullable.Equals(MaxEmbedment, outra.MaxEmbedment)
         && Equals(Bifila, outra.Bifila)
         && (_vaos is null
             ? outra._vaos is null
@@ -382,6 +405,8 @@ public sealed record TableFrame(
         codigo.Add(PillarSpanTarget);
         codigo.Add(PillarCantilever);
         codigo.Add(MinEmbedment);
+        codigo.Add(NominalEmbedment);
+        codigo.Add(MaxEmbedment);
         codigo.Add(Bifila);
         codigo.Add(_vaos is null);
         if (_vaos is not null) foreach (var vao in _vaos) codigo.Add(vao);

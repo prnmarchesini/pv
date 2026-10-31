@@ -97,6 +97,13 @@ public sealed record TableProfile(
     public const int VersaoBifilaComPilares = 5;
 
     /// <summary>
+    /// O enterro nominal e máximo, e os do pilar de trás do biposte (38.12):
+    /// o perfil que tem algum deles sai na 6; os outros continuam na versão de
+    /// antes, que o plugin anterior lê.
+    /// </summary>
+    public const int VersaoComEnterro = 6;
+
+    /// <summary>
     /// Os dados elétricos do módulo desta estrutura (lidos do .PAN do PVsyst
     /// ou digitados no cadastro), ou null quando a estrutura ainda não os
     /// tem: aí as tensões e correntes da rota ficam em branco. É a fonte
@@ -168,6 +175,15 @@ public sealed record TableProfile(
         }
     }
 
+    /// <summary>Se a estrutura tem o enterro do 38.12 (nominal, máximo ou os de trás): o perfil sai na versão 6.</summary>
+    private bool TemEnterroNovo =>
+        Frame.NominalEmbedment is not null || Frame.MaxEmbedment is not null
+        || Frame.Bifila is { } b && (b.RearMinEmbedment is not null || b.RearNominalEmbedment is not null || b.RearMaxEmbedment is not null);
+
+    private static bool TemEnterroNovoNoArquivo(Arquivo arquivo) =>
+        arquivo.Frame is { } f && (f.NominalEmbedment is not null || f.MaxEmbedment is not null
+            || f.Bifila is { } b && (b.RearMinEmbedment is not null || b.RearNominalEmbedment is not null || b.RearMaxEmbedment is not null));
+
     /// <summary>
     /// O P1 e o P2 do biposte (38.9) com a mesa montada: o P1 tem que deixar
     /// os módulos acima do chão, e o P2 tem que alcançar a viga no chão plano.
@@ -177,8 +193,11 @@ public sealed record TableProfile(
     {
         if (Frame.Bifila is not { FrontPillar: { } p1, RearPillar: { } p2 }) return null;
 
-        if (Frame.MinEmbedment is not { } t3)
-            return Tr.T("o P1 é o pilar inteiro, com o enterro: escreva o enterro mínimo T3 da estrutura");
+        // O P1 dá a altura com o enterro nominal (38.12); sem nominal, o mínimo.
+        if ((Frame.NominalEmbedment ?? Frame.MinEmbedment) is not { } escrito)
+            return Tr.T("o P1 é o pilar inteiro, com o enterro: escreva o enterro nominal (ou o mínimo) da estrutura");
+
+        var t3 = Math.Max(escrito, Frame.MinEmbedment ?? escrito);
 
         var geometria = TableGeometry.Local(Layout, Frame.Pillars(Layout), Frame);
         var pontaBaixa = StructureHeight.LowEdge(geometria, TiltRadians)!.Value;
@@ -359,7 +378,8 @@ public sealed record TableProfile(
 
         var arquivo = new Arquivo
         {
-            FormatVersion = Frame.Bifila is { } bifila ? (bifila.FrontPillar is null ? VersaoBifila : VersaoBifilaComPilares)
+            FormatVersion = TemEnterroNovo ? VersaoComEnterro
+                : Frame.Bifila is { } bifila ? (bifila.FrontPillar is null ? VersaoBifila : VersaoBifilaComPilares)
                 : ModuleElectrical is null ? VersaoDoFormato : VersaoComEletrica,
             // Sem Trim: trimar só na gravação faria o perfil voltar diferente
             // do que entrou, que é exatamente o que este arquivo existe para
@@ -472,11 +492,18 @@ public sealed record TableProfile(
         if (arquivo.FormatVersion is not { } versao)
             throw new InvalidOperationException(Tr.T("O perfil de mesa não diz de que versão do formato é."));
 
-        if (versao != VersaoDoFormato && versao != VersaoComEletrica && versao != VersaoBifila && versao != VersaoBifilaComPilares)
+        if (versao != VersaoDoFormato && versao != VersaoComEletrica && versao != VersaoBifila && versao != VersaoBifilaComPilares && versao != VersaoComEnterro)
         {
             throw new InvalidOperationException(
-                Tr.F("O perfil de mesa é da versão {0} do formato, e este plugin lê a versão {1}.", versao, VersaoBifilaComPilares));
+                Tr.F("O perfil de mesa é da versão {0} do formato, e este plugin lê a versão {1}.", versao, VersaoComEnterro));
         }
+
+        // A 6 (38.12) é a que traz o enterro novo; sem ele, o arquivo foi mexido à mão.
+        if (versao == VersaoComEnterro && !TemEnterroNovoNoArquivo(arquivo))
+            throw new InvalidOperationException(Tr.T("O perfil de mesa é da versão 6 do formato e não traz o enterro nominal, o máximo nem os do pilar de trás."));
+
+        if (versao != VersaoComEnterro && TemEnterroNovoNoArquivo(arquivo))
+            throw new InvalidOperationException(Tr.F("O perfil de mesa é da versão {0} do formato e traz o enterro nominal ou máximo, que só existem na versão 6.", versao));
 
         // Os dados elétricos entraram na versão 3: um perfil que diz ser da 2
         // e os traz foi mexido à mão, e não é lido pela metade.
@@ -488,7 +515,7 @@ public sealed record TableProfile(
 
         // A bifila entrou na versão 4, e só ela sai na 4 (ou na 5, com o P1 e
         // o P2): os dois lados precisam bater, senão o arquivo foi mexido à mão.
-        var ehBifila = versao is VersaoBifila or VersaoBifilaComPilares;
+        var ehBifila = versao is VersaoBifila or VersaoBifilaComPilares || (versao == VersaoComEnterro && arquivo.Frame?.Bifila is not null);
 
         if (ehBifila && arquivo.Frame?.Bifila is null)
             throw new InvalidOperationException(Tr.F("O perfil de mesa é da versão {0} do formato e não traz a estrutura do biposte (frame.bifila).", versao));
@@ -545,7 +572,9 @@ public sealed record TableProfile(
                 // igual ao mínimo e o máximo do projeto, como sempre abriu.
                 NominalEmbedment = arquivo.Frame.NominalEmbedment,
                 MaxEmbedment = arquivo.Frame.MaxEmbedment,
-                Bifila = arquivo.Frame.Bifila is { } b ? LerBifila(b, comPilares: versao == VersaoBifilaComPilares) : null,
+                Bifila = arquivo.Frame.Bifila is { } b
+                    ? LerBifila(b, comPilares: versao == VersaoBifilaComPilares || (versao == VersaoComEnterro && (b.FrontPillar is not null || b.RearPillar is not null)))
+                    : null,
             },
             Exigir(arquivo.TiltDegrees, "tiltDegrees") * Math.PI / 180)
         {
