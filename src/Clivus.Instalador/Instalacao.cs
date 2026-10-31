@@ -105,6 +105,46 @@ internal sealed class Instalacao
     internal static bool AutoCadAberto() =>
         Process.GetProcessesByName("acad").Length + Process.GetProcessesByName("accoreconsole").Length > 0;
 
+    /// <summary>
+    /// Quantos processos que seguram o bundle estão abertos
+    /// (<see cref="InstallerWait.BlockingProcesses"/>: o Civil 3D, o Core
+    /// Console e o Clivus.Link), e quais. Para a espera da atualização.
+    /// </summary>
+    internal static (int Quantos, string Quais) ProcessosQueSeguramOPlugin()
+    {
+        var quantos = 0;
+        var quais = new List<string>();
+
+        foreach (var nome in InstallerWait.BlockingProcesses)
+        {
+            var processos = Process.GetProcessesByName(nome);
+            foreach (var processo in processos) processo.Dispose();
+
+            if (processos.Length == 0) continue;
+            quantos += processos.Length;
+            quais.Add($"{nome} ×{processos.Length}");
+        }
+
+        return (quantos, string.Join(", ", quais));
+    }
+
+    /// <summary>
+    /// A versão do bundle instalado (o AppVersion do PackageContents.xml dele,
+    /// carimbado no build), ou null se não há bundle ou não se lê.
+    /// </summary>
+    internal string? VersaoInstalada()
+    {
+        try
+        {
+            var descritor = Path.Combine(PastaDoBundle, "PackageContents.xml");
+            return File.Exists(descritor) ? (string?)XDocument.Load(descritor).Root?.Attribute("AppVersion") : null;
+        }
+        catch (Exception erro) when (erro is IOException or UnauthorizedAccessException or System.Xml.XmlException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Instala. A frase do resultado.</summary>
     internal string Instalar(Action<string>? progresso = null)
     {

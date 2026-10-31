@@ -23,10 +23,14 @@ internal static class Licenciamento
 {
     private static readonly HttpClient Cliente = new() { Timeout = TimeSpan.FromSeconds(20) };
 
-    /// <summary>Comandos que rodam sem licença: ativar, sobre, olá e a migração do nome.</summary>
+    /// <summary>
+    /// Comandos que rodam sem licença: ativar, sobre, olá, a migração do nome,
+    /// o idioma e, desde a etapa 43, atualizar (a licença vencida não pode
+    /// impedir de receber a versão nova; atualizar não mexe no desenho).
+    /// </summary>
     // Os livres em todo idioma: o nome global e os traduzidos (10.5).
     private static readonly HashSet<string> Livres = new(
-        new[] { PluginInfo.ComandoAtivar, PluginInfo.ComandoAtivarAutomatico, PluginInfo.ComandoSobre, PluginInfo.ComandoOla, PluginInfo.ComandoMigrar, PluginInfo.ComandoIdioma }
+        new[] { PluginInfo.ComandoAtivar, PluginInfo.ComandoAtivarAutomatico, PluginInfo.ComandoSobre, PluginInfo.ComandoOla, PluginInfo.ComandoMigrar, PluginInfo.ComandoIdioma, PluginInfo.ComandoAtualizar }
             .SelectMany(CommandNames.AllNamesOf),
         StringComparer.OrdinalIgnoreCase);
 
@@ -86,6 +90,27 @@ internal static class Licenciamento
 
         var texto = File.Exists(Arquivo) ? File.ReadAllText(Arquivo).Trim() : null;
         return License.Check(texto, Chaves, Maquina, DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// A licença guardada e o que ela vale agora, para o plugin se identificar
+    /// no servidor do Clivus sem a chave (etapa 43, <see cref="ServerAuthorization"/>).
+    /// Sem licenciamento ligado ou sem arquivo, nenhuma.
+    /// </summary>
+    internal static (string? Texto, LicenseState Estado) ParaOServidor()
+    {
+        try
+        {
+            if (!Ligado || !File.Exists(Arquivo)) return (null, LicenseState.Invalid);
+
+            var texto = File.ReadAllText(Arquivo).Trim();
+            return (texto, License.Check(texto, Chaves, Maquina, DateTime.UtcNow).State);
+        }
+        catch (Exception erro) when (erro is IOException or UnauthorizedAccessException)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui ler a licença para o servidor.", erro);
+            return (null, LicenseState.Invalid);
+        }
     }
 
     /// <summary>Ativa com o código do portal. A frase do resultado, e se deu certo.</summary>

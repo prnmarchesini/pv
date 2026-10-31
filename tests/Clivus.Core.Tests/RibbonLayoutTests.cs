@@ -135,6 +135,26 @@ public class RibbonLayoutTests
     }
 
     /// <summary>
+    /// Etapa 43 (Renan, 31/10/2026: "quero que o cliente receba atualizações
+    /// também"): o Atualizar, pequeno, no painel Configurações, embaixo do
+    /// Ativar e do Sobre (a coluna de três pequenos), com ícone próprio.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "43")]
+    public void AtualizarEUmBotaoPequenoNasConfiguracoes()
+    {
+        var configuracoes = RibbonLayout.Tabs[0].Panels.Single(p => p.Title == "Configurações");
+        var botao = Assert.Single(configuracoes.Buttons, b => b.Command == PluginInfo.ComandoAtualizar);
+
+        Assert.Equal("Atualizar", botao.Text);
+        Assert.False(botao.Large);
+        Assert.Equal("atualizar", botao.Icon);
+        Assert.Equal(
+            [PluginInfo.ComandoAtivar, PluginInfo.ComandoSobre, PluginInfo.ComandoAtualizar],
+            configuracoes.Buttons.Where(b => !b.Large).Select(b => b.Command).ToArray());
+    }
+
+    /// <summary>
     /// Etapa 33, desde 28/10/2026 um botão só no painel Saída: o TermoVision
     /// abre ou manda conforme o desenho (pedido do Renan).
     /// </summary>

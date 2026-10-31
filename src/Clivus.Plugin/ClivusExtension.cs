@@ -99,6 +99,17 @@ public sealed class ClivusExtension : IExtensionApplication
         {
             RegistroDeDiagnostico.Registrar("Não foi possível abrir a entrada do TermoVision.", erro);
         }
+
+        // A atualização (etapa 43): a versão publicada, no máximo uma vez por
+        // dia, em segundo plano; o aviso vem na folga, com um desenho aberto.
+        try
+        {
+            Atualizacao.ConsultarAoAbrir();
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não foi possível consultar a atualização.", erro);
+        }
     }
 
     public void Terminate()
@@ -121,6 +132,7 @@ public sealed class ClivusExtension : IExtensionApplication
         {
             AutoSelecao.Desinstalar();
             EntradaDoTermoVision.Desinstalar();
+            Atualizacao.Desinstalar();
             MenuDeContexto.Desinstalar();
             if (TemInterface()) FecharPainelDeGrupos();
         }

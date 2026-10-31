@@ -1800,8 +1800,9 @@ internal sealed class JanelaDeMesa : Window
     {
         try
         {
-            // Sem endereço, sem HTTPS ou sem a chave, o cadastro não iria: a
-            // janela diz antes de o usuário encher o diálogo (revisão do 38.8).
+            // Sem endereço, sem HTTPS ou sem a chave (nem a licença, etapa 43),
+            // o cadastro não iria: a janela diz antes de o usuário encher o
+            // diálogo (revisão do 38.8).
             if (FonteDeModulos.PorQueNaoCadastra is { } porQue)
             {
                 Avisar(porQue);
@@ -2066,9 +2067,9 @@ internal sealed class JanelaDeMesa : Window
             if (Math.Abs(antes - pan.Pmax) > ModuleSource.Tolerance)
                 recado += "\n\n" + Tr.F("A potência do módulo passou de {0:0.#} para {1:0.#} Wp. As mesas já desenhadas continuam como estavam: depois de gravar a estrutura no desenho, use \"Atualizar a potência das mesas desenhadas\" nas Configurações.", antes, pan.Pmax);
 
-            // Sem a chave (ou sem servidor), o módulo novo não pode ir para a
-            // biblioteca de todos: o recado diz que ele vale só nesta janela,
-            // e a janela nem pergunta (revisão do 38.8).
+            // Sem a chave nem a licença (ou sem servidor), o módulo novo não
+            // pode ir para a biblioteca de todos: o recado diz que ele vale só
+            // nesta janela, e a janela nem pergunta (revisão do 38.8).
             if (modulo is not null && daBiblioteca is null && FonteDeModulos.PorQueNaoCadastra is { } porQue)
                 recado += "\n\n" + Tr.F("O módulo vale só nesta janela. {0}", porQue);
 
@@ -2092,8 +2093,8 @@ internal sealed class JanelaDeMesa : Window
     /// </summary>
     private void OferecerCadastro(SolarModule modulo, PanModule pan, string texto, string nome)
     {
-        // Sem a chave, o servidor do Clivus recusaria (38.8): nem pergunta; o
-        // recado do .PAN já disse que o módulo vale só nesta janela.
+        // Sem a chave nem a licença, o servidor do Clivus recusaria (38.8):
+        // nem pergunta; o recado do .PAN já disse que o módulo vale só nesta janela.
         if (FonteDeModulos.PorQueNaoCadastra is not null) return;
 
         if (!FonteDeModulos.NoAr)

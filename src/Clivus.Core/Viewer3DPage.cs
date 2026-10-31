@@ -400,6 +400,21 @@ public static class Viewer3DPage
     }
 
     /// <summary>
+    /// O mesmo, sabendo com o que o plugin se identificou (etapa 43): a recusa
+    /// sem o motivo do servidor (401 ou 403 fora do contrato, um proxy no
+    /// caminho) diz o que conferir, a chave ou a ativação. Com o motivo
+    /// (<c>{"erro": "..."}</c>), ele vai como veio.
+    /// </summary>
+    public static (PublishedScene? Publicada, string? Erro) ParseResponse(int status, string? corpo, ServerAuthorization? autorizacao)
+    {
+        var resposta = ParseResponse(status, corpo);
+
+        return status is 401 or 403 && ModuleServiceReply.ErrorMessage(corpo ?? string.Empty) is null
+            ? (null, ServerAuthorization.RefusedMessage(autorizacao))
+            : resposta;
+    }
+
+    /// <summary>
     /// Se o endereço do servidor serve (plano/seguranca.md): HTTPS; http só em
     /// localhost (o servidor falso dos testes). Null se serve, o porquê se não.
     /// </summary>

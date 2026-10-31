@@ -270,6 +270,22 @@ public static partial class PluginInfo
     /// </summary>
     public const string PortalDoApp = ServidorDeProducao;
 
+    /// <summary>
+    /// Consulta agora a versão publicada no servidor e, com versão nova, abre
+    /// a janela da atualização (etapa 43). Ao abrir o Civil 3D a consulta é
+    /// sozinha, uma vez por dia.
+    /// </summary>
+    public const string ComandoAtualizar = "CLIVUS_ATUALIZAR";
+
+    /// <summary>
+    /// O site de download (a landing, com o <c>/baixar/</c> na KingHost), de
+    /// onde a atualização aceita baixar o instalador, além do próprio servidor
+    /// (<see cref="PluginUpdate.WhyUrlRejected"/>). É o mesmo <c>$site</c> do
+    /// tools/gerar-instalador.ps1: mudou um, muda o outro, numa versão do
+    /// plugin que saia antes da troca (as instaladas só baixam daqui).
+    /// </summary>
+    public const string SiteDeDownload = "https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io";
+
     /// <summary>Troca a mesa clicada por uma ou mais de outro tipo, travando um lado (9.2).</summary>
     public const string ComandoTrocarMesa = "CLIVUS_TROCAR_MESA";
 

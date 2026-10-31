@@ -7,7 +7,8 @@ namespace Clivus.Core;
 /// Com <c>CLIVUS_SERVICO</c>, é o serviço local (<c>servidor/</c>), que não
 /// pede chave. Sem ela, é o servidor do Clivus (o do Publicar 3D:
 /// <c>CLIVUS_SERVIDOR</c> ou o de produção) com <c>/api/v1</c>. Lá o
-/// cadastro leva a chave <c>CLIVUS_SERVIDOR_CHAVE</c>, só por HTTPS, e o
+/// cadastro leva a chave <c>CLIVUS_SERVIDOR_CHAVE</c> ou, no PC do cliente,
+/// a licença (etapa 43, <see cref="ServerAuthorization"/>), só por HTTPS, e o
 /// módulo fica pendente até a gestão conferir o .PAN.
 /// </summary>
 /// <param name="Address">O endereço da biblioteca, sem a barra do fim; null se não há um que preste.</param>
@@ -48,6 +49,24 @@ public sealed record ModuleServer(string? Address, bool IsClivus, string? Proble
 
         return string.IsNullOrWhiteSpace(chave)
             ? Tr.T("Para mandar o módulo ao servidor do Clivus falta a chave (variável CLIVUS_SERVIDOR_CHAVE).")
+            : null;
+    }
+
+    /// <summary>
+    /// O mesmo com a identificação do plugin (etapa 43): no servidor do Clivus
+    /// o cadastro vai com a chave ou, no PC do cliente, com a licença
+    /// (<see cref="ServerAuthorization.Choose"/>); sem nenhuma das duas, não
+    /// vai. A identificação só vai por HTTPS, como a chave.
+    /// </summary>
+    /// <param name="autorizacao">A identificação escolhida, ou null se não há.</param>
+    public string? WhyCannotSend(ServerAuthorization? autorizacao)
+    {
+        if (Problem is { } problema) return problema;
+        if (!IsClivus) return null;
+        if (Viewer3DPage.WhyServerUnsafe(Address) is { } inseguro) return inseguro;
+
+        return autorizacao is null
+            ? Tr.T("Para mandar o módulo ao servidor do Clivus, ative o Clivus Solar neste computador (botão Ativar) ou defina a chave (variável CLIVUS_SERVIDOR_CHAVE).")
             : null;
     }
 
