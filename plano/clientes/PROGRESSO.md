@@ -7,7 +7,7 @@ Só o Renan marca VALIDADO (exceto `VALIDADO (automático)`).
 - 43.2 A área do cliente completa (conta, senha, código e máquinas, baixar com SHA-256, projetos 3D, suporte): AGUARDANDO VALIDAÇÃO — o mesmo commit; a troca de senha no primeiro acesso (`/senha`)
 - 43.3 O plugin do cliente se identifica pela licença no 3D e nos módulos: AGUARDANDO VALIDAÇÃO — servidor publicado (`Authorization: Licenca` em `/api/v1/cenas` e `/api/v1/modulos`); plugin no `bifila` (branch `cliente-plugin`, 3d94b66, juntado)
 - 43.4 Atualizações: a versão publicada no servidor; o plugin avisa, baixa, confere e instala quando o Civil 3D fecha: AGUARDANDO VALIDAÇÃO — servidor publicado (`/gestao/versoes`, `GET /api/v1/versao`); plugin e instalador no `bifila` (o mesmo merge)
-- 43.5 O executável de teste na KingHost (0.1.1) e a atualização de ponta a ponta: PENDENTE
+- 43.5 O executável de teste na KingHost (0.1.1) e a atualização de ponta a ponta: AGUARDANDO VALIDAÇÃO — a 0.1.1 (2f39320) no `/baixar` (`ClivusSolar-Setup-0.1.1.exe` e o nome fixo, SHA-256 5736b5f0…d027, 6.816.292 bytes) e publicada no servidor; fora do Civil 3D, provada de ponta a ponta; no PC do Renan, a 0.1.0 com o atualizador espera a tela
 
 ## Observações
 
@@ -140,3 +140,48 @@ Roteiro de tela (43.3 e 43.4), quando o servidor publicar a parte dele:
 8. No PC de desenvolvimento (bundle em Arquivos de Programas ou DLL do build),
    com a 0.1.1 publicada: a abertura só avisa na linha de comando; o botão
    Atualizar abre a janela, que explica e não deixa baixar.
+
+### 31/10/2026: 43.5, a 0.1.1 de teste
+
+- O merge do `cliente-plugin` no `bifila` (2e81f03), as 59 frases traduzidas e a etapa 43 no
+  placar (41e840e). Bateria completa verde antes de gerar: nível 1 (etapas 0 a 43, a 43 com
+  130 testes), nível 2 105/105, serviço 53/53, Sol (JS), instalador e acervo.
+- A 0.1.0 deste código (com o atualizador) foi instalada no PC do Renan às 03h23
+  (`instalar.ps1`; só existe a cópia em `%APPDATA%`, a que a atualização troca). Ela ainda
+  não consultou o servidor: a primeira abertura do Civil 3D procura e acha a 0.1.1.
+- A 0.1.1 é o mesmo código com o número novo (2f39320). Foi gerada e enviada com
+  `tools/gerar-instalador.ps1 -Enviar`, que conferiu o SHA-256 baixando pelo site. O envio
+  pelo pipe falhou ("Invalid command": o BOM do PowerShell 5.1) e passou a usar arquivo de
+  lote (4dc7718).
+- Publicada no servidor pelo serviço de versões, dentro do contêiner (`versoes.registrar`,
+  as mesmas regras do formulário de `/gestao/versoes`), com a conta Develop como autora:
+  id 1, não obrigatória, notas em português.
+- Ponta a ponta fora do Civil 3D:
+  - Um programa de teste (fora do repositório) com as funções do Core que o `Atualizacao.cs`
+    usa: a consulta em `https://clivus.marcheng.com.br/api/v1/versao` achou a 0.1.1; baixou da
+    landing (host aceito); o tamanho e o SHA-256 bateram; um endereço de fora foi recusado.
+  - O instalador baixado, com `/aguardar-civil3d` numa pasta de teste (`/teste=`) por cima de
+    uma 0.1.0 instalada pelo instalador 0.1.0: esperou, viu tudo fechado, instalou em 10 s
+    na primeira tentativa, e o bundle ficou 0.1.1. A pasta e a entrada de teste do Windows
+    foram apagadas depois.
+
+Roteiro de tela (43.1 a 43.5), o caminho do primeiro cliente:
+
+1. Civil 3D: abrir com um desenho. A linha de comando avisa "Há uma versão nova do Clivus
+   Solar: 0.1.1" e a janela "Clivus Solar — Atualização" abre com as notas.
+2. Atualizar agora: a barra anda, "Baixado e conferido (tamanho e SHA-256)" e "Feche o
+   Civil 3D: a atualização instala sozinha quando ele fechar".
+3. Fechar o Civil 3D: em uns 15 s, uma janela do Windows diz "Clivus Solar 0.1.1 instalado".
+4. Abrir de novo: o aviso da DLL não assinada (Always Load) e o Sobre com 0.1.1; o registro
+   fica em `%LOCALAPPDATA%\Clivus Solar\atualizacao.log`. Daí em diante o PC fica com o
+   bundle Release do instalador, até o próximo `instalar.ps1`.
+5. Navegador: https://clivus.marcheng.com.br/entrar com a conta Develop › Gestão › Clientes ›
+   Novo cliente (e-mail, empresa, plano Cliente, validade, 2 computadores, "Gerar já o
+   código"). A senha inicial e o código aparecem uma vez só: copiar a "Mensagem pronta".
+6. Com a conta nova (outra janela anônima): a troca de senha no primeiro acesso, o código, o
+   download da 0.1.1 com o SHA-256 e a lista de computadores.
+7. Num PC do cliente (ou o seu, depois de desinstalar): instalar a 0.1.1, ativar com o código
+   e publicar um 3D; o link sai em clivus.marcheng.com.br e o projeto aparece na área do
+   cliente da conta nova (não na Develop).
+
+Pendente do Renan: o e-mail de suporte que a área do cliente mostra (`CLIVUS_SUPORTE_EMAIL`).
