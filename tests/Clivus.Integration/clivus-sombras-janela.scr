@@ -75,6 +75,7 @@
 
 (princ (strcat "\nCLIVUS_JANELA chao=" (itoa (clivus:hachuras "Chao"))
                " mesa=" (itoa (clivus:hachuras "Mesa"))
+               " modulos=" (itoa (length (clivus-sombras-modulos)))
                " vermelhos=" (itoa (clivus:cor '(16711680)))
                " igual=" clivus:igual " oculta=" clivus:oculta " mostra=" clivus:mostra " fim"))
 (setvar "SECURELOAD" clivus:secureload)

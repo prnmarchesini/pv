@@ -111,13 +111,19 @@
       clivus:bordas (length (clivus:sombras "POLYLINE" nil)) clivus:faixa1 (clivus:faixa "Chao") clivus:erradas1 (clivus:erradas))
 (clivus:amostra)
 (setq clivus:repintou (if (equal clivus:antes (clivus:assinatura)) "0" "1"))
+; Os modulos com sombra, pelo registro dos motivos (o modulo nao e mais pintado).
+(setq clivus:mod1 (clivus-sombras-modulos))
 
 ; O Apagar da linha de comando, Tudo (Enter).
 (command "CLIVUS_SOMBRAS_APAGAR" "")
 (setq clivus:apagado (clivus:todas))
 
+(setq clivus:modapagado (length (clivus-sombras-modulos)))
 (command "CLIVUS_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "06:00" "18:00" "60" "-3" "1")
 (setq clivus:dia (length (clivus:sombras "HATCH" "Chao")) clivus:repintoudia (if (equal clivus:antes (clivus:assinatura)) "0" "1"))
+; O dia (pior caso) guarda pelo menos os modulos das 09:00.
+(setq clivus:mod3 (clivus-sombras-modulos) clivus:faltam 0)
+(foreach h clivus:mod1 (if (not (member h clivus:mod3)) (setq clivus:faltam (1+ clivus:faltam))))
 
 ; Sol baixo (07:30): a fileira da frente faz sombra na de tras (o detalhe da
 ; linha de comando diz quantos modulos por outra mesa).
@@ -126,6 +132,7 @@
 
 (princ (strcat "\nCLIVUS_SOMBRAS chao=" (itoa clivus:chao) " mesa=" (itoa clivus:mesa) " bordas=" (itoa clivus:bordas)
                " zmin=" (rtos (car clivus:faixa1) 2 3) " zmax=" (rtos (cadr clivus:faixa1) 2 3) clivus:erradas1
-               " repintou=" clivus:repintou " apagado=" (itoa clivus:apagado) " dia=" (itoa clivus:dia) " repintoudia=" clivus:repintoudia " fim"))
+               " repintou=" clivus:repintou " apagado=" (itoa clivus:apagado) " dia=" (itoa clivus:dia) " repintoudia=" clivus:repintoudia
+               " modulos=" (itoa (length clivus:mod1)) " modapagado=" (itoa clivus:modapagado) " modulosdia=" (itoa (length clivus:mod3)) " faltamnodia=" (itoa clivus:faltam) " fim"))
 (setvar "SECURELOAD" clivus:secureload)
 (princ)

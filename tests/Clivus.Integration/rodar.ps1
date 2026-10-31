@@ -4073,7 +4073,7 @@ function Testar-SombrasJanela {
         return $false
     }
 
-    if ($r.Texto -notmatch 'CLIVUS_JANELA chao=(\d+) mesa=(\d+) vermelhos=(\d+) igual=(\d) oculta=(\d) mostra=(\d) fim') {
+    if ($r.Texto -notmatch 'CLIVUS_JANELA chao=(\d+) mesa=(\d+) modulos=(\d+) vermelhos=(\d+) igual=(\d) oculta=(\d) mostra=(\d) fim') {
         $problemas.Add("clivus-sombras-janela: sem o resumo. Veja $($r.Saida)")
         return $false
     }
@@ -4084,11 +4084,12 @@ function Testar-SombrasJanela {
     $erros = @()
     if ([int]$m[1] -lt 1) { $erros += 'nenhuma hachura magenta de sombra no chao' }
     if ([int]$m[2] -lt 1) { $erros += 'nenhuma hachura magenta de sombra sobre as mesas (a arvore ao norte da F1.3)' }
-    if ([int]$m[3] -gt 0) { $erros += "$($m[3]) modulo(s) vermelhos de pendente (o vigia tomou a sombra por edicao)" }
+    if ([int]$m[3] -lt 1) { $erros += 'nenhum modulo com sombra no registro dos motivos' }
+    if ([int]$m[4] -gt 0) { $erros += "$($m[4]) modulo(s) vermelhos de pendente (o vigia tomou a sombra por edicao)" }
     if ($depois -match 'pendente') { $erros += 'o vigia escreveu "pendente" depois da sombra' }
-    if ($m[4] -ne '1') { $erros += 'a sombra mudou a cor ou a camada de modulo (nao pinta mais o bloco)' }
-    if ($m[5] -ne '1') { $erros += 'Ocultar nao desligou a camada CLIVUS_SOMBRA' }
-    if ($m[6] -ne '1') { $erros += 'Mostrar nao ligou a camada CLIVUS_SOMBRA de novo' }
+    if ($m[5] -ne '1') { $erros += 'a sombra mudou a cor ou a camada de modulo (nao pinta mais o bloco)' }
+    if ($m[6] -ne '1') { $erros += 'Ocultar nao desligou a camada CLIVUS_SOMBRA' }
+    if ($m[7] -ne '1') { $erros += 'Mostrar nao ligou a camada CLIVUS_SOMBRA de novo' }
     if ($r.Texto -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) { $erros += 'o SECURELOAD nao voltou ao que era' }
 
     if ($erros.Count -gt 0) {
@@ -4096,7 +4097,7 @@ function Testar-SombrasJanela {
         return $false
     }
 
-    Write-Host "  (sombras pela janela: $($m[1]) hachura(s) no chao e $($m[2]) sobre mesas, nenhum modulo mexido nem pendente; ocultar e mostrar pela janela)" -ForegroundColor DarkGray
+    Write-Host "  (sombras pela janela: $($m[1]) hachura(s) no chao e $($m[2]) sobre mesas, $($m[3]) modulo(s) com sombra no registro, nenhum mexido nem pendente; ocultar e mostrar pela janela)" -ForegroundColor DarkGray
     return $true
 }
 
@@ -4183,7 +4184,7 @@ function Testar-Sombras {
         return $false
     }
 
-    if ($r.Texto -notmatch 'CLIVUS_SOMBRAS chao=(\d+) mesa=(\d+) bordas=(\d+) zmin=(-?[\d.E+]+) zmax=(-?[\d.E+]+) naomagenta=(\d+) foradacamada=(\d+) semtransparencia=(\d+) naosolid=(\d+) repintou=(\d) apagado=(\d+) dia=(\d+) repintoudia=(\d) fim') {
+    if ($r.Texto -notmatch 'CLIVUS_SOMBRAS chao=(\d+) mesa=(\d+) bordas=(\d+) zmin=(-?[\d.E+]+) zmax=(-?[\d.E+]+) naomagenta=(\d+) foradacamada=(\d+) semtransparencia=(\d+) naosolid=(\d+) repintou=(\d) apagado=(\d+) dia=(\d+) repintoudia=(\d) modulos=(\d+) modapagado=(\d+) modulosdia=(\d+) faltamnodia=(\d+) fim') {
         $problemas.Add("clivus-sombras: nao consegui ler o LISP. Veja $($r.Saida)")
         return $false
     }
@@ -4209,6 +4210,9 @@ function Testar-Sombras {
     if ([int] $m[11] -ne 0) { $erros += "Apagar (Tudo) deixou $($m[11]) entidade(s) de sombra" }
     if ([int] $m[12] -lt 1) { $erros += 'o dia inteiro nao desenhou a mancha no chao' }
     if ($m[13] -ne '0') { $erros += 'o dia inteiro repintou modulo' }
+    if ([int] $m[14] -lt 1) { $erros += 'as 09:00 nenhum modulo com sombra no registro dos motivos (a arvore no meio da F1.3)' }
+    if ([int] $m[15] -ne 0) { $erros += "Apagar (Tudo) deixou $($m[15]) modulo(s) no registro dos motivos" }
+    if ([int] $m[16] -lt [int] $m[14] -or [int] $m[17] -ne 0) { $erros += "o dia inteiro (pior caso) deveria guardar pelo menos os $($m[14]) modulo(s) das 09:00; guardou $($m[16]), e $($m[17]) das 09:00 ficaram de fora" }
 
     # A amostra: a cota de cada vertice de hachura do chao contra a do terreno no mesmo ponto.
     $i = $r.Texto.IndexOf('CLIVUS_AMOSTRA_INICIO'); $j = $r.Texto.IndexOf('CLIVUS_AMOSTRA_FIM')
