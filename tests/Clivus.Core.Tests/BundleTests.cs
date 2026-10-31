@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using System.Xml.XPath;
 
 namespace Clivus.Core.Tests;
 
@@ -10,8 +11,6 @@ namespace Clivus.Core.Tests;
 /// </summary>
 public class BundleTests
 {
-    private const string VersaoEsperada = "0.1.0";
-
     [Fact]
     [Trait("Etapa", "0")]
     public void ModuleNameApontaParaADllDoPlugin()
@@ -35,20 +34,57 @@ public class BundleTests
     [Trait("Etapa", "0")]
     public void VersaoDoPacoteBateComADoBuild()
     {
-        // Tres lugares dizem a versao: Directory.Build.props, o atributo
-        // AppVersion e o Version do ComponentEntry. Divergir e o caminho curto
-        // para o instalador atualizar uma coisa e deixar outra para tras.
-        var pacote = Pacote();
+        // Tres lugares diziam a versao: Directory.Build.props, o atributo
+        // AppVersion e o Version do ComponentEntry (e este teste, o quarto).
+        // Divergir e o caminho curto para o instalador atualizar uma coisa e
+        // deixar outra para tras. Desde a etapa 43 a versao mora so no
+        // Directory.Build.props: o PackageContents.xml do repositorio traz
+        // $(Version) nos dois atributos, e o build grava na saida a copia com o
+        // numero (alvo CarimbarPackageContents), que e a que vai para o bundle.
+        var versao = VersaoDoBuild();
+        Assert.Matches(@"^\d+\.\d+\.\d+$", versao);
+        Assert.Equal(versao, SemanticVersion.Parse(versao)?.ToString());
 
-        Assert.Equal(VersaoEsperada, (string?)pacote.Attribute("AppVersion"));
-        Assert.Equal(VersaoEsperada, (string?)ComponentEntry().Attribute("Version"));
-        Assert.Equal(
-            VersaoEsperada,
-            XDocument.Load(Repositorio.Caminho("Directory.Build.props"))
-                .Descendants()
-                .First(e => e.Name.LocalName == "Version")
-                .Value);
+        // Nenhum numero escrito a mao no descritor do repositorio.
+        Assert.Equal("$(Version)", (string?)Pacote().Attribute("AppVersion"));
+        Assert.Equal("$(Version)", (string?)ComponentEntry().Attribute("Version"));
+
+        // O alvo do build troca exatamente os dois atributos pela versao: as
+        // consultas dele, rodadas aqui no descritor, acham um atributo cada,
+        // com o $(Version), e juntas cobrem os dois.
+        var alvo = XDocument.Load(Repositorio.Caminho("src", "Clivus.Plugin", "Clivus.Plugin.csproj"))
+            .Descendants()
+            .Single(e => e.Name.LocalName == "Target" && (string?)e.Attribute("Name") == "CarimbarPackageContents");
+
+        Assert.Equal("Build", (string?)alvo.Attribute("AfterTargets"));
+
+        var trocas = alvo.Elements().Where(e => e.Name.LocalName == "XmlPoke").ToList();
+        Assert.Equal(2, trocas.Count);
+
+        var descritor = XDocument.Load(Repositorio.Caminho("src", "Clivus.Plugin", "PackageContents.xml"));
+        var trocados = new List<XAttribute>();
+
+        foreach (var troca in trocas)
+        {
+            Assert.Equal("$(Version)", (string?)troca.Attribute("Value"));
+            Assert.Equal("$(OutDir)PackageContents.xml", (string?)troca.Attribute("XmlInputPath"));
+
+            var achados = ((IEnumerable<object>)descritor.XPathEvaluate((string)troca.Attribute("Query")!)).OfType<XAttribute>().ToList();
+            var achado = Assert.Single(achados);
+            Assert.Equal("$(Version)", achado.Value);
+            trocados.Add(achado);
+        }
+
+        Assert.Contains(trocados, a => a.Parent == descritor.Root && a.Name.LocalName == "AppVersion");
+        Assert.Contains(trocados, a => a.Parent?.Name.LocalName == "ComponentEntry" && a.Name.LocalName == "Version");
     }
+
+    /// <summary>A versao do Directory.Build.props, a unica fonte (etapa 43).</summary>
+    private static string VersaoDoBuild() =>
+        XDocument.Load(Repositorio.Caminho("Directory.Build.props"))
+            .Descendants()
+            .First(e => e.Name.LocalName == "Version")
+            .Value;
 
     [Fact]
     [Trait("Etapa", "0")]

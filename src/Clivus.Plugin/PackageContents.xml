@@ -7,6 +7,11 @@
   SeriesMin/SeriesMax travam em R25.1, que e o AutoCAD/Civil 3D 2026. Isso e
   proposital: 02-arquitetura.md trava o projeto na versao instalada, e versao
   nova vira atualizacao. Carregar em versao nao testada e pior que nao carregar.
+
+  A versao do plugin nao fica aqui (etapa 43): AppVersion e o Version do
+  ComponentEntry trazem $(Version), e o build grava na saida a copia com o
+  numero do Directory.Build.props (alvo CarimbarPackageContents do
+  Clivus.Plugin.csproj). E essa copia que vai para o bundle.
 -->
 <ApplicationPackage
     SchemaVersion="1.0"
@@ -15,7 +20,7 @@
     ProductCode="{4587CF2D-BA44-41CD-A4D3-50CA1D73FC5E}"
     Name="Clivus Solar"
     Description="Layout de usinas fotovoltaicas em terreno inclinado"
-    AppVersion="0.1.0"
+    AppVersion="$(Version)"
     Author="Clivus Solar"
     Icon="./Contents/Resources/clivus.ico">
 
@@ -30,7 +35,7 @@
 
     <ComponentEntry
         AppName="ClivusSolar"
-        Version="0.1.0"
+        Version="$(Version)"
         ModuleName="./Contents/Clivus.Plugin.dll"
         AppDescription="Clivus Solar"
         LoadOnAutoCADStartup="True"

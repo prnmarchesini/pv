@@ -85,6 +85,18 @@
   </Target>
 
   <!--
+    A versão do pacote sai do Directory.Build.props, a única fonte (etapa 43):
+    o PackageContents.xml do repositório traz $(Version) no lugar do número, e
+    o build grava na saída a cópia com o número, que o publicar-bundle.ps1 põe
+    no bundle (e o instalador, no PC do cliente).
+  -->
+  <Target Name="CarimbarPackageContents" AfterTargets="Build">
+    <Copy SourceFiles="PackageContents.xml" DestinationFolder="$(OutDir)" />
+    <XmlPoke XmlInputPath="$(OutDir)PackageContents.xml" Query="/ApplicationPackage/@AppVersion" Value="$(Version)" />
+    <XmlPoke XmlInputPath="$(OutDir)PackageContents.xml" Query="/ApplicationPackage/Components/ComponentEntry/@Version" Value="$(Version)" />
+  </Target>
+
+  <!--
     Clipper2Lib (a união das sombras do período, 05/10/2026) vem por pacote do
     Clivus.Core. Com CopyLocalLockFileAssemblies desligado (para não copiar as
     libs do AutoCAD), ela é copiada aqui, só ela, para a saída do plugin.
