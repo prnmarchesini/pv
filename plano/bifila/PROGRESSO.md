@@ -48,6 +48,9 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 
 - 42.1 A revisão das sombras: hachura magenta no chão (acompanhando o terreno) e sobre os módulos, a sombra do relevo, o escopo (seleção, uma área, área + seleção, várias áreas, desenho inteiro), Gerar e Apagar no escopo, Ocultar e Mostrar, Ver análises em tópicos, o módulo sem pintura: AGUARDANDO VALIDAÇÃO — `TerrainShadow`, `GroundPatches`, `ShadowScopePlan`, `ShadowReasons` V2, 23 testes; nível 2 `clivus-sombras*` (rodar.ps1 -SoSombras), o novo `clivus-sombras-escopo`; a bateria inteira de 31/10 deu 104/105: o `clivus-apagar` ainda esperava a sombra pintando módulo e passou a conferir o desenho antigo, montado pelo gancho `clivus-sombra-antiga` (30 módulos roxos voltam à cor de antes; b5d48f0)
 - 42.2 O 3D com o sol (31/10/2026: "leve a simulacao de sombra para o 3D no navegador"): o navegador calcula o sol e faz a sombra em tempo real (data, hora, animar o dia, equinócios e solstícios, ligar a sombra), os pilares modelados (a seção e o giro do bloco), o item Resumo das camadas (mesas, módulos e kWp, por área e por tipo) e o logo do Clivus; na página pública, a propaganda que leva à landing: AGUARDANDO VALIDAÇÃO — `sol.js` e `resumo.js` (os mesmos no servidor), `Scene3DLocation`, `Scene3DPillarSection`, `Scene3DSummary`, 7 testes da etapa 42 e `tools/conferir-sol.js` (linha "Sol (JS)" do placar); servidor: clivussolar branch `sombras-3d`
+- 42.1 e 42.2 na tela (31/10/2026, 10h, Aurora): REPROVADOS. "ocultei e nao tem ver sombra. A sombra fica marcada no modulo mas nao fica no solo. Eu fui claro e vc errou"; no 3D, "ta roxo, nao vejo a sombra passar, deveria no minimo ter um botão 'ver momento que causa sombras' eu nao estou acreditando que faz sombra" e "comeu modulo, é mentira, nao comeu no cad". Refeitos no 42.3.
+- 42.3 As correções da tela: o Mostrar à vista (um botão só, Ocultar ou Mostrar sombras, e as linhas da janela quebram em vez de cortar); a área leva as que estão dentro dela (a "Area 1" do Aurora dava "Nenhuma mesa"); a lista diz quantas mesas cada área leva e abre na primeira que tem; o roxo da versão antiga sai ao abrir a janela; o 3D com o terreno de verdade (o TIN), sem o roxo antigo, com a sombra do CAD em magenta e o botão "Ver o momento que causa sombra": AGUARDANDO VALIDAÇÃO
+- 42.4 A exportação para o PVsyst por escopo (31/10/2026: "tenho que ter a liberdade de exportar uma area, varias, todas, e pode selecionar as mesas que eu quero se for o caso"): a mesma escolha da janela das sombras (`SeletorDeEscopo`), numa janela antes de pedir o arquivo: AGUARDANDO VALIDAÇÃO
 
 ## Observações
 
@@ -847,6 +850,54 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     16.016 módulos e 6.864 pilares: 7,7 quadros/s com a sombra parada, 4,5 animando e 9,2 sem
     sombra. Só a proporção vale; o número de verdade é na tela.
 
+- 42.3 (31/10/2026, manhã), o que achei e o que fiz. Na sessão das 09:56 o Renan abriu o
+  Aurora (`Marcheng\PLAT A_Perfiles.dwg`) na 0.1.0 com o atualizador e:
+  - **Gerar sombras deu "Nenhuma mesa de Area 1: nada a calcular"** (a linha de comando
+    registrada mostra). O desenho tem a "Area 1" (das 20:04 de 30/10, camada
+    `CLIVUS_AREA959`) e a "area1" (das 22:21) quase iguais: a mesma caixa, 214,0 × 75,2 m
+    contra 214,3 × 75,2. A mesa conta na menor (a regra do resumo), a "area1", e a janela abria
+    com a "Area 1" escolhida. Nada foi desenhado no chão por isso.
+  - **O roxo dos módulos era a pintura da versão antiga** (a sessão das 00:24, na 632996d):
+    a 42.1 só a devolvia num cálculo do escopo dela ou no Apagar, o Ocultar não a escondia
+    (ela é a cor do bloco, não camada) e o 3D a mostrava como sombra.
+  - **O Mostrar existia, mas ficava cortado**: a linha de botões era um DockPanel com o grupo
+    da direita (Ver análises, Por que, Fechar) por cima do fim do grupo da esquerda.
+  - **O módulo "comido" no 3D** era o terreno: a grade de 2,8 m da página ficava acima do TIN
+    no pé do talude. Na cena publicada às 09:59 (16.492 faces), 3 faces tinham a grade por
+    cima: 0,43 m, 0,17 m e 0,03 m (as duas primeiras roxas, as que a imagem mostra).
+  - O que mudou:
+    - `ShadowScopePlan`: a área escolhida leva as que estão dentro dela (99 % da área de
+      dentro na de fora; duas quase iguais vão uma com a outra). O teste
+      `AAreaGrandeNaoLevaOChaoNemAsMesasDasMenoresDentroDela` dizia o contrário (a Usina com a
+      Oeste e a Leste dentro não levava nada) e virou `AAreaGrandeLevaAsMenoresDentroDela`:
+      a regra mudou pela tela, não para o teste passar. Mais `DuasAreasQuaseIguaisVaoUmaComAOutra`
+      e `AAreaQueSoEncostaNaoVaiJunto`.
+    - A janela: Ocultar e Mostrar num botão que diz o que faz ("Ocultar sombras" com elas à
+      vista, "Mostrar sombras" com elas escondidas); as linhas e os botões em WrapPanel; a
+      lista de áreas com "· N mesa(s)" e aberta na primeira que tem; ao abrir, o roxo da versão
+      antiga volta à cor de antes em todo o desenho (`TirarPinturaAntiga`, fora de comando,
+      registro `SOMBRA_PINTADAS` zerado) e a janela diz quantos.
+    - O escopo saiu da janela para o `SeletorDeEscopo`, que a exportação para o PVsyst usa.
+    - O 3D: a cena leva o TIN (`terreno.tin`, vértices juntados e triângulos; até 1 milhão de
+      triângulos, acima disso só a grade, que continua indo); a cor de antes nos módulos ainda
+      pintados pela versão antiga (o desenho não muda); `momentos` (os instantes, no relógio da
+      usina, da pior sombra de cada módulo no registro dos motivos, com quantos módulos) e,
+      nas faces desses módulos, o momento e a fração; `sombrasGrupo` (a hachura de cada anel,
+      para preencher com os furos). Contrato no `clivussolar` (branch `momentos-3d`).
+  - Nível 2: o `clivus-sombras-escopo` calcula a Usina (a de fora) e confere sombra na Oeste e
+    na Leste; pinta 5 módulos como a versão antiga e confere que o caminho da janela os
+    devolve (e que a segunda vez não acha nada); o `clivus-3d` confere o TIN, o `sombrasGrupo`
+    e o momento de cada face com sombra. Gancho novo: `clivus-sombras-acao "tirar-pintura"` e
+    `clivus-renderizar-janela` (a janela num PNG, sem abrir).
+- 42.4 (31/10/2026), o PVsyst por escopo. O CLIVUS_EXPORTAR com interface abre a janela "Exportar
+  para o PVsyst" (o `SeletorDeEscopo`: Seleção, Uma área, Área + seleção, Várias áreas,
+  Desenho inteiro; a seleção feita antes do botão abre em Seleção) e só depois a janela do
+  Windows do arquivo. Vão as faces dos módulos das mesas do escopo (a mesma conta das
+  sombras: a área com as de dentro). Sem interface, a seleção de sempre. Para o nível 2,
+  `CLIVUS_EXPORTAR_ESCOPO_AUTO` (escopo, áreas, letreiros e o arquivo), conferido no
+  `clivus-sombras-escopo`: a Oeste, as duas, a F1.1, tudo e a Usina (a Usina = as duas, a F1.1
+  = 1 mesa).
+
 ## Roteiro de tela (38.1 a 42.2)
 
 1. **Nova estrutura (38.1 e 38.5):** Configurações › Estruturas › Nova estrutura… › **Fixa**.
@@ -1011,3 +1062,24 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     (no celular, recolhe sozinho ao tocar no 3D); "Conheça o Clivus Solar" abre a landing. O sol
     e o resumo como na local. No Aurora (usina grande), girar e animar o dia com a sombra e ver
     se fica liso.
+28. **Sombras de novo (42.3), no Aurora:** abrir Sombreamento › Sombras:
+    - a janela diz "A pintura roxa da versão antiga saiu de N módulo(s)..." e os módulos roxos
+      voltam ao azul (uma vez só: abrir de novo não diz mais);
+    - a lista de áreas mostra "area1 · N mesas" e a "Area 1" também com mesas (ela leva a
+      "area1", que está dentro dela); abre numa área com mesa;
+    - Gerar sombras (Instante, 09:00): a sombra magenta aparece no chão entre as fileiras e
+      sobre os módulos;
+    - o botão diz "Ocultar sombras": clicar esconde, e ele passa a dizer "Mostrar sombras";
+      clicar de novo traz de volta. Nenhum botão cortado na borda da janela.
+29. **O 3D com a análise (42.3):** depois do Gerar, Publicar 3D:
+    - os módulos azuis (sem o roxo antigo), a sombra do CAD em magenta no chão e nos módulos;
+    - no painel do sol, "Ver o momento que causa sombra": o sol vai para a hora da análise, os
+      módulos com sombra ficam destacados e a sombra do sol cai sobre eles; ◀ ▶ passam pelos
+      momentos; ▶ Animar o dia mostra a sombra passando;
+    - o canto da mesa no pé do talude (o "comeu módulo" da imagem de 31/10) inteiro, como no
+      CAD.
+30. **O PVsyst por escopo (42.4):** Exportar para o PVsyst: a janela pergunta o que exportar
+    (Uma área com "· N mesas", Várias áreas, Seleção, Desenho inteiro); Exportar… pede o
+    arquivo; a linha de comando diz "EXPORTAR N mesa(s) de ..." e o arquivo abre no PVsyst só
+    com aquelas mesas. Selecionar umas mesas antes de clicar o botão: a janela abre em Seleção
+    com elas.

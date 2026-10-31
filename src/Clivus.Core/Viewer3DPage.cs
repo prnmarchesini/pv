@@ -5,8 +5,68 @@ using Clivus.Geo;
 
 namespace Clivus.Core;
 
-/// <summary>Uma face de módulo na cena 3D: os quatro cantos e a cor (a do desenho).</summary>
-public sealed record Scene3DFace(IReadOnlyList<Point3> Corners, RgbColor Color);
+/// <summary>
+/// Uma face de módulo na cena 3D: os quatro cantos, a cor (a do desenho) e,
+/// no módulo com sombra na análise do CAD (42.3), a pior sombra dele.
+/// </summary>
+public sealed record Scene3DFace(IReadOnlyList<Point3> Corners, RgbColor Color, Scene3DFaceShadow? Shadow = null);
+
+/// <summary>
+/// A pior sombra do módulo na análise de sombras do CAD (42.3): o momento
+/// (a posição em <see cref="Scene3D.Moments"/>) e a fração da face na sombra.
+/// </summary>
+public sealed record Scene3DFaceShadow(int Moment, double Fraction);
+
+/// <summary>
+/// Um momento da análise de sombras do CAD (42.3, Renan: "deveria no mínimo
+/// ter um botão 'ver momento que causa sombras'"): o instante, no relógio da
+/// usina, e quantos módulos têm nele a pior sombra deles.
+/// </summary>
+public sealed record Scene3DMoment(DateTime When, int Modules);
+
+/// <summary>
+/// O terreno de verdade, em triângulos (42.3, Renan: "comeu módulo, é
+/// mentira, não comeu no cad"): os vértices sem repetição e, para cada
+/// triângulo, as três posições. A grade de 2,8 m do Aurora ficava até 0,43 m
+/// acima do TIN no pé do talude e cobria o canto de módulos.
+/// </summary>
+public sealed record Scene3DTin(IReadOnlyList<Point3> Vertices, IReadOnlyList<int> Triangles)
+{
+    /// <summary>
+    /// Até quantos triângulos o TIN vai inteiro (uns 30 MB de cena); acima
+    /// disso só a grade, que no navegador fica leve.
+    /// </summary>
+    public const int MaxTriangles = 1_000_000;
+
+    /// <summary>O TIN dos triângulos, com os vértices iguais juntados; null sem triângulo ou acima de <paramref name="maxTriangles"/>.</summary>
+    public static Scene3DTin? From(IReadOnlyCollection<Triangle> triangles, int maxTriangles = MaxTriangles)
+    {
+        ArgumentNullException.ThrowIfNull(triangles);
+        if (triangles.Count == 0 || triangles.Count > maxTriangles) return null;
+
+        var posicao = new Dictionary<(double, double, double), int>();
+        var vertices = new List<Point3>();
+        var indices = new List<int>(triangles.Count * 3);
+
+        int Indice(Point3 p)
+        {
+            if (posicao.TryGetValue((p.X, p.Y, p.Z), out var i)) return i;
+            posicao[(p.X, p.Y, p.Z)] = vertices.Count;
+            vertices.Add(p);
+            return vertices.Count - 1;
+        }
+
+        foreach (var t in triangles)
+        {
+            if (!t.A.IsFinite || !t.B.IsFinite || !t.C.IsFinite) continue;
+            indices.Add(Indice(t.A));
+            indices.Add(Indice(t.B));
+            indices.Add(Indice(t.C));
+        }
+
+        return indices.Count == 0 ? null : new Scene3DTin(vertices, indices);
+    }
+}
 
 /// <summary>
 /// Um pilar na cena 3D: centro em planta, topo e pé (cotas) e, quando se
@@ -46,9 +106,11 @@ public sealed record Scene3DTree(double X, double Y, double Ground, TreeSpec Spe
 /// demais no navegador): <see cref="Columns"/> × <see cref="Rows"/> pontos a
 /// partir de (<see cref="X0"/>, <see cref="Y0"/>), de <see cref="Step"/> em
 /// <see cref="Step"/> metros; null onde não há terreno. A ordem é linha a
-/// linha (y), coluna a coluna (x).
+/// linha (y), coluna a coluna (x). Com o <paramref name="Tin"/> (42.3), o
+/// visualizador desenha o terreno por ele; a grade continua indo (o
+/// visualizador antigo e a caixa da cena).
 /// </summary>
-public sealed record Scene3DTerrain(double X0, double Y0, double Step, int Columns, int Rows, IReadOnlyList<double?> Z);
+public sealed record Scene3DTerrain(double X0, double Y0, double Step, int Columns, int Rows, IReadOnlyList<double?> Z, Scene3DTin? Tin = null);
 
 /// <summary>A cena publicada no servidor 3D: o id, o link da página e quando ela expira.</summary>
 public sealed record PublishedScene(string Id, string Url, DateTime? ExpiresAt);
@@ -116,6 +178,10 @@ public sealed record Scene3DSummary(Scene3DSummaryRow Total, IReadOnlyList<Scene
 /// <summary>
 /// A cena da página 3D. Sem <paramref name="Location"/>, a página fica sem o
 /// sol (a luz de sempre); sem <paramref name="Summary"/>, sem o quadro do resumo.
+/// <paramref name="Moments"/> são os momentos da análise de sombras do CAD
+/// (42.3), em ordem; <paramref name="ShadowGroups"/>, para cada anel de
+/// <paramref name="Shadows"/>, a hachura dele (os anéis de uma hachura estão
+/// num plano, e o de dentro de outro é furo).
 /// </summary>
 public sealed record Scene3D(
     string Title,
@@ -126,7 +192,9 @@ public sealed record Scene3D(
     IReadOnlyList<IReadOnlyList<Point3>> Shadows,
     IReadOnlyList<Scene3DFace>? Channels = null,
     Scene3DLocation? Location = null,
-    Scene3DSummary? Summary = null);
+    Scene3DSummary? Summary = null,
+    IReadOnlyList<Scene3DMoment>? Moments = null,
+    IReadOnlyList<int>? ShadowGroups = null);
 
 /// <summary>
 /// A página 3D no navegador (9.9). Renan, 03/10/2026: "o PVcase tinha uma
@@ -277,13 +345,38 @@ public static class Viewer3DPage
         {
             s.Append(",\"terreno\":{\"x0\":").Append(X(t.X0)).Append(",\"y0\":").Append(Y(t.Y0))
                 .Append(",\"passo\":").Append(N(t.Step)).Append(",\"colunas\":").Append(t.Columns).Append(",\"linhas\":").Append(t.Rows)
-                .Append(",\"z\":[").Append(string.Join(',', t.Z.Select(v => v is { } z ? Z(z) : "null"))).Append("]}");
+                .Append(",\"z\":[").Append(string.Join(',', t.Z.Select(v => v is { } z ? Z(z) : "null"))).Append(']');
+
+            // O TIN (42.3): os vértices relativos à origem e os triângulos.
+            if (t.Tin is { Vertices.Count: > 0, Triangles.Count: > 0 } tin)
+            {
+                s.Append(",\"tin\":{\"v\":[").Append(string.Join(',', tin.Vertices.Select(p => X(p.X) + "," + Y(p.Y) + "," + Z(p.Z))))
+                    .Append("],\"t\":[").Append(string.Join(',', tin.Triangles.Select(i => i.ToString(Inv)))).Append("]}");
+            }
+
+            s.Append('}');
         }
+
+        // O momento de cada face só vai se ele existe na lista (o servidor recusa índice fora dela).
+        var momentos = scene.Moments ?? [];
+
+        string Sombra(Scene3DFace f) =>
+            f.Shadow is { } m && m.Moment >= 0 && m.Moment < momentos.Count && double.IsFinite(m.Fraction) && m.Fraction > 0
+                ? "," + m.Moment.ToString(Inv) + "," + Math.Clamp(Math.Round(m.Fraction, 3), 0.001, 1).ToString("0.###", Inv)
+                : string.Empty;
 
         s.Append(",\"faces\":[");
         s.Append(string.Join(',', scene.Faces.Select(f =>
-            "[" + string.Join(',', f.Corners.Select(p => X(p.X) + "," + Y(p.Y) + "," + Z(p.Z))) + "," + ((f.Color.R << 16) | (f.Color.G << 8) | f.Color.B).ToString(Inv) + "]")));
+            "[" + string.Join(',', f.Corners.Select(p => X(p.X) + "," + Y(p.Y) + "," + Z(p.Z))) + "," + ((f.Color.R << 16) | (f.Color.G << 8) | f.Color.B).ToString(Inv) + Sombra(f) + "]")));
         s.Append(']');
+
+        if (momentos.Count > 0)
+        {
+            s.Append(",\"momentos\":[");
+            s.Append(string.Join(',', momentos.Select(m =>
+                "{\"quando\":\"" + m.When.ToString("yyyy-MM-dd'T'HH:mm", Inv) + "\",\"modulos\":" + m.Modules.ToString(Inv) + "}")));
+            s.Append(']');
+        }
 
         // O pilar com a seção (42.2) leva largura, profundidade e giro; o giro
         // com 4 casas (0,006°). Seção que não serve fica de fora: o
@@ -304,6 +397,10 @@ public static class Viewer3DPage
         s.Append(",\"sombras\":[");
         s.Append(string.Join(',', scene.Shadows.Select(c => "[" + string.Join(',', c.Select(p => X(p.X) + "," + Y(p.Y) + "," + Z(p.Z))) + "]")));
         s.Append(']');
+
+        // A hachura de cada anel (42.3): o visualizador preenche a hachura com os furos dela.
+        if (scene.ShadowGroups is { } grupos && grupos.Count == scene.Shadows.Count && grupos.Count > 0 && grupos.All(g => g >= 0))
+            s.Append(",\"sombrasGrupo\":[").Append(string.Join(',', grupos.Select(g => g.ToString(Inv)))).Append(']');
 
         // As canaletas da drenagem (29.3): triângulos, três cantos e a cor.
         s.Append(",\"canaletas\":[");

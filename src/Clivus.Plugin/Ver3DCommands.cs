@@ -294,17 +294,36 @@ public static class Ver3DCommands
             }
         }
 
-        var grade = Viewer3DPage.SampleTerrain(minX, minY, maxX, maxY, (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null);
+        // A grade continua (o visualizador antigo e a caixa da cena) e o TIN vai
+        // junto (42.3): a grade de 2,8 m cobria o canto de módulos no pé do talude.
+        var grade = Viewer3DPage.SampleTerrain(minX, minY, maxX, maxY, (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null)
+            with { Tin = Scene3DTin.From(terreno.Mesh.Triangles) };
 
         var faces = new List<Scene3DFace>();
         var pilares = new List<Scene3DPillar>();
         var arvores = new List<Scene3DTree>();
         var sombras = new List<IReadOnlyList<Point3>>();
+        var grupos = new List<int>();
+
+        // A análise de sombras do CAD (42.3): o momento e a fração de cada
+        // módulo com sombra, e a cor de antes dos pintados pela versão antiga.
+        var motivos = SombrasCommands.MotivosDoDesenho(database)
+            .Where(m => m.When is not null && m.Fraction > 0)
+            .GroupBy(m => m.Handle, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.MaxBy(m => m.Fraction)!, StringComparer.OrdinalIgnoreCase);
+        var momentos = motivos.Values
+            .GroupBy(m => Minuto(m.When!.Value))
+            .OrderBy(g => g.Key)
+            .Select(g => new Scene3DMoment(g.Key, g.Count()))
+            .ToList();
+        var posicaoDoMomento = momentos.Select((m, i) => (m.When, i)).ToDictionary(x => x.When, x => x.i);
+        var antesDaPintura = SombrasCommands.CoresDeAntesDaPintura(database);
 
         using (var transacao = database.TransactionManager.StartOpenCloseTransaction())
         {
             var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
             var cores = new Dictionary<Guid, RgbColor>();
+            var sombraDoModulo = new Dictionary<Guid, Scene3DFaceShadow>();
             var facesLidas = new List<(Guid Modulo, List<Point3> Cantos)>();
 
             foreach (ObjectId id in espaco)
@@ -324,7 +343,10 @@ public static class Ver3DCommands
                         break;
 
                     case BlockReference br when LayoutXData.LoadModule(br) is { } m:
-                        cores.TryAdd(m.Id, Cor(transacao, br));
+                        var handle = br.Handle.ToString();
+                        cores.TryAdd(m.Id, antesDaPintura.TryGetValue(handle, out var antes) ? Cor(transacao, br, antes) : Cor(transacao, br));
+                        if (motivos.TryGetValue(handle, out var motivo) && posicaoDoMomento.TryGetValue(Minuto(motivo.When!.Value), out var momento))
+                            sombraDoModulo.TryAdd(m.Id, new Scene3DFaceShadow(momento, motivo.Fraction));
                         break;
 
                     case BlockReference br when LayoutXData.LoadPillar(br) is { } p:
@@ -345,14 +367,21 @@ public static class Ver3DCommands
                     // cada laço vira um anel no mundo. A borda passou a ser trechos
                     // abertos por pedaço, que não fecham anel.
                     case Hatch hachura when PluginXData.Load(hachura, "Sombra", 1, 1) is not null:
+                        // Os anéis da hachura vão com o número dela (42.3): o de dentro de outro é furo.
+                        var grupo = grupos.Count == 0 ? 0 : grupos[^1] + 1;
                         foreach (var anel in AneisDaHachura(hachura))
-                            if (anel.Count >= 3) sombras.Add(anel);
+                        {
+                            if (anel.Count < 3) continue;
+                            sombras.Add(anel);
+                            grupos.Add(grupo);
+                        }
+
                         break;
                 }
             }
 
             foreach (var (modulo, cantos) in facesLidas)
-                faces.Add(new Scene3DFace(cantos, cores.TryGetValue(modulo, out var c) ? c : new RgbColor(30, 60, 140)));
+                faces.Add(new Scene3DFace(cantos, cores.TryGetValue(modulo, out var c) ? c : new RgbColor(30, 60, 140), sombraDoModulo.GetValueOrDefault(modulo)));
         }
 
         var titulo = Path.GetFileNameWithoutExtension(documento.Name);
@@ -364,8 +393,12 @@ public static class Ver3DCommands
         // as faces lidas dos próprios sólidos do desenho.
         extras.AddRange(EstruturaDaBifila(database));
 
-        return new Scene3D(string.IsNullOrWhiteSpace(titulo) ? Tr.T("Usina") : titulo, grade, faces, pilares, arvores, sombras, extras, Lugar(documento), ResumoDaUsina(documento));
+        return new Scene3D(string.IsNullOrWhiteSpace(titulo) ? Tr.T("Usina") : titulo, grade, faces, pilares, arvores, sombras, extras, Lugar(documento), ResumoDaUsina(documento),
+            momentos, grupos);
     }
+
+    /// <summary>O instante no minuto (o momento da análise vai até o minuto).</summary>
+    private static DateTime Minuto(DateTime t) => new(t.Year, t.Month, t.Day, t.Hour, t.Minute, 0, DateTimeKind.Unspecified);
 
     /// <summary>
     /// O lugar do desenho, para o sol do 3D (42.2): a latitude e a longitude
@@ -452,10 +485,11 @@ public static class Ver3DCommands
     }
 
     /// <summary>A cor que a peça mostra: a dela, ou a da camada quando é "por camada".</summary>
-    private static RgbColor Cor(Transaction transacao, Entity e)
-    {
-        var cor = e.Color;
+    private static RgbColor Cor(Transaction transacao, Entity e) => Cor(transacao, e, e.Color);
 
+    /// <summary>A cor dada na peça (a de antes da pintura antiga, 42.3), ou a da camada quando é "por camada".</summary>
+    private static RgbColor Cor(Transaction transacao, Entity e, Autodesk.AutoCAD.Colors.Color cor)
+    {
         if (cor.IsByLayer || cor.IsByBlock)
         {
             if (transacao.GetObject(e.LayerId, OpenMode.ForRead) is LayerTableRecord camada) cor = camada.Color;

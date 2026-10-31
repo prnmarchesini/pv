@@ -33,21 +33,14 @@ internal sealed class JanelaDeSombras : Window
     private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
     private static readonly Dictionary<Document, JanelaDeSombras> Abertas = [];
 
-    /// <summary>Uma área na lista: o GUID e o nome.</summary>
-    private sealed record AreaDaLista(Guid Id, string Nome)
-    {
-        public override string ToString() => Nome;
-    }
-
     private readonly Document _documento;
 
-    // O que calcular.
-    private readonly ComboBox _escopo = new() { Width = 150, ToolTip = Tr.T("O que calcular: as mesas escolhidas no desenho, uma área, uma área e mais as mesas escolhidas, várias áreas ou o desenho inteiro. Fazem sombra também as mesas, as árvores e o relevo em volta.") };
-    private readonly ComboBox _area = new() { Width = 190, Margin = new Thickness(6, 0, 0, 0), ToolTip = Tr.T("A área: as mesas com o centro nela e o chão dela.") };
-    private readonly WrapPanel _areas = new() { Margin = new Thickness(76, 2, 0, 2) };
-    private readonly Button _pegar;
-    private readonly TextBlock _selecao = new() { VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Gray, Margin = new Thickness(6, 0, 0, 0) };
-    private HashSet<Guid> _mesasEscolhidas = [];
+    // Ocultar e Mostrar num botão só (42.3, tela de 31/10/2026: "ocultei e não
+    // tem ver sombra"; o Mostrar ficava cortado pela borda da janela).
+    private readonly Button _ligar;
+
+    // O que calcular (a mesma escolha da exportação para o PVsyst, 42.4).
+    private readonly SeletorDeEscopo _seletor;
 
     // O período.
     private readonly ComboBox _modo = new() { Width = 260, ToolTip = Tr.T("Um instante; um dia inteiro; o mesmo horário em cada dia de um período; ou todas as horas de um período. No período, a sombra desenhada é a de todos os passos juntos e cada módulo guarda o pior caso dele.") };
@@ -64,7 +57,7 @@ internal sealed class JanelaDeSombras : Window
 
     private readonly TextBlock _recado = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
 
-    private JanelaDeSombras(Document documento)
+    internal JanelaDeSombras(Document documento)
     {
         _documento = documento;
 
@@ -74,9 +67,11 @@ internal sealed class JanelaDeSombras : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        StackPanel Linha(params UIElement[] itens)
+        // Linha que quebra em vez de cortar (42.3): com a fonte ou a escala do
+        // Windows maiores, o fim da linha ia para fora da janela.
+        WrapPanel Linha(params UIElement[] itens)
         {
-            var linha = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 3) };
+            var linha = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 3) };
             foreach (var i in itens) linha.Children.Add(i);
             return linha;
         }
@@ -104,15 +99,12 @@ internal sealed class JanelaDeSombras : Window
             return b;
         }
 
-        // ---- o que calcular
+        // ---- o que calcular (abre em "Uma área", o jeito de não travar o PC
+        // numa usina grande; sem área no desenho, no desenho inteiro)
 
-        foreach (var k in ShadowScope.Kinds) _escopo.Items.Add(ShadowScope.Name(k));
-        _escopo.SelectedIndex = ShadowScope.Kinds.ToList().IndexOf(ShadowScopeKind.Area);
-        _escopo.SelectionChanged += (_, _) => Tentar(AplicarEscopo);
-        _area.DropDownOpened += (_, _) => Tentar(LerAreas);
-
-        _pegar = Botao(Tr.T("Pegar seleção"), Tr.T("Usa as mesas selecionadas agora no desenho (clique nelas com a janela aberta e depois aqui)."), PegarSelecao);
-        _pegar.Margin = new Thickness(6, 0, 0, 0);
+        _seletor = new SeletorDeEscopo(documento, Tr.T("Calcular"),
+            Tr.T("O que calcular: as mesas escolhidas no desenho, uma área, uma área e mais as mesas escolhidas, várias áreas ou o desenho inteiro. Fazem sombra também as mesas, as árvores e o relevo em volta."),
+            Recado, Tentar);
 
         // ---- o período
 
@@ -138,8 +130,8 @@ internal sealed class JanelaDeSombras : Window
 
         var pilha = new StackPanel { Margin = new Thickness(12) };
 
-        pilha.Children.Add(Linha(R(Tr.T("Calcular"), 70), _escopo, _area, _pegar, _selecao));
-        pilha.Children.Add(_areas);
+        pilha.Children.Add(_seletor.Linha);
+        pilha.Children.Add(_seletor.Caixas);
         pilha.Children.Add(Linha(R(Tr.T("Modo"), 70), _modo));
         pilha.Children.Add(Linha(R(Tr.T("Dias"), 70), _de, R(Tr.T("  a")), _ate, R(Tr.T("   a cada")), _dias, R(Tr.T(" dia(s)"))));
         pilha.Children.Add(Linha(R(Tr.T("Considerar"), 70), _criterio, R(" "), _altura, R("°")));
@@ -180,8 +172,11 @@ internal sealed class JanelaDeSombras : Window
         var gerar = Botao(Tr.T("Gerar sombras"), Tr.T("Calcula o escopo no período e troca as sombras dele pelas novas: hachura magenta no chão e sobre os módulos."), Gerar);
         gerar.IsDefault = true;
         var apagar = Botao(Tr.T("Apagar sombras"), Tr.T("Apaga as sombras do escopo escolhido (as de outras áreas ficam) e devolve a cor dos módulos pintados por desenho antigo."), Apagar);
-        var ocultar = Botao(Tr.T("Ocultar"), Tr.T("Esconde todas as sombras: desliga as camadas delas. Nada é apagado."), () => Fazer(() => SombrasCommands.Ligar(_documento, false)));
-        var mostrar = Botao(Tr.T("Mostrar"), Tr.T("Mostra as sombras de novo: liga as camadas delas."), () => Fazer(() => SombrasCommands.Ligar(_documento, true)));
+        _ligar = Botao(Tr.T("Ocultar sombras"), Tr.T("Esconde ou mostra todas as sombras: desliga ou liga as camadas delas. Nada é apagado."), () =>
+        {
+            // O que o botão diz é o que ele faz: à vista, oculta; escondidas, mostra.
+            Fazer(() => SombrasCommands.Ligar(_documento, SombrasCommands.SombrasAVista(_documento.Database) == false));
+        });
         var analises = Botao(Tr.T("Ver análises…"), Tr.T("Abre a lista dos módulos com sombra, por área e mesa, com quanto, de quê e quando; o clique leva ao lugar no desenho."), () => JanelaDeAnalisesDeSombra.Abrir(_documento));
 
         // O porquê pede um clique no desenho: vai como comando (a janela fica aberta).
@@ -194,36 +189,44 @@ internal sealed class JanelaDeSombras : Window
         var fechar = new Button { Content = Tr.T("Fechar"), Width = 80, Height = 26, IsCancel = true, ToolTip = Tr.T("Fecha a janela; as sombras desenhadas ficam.") };
         fechar.Click += (_, _) => Tentar(Close);
 
-        var esquerda = new StackPanel { Orientation = Orientation.Horizontal };
-        esquerda.Children.Add(gerar);
-        esquerda.Children.Add(apagar);
-        esquerda.Children.Add(new Border { Width = 1, Margin = new Thickness(4, 3, 10, 3), Background = Brushes.Silver });
-        esquerda.Children.Add(ocultar);
-        esquerda.Children.Add(mostrar);
-
-        var direita = new StackPanel { Orientation = Orientation.Horizontal };
-        direita.Children.Add(analises);
-        direita.Children.Add(porQue);
-        direita.Children.Add(fechar);
-
-        var botoes = new DockPanel { Margin = new Thickness(0, 10, 0, 0), LastChildFill = false };
-        DockPanel.SetDock(direita, Dock.Right);
-        botoes.Children.Add(direita);
-        botoes.Children.Add(esquerda);
+        // Os botões numa linha que quebra: nenhum fica escondido atrás de outro
+        // (o Mostrar ficava atrás do Ver análises, 42.3).
+        var botoes = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
+        botoes.Children.Add(gerar);
+        botoes.Children.Add(apagar);
+        botoes.Children.Add(_ligar);
+        botoes.Children.Add(new Border { Width = 1, Height = 20, Margin = new Thickness(4, 3, 10, 3), Background = Brushes.Silver });
+        botoes.Children.Add(analises);
+        botoes.Children.Add(porQue);
+        botoes.Children.Add(fechar);
         pilha.Children.Add(botoes);
 
         Content = pilha;
 
-        // Abre em "Uma área" (o jeito de não travar o PC numa usina grande);
-        // sem área no desenho, no desenho inteiro.
-        Tentar(LerAreas);
-        if (_area.Items.Count == 0)
-        {
-            _escopo.SelectedIndex = ShadowScope.Kinds.ToList().IndexOf(ShadowScopeKind.Drawing);
-            _recado.Text = string.Empty;
-        }
+        // Sem área no desenho, o seletor já abriu no desenho inteiro: o aviso de "nenhuma área" não vale.
+        if (_seletor.Tipo == ShadowScopeKind.Drawing) _recado.Text = string.Empty;
 
-        Tentar(AplicarEscopo);
+        // O roxo da versão antiga sai ao abrir (42.3): ele não é a sombra de
+        // hoje, o Ocultar não o escondia e o 3D o mostrava como sombra.
+        Tentar(() =>
+        {
+            var voltaram = EscritaForaDeComando.Fazer(_documento, () => SombrasCommands.TirarPinturaAntiga(_documento.Database));
+            if (voltaram == 0) return;
+
+            RegistroDeDiagnostico.Registrar($"Sombras: a pintura da versão antiga saiu de {voltaram} módulo(s) ({_documento.Name}).");
+            if (ClivusExtension.TemInterface()) _documento.Editor.Regen();
+            Recado(Tr.F("A pintura roxa da versão antiga saiu de {0} módulo(s): a sombra agora é a hachura magenta, no chão e sobre os módulos (Gerar sombras).", voltaram), false);
+        });
+
+        Tentar(MostrarCamadas);
+    }
+
+    /// <summary>O botão de ligar diz o que vai fazer: Ocultar com as sombras à vista, Mostrar com elas escondidas.</summary>
+    private void MostrarCamadas()
+    {
+        var aVista = SombrasCommands.SombrasAVista(_documento.Database);
+        _ligar.Content = aVista == false ? Tr.T("Mostrar sombras") : Tr.T("Ocultar sombras");
+        _ligar.IsEnabled = aVista is not null;
     }
 
     /// <summary>Abre a janela do desenho, ou traz para a frente a que já está aberta.</summary>
@@ -232,7 +235,7 @@ internal sealed class JanelaDeSombras : Window
         if (Abertas.TryGetValue(documento, out var aberta))
         {
             if (aberta.WindowState == WindowState.Minimized) aberta.WindowState = WindowState.Normal;
-            aberta.Tentar(aberta.LerAreas);
+            aberta.Tentar(aberta._seletor.LerAreas);
             aberta.Activate();
             return;
         }
@@ -269,84 +272,11 @@ internal sealed class JanelaDeSombras : Window
         AcadApp.ShowModelessWindow(janela);
     }
 
-    // ------------------------------------------------------------ o escopo
-
-    private ShadowScopeKind Tipo => _escopo.SelectedIndex >= 0 ? ShadowScope.Kinds[_escopo.SelectedIndex] : ShadowScopeKind.Area;
-
-    /// <summary>Lê as áreas do desenho para a lista e as caixas, mantendo as escolhidas.</summary>
-    private void LerAreas()
-    {
-        var antes = (_area.SelectedItem as AreaDaLista)?.Id;
-        var marcadas = _areas.Children.OfType<CheckBox>().Where(c => c.IsChecked == true).Select(c => ((AreaDaLista)c.Tag).Id).ToHashSet();
-
-        var areas = EscolhaDeArea.Distintas(AreasDoDesenho.Varrer(_documento.Database))
-            .Select(a => new AreaDaLista(a.Identity.Id, a.Identity.DisplayName))
-            .ToList();
-
-        _area.ItemsSource = areas;
-        _area.SelectedItem = areas.FirstOrDefault(a => a.Id == antes) ?? areas.FirstOrDefault();
-
-        _areas.Children.Clear();
-        foreach (var a in areas)
-            _areas.Children.Add(new CheckBox { Content = a.Nome, Tag = a, IsChecked = marcadas.Contains(a.Id), Margin = new Thickness(0, 2, 14, 2) });
-
-        if (areas.Count == 0 && Tipo is not (ShadowScopeKind.Selection or ShadowScopeKind.Drawing))
-            Recado(Tr.T("Nenhuma área neste desenho: use Seleção ou Desenho inteiro (ou crie a área com o botão Área)."), true);
-    }
-
-    /// <summary>O escopo mostra só o que vale nele.</summary>
-    private void AplicarEscopo()
-    {
-        var tipo = Tipo;
-
-        _area.Visibility = tipo is ShadowScopeKind.Area or ShadowScopeKind.AreaAndSelection ? Visibility.Visible : Visibility.Collapsed;
-        _areas.Visibility = tipo == ShadowScopeKind.Areas ? Visibility.Visible : Visibility.Collapsed;
-
-        var selecao = tipo is ShadowScopeKind.Selection or ShadowScopeKind.AreaAndSelection;
-        _pegar.Visibility = selecao ? Visibility.Visible : Visibility.Collapsed;
-        _selecao.Visibility = selecao ? Visibility.Visible : Visibility.Collapsed;
-        MostrarSelecao();
-    }
-
-    /// <summary>As mesas selecionadas agora no desenho.</summary>
-    private void PegarSelecao()
-    {
-        var implicita = _documento.Editor.SelectImplied();
-        var ids = implicita.Status == PromptStatus.OK ? implicita.Value.GetObjectIds() : [];
-        _mesasEscolhidas = SelecaoCommands.MesasTocadas(_documento, ids);
-        MostrarSelecao();
-
-        if (_mesasEscolhidas.Count == 0) Recado(Tr.T("Nenhuma mesa selecionada no desenho: clique nas mesas (com a janela aberta) e use Pegar seleção."), true);
-        else _recado.Text = string.Empty;
-    }
-
-    private void MostrarSelecao() =>
-        _selecao.Text = _mesasEscolhidas.Count == 0 ? Tr.T("nenhuma mesa escolhida") : Tr.F("{0} mesa(s) escolhida(s)", _mesasEscolhidas.Count);
-
-    /// <summary>O escopo escolhido; sem seleção guardada, a do desenho agora. Lança <see cref="ArgumentException"/> com o que falta.</summary>
-    private ShadowScope Escopo()
-    {
-        var tipo = Tipo;
-
-        if (tipo is ShadowScopeKind.Selection or ShadowScopeKind.AreaAndSelection && _mesasEscolhidas.Count == 0) PegarSelecao();
-
-        IReadOnlyList<Guid> areas = tipo switch
-        {
-            ShadowScopeKind.Area or ShadowScopeKind.AreaAndSelection => _area.SelectedItem is AreaDaLista a ? [a.Id] : [],
-            ShadowScopeKind.Areas => _areas.Children.OfType<CheckBox>().Where(c => c.IsChecked == true).Select(c => ((AreaDaLista)c.Tag).Id).ToList(),
-            _ => [],
-        };
-
-        var comSelecao = tipo is ShadowScopeKind.Selection or ShadowScopeKind.AreaAndSelection;
-        var escopo = new ShadowScope(tipo, areas, comSelecao ? [.. _mesasEscolhidas] : []);
-        return escopo.WhyInvalid() is { } falta ? throw new ArgumentException(falta) : escopo;
-    }
-
     // ------------------------------------------------------------ as ações
 
     private void Gerar()
     {
-        var escopo = Escopo();
+        var escopo = _seletor.Escopo();
 
         Fazer(() =>
         {
@@ -365,7 +295,7 @@ internal sealed class JanelaDeSombras : Window
 
     private void Apagar()
     {
-        var escopo = Escopo();
+        var escopo = _seletor.Escopo();
 
         if (escopo.Kind == ShadowScopeKind.Drawing
             && MessageBox.Show(this, Tr.T("Apagar as sombras do desenho inteiro (todas as áreas)?"), Tr.T("Apagar sombras"), MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes)
@@ -402,6 +332,7 @@ internal sealed class JanelaDeSombras : Window
         finally
         {
             Cursor = null;
+            Tentar(MostrarCamadas);
         }
     }
 

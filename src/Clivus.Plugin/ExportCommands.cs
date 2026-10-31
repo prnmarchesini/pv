@@ -13,9 +13,12 @@ using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 namespace Clivus.Plugin;
 
 /// <summary>
-/// A exportação para o PVsyst: o passo 6.2. O usuário seleciona (janela sobre
-/// a área), o plugin recolhe as faces de módulo que são nossas, pergunta o
-/// formato e grava o arquivo.
+/// A exportação para o PVsyst: o passo 6.2. Desde o 42.4 (Renan, 31/10/2026:
+/// "tenho que ter a liberdade de exportar uma area, varias, todas, e pode
+/// selecionar as mesas que eu quero se for o caso"), a janela pergunta o
+/// escopo, como a das sombras: as mesas escolhidas, uma área (com as de
+/// dentro), área + seleção, várias áreas ou o desenho inteiro. O plugin
+/// recolhe as faces de módulo das mesas do escopo e grava o arquivo.
 ///
 /// O que é "face de módulo nossa" é dito pelo XData (<see cref="FaceIdentity"/>),
 /// nunca pela camada: a seleção filtra 3DFACE com o nosso nome de aplicativo
@@ -38,10 +41,31 @@ public static class ExportCommands
 
         try
         {
-            var selecao = Selecionar(editor);
-            if (selecao is null) return;
+            IReadOnlyList<ModuleFace> faces;
+            int ignoradas, repetidas;
 
-            var (faces, ignoradas, repetidas) = Recolher(documento.Database, selecao);
+            if (ClivusExtension.TemInterface())
+            {
+                // A seleção feita antes do botão abre a janela em Seleção.
+                var antes = editor.SelectImplied();
+                var escolhidas = antes.Status == PromptStatus.OK ? SelecaoCommands.MesasTocadas(documento, antes.Value.GetObjectIds()) : [];
+
+                if (JanelaDoPvsyst.Perguntar(documento, escolhidas) is not { } escopo)
+                {
+                    editor.WriteMessage(Tr.T("\nEXPORTAR Cancelado.\n"));
+                    return;
+                }
+
+                (faces, ignoradas, repetidas) = Recolher(documento.Database, TodasAsFaces(documento.Database), escopo.Mesas);
+                editor.WriteMessage(Tr.F("\nEXPORTAR {0} mesa(s) {1}.", escopo.Mesas.Count, escopo.Nome));
+            }
+            else
+            {
+                var selecao = Selecionar(editor);
+                if (selecao is null) return;
+
+                (faces, ignoradas, repetidas) = Recolher(documento.Database, selecao);
+            }
 
             if (ignoradas > 0)
                 editor.WriteMessage(Tr.F("\n  {0} face(s) da seleção não tem identidade de módulo e foi ignorada.\n", ignoradas));
@@ -108,6 +132,64 @@ public static class ExportCommands
     }
 
     /// <summary>
+    /// CLIVUS_EXPORTAR_ESCOPO_AUTO: o escopo (TUDO, AREA, AREAS, SELECAO,
+    /// AREA+SELECAO), as áreas pelo nome e as mesas pelo letreiro (separados
+    /// por ";", "-" para nenhum) e o arquivo DAE. Para o nível 2 (42.4).
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoExportarEscopoAutomatico)]
+    public static void ExportarEscopoAutomatico()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+
+        try
+        {
+            string? Texto(string pergunta)
+            {
+                var r = editor.GetString(new PromptStringOptions($"\n{pergunta}: ") { AllowSpaces = true });
+                return r.Status == PromptStatus.OK ? r.StringResult : null;
+            }
+
+            var tipo = Texto(Tr.T("Escopo (TUDO, AREA, AREAS, SELECAO, AREA+SELECAO)"));
+            var areas = Texto(Tr.T("Áreas, pelo nome, separadas por ; (- para nenhuma)"));
+            var letreiros = Texto(Tr.T("Mesas, pelo letreiro, separadas por ; (- para nenhuma)"));
+            var arquivo = Texto(Tr.T("Arquivo DAE"));
+            if (tipo is null || areas is null || letreiros is null || string.IsNullOrWhiteSpace(arquivo)) return;
+
+            if (SombrasCommands.EscopoPelosNomes(documento.Database, tipo, areas, letreiros, out var porque) is not { } escopo)
+            {
+                editor.WriteMessage(Tr.F("\nEXPORTAR {0}\n", porque));
+                return;
+            }
+
+            var (mesas, nome) = MesasDoEscopo(documento.Database, escopo);
+            editor.WriteMessage($"\nEXPORTAR_MESAS {mesas.Count}");
+
+            var (faces, _, repetidas) = Recolher(documento.Database, TodasAsFaces(documento.Database), mesas);
+            if (!AvisarRepetidas(editor, repetidas)) return;
+
+            if (faces.Count == 0)
+            {
+                editor.WriteMessage(Tr.F("\nEXPORTAR Nenhuma mesa {0}: nada a exportar.\n", nome));
+                return;
+            }
+
+            Gravar(editor, faces, ComExtensao(arquivo.Trim().Trim('"')), linhaParaTeste: true);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao exportar o escopo para o PVsyst (automático).", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui exportar: {0}\n", erro.Message));
+        }
+    }
+
+    /// <summary>As mesas do escopo (a mesma conta do escopo das sombras) e o nome dele.</summary>
+    internal static (IReadOnlySet<Guid> Mesas, string Nome) MesasDoEscopo(Database database, ShadowScope escopo) =>
+        SombrasCommands.MesasDoEscopo(database, escopo);
+
+    /// <summary>
     /// A seleção: 3DFACE com o nosso XData. Aceita a seleção prévia (o
     /// usuário pode selecionar antes de clicar o botão) e a janela.
     /// </summary>
@@ -159,9 +241,10 @@ public static class ExportCommands
     /// GUID da face é o GUID do arquivo (regra sagrada 3 atravessando para o
     /// PVsyst). Face sem identidade é contada como ignorada; GUID visto
     /// duas vezes (mesa copiada e colada) é contado como repetido, e a
-    /// exportação não sai com ele.
+    /// exportação não sai com ele. Com <paramref name="mesas"/> (42.4), só as
+    /// faces dessas mesas entram; as outras nem contam.
     /// </summary>
-    private static (IReadOnlyList<ModuleFace> Faces, int Ignoradas, int Repetidas) Recolher(Database database, ObjectId[] ids)
+    private static (IReadOnlyList<ModuleFace> Faces, int Ignoradas, int Repetidas) Recolher(Database database, ObjectId[] ids, IReadOnlySet<Guid>? mesas = null)
     {
         var faces = new List<ModuleFace>();
         var vistos = new HashSet<Guid>();
@@ -178,9 +261,12 @@ public static class ExportCommands
 
             if (identidade is null)
             {
-                ignoradas++;
+                // Fora de uma seleção à mão, face sem identidade não é nossa: nem conta.
+                if (mesas is null) ignoradas++;
                 continue;
             }
+
+            if (mesas is not null && !mesas.Contains(identidade.Table)) continue;
 
             if (!vistos.Add(identidade.Id))
             {

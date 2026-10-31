@@ -153,6 +153,13 @@ public static partial class PluginInfo
     /// </summary>
     public const string ComandoExportarAutomatico = "CLIVUS_EXPORTAR_AUTO";
 
+    /// <summary>
+    /// Comando que exporta em DAE as mesas de um escopo (42.4: uma área, várias,
+    /// todas ou as mesas escolhidas), pelos nomes, como o CLIVUS_SOMBRAS_ESCOPO_AUTO,
+    /// para o caminho pedido. Para o teste de nível 2.
+    /// </summary>
+    public const string ComandoExportarEscopoAutomatico = "CLIVUS_EXPORTAR_ESCOPO_AUTO";
+
     /// <summary>Comando que marca uma mesa como suja (precisa de recálculo) e a pinta de vermelho.</summary>
     public const string ComandoPendente = "CLIVUS_PENDENTE";
 

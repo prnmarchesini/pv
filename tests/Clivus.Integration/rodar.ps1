@@ -4277,11 +4277,21 @@ function Testar-SombrasEscopo {
     $inv = [Globalization.CultureInfo]::InvariantCulture
     function P([double] $dx, [double] $dy) { [string]::Format($inv, '{0:0.###},{1:0.###},0', $terreno.X + $dx, $terreno.Y + $dy) }
 
+    # Os DAE do PVsyst por escopo (42.4): nivel2-pvsyst-oeste.dae e os outros.
+    $dae = Join-Path $saida 'nivel2-pvsyst-'
+    Get-ChildItem $saida -Filter 'nivel2-pvsyst-*.dae' -ErrorAction SilentlyContinue | Remove-Item -Force
+
+    # O 3D depois de calcular a Usina (42.3): os momentos da analise.
+    $html = Join-Path $saida 'clivus-sombras-escopo-3d.html'
+    if (Test-Path $html) { Remove-Item $html -Force }
+
     $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-escopo' -Script (Join-Path $PSScriptRoot 'clivus-sombras-escopo.scr') -Substituicoes @{
         '{{U1}}' = (P -50 -50); '{{U2}}' = (P 50 -50); '{{U3}}' = (P 50 50); '{{U4}}' = (P -50 50)
         '{{A1}}' = (P -50 -50); '{{A2}}' = (P 0 -50); '{{A3}}' = (P 0 50); '{{A4}}' = (P -50 50)
         '{{B1}}' = (P 0 -50); '{{B2}}' = (P 50 -50); '{{B3}}' = (P 50 50); '{{B4}}' = (P 0 50)
         '{{L1}}' = (P -50 -50); '{{L2}}' = (P -50 50); '{{LADO}}' = (P 0 0)
+        '{{DAE}}' = $dae
+        '{{HTML}}' = $html
     }
 
     if ($r.Estourou -or $r.Codigo -ne 0 -or $r.Texto -notmatch 'CLIVUS_ESCOPO_FIM oculta=(\d) mostra=(\d) repintou=(\d) fim') {
@@ -4328,6 +4338,45 @@ function Testar-SombrasEscopo {
     if ($analises -notmatch 'SOMBRA_TOPICO 1 Area Leste') { $erros += 'as analises nao listam a Area Leste' }
     if ($analises -match 'SOMBRA_TOPICO 1 Area Oeste .{1,4}(\d+) mesa' -and [int] $Matches[1] -ne 1) { $erros += "as analises listam $($Matches[1]) mesa(s) na Oeste depois de apagar a area e calcular so a F1.1" }
 
+    # 42.3: a Usina (a de fora) leva a Oeste e a Leste.
+    $usina = Par 'USINA'
+    if ($t -match 'Nenhuma mesa de Usina') { $erros += 'calcular a Usina deu "Nenhuma mesa de Usina" (a area de fora tem de levar as de dentro)' }
+    elseif ($null -eq $usina -or $usina.HO -lt 1 -or $usina.HL -lt 1) { $erros += "calcular a Usina: $(if ($usina) { "$($usina.HO) hachura(s) na Oeste e $($usina.HL) na Leste (as duas > 0)" } else { 'o LISP nao contou' })" }
+
+    # 42.3: o 3D da Usina calculada as 07:30 leva o momento e a pior sombra dos modulos.
+    $momentosNoTresD = 0; $facesComSombra = 0
+    if (-not (Test-Path $html)) { $erros += 'o 3D depois de calcular a Usina nao foi gravado' }
+    elseif ([IO.File]::ReadAllText($html, [Text.Encoding]::UTF8) -notmatch 'const D = (\{.*?\});\r?\n') { $erros += 'a cena nao esta no 3D da Usina' }
+    else {
+        $cena = $Matches[1] | ConvertFrom-Json
+        $lista = @(if ($cena.PSObject.Properties['momentos']) { $cena.momentos })
+        $momentosNoTresD = $lista.Count
+        $facesComSombra = @($cena.faces | Where-Object { @($_).Count -eq 15 }).Count
+        if ($lista.Count -ne 1 -or $lista[0].quando -ne '2026-06-21T07:30' -or $lista[0].modulos -lt 1) { $erros += "o 3D da Usina devia ter um momento, 21/06/2026 07:30 (tem $($lista.Count): $(($lista | ForEach-Object { $_.quando }) -join ', '))" }
+        elseif ($facesComSombra -lt 1 -or $facesComSombra -ne $lista[0].modulos) { $erros += "o 3D da Usina tem $facesComSombra face(s) com sombra e o momento diz $($lista[0].modulos) modulo(s)" }
+    }
+
+    # 42.3: o roxo da versao antiga sai ao abrir a janela (o mesmo caminho, fora de comando).
+    if ($t -notmatch 'CLIVUS_PINTURA_ANTIGA pintou=5 mudou=1 tirou=5 voltou=1 de_novo=0 fim') {
+        $linha = [regex]::Match($t, 'CLIVUS_PINTURA_ANTIGA [^\r\n]*').Value
+        $erros += "a pintura da versao antiga nao saiu como devia (esperado pintou=5 mudou=1 tirou=5 voltou=1 de_novo=0; deu: $linha)"
+    }
+
+    # 42.4: o PVsyst pelo escopo. Mesas: Oeste, as duas, a F1.1, tudo e a Usina.
+    $k = $t.IndexOf('CLIVUS_ESCOPO_USINA'); $l = $t.IndexOf('CLIVUS_EXPORTAR_FIM')
+    $exportar = if ($k -ge 0 -and $l -gt $k) { $t.Substring($k, $l - $k) } else { '' }
+    $mesas = @([regex]::Matches($exportar, 'EXPORTAR_MESAS (\d+)') | ForEach-Object { [int] $_.Groups[1].Value })
+    $faces = @([regex]::Matches($exportar, 'EXPORTAR (\d+) face\(s\) de m\S+dulo gravada') | ForEach-Object { [int] $_.Groups[1].Value })
+    $arquivos = @('oeste', 'areas', 'selecao', 'tudo', 'usina' | ForEach-Object { Test-Path "$dae$_.dae" })
+    if ($mesas.Count -ne 5 -or $faces.Count -ne 5 -or $arquivos -contains $false) {
+        $erros += "o PVsyst por escopo nao gravou os 5 arquivos (mesas: $($mesas -join ', '); faces: $($faces -join ', '); arquivos: $($arquivos -join ', '))"
+    }
+    else {
+        $po = $mesas[0]; $pa = $mesas[1]; $ps = $mesas[2]; $pt = $mesas[3]; $pu = $mesas[4]
+        if ($po -lt 1 -or $pa -le $po -or $ps -ne 1 -or $pu -ne $pa -or $pt -lt $pu) { $erros += "o PVsyst por escopo levou mesas erradas: Oeste $po, as duas $pa (> Oeste), F1.1 $ps (1), tudo $pt (>= Usina), Usina $pu (= as duas)" }
+        if ($faces[1] -ne $faces[4] -or $faces[0] -ge $faces[1] -or $faces[2] -lt 1 -or $faces[2] -ge $faces[0]) { $erros += "o PVsyst por escopo gravou faces erradas: Oeste $($faces[0]), as duas $($faces[1]), F1.1 $($faces[2]), tudo $($faces[3]), Usina $($faces[4])" }
+    }
+
     if ($t -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) { $erros += 'o SECURELOAD nao voltou ao que era' }
 
     if ($erros.Count -gt 0) {
@@ -4335,7 +4384,7 @@ function Testar-SombrasEscopo {
         return $false
     }
 
-    Write-Host "  (escopo: Oeste com $($oeste.HO) hachura(s); a Leste ($($leste.HL)) nao mexeu na Oeste; apagar a Oeste deixou a Leste; a selecao so perto da F1.1 ($($selecao.HO)); ocultar e mostrar; nada repintado; apagar tudo)" -ForegroundColor DarkGray
+    Write-Host "  (escopo: Oeste com $($oeste.HO) hachura(s); a Leste ($($leste.HL)) nao mexeu na Oeste; apagar a Oeste deixou a Leste; a selecao so perto da F1.1 ($($selecao.HO)); ocultar e mostrar; a Usina levou as duas ($($usina.HO) e $($usina.HL)), o 3D com $momentosNoTresD momento e $facesComSombra modulo(s) com sombra; PVsyst por escopo com $($mesas -join '/') mesa(s); nada repintado; apagar tudo)" -ForegroundColor DarkGray
     return $true
 }
 
@@ -4410,12 +4459,32 @@ function Testar-Ver3D {
     if (@($cena.sombras).Count -lt 1 -or @($cena.sombras | Where-Object { @($_).Count -lt 9 }).Count -gt 0) { $erros += "$(@($cena.sombras).Count) sombras (esperava a mancha da arvore, cada uma com 3 pontos ou mais)" }
     if ($null -eq $cena.terreno -or @($cena.terreno.z | Where-Object { $null -ne $_ }).Count -lt 100) { $erros += 'terreno vazio' }
 
+    # 42.3: o TIN de verdade vai junto com a grade (a grade cobria o canto de modulos no pe do talude).
+    # Campo opcional lido sem quebrar o StrictMode.
+    function Campo($objeto, [string] $nome) { if ($null -ne $objeto -and $objeto.PSObject.Properties[$nome]) { $objeto.$nome } else { $null } }
+    $tin = Campo $cena.terreno 'tin'
+    if ($null -eq $tin) { $erros += 'a cena nao leva o TIN do terreno' }
+    else {
+        $nv = @($tin.v).Count; $nt = @($tin.t).Count
+        if ($nv -lt 9 -or $nv % 3 -ne 0 -or $nt -lt 3 -or $nt % 3 -ne 0) { $erros += "o TIN veio torto ($nv numeros de vertice, $nt indices)" }
+        elseif (@($tin.t | Where-Object { $_ -lt 0 -or $_ -ge $nv / 3 }).Count -gt 0) { $erros += 'o TIN tem indice fora dos vertices' }
+    }
+
+    # 42.3: cada anel de sombra com a hachura dele; a face com sombra aponta um momento que existe.
+    $grupos = Campo $cena 'sombrasGrupo'
+    if ($null -eq $grupos -or @($grupos).Count -ne @($cena.sombras).Count) { $erros += "sombrasGrupo com $(@($grupos).Count) item(ns) para $(@($cena.sombras).Count) anel(is)" }
+    $comSombra = @($cena.faces | Where-Object { @($_).Count -gt 13 })
+    $momentos = @(Campo $cena 'momentos' | Where-Object { $null -ne $_ })
+    if ($comSombra.Count -gt 0 -and ($momentos.Count -lt 1 -or @($comSombra | Where-Object { @($_).Count -ne 15 -or $_[13] -lt 0 -or $_[13] -ge $momentos.Count -or $_[14] -le 0 -or $_[14] -gt 1 }).Count -gt 0)) {
+        $erros += "faces com sombra que nao apontam um dos $($momentos.Count) momento(s)"
+    }
+
     if ($erros.Count -gt 0) {
         $problemas.Add("clivus-3d: $($erros -join '; '). Veja $html e $($r.Saida)")
         return $false
     }
 
-    Write-Host "  (3d: $faces faces, $pilares pilares, 1 arvore, $(@($cena.sombras).Count) sombras, terreno $($cena.terreno.colunas) x $($cena.terreno.linhas); $([math]::Round((Get-Item $html).Length / 1MB, 1)) MB)" -ForegroundColor DarkGray
+    Write-Host "  (3d: $faces faces ($($comSombra.Count) com sombra em $($momentos.Count) momento(s)), $pilares pilares, 1 arvore, $(@($cena.sombras).Count) sombras, terreno $($cena.terreno.colunas) x $($cena.terreno.linhas) e TIN de $(@($tin.t).Count / 3) triangulos; $([math]::Round((Get-Item $html).Length / 1MB, 1)) MB)" -ForegroundColor DarkGray
     return $true
 }
 

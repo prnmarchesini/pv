@@ -61,14 +61,60 @@ public class ShadowScopeTests
 
     [Fact]
     [Trait("Etapa", "42")]
-    public void AAreaGrandeNaoLevaOChaoNemAsMesasDasMenoresDentroDela()
+    public void AAreaGrandeLevaAsMenoresDentroDela()
     {
-        // O território da Usina é ela menos a Oeste e a Leste: nada sobra.
+        // 42.3 (tela de 31/10/2026, "Nenhuma mesa de Area 1"): até a 42.1 a
+        // Usina não levava nada (o território dela é ela menos a Oeste e a
+        // Leste). Escolher a de fora é escolher tudo o que está nela.
         var plano = ShadowScopePlan.Build(new ShadowScope(ShadowScopeKind.Area, [Usina], []), Areas, Mesas, 8);
 
-        Assert.Equal(0, plano.ReceiverCount);
-        Assert.Empty(plano.Ground);
-        Assert.Null(plano.Bounds);
+        Assert.Equal([true, true, true, true, false], plano.Receives);
+        Assert.Equal([Oeste, Leste], plano.Ground.Select(p => p.Area!.Value).OrderBy(g => g));
+        Assert.Equal(new HashSet<Guid> { Usina, Oeste, Leste }, plano.IncludedAreas.ToHashSet());
+        Assert.Equal((0.0, 0.0, 100.0, 50.0), plano.Bounds);
+
+        // Calcular a Usina troca as sombras das de dentro; a de dentro, só as dela.
+        Assert.True(plano.Erases(new ShadowTag(ShadowPlace.Ground, Oeste, null, (1, 1))));
+        Assert.True(plano.Erases(new ShadowTag(ShadowPlace.Table, Leste, Mesas[2].Id, null)));
+        var oeste = ShadowScopePlan.Build(new ShadowScope(ShadowScopeKind.Area, [Oeste], []), Areas, Mesas, 8);
+        Assert.Equal(new HashSet<Guid> { Oeste }, oeste.IncludedAreas.ToHashSet());
+    }
+
+    [Fact]
+    [Trait("Etapa", "42")]
+    public void DuasAreasQuaseIguaisVaoUmaComAOutra()
+    {
+        // O Aurora: a "Area 1" e a "area1" traçadas de novo por cima, com uns
+        // centímetros de diferença. As mesas contam na menor; qualquer das duas
+        // escolhida leva as mesas e o chão.
+        var grande = Guid.Parse("00000000-0000-0000-0000-0000000000b1");
+        var menor = Guid.Parse("00000000-0000-0000-0000-0000000000b2");
+        IReadOnlyList<ShadowArea> areas = [new(grande, "Area 1", Retangulo(-0.03, -0.02, 50.02, 50.03)), new(menor, "area1", Retangulo(0, 0, 50, 50))];
+        IReadOnlyList<ShadowTable> mesas = [Mesa(1, 10, 10), Mesa(2, 30, 30)];
+
+        foreach (var escolhida in new[] { grande, menor })
+        {
+            var plano = ShadowScopePlan.Build(new ShadowScope(ShadowScopeKind.Area, [escolhida], []), areas, mesas, 8);
+
+            Assert.Equal([true, true], plano.Receives);
+            Assert.Equal(new HashSet<Guid> { grande, menor }, plano.IncludedAreas.ToHashSet());
+            Assert.Equal(50.05 * 50.05, plano.Ground.Sum(AreaDe), 1);
+        }
+    }
+
+    [Fact]
+    [Trait("Etapa", "42")]
+    public void AAreaQueSoEncostaNaoVaiJunto()
+    {
+        // A Leste com metade fora da Oeste deslocada: não está dentro, fica de fora.
+        var outra = Guid.Parse("00000000-0000-0000-0000-0000000000c1");
+        IReadOnlyList<ShadowArea> areas = [new(Oeste, "Area Oeste", Retangulo(0, 0, 50, 50)), new(outra, "Outra", Retangulo(25, 0, 75, 50))];
+        IReadOnlyList<ShadowTable> mesas = [Mesa(1, 10, 10), Mesa(3, 60, 10)];
+
+        var plano = ShadowScopePlan.Build(new ShadowScope(ShadowScopeKind.Area, [Oeste], []), areas, mesas, 8);
+
+        Assert.Equal([true, false], plano.Receives);
+        Assert.Equal(new HashSet<Guid> { Oeste }, plano.IncludedAreas.ToHashSet());
     }
 
     [Fact]

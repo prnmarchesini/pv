@@ -172,8 +172,16 @@ public sealed class ShadowScopePlan
 
         var entradas = areas.Select(a => new AreaInput(a.Id, a.Name, a.Outline, false)).ToList();
         var dono = tables.Select(t => AreaSummary.AreaOf(t.Outline, entradas)).ToList();
-        var escolhidas = scope.UsesAreas ? scope.Areas.ToHashSet() : new HashSet<Guid>();
         var mesasEscolhidas = scope.UsesSelection ? scope.Tables.ToHashSet() : new HashSet<Guid>();
+
+        var contornos = areas.Select(a => a.Outline.Count(p => p.IsFinite) >= 3 ? Caminho(a.Outline) : []).ToList();
+        var tamanhos = contornos.Select(c => c.Count >= 3 ? Math.Abs(Clipper.Area(c)) : double.PositiveInfinity).ToList();
+
+        // A área escolhida leva junto as que estão dentro dela (31/10/2026: a
+        // "Area 1" do Aurora tem quase o mesmo contorno da "area1", menor por
+        // centímetros; a mesa conta na menor, e calcular a "Area 1" dava
+        // "nenhuma mesa"). Escolher a de fora é escolher tudo o que está nela.
+        var escolhidas = scope.UsesAreas ? AreasDentro(scope.Areas, areas, contornos, tamanhos) : new HashSet<Guid>();
 
         bool Valida(ShadowTable t) => t.Outline.Count(p => p.IsFinite) >= 3;
 
@@ -186,8 +194,6 @@ public sealed class ShadowScopePlan
         })).ToList();
 
         // O território de cada área: ela menos as menores (a menor que contém manda).
-        var contornos = areas.Select(a => a.Outline.Count(p => p.IsFinite) >= 3 ? Caminho(a.Outline) : []).ToList();
-        var tamanhos = contornos.Select(c => c.Count >= 3 ? Math.Abs(Clipper.Area(c)) : double.PositiveInfinity).ToList();
         var territorios = new List<Paths64>();
         for (var i = 0; i < areas.Count; i++)
         {
@@ -325,6 +331,37 @@ public sealed class ShadowScopePlan
     /// <summary>A área (GUID) da mesa na posição <paramref name="table"/>, ou null fora das áreas.</summary>
     public Guid? AreaIdOf(int table, IReadOnlyList<ShadowArea> areas) =>
         AreaOfTable[table] is { } a && a >= 0 && a < areas.Count ? areas[a].Id : null;
+
+    /// <summary>As áreas que o escopo leva: as escolhidas e as que estão dentro delas.</summary>
+    public IReadOnlySet<Guid> IncludedAreas => _areas;
+
+    /// <summary>Quanto da área de dentro precisa estar na de fora para ir junto com ela (o resto é a linha traçada de novo, um pouco diferente).</summary>
+    public const double InsideShare = 0.99;
+
+    /// <summary>
+    /// As áreas escolhidas e as que estão dentro delas: pelo menos
+    /// <see cref="InsideShare"/> da área de dentro na de fora. Duas áreas quase
+    /// iguais vão uma com a outra, qualquer que seja a escolhida.
+    /// </summary>
+    private static HashSet<Guid> AreasDentro(IReadOnlyList<Guid> pedidas, IReadOnlyList<ShadowArea> areas, IReadOnlyList<Path64> contornos, IReadOnlyList<double> tamanhos)
+    {
+        var escolhidas = pedidas.ToHashSet();
+
+        for (var i = 0; i < areas.Count; i++)
+        {
+            if (!pedidas.Contains(areas[i].Id) || contornos[i].Count < 3) continue;
+
+            for (var j = 0; j < areas.Count; j++)
+            {
+                if (j == i || contornos[j].Count < 3 || escolhidas.Contains(areas[j].Id)) continue;
+
+                var comum = Clipper.Intersect([contornos[j]], [contornos[i]], FillRule.NonZero).Sum(p => Math.Abs(Clipper.Area(p)));
+                if (comum >= InsideShare * tamanhos[j]) escolhidas.Add(areas[j].Id);
+            }
+        }
+
+        return escolhidas;
+    }
 
     private static Path64 Caminho(IReadOnlyList<Point3> contorno) =>
         ShadowPaths.Path(contorno.Where(p => p.IsFinite).Select(p => (p.X, p.Y)).ToList());

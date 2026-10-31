@@ -126,6 +126,119 @@ public static class SombrasCommands
     /// <summary>Os handles dos blocos dos módulos com sombra no registro dos motivos (o nível 2 escolhe um para o porquê).</summary>
     internal static IReadOnlyList<string> ModulosComSombra(Database database) => LerMotivos(database).Modules.Select(m => m.Handle).ToList();
 
+    /// <summary>Os módulos com sombra no registro dos motivos: o 3D (42.3) leva o momento e a fração de cada um.</summary>
+    internal static IReadOnlyCollection<ModuleShadow> MotivosDoDesenho(Database database) => LerMotivos(database).Modules;
+
+    /// <summary>
+    /// A cor de antes dos módulos ainda pintados por desenho antigo (handle,
+    /// em hexadecimal, e a cor), só os que estão numa cor da marca de sombra:
+    /// o 3D (42.3) mostra o módulo na cor dele, e não no roxo de uma conta da
+    /// versão antiga.
+    /// </summary>
+    internal static Dictionary<string, Color> CoresDeAntesDaPintura(Database database)
+    {
+        var cores = new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase);
+        var pintadas = LerPintadas(database, out var existe);
+        if (!existe || pintadas.Count == 0) return cores;
+
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+
+        foreach (var texto in pintadas)
+        {
+            var partes = texto.Split('=', 2);
+            if (partes.Length != 2 || !long.TryParse(partes[0], NumberStyles.HexNumber, Invariante, out var numero)) continue;
+            if (!database.TryGetObjectId(new Handle(numero), out var id) || id.IsErased) continue;
+            if (transacao.GetObject(id, OpenMode.ForRead, false, true) is not Entity modulo || !EDaSombra(modulo.Color)) continue;
+
+            cores[modulo.Handle.ToString()] = PecasPintadas.CorDe(partes[1]);
+        }
+
+        return cores;
+    }
+
+    /// <summary>
+    /// Devolve a cor de antes a todos os módulos pintados por desenho antigo e
+    /// zera o registro (42.3, tela de 31/10/2026: "A sombra fica marcada no
+    /// modulo mas nao fica no solo"; o roxo da versão antiga ficava no módulo,
+    /// o Ocultar não escondia e o 3D mostrava). Quantos voltaram. Com o
+    /// documento travado.
+    /// </summary>
+    internal static int TirarPinturaAntiga(Database database)
+    {
+        // O registro é lido antes da transação de escrita (ler o dicionário com ela aberta derrubava o Core Console).
+        var pintadas = LerPintadas(database, out var existe);
+        if (!existe || pintadas.Count == 0) return 0;
+
+        var voltaram = 0;
+
+        using (var transacao = database.TransactionManager.StartTransaction())
+        {
+            foreach (var texto in pintadas)
+            {
+                var partes = texto.Split('=', 2);
+                if (partes.Length != 2 || !long.TryParse(partes[0], NumberStyles.HexNumber, Invariante, out var numero)) continue;
+                if (!database.TryGetObjectId(new Handle(numero), out var id) || id.IsErased) continue;
+                if (transacao.GetObject(id, OpenMode.ForWrite, false, true) is not Entity modulo || !EDaSombra(modulo.Color)) continue;
+
+                modulo.Color = PecasPintadas.CorDe(partes[1]);
+                voltaram++;
+            }
+
+            GravarPintadas(database, []);
+            transacao.Commit();
+        }
+
+        return voltaram;
+    }
+
+    /// <summary>
+    /// Quantas mesas cada área leva no cálculo (a área e as que estão dentro
+    /// dela, <see cref="ShadowScopePlan"/>): a janela mostra o número ao lado
+    /// do nome e abre na primeira área que tem mesa (42.3).
+    /// </summary>
+    internal static Dictionary<Guid, int> MesasPorArea(Database database, IReadOnlyList<AreaNoDesenho> areas)
+    {
+        var mesas = LerMesas(database, comFaces: false).Select(m => new ShadowTable(m.Id, m.Contorno)).ToList();
+        var todas = ParaOEscopo(areas);
+        var contas = new Dictionary<Guid, int>();
+
+        foreach (var area in areas)
+        {
+            if (contas.ContainsKey(area.Identity.Id)) continue;
+            contas[area.Identity.Id] = ShadowScopePlan.Build(new ShadowScope(ShadowScopeKind.Area, [area.Identity.Id], []), todas, mesas, FolgaDaSelecao).ReceiverCount;
+        }
+
+        return contas;
+    }
+
+    /// <summary>
+    /// As mesas que o escopo leva (as que receberiam a sombra: a área com as
+    /// de dentro dela, a seleção, o desenho inteiro) e o nome dele ("de
+    /// area1"): a exportação para o PVsyst (42.4) usa a mesma escolha.
+    /// </summary>
+    internal static (HashSet<Guid> Mesas, string Nome) MesasDoEscopo(Database database, ShadowScope escopo)
+    {
+        if (escopo.WhyInvalid() is { } falta) throw new ArgumentException(falta);
+
+        var mesas = LerMesas(database, comFaces: false);
+        var areas = AreasDoDesenho.Varrer(database);
+        var plano = ShadowScopePlan.Build(escopo, ParaOEscopo(areas), mesas.Select(m => new ShadowTable(m.Id, m.Contorno)).ToList(), FolgaDaSelecao);
+
+        return (Enumerable.Range(0, mesas.Count).Where(k => plano.Receives[k]).Select(k => mesas[k].Id).ToHashSet(), NomeDoEscopo(escopo, areas));
+    }
+
+    /// <summary>Se as camadas das sombras estão à vista; null se ainda não há sombra desenhada (a janela mostra Ocultar ou Mostrar).</summary>
+    internal static bool? SombrasAVista(Database database)
+    {
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+
+        var sombra = LayoutLayers.EstaDesligada(transacao, database, LayoutLayers.Sombra);
+        var texto = LayoutLayers.EstaDesligada(transacao, database, LayoutLayers.SombraTexto);
+        if (sombra is null && texto is null) return null;
+
+        return sombra == false || texto == false;
+    }
+
     // ------------------------------------------------------------ comandos
 
     [CommandMethod(PluginInfo.ComandoSombras)]

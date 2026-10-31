@@ -88,7 +88,9 @@ public static class GanchosDeTeste
     /// Os outros botões da janela de sombras, fora de comando:
     /// (clivus-sombras-acao "apagar" "escopo" "áreas" "mesas"),
     /// (clivus-sombras-acao "ocultar") e (clivus-sombras-acao "mostrar").
-    /// Escreve a frase e devolve T.
+    /// Escreve a frase e devolve T. E o que a janela faz ao abrir (42.3):
+    /// (clivus-sombras-acao "tirar-pintura") devolve quantos módulos pintados
+    /// pela versão antiga voltaram à cor.
     /// </summary>
     [LispFunction("CLIVUS-SOMBRAS-ACAO")]
     public static object? SombrasAcao(ResultBuffer argumentos)
@@ -100,6 +102,9 @@ public static class GanchosDeTeste
         RelatoDasSombras relato;
         switch (valores[0])
         {
+            case "tirar-pintura":
+                return EscritaForaDeComando.Fazer(documento, () => SombrasCommands.TirarPinturaAntiga(documento.Database));
+
             case "ocultar":
             case "mostrar":
                 relato = EscritaForaDeComando.Fazer(documento, () => SombrasCommands.Ligar(documento, valores[0] == "mostrar"));
@@ -122,6 +127,51 @@ public static class GanchosDeTeste
         }
 
         documento.Editor.WriteMessage($"\n{relato}\n");
+        return true;
+    }
+
+    /// <summary>
+    /// A janela das sombras ou a do PVsyst desenhada num PNG, sem abrir
+    /// (memória "conferir a tela renderizada"): (clivus-renderizar-janela
+    /// "sombras"|"pvsyst" "caminho.png" largura). A largura é a do conteúdo,
+    /// para ver se a linha quebra em vez de cortar. Devolve T, ou nil se a
+    /// linha do Core Console não é STA (o WPF exige).
+    /// </summary>
+    [LispFunction("CLIVUS-RENDERIZAR-JANELA")]
+    public static object? RenderizarJanela(ResultBuffer argumentos)
+    {
+        var valores = Valores(argumentos);
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (valores.Length < 3 || documento is null || !double.TryParse(valores[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var largura)) return null;
+
+        if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
+        {
+            documento.Editor.WriteMessage("\nRENDER a linha não é STA; o WPF não desenha aqui.\n");
+            return null;
+        }
+
+        System.Windows.Window janela = valores[0] == "pvsyst" ? new JanelaDoPvsyst(documento, []) : new JanelaDeSombras(documento);
+        var conteudo = (System.Windows.FrameworkElement)janela.Content;
+        conteudo.Measure(new System.Windows.Size(largura, double.PositiveInfinity));
+        conteudo.Arrange(new System.Windows.Rect(0, 0, largura, conteudo.DesiredSize.Height));
+        conteudo.UpdateLayout();
+
+        var (w, h) = ((int)Math.Ceiling(largura), (int)Math.Ceiling(conteudo.DesiredSize.Height));
+        var visual = new System.Windows.Media.DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            dc.DrawRectangle(System.Windows.Media.Brushes.White, null, new System.Windows.Rect(0, 0, w, h));
+            dc.DrawRectangle(new System.Windows.Media.VisualBrush(conteudo) { Stretch = System.Windows.Media.Stretch.None, AlignmentX = System.Windows.Media.AlignmentX.Left, AlignmentY = System.Windows.Media.AlignmentY.Top }, null, new System.Windows.Rect(0, 0, w, h));
+        }
+
+        var imagem = new System.Windows.Media.Imaging.RenderTargetBitmap(w, h, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+        imagem.Render(visual);
+        var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(imagem));
+        using (var arquivo = System.IO.File.Create(valores[1])) png.Save(arquivo);
+
+        janela.Close();
+        documento.Editor.WriteMessage($"\nRENDER {valores[0]} {w}x{h} em {valores[1]}\n");
         return true;
     }
 
