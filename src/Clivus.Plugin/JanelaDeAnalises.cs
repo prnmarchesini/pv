@@ -176,9 +176,20 @@ internal sealed class JanelaDeAnalises : Window
 
         EscritaForaDeComando.Fazer(documento, () =>
         {
-            var deitados = AnalisesIndependentes.DeitarTextosAntigos(_database);
+            var (deitados, textos, ficaram) = AnalisesIndependentes.DeitarTextosAntigos(_database);
+
+            // Sem texto de ponta ou de pilar, nada a gravar: abrir a janela
+            // não deixa o desenho modificado à toa.
+            if (textos == 0) return;
+
             PluginDictionary.Save(_database, ChaveDosTextosDeitados, new ResultBuffer(new TypedValue((int)DxfCode.Text, "1")));
-            if (deitados > 0) RegistroDeDiagnostico.Registrar($"Análises: {deitados} texto(s) antigos deitados no plano dos módulos.");
+            if (deitados > 0)
+            {
+                RegistroDeDiagnostico.Registrar($"Análises: {deitados} texto(s) antigos deitados no plano dos módulos.");
+                _atualizarTela();
+            }
+
+            if (ficaram > 0) RegistroDeDiagnostico.Registrar($"Análises: {ficaram} texto(s) antigos ficaram como estavam (longe da mesa ou em camada travada).");
         });
     }
 

@@ -180,7 +180,6 @@ internal static class AutoSelecao
                     return;
                 }
 
-                _ultimos = ids;
                 var mesas = SelecaoCommands.MesasTocadas(_documento, ids);
 
                 if (mesas.Count == 0)
@@ -197,14 +196,19 @@ internal static class AutoSelecao
                     _texto = SelecaoCommands.Resumir(_documento, mesas).Describe();
                 }
 
+                // A seleção da conta, só depois de ela dar certo.
+                _ultimos = ids;
                 Mostrar(_texto);
                 _falhasSeguidas = 0;
             }
             catch (System.Exception erro)
             {
                 // Exceção num evento derruba o Civil 3D: registrada, e a caixa
-                // some. Repetindo, a escuta se desliga.
+                // some. Repetindo, a escuta se desliga. A conta de antes não
+                // vale mais para esta seleção.
                 RegistroDeDiagnostico.Registrar("Falha na caixa da seleção.", erro);
+                _ultimos = [];
+                _texto = null;
                 Esconder();
 
                 if (++_falhasSeguidas >= FalhasAteDesligar)

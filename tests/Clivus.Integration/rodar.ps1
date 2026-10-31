@@ -4374,6 +4374,21 @@ function Testar-AnalisesEscopo {
     Conferir ($antigos.Success -and [int] $antigos.Groups[1].Value -eq $leste.Pilares) "os textos antigos da Leste deviam ser $($leste.Pilares); foram $($antigos.Value)"
     Conferir ($e.L.Pintados -eq $leste.Tras -and $e.L.N -eq $leste.Pilares) "os textos antigos da Leste (monoposte acima de 0 m, frente acima de 100 m, tras acima de 0 m) pintaram $($e.L.Pintados) de $($e.L.N); esperava so os $($leste.Tras) de tras"
 
+    # Revisao da 0.1.6: o texto de pilar deitado no plano dos modulos (0,15 m acima,
+    # na normal), conferido em LISP pelo DXF; posto em pe como antes, a migracao
+    # o deita, menos o afastado 30 m da mesa; a segunda migracao nao mexe em nada.
+    function Plano([string] $rotulo) {
+        $m = [regex]::Match($t, "CLIVUS_AN_PLANO $rotulo textos=(\d+) deitados=(\d+) fim")
+        if ($m.Success) { return @([int] $m.Groups[1].Value, [int] $m.Groups[2].Value) } else { return @(-1, -1) }
+    }
+    $noPlano = Plano 'NO_PLANO'; $emPe = Plano 'EM_PE'; $deitados = Plano 'DEITADOS'
+    $migracoes = [regex]::Matches($t, 'ANALISES_DEITAR deitados=(\d+) textos=(\d+) ficaram=(\d+) fim')
+    Conferir ($noPlano[0] -eq $leste.Pilares -and $noPlano[1] -eq $noPlano[0]) "os textos de pilar da Leste deviam estar todos deitados no plano dos modulos: $($noPlano[1]) de $($noPlano[0]) ($($leste.Pilares) pilares)"
+    Conferir ($emPe[1] -eq 0) "depois de postos em pe, $($emPe[1]) texto(s) ainda pareciam deitados"
+    Conferir ($deitados[1] -eq $deitados[0] - 1) "a migracao devia deitar todos menos o afastado: $($deitados[1]) de $($deitados[0])"
+    Conferir ($migracoes.Count -eq 2 -and [int] $migracoes[0].Groups[1].Value -eq $leste.Pilares - 1 -and [int] $migracoes[0].Groups[3].Value -eq 1) "a migracao devia dizer $($leste.Pilares - 1) deitados e 1 que ficou (o longe da mesa)"
+    Conferir ($migracoes.Count -eq 2 -and [int] $migracoes[1].Groups[1].Value -eq 0) "a segunda migracao nao podia deitar nada (deitou $(if ($migracoes.Count -eq 2) { $migracoes[1].Groups[1].Value } else { '?' }))"
+
     $e = $etapas['DECL_LESTE']
     Conferir ($e.L.N -eq $leste.Mesas -and $e.O.N -eq 0) "a declividade na Leste deu $($e.L.N) texto(s) ($($leste.Mesas) mesas) e $($e.O.N) na Oeste"
 

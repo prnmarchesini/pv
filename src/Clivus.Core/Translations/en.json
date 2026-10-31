@@ -1834,7 +1834,7 @@
  "Não consegui abrir as análises de sombra: {0}": "Could not open the shadow analyses: {0}",
  "Não consegui abrir as sombras: {0}": "Could not open the shading: {0}",
  "Não consegui abrir as strings: {0}": "Could not open the strings: {0}",
- "Não consegui abrir o nome para editar; use dois cliques devagar no nome.": "I could not open the name for editing; use two slow clicks on the name.",
+ "Não consegui abrir o nome para editar; use o botão direito › Renomear.": "I could not open the name for editing; use right click › Rename.",
  "Não consegui abrir o painel: {0}": "Could not open the panel: {0}",
  "Não consegui abrir o perfil \"{0}\": {1}": "Could not open profile \"{0}\": {1}",
  "Não consegui abrir os parâmetros: {0}": "Could not open the parameters: {0}",

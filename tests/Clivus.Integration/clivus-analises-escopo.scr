@@ -22,6 +22,11 @@
 ;   - os textos da Leste como eram antes do 42.6 (sem a linha do pilar no
 ;     XData), com a monoposte acima de 0 m: cada um pinta pela linha do pilar
 ;     mais perto, e so os de tras saem pintados;
+;   - o texto de pilar deitado no plano dos modulos, 0,15 m acima na normal
+;     (conferido pelo 210 e pelo 10 de cada MTEXT contra o plano dos quatro
+;     cantos do contorno da mesa dele); posto em pe como antes, a migracao da
+;     janela o deita de novo, menos o que foi afastado 30 m da mesa; e de novo
+;     nao mexe em nada;
 ;   - a declividade so na Leste, um texto por mesa;
 ;   - e a janela desenhada num PNG, na aba da parte livre.
 
@@ -88,6 +93,49 @@
   (list f r))
 
 (defun clivus:i (l) (apply 'strcat (mapcar '(lambda (n) (strcat (itoa n) ",")) l)))
+
+; O plano de cada mesa: os quatro primeiros vertices do contorno (POLYLINE 3D
+; com o XData "Mesa"), a normal para cima: (guid v0 normal).
+(defun clivus:vertices (e / v l)
+  (setq v (entnext e) l nil)
+  (while (and v (= (cdr (assoc 0 (entget v))) "VERTEX"))
+    (setq l (cons (cdr (assoc 10 (entget v))) l) v (entnext v)))
+  (reverse l))
+(defun clivus:menos (a b) (mapcar '- a b))
+(defun clivus:escalar (a b) (apply '+ (mapcar '* a b)))
+(defun clivus:vetorial (a b)
+  (list (- (* (cadr a) (caddr b)) (* (caddr a) (cadr b)))
+        (- (* (caddr a) (car b)) (* (car a) (caddr b)))
+        (- (* (car a) (cadr b)) (* (cadr a) (car b)))))
+(defun clivus:unitario (a / n) (setq n (sqrt (clivus:escalar a a))) (mapcar '(lambda (x) (/ x n)) a))
+(defun clivus:ler-planos ( / ss i e xd vs n)
+  (setq clivus:planos nil ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) i 0)
+  (while (< i (clivus:conta ss))
+    (setq e (ssname ss i) xd (clivus:xdata e))
+    (if (= (cdr (nth 0 xd)) "Mesa")
+      (progn
+        (setq vs (clivus:vertices e))
+        (if (>= (length vs) 4)
+          (progn
+            (setq n (clivus:unitario (clivus:vetorial (clivus:menos (nth 1 vs) (nth 0 vs)) (clivus:menos (nth 3 vs) (nth 0 vs)))))
+            (if (< (caddr n) 0) (setq n (mapcar '- n)))
+            (setq clivus:planos (cons (list (cdr (nth 2 xd)) (nth 0 vs) n) clivus:planos))))))
+    (setq i (1+ i))))
+
+; Quantos textos da analise, e quantos deitados: a normal do texto (210) e a
+; da mesa, e o texto (10) 0,15 m acima do plano, na normal.
+(defun clivus:plano (rotulo tipo / ss i e d xd pl n p dist total deitados normal)
+  (clivus:ler-planos)
+  (setq ss (ssget "_X" (list (cons 0 "MTEXT") (list -3 (list "CLIVUS")))) i 0 total 0 deitados 0)
+  (while (< i (clivus:conta ss))
+    (setq e (ssname ss i) d (entget e) xd (clivus:xdata e))
+    (if (and (= (cdr (nth 0 xd)) "TextoAnalise") (= (cdr (nth 4 xd)) tipo) (setq pl (assoc (cdr (nth 3 xd)) clivus:planos)))
+      (progn
+        (setq total (1+ total) n (caddr pl) p (cdr (assoc 10 d)) normal (if (assoc 210 d) (cdr (assoc 210 d)) '(0.0 0.0 1.0)))
+        (setq dist (clivus:escalar (clivus:menos p (cadr pl)) n))
+        (if (and (< (abs (- (clivus:escalar normal n) 1.0)) 1e-6) (< (abs (- dist 0.15)) 0.02)) (setq deitados (1+ deitados)))))
+    (setq i (1+ i)))
+  (princ (strcat "\nCLIVUS_AN_PLANO " rotulo " textos=" (itoa total) " deitados=" (itoa deitados) " fim")))
 (defun clivus:estado (rotulo tipo)
   (princ (strcat "\nCLIVUS_AN_ESCOPO " rotulo " oeste=" (clivus:i (clivus:textos tipo "oeste")) " leste=" (clivus:i (clivus:textos tipo "leste"))
                  " azuis_oeste=" (clivus:i (clivus:pilares-azuis "oeste")) " azuis_leste=" (clivus:i (clivus:pilares-azuis "leste")) " fim")))
@@ -124,6 +172,14 @@
 (clivus-analises-pela-janela "analisar" "PillarAbove" "AREA" "Area Leste" "-" ";0 F=;100 T=;0")
 (clivus:estado "ANTIGOS_LESTE" "PillarAbove")
 (princ (strcat "\nCLIVUS_AN_ESCOPO_ANTIGOS n=" (if clivus:antigos (itoa clivus:antigos) "nil") " fim"))
+
+; Revisao da 0.1.6: o texto deitado, e a migracao dos textos de antes.
+(clivus:plano "NO_PLANO" "PillarAbove")
+(setq clivus:em-pe (clivus-analises-texto-em-pe "PillarAbove"))
+(clivus:plano "EM_PE" "PillarAbove")
+(clivus-analises-deitar)
+(clivus:plano "DEITADOS" "PillarAbove")
+(clivus-analises-deitar)
 
 (clivus-analises-pela-janela "inserir" "Slope" "AREA" "Area Leste" "-")
 (clivus:estado "DECL_LESTE" "Slope")

@@ -1022,6 +1022,20 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
       reaproveita a conta se a seleção é a mesma), o menu do botão direito abria cada
       objeto selecionado (agora, achada a mesa, só abre curvas), e cada leitura das áreas
       lançava uma exceção por área do registro sem polilinha (agora `TryGetObjectId`).
+    - A revisão da segunda rodada (subagente em worktree, no 1cf0072) achou e eu corrigi: o
+      seletor das sombras e do PVsyst não abria mais no desenho inteiro num desenho sem área (o
+      Desenho inteiro mora na grade das áreas: a conta de "sem área" olhava as filhas da grade);
+      a migração dos textos estendia o plano da mesa sem limite (agora só o texto a até 1,5 m do
+      contorno, em planta; o que foi afastado à mão, ou ficou para trás num MOVE da mesa, fica
+      como estava, com uma linha no log), o "já deitado" passou a ser a distância ao plano na
+      normal (0,15 m, exato em qualquer inclinação), a camada travada é respeitada, a marca só é
+      gravada quando o desenho tem texto de ponta ou de pilar, e a tela é redesenhada; com a coluna
+      do nome editável, o DataGrid abria a edição com a primeira letra digitada e no primeiro
+      clique (agora só o F2, o menu e o clique devagar de verdade, com o tempo do duplo clique do
+      Windows; o Enter grava e fica na linha); a caixa do kWp guardava a seleção antes da conta e
+      mostraria a conta velha depois de uma falha. O nível 2 confere, pelo DXF (210 e 10) contra o
+      plano dos quatro cantos do contorno, o texto de pilar deitado 0,15 m acima; e a migração de
+      textos postos em pé (o afastado 30 m fica; a segunda migração não mexe em nada).
   - Ficaram como estão, de propósito: abrir a janela pela primeira vez grava o fundo nos
     textos antigos (o U desfaz); o Excel guarda a última quantificação de cada análise, e a
     coluna Onde diz de onde ela é (quantificar a Leste depois da Oeste troca o número); o

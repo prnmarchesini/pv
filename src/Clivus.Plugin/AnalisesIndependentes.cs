@@ -101,9 +101,6 @@ internal static class AnalisesIndependentes
             }
         }
 
-        /// <summary>O rumo legível do texto, ao longo da fileira.</summary>
-        internal double Rumo => LayoutDrawer.RumoLegivel(Cantos[1].X - Cantos[0].X, Cantos[1].Y - Cantos[0].Y);
-
         /// <summary>
         /// O ponto do plano dos módulos (o dos quatro cantos do contorno)
         /// sobre (x, y) em planta, levantado <see cref="AcimaDosModulos"/> na
@@ -122,6 +119,41 @@ internal static class AnalisesIndependentes
 
             var n = Normal;
             return new Point3(x + n.X * AcimaDosModulos, y + n.Y * AcimaDosModulos, z + n.Z * AcimaDosModulos);
+        }
+
+        /// <summary>
+        /// Se o texto já está deitado no plano dos módulos: a normal dele é a
+        /// da mesa e ele fica <see cref="AcimaDosModulos"/> acima do plano,
+        /// medido na normal (exato em qualquer inclinação).
+        /// </summary>
+        internal bool Deitado(MText texto)
+        {
+            var n = Normal;
+            var normalIgual = Math.Abs(texto.Normal.X - n.X) < 1e-6 && Math.Abs(texto.Normal.Y - n.Y) < 1e-6 && Math.Abs(texto.Normal.Z - n.Z) < 1e-6;
+            var p = texto.Location;
+            var distancia = (p.X - Cantos[0].X) * n.X + (p.Y - Cantos[0].Y) * n.Y + (p.Z - Cantos[0].Z) * n.Z;
+            return normalIgual && Math.Abs(distancia - AcimaDosModulos) < 0.02;
+        }
+
+        /// <summary>Se (x, y) fica dentro do contorno em planta, ou a até <paramref name="folga"/> dele.</summary>
+        internal bool Perto(double x, double y, double folga)
+        {
+            var dentro = false;
+            var menor = double.MaxValue;
+
+            for (int i = 0, j = Cantos.Count - 1; i < Cantos.Count; j = i++)
+            {
+                var (a, b) = (Cantos[i], Cantos[j]);
+                if ((a.Y > y) != (b.Y > y) && x < (b.X - a.X) * (y - a.Y) / (b.Y - a.Y) + a.X) dentro = !dentro;
+
+                // A distância ao lado a-b, em planta.
+                var (dx, dy) = (b.X - a.X, b.Y - a.Y);
+                var t = dx * dx + dy * dy < 1e-12 ? 0 : Math.Clamp(((x - a.X) * dx + (y - a.Y) * dy) / (dx * dx + dy * dy), 0, 1);
+                var (px, py) = (a.X + t * dx - x, a.Y + t * dy - y);
+                menor = Math.Min(menor, Math.Sqrt(px * px + py * py));
+            }
+
+            return dentro || menor <= folga;
         }
 
         /// <summary>A normal do plano dos módulos, para cima.</summary>
@@ -324,24 +356,39 @@ internal static class AnalisesIndependentes
     /// ainda estão na horizontal (o valor, a cor, o fundo e a borda ficam).
     /// Quantos mudaram.
     /// </summary>
-    internal static int DeitarTextosAntigos(Database database)
+    /// <returns>
+    /// Quantos foram deitados, quantos textos de ponta e de pilar o desenho
+    /// tem, e quantos ficaram como estavam por estarem longe da mesa (afastados
+    /// à mão, ou deixados para trás num MOVE da mesa: estender o plano até lá
+    /// os enterraria ou os poria voando, regra 5) ou numa camada travada.
+    /// </returns>
+    internal static (int Deitados, int Textos, int Ficaram) DeitarTextosAntigos(Database database)
     {
         using var transacao = database.TransactionManager.StartTransaction();
 
-        var leitura = Ler(transacao, database);
-        var porMesa = leitura.Mesas.ToDictionary(m => m.Id);
-        var deitados = 0;
-
-        foreach (var (id, identidade) in leitura.Textos)
+        // Só as mesas que têm texto de ponta ou de pilar são lidas.
+        var textos = Textos(transacao, database, t => t.Kind != IndependentKind.Slope, null);
+        if (textos.Count == 0)
         {
-            if (identidade.Kind == IndependentKind.Slope || !porMesa.TryGetValue(identidade.Table, out var mesa)) continue;
+            transacao.Commit();
+            return (0, 0, 0);
+        }
+
+        var porMesa = Ler(transacao, database, textos.Select(t => t.Texto.Table).ToHashSet()).Mesas.ToDictionary(m => m.Id);
+        var travadas = CamadasTravadas(transacao, database);
+        var (deitados, ficaram) = (0, 0);
+
+        foreach (var (id, identidade) in textos)
+        {
+            if (!porMesa.TryGetValue(identidade.Table, out var mesa)) continue;
             if (transacao.GetObject(id, OpenMode.ForRead) is not MText texto) continue;
-            // Já deitado: a normal da mesa e a cota do plano (com folga para o
-            // passo em planta que a normal dá ao levantar).
-            var n = mesa.Normal;
-            var noPlano = Math.Abs(texto.Normal.X - n.X) < 1e-6 && Math.Abs(texto.Normal.Y - n.Y) < 1e-6 && Math.Abs(texto.Normal.Z - n.Z) < 1e-6
-                && Math.Abs(texto.Location.Z - mesa.NoPlano(texto.Location.X, texto.Location.Y).Z) < 0.1;
-            if (noPlano) continue;
+            if (mesa.Deitado(texto)) continue;
+
+            if (travadas.Contains(texto.LayerId) || !mesa.Perto(texto.Location.X, texto.Location.Y, PertoDaMesa))
+            {
+                ficaram++;
+                continue;
+            }
 
             texto.UpgradeOpen();
             NoPlano(texto, mesa, texto.Location.X, texto.Location.Y);
@@ -349,7 +396,27 @@ internal static class AnalisesIndependentes
         }
 
         transacao.Commit();
-        return deitados;
+        return (deitados, textos.Count, ficaram);
+    }
+
+    /// <summary>
+    /// Até onde, em planta, fora do contorno, o texto ainda é da mesa: o de
+    /// PB/PA nasce 0,45 m fora da borda, e o texto tem meia altura.
+    /// </summary>
+    private const double PertoDaMesa = 1.5;
+
+    /// <summary>As camadas travadas do desenho: o texto delas não é mexido (o usuário travou).</summary>
+    private static HashSet<ObjectId> CamadasTravadas(Transaction transacao, Database database)
+    {
+        var travadas = new HashSet<ObjectId>();
+        var tabela = (LayerTable)transacao.GetObject(database.LayerTableId, OpenMode.ForRead);
+
+        foreach (ObjectId id in tabela)
+        {
+            if (transacao.GetObject(id, OpenMode.ForRead) is LayerTableRecord { IsLocked: true }) travadas.Add(id);
+        }
+
+        return travadas;
     }
 
     // -------------------------------------------------------------- apagar
@@ -432,9 +499,11 @@ internal static class AnalisesIndependentes
         var aFrente = new ObjectIdCollection();
         quantos = 0;
 
+        var travadas = CamadasTravadas(transacao, database);
+
         foreach (var (id, identidade) in Textos(transacao, database, t => aparencias.ContainsKey(t.Kind), null))
         {
-            if (transacao.GetObject(id, OpenMode.ForRead) is not MText texto) continue;
+            if (transacao.GetObject(id, OpenMode.ForRead) is not MText texto || travadas.Contains(texto.LayerId)) continue;
 
             var aparencia = aparencias[identidade.Kind];
             texto.UpgradeOpen();
@@ -559,8 +628,9 @@ internal static class AnalisesIndependentes
     /// antes do 42.6 (XData versão 1) não a guarda: lido como monoposte, ele
     /// seria pintado no biposte por um limite que não aparece na janela
     /// (revisão do 42.6). Numa mesa com pilar da frente e de trás, a linha
-    /// dele é a do pilar mais perto em planta (o texto nasce no topo do
-    /// pilar, a 0,45 m no máximo; o outro pilar do pórtico fica a metros).
+    /// dele é a do pilar mais perto em planta (o texto nasce sobre o pilar, a
+    /// 0,45 m dele no máximo, mais o pouco que a normal o desloca ao subir;
+    /// o outro pilar do pórtico fica a metros).
     /// </summary>
     private static PillarLine LinhaDoTexto(Transaction transacao, ObjectId id, AnalysisTextIdentity identidade, MesaLida mesa)
     {

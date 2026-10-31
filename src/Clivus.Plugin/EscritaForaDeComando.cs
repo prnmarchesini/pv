@@ -367,6 +367,57 @@ public static class GanchosDeTeste
         return null;
     }
 
+    /// <summary>
+    /// Os textos de uma análise como eram antes de 31/10/2026 (revisão da
+    /// 0.1.6): (clivus-analises-texto-em-pe "PillarAbove") os põe em pé (na
+    /// horizontal), 0,3 m abaixo de onde estão, e o primeiro deles 30 m para o
+    /// lado, longe da mesa. Devolve quantos.
+    /// </summary>
+    [LispFunction("CLIVUS-ANALISES-TEXTO-EM-PE")]
+    public static object? AnalisesTextoEmPe(ResultBuffer argumentos)
+    {
+        var valores = Valores(argumentos);
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (valores.Length < 1 || documento is null || !Enum.TryParse<IndependentKind>(valores[0], out var tipo)) return null;
+
+        return EscritaForaDeComando.Fazer(documento, () =>
+        {
+            var database = documento.Database;
+            using var transacao = database.TransactionManager.StartTransaction();
+
+            var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForRead);
+            var espaco = (BlockTableRecord)transacao.GetObject(tabela[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+            var quantos = 0;
+
+            foreach (ObjectId id in espaco)
+            {
+                if (transacao.GetObject(id, OpenMode.ForRead) is not MText texto || LayoutXData.LoadAnalysisText(texto) is not { } identidade || identidade.Kind != tipo) continue;
+
+                var p = texto.Location;
+                texto.UpgradeOpen();
+                texto.Normal = Autodesk.AutoCAD.Geometry.Vector3d.ZAxis;
+                texto.Location = new Autodesk.AutoCAD.Geometry.Point3d(p.X + (quantos == 0 ? 30 : 0), p.Y, p.Z - 0.3);
+                texto.Rotation = 0;
+                quantos++;
+            }
+
+            transacao.Commit();
+            return quantos;
+        });
+    }
+
+    /// <summary>O que a janela de análises faz ao abrir com textos antigos: (clivus-analises-deitar) escreve o que deitou.</summary>
+    [LispFunction("CLIVUS-ANALISES-DEITAR")]
+    public static object? AnalisesDeitar(ResultBuffer argumentos)
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return null;
+
+        var (deitados, textos, ficaram) = EscritaForaDeComando.Fazer(documento, () => AnalisesIndependentes.DeitarTextosAntigos(documento.Database));
+        documento.Editor.WriteMessage($"\nANALISES_DEITAR deitados={deitados} textos={textos} ficaram={ficaram} fim\n");
+        return true;
+    }
+
     /// <summary>(clivus-sombras-modulos): os handles dos blocos dos módulos com sombra no registro dos motivos, ou nil.</summary>
     [LispFunction("CLIVUS-SOMBRAS-MODULOS")]
     public static object? SombrasModulos(ResultBuffer argumentos)

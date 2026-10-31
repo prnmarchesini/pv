@@ -124,7 +124,8 @@ internal sealed class SeletorDeEscopo
         // Abre com a primeira área que tem mesa marcada (ou com as mesas já
         // escolhidas); sem área no desenho, no desenho inteiro.
         tentar(() => LerAreas(primeira: !desenhoInteiro && _mesasEscolhidas.Count == 0));
-        if (desenhoInteiro || (_areas.Children.Count == 0 && _mesasEscolhidas.Count == 0)) _tudo.IsChecked = true;
+        // O Desenho inteiro mora na grade das áreas: sem área é sem caixa de área (revisão da 0.1.6).
+        if (desenhoInteiro || (!Caixas.Any() && _mesasEscolhidas.Count == 0)) _tudo.IsChecked = true;
 
         tentar(Aplicar);
     }

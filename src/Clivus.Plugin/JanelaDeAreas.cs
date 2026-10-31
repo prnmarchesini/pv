@@ -92,6 +92,34 @@ internal sealed class JanelaDeAreas : Window
     // o duplo clique, a lixeira, o F2 e o menu do botão direito. Embaixo,
     // as de todas as áreas.
     private readonly DataGridTextColumn _colunaNome;
+
+    // O clique devagar no nome (o segundo, depois do tempo do duplo clique).
+    private readonly System.Windows.Threading.DispatcherTimer _cliqueDevagar = new() { Interval = TimeSpan.FromMilliseconds(TempoDoDuploClique()) };
+    private Linha? _linhaDoCliqueDevagar;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDoubleClickTime();
+
+    /// <summary>O tempo do duplo clique do Windows, em milissegundos (500 sem ele).</summary>
+    private static double TempoDoDuploClique()
+    {
+        try
+        {
+            var tempo = GetDoubleClickTime();
+            return tempo is > 0 and < 5000 ? tempo : 500;
+        }
+        catch (Exception erro) when (erro is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return 500;
+        }
+    }
+
+    /// <summary>O primeiro ancestral do tipo pedido na árvore visual, ou null.</summary>
+    private static T? Acima<T>(DependencyObject? de) where T : DependencyObject
+    {
+        while (de is not null and not T) de = de is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(de) : LogicalTreeHelper.GetParent(de);
+        return de as T;
+    }
     private readonly MenuItem _menuZoom;
     private readonly MenuItem _menuRenomear;
     private readonly MenuItem _menuHachurar;
@@ -131,16 +159,42 @@ internal sealed class JanelaDeAreas : Window
         _lista.SelectionChanged += (_, _) => Tentar(MostrarDetalhe);
         _lista.MouseDoubleClick += (_, e) => Tentar(() =>
         {
+            _cliqueDevagar.Stop();
+
             // Só o duplo clique numa linha (no cabeçalho, nada).
             if (e.OriginalSource is DependencyObject alvo && ItemsControl.ContainerFromElement(_lista, alvo) is DataGridRow) Zoom();
         });
 
         // O nome se edita na linha: F2, ou o segundo clique, devagar, no nome
         // da área já escolhida (o duplo clique é o zoom).
+        // Só o F2, o menu e o clique devagar (os três chamam o BeginEdit sem
+        // evento) abrem o nome: o DataGrid sozinho abriria a edição com a
+        // primeira letra digitada (e a área viraria "RE" de quem achou que
+        // estava na linha de comando) e já no primeiro clique da célula
+        // escolhida (revisão da 0.1.6).
         _lista.BeginningEdit += (_, e) =>
         {
-            if (e.Column != _colunaNome || e.Row.Item is not Linha { Apagavel: true } || e.EditingEventArgs is MouseButtonEventArgs { ClickCount: > 1 }) e.Cancel = true;
+            if (e.Column != _colunaNome || e.Row.Item is not Linha { Apagavel: true } || e.EditingEventArgs is not null) e.Cancel = true;
         };
+
+        // O clique devagar, como nas pastas do Windows: o segundo clique, um
+        // só, no nome da área que já estava escolhida; se dentro do tempo do
+        // duplo clique vier outro, é o zoom.
+        _lista.PreviewMouseLeftButtonDown += (_, e) => Tentar(() =>
+        {
+            _cliqueDevagar.Stop();
+            if (e.ClickCount != 1 || e.OriginalSource is not DependencyObject alvo) return;
+            if (Acima<DataGridCell>(alvo) is not { } celula || celula.Column != _colunaNome) return;
+            if (celula.DataContext is not Linha { Apagavel: true } linha || !ReferenceEquals(_lista.SelectedItem, linha)) return;
+
+            _linhaDoCliqueDevagar = linha;
+            _cliqueDevagar.Start();
+        });
+        _cliqueDevagar.Tick += (_, _) => Tentar(() =>
+        {
+            _cliqueDevagar.Stop();
+            if (ReferenceEquals(_lista.SelectedItem, _linhaDoCliqueDevagar)) ComecarARenomear();
+        });
         _lista.CellEditEnding += (_, e) =>
         {
             if (e.EditAction != DataGridEditAction.Commit || e.Row.Item is not Linha { Origem.Area: { } area } || e.EditingElement is not TextBox caixa) return;
@@ -153,7 +207,18 @@ internal sealed class JanelaDeAreas : Window
         };
         _lista.PreviewKeyDown += (_, e) => Tentar(() =>
         {
-            if (_lista.IsKeyboardFocusWithin && Keyboard.FocusedElement is TextBox) return;   // editando o nome
+            if (_lista.IsKeyboardFocusWithin && Keyboard.FocusedElement is TextBox)
+            {
+                // Editando o nome: o Enter grava e fica na mesma linha (o
+                // DataGrid passaria para a de baixo).
+                if (e.Key == Key.Enter)
+                {
+                    _lista.CommitEdit(DataGridEditingUnit.Row, true);
+                    e.Handled = true;
+                }
+
+                return;
+            }
 
             if (e.Key == Key.F2)
             {
@@ -658,7 +723,11 @@ internal sealed class JanelaDeAreas : Window
         _lista.Focus();
         _lista.CurrentCell = new DataGridCellInfo(linha, _colunaNome);
 
-        if (!_lista.BeginEdit()) Recado(Tr.T("Não consegui abrir o nome para editar; use dois cliques devagar no nome."), true);
+        if (!_lista.BeginEdit())
+        {
+            RegistroDeDiagnostico.Registrar($"Áreas: o BeginEdit do nome de {linha.Nome} não abriu.");
+            Recado(Tr.T("Não consegui abrir o nome para editar; use o botão direito › Renomear."), true);
+        }
     }
 
 #if DEBUG
