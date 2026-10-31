@@ -11,7 +11,9 @@ namespace Clivus.Plugin;
 /// Manda a usina para o servidor 3D (plano/contrato-servidor-3d.md) e devolve
 /// o link da página. O endereço e a chave vêm de variável de ambiente
 /// (CLIVUS_SERVIDOR e CLIVUS_SERVIDOR_CHAVE), como o serviço de módulos:
-/// nada de segredo no desenho nem no repositório.
+/// nada de segredo no desenho nem no repositório. Sem a chave (o PC do
+/// cliente), o plugin se identifica pela licença (etapa 43,
+/// <see cref="ServerAuthorization"/>).
 /// </summary>
 internal static class Publicador3D
 {
@@ -28,7 +30,20 @@ internal static class Publicador3D
             ? uri.ToString().TrimEnd('/')
             : null;
 
-    internal static string? Chave => Environment.GetEnvironmentVariable("CLIVUS_SERVIDOR_CHAVE") is { Length: > 0 } c ? c.Trim() : null;
+    /// <summary>A chave de CLIVUS_SERVIDOR_CHAVE, ou null (em branco conta como sem chave: aí vale a licença).</summary>
+    internal static string? Chave => Environment.GetEnvironmentVariable("CLIVUS_SERVIDOR_CHAVE") is { } c && !string.IsNullOrWhiteSpace(c) ? c.Trim() : null;
+
+    /// <summary>
+    /// Com o que o plugin se identifica no servidor do Clivus (3D e módulos):
+    /// a chave, se definida; senão a licença válida deste PC; senão nada.
+    /// </summary>
+    internal static ServerAuthorization? Autorizacao()
+    {
+        if (Chave is { } chave) return ServerAuthorization.Choose(chave, null, LicenseState.Invalid);
+
+        var (licenca, estado) = Licenciamento.ParaOServidor();
+        return ServerAuthorization.Choose(null, licenca, estado);
+    }
 
     /// <summary>Publica o corpo (já no formato do contrato). O link, ou o erro em português.</summary>
     internal static (PublishedScene? Publicada, string? Erro) Publicar(string corpo)
@@ -48,14 +63,15 @@ internal static class Publicador3D
             conteudo.Headers.ContentEncoding.Add("gzip");
 
             using var pedido = new HttpRequestMessage(HttpMethod.Post, endereco + "/api/v1/cenas") { Content = conteudo };
-            if (Chave is { } chave) pedido.Headers.Authorization = new AuthenticationHeaderValue("Bearer", chave);
+            var autorizacao = Autorizacao();
+            if (autorizacao is not null) pedido.Headers.Authorization = new AuthenticationHeaderValue(autorizacao.Scheme, autorizacao.Parameter);
             // O erro do servidor volta no idioma da tela (etapa 10).
             pedido.Headers.AcceptLanguage.ParseAdd(Tr.AcceptLanguage);
 
             using var resposta = Cliente.Send(pedido);
             using var leitor = new StreamReader(resposta.Content.ReadAsStream(), Encoding.UTF8);
 
-            return Viewer3DPage.ParseResponse((int)resposta.StatusCode, leitor.ReadToEnd());
+            return Viewer3DPage.ParseResponse((int)resposta.StatusCode, leitor.ReadToEnd(), autorizacao);
         }
         catch (HttpRequestException erro)
         {

@@ -172,6 +172,9 @@ def icones():
                   [t('M16,4 L27,10 L27,22 L16,28 L5,22 L5,10 Z M5,10 L16,16 L27,10 M16,16 V28')]),
         'ativar': ([T(circulo(10, 16, 6)), T('M16,16 H29 M24,16 V21 M28,16 V20'), ambar_cheio(circulo(10, 16, 2.2))],
                    [t(circulo(10, 16, 6)), t('M16,16 H29 M25,16 V21')]),
+        # Atualizar (etapa 43): a bandeja e a seta da versão nova descendo nela.
+        'atualizar': ([T('M5,19 V26 a2,2 0 0,0 2,2 H25 a2,2 0 0,0 2,-2 V19'), ambar_traco('M16,4 V19 M10,13 L16,19 L22,13', L)],
+                      [t('M4,19 V27 H28 V19'), ambar_traco('M16,3 V19 M9,12 L16,19 L23,12', S)]),
         'edicao': ([T(mesa(3, 17, 15, 8)), T('M15,17 L25,7 L28,10 L18,20 L14,21 Z'), ambar_cheio('M15,17 L18,20 L14,21 Z')],
                    [t(mesa(3, 17, 15, 8)), t('M16,17 L26,7')]),
         'objetos': (arvore32[:2] + [ambar_cheio(modulo(26, 26, 6, 4))], arvore16),

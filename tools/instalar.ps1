@@ -138,6 +138,12 @@ $serieMin  = $requisitos.GetAttribute('SeriesMin')
 $serieMax  = $requisitos.GetAttribute('SeriesMax')
 $versaoApp = $pacote.DocumentElement.GetAttribute('AppVersion')
 
+# O PackageContents.xml do repositorio traz $(Version): o numero mora so no
+# Directory.Build.props (etapa 43), e o build o grava na copia do bundle.
+if ($versaoApp -eq '$(Version)') {
+    $versaoApp = ([xml] (Get-Content (Join-Path $raiz 'Directory.Build.props'))).Project.PropertyGroup[0].Version
+}
+
 if (-not $serieMin -or -not $serieMax) {
     Dizer "PackageContents.xml nao declara SeriesMin/SeriesMax." 'Red'
     exit 1

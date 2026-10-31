@@ -219,6 +219,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_ACTIVAR")]
     public static void CLIVUS_ACTIVAR() => AtivarCommands.Ativar();
 
+    [CommandMethod("CLIVUS_UPDATE")]
+    public static void CLIVUS_UPDATE() => AtualizarCommands.Atualizar();
+
+    [CommandMethod("CLIVUS_ACTUALIZAR")]
+    public static void CLIVUS_ACTUALIZAR() => AtualizarCommands.Atualizar();
+
     [CommandMethod("CLIVUS_TESTBENCH")]
     public static void CLIVUS_TESTBENCH() => BancadaCommands.Bancada();
 

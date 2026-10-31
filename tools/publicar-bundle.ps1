@@ -111,7 +111,21 @@ if (Test-Path $bundle) { Remove-Item $bundle -Recurse -Force }
 $conteudo = Join-Path $bundle 'Contents'
 New-Item -ItemType Directory -Path $conteudo -Force | Out-Null
 
-Copy-Item (Join-Path $raiz 'src\Clivus.Plugin\PackageContents.xml') $bundle
+# O PackageContents.xml da saida do build, com a versao do Directory.Build.props
+# (a unica fonte, etapa 43); o do repositorio traz $(Version) no lugar do numero.
+$descritor = Join-Path $saidaDoBuild 'PackageContents.xml'
+$versao = ([xml] (Get-Content (Join-Path $raiz 'Directory.Build.props'))).Project.PropertyGroup[0].Version
+if (-not (Test-Path $descritor)) {
+    Write-Host "PackageContents.xml nao esta na saida do build ($saidaDoBuild)." -ForegroundColor Red
+    exit 1
+}
+$pacote = [xml] (Get-Content $descritor -Encoding UTF8)
+$daEntrada = $pacote.SelectSingleNode('//ComponentEntry').GetAttribute('Version')
+if ($pacote.DocumentElement.GetAttribute('AppVersion') -ne $versao -or $daEntrada -ne $versao) {
+    Write-Host "O PackageContents.xml do build nao tem a versao $versao (AppVersion e ComponentEntry). Compile de novo." -ForegroundColor Red
+    exit 1
+}
+Copy-Item $descritor $bundle
 
 # So o que e nosso. O resto o AutoCAD ja tem.
 # Clipper2Lib (Boost, THIRD-PARTY-NOTICES.md): a uniao das sombras do periodo (05/10/2026).

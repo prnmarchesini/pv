@@ -77,7 +77,13 @@ O resultado é um destes estados:
 | `tests/Clivus.Core.Tests/LicenseTests.cs` | testes da conferência, inclusive `AChaveEmbutidaConfereALicencaDoServidor`, que usa uma licença emitida pelo servidor de produção |
 
 Comandos que rodam **sem** licença: `CLIVUS_ATIVAR`, `CLIVUS_SOBRE`,
-`CLIVUS_OLA` e `CLIVUS_MIGRAR`.
+`CLIVUS_OLA`, `CLIVUS_MIGRAR`, `CLIVUS_IDIOMA` e, desde a etapa 43,
+`CLIVUS_ATUALIZAR` (a licença vencida não impede de receber a versão nova).
+
+Desde a etapa 43 a licença também identifica o plugin do cliente no
+servidor: sem `CLIVUS_SERVIDOR_CHAVE`, o Publicar 3D e o cadastro de módulos
+mandam `Authorization: Licenca {a licença}` (`ServerAuthorization`, no Core;
+contrato em `plano/contrato-ativacao.md`, seção "Etapa 43").
 
 **Servidor (repositório privado `prnmarchesini/clivussolar`, pasta `app/`):**
 

@@ -8,42 +8,89 @@ using Clivus.Core;
 namespace Clivus.Instalador;
 
 /// <summary>
-/// ClivusSolar-Setup.exe. Sem argumentos, a janela. Argumentos:
-/// <c>/desinstalar</c>, <c>/silencioso</c> (sem janela, o resultado no
-/// <c>/log=arquivo</c> e no código de saída), <c>/teste=pasta</c> (tudo dentro
-/// da pasta, sem tocar a instalação de verdade), <c>/ignorar-civil3d</c> (só
-/// com /teste), <c>/idioma=pt|en|es</c> (por cima do idioma do Windows). Códigos de saída: 0 ok, 2/3/4/6 os da regra de versão, 5
-/// AutoCAD aberto, 1 falha.
+/// ClivusSolar-Setup.exe. Sem argumentos, a janela. Argumentos
+/// (<see cref="InstallerOptions"/>): <c>/desinstalar</c>, <c>/silencioso</c>
+/// (sem janela, o resultado no <c>/log=arquivo</c> e no código de saída),
+/// <c>/teste=pasta</c> (tudo dentro da pasta, sem tocar a instalação de
+/// verdade), <c>/ignorar-civil3d</c> (só com /teste), <c>/idioma=pt|en|es</c>
+/// (por cima do idioma do Windows) e, desde a etapa 43,
+/// <c>/aguardar-civil3d</c> (espera o Civil 3D fechar e instala como no
+/// silencioso, avisando no fim: <see cref="EsperaDoCivil3D"/>). Códigos de
+/// saída: 0 ok, 2/3/4/6 os da regra de versão, 5 AutoCAD aberto, 1 falha; na
+/// espera, 7 outra atualização já espera, 8 o Civil 3D ficou aberto além do
+/// limite, 9 o Windows desligando.
 /// </summary>
 internal static class Programa
 {
     [STAThread]
     private static int Main(string[] args)
     {
-        string? Valor(string nome) => args.FirstOrDefault(a => a.StartsWith(nome + "=", StringComparison.OrdinalIgnoreCase))?[(nome.Length + 1)..].Trim('"');
-        bool Tem(string nome) => args.Any(a => string.Equals(a, nome, StringComparison.OrdinalIgnoreCase));
+        var opcoes = InstallerOptions.Parse(args);
 
         // O idioma do Windows (10.6); /idioma=pt|en|es por cima, para os testes.
-        Tr.Current = Tr.Resolve(Valor("/idioma"), System.Globalization.CultureInfo.CurrentUICulture);
+        Tr.Current = Tr.Resolve(opcoes.Language, System.Globalization.CultureInfo.CurrentUICulture);
 
-        var teste = Valor("/teste");
-        var instalacao = new Instalacao(teste);
-        var desinstalar = Tem("/desinstalar");
-        var ignorarCivil = teste is not null && Tem("/ignorar-civil3d");
+        var instalacao = new Instalacao(opcoes.TestFolder);
 
-        if (!Tem("/silencioso"))
+        // A atualização do plugin (etapa 43): espera o Civil 3D fechar, sem janela.
+        if (opcoes.WaitForCivil3D) return EsperaDoCivil3D.Executar(instalacao, opcoes);
+
+        if (!opcoes.Silent)
         {
             var app = new Application();
-            return app.Run(new JanelaDoInstalador(instalacao, desinstalar, ignorarCivil));
+            return app.Run(new JanelaDoInstalador(instalacao, opcoes.Uninstall, opcoes.IgnoreCivil3D));
         }
 
-        var (codigo, frase) = Executar(instalacao, desinstalar, ignorarCivil, null);
-        if (Valor("/log") is { } log) File.WriteAllText(log, $"{codigo} {frase}");
+        var (codigo, frase) = Executar(instalacao, opcoes.Uninstall, opcoes.IgnoreCivil3D, null);
+        if (opcoes.LogFile is { } log) File.WriteAllText(log, $"{codigo} {frase}");
         return codigo;
     }
 
-    /// <summary>Instala ou desinstala; o código de saída e a frase.</summary>
+    /// <summary>
+    /// Instala ou desinstala; o código de saída e a frase. Uma de cada vez
+    /// (etapa 43): a janela, o silencioso e a atualização que esperava o
+    /// Civil 3D podem cair no mesmo minuto, e duas cópias na mesma pasta
+    /// misturariam os arquivos.
+    /// </summary>
     internal static (int Codigo, string Frase) Executar(Instalacao instalacao, bool desinstalar, bool ignorarCivil, Action<string>? progresso)
+    {
+        Mutex? umaDeCadaVez = null;
+
+        try
+        {
+            umaDeCadaVez = new Mutex(initiallyOwned: false, InstallerWait.InstallingMutexName);
+
+            try
+            {
+                if (!umaDeCadaVez.WaitOne(InstallerWait.InstallingWait))
+                {
+                    umaDeCadaVez.Dispose();
+                    umaDeCadaVez = null;
+                    return (1, Tr.T("Outra instalação do Clivus Solar está em andamento; tente de novo daqui a pouco."));
+                }
+            }
+            catch (AbandonedMutexException)
+            {
+                // A anterior caiu no meio: a vez é desta, que refaz tudo.
+            }
+
+            return ExecutarSozinho(instalacao, desinstalar, ignorarCivil, progresso);
+        }
+        catch (Exception erro) when (erro is IOException or UnauthorizedAccessException or WaitHandleCannotBeOpenedException)
+        {
+            return (1, desinstalar ? Tr.F("Não consegui desinstalar: {0}", erro.Message) : Tr.F("Não consegui instalar: {0}", erro.Message));
+        }
+        finally
+        {
+            if (umaDeCadaVez is not null)
+            {
+                umaDeCadaVez.ReleaseMutex();
+                umaDeCadaVez.Dispose();
+            }
+        }
+    }
+
+    private static (int Codigo, string Frase) ExecutarSozinho(Instalacao instalacao, bool desinstalar, bool ignorarCivil, Action<string>? progresso)
     {
         try
         {

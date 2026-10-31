@@ -67,6 +67,9 @@ Write-Host "SHA-256:    $hash" -ForegroundColor Green
 
 if ($Enviar) {
     # O servidor e a pasta (CANAL.md, 04/10/2026): o site serve /baixar.
+    # O host do $site e o PluginInfo.SiteDeDownload do plugin (etapa 43): a
+    # atualizacao so baixa o instalador dele ou do servidor. Mudou um, muda o
+    # outro, numa versao do plugin que saia antes da troca.
     $servidor = 'clivus-upload@177.153.20.214'
     $site = 'https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io/baixar'
     $chave = Join-Path $HOME '.ssh\clivus_kinghost'

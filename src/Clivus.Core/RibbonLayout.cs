@@ -58,6 +58,8 @@ public static class RibbonLayout
                     "configuracoes", grande: true),
                 B(Tr.N("Ativar"), PluginInfo.ComandoAtivar, Tr.N("Ativa o Clivus Solar neste PC com o código gerado no portal do app, e mostra a situação da licença."), "ativar"),
                 B(Tr.N("Sobre"), PluginInfo.ComandoSobre, Tr.N("O Clivus Solar: versão, onde fica o registro de diagnóstico e o que ele faz."), "sobre"),
+                // Etapa 43 (31/10/2026): pequeno, embaixo do Ativar e do Sobre (a coluna de três).
+                B(Tr.N("Atualizar"), PluginInfo.ComandoAtualizar, Tr.N("Procura uma versão nova do Clivus Solar. Se houver, mostra o que mudou e baixa o instalador, que espera o Civil 3D fechar para instalar. Ao abrir o Civil 3D, a procura é sozinha, uma vez por dia."), "atualizar"),
             ]),
             new(Tr.N("Terreno"),
             [

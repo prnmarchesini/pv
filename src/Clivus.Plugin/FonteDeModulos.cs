@@ -13,6 +13,7 @@ namespace Clivus.Plugin;
 /// e se o cadastro pode ir é o <see cref="ModuleServer"/> do Core.
 ///
 /// No servidor do Clivus o cadastro leva a chave (<c>CLIVUS_SERVIDOR_CHAVE</c>)
+/// ou, no PC do cliente, a licença (etapa 43, <see cref="ServerAuthorization"/>)
 /// e o módulo fica pendente até a gestão conferir o .PAN; só então entra na
 /// lista de todos (plano/contrato-servidor-3d.md). Até lá, ele fica na lista
 /// das janelas desta sessão do Civil 3D (<see cref="Pendentes"/>).
@@ -80,8 +81,15 @@ internal static class FonteDeModulos
     /// <summary>O endereço da biblioteca, para as mensagens.</summary>
     internal static string Endereco => Servidor.Address ?? "—";
 
-    /// <summary>Por que um cadastro não pode ir agora (sem endereço, sem HTTPS, sem chave), ou null.</summary>
-    internal static string? PorQueNaoCadastra => Servidor.WhyCannotRegister(Publicador3D.Chave);
+    /// <summary>Por que um cadastro não pode ir agora (sem endereço, sem HTTPS, sem chave nem licença), ou null.</summary>
+    internal static string? PorQueNaoCadastra
+    {
+        get
+        {
+            var servidor = Servidor;
+            return servidor.WhyCannotSend(servidor.CredentialFor(Publicador3D.Autorizacao()));
+        }
+    }
 
     /// <summary>Se o modelo foi mandado nesta sessão e espera a validação da gestão.</summary>
     internal static bool EhPendente(string modelo) => Pendentes.ContainsKey(modelo.Trim());
@@ -190,11 +198,11 @@ internal static class FonteDeModulos
         }
 
         var servidor = Servidor;
-        var chave = Publicador3D.Chave;
 
-        // A chave só vai por HTTPS e só para o servidor do Clivus; o serviço
-        // local não pede nenhuma.
-        if (servidor.WhyCannotRegister(chave) is { } motivo) return (false, false, motivo);
+        // A chave (ou a licença) só vai por HTTPS e só para o servidor do
+        // Clivus; o serviço local não pede nenhuma.
+        var autorizacao = servidor.CredentialFor(Publicador3D.Autorizacao());
+        if (servidor.WhyCannotSend(autorizacao) is { } motivo) return (false, false, motivo);
         var endereco = servidor.Address!;
 
         try
@@ -202,7 +210,7 @@ internal static class FonteDeModulos
             using var corpo = new StringContent(json, Encoding.UTF8, "application/json");
             using var pedido = new HttpRequestMessage(HttpMethod.Post, $"{endereco}/modulos") { Content = corpo };
 
-            if (servidor.IsClivus) pedido.Headers.Authorization = new AuthenticationHeaderValue("Bearer", chave!.Trim());
+            if (autorizacao is not null) pedido.Headers.Authorization = new AuthenticationHeaderValue(autorizacao.Scheme, autorizacao.Parameter);
             pedido.Headers.AcceptLanguage.ParseAdd(Tr.AcceptLanguage);
 
             using var resposta = Task.Run(() => ClienteDoCadastro.SendAsync(pedido)).GetAwaiter().GetResult();
@@ -245,9 +253,14 @@ internal static class FonteDeModulos
                 return (true, true, Tr.F("O módulo {0} já está no servidor do Clivus: espera a validação da equipe ou já foi aprovado. Nesta sessão do Civil 3D, ele fica na lista das janelas de Mesa.", modulo.DisplayName));
             }
 
+            // Recusa sem o motivo do servidor (401 ou 403 fora do contrato): o
+            // que conferir depende de com o que o plugin se identificou (etapa 43).
+            var porQue = ModuleServiceReply.ErrorMessage(texto)
+                ?? (servidor.IsClivus && resposta.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden ? ServerAuthorization.RefusedMessage(autorizacao) : Cortar(texto));
+
             return (false, false, resposta.StatusCode == HttpStatusCode.Conflict
                 ? ModuleServiceReply.ErrorMessage(texto) ?? Tr.T("Já existe um módulo com esse modelo.")
-                : Tr.F("O serviço recusou ({0}): {1}", (int)resposta.StatusCode, ModuleServiceReply.ErrorMessage(texto) ?? Cortar(texto)));
+                : Tr.F("O serviço recusou ({0}): {1}", (int)resposta.StatusCode, porQue));
         }
         catch (Exception erro) when (erro is HttpRequestException or TaskCanceledException)
         {

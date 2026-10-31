@@ -1,7 +1,13 @@
 <Project>
 
   <PropertyGroup>
-    <!-- Versao do plugin, a que o comando CLIVUS_OLA mostra ao usuario. -->
+    <!--
+      Versao do plugin: a unica fonte (etapa 43). Dela saem o CLIVUS_OLA e o
+      Sobre, a versao que a atualizacao compara com a publicada no servidor, o
+      PackageContents.xml do bundle (carimbado no build), a versao do
+      instalador e o nome do ClivusSolar-Setup-<versao>.exe. Para subir: mude
+      aqui e rode tools\gerar-instalador.ps1.
+    -->
     <Version>0.1.0</Version>
     <Company>Clivus Solar</Company>
     <Product>Clivus Solar</Product>
