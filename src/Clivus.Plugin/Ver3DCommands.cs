@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
+using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.Runtime;
 using Clivus.Core;
 using Clivus.Geo;
@@ -144,6 +145,39 @@ public static class Ver3DCommands
     }
 
     /// <summary>
+    /// Os laços da hachura no mundo: os vértices estão no plano dela (o OCS da
+    /// normal, na elevação), e a matriz do plano os leva ao mundo. Laço de
+    /// curvas (não polilinha) vale pelos pontos de começo delas.
+    /// </summary>
+    private static IEnumerable<List<Point3>> AneisDaHachura(Hatch hachura)
+    {
+        var plano = Matrix3d.PlaneToWorld(hachura.Normal);
+
+        Point3 Mundo(double x, double y)
+        {
+            var p = new Point3d(x, y, hachura.Elevation).TransformBy(plano);
+            return new Point3(p.X, p.Y, p.Z);
+        }
+
+        for (var i = 0; i < hachura.NumberOfLoops; i++)
+        {
+            var laco = hachura.GetLoopAt(i);
+            var anel = new List<Point3>();
+
+            if (laco.IsPolyline)
+            {
+                foreach (BulgeVertex v in laco.Polyline) anel.Add(Mundo(v.Vertex.X, v.Vertex.Y));
+            }
+            else
+            {
+                foreach (Curve2d curva in laco.Curves) anel.Add(Mundo(curva.StartPoint.X, curva.StartPoint.Y));
+            }
+
+            yield return anel;
+        }
+    }
+
+    /// <summary>
     /// As mesas assentadas num terreno diferente do de hoje (30/10/2026: "o 3d
     /// no navegador cagou forte, no 3d do cad não tem isso"): o 3D mostra o
     /// terreno de hoje, e onde ele subiu depois que as mesas foram geradas o
@@ -277,7 +311,7 @@ public static class Ver3DCommands
             {
                 if (id.IsErased) continue;
                 var dxf = id.ObjectClass.DxfName;
-                if (dxf != "3DFACE" && dxf != "INSERT" && dxf != "POLYLINE") continue;
+                if (dxf != "3DFACE" && dxf != "INSERT" && dxf != "HATCH") continue;
                 if (transacao.GetObject(id, OpenMode.ForRead) is not Entity e) continue;
 
                 using (var dados = e.GetXDataForApplication(PluginXData.Aplicativo))
@@ -307,8 +341,12 @@ public static class Ver3DCommands
                         arvores.Add(new Scene3DTree(br.Position.X, br.Position.Y, br.Position.Z, a.Spec));
                         break;
 
-                    case Polyline3d linha when PluginXData.Load(linha, "Sombra", 1, 1) is not null:
-                        sombras.Add(FileiraCommands.Vertices(linha, transacao).ToList());
+                    // A sombra (42.1) é a hachura magenta, no chão e sobre as mesas:
+                    // cada laço vira um anel no mundo. A borda passou a ser trechos
+                    // abertos por pedaço, que não fecham anel.
+                    case Hatch hachura when PluginXData.Load(hachura, "Sombra", 1, 1) is not null:
+                        foreach (var anel in AneisDaHachura(hachura))
+                            if (anel.Count >= 3) sombras.Add(anel);
                         break;
                 }
             }

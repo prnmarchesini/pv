@@ -4221,8 +4221,11 @@ function Testar-Sombras {
     if ([int] $m[16] -lt [int] $m[14] -or [int] $m[17] -ne 0) { $erros += "o dia inteiro (pior caso) deveria guardar pelo menos os $($m[14]) modulo(s) das 09:00; guardou $($m[16]), e $($m[17]) das 09:00 ficaram de fora" }
 
     # A amostra: a cota de cada vertice de hachura do chao contra a do terreno no mesmo ponto.
-    $i = $r.Texto.IndexOf('CLIVUS_AMOSTRA_INICIO'); $j = $r.Texto.IndexOf('CLIVUS_AMOSTRA_FIM')
-    $amostra = if ($i -ge 0 -and $j -gt $i) { $r.Texto.Substring($i, $j - $i) } else { '' }
+    # Os marcos no começo da linha: o eco do defun (antes, no meio do código LISP)
+    # também traz os dois nomes, e a amostra ficava sendo o código.
+    $mi = [regex]::Match($r.Texto, '(?m)^CLIVUS_AMOSTRA_INICIO\s*$')
+    $mj = [regex]::Match($r.Texto, '(?m)^CLIVUS_AMOSTRA_FIM')
+    $amostra = if ($mi.Success -and $mj.Success -and $mj.Index -gt $mi.Index) { $r.Texto.Substring($mi.Index, $mj.Index - $mi.Index) } else { '' }
     $hv = [regex]::Matches($amostra, 'CLIVUS_HV z=(-?[\d.]+)')
     $chaoNoPonto = [regex]::Matches($amostra, '(?m)^\s+X [\d\.,]+\s+Y [\d\.,]+\s+Z ([\d\.,-]+)\s*$')
 
