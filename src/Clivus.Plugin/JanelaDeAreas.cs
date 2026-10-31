@@ -348,7 +348,9 @@ internal sealed class JanelaDeAreas : Window
         _avisos.Visibility = _leitura.Avisos.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         _hachurarTodas.IsEnabled = _leitura.Areas.Count > 0;
 
-        if (_leitura.Areas.Count == 0) Recado(Tr.T("Nenhuma área neste desenho. Use o botão Área."), true);
+        var semArea = Tr.T("Nenhuma área neste desenho. Use o botão Área.");
+        if (_leitura.Areas.Count == 0) Recado(semArea, true);
+        else if (_recado.Text == semArea) _recado.Text = string.Empty;
 
         MostrarDetalhe();
     }
