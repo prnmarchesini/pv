@@ -280,13 +280,13 @@ internal sealed class CorteDaMesa : FrameworkElement
         // caindo para trás, girando no pé do P1, até onde o P2 alcança.
         DesenharChao(tela, ySolo);
         var yChaoAtras = ySolo;
-        var declive = 0.0;
+        var emPlanta = (trasEm - frenteEm) * cos;
+        var declive = folga > 0.0005 && emPlanta > 1e-9 ? folga / emPlanta : 0.0;
 
-        if (folga > 0.0005 && xTras - xFrente > 1)
+        if (declive > 0 && xTras - xFrente > 1)
         {
             // O tracejado para logo depois do P2, antes das cotas dele; o
             // nome vai no começo, longe do T3 do P2.
-            declive = folga / ((trasEm - frenteEm) * cos);
             var xFim = xTras + 8;
             tela.DrawLine(ChaoCaindo, new Point(xFrente, ySolo), new Point(xFim, ySolo + (xFim - xFrente) * declive));
             yChaoAtras = ySolo + folga * k;

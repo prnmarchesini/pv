@@ -271,8 +271,11 @@ internal sealed class JanelaDeMesa : Window
         _projeto = projeto ?? ProjectSettings.Default.Configuration;
 
         Title = Tr.T("Clivus Solar — Mesa");
-        Width = 1320;
-        Height = 800;
+
+        // Mais larga e mais alta (38.9): o biposte cabe em duas colunas e a
+        // vista lateral, com as peças cotadas, fica legível.
+        Width = 1400;
+        Height = 860;
         MinWidth = 1100;
         MinHeight = 600;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -887,12 +890,12 @@ internal sealed class JanelaDeMesa : Window
         Secao(Tr.T("Pórtico: pilares e mãos francesas"));
         Linha(Tr.T("P1: pilar dianteiro, o menor (m)"), _bfP1, Tr.T("O pilar dianteiro inteiro, com o enterro T3, como o fabricante cota no chão plano (ex.: 3,059). É a altura da estrutura: na usina, a ponta baixa nunca fica abaixo da que ele dá, e cada pilar sai com o comprimento que o terreno pede. Em branco, com o P2: a altura vem da faixa do projeto."));
         Linha(Tr.T("MF1: mão francesa do P1 (m)"), _bfMaoFrente, Tr.T("O comprimento da mão francesa do pilar dianteiro (ex.: 1,244). Zero: sem mão francesa."));
-        Linha(Tr.T("MF1: prende no P1 a quanto do topo (m)"), _bfMaoFrenteAbaixo, Tr.T("Onde a MF1 prende no P1, medido do topo do pilar para baixo (ex.: 0,447). A outra ponta vai na tesoura, onde o comprimento alcança. A vista lateral mostra a cota."));
+        Linha(Tr.T("MF1: abaixo do topo do P1 (m)"), _bfMaoFrenteAbaixo, Tr.T("Onde a MF1 prende no P1, medido do topo do pilar para baixo (ex.: 0,447). A outra ponta vai na tesoura, onde o comprimento alcança. A vista lateral mostra a cota."));
         Linha(Tr.T("P2: pilar traseiro, o maior (m)"), _bfP2, Tr.T("O pilar traseiro inteiro, como o fabricante cota (ex.: 3,888). No chão plano ele precisa do P1 mais a subida da tesoura entre os dois; o que passar disso é a folga para o chão caindo para trás."));
         Linha(Tr.T("MF2: mão francesa do P2 (m)"), _bfMaoTras, Tr.T("O comprimento da mão francesa do pilar traseiro (ex.: 1,209). Zero: sem mão francesa."));
-        Linha(Tr.T("MF2: prende no P2 a quanto do topo (m)"), _bfMaoTrasAbaixo, Tr.T("Onde a MF2 prende no P2, medido do topo do pilar para baixo (ex.: 0,773)."));
+        Linha(Tr.T("MF2: abaixo do topo do P2 (m)"), _bfMaoTrasAbaixo, Tr.T("Onde a MF2 prende no P2, medido do topo do pilar para baixo (ex.: 0,773)."));
         Linha(Tr.T("Entre P1 e P2, na horizontal (m)"), _bfEntrePilares, Tr.T("Distância entre os eixos do P1 e do P2, em planta (ex.: 3,00). O T2 da seção Estrutura é onde o P1 encosta na tesoura."));
-        Linha(Tr.T("Topo dos pilares abaixo dos módulos (m)"), _bfTopo, Tr.T("Na vertical, da face de cima dos módulos ao topo dos pilares: módulo, terça e tesoura (ex.: 0,126)."));
+        Linha(Tr.T("Topo dos pilares sob os módulos (m)"), _bfTopo, Tr.T("Na vertical, da face de cima dos módulos ao topo dos pilares: módulo, terça e tesoura (ex.: 0,126)."));
         pilha.Children.Add(_bfAlturaBasica);
 
         Secao(Tr.T("Terças"));
@@ -987,8 +990,8 @@ internal sealed class JanelaDeMesa : Window
         yield return (_sobraEsquerda, Tr.T("Sobra da esquerda"));
         yield return (_sobraDireita, Tr.T("Sobra da direita"));
         yield return (_inclinacao, Tr.T("Inclinação"));
-        yield return (_tesoura, _bifila ? Tr.T("Viga T1") : Tr.T("Tesoura T1"));
-        yield return (_pilarNaTesoura, _bifila ? Tr.T("Pilar dianteiro na viga T2") : Tr.T("Pilar na tesoura T2"));
+        yield return (_tesoura, Tr.T("Tesoura T1"));
+        yield return (_pilarNaTesoura, _bifila ? Tr.T("P1 na tesoura T2") : Tr.T("Pilar na tesoura T2"));
         yield return (_pilarLargura, Tr.T("Pilar: largura ao longo da fileira"));
         yield return (_pilarProfundidade, Tr.T("Pilar: largura na inclinação"));
         yield return (_vaoAlvo, Tr.T("Vão-alvo entre pilares"));
@@ -999,11 +1002,11 @@ internal sealed class JanelaDeMesa : Window
     private IEnumerable<(TextBox Campo, string Nome)> CamposDaBifila()
     {
         yield return (_bfEntrePilares, Tr.T("Entre P1 e P2, na horizontal"));
-        yield return (_bfTopo, Tr.T("Topo dos pilares abaixo dos módulos"));
+        yield return (_bfTopo, Tr.T("Topo dos pilares sob os módulos"));
         yield return (_bfMaoFrente, Tr.T("MF1: mão francesa do P1"));
-        yield return (_bfMaoFrenteAbaixo, Tr.T("MF1: prende no P1 a quanto do topo"));
+        yield return (_bfMaoFrenteAbaixo, Tr.T("MF1: abaixo do topo do P1"));
         yield return (_bfMaoTras, Tr.T("MF2: mão francesa do P2"));
-        yield return (_bfMaoTrasAbaixo, Tr.T("MF2: prende no P2 a quanto do topo"));
+        yield return (_bfMaoTrasAbaixo, Tr.T("MF2: abaixo do topo do P2"));
         yield return (_bfTercaBorda, Tr.T("Terça a partir da borda do módulo"));
         yield return (_bfTercaBarra, Tr.T("Barra máxima da terça"));
         yield return (_bfTiranteCima, Tr.T("Tirante: ponto de cima"));
@@ -1352,12 +1355,13 @@ internal sealed class JanelaDeMesa : Window
 
         foreach (var secao in _secoesDoBiposte) secao.Visibility = _bifila ? Visibility.Visible : Visibility.Collapsed;
 
-        _rotuloT1.Text = _bifila ? Tr.T("Viga T1 (m)") : Tr.T("Tesoura T1 (m)");
+        // A tesoura é a viga do pórtico; o Renan chama de tesoura (38.9).
+        _rotuloT1.Text = Tr.T("Tesoura T1 (m)");
         _rotuloT1.ToolTip = _tesoura.ToolTip = _bifila
-            ? Tr.T("Comprimento da viga do pórtico, ao longo da inclinação (ex.: 4,030).")
+            ? Tr.T("Comprimento da tesoura (a viga do pórtico), ao longo da inclinação (ex.: 4,030).")
             : Tr.T("Comprimento da tesoura, ao longo da inclinação.");
 
-        _rotuloT2.Text = _bifila ? Tr.T("Pilar dianteiro na viga T2 (m)") : Tr.T("Pilar na tesoura T2 (m)");
+        _rotuloT2.Text = _bifila ? Tr.T("P1 na tesoura T2 (m)") : Tr.T("Pilar na tesoura T2 (m)");
         _rotuloT2.ToolTip = _pilarNaTesoura.ToolTip = _bifila
             ? Tr.T("Onde o pilar dianteiro encosta na viga, medido da ponta baixa dela (ex.: 0,498). O traseiro sai da distância entre os pilares, na seção Pórtico.")
             : Tr.T("Onde o pilar encosta na tesoura, medido da ponta baixa dela.");
@@ -2066,15 +2070,20 @@ internal sealed class JanelaDeMesa : Window
                 var naUsina = _projeto.ForStructure(geometria, perfil.TiltRadians);
                 var livre = basica.LowEdge - perfil.Layout.Module.Thickness * Math.Cos(perfil.TiltRadians);
 
+                // O recado curto embaixo do pórtico (o formulário cabe em duas
+                // colunas e a vista lateral fica larga); a conta inteira na dica.
                 var texto = Tr.F(
                     "No chão plano, o P1 de {0} m com {1} m enterrados põe a ponta baixa a {2} m do chão ({3} m livres sob o módulo). Na usina, a ponta baixa vai de {4} a {5} m, e cada pilar sai com o comprimento que o terreno pede: o P1 é o dianteiro mais curto.",
                     Milimetro(p1), Numero(basica.Embedment), Milimetro(basica.LowEdge), Milimetro(livre), Milimetro(naUsina.MinLowEdge), Milimetro(naUsina.MaxLowEdge));
 
-                texto += " " + (p2 - p2NoPlano > 0.0005 && StructureHeight.RearSlopeAllowance(geometria, perfil.TiltRadians) is { } declive
-                    ? Tr.F("No chão plano o P2 precisa de {0} m; os {1} m a mais cobrem o chão caindo até {2} % para trás.", Milimetro(p2NoPlano), Milimetro(p2 - p2NoPlano), Numero(Math.Round(declive * 100, 1)))
-                    : Tr.T("O P2 é o do chão plano, sem folga para o chão caindo para trás."));
+                var folga = p2 - p2NoPlano > 0.0005 && StructureHeight.RearSlopeAllowance(geometria, perfil.TiltRadians) is { } declive
+                    ? (Tr.F("No chão plano o P2 precisa de {0} m; os {1} m a mais cobrem o chão caindo até {2} % para trás.", Milimetro(p2NoPlano), Milimetro(p2 - p2NoPlano), Numero(Math.Round(declive * 100, 1))),
+                        Tr.F("P2: folga para o chão caindo {0} % para trás.", Numero(Math.Round(declive * 100, 1))))
+                    : (Tr.T("O P2 é o do chão plano, sem folga para o chão caindo para trás."), Tr.T("P2: o do chão plano, sem folga."));
 
-                _bfAlturaBasica.Text = texto;
+                _bfAlturaBasica.Text = Tr.F("Ponta baixa a {0} m ({1} m livres); na usina, de {2} a {3} m.", Milimetro(basica.LowEdge), Milimetro(livre), Milimetro(naUsina.MinLowEdge), Milimetro(naUsina.MaxLowEdge))
+                    + " " + folga.Item2;
+                _bfAlturaBasica.ToolTip = texto + " " + folga.Item1;
             }
             else
             {
@@ -2085,6 +2094,7 @@ internal sealed class JanelaDeMesa : Window
                 _bfAlturaBasica.Text = Tr.F(
                     "P1 e P2 em branco: a altura vem da faixa do projeto. No chão plano, com a ponta baixa em {0} m (a mínima do projeto, Configurações › Parâmetros) e {1}, o P1 dá {2} m e o P2 {3} m.",
                     Numero(basica.LowEdge), enterro, Milimetro(basica.P1), Milimetro(basica.P2 ?? 0));
+                _bfAlturaBasica.ToolTip = null;
             }
 
             return basica;
