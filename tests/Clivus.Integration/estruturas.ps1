@@ -38,6 +38,7 @@ function Testar-Estruturas {
     foreach ($tipo in @('mono', 'bi')) {
         $arquivos = @{
             DAE  = Join-Path $pasta "$rotulo-$tipo.dae"
+            PVC  = Join-Path $pasta "$rotulo-$tipo.pvc"
             XLSX = Join-Path $pasta "$rotulo-$tipo.xlsx"
             HTML = Join-Path $pasta "$rotulo-$tipo-3d.html"
             JSON = Join-Path $pasta "$rotulo-$tipo-tv.json"
@@ -50,7 +51,7 @@ function Testar-Estruturas {
             '{{L1}}' = (P -30 -30); '{{L2}}' = (P -30 30); '{{LADO}}' = (P 0 0)
             '{{V1}}' = (P 35 -35); '{{V2}}' = (P 35 35)
             '{{P}}' = (P -40 0)
-            '{{DAE}}' = $arquivos.DAE; '{{XLSX}}' = $arquivos.XLSX; '{{HTML}}' = $arquivos.HTML; '{{JSON}}' = $arquivos.JSON
+            '{{DAE}}' = $arquivos.DAE; '{{PVC}}' = $arquivos.PVC; '{{XLSX}}' = $arquivos.XLSX; '{{HTML}}' = $arquivos.HTML; '{{JSON}}' = $arquivos.JSON
         }
 
         $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo "$rotulo-$tipo" -Script (Join-Path $PSScriptRoot 'clivus-estruturas.scr') -Substituicoes $sub
@@ -201,7 +202,7 @@ function Testar-Estruturas {
         @{ S = [Math]::Round($s, 2); N = $n }
     }
 
-    foreach ($f in @('DAE', 'XLSX', 'HTML', 'JSON')) {
+    foreach ($f in @('DAE', 'PVC', 'XLSX', 'HTML', 'JSON')) {
         if (-not (Test-Path $mono.Arquivos[$f]) -or -not (Test-Path $bi.Arquivos[$f])) {
             $problemas.Add("${rotulo}: o arquivo $f nao saiu nas duas rodadas ($($mono.Arquivos[$f]), $($bi.Arquivos[$f])).")
             return $false
@@ -214,6 +215,38 @@ function Testar-Estruturas {
     if ($dm.N -eq 0 -or $dm.N -ne $db.N -or [Math]::Abs($dm.S - $db.S) -gt 0.05) {
         $problemas.Add("${rotulo}: o DAE do PVsyst mudou com a estrutura ($($dm.N) numeros, soma $($dm.S); $($db.N), soma $($db.S)).")
         $ok = $false
+    }
+
+    # O PVC do PVsyst (6.5): uma fiada por mesa, a mesma nas duas estruturas, e
+    # cada uma fecha com 14 x 2 modulos da 2P14 (a conta que o PVsyst faz).
+    $pm = SomaDosNumeros ([IO.File]::ReadAllText($mono.Arquivos.PVC))
+    $pb = SomaDosNumeros ([IO.File]::ReadAllText($bi.Arquivos.PVC))
+    if ($pm.N -eq 0 -or $pm.N -ne $pb.N -or [Math]::Abs($pm.S - $pb.S) -gt 0.05) {
+        $problemas.Add("${rotulo}: o PVC do PVsyst mudou com a estrutura ($($pm.N) numeros, soma $($pm.S); $($pb.N), soma $($pb.S)).")
+        $ok = $false
+    }
+    foreach ($rodada in @($mono, $bi)) {
+        if ($rodada.R.Texto -notmatch 'PVC_FIADAS (\d+) MESAS (\d+) MODULOS (\d+) PEDACOS 0 FORA_DA_GRADE 0 DE_FORA 0' -or $Matches[1] -ne $Matches[2] -or [int] $Matches[3] -ne 28 * [int] $Matches[2]) {
+            $problemas.Add("${rotulo}: o PVC nao saiu com uma fiada de 28 modulos por mesa ($([regex]::Match($rodada.R.Texto, 'PVC_FIADAS[^\r\n]*').Value)).")
+            $ok = $false
+        }
+    }
+    [xml] $px = [IO.File]::ReadAllText($bi.Arquivos.PVC)
+    $pns = New-Object System.Xml.XmlNamespaceManager($px.NameTable)
+    $pns.AddNamespace('c', 'http://www.collada.org/2005/11/COLLADASchema')
+    foreach ($g in @($px.SelectNodes('//c:library_geometries/c:geometry', $pns))) {
+        $n = @($g.SelectSingleNode('.//c:float_array', $pns).InnerText.Trim() -split '\s+' | ForEach-Object { [double]::Parse($_, $inv) })
+        $fp = $g.SelectSingleNode('c:mesh/c:frame_parameters', $pns)
+        $w = [double]::Parse($fp.module_width, $inv); $h = [double]::Parse($fp.module_height, $inv)
+        $sx = [double]::Parse($fp.module_x_spacing, $inv); $sy = [double]::Parse($fp.module_y_spacing, $inv)
+        $lado = [Math]::Sqrt([Math]::Pow($n[3] - $n[0], 2) + [Math]::Pow($n[4] - $n[1], 2) + [Math]::Pow($n[5] - $n[2], 2))
+        $descida = [Math]::Sqrt([Math]::Pow($n[9] - $n[0], 2) + [Math]::Pow($n[10] - $n[1], 2) + [Math]::Pow($n[11] - $n[2], 2))
+        $nc = ($lado + $sx) / ($w + $sx); $nr = ($descida + $sy) / ($h + $sy)
+        if ([Math]::Abs($nc - 14) -gt 1e-4 -or [Math]::Abs($nr - 2) -gt 1e-4) {
+            $problemas.Add("${rotulo}: a fiada $($g.id) do biposte nao fecha em 14 x 2 ($nc x $nr).")
+            $ok = $false
+            break
+        }
     }
 
     # O Excel: as abas que nao sao de pilar, estrutura ou resumo, celula a celula.
@@ -366,7 +399,7 @@ function Testar-Estruturas {
     }
 
     if ($ok) {
-        Escrever-Linha $rotulo "$fileiras fileiras, $mesas mesas, $modulos modulos; $iguais camadas iguais, $abasIguais abas, DAE, 3D e TermoVision iguais; pilares $pilaresMono x $pilaresBi" 'OK'
+        Escrever-Linha $rotulo "$fileiras fileiras, $mesas mesas, $modulos modulos; $iguais camadas iguais, $abasIguais abas, DAE, PVC (14 x 2 por mesa), 3D e TermoVision iguais; pilares $pilaresMono x $pilaresBi" 'OK'
     }
 
     return $ok

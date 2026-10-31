@@ -1,0 +1,63 @@
+; Teste de nivel 2 do passo 6.5: processa uma fileira (como no 6.2) e exporta
+; em PV Collada (.pvc), uma fiada por mesa como o PVcase, sem janela
+; (CLIVUS_EXPORTAR_AUTO). O LISP le do desenho o que o arquivo tem que refletir:
+;   - quantas faces de modulo e quantas mesas (GUIDs de mesa no XData das faces);
+;   - da primeira mesa: o GUID, a maior coluna e a maior fileira, e os cantos
+;     das faces das pontas, pela ordem gravada no desenho: o canto 0 da face
+;     (0,0), o 1 da (cmax,0), o 2 da (cmax,rmax) e o 3 da (0,rmax). Sao os
+;     quatro cantos da fiada dessa mesa no arquivo (a geometria mesa-<GUID>),
+;     ao milimetro, depois da matriz do no raiz e da origem do cabecalho.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area da exportacao")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento da exportacao")
+(command "CLIVUS_FILEIRA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_EXPORTAR_AUTO" "{{PVC}}")
+
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+(defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))
+(defun clivus:p (pt) (strcat (rtos (car pt) 2 6) "," (rtos (cadr pt) 2 6) "," (rtos (caddr pt) 2 6)))
+
+(setq clivus:faces (ssget "_X" (list (cons 0 "3DFACE") (cons 8 "CLIVUS_FACE"))))
+(setq clivus:nf 0 clivus:mesas nil clivus:t0 nil clivus:lista nil clivus:i 0)
+(if clivus:faces
+  (repeat (sslength clivus:faces)
+    (setq clivus:e (ssname clivus:faces clivus:i)
+          clivus:xd (clivus:xdata clivus:e))
+    (if (and clivus:xd (= (cdr (car clivus:xd)) "Face"))
+      (progn
+        (setq clivus:nf (1+ clivus:nf)
+              clivus:g (clivus:campo clivus:xd 2))
+        (if (not (member clivus:g clivus:mesas)) (setq clivus:mesas (cons clivus:g clivus:mesas)))
+        (if (null clivus:t0) (setq clivus:t0 clivus:g))
+        (if (= clivus:g clivus:t0)
+          (setq clivus:lista (cons (list (atoi (clivus:campo clivus:xd 3)) (atoi (clivus:campo clivus:xd 4)) (entget clivus:e)) clivus:lista)))))
+    (setq clivus:i (1+ clivus:i))))
+
+(defun clivus:acha (c r)
+  (caddr (car (vl-remove-if-not '(lambda (x) (and (= (car x) c) (= (cadr x) r))) clivus:lista))))
+(defun clivus:canto (c r k)
+  (if (clivus:acha c r) (clivus:p (cdr (assoc k (clivus:acha c r)))) "-"))
+
+(if clivus:lista
+  (progn
+    (setq clivus:cmax (apply 'max (mapcar 'car clivus:lista))
+          clivus:rmax (apply 'max (mapcar 'cadr clivus:lista)))
+    (princ (strcat "\nCLIVUS_PVC_LISP faces=" (itoa clivus:nf) " mesas=" (itoa (length clivus:mesas))
+                   " mesa=" clivus:t0 " cmax=" (itoa clivus:cmax) " rmax=" (itoa clivus:rmax)
+                   " p0=" (clivus:canto 0 0 10) " p1=" (clivus:canto clivus:cmax 0 11)
+                   " p2=" (clivus:canto clivus:cmax clivus:rmax 12) " p3=" (clivus:canto 0 clivus:rmax 13)
+                   " fim")))
+  (princ "\nCLIVUS_PVC_LISP sem faces"))
+
+; A janela do PVsyst desenhada num PNG, com o texto do 6.5 (memoria "conferir a tela renderizada").
+(clivus-renderizar-janela "pvsyst" "{{PNG}}" "600")
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

@@ -81,6 +81,7 @@
 
 ; As saidas: PVsyst, Excel com todas as abas, 3D e TermoVision.
 (command "CLIVUS_EXPORTAR_AUTO" "{{DAE}}")
+(command "CLIVUS_EXPORTAR_AUTO" "{{PVC}}")
 (command "CLIVUS_EXCEL_TUDO_AUTO" "{{XLSX}}")
 (command "CLIVUS_3D_AUTO" "{{HTML}}")
 (command "CLIVUS_TV_EXPORTAR_AUTO" "{{JSON}}")

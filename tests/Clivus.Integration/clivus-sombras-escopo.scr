@@ -124,6 +124,11 @@
 (command "CLIVUS_EXPORTAR_ESCOPO_AUTO" "AREA" "Usina" "-" (strcat "{{DAE}}" "usina.dae"))
 (princ "\nCLIVUS_EXPORTAR_FIM")
 
+; 6.5: as duas areas em PV Collada, uma fiada por mesa (o caminho do botao):
+; as mesmas mesas e os mesmos modulos do DAE das duas.
+(command "CLIVUS_EXPORTAR_ESCOPO_AUTO" "AREAS" "Area Oeste;Area Leste" "-" (strcat "{{DAE}}" "areas.pvc"))
+(princ "\nCLIVUS_EXPORTAR_PVC_FIM")
+
 ; 42.3: o roxo da versao antiga sai ao abrir a janela das sombras. Cinco
 ; modulos pintados como antes voltam a cor de antes, e o registro fica vazio.
 (setq clivus:sem-pintura (clivus:assinatura))

@@ -56,6 +56,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 42.5 A janela Áreas com as ações na linha (31/10/2026, tarde: "eu clico em apagar area e nao apaga. As ações precisam estar na linha"): dois cliques dá zoom, a lixeira (ou Del) apaga com aviso, F2 ou o segundo clique devagar renomeia, o botão direito tem o resto; embaixo, "Todas as áreas" (Hachurar, Tirar hachura, Limpar, Regerar, Apagar); o Apagar área, o Limpar e o Recalcular só com as mesas DA área. E o CLIVUS_3D com a janela de andamento e o Cancelar ("trava gostoso [...] sem MATAR MEU CAD"): AGUARDANDO VALIDAÇÃO — bc9b912; nível 2 `clivus-areas-acoes` (rodar.ps1 -SoAreas)
 - 42.6 As análises por escopo, o fundo e a borda dos textos e as colunas do biposte (31/10/2026, tarde: "Em analise eu tbm quero poder escolher o que analisar, uma area ou todas, isso para TODAS analises"; "texto ruim de ver, falta opção do texto de colocar o fundo e borda, isso para TODAS analises"; "em pilar, deveria ter a opção de analisar AMBOS pilares, cada um tem uma altura [...] uma coluna para cada pilar o da frente e o de traz, a cor pode ser o mesmo para ambos"): AGUARDANDO VALIDAÇÃO — `LineLimits`, `ThresholdRule.ForLine`, `AnalysisTally` V2 (o lugar e as linhas), `AnalysisTextLook`, `ThresholdForm`, 26 testes da etapa 42; nível 2 `clivus-analises-escopo` (rodar.ps1 -Caso Testar-AnalisesEscopo)
 - 42.5 e 42.6, a segunda rodada (31/10/2026, 14h40, na tela com a 0.1.5): "nao funciona o renomear. o F2 nao funciona tbm" (a coluna do nome, ligada só de ida, era só leitura para o DataGrid); "o texto fica por traz" (nas vistas sombreadas os módulos cobriam o texto: agora ele fica deitado no plano dos módulos, 0,15 m acima, como a seta da declividade); "TEM QUE EXISTIR ALINHAMENTO" (as áreas do seletor em colunas da mesma largura); "o botão direito anda muito devagar, o zoom, muito devagar" (a caixa do kWp e o menu do botão direito liam toda a seleção a cada pan e a cada clique): AGUARDANDO VALIDAÇÃO — nível 2 `clivus-areas` pelo F2 e pelo menu da linha (conferido que o teste pega o bug antigo)
+- 42.7 O PVsyst por mesa, como o PVcase (31/10/2026, noite, na tela com a 0.1.7: "tem um erro na exportação do PVsyst, é preciso exportar como mesa, exportar como modulo, vai me dificultar a modelagem"; "aqui é como o pvcase exporta", "agora vc consegue fazer igual"; é o 6.5 do plano principal): cada mesa vai como uma fiada do PVsyst com os módulos dentro (a medida do módulo e os vãos), num `.pvc` com a forma do arquivo do PVcase: AGUARDANDO VALIDAÇÃO — `PvFrames`, `PvColladaWriter`, 19 testes da etapa 6; nível 2 `clivus-exportar-pvc` (rodar.ps1 -Caso Testar-ExportarPvc), o PVC das duas áreas no `clivus-sombras-escopo` e o PVC da monoposte igual ao do biposte, 14 × 2 por mesa, no `-SoEstruturas`
 
 ## Observações
 
@@ -1053,7 +1054,42 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     desenho salvo nesta versão, aberto numa anterior, perde a regra por linha, a quantificação
     nova e o reconhecimento do texto de pilar do biposte (a versão antiga não os lê).
 
-## Roteiro de tela (38.1 a 42.6)
+- 42.7, o PVsyst por mesa (31/10/2026, noite):
+  - A referência: os quatro arquivos do PVcase do Renan e o exemplo que vem com o PVsyst 8.0.16
+    têm a mesma forma: Collada 1.4.1; cada mesa uma geometria de oito vértices (a face de cima
+    dos módulos e o fundo, a espessura abaixo) com dois triângulos da face de cima, "3 1 2 1 3 0";
+    o material "Frames"; dentro da `mesh`, depois dos triângulos, o `frame_parameters` com
+    `module_width` (o lado menor), `module_height` (o maior), `module_x_spacing` (o vão ao longo
+    da mesa), `module_y_spacing` (entre as fileiras) e "generic" no fabricante e no modelo; Y para
+    cima e o nó raiz girando para Z. A face é o retângulo EXATO dos módulos: nas 356 mesas do
+    PVcase, colunas × largura + vãos fecha com o lado ao milímetro (12 × 2 em Porto Feliz; 26 × 2
+    com vão de 0,021 e 39 × 2 com 0,018 em Mairinque). É por essa conta que o PVsyst enche a
+    fiada de módulos. O PVcase escreve as medidas em metro (1.303, 2.384, 0.02); a ajuda do
+    PVsyst diz milímetro inteiro e o exemplo dele traz 992 num arquivo em polegada: foi em metro,
+    como o PVcase, que é o que o PVsyst do Renan lê hoje.
+  - `PvFrames.FromFaces` monta a fiada das faces dos módulos desenhados (não do perfil): os eixos
+    da mesa saem do centro da primeira à última coluna e fileira (a mediana entre as linhas, para
+    um módulo arrastado não entortar a mesa), a medida do módulo e os vãos das faces projetadas
+    nesses eixos, ao milímetro, e o retângulo é refeito com elas, centrado no desenhado: assim a
+    conta do PVsyst fecha exata. Os cantos vão na ordem do PVcase (começo e fim da borda baixa,
+    fim e começo da borda alta), que é a ordem das faces no desenho.
+  - Decisões minhas: a mesa com módulo apagado vai em pedaços retangulares (colunas seguidas com
+    as mesmas fileiras), só com os módulos que estão no desenho, com " #2", " #3" no nome; a com
+    módulo fora da grade (mais de 3 mm do lugar, ou fora do plano) vai módulo a módulo, cada um
+    onde está; face sem área ou mesa de pé fica de fora e a linha de comando diz qual; sem vizinho
+    num sentido (mesa 1V), o vão do outro sentido, como o PVcase escreve os dois; a espessura vem
+    do módulo do tipo da mesa no desenho (35 mm, a do PVcase, sem tipo); o nome da geometria é o
+    letreiro da mesa e o id é "mesa-" e o GUID dela (regra sagrada 3).
+  - O botão grava só o `.pvc` (a janela do Windows sugere ".pvc"; quem escrever ".dae" leva o
+    mesmo conteúdo, como o `_export.dae` do PVcase). O DAE de uma face por módulo ficou nos
+    comandos automáticos com ".dae", que o nível 2 usa para conferir as faces (6.2, 42.4 e a prova
+    das estruturas, intactos).
+  - Ficou de fora, de propósito: o PVcase manda também as cercas, as estações e as árvores
+    ("Fence", "Station", "Tree_trunk", "Tree_crown") e o terreno num CSV ao lado; o pedido foi a
+    mesa. Se o Renan quiser os objetos que fazem sombra (as árvores do Clivus) e o relevo, é o
+    passo seguinte.
+
+## Roteiro de tela (38.1 a 42.7)
 
 1. **Nova estrutura (38.1 e 38.5):** Configurações › Estruturas › Nova estrutura… › **Fixa**.
    A janela de Mesa abre na aba "Perfil e módulo"; clicar no cartão **Biposte** abre a aba
@@ -1272,3 +1308,9 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     Atenção: com o máximo do projeto em 2,0 m (o padrão) e o mínimo da GC800 em 2,2 m, a faixa
     fica 2,2/2,2/2,2 e a estaca do catálogo não aparece; escreva o máximo de cada pilar (ou suba o
     do projeto) para ver o enterro variar.
+36. **O PVsyst por mesa (42.7):** Exportar para o PVsyst, escolher o escopo e Exportar…: a janela
+    do Windows sugere um `.pvc`. A linha de comando diz "EXPORTAR N mesa(s) em N fiada(s) do
+    PVsyst" e a medida que foi ("… de 14 × 2 módulos de 1,134 × 2,456 m, vãos 0,02 e 0,02 m"). No
+    PVsyst: Ficheiro › Importar › cena 3D, escolher o `.pvc`: não pergunta material; cada mesa
+    entra como uma fiada "Por módulos" com 14 × 2 (abrir uma: a mesma tela da fiada feita à mão),
+    e o total de módulos do PVsyst é o do Clivus.

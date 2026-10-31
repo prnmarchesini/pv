@@ -59,7 +59,7 @@ internal sealed class JanelaDoPvsyst : Window
         pilha.Children.Add(_seletor.Painel);
         pilha.Children.Add(new TextBlock
         {
-            Text = Tr.T("Vão as faces dos módulos das mesas escolhidas, num arquivo DAE (Collada) para importar no PVsyst. A área leva as áreas que estão dentro dela."),
+            Text = Tr.T("Cada mesa escolhida vai como uma fiada do PVsyst, com os módulos dentro (colunas, fileiras, medida do módulo e vãos), num arquivo PVC como o do PVcase. No PVsyst, importe como cena 3D. A área leva as áreas que estão dentro dela."),
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brushes.Gray,
             Margin = new Thickness(0, 8, 0, 0),

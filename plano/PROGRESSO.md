@@ -46,7 +46,7 @@ Só o Renan marca VALIDADO.
 | 6.2 | Botão Exportar para PVsyst | AGUARDANDO VALIDAÇÃO | `CLIVUS_EXPORTAR` (seleção por XData, formato, janela de arquivo, DAE com origem local); nível 2 relê o DAE: 168 faces, vértice ao milímetro |
 | 6.3 | Validação no PVsyst | AGUARDANDO VALIDAÇÃO | Renan importa o DAE no PVsyst, escolhe o material `CLIVUS_FACE`, confere contagem e orientação |
 | 6.4 | Estudo do formato PVC | AGUARDANDO VALIDAÇÃO | Resumo entregue em 26/09/2026 (seção "6.4: o formato PVC"); o plano manda PARAR aqui |
-| 6.5 | Escritor PVC | PENDENTE | |
+| 6.5 | Escritor PVC | AGUARDANDO VALIDAÇÃO | O PVsyst por mesa, como o PVcase (31/10/2026, noite): `PvFrames` e `PvColladaWriter`, uma fiada por mesa com o `frame_parameters`; feito como o 42.7 do plano bifila (seção "6.5: o escritor PVC" abaixo e `plano/bifila/PROGRESSO.md`) |
 | 7.1 | Estado sujo | AGUARDANDO VALIDAÇÃO | `TableIdentity.Dirty` no XData (versão 2, lê a 1); `CLIVUS_SUJAR` pinta contorno, pilares e módulos de vermelho; `CLIVUS_ESTADO` lista; nível 2 confere cor e XData |
 | 7.2 | O vigia | AGUARDANDO VALIDAÇÃO | `LayoutWatcher` por desenho: eventos do banco + fim de comando; `PendingChanges` (Core) decide; MOVE suja, ERASE do contorno registra remoção (`RemovalStore`); nível 2 com MOVE e ERASE por script |
 | 7.3 | Recalcular mesa | AGUARDANDO VALIDAÇÃO | `CLIVUS_RECALCULAR` (botão e botão direito sobre a peça): célula dos cantos do contorno (`TableCells`), reamostra, refaz pilares e pontas baixas, mesmo GUID, nasce limpa |
@@ -2936,6 +2936,25 @@ PVsyst do Renan permitir (pergunta 1).
    para lat/long/alt por ele. Se não, você digita lat/long de um ponto
    conhecido do desenho (e eu registro qual) — ou aceita que a cena vá
    com a `GeoLocation` do sítio como origem, sem a conversão exata.
+
+## 6.5: o escritor PVC (31/10/2026, noite)
+
+O Renan, com a 0.1.7 no PVsyst: "tem um erro na exportação do PVsyst, é preciso exportar como
+mesa, exportar como modulo, vai me dificultar a modelagem", com um print de uma fiada do
+PVsyst feita à mão (Por módulos, 14 × 2, retrato, vãos de 0,02) e, depois, quatro exportações
+do PVcase dele (`Docs\Marcheng\PVcase`: Porto Feliz e Mairinque, `.dae` e `.pvc`): "aqui é
+como o pvcase exporta", "agora vc consegue fazer igual". As três perguntas do 6.4 se
+resolveram assim:
+
+1. **A versão**: o PVsyst instalado é o 8.0.16, que não lê o PVC 2.0. O formato é o PV Collada
+   da ajuda dele ("PV Collada file format": um `frame_parameters` dentro da `mesh` faz dela uma
+   malha FV) e do exemplo que vem com ele (`DataRO\PVsyst8.0_Data\Userdata\SHD_PVC_Fixed_Example.pvc`),
+   que é o mesmo dos arquivos do PVcase do Renan.
+2. **Os dados do módulo**: o PVcase escreve só a medida do módulo e os vãos, com "generic" no
+   fabricante e no modelo; o módulo de verdade é o do projeto no PVsyst. Sem PAN.
+3. **A georreferência**: o PV Collada 1.x não tem; vai a origem local do 6.2, como o DAE.
+
+O que foi feito e as decisões estão no 42.7 do `plano/bifila/PROGRESSO.md`.
 
 ## 7.1: o estado sujo
 

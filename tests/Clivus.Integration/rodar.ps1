@@ -1728,6 +1728,166 @@ function Testar-Exportar {
 }
 
 <#
+    O PVsyst por mesa (6.5, Renan 31/10/2026: "é preciso exportar como mesa"):
+    processa uma fileira, exporta em .pvc e LE O ARQUIVO como o PVcase o
+    escreve: uma geometria por mesa do desenho (contadas em LISP pelo XData
+    das faces), material "Frames", sem up_axis, o no raiz com a matriz de Y
+    para cima, oito vertices e os triangulos "3 1 2 1 3 0" em cada mesa, o
+    frame_parameters com a medida do modulo e os vaos e o "generic". Cada
+    fiada fecha EXATAMENTE com os modulos (colunas x largura + vaos, o que o
+    PVsyst conta), a soma dos modulos e a das faces do desenho, e os quatro
+    cantos da fiada da primeira mesa sao os cantos das faces das pontas dela
+    (lidos em LISP), ao milimetro, pela matriz e pela origem do cabecalho.
+#>
+function Testar-ExportarPvc {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-exportar-pvc--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'clivus-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("clivus-exportar-pvc: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[1], $inv)
+    $centroY = [double]::Parse($Matches[2], $inv)
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($inv, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $pvc = Join-Path $saida 'nivel2-clivus-exportar.pvc'
+    if (Test-Path $pvc) { Remove-Item $pvc -Force }
+    $png = Join-Path $saida 'clivus-exportar-pvc-janela.png'
+    if (Test-Path $png) { Remove-Item $png -Force }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-exportar-pvc' `
+        -Script (Join-Path $PSScriptRoot 'clivus-exportar-pvc.scr') `
+        -Substituicoes @{
+            '{{A1}}'   = (Ponto3 -50 -50 0)
+            '{{A2}}'   = (Ponto3  50 -50 0)
+            '{{A3}}'   = (Ponto3  50  50 0)
+            '{{A4}}'   = (Ponto3 -50  50 0)
+            '{{L1}}'   = (Ponto3 -50 -50 0)
+            '{{L2}}'   = (Ponto3 -50  50 0)
+            '{{LADO}}' = (Ponto3   0   0 0)
+            '{{PVC}}'  = $pvc
+            '{{PNG}}'  = $png.Replace('\', '/')
+        }
+
+    $erros = @()
+    $t = $r.Texto
+    if ($r.Estourou -or $r.Codigo -ne 0) {
+        $problemas.Add("clivus-exportar-pvc terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($t -notmatch 'PVC_FIADAS (\d+) MESAS (\d+) MODULOS (\d+) PEDACOS (\d+) FORA_DA_GRADE (\d+) DE_FORA (\d+)') {
+        $problemas.Add("clivus-exportar-pvc: o comando nao gravou o PVC. Veja $($r.Saida)")
+        return $false
+    }
+    $relato = @{ Fiadas = [int] $Matches[1]; Mesas = [int] $Matches[2]; Modulos = [int] $Matches[3]; Pedacos = [int] $Matches[4]; Fora = [int] $Matches[5]; DeFora = [int] $Matches[6] }
+
+    if ($t -notmatch 'CLIVUS_PVC_LISP faces=(\d+) mesas=(\d+) mesa=([0-9A-Fa-f-]+) cmax=(\d+) rmax=(\d+) p0=(\S+) p1=(\S+) p2=(\S+) p3=(\S+) fim') {
+        $problemas.Add("clivus-exportar-pvc: nao consegui ler as faces em LISP. Veja $($r.Saida)")
+        return $false
+    }
+    $faces = [int] $Matches[1]; $mesas = [int] $Matches[2]; $guid = $Matches[3].Replace('-', '').ToLowerInvariant()
+    $colunas = [int] $Matches[4] + 1; $fileiras = [int] $Matches[5] + 1
+    $cantos = @(6..9 | ForEach-Object { , @($Matches[$_].Split(',') | ForEach-Object { [double]::Parse($_, $inv) }) })
+
+    if ($faces -lt 2 -or $mesas -lt 1) { $erros += "o desenho tem $faces face(s) e $mesas mesa(s)" }
+    if ($relato.Mesas -ne $mesas -or $relato.Fiadas -ne $mesas -or $relato.Modulos -ne $faces -or $relato.Pedacos -ne 0 -or $relato.Fora -ne 0 -or $relato.DeFora -ne 0) {
+        $erros += "o comando relatou $($relato.Fiadas) fiada(s), $($relato.Mesas) mesa(s), $($relato.Modulos) modulo(s) ($($relato.Pedacos) em pedacos, $($relato.Fora) fora da grade, $($relato.DeFora) de fora); o desenho tem $mesas mesa(s) inteiras e $faces face(s)"
+    }
+
+    if (-not (Test-Path $pvc)) {
+        $problemas.Add("clivus-exportar-pvc: o arquivo $pvc nao foi criado. Veja $($r.Saida)")
+        return $false
+    }
+    try { [xml] $xml = Get-Content $pvc -Raw -Encoding UTF8 }
+    catch { $problemas.Add("clivus-exportar-pvc: o PVC nao e XML valido: $($_.Exception.Message)"); return $false }
+
+    $ns = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
+    $ns.AddNamespace('c', 'http://www.collada.org/2005/11/COLLADASchema')
+
+    # A forma do PVcase.
+    $materiais = @($xml.SelectNodes('//c:library_materials/c:material', $ns))
+    if ($materiais.Count -ne 1 -or $materiais[0].name -ne 'Frames') { $erros += 'esperava um material so, chamado Frames' }
+    if ($null -ne $xml.SelectSingleNode('//c:asset/c:up_axis', $ns)) { $erros += 'o PVC nao devia ter up_axis (o do PVcase e Y para cima, sem ele)' }
+    $unidade = $xml.SelectSingleNode('//c:asset/c:unit', $ns)
+    if ($null -eq $unidade -or $unidade.meter -ne '1') { $erros += 'a unidade do PVC nao e o metro' }
+    $raiz = $xml.SelectSingleNode('//c:visual_scene/c:node', $ns)
+    if ($null -eq $raiz -or $raiz.SelectSingleNode('c:matrix', $ns).InnerText -ne '1 0 0 0 0 0 -1 0 0 1 0 0 0 0 0 1') { $erros += 'o no raiz nao tem a matriz do PVcase (Y para cima)' }
+
+    if ($xml.SelectSingleNode('//c:asset/c:contributor/c:comments', $ns).InnerText -notmatch 'E=(-?[\d.E+-]+) N=(-?[\d.E+-]+) Z=(-?[\d.E+-]+)\.') {
+        $problemas.Add("clivus-exportar-pvc: o cabecalho do PVC nao traz a origem local")
+        return $false
+    }
+    $oE = [double]::Parse($Matches[1], $inv); $oN = [double]::Parse($Matches[2], $inv); $oZ = [double]::Parse($Matches[3], $inv)
+    if ($t -notmatch 'ORIGEM E=(-?[\d.E+-]+) N=(-?[\d.E+-]+) Z=(-?[\d.E+-]+)' -or [math]::Abs([double]::Parse($Matches[1], $inv) - $oE) -gt 1e-6 -or [math]::Abs([double]::Parse($Matches[2], $inv) - $oN) -gt 1e-6) {
+        $erros += 'a origem do cabecalho difere da dita pelo comando'
+    }
+
+    $geometrias = @($xml.SelectNodes('//c:library_geometries/c:geometry', $ns))
+    $instancias = @($xml.SelectNodes('//c:visual_scene//c:instance_geometry', $ns))
+    if ($geometrias.Count -ne $mesas -or $instancias.Count -ne $mesas) { $erros += "o desenho tem $mesas mesa(s); o PVC tem $($geometrias.Count) geometria(s) e $($instancias.Count) instancia(s)" }
+
+    $somaDeModulos = 0
+    $daPrimeira = $null
+    foreach ($g in $geometrias) {
+        $n = @($g.SelectSingleNode('.//c:float_array', $ns).InnerText.Trim() -split '\s+' | ForEach-Object { [double]::Parse($_, $inv) })
+        $p = $g.SelectSingleNode('.//c:triangles/c:p', $ns).InnerText
+        $fp = $g.SelectSingleNode('c:mesh/c:frame_parameters', $ns)
+        if ($n.Count -ne 24 -or $p -ne '3 1 2 1 3 0' -or $null -eq $fp) { $erros += "a geometria $($g.id) nao tem a forma do PVcase ($($n.Count) numeros, triangulos '$p')"; continue }
+        if ($fp.module_manufacturer -ne 'generic' -or $fp.module_name -ne 'generic') { $erros += "a geometria $($g.id) nao leva o generic do PVcase" }
+
+        $w = [double]::Parse($fp.module_width, $inv); $h = [double]::Parse($fp.module_height, $inv)
+        $sx = [double]::Parse($fp.module_x_spacing, $inv); $sy = [double]::Parse($fp.module_y_spacing, $inv)
+
+        # Os cantos de volta ao desenho: a matriz (x, -z, y) e a origem.
+        $v = @(0..3 | ForEach-Object { , @(($n[3 * $_] + $oE), (-$n[3 * $_ + 2] + $oN), ($n[3 * $_ + 1] + $oZ)) })
+        function D($a, $b) { [math]::Sqrt([math]::Pow($a[0] - $b[0], 2) + [math]::Pow($a[1] - $b[1], 2) + [math]::Pow($a[2] - $b[2], 2)) }
+        $lado = D $v[0] $v[1]; $descida = D $v[0] $v[3]
+
+        # Retrato: a largura ao longo da mesa. A conta do PVsyst tem que fechar inteira.
+        $nc = ($lado + $sx) / ($w + $sx); $nr = ($descida + $sy) / ($h + $sy)
+        if ([math]::Abs($nc - [math]::Round($nc)) -gt 1e-4 -or [math]::Abs($nr - [math]::Round($nr)) -gt 1e-4) {
+            $erros += "a fiada $($g.id) nao fecha com os modulos ($nc x $nr com $w x $h e vaos $sx, $sy)"
+            continue
+        }
+        $somaDeModulos += [math]::Round($nc) * [math]::Round($nr)
+
+        if ($g.id -eq "mesa-$guid") { $daPrimeira = @{ V = $v; Nc = [math]::Round($nc); Nr = [math]::Round($nr) } }
+    }
+
+    if ($somaDeModulos -ne $faces) { $erros += "as fiadas somam $somaDeModulos modulo(s) e o desenho tem $faces face(s)" }
+
+    if ($null -eq $daPrimeira) { $erros += "o PVC nao tem a geometria mesa-$guid da primeira mesa" }
+    else {
+        if ($daPrimeira.Nc -ne $colunas -or $daPrimeira.Nr -ne $fileiras) { $erros += "a fiada da primeira mesa tem $($daPrimeira.Nc) x $($daPrimeira.Nr) modulos; o desenho, $colunas x $fileiras" }
+        for ($k = 0; $k -lt 4; $k++) {
+            $a = $daPrimeira.V[$k]; $b = $cantos[$k]
+            $d = [math]::Sqrt([math]::Pow($a[0] - $b[0], 2) + [math]::Pow($a[1] - $b[1], 2) + [math]::Pow($a[2] - $b[2], 2))
+            if ($d -gt 0.001) { $erros += "o canto $k da fiada da primeira mesa esta a $([math]::Round($d * 1000, 1)) mm do canto das faces do desenho" }
+        }
+    }
+
+    if ($t -notmatch 'RENDER pvsyst \d+x\d+' -or -not (Test-Path $png)) { $erros += "a janela do PVsyst nao foi desenhada em $png" }
+
+    if ($t -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) { $erros += 'o SECURELOAD nao voltou ao que era' }
+
+    if ($erros.Count -gt 0) {
+        $problemas.Add("clivus-exportar-pvc: $($erros -join '; '). Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (exportar PVC: $mesas mesa(s) em $($geometrias.Count) fiada(s), $somaDeModulos modulos, a primeira $colunas x $fileiras, cantos ao milimetro)" -ForegroundColor DarkGray
+    return $true
+}
+
+<#
     O estado sujo (7.1): processa uma fileira, suja a primeira mesa e le do
     desenho: exatamente um contorno com suja=1 e motivo no XData; contorno,
     pilares e modulos dessa mesa vermelhos; nenhuma face vermelha; e o
@@ -4415,6 +4575,7 @@ function Testar-SombrasEscopo {
     # Os DAE do PVsyst por escopo (42.4): nivel2-pvsyst-oeste.dae e os outros.
     $dae = Join-Path $saida 'nivel2-pvsyst-'
     Get-ChildItem $saida -Filter 'nivel2-pvsyst-*.dae' -ErrorAction SilentlyContinue | Remove-Item -Force
+    Get-ChildItem $saida -Filter 'nivel2-pvsyst-*.pvc' -ErrorAction SilentlyContinue | Remove-Item -Force
 
     # O 3D depois de calcular a Usina (42.3): os momentos da analise.
     $html = Join-Path $saida 'clivus-sombras-escopo-3d.html'
@@ -4515,6 +4676,16 @@ function Testar-SombrasEscopo {
         $po = $mesas[0]; $pa = $mesas[1]; $ps = $mesas[2]; $pt = $mesas[3]; $pu = $mesas[4]
         if ($po -lt 1 -or $pa -le $po -or $ps -ne 1 -or $pu -ne $pa -or $pt -lt $pu) { $erros += "o PVsyst por escopo levou mesas erradas: Oeste $po, as duas $pa (> Oeste), F1.1 $ps (1), tudo $pt (>= Usina), Usina $pu (= as duas)" }
         if ($faces[1] -ne $faces[4] -or $faces[0] -ge $faces[1] -or $faces[2] -lt 1 -or $faces[2] -ge $faces[0]) { $erros += "o PVsyst por escopo gravou faces erradas: Oeste $($faces[0]), as duas $($faces[1]), F1.1 $($faces[2]), tudo $($faces[3]), Usina $($faces[4])" }
+
+        # 6.5: as duas areas por mesa, as mesmas mesas e os mesmos modulos do DAE delas.
+        $m = $t.IndexOf('CLIVUS_EXPORTAR_PVC_FIM')
+        $pvc = if ($l -ge 0 -and $m -gt $l) { $t.Substring($l, $m - $l) } else { '' }
+        if ($pvc -notmatch 'EXPORTAR_MESAS (\d+)[\s\S]*PVC_FIADAS (\d+) MESAS (\d+) MODULOS (\d+) PEDACOS 0 FORA_DA_GRADE 0 DE_FORA 0' -or -not (Test-Path "${dae}areas.pvc")) {
+            $erros += 'o PVsyst por mesa das duas areas nao gravou o PVC'
+        }
+        elseif ([int] $Matches[1] -ne $pa -or [int] $Matches[2] -ne $pa -or [int] $Matches[3] -ne $pa -or [int] $Matches[4] -ne $faces[1]) {
+            $erros += "o PVsyst por mesa das duas areas levou $($Matches[3]) mesa(s) em $($Matches[2]) fiada(s) com $($Matches[4]) modulo(s); o DAE delas, $pa mesa(s) e $($faces[1]) face(s)"
+        }
     }
 
     if ($t -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) { $erros += 'o SECURELOAD nao voltou ao que era' }
@@ -5094,6 +5265,10 @@ else {
     # A exportacao para o PVsyst, lendo o DAE de volta.
     $total++
     if (Testar-Exportar -Desenho $desenhos[0]) { $passaram++ }
+
+    # O PVsyst por mesa (6.5), lendo o PVC de volta como o PVcase o escreve.
+    $total++
+    if (Testar-ExportarPvc -Desenho $desenhos[0]) { $passaram++ }
 
     # O estado sujo da mesa, lido do XData e da cor.
     $total++
