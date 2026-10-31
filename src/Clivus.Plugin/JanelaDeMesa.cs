@@ -205,7 +205,7 @@ internal sealed class JanelaDeMesa : Window
     // Para onde os módulos olham, embaixo da inclinação: é do projeto (38.9).
     private readonly TextBlock _olhaPara = new() { FontSize = 11, Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) };
 
-    // A aba Modelos (38.7; o nome de 31/10/2026): as estruturas prontas, que vão para a aba do biposte.
+    // A aba Modelos (38.7; o nome de 30/10/2026): as estruturas prontas, que vão para a aba do biposte.
     private readonly TabItem _abaDosModelos = new();
     private readonly TextBlock _recadoDosModelos = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
 
@@ -510,12 +510,12 @@ internal sealed class JanelaDeMesa : Window
     }
 
     /// <summary>
-    /// A aba Modelos (38.7, Fabricantes até 31/10/2026): o biposte genérico,
+    /// A aba Modelos (38.7, Fabricantes até 30/10/2026): o biposte genérico,
     /// para montar o seu, e uma seção por fabricante com um cartão por
     /// estrutura pronta (as peças, a altura livre e os pilares de catálogo).
     /// "Usar" enche a aba do biposte, onde tudo se muda, o nome também (38.9:
     /// "eu escolho um modelo e edito ela, onde posso dar outro nome").
-    /// "Apagar" tira o cartão da aba (Renan, 31/10/2026: "eu falei que quero
+    /// "Apagar" tira o cartão da aba (Renan, 30/10/2026: "eu falei que quero
     /// APAGAR os fabricantes, cadê? E não chama fabricante, chama modelos a
     /// aba, e aí, quero seções POR fabricantes"); os prontos vêm com o
     /// plugin, então apagar é esconder, e "Mostrar os apagados" traz de volta.

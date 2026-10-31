@@ -6,7 +6,7 @@ using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 namespace Clivus.Plugin;
 
 /// <summary>
-/// O registro de tudo (Renan, 31/10/2026: "quero também que você gere logs
+/// O registro de tudo (Renan, 30/10/2026: "quero também que você gere logs
 /// de tudo, porque apareceu umas msg de erro, e aí, tendo log, você poderá
 /// analisar"). Só no Civil 3D com interface; o Core Console dos testes não
 /// escreve nada aqui. Três fontes, todas na pasta do plugin

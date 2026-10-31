@@ -26,7 +26,7 @@ public class VendorStructuresTests
     /// <summary>A tolerância contra o motor: a mesma conta, só o ponto flutuante de diferença.</summary>
     private const double Motor = 1e-6;
 
-    // ------------------------------------------------- aba Modelos (31/10)
+    // ------------------------------------------------- aba Modelos (30/10)
 
     [Fact]
     [Trait("Etapa", "38")]

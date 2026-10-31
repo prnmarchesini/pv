@@ -6,7 +6,7 @@
 ; polilinha do usuario ficou no desenho. Depois tenta fazer area da propria
 ; area: tem que recusar.
 ;
-; Desde 31/10/2026 ("em selecionar area, poligonal fechada, quero que seja
+; Desde 30/10/2026 ("em selecionar area, poligonal fechada, quero que seja
 ; possivel usar 3D polilinha"), mais duas, com 3DPOLY e cotas estragadas:
 ; uma com a ponta no primeiro vertice em planta, mas com outra cota (sem o
 ; "fechada" do AutoCAD), que vale como fechada; e uma aberta (triangulo sem

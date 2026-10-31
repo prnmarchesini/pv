@@ -6,7 +6,7 @@ namespace Clivus.Core;
 /// <summary>
 /// As preferências do usuário que não são do desenho (etapa 10): o idioma
 /// ("auto", "pt", "en", "es") e, desde 21/10/2026, se o rastreio planta ↔
-/// gráfico da drenagem está ligado (32.2). Desde 31/10/2026, os modelos
+/// gráfico da drenagem está ligado (32.2). Desde 30/10/2026, os modelos
 /// apagados da aba Modelos da janela de Mesa (os prontos vêm com o plugin:
 /// apagar é deixar de mostrar, e "Mostrar os apagados" traz de volta). Ficam
 /// em <c>%LOCALAPPDATA%\Clivus Solar\preferencias.json</c>; arquivo que

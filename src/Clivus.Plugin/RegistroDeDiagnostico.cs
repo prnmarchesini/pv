@@ -14,7 +14,7 @@ namespace Clivus.Plugin;
 ///
 /// O arquivo fica em %LOCALAPPDATA%\Clivus Solar\clivus.log. Cheio, ele vira
 /// clivus.1.log (o anterior a esse sai) e um novo comeca: o que aconteceu
-/// pouco antes de um erro nao se perde na virada (31/10/2026, "quero que voce
+/// pouco antes de um erro nao se perde na virada (30/10/2026, "quero que voce
 /// gere logs de tudo [...] tendo log, voce podera analisar").
 /// </summary>
 internal static class RegistroDeDiagnostico

@@ -149,7 +149,7 @@ public static class AreaCommands
     /// das áreas. A cota da polilinha não vale; vem do terreno, no
     /// <see cref="Criar"/>, como a do clique. Fechada é em planta: a 3D com a
     /// ponta no começo (a até 1 cm, com qualquer cota) serve; a que não fecha
-    /// pergunta se fecha com uma reta da ponta ao começo (31/10/2026).
+    /// pergunta se fecha com uma reta da ponta ao começo (30/10/2026).
     /// </summary>
     private static IReadOnlyList<Point3d>? Selecionar(Editor editor, RastroDoTracado rastro)
     {

@@ -541,7 +541,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     pilares, ocupação, a mesa na divisa, a área vazia, o total de várias, a cota da hachura)
     e o nível 2 `clivus-areas` (duas áreas, o total igual ao Recontar, as hachuras acima das
     mesas, renomear, tirar e o Excel).
-- 38.10 (31/10/2026), pedidos da tela de 30/10 à noite: "eu cliquei em salvar e chega a dar
+- 38.10 (30/10/2026, à noite), pedidos da tela: "eu cliquei em salvar e chega a dar
   uma travada no cad [...] VIGIA Fx.y pendente (movida ou editada, comando QSAVE) [...] isso é
   bug, corrija", "depois de salvar as mesas ficaram todas vermelhas, bug dos bravos", "quero
   também que você gere logs de tudo", "eu falei que quero APAGAR os fabricantes, cadê? E não

@@ -340,7 +340,7 @@ public static class LocalDosInversores
     /// <summary>
     /// Em planta, a ponta a até 1 cm do começo fecha a polilinha, com
     /// qualquer cota: a 3D do cliente vem com a cota estragada, e o último
-    /// clique quase nunca cai em cima do primeiro (31/10/2026: "em selecionar
+    /// clique quase nunca cai em cima do primeiro (30/10/2026: "em selecionar
     /// área, poligonal fechada, quero que seja possível usar 3D polilinha").
     /// </summary>
     internal const double FolgaDoFechamento = 0.01;

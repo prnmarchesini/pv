@@ -63,7 +63,7 @@ public sealed class ClivusExtension : IExtensionApplication
             return;
         }
 
-        // O registro de tudo (31/10/2026) antes da ribbon: se ela falhar, o
+        // O registro de tudo (30/10/2026) antes da ribbon: se ela falhar, o
         // que aconteceu até ali já fica escrito.
         try
         {

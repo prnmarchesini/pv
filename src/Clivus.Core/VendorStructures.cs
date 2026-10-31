@@ -113,7 +113,7 @@ public sealed record VendorStructure(
 /// duas da Arctech do projeto Aurora (plano/bifila/01-modelo-de-referencia.md).
 ///
 /// Na janela de Mesa elas ficam na aba Modelos, numa seção por fabricante,
-/// depois da do biposte genérico (Renan, 31/10/2026: "não chama fabricante,
+/// depois da do biposte genérico (Renan, 30/10/2026: "não chama fabricante,
 /// chama modelos a aba, e aí, quero seções POR fabricantes"). O modelo
 /// apagado some da aba (os prontos vêm com o plugin: apagar é esconder, e o
 /// usuário traz de volta).
