@@ -745,7 +745,21 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     ladrilho, e a hachura é entidade nova (o outro trabalho, o do 3D, precisa ler as
     hachuras). As frases novas estão sem tradução (os testes de idioma ficam vermelhos até
     o catálogo ser atualizado).
-  - Desempenho: ver o relatório do passo (medido fora do CAD).
+  - **Desempenho, medido fora do CAD** (Core em Release, num terreno ondulado de ±15 m com
+    um barranco de 8 m, uma área de 300 × 300 m com 300 mesas e 12 mil módulos, um ano com
+    um dia por semana de 30 em 30 min, 1247 passos com sol):
+    - o relevo: 0,4 s para montar a grade, 1,7 ms por passo (934 dos 1247 varreram), 2 s no
+      ano; os 3132 pedaços do chão em 0,15 s;
+    - a sombra mesa a mesa nos módulos (`ShadingModel`, já existia): 447 ms por passo
+      antes, 140 ms agora (o bloco de 8 × 8 células todo abaixo do raio é pulado, e o raio
+      para ao sair da caixa das faces; a resposta é a mesma, conferida contra a força
+      bruta): no ano inteiro dessa área, uns 3 minutos;
+    - a mancha das mesas no chão (`ShadowFootprint`, já existia): 7 ms por passo, mas a
+      união dos polígonos de todos os passos pesa (4 s para 63 passos de 300 mesas): no
+      ano, perto de um minuto e meio.
+    - Numa área de uns 3 mil módulos, o ano fica por volta de um minuto; o Solstício de
+      inverno, em segundos. O desenho inteiro de 16 mil módulos no ano inteiro passa de dez
+      minutos: área por área, como o Renan disse que vai fazer.
 
 ## Roteiro de tela (38.1 a 42.1)
 
