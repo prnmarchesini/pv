@@ -197,7 +197,7 @@ internal sealed class JanelaDeBacias : Window
         JanelaDeProgresso? andamento = null;
         Fazer(() =>
         {
-            var terreno = TerrainCache.Get(_documento) ?? throw new ArgumentException(Tr.T("Nenhum terreno processado neste desenho. Use o botão Terreno primeiro."));
+            var terreno = TerrenoDoDesenho.Garantir(_documento) ?? throw new ArgumentException(Tr.T("Nenhum terreno processado neste desenho. Use o botão Terreno primeiro."));
             andamento = JanelaDeProgresso.Abrir(this, Tr.T("Bacias de contribuição"), podeCancelar: true);
 
             try

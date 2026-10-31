@@ -44,19 +44,10 @@ public static class AlignmentCommands
 
         try
         {
-            var terreno = TerrainCache.Get(documento);
-            if (terreno is null)
-            {
-                editor.WriteMessage(
-                    Tr.T("\nNenhum terreno processado neste desenho. Use o botão Terreno primeiro.\n"));
-                return;
-            }
-
-            var aviso = TerrenoEnvelhecido.Conferir(documento);
-            if (aviso is not null)
-            {
-                editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
-            }
+            // Reaberto o desenho, o terreno do carimbo volta sozinho (31/10/2026),
+            // e o aviso de terreno envelhecido sai junto.
+            var terreno = FileiraCommands.ExigirTerreno(editor, documento);
+            if (terreno is null) return;
 
             // O rastro vive por todo o comando, e não só enquanto se traça:
             // é com a linha na tela que o usuário clica o lado. Sem ela, "de

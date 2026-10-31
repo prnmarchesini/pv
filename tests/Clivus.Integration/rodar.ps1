@@ -713,6 +713,12 @@ function Testar-Carimbo {
         return $false
     }
 
+    # O terreno volta a memoria ao abrir (31/10/2026), sem modificar o desenho.
+    if ($ler.Texto -notmatch 'CLIVUS_TERRENO_AO_ABRIR=T DBMOD_ANTES=(\d+) DBMOD_DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2] -or $ler.Texto -notmatch 'CLIVUS Terreno carregado: ') {
+        $problemas.Add("clivus-carimbo: ao abrir, o terreno do carimbo nao voltou a memoria, ou voltar modificou o desenho (DBMOD). Veja $($ler.Saida)")
+        return $false
+    }
+
     # Terceira metade: move a superficie e exige que o carimbo perceba.
     #
     # E o caso que o Renan achou a mao. Sem ele, a deteccao de terreno

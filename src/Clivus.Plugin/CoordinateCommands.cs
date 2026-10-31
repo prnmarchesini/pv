@@ -33,11 +33,11 @@ public static class CoordinateCommands
 
         try
         {
-            var terreno = TerrainCache.Get(documento);
+            // Reaberto o desenho, o terreno do carimbo volta sozinho
+            // (31/10/2026). Sem terreno nenhum, a mensagem diz o que fazer.
+            var terreno = TerrenoDoDesenho.Garantir(documento);
             if (terreno is null)
             {
-                // Sem terreno processado não há o que consultar. A mensagem diz
-                // o que fazer, e não só que não dá.
                 editor.WriteMessage(
                     Tr.T("\nNenhum terreno processado neste desenho. Use o botão Terreno primeiro.\n"));
                 return;

@@ -101,7 +101,7 @@ public static class FlechasCommands
     /// </summary>
     internal static string GerarPelaJanela(Document documento, OndeFlechas onde, ArrowSettings configuracao)
     {
-        var terreno = TerrainCache.Get(documento);
+        var terreno = TerrenoDoDesenho.Garantir(documento);
 
         if (terreno is null && TerrainCommands.Reprocessar(documento.Editor, documento))
             terreno = TerrainCache.Get(documento);

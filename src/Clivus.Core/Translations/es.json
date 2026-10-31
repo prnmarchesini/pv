@@ -592,6 +592,7 @@
  "CC/CA": "CC/CA",
  "CLIVUS Camadas {0} (laranja) e {1} (amarela) acertadas.": "CLIVUS Capas {0} (naranja) y {1} (amarilla) corregidas.",
  "CLIVUS SOLAR sem licença válida ({0}). Gere seu código no portal do app e use o botão Ativar ({1}).": "CLIVUS SOLAR sin licencia válida ({0}). Genere su código en el portal de la app y use el botón Activar ({1}).",
+ "CLIVUS Terreno carregado: {0} ({1:N0} triângulos), processado em {2}; em {3:0.0} s.": "CLIVUS Terreno cargado: {0} ({1:N0} triángulos), procesado el {2}; en {3:0.0} s.",
  "CLIVUS {0} mesa(s) estavam pendentes só porque o desenho foi salvo (erro corrigido em 30/10/2026). Estão inteiras e onde foram desenhadas, e voltaram ao normal, sem recalcular: {1}. Se alguma tinha uma peça mexida no lugar, ou você a tinha marcado pendente à mão, use Recalcular ou Marcar pendente nela.": "CLIVUS {0} mesa(s) estaban pendientes solo porque se guardó el dibujo (error corregido el 30/10/2026). Están completas y donde se dibujaron, y volvieron a la normalidad, sin recalcular: {1}. Si alguna tenía una pieza movida en su lugar, o usted la había marcado pendiente a mano, use Recalcular o Marcar pendiente en ella.",
  "CLIVUS {0} mesa(s) pendentes pelo salvar não puderam voltar ao normal e continuam pendentes (veja o clivus.log): {1}.": "CLIVUS {0} mesa(s) pendientes por el guardado no pudieron volver a la normalidad y siguen pendientes (vea el clivus.log): {1}.",
  "CLIVUS_SERVICO não é um endereço http: \"{0}\"": "CLIVUS_SERVICO no es una dirección http: \"{0}\"",

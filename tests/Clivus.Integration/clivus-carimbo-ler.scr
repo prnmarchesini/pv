@@ -5,11 +5,19 @@
 ; mudou desde o processamento. Se a resposta for SemCarimbo, o carimbo nao
 ; sobreviveu ao arquivo; se for Desatualizado ou SuperficieSumiu, a leitura de
 ; volta entendeu errado o que foi gravado.
+;
+; Desde 31/10/2026 ("quando o cad abre, ele nao ta carregando o terreno, isso
+; e erro"): o terreno do carimbo volta a memoria ao abrir, sem gravar nada no
+; desenho. Com interface isso roda na primeira folga; aqui, pelo gancho, que
+; chama o mesmo. O DBMOD tem de continuar o mesmo (abrir nao modifica).
 
 (setq clivus:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
 (command "_.NETLOAD" "{{DLL}}")
 (command "CLIVUS_TERRENO_STATUS")
+(setq clivus:dbmod (getvar "DBMOD"))
+(setq clivus:carregou (clivus-terreno-ao-abrir))
+(princ (strcat "\nCLIVUS_TERRENO_AO_ABRIR=" (if clivus:carregou "T" "NAO") " DBMOD_ANTES=" (itoa clivus:dbmod) " DBMOD_DEPOIS=" (itoa (getvar "DBMOD"))))
 (setvar "SECURELOAD" clivus:secureload)
 (princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
 (princ)

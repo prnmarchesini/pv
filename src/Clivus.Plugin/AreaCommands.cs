@@ -33,22 +33,12 @@ public static class AreaCommands
 
         try
         {
-            var terreno = TerrainCache.Get(documento);
-            if (terreno is null)
-            {
-                editor.WriteMessage(
-                    Tr.T("\nNenhum terreno processado neste desenho. Use o botão Terreno primeiro.\n"));
-                return;
-            }
-
-            // A área vai ser assentada sobre o terreno que está em memória. Se
-            // ele não corresponde mais ao desenho, a área nasce errada — e
-            // parecendo certa.
-            var aviso = TerrenoEnvelhecido.Conferir(documento);
-            if (aviso is not null)
-            {
-                editor.WriteMessage(Tr.F("\n  ATENÇÃO: {0}\n", aviso));
-            }
+            // A área vai ser assentada sobre o terreno que está em memória.
+            // Reaberto o desenho, o do carimbo volta sozinho (31/10/2026); se
+            // ele não corresponde mais ao desenho, o aviso sai: a área nasceria
+            // errada, e parecendo certa.
+            var terreno = FileiraCommands.ExigirTerreno(editor, documento);
+            if (terreno is null) return;
 
             // O rastro mostra o que já foi clicado: o AutoCAD sozinho só dá o
             // elástico do último ponto até o cursor, e num contorno de seis ou

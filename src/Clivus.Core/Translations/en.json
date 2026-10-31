@@ -592,6 +592,7 @@
  "CC/CA": "DC/AC",
  "CLIVUS Camadas {0} (laranja) e {1} (amarela) acertadas.": "CLIVUS Layers {0} (orange) and {1} (yellow) fixed.",
  "CLIVUS SOLAR sem licença válida ({0}). Gere seu código no portal do app e use o botão Ativar ({1}).": "CLIVUS SOLAR has no valid license ({0}). Generate your code in the app portal and use the Activate button ({1}).",
+ "CLIVUS Terreno carregado: {0} ({1:N0} triângulos), processado em {2}; em {3:0.0} s.": "CLIVUS Terrain loaded: {0} ({1:N0} triangles), processed on {2}; in {3:0.0} s.",
  "CLIVUS {0} mesa(s) estavam pendentes só porque o desenho foi salvo (erro corrigido em 30/10/2026). Estão inteiras e onde foram desenhadas, e voltaram ao normal, sem recalcular: {1}. Se alguma tinha uma peça mexida no lugar, ou você a tinha marcado pendente à mão, use Recalcular ou Marcar pendente nela.": "CLIVUS {0} table(s) were pending only because the drawing was saved (bug fixed on 30/10/2026). They are complete and where they were drawn, and are back to normal, without recalculating: {1}. If one had a part changed in place, or you had marked it pending by hand, use Recalculate or Mark pending on it.",
  "CLIVUS {0} mesa(s) pendentes pelo salvar não puderam voltar ao normal e continuam pendentes (veja o clivus.log): {1}.": "CLIVUS {0} table(s) left pending by saving could not go back to normal and are still pending (see clivus.log): {1}.",
  "CLIVUS_SERVICO não é um endereço http: \"{0}\"": "CLIVUS_SERVICO is not an http address: \"{0}\"",

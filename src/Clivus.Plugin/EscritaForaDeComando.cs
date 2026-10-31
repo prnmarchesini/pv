@@ -44,6 +44,20 @@ internal static class EscritaForaDeComando
 /// </summary>
 public static class GanchosDeTeste
 {
+    /// <summary>
+    /// O carregamento do terreno ao abrir (31/10/2026), que com interface roda
+    /// na primeira folga: no Core Console não há folga, então o nível 2 chama
+    /// o mesmo por aqui. Devolve T se carregou.
+    /// </summary>
+    [LispFunction("CLIVUS-TERRENO-AO-ABRIR")]
+    public static object? TerrenoAoAbrir(ResultBuffer argumentos)
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return null;
+
+        return TerrainCommands.CarregarDoCarimbo(documento.Editor, documento) ? true : null;
+    }
+
     [LispFunction("CLIVUS-SOMBRAS-PELA-JANELA")]
     public static object? SombrasPelaJanela(ResultBuffer argumentos)
     {

@@ -344,7 +344,7 @@ internal sealed class JanelaDeCanaleta : Window
 
     private void Atualizar() => Fazer(() =>
     {
-        var terreno = TerrainCache.Get(_documento) ?? throw new ArgumentException(Tr.T("Nenhum terreno processado neste desenho. Use o botão Terreno primeiro."));
+        var terreno = TerrenoDoDesenho.Garantir(_documento) ?? throw new ArgumentException(Tr.T("Nenhum terreno processado neste desenho. Use o botão Terreno primeiro."));
         return LinhaCommands.AtualizarTodas(_documento, terreno.Mesh);
     });
 

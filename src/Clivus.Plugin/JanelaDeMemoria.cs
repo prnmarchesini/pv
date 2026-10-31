@@ -349,7 +349,7 @@ internal sealed class JanelaDeMemoria : Window
         {
             Cursor = System.Windows.Input.Cursors.Wait;
             var parametros = Ler();
-            var terreno = TerrainCache.Get(_documento) ?? throw new ArgumentException(Tr.T("Nenhum terreno processado neste desenho. Use o botão Terreno primeiro."));
+            var terreno = TerrenoDoDesenho.Garantir(_documento) ?? throw new ArgumentException(Tr.T("Nenhum terreno processado neste desenho. Use o botão Terreno primeiro."));
             var frases = new List<string>();
             DrainageMemoryResult memoria;
 
@@ -457,7 +457,7 @@ internal sealed class JanelaDeMemoria : Window
     {
         try
         {
-            var terreno = TerrainCache.Get(_documento) ?? throw new ArgumentException(Tr.T("Nenhum terreno processado neste desenho. Use o botão Terreno primeiro."));
+            var terreno = TerrenoDoDesenho.Garantir(_documento) ?? throw new ArgumentException(Tr.T("Nenhum terreno processado neste desenho. Use o botão Terreno primeiro."));
             var nome = Path.GetFileNameWithoutExtension(_documento.Name);
             if (string.IsNullOrWhiteSpace(nome)) nome = "usina";
 

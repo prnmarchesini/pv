@@ -377,6 +377,55 @@ public static class TerrainCommands
     }
 
     /// <summary>
+    /// Põe na memória o terreno do carimbo (a superfície que o desenho usou
+    /// da última vez, pelo handle), sem gravar nada no desenho: abrir o
+    /// arquivo não o deixa "modificado", e o carimbo continua dizendo quando
+    /// e o que foi processado. Se a superfície mudou depois disso, o aviso do
+    /// terreno envelhecido continua valendo (o Processar regravaria o carimbo
+    /// e o apagaria). Renan, 31/10/2026: "quando o cad abre, ele não tá
+    /// carregando o terreno, isso é erro". Devolve se carregou.
+    /// </summary>
+    internal static bool CarregarDoCarimbo(Editor? editor, Document documento)
+    {
+        try
+        {
+            if (ProvenanceStore.Load(documento.Database) is not { } carimbo) return false;
+            if (TerrenoEnvelhecido.AcharPorHandle(documento.Database, carimbo.Surface.Handle) is not { } id) return false;
+
+            var relogio = Stopwatch.StartNew();
+            SurfaceMesh lida;
+            string nome;
+
+            using (var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction())
+            {
+                if (transacao.GetObject(id, OpenMode.ForRead) is not TinSurface superficie) return false;
+
+                lida = SurfaceExtractor.Extract(superficie);
+                nome = string.IsNullOrWhiteSpace(superficie.Name) ? carimbo.Surface.Name : superficie.Name;
+                transacao.Commit();
+            }
+
+            var malha = new Tin(lida.Triangles);
+            if (malha.TriangleCount == 0) return false;
+
+            TerrainCache.Store(documento, new ProcessedTerrain(id, malha, new TerrainSummary(
+                nome, malha.TriangleCount, malha.DiscardedTriangleCount, malha.MinZ, malha.MaxZ, malha.Area2D, malha.Area3D)));
+
+            editor?.WriteMessage(Tr.F("\nCLIVUS Terreno carregado: {0} ({1:N0} triângulos), processado em {2}; em {3:0.0} s.\n",
+                nome, malha.TriangleCount, carimbo.ProcessedAtText, relogio.Elapsed.TotalSeconds));
+
+            if (TerrenoEnvelhecido.Conferir(documento) is { } aviso) editor?.WriteMessage(Tr.F("  ATENÇÃO: {0}\n", aviso));
+
+            return true;
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não consegui carregar o terreno do carimbo.", erro);
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Lê a superfície escolhida, monta a malha e guarda. O resumo que sai
     /// daqui é o que o usuário confere contra o Civil 3D.
     /// </summary>

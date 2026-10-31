@@ -217,10 +217,60 @@ internal static class ValidacaoAoAbrir
 
             if (!validacao.IsClean)
                 documento.Editor.WriteMessage(Tr.F("  ({0} repete esta conferência a qualquer hora.)\n", PluginInfo.ComandoValidar));
+
+            AgendarOTerreno(documento);
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao validar ao abrir o desenho.", erro);
+        }
+    }
+
+    /// <summary>Os desenhos abertos com carimbo de terreno, à espera da folga para carregá-lo.</summary>
+    private static readonly HashSet<Document> TerrenosPorCarregar = [];
+
+    private static bool _folgaAgendada;
+
+    /// <summary>
+    /// O terreno do carimbo volta à memória sozinho ao abrir o desenho
+    /// (31/10/2026, Renan: "quando o cad abre, ele não tá carregando o
+    /// terreno, isso é erro"). Na primeira folga, para não segurar a abertura;
+    /// só com interface (no Core Console, o gancho de teste chama o mesmo).
+    /// Nada é gravado no desenho: abrir não o deixa "modificado".
+    /// </summary>
+    private static void AgendarOTerreno(Document documento)
+    {
+        if (!ClivusExtension.TemInterface()) return;
+        if (TerrainCache.Get(documento) is not null || !PluginDictionary.Contains(documento.Database, "TERRENO")) return;
+
+        TerrenosPorCarregar.Add(documento);
+        if (_folgaAgendada) return;
+
+        AcadApp.Idle += CarregarNaFolga;
+        _folgaAgendada = true;
+    }
+
+    private static void CarregarNaFolga(object? sender, EventArgs e)
+    {
+        AcadApp.Idle -= CarregarNaFolga;
+        _folgaAgendada = false;
+
+        var abertos = AcadApp.DocumentManager.Cast<Document>().ToHashSet();
+
+        foreach (var documento in TerrenosPorCarregar.ToList())
+        {
+            TerrenosPorCarregar.Remove(documento);
+
+            try
+            {
+                if (!abertos.Contains(documento) || TerrainCache.Get(documento) is not null) continue;
+
+                using (documento.LockDocument()) TerrainCommands.CarregarDoCarimbo(documento.Editor, documento);
+            }
+            catch (System.Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Não consegui carregar o terreno ao abrir o desenho.", erro);
+            }
         }
     }
 

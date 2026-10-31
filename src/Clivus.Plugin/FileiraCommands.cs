@@ -256,9 +256,11 @@ public static class FileiraCommands
         var terreno = TerrainCache.Get(documento);
 
         // Fechou e reabriu o desenho: a malha era só memória, mas o carimbo
-        // no desenho diz qual superfície foi processada. Reprocessa sozinho.
+        // no desenho diz qual superfície foi processada. Carrega sozinho, sem
+        // regravar o carimbo (o aviso de terreno envelhecido continua
+        // valendo); sem carimbo, o Reprocessar acha a única superfície.
         // Pedido do Renan em 26/09/2026: "é preciso que ele não perca".
-        if (terreno is null && TerrainCommands.Reprocessar(editor, documento))
+        if (terreno is null && (TerrainCommands.CarregarDoCarimbo(editor, documento) || TerrainCommands.Reprocessar(editor, documento)))
             terreno = TerrainCache.Get(documento);
 
         if (terreno is null)

@@ -25,6 +25,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 38.7 Fabricantes, biposte genérico e a altura básica (P1 e P2): REPROVADO (30/10/2026, na tela: o P1 e o P2 não se mudavam, as medidas das mãos francesas não diziam nada, o desenho ruim, sem genérico em Fabricantes nem onde dar outro nome) — refeito no 38.9
 - 38.8 Os módulos no servidor do Clivus, com a validação da gestão: AGUARDANDO VALIDAÇÃO — servidor: clivussolar 2cc6561 (gate `validate_modulos`); plugin: `ModuleServiceReply` e `ModuleServer`, 37 testes
 - 38.9 A altura é da estrutura (P1 e P2 digitados), o pórtico peça por peça (P1, MF1, P2, MF2, tesoura, terças), o genérico em Fabricantes, a vista lateral nova, Norte/Sul e a lista de estruturas que voltava: AGUARDANDO VALIDAÇÃO — `StructureHeight`, `ForStructure`, perfil v5; nível 2 `clivus-bifila-p1` (rodar.ps1 -SoBifila)
+- 38.11 O terreno volta à memória ao abrir o desenho, sem modificá-lo, e Área, Alinhamento, Coordenada e as janelas da drenagem carregam sozinhos: AGUARDANDO VALIDAÇÃO — `TerrainCommands.CarregarDoCarimbo`; nível 2 `clivus-carimbo` (rodar.ps1 -Caso Testar-Carimbo)
 - 38.10 Salvar não suja mais o biposte (e o desenho que ficou vermelho se conserta ao abrir), o registro de tudo, a aba Modelos com seções por fabricante e Apagar, e a área pela polilinha 3D: AGUARDANDO VALIDAÇÃO — `PendingChanges.MayBeFromSave`, `PendenciasDoSalvar`, `RegistroDeTudo`, `VendorStructures.ByManufacturer`; nível 2 `clivus-salvar` (rodar.ps1 -SoBifila) e `clivus-area-selecionar` (rodar.ps1 -Caso Testar-AreaSelecionar)
 
 ## Etapa 39: o resto do Clivus
@@ -617,6 +618,25 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     abrir, só a inteira e no lugar volta.
   - Fica para a tela: o salvamento automático (SAVETIME) e o SAVEAS em DXF não passam no
     Core Console; o roteiro 14 pede para conferir.
+- 38.11 (31/10/2026), pedido da tela: "quando o cad abre, ele não tá carregando o terreno,
+  isso é erro". O terreno processado só vive na memória. Ao reabrir, os comandos que passam
+  pelo `ExigirTerreno` reprocessavam sozinhos. Já Área, Alinhamento, Coordenada, Flechas e as
+  janelas Bacias, Canaleta e Memória olhavam só a memória e diziam "Nenhum terreno
+  processado". O que fiz:
+  - `TerrainCommands.CarregarDoCarimbo` põe na memória a superfície do carimbo (pelo
+    handle), sem gravar nada no desenho: abrir não o deixa "modificado". O Reprocessar de
+    antes regravava o carimbo e apagava, por baixo dos panos, o aviso de superfície que
+    mudou depois do processamento. Agora o aviso continua até o botão Terreno processar de
+    novo.
+  - Ao abrir o desenho, com interface, ele roda na primeira folga do AutoCAD, para não
+    segurar a abertura, e escreve uma linha: "CLIVUS Terreno carregado: ...".
+  - O `ExigirTerreno` usa o mesmo carregamento quando há carimbo (sem carimbo, o
+    Reprocessar acha a única superfície, como antes). Área, Alinhamento e Coordenada passam
+    pelo `ExigirTerreno` ou pelo `TerrenoDoDesenho.Garantir`, e as janelas da drenagem pelo
+    `Garantir`.
+  - Nível 2: a segunda metade do `clivus-carimbo` chama, pelo gancho de teste, o mesmo
+    carregamento (no Core Console não há folga). Confere "CLIVUS Terreno carregado" e o
+    DBMOD igual antes e depois.
 - 39.3 e 41.2 (30/10/2026, à noite), pedidos da tela: "o 3d no navegador cagou forte, no 3d do
   cad não tem isso"; "a ferramenta 'conforme objetos' não reconhece a área [...] tinha VÁRIAS
   linhas sobrepostas e aí buga a ferramenta [...] isso deveria ser percebido pela
@@ -792,3 +812,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     Conforme objetos › clicar na linha (ou dentro da área): "Área: ..." e segue. Área › os
     mesmos vértices de uma área que já existe: "Já existe a área ..." antes de pedir o
     nome.
+22. **O terreno ao abrir (38.11):** fechar e abrir o Civil 3D com o desenho do Aurora: logo
+    depois de abrir, a linha "CLIVUS Terreno carregado: 202605 TN LEV MAYO (...)". Área, sem
+    apertar Terreno: pede os vértices na hora. Fechar sem mexer em nada: o Civil 3D não
+    pergunta se quer salvar.
