@@ -1,7 +1,10 @@
-; Teste de nivel 2 das sombras no periodo (05/10/2026): o dia inteiro com a
-; arvore fora da fileira desenha os contornos hora a hora do pior dia (nao so
-; o pior instante), e o "Por que essa sombra?" de um modulo marcado diz
-; quanto, por que (arvore) e quando; o de um modulo sem marca, que nao tem.
+; Teste de nivel 2 das sombras no periodo (05/10/2026 e 42.1): o dia inteiro
+; com a arvore fora da fileira desenha a mancha de todos os passos (hachura e
+; borda magenta, a borda com os dentes dos passos); o "Por que essa sombra?"
+; de um modulo com sombra (o primeiro do registro dos motivos, pelo gancho
+; clivus-sombras-modulos, so no build Debug) diz quanto, por que e quando; o
+; de um modulo sem sombra, que nao tem; as analises (CLIVUS_SOMBRAS_ANALISES_AUTO)
+; listam os topicos area > mesa > modulo; e o ano com o sol acima de 20 graus.
 
 (setq clivus:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
@@ -35,41 +38,44 @@
 (command "CLIVUS_ARVORE_AUTO" 4 0.6 10 8 clivus:pe "")
 (setvar "OSMODE" clivus:osmode)
 
-(defun clivus:cor (c / ss i n)
-  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_MOD*"))) i 0 n 0)
+; As entidades de sombra de um tipo ("HATCH" ou "POLYLINE").
+(defun clivus:sombras (tipo / ss i e l)
+  (setq ss (ssget "_X" (list (cons 0 tipo) (list -3 (list "CLIVUS")))) i 0 l nil)
   (while (< i (clivus:conta ss))
-    (if (member (cdr (assoc 420 (entget (ssname ss i)))) c) (setq n (1+ n)))
-    (setq i (1+ i)))
-  n)
-(defun clivus:sombras ( / ss i n)
-  (setq ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) i 0 n 0)
-  (while (< i (clivus:conta ss))
-    (if (= (cdr (nth 0 (clivus:xdata (ssname ss i)))) "Sombra") (setq n (1+ n)))
-    (setq i (1+ i)))
-  n)
-
-(defun clivus:handles (c / ss i l)
-  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_MOD*"))) i 0)
-  (while (< i (clivus:conta ss))
-    (if (= (null (member (cdr (assoc 420 (entget (ssname ss i)))) '(14136575 10509030 6231200))) (null c))
-      (setq l (cons (cdr (assoc 5 (entget (ssname ss i)))) l)))
+    (setq e (ssname ss i))
+    (if (= (cdr (nth 0 (clivus:xdata e))) "Sombra") (setq l (cons e l)))
     (setq i (1+ i)))
   l)
+; Quantos vertices (o 10 do contorno, entre o 91 e o 75) tem a maior hachura.
+(defun clivus:nvh (e / dentro n)
+  (setq dentro nil n 0)
+  (foreach g (entget e)
+    (cond ((= (car g) 91) (setq dentro T))
+          ((= (car g) 75) (setq dentro nil))
+          ((and dentro (= (car g) 10)) (setq n (1+ n)))))
+  n)
 
 (command "CLIVUS_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "06:00" "18:00" "60" "-3" "1")
-(setq clivus:marcado (car (clivus:handles T)) clivus:limpo (car (clivus:handles nil)))
-(princ (strcat "\nCLIVUS_PORQUE contornos=" (itoa (clivus:sombras)) " marcado=" (if clivus:marcado clivus:marcado "-")))
-(defun clivus:maior ( / ss i n)
-  (setq ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) i 0 n 0)
-  (while (< i (clivus:conta ss))
-    (if (= (cdr (nth 0 (clivus:xdata (ssname ss i)))) "Sombra") (setq n (max n (length (clivus:verts (ssname ss i))))))
-    (setq i (1+ i)))
-  n)
-(princ (strcat "\nCLIVUS_PORQUE_VERTICES maior=" (itoa (clivus:maior))))
+(setq clivus:comsombra (clivus-sombras-modulos) clivus:marcado (car clivus:comsombra))
+
+; Um modulo sem sombra: o primeiro bloco de modulo que nao esta no registro.
+(setq clivus:ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_MOD*"))) clivus:i 0 clivus:limpo nil)
+(while (and (null clivus:limpo) (< clivus:i (clivus:conta clivus:ss)))
+  (setq clivus:h (cdr (assoc 5 (entget (ssname clivus:ss clivus:i)))))
+  (if (not (member clivus:h clivus:comsombra)) (setq clivus:limpo clivus:h))
+  (setq clivus:i (1+ clivus:i)))
+
+(setq clivus:bordas 0 clivus:maior 0)
+(foreach e (clivus:sombras "POLYLINE") (setq clivus:bordas (+ clivus:bordas (length (clivus:verts e)))))
+(foreach e (clivus:sombras "HATCH") (setq clivus:maior (max clivus:maior (clivus:nvh e))))
+(princ (strcat "\nCLIVUS_PORQUE hachuras=" (itoa (length (clivus:sombras "HATCH"))) " marcado=" (if clivus:marcado clivus:marcado "-") " limpo=" (if clivus:limpo clivus:limpo "-")))
+(princ (strcat "\nCLIVUS_PORQUE_VERTICES bordas=" (itoa clivus:bordas) " maior=" (itoa clivus:maior)))
 (princ "\nCLIVUS_PORQUE_MARCADO")
-(command "CLIVUS_SOMBRA_PORQUE_AUTO" clivus:marcado)
+(if clivus:marcado (command "CLIVUS_SOMBRA_PORQUE_AUTO" clivus:marcado))
 (princ "\nCLIVUS_PORQUE_LIMPO")
-(command "CLIVUS_SOMBRA_PORQUE_AUTO" clivus:limpo)
+(if clivus:limpo (command "CLIVUS_SOMBRA_PORQUE_AUTO" clivus:limpo))
+(princ "\nCLIVUS_PORQUE_ANALISES")
+(command "CLIVUS_SOMBRAS_ANALISES_AUTO")
 (princ "\nCLIVUS_PORQUE_ALTURA")
 (command "CLIVUS_SOMBRAS_AUTO" "01/01/2026" "31/12/2026" ">20" "23:59" "60" "-3" "30")
 (princ "\nCLIVUS_PORQUE_FIM")

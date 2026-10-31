@@ -39,6 +39,12 @@ public sealed record ShadingResult(IReadOnlyList<double> Fractions, IReadOnlyLis
 ///   mesas (dois triângulos cada). Célula cuja face mais alta fica abaixo do
 ///   raio é pulada.
 /// - Árvores: o cilindro de <see cref="Shading.Blocks"/>.
+///
+/// Com o escopo (42.1, 31/10/2026): só as faces que recebem (<c>receivers</c>)
+/// são avaliadas; as outras só fazem sombra. Com a sombra do relevo
+/// (<see cref="TerrainShadow"/>), o relevo é conferido ponto a ponto, na
+/// mesma varredura que desenha a sombra dele: a face fica com a parte que o
+/// terreno esconde de verdade, e não inteira pelo horizonte do centro da mesa.
 /// </summary>
 public sealed class ShadingModel
 {
@@ -51,10 +57,24 @@ public sealed class ShadingModel
     private readonly int _atraves;
     private readonly double[][]? _horizontes;
     private readonly (double MinX, double MaxX, double MinY, double MaxY, double MinZ)[] _caixas;
+    private readonly IReadOnlyList<bool>? _recebe;
+    private readonly TerrainShadow? _relevo;
 
     private readonly double _celula;
-    private readonly Dictionary<long, List<int>> _grade = [];
-    private readonly Dictionary<long, double> _alturaDaCelula = [];
+    /// <summary>As faces de cada célula e a mais alta delas, numa consulta só.</summary>
+    private readonly Dictionary<long, Celula> _grade = [];
+
+    /// <summary>
+    /// A face mais alta de cada bloco de 8 × 8 células (31/10/2026): no
+    /// terreno ondulado o raio anda centenas de metros até passar da face mais
+    /// alta do desenho, e o bloco inteiro abaixo dele é pulado sem olhar célula
+    /// por célula (o raio só sobe: abaixo na entrada, abaixo no bloco todo).
+    /// </summary>
+    private readonly Dictionary<long, double> _alturaDoBloco = [];
+
+    /// <summary>A caixa, em planta, de todas as faces: o raio que sai dela não tem mais em quem bater.</summary>
+    private readonly (double MinX, double MaxX, double MinY, double MaxY) _caixaDasFaces;
+
     private readonly double _maisAlta;
     private readonly int[] _carimbo;
     private int _rodada;
@@ -66,13 +86,17 @@ public sealed class ShadingModel
     /// <param name="tablesCastShadow">Se as mesas fazem sombra umas nas outras.</param>
     /// <param name="along">Pontos amostrados ao longo da face.</param>
     /// <param name="across">Pontos amostrados no fundo da face.</param>
+    /// <param name="receivers">Quais faces recebem sombra (as do escopo); null: todas. As outras só fazem.</param>
+    /// <param name="terrain">A sombra do relevo, conferida ponto a ponto; null deixa o relevo para o horizonte de <paramref name="ground"/>.</param>
     public ShadingModel(
         IReadOnlyList<ShadowQuad> faces, IReadOnlyList<ShadowCylinder> cylinders, Func<double, double, double?>? ground = null,
-        double groundMaxZ = double.NaN, bool tablesCastShadow = true, int along = 4, int across = 2)
+        double groundMaxZ = double.NaN, bool tablesCastShadow = true, int along = 4, int across = 2,
+        IReadOnlyList<bool>? receivers = null, TerrainShadow? terrain = null)
     {
         ArgumentNullException.ThrowIfNull(faces);
         ArgumentNullException.ThrowIfNull(cylinders);
         if (faces.Any(f => f.Corners.Count != 4)) throw new ArgumentException("toda face precisa de quatro cantos", nameof(faces));
+        if (receivers is not null && receivers.Count != faces.Count) throw new ArgumentException("uma marca de quem recebe por face", nameof(receivers));
 
         _faces = faces;
         _cilindros = cylinders;
@@ -80,12 +104,17 @@ public sealed class ShadingModel
         _ao = Math.Max(1, along);
         _atraves = Math.Max(1, across);
         _carimbo = new int[faces.Count];
+        _recebe = receivers;
+        _relevo = terrain;
 
         _caixas = faces.Select(f => (f.Corners.Min(p => p.X), f.Corners.Max(p => p.X), f.Corners.Min(p => p.Y), f.Corners.Max(p => p.Y), f.Corners.Min(p => p.Z))).ToArray();
 
         // A célula da grade: perto do tamanho de um módulo.
         _celula = faces.Count == 0 ? 3 : Math.Clamp(faces.Average(f => Math.Max(Distancia(f.Corners[0], f.Corners[1]), Distancia(f.Corners[1], f.Corners[2]))), 1, 10);
         _maisAlta = faces.Count == 0 ? double.NegativeInfinity : faces.Max(f => f.Corners.Max(p => p.Z));
+        _caixaDasFaces = faces.Count == 0
+            ? (0, 0, 0, 0)
+            : (_caixas.Min(c => c.MinX), _caixas.Max(c => c.MaxX), _caixas.Min(c => c.MinY), _caixas.Max(c => c.MaxY));
 
         for (var k = 0; k < faces.Count; k++)
         {
@@ -97,9 +126,12 @@ public sealed class ShadingModel
                 for (var iy = Indice(c.MinY); iy <= Indice(c.MaxY); iy++)
                 {
                     var chave = Chave(ix, iy);
-                    if (!_grade.TryGetValue(chave, out var lista)) _grade[chave] = lista = [];
-                    lista.Add(k);
-                    _alturaDaCelula[chave] = _alturaDaCelula.TryGetValue(chave, out var h) ? Math.Max(h, topo) : topo;
+                    if (!_grade.TryGetValue(chave, out var celula)) _grade[chave] = celula = new Celula();
+                    celula.Faces.Add(k);
+                    celula.Altura = Math.Max(celula.Altura, topo);
+
+                    var bloco = Bloco(ix, iy);
+                    _alturaDoBloco[bloco] = _alturaDoBloco.TryGetValue(bloco, out var hb) ? Math.Max(hb, topo) : topo;
                 }
             }
         }
@@ -107,18 +139,23 @@ public sealed class ShadingModel
         // O horizonte é um por mesa, do centro dela: numa mesa de 20 m a
         // diferença é desprezível, e por face a conta levava 14 s numa usina
         // de 2 mil módulos.
-        if (ground is not null)
+        if (ground is not null && terrain is null)
         {
+            // Só as mesas que recebem precisam do horizonte.
             var porMesa = faces
-                .Select((f, k) => (f.Group, Centro: Centro(f.Corners)))
+                .Select((f, k) => (f.Group, Centro: Centro(f.Corners), Recebe: Recebe(k)))
                 .GroupBy(x => x.Group)
+                .Where(g => g.Any(x => x.Recebe))
                 .ToDictionary(
                     g => g.Key,
                     g => Horizonte(new Point3(g.Average(x => x.Centro.X), g.Average(x => x.Centro.Y), g.Average(x => x.Centro.Z)), ground, groundMaxZ));
 
-            _horizontes = faces.Select(f => porMesa[f.Group]).ToArray();
+            var nenhum = Enumerable.Repeat(-90.0, Setores).ToArray();
+            _horizontes = faces.Select(f => porMesa.TryGetValue(f.Group, out var h) ? h : nenhum).ToArray();
         }
     }
+
+    private bool Recebe(int face) => _recebe is null || _recebe[face];
 
     /// <summary>A fração sombreada e a causa de cada face, com o sol nesta direção.</summary>
     public ShadingResult At(SunPosition sun)
@@ -135,9 +172,15 @@ public sealed class ShadingModel
         var perto = new List<ShadowCylinder>();
         var porCausa = new int[4];
 
+        // O relevo deste passo: a varredura (já feita, se quem desenha a
+        // sombra do relevo preparou o mesmo sol), ou nada se ele não alcança.
+        var relevo = _relevo is not null && _relevo.Prepare(sun);
+
         for (var k = 0; k < _faces.Count; k++)
         {
-            // O relevo: abaixo do horizonte, a face inteira.
+            if (!Recebe(k)) continue;
+
+            // O relevo pelo horizonte (sem a varredura): abaixo dele, a face inteira.
             if (_horizontes is not null && sun.ElevationDegrees < Horizonte(_horizontes[k], sun.AzimuthDegrees))
             {
                 fracoes[k] = 1;
@@ -158,7 +201,9 @@ public sealed class ShadingModel
                 for (var j = 0; j < _atraves; j++)
                 {
                     var p = Bilinear(_faces[k].Corners, (i + 0.5) / _ao, (j + 0.5) / _atraves);
-                    var causa = Causa(p, _faces[k].Group, s, perto);
+
+                    // O relevo primeiro: uma conta só, e o mais barato.
+                    var causa = relevo && _relevo!.Occludes(p.X, p.Y, p.Z) ? ShadowCause.Terrain : Causa(p, _faces[k].Group, s, perto);
                     if (causa == ShadowCause.None) continue;
 
                     sombra++;
@@ -167,10 +212,20 @@ public sealed class ShadingModel
             }
 
             fracoes[k] = (double)sombra / (_ao * _atraves);
-            if (sombra > 0) causas[k] = porCausa[(int)ShadowCause.Object] >= porCausa[(int)ShadowCause.Table] ? ShadowCause.Object : ShadowCause.Table;
+            if (sombra > 0) causas[k] = Principal(porCausa);
         }
 
         return new ShadingResult(fracoes, causas);
+    }
+
+    /// <summary>A causa com mais pontos (no empate, árvore, depois mesa, depois terreno).</summary>
+    private static ShadowCause Principal(int[] porCausa)
+    {
+        var melhor = ShadowCause.Object;
+        foreach (var c in new[] { ShadowCause.Table, ShadowCause.Terrain })
+            if (porCausa[(int)c] > porCausa[(int)melhor]) melhor = c;
+
+        return melhor;
     }
 
     /// <summary>O pior caso de cada face num período, com a causa nesse pior instante.</summary>
@@ -256,7 +311,12 @@ public sealed class ShadingModel
         var ux = s.X / horizontal;
         var uy = s.Y / horizontal;
         var subida = s.Z / horizontal;                 // metro de cota por metro em planta
-        var alcance = (_maisAlta - p.Z) / subida;      // em planta, até passar da face mais alta
+
+        // Em planta, até passar da face mais alta ou sair da caixa das faces
+        // (dali em diante não há em quem bater).
+        var saidaX = ux > 1e-12 ? (_caixaDasFaces.MaxX - p.X) / ux : ux < -1e-12 ? (_caixaDasFaces.MinX - p.X) / ux : double.PositiveInfinity;
+        var saidaY = uy > 1e-12 ? (_caixaDasFaces.MaxY - p.Y) / uy : uy < -1e-12 ? (_caixaDasFaces.MinY - p.Y) / uy : double.PositiveInfinity;
+        var alcance = Math.Min((_maisAlta - p.Z) / subida, Math.Min(saidaX, saidaY));
 
         var ix = Indice(p.X);
         var iy = Indice(p.Y);
@@ -267,10 +327,23 @@ public sealed class ShadingModel
         var deltaX = Math.Abs(ux) < 1e-12 ? double.PositiveInfinity : _celula / Math.Abs(ux);
         var deltaY = Math.Abs(uy) < 1e-12 ? double.PositiveInfinity : _celula / Math.Abs(uy);
         var entrada = 0.0;
+        var blocoAtual = long.MinValue;
+        var pularBloco = false;
 
         while (entrada <= alcance)
         {
-            if (BateNaCelula(Chave(ix, iy), p, grupo, s, p.Z + entrada * subida)) return true;
+            var cota = p.Z + entrada * subida;
+
+            // O bloco novo: se a face mais alta dele fica abaixo do raio já na
+            // entrada, nenhuma célula dele é olhada (o raio só sobe).
+            var bloco = Bloco(ix, iy);
+            if (bloco != blocoAtual)
+            {
+                blocoAtual = bloco;
+                pularBloco = !_alturaDoBloco.TryGetValue(bloco, out var maisAltaDoBloco) || maisAltaDoBloco < cota;
+            }
+
+            if (!pularBloco && BateNaCelula(Chave(ix, iy), p, grupo, s, cota)) return true;
 
             if (proximaX < proximaY)
             {
@@ -291,12 +364,12 @@ public sealed class ShadingModel
 
     private bool BateNaCelula(long chave, Point3 p, int grupo, (double X, double Y, double Z) s, double cotaDoRaio)
     {
-        if (!_grade.TryGetValue(chave, out var lista)) return false;
+        if (!_grade.TryGetValue(chave, out var celula)) return false;
 
         // A face mais alta da célula fica abaixo de onde o raio entra: nada aqui.
-        if (_alturaDaCelula[chave] < cotaDoRaio) return false;
+        if (celula.Altura < cotaDoRaio) return false;
 
-        foreach (var k in lista)
+        foreach (var k in celula.Faces)
         {
             if (_carimbo[k] == _rodada) continue;
             _carimbo[k] = _rodada;
@@ -386,6 +459,17 @@ public sealed class ShadingModel
     private int Indice(double v) => (int)Math.Floor(v / _celula);
 
     private static long Chave(int ix, int iy) => ((long)ix << 32) ^ (uint)iy;
+
+    /// <summary>O bloco de 8 × 8 células da célula (o deslocamento aritmético arredonda para baixo, também no negativo).</summary>
+    private static long Bloco(int ix, int iy) => Chave(ix >> 3, iy >> 3);
+
+    /// <summary>Uma célula da grade: as faces que tocam nela e o topo da mais alta.</summary>
+    private sealed class Celula
+    {
+        internal List<int> Faces { get; } = [];
+
+        internal double Altura { get; set; } = double.NegativeInfinity;
+    }
 
     private static Point3 Centro(IReadOnlyList<Point3> c) =>
         new(c.Average(p => p.X), c.Average(p => p.Y), c.Average(p => p.Z));

@@ -46,6 +46,39 @@ public static class ShadowUnion
             .ToList();
     }
 
+    /// <summary>
+    /// A parte dos anéis dentro da região (42.1: a sombra desenhada fica no
+    /// chão do escopo). Os furos vêm ao contrário dos externos, como na
+    /// união; vazio se nada sobra.
+    /// </summary>
+    public static IReadOnlyList<IReadOnlyList<(double X, double Y)>> Intersect(
+        IEnumerable<IReadOnlyList<(double X, double Y)>> rings, IEnumerable<IReadOnlyList<(double X, double Y)>> region)
+    {
+        ArgumentNullException.ThrowIfNull(rings);
+        ArgumentNullException.ThrowIfNull(region);
+
+        var sujeito = ShadowPaths.Paths(rings);
+        var recorte = ShadowPaths.Paths(region);
+        if (sujeito.Count == 0 || recorte.Count == 0) return [];
+
+        return ShadowPaths.Rings(Clipper.SimplifyPaths(Clipper.Intersect(sujeito, recorte, FillRule.NonZero), 2));
+    }
+
+    /// <summary>Os anéis menos os de <paramref name="cut"/> (42.1: o chão debaixo das mesas, que em planta é a mesa).</summary>
+    public static IReadOnlyList<IReadOnlyList<(double X, double Y)>> Difference(
+        IEnumerable<IReadOnlyList<(double X, double Y)>> rings, IEnumerable<IReadOnlyList<(double X, double Y)>> cut)
+    {
+        ArgumentNullException.ThrowIfNull(rings);
+        ArgumentNullException.ThrowIfNull(cut);
+
+        var sujeito = ShadowPaths.Paths(rings);
+        if (sujeito.Count == 0) return [];
+
+        var recorte = ShadowPaths.Paths(cut);
+        var resultado = recorte.Count == 0 ? Clipper.Union(sujeito, FillRule.NonZero) : Clipper.Difference(sujeito, recorte, FillRule.NonZero);
+        return ShadowPaths.Rings(Clipper.SimplifyPaths(resultado, 2));
+    }
+
     /// <summary>A área de um anel (m²), sempre positiva.</summary>
     public static double Area(IReadOnlyList<(double X, double Y)> anel)
     {

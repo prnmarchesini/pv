@@ -1,0 +1,110 @@
+; Teste de nivel 2 do ESCOPO das sombras (42.1, Renan, 31/10/2026: "vou
+; analisar area por area para nao travar o PC, ai vou querer apagar as
+; sombras de algumas areas, recaldular de outras"). A area Usina (100 x 100
+; m) com a usina gerada, e dentro dela a Area Oeste e a Area Leste (as duas
+; metades): a mesa conta na menor area que tem o centro dela. As 07:30 de
+; 21/06/2026 (sol baixo) as fileiras fazem sombra umas nas outras e no chao.
+; Conferido em LISP, pela area gravada no XData de cada hachura de sombra
+; (o GUID da polilinha da area):
+;   - calcular a Oeste desenha so na Oeste;
+;   - calcular a Leste depois desenha na Leste e a Oeste fica igual;
+;   - apagar a Oeste deixa a Leste igual;
+;   - a selecao (a F1.1, na Oeste) desenha so perto dela, e a Leste fica;
+;   - ocultar e mostrar desligam e ligam a camada CLIVUS_SOMBRA;
+;   - as analises listam a Leste e nao a Oeste apagada;
+;   - nenhum modulo repintado; apagar tudo nao deixa nada.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{U1}}" "{{U2}}" "{{U3}}" "{{U4}}" "" "Usina")
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area Oeste")
+(command "CLIVUS_AREA" "{{B1}}" "{{B2}}" "{{B3}}" "{{B4}}" "" "Area Leste")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento sombras")
+(command "CLIVUS_MESAS_EXEMPLO_AUTO")
+(command "CLIVUS_USINA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+
+(defun clivus:conta (ss) (if ss (sslength ss) 0))
+(defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
+
+; O GUID da area com este nome (XData "Area": o GUID no primeiro campo, o nome no segundo).
+(defun clivus:area (nome / ss i xd r)
+  (setq ss (ssget "_X" (list (cons 0 "POLYLINE") (list -3 (list "CLIVUS")))) i 0 r nil)
+  (while (< i (clivus:conta ss))
+    (setq xd (clivus:xdata (ssname ss i)))
+    (if (and (= (cdr (nth 0 xd)) "Area") (= (cdr (nth 3 xd)) nome)) (setq r (cdr (nth 2 xd))))
+    (setq i (1+ i)))
+  r)
+
+; Quantas entidades de sombra (hachura, borda e etiqueta) tem esta area no XData (nil: todas).
+(defun clivus:da-area (area / n tipo ss i xd)
+  (setq n 0)
+  (foreach tipo '("HATCH" "POLYLINE" "MTEXT")
+    (setq ss (ssget "_X" (list (cons 0 tipo) (list -3 (list "CLIVUS")))) i 0)
+    (while (< i (clivus:conta ss))
+      (setq xd (clivus:xdata (ssname ss i)))
+      (if (and (= (cdr (nth 0 xd)) "Sombra") (or (null area) (= (cdr (nth 4 xd)) area))) (setq n (1+ n)))
+      (setq i (1+ i))))
+  n)
+
+; Quantas hachuras de sombra desta area.
+(defun clivus:hachuras (area / ss i xd n)
+  (setq ss (ssget "_X" (list (cons 0 "HATCH") (list -3 (list "CLIVUS")))) i 0 n 0)
+  (while (< i (clivus:conta ss))
+    (setq xd (clivus:xdata (ssname ss i)))
+    (if (and (= (cdr (nth 0 xd)) "Sombra") (= (cdr (nth 4 xd)) area)) (setq n (1+ n)))
+    (setq i (1+ i)))
+  n)
+
+(defun clivus:assinatura ( / ss i l)
+  (setq ss (ssget "_X" (list (cons 0 "INSERT") (cons 2 "CLIVUS_MOD*"))) i 0)
+  (while (< i (clivus:conta ss))
+    (setq l (cons (list (cdr (assoc 5 (entget (ssname ss i)))) (cdr (assoc 62 (entget (ssname ss i)))) (cdr (assoc 420 (entget (ssname ss i))))) l) i (1+ i)))
+  l)
+(defun clivus:desligada (nome) (minusp (cdr (assoc 62 (tblsearch "LAYER" nome)))))
+(defun clivus:par (rotulo)
+  (princ (strcat "\nCLIVUS_ESCOPO " rotulo " oeste=" (itoa (clivus:da-area clivus:oeste)) " leste=" (itoa (clivus:da-area clivus:leste))
+                 " usina=" (itoa (clivus:da-area clivus:usina)) " ho=" (itoa (clivus:hachuras clivus:oeste)) " hl=" (itoa (clivus:hachuras clivus:leste))
+                 " todas=" (itoa (clivus:da-area nil)) " fim")))
+
+(setq clivus:usina (clivus:area "Usina") clivus:oeste (clivus:area "Area Oeste") clivus:leste (clivus:area "Area Leste"))
+(princ (strcat "\nCLIVUS_ESCOPO_AREAS usina=" (if clivus:usina "1" "0") " oeste=" (if clivus:oeste "1" "0") " leste=" (if clivus:leste "1" "0")))
+(setq clivus:antes (clivus:assinatura))
+
+(princ "\nCLIVUS_ESCOPO_OESTE")
+(command "CLIVUS_SOMBRAS_ESCOPO_AUTO" "AREA" "Area Oeste" "-" "21/06/2026" "21/06/2026" "07:30" "07:30" "30" "-3" "1")
+(clivus:par "OESTE")
+
+(princ "\nCLIVUS_ESCOPO_LESTE")
+(command "CLIVUS_SOMBRAS_ESCOPO_AUTO" "AREA" "Area Leste" "-" "21/06/2026" "21/06/2026" "07:30" "07:30" "30" "-3" "1")
+(clivus:par "LESTE")
+
+(princ "\nCLIVUS_ESCOPO_APAGAR_OESTE")
+(command "CLIVUS_SOMBRAS_APAGAR_AUTO" "AREA" "Area Oeste" "-")
+(clivus:par "SEM_OESTE")
+
+(princ "\nCLIVUS_ESCOPO_SELECAO")
+(command "CLIVUS_SOMBRAS_ESCOPO_AUTO" "SELECAO" "-" "F1.1" "21/06/2026" "21/06/2026" "07:30" "07:30" "30" "-3" "1")
+(clivus:par "SELECAO")
+
+(clivus-sombras-acao "ocultar")
+(setq clivus:oculta (if (clivus:desligada "CLIVUS_SOMBRA") "1" "0"))
+(clivus-sombras-acao "mostrar")
+(setq clivus:mostra (if (clivus:desligada "CLIVUS_SOMBRA") "0" "1"))
+
+(princ "\nCLIVUS_ESCOPO_ANALISES")
+(command "CLIVUS_SOMBRAS_ANALISES_AUTO")
+(princ "\nCLIVUS_ESCOPO_FIM_ANALISES")
+
+(setq clivus:repintou (if (equal clivus:antes (clivus:assinatura)) "0" "1"))
+(command "CLIVUS_SOMBRAS_APAGAR_AUTO" "TUDO" "-" "-")
+(clivus:par "TUDO")
+
+(princ (strcat "\nCLIVUS_ESCOPO_FIM oculta=" clivus:oculta " mostra=" clivus:mostra " repintou=" clivus:repintou " fim"))
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

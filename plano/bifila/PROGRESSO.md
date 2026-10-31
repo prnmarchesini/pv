@@ -44,6 +44,10 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 41.1 A janela Áreas (Implantação): a lista das áreas com o resumo de cada uma, zoom, hachura, renomear e o Excel por área: AGUARDANDO VALIDAÇÃO — `AreaSummary`, `AreaHatch`, `AreaReport`, 34 testes; nível 2 `clivus-areas` (rodar.ps1 -SoAreas)
 - 41.2 As ações por área (Apagar área, Limpar mesas, Regerar, Recalcular), a área repetida recusada e avisada, e a área achada pelo clique mesmo com a linha do cliente por cima: AGUARDANDO VALIDAÇÃO — `EscolhaDeArea`, `CLIVUS_AREA_APAGAR`, `CLIVUS_AREA_RECALCULAR`, `Polygons.SameOutline`; nível 2 `clivus-areas-acoes` (rodar.ps1 -SoAreas)
 
+## Etapa 42: as sombras
+
+- 42.1 A revisão das sombras: hachura magenta no chão (acompanhando o terreno) e sobre os módulos, a sombra do relevo, o escopo (seleção, uma área, área + seleção, várias áreas, desenho inteiro), Gerar e Apagar no escopo, Ocultar e Mostrar, Ver análises em tópicos, o módulo sem pintura: AGUARDANDO VALIDAÇÃO — `TerrainShadow`, `GroundPatches`, `ShadowScopePlan`, `ShadowReasons` V2, 23 testes; nível 2 `clivus-sombras*` (rodar.ps1 -SoSombras), o novo `clivus-sombras-escopo`; o nível 2 ainda não rodou
+
 ## Observações
 
 - 37.1 (30/10/2026), o que assumi:
@@ -687,8 +691,97 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     - depois o Validar não acha registro sobrando.
   - Não deu para renderizar a janela Áreas fora do Civil 3D (ela nasce de um Document): os
     botões novos ficam para a tela.
+- 42.1 (31/10/2026), a revisão das sombras. Pedido do Renan: "Esta marcando que sombreou o
+  modulo, mas nao marca a sombra no chao [...] QUERO VER o desenho das sombras no chao,
+  rachurada [...] Falta o botão apagar sombras, ocultar sombras e mostrar sombras [...] o
+  botão para escolher o que quero que seja calculado [...] tudo gera sombra, as mesas geram
+  sombras e eu nao estou vendo, o terreno gera sombra se tiver barranco [...] O PVcase pinta
+  de magenta as sombras". O que fiz e assumi:
+  - **A sombra é hachura SOLID magenta (255,0,255), 50 % transparente, com a borda magenta**,
+    na camada `CLIVUS_SOMBRA` (nasce magenta; a que ainda tinha o cinza de antes vira
+    magenta, a cor escolhida pelo usuário fica). A etiqueta vai na `CLIVUS_SOMBRA_TEXTO`, em
+    magenta.
+  - **No chão:** a mancha é cortada nos ladrilhos de 8 m de uma grade fixa do desenho
+    (múltiplos de 8 m), e cada pedaço ganha o plano de mínimos quadrados do terreno debaixo
+    dele, levantado até 4 cm acima do ponto mais alto; se o terreno do pedaço não cabe num
+    plano (a folga variando mais de 5 cm), o pedaço se divide em quatro, até 1 m
+    (`GroundPatches`). Os pontos conferidos: 9 × 9 na caixa do pedaço, o contorno a cada
+    oitavo do lado e os vértices do TIN que esses pontos tocam. A borda segue o terreno a
+    4 cm, cortada nos mesmos ladrilhos (para o escopo da seleção apagar ladrilho inteiro).
+  - **O chão debaixo das mesas não é desenhado**: em planta, ali se vê a mesa (o módulo é
+    caixa em wireframe; a hachura do chão por baixo dele parecia sombra no módulo). Decisão
+    minha.
+  - **Sobre a mesa:** a parte do plano dos módulos na sombra, 3 cm acima dele (a caixa do
+    módulo sobe 2 cm), numa hachura por mesa, no plano dela.
+  - **Ordem de desenho:** a sombra sobre as mesas vai para a frente; a do chão fica logo
+    abaixo da primeira peça de mesa (módulo, face ou contorno).
+  - **O relevo faz sombra** (`TerrainShadow`): o terreno vira uma grade de cotas de 1 m (2 m
+    acima de 25 ha), com até 500 m em volta de quem recebe; a cada passo, linhas paralelas
+    ao sol varrem a grade guardando o maior "z + s·tan(elevação)": o ponto está na sombra se
+    esse máximo, até meio passo antes dele, passa da cota dele (com 5 cm de folga). Recebem
+    as células de 1 a 2 m do chão do escopo e os pontos de 0,5 m do plano de cada mesa do
+    escopo. Saída cedo: se o sol mais baixo do período está acima do chão mais íngreme em
+    volta (a maior declividade dos triângulos), o relevo nem é montado; e em cada passo,
+    se o sol está acima da rampa mais íngreme da grade na direção dele, o passo não varre.
+  - **A fração do módulo pelo relevo agora é ponto a ponto, na mesma varredura** (os 8
+    pontos de cada face), e não mais a face inteira pelo horizonte do centro da mesa: o
+    número bate com o desenho. O horizonte continua no `ShadingModel` para quem não passa
+    a varredura (os testes antigos).
+  - **O módulo não é mais pintado.** O registro `SOMBRA_MOTIVOS` passou a V2, por módulo:
+    `T|mesa|período` para cada mesa calculada e `M|handle|mesa|fração|causa|quando|período`
+    para cada módulo com sombra. Um escopo novo troca só as mesas dele. O V1 é lido (a mesa
+    de cada módulo sai do bloco) e a primeira troca grava em V2. Os módulos pintados por
+    desenho antigo (`SOMBRA_PINTADAS`) voltam à cor no Apagar, no cálculo do escopo deles e
+    na Limpeza.
+  - **O escopo** (`ShadowScopePlan`): recebem as mesas do escopo (na área, pelo centro do
+    contorno, dentro de duas a menor, a regra do resumo por área). O chão de cada área é o
+    território dela (a área menos as menores dentro dela); na seleção, os ladrilhos de 8 m em
+    volta das mesas escolhidas (8 m de folga, fixos, para o Apagar achar os mesmos),
+    repartidos pelas áreas; no desenho inteiro, as áreas e, fora delas, os ladrilhos em
+    volta das mesas de fora. Fazem sombra as mesas e as árvores até a margem em que alcançam
+    quem recebe com o sol mais baixo do período (no máximo 200 m) e o relevo (até 500 m).
+    Cada entidade de sombra leva no XData ("Sombra", versão 1, os dois primeiros campos como
+    antes): o primeiro instante, onde (Chao, Mesa, Texto), a área (GUID ou `SEM_AREA`), o
+    período e o ladrilho ("x;y") ou a mesa (GUID). Gerar ou Apagar num escopo leva as
+    entidades com uma área dele, as das mesas escolhidas e as dos ladrilhos da seleção; as
+    de antes de 31/10/2026 (sem área) são julgadas pela posição.
+  - **Comandos novos:** `CLIVUS_SOMBRAS_OCULTAR`, `CLIVUS_SOMBRAS_MOSTRAR`,
+    `CLIVUS_SOMBRAS_ANALISES` (com inglês e espanhol) e, para o nível 2,
+    `CLIVUS_SOMBRAS_ESCOPO_AUTO`, `CLIVUS_SOMBRAS_APAGAR_AUTO` e
+    `CLIVUS_SOMBRAS_ANALISES_AUTO`. O `CLIVUS_SOMBRAS_APAGAR` digitado pergunta
+    [Tudo/Area/Selecao] (Enter: tudo). O `CLIVUS_SOMBRAS_AUTO` continua igual (desenho
+    inteiro). Ganchos de teste: `clivus-sombras-pela-janela` aceita o escopo,
+    `clivus-sombras-acao` (apagar, ocultar, mostrar) e `clivus-sombras-modulos`.
+  - **A janela:** "Calcular" (o escopo; abre em Uma área, ou no Desenho inteiro sem área), a
+    área, as caixas das várias áreas, "Pegar seleção" (as mesas selecionadas no desenho); o
+    resultado numa ou duas linhas (o detalhe vai para a linha de comando); Gerar, Apagar
+    (no desenho inteiro, pergunta), Ocultar, Mostrar, Ver análises…, Por que essa sombra?.
+    Gerar liga as camadas das sombras se estavam escondidas.
+  - **Ver análises:** janela solta com a árvore área › mesa › módulo, do pior para o melhor,
+    com %, causa e quando; o clique dá zoom (pelo menos uns 25 m na tela) e seleciona a
+    mesa ou o módulo. Lê de novo sozinha quando a janela de sombras gera ou apaga.
+  - **Ficou para conferir na tela ou fora do escopo:** o 3D no navegador continua lendo só
+    as bordas (Polyline3d "Sombra"); a borda do chão agora vem em trechos abertos por
+    ladrilho, e a hachura é entidade nova (o outro trabalho, o do 3D, precisa ler as
+    hachuras). As frases novas estão sem tradução (os testes de idioma ficam vermelhos até
+    o catálogo ser atualizado).
+  - **Desempenho, medido fora do CAD** (Core em Release, num terreno ondulado de ±15 m com
+    um barranco de 8 m, uma área de 300 × 300 m com 300 mesas e 12 mil módulos, um ano com
+    um dia por semana de 30 em 30 min, 1247 passos com sol):
+    - o relevo: 0,4 s para montar a grade, 1,7 ms por passo (934 dos 1247 varreram), 2 s no
+      ano; os 3132 pedaços do chão em 0,15 s;
+    - a sombra mesa a mesa nos módulos (`ShadingModel`, já existia): 447 ms por passo
+      antes, 140 ms agora (o bloco de 8 × 8 células todo abaixo do raio é pulado, e o raio
+      para ao sair da caixa das faces; a resposta é a mesma, conferida contra a força
+      bruta): no ano inteiro dessa área, uns 3 minutos;
+    - a mancha das mesas no chão (`ShadowFootprint`, já existia): 7 ms por passo, mas a
+      união dos polígonos de todos os passos pesa (4 s para 63 passos de 300 mesas): no
+      ano, perto de um minuto e meio.
+    - Numa área de uns 3 mil módulos, o ano fica por volta de um minuto; o Solstício de
+      inverno, em segundos. O desenho inteiro de 16 mil módulos no ano inteiro passa de dez
+      minutos: área por área, como o Renan disse que vai fazer.
 
-## Roteiro de tela (38.1 a 41.2)
+## Roteiro de tela (38.1 a 42.1)
 
 1. **Nova estrutura (38.1 e 38.5):** Configurações › Estruturas › Nova estrutura… › **Fixa**.
    A janela de Mesa abre na aba "Perfil e módulo"; clicar no cartão **Biposte** abre a aba
@@ -816,3 +909,23 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     depois de abrir, a linha "CLIVUS Terreno carregado: 202605 TN LEV MAYO (...)". Área, sem
     apertar Terreno: pede os vértices na hora. Fechar sem mexer em nada: o Civil 3D não
     pergunta se quer salvar.
+23. **Sombras (42.1):** num desenho com duas ou mais áreas com mesas (o terreno girante),
+    Sombreamento › Sombras:
+    - Calcular **Uma área** (a 1), Solstício de inverno, Gerar sombras: no 2D Wireframe, a
+      sombra das mesas no chão (entre as fileiras) e sobre os módulos aparece cheia, em
+      magenta transparente, com a borda magenta; os módulos não mudam de cor; o resultado na
+      janela cabe numa ou duas linhas ("N módulo(s) com sombra em M mesa(s) de Área 1; o
+      pior: ...").
+    - Orbitar: no chão, a hachura acompanha o terreno, uns 4 cm acima (nem afundada nem
+      voando); sobre a mesa, logo acima dos módulos, só até onde a sombra pega.
+    - Um barranco (talude íngreme virado para longe do sol, de manhã ou à tarde): a sombra
+      dele no pé do talude; o detalhe na linha de comando diz se o relevo fez sombra.
+    - Calcular a área 2: as sombras da 1 continuam. Apagar sombras com a área 1: só as da 1
+      somem. **Várias áreas**, **Seleção** (clicar nas mesas, Pegar seleção) e **Área +
+      seleção**: cada um troca só as sombras dele.
+    - Ocultar e Mostrar: as sombras somem e voltam (nada é apagado).
+    - **Ver análises…**: a árvore área › mesa › módulo, do pior para o melhor; clicar num
+      módulo: zoom nele e ele fica selecionado.
+    - Num desenho antigo, com módulos roxos da sombra de antes: Gerar na área deles (ou
+      Apagar) devolve a cor de antes.
+    - O tempo: uma área inteira no "Ano, sol acima de 20°" (o detalhe diz "Conta em ...").

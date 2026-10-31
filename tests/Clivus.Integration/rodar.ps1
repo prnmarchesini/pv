@@ -48,6 +48,8 @@ param(
     [switch] $SoEstruturas,
     # Só a janela Áreas (areas.ps1, etapa 41).
     [switch] $SoAreas,
+    # Só as sombras (os casos Testar-Sombras*, 42.1).
+    [switch] $SoSombras,
     [string] $Filtro = '',
     # Só um caso da lista principal, pelo nome da função (Testar-AreaSelecionar),
     # no primeiro desenho: para conferir um passo sem a rodada inteira.
@@ -3947,32 +3949,69 @@ function Testar-Arvore {
 }
 
 <#
-    As sombras pelo BOTAO da janela (04/10/2026, Renan: "nao esta pintando os
-    modulos com sombra"). O botao roda fora de um comando; o vigia tomava a
-    pintura por edicao do usuario e, no proximo comando, marcava as mesas
-    pendentes e pintava os modulos de vermelho por cima do roxo. O teste de
-    antes so usava a linha de comando (vigia calado) e a arvore em cima da
-    mesa. Aqui: arvore fora da fileira, o mesmo caminho do botao, um REGEN
-    depois. Exige modulos com cor de sombra, nenhum vermelho de pendente,
-    nenhum "pendente" escrito e contornos de sombra sobre as mesas.
+    O centro e a faixa de cotas do terreno do desenho (a sonda dos casos das
+    sombras): $null se nao achou.
+#>
+function Sondar-TerrenoDasSombras {
+    param([string] $Desenho, [string] $Rotulo)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo "$Rotulo--sonda" -Script (Join-Path $PSScriptRoot 'clivus-terreno.scr')
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
+
+    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("${Rotulo}: nao achei o centro do terreno. Veja $($sonda.Saida)")
+        return $null
+    }
+
+    $cx = [double]::Parse($Matches[1], $inv)
+    $cy = [double]::Parse($Matches[2], $inv)
+
+    if ($sonda.Texto -notmatch 'cotas:\s+(-?[\d.,]+) m a (-?[\d.,]+) m') {
+        $problemas.Add("${Rotulo}: nao achei a faixa de cotas do terreno. Veja $($sonda.Saida)")
+        return $null
+    }
+
+    return [pscustomobject]@{
+        X = $cx; Y = $cy
+        Minima = [double]::Parse($Matches[1], $ptbr)
+        Maxima = [double]::Parse($Matches[2], $ptbr)
+    }
+}
+
+<#
+    Os pontos A1 a A4 (a area de 100 x 100 m), L1, L2 e LADO (o alinhamento
+    na divisa oeste) em volta do centro do terreno, como os casos das sombras
+    sempre usaram.
+#>
+function Pontos-DasSombras {
+    param($Terreno)
+
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    function P([double] $dx, [double] $dy) { [string]::Format($inv, '{0:0.###},{1:0.###},0', $Terreno.X + $dx, $Terreno.Y + $dy) }
+
+    return @{
+        '{{A1}}' = (P -50 -50); '{{A2}}' = (P 50 -50); '{{A3}}' = (P 50 50); '{{A4}}' = (P -50 50)
+        '{{L1}}' = (P -50 -50); '{{L2}}' = (P -50 50); '{{LADO}}' = (P 0 0)
+    }
+}
+
+<#
+    O "Por que essa sombra?", as analises e o periodo (05/10/2026 e 42.1): o
+    dia inteiro com a arvore fora da fileira desenha a mancha de todos os
+    passos em hachura e borda magenta (a borda com os dentes dos passos); o
+    porque de um modulo do registro dos motivos diz quanto, o que e quando, o
+    de um modulo sem sombra diz que nao tem; as analises (CLIVUS_SOMBRAS_
+    ANALISES_AUTO) listam area > mesa > modulo; o ano com o sol acima de 20
+    graus conta os instantes certos.
 #>
 function Testar-SombrasPorQue {
     param([string] $Desenho)
 
-    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-porque--sonda' -Script (Join-Path $PSScriptRoot 'clivus-terreno.scr')
-    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
-        $problemas.Add("clivus-sombras-porque: nao achei o centro do terreno. Veja $($sonda.Saida)")
-        return $false
-    }
+    $terreno = Sondar-TerrenoDasSombras -Desenho $Desenho -Rotulo 'clivus-sombras-porque'
+    if ($null -eq $terreno) { return $false }
 
-    $invariante = [Globalization.CultureInfo]::InvariantCulture
-    $cx = [double]::Parse($Matches[1], $invariante)
-    $cy = [double]::Parse($Matches[2], $invariante)
-    function Ponto3([double] $dx, [double] $dy) { [string]::Format($invariante, '{0:0.###},{1:0.###},0', $cx + $dx, $cy + $dy) }
-
-    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-porque' -Script (Join-Path $PSScriptRoot 'clivus-sombras-porque.scr') -Substituicoes @{
-        '{{A1}}' = (Ponto3 -50 -50); '{{A2}}' = (Ponto3 50 -50); '{{A3}}' = (Ponto3 50 50); '{{A4}}' = (Ponto3 -50 50)
-        '{{L1}}' = (Ponto3 -50 -50); '{{L2}}' = (Ponto3 -50 50); '{{LADO}}' = (Ponto3 0 0) }
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-porque' -Script (Join-Path $PSScriptRoot 'clivus-sombras-porque.scr') -Substituicoes (Pontos-DasSombras $terreno)
 
     if ($r.Estourou -or $r.Codigo -ne 0 -or $r.Texto.IndexOf('CLIVUS_PORQUE_FIM') -lt 0) {
         $problemas.Add("clivus-sombras-porque terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
@@ -3980,266 +4019,320 @@ function Testar-SombrasPorQue {
     }
 
     $t = $r.Texto
-    $marcado = $t.Substring($t.IndexOf('CLIVUS_PORQUE_MARCADO')); $marcado = $marcado.Substring(0, $marcado.IndexOf('CLIVUS_PORQUE_LIMPO'))
-    $limpo = $t.Substring($t.IndexOf('CLIVUS_PORQUE_LIMPO')); $limpo = $limpo.Substring(0, $limpo.IndexOf('CLIVUS_PORQUE_FIM'))
+    function Bloco([string] $de, [string] $ate) {
+        $i = $t.IndexOf($de); $j = $t.IndexOf($ate)
+        if ($i -lt 0 -or $j -lt $i) { return '' }
+        return $t.Substring($i, $j - $i)
+    }
+
+    $marcado = Bloco 'CLIVUS_PORQUE_MARCADO' 'CLIVUS_PORQUE_LIMPO'
+    $limpo = Bloco 'CLIVUS_PORQUE_LIMPO' 'CLIVUS_PORQUE_ANALISES'
+    $analises = Bloco 'CLIVUS_PORQUE_ANALISES' 'CLIVUS_PORQUE_ALTURA'
 
     $erros = @()
-    if ($t -notmatch 'CLIVUS_PORQUE contornos=(\d+) marcado=(\S+)' -or [int]$Matches[1] -lt 1 -or $Matches[2] -eq '-') { $erros += 'o periodo nao desenhou a mancha, ou nenhum modulo ficou marcado' }
+    if ($t -notmatch 'CLIVUS_PORQUE hachuras=(\d+) marcado=(\S+) limpo=(\S+)' -or [int]$Matches[1] -lt 1 -or $Matches[2] -eq '-') { $erros += 'o dia nao desenhou a mancha em hachura, ou nenhum modulo ficou no registro dos motivos' }
+    elseif ($Matches[3] -eq '-') { $erros += 'nao sobrou modulo sem sombra para o porque dele' }
     if ($t -notmatch 'a uni\S+o das sombras de (\d+) passo' -or [int]$Matches[1] -lt 10) { $erros += 'a mancha nao e a uniao dos passos do dia' }
-    if ($t -notmatch 'CLIVUS_PORQUE_VERTICES maior=(\d+)' -or [int]$Matches[1] -lt 40) { $erros += 'a mancha do chao nao tem a borda densificada com os dentes dos passos' }
-    if ($marcado -notmatch 'SOMBRA F\S+ col \d+ fil \d+: \d+% da face na sombra, por \S+, em 21/06/2026 \d\d:\d\d') { $erros += 'o por que do modulo marcado nao diz quanto, o que e quando' }
-    if ($limpo -notmatch 'sem sombra no' ) { $erros += 'o por que do modulo sem marca nao diz que esta sem sombra' }
+    if ($t -notmatch 'CLIVUS_PORQUE_VERTICES bordas=(\d+) maior=(\d+)' -or [int]$Matches[1] -lt 40 -or [int]$Matches[2] -lt 4) { $erros += 'a borda da mancha no chao nao tem os dentes dos passos (poucos vertices)' }
+    if ($marcado -notmatch 'SOMBRA F\S+ col \d+ fil \d+: \d+% da face na sombra, por \S+, em 21/06/2026 \d\d:\d\d') { $erros += 'o por que do modulo com sombra nao diz quanto, o que e quando' }
+    if ($limpo -notmatch 'sem sombra no') { $erros += 'o por que do modulo sem sombra nao diz que esta sem sombra' }
+    if ($analises -notmatch 'SOMBRA_TOPICO 1 Area sombras .{1,4}\d+ mesa\(s\), \d+ m\S+dulo\(s\) com sombra') { $erros += 'as analises nao trazem o topico da area' }
+    if ($analises -notmatch 'SOMBRA_TOPICO 2 F\S+ .{1,4}\d+ m\S+dulo\(s\); pior \d+%') { $erros += 'as analises nao trazem os topicos das mesas' }
+    if ($analises -notmatch 'SOMBRA_TOPICO 3 col \d+ fil \d+ .{1,4}\d+% .{1,4}\S+.{1,4}21/06/2026 \d\d:\d\d') { $erros += 'as analises nao trazem os topicos dos modulos (%, causa, quando)' }
 
     # 05/10/2026: o ano com o sol acima de 20 graus (os horarios saem do sol).
     $altura = $t.Substring($t.IndexOf('CLIVUS_PORQUE_ALTURA'))
     if ($altura -notmatch 'com o sol acima de 20\S*, de 60 em 60 min' -or $altura -notmatch '(\d+) instante\(s\), (\d+) com sol') { $erros += 'o periodo pela altura solar nao foi calculado' }
     elseif ([int]$Matches[1] -lt 50 -or [int]$Matches[1] -gt 13 * 13) { $erros += "o periodo pela altura solar teve $($Matches[1]) instante(s), fora do esperado para 13 dias com o sol acima de 20 graus" }
 
+    if ($t -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) { $erros += 'o SECURELOAD nao voltou ao que era' }
+
     if ($erros.Count -gt 0) {
         $problemas.Add("clivus-sombras-porque: $($erros -join '; '). Veja $($r.Saida)")
         return $false
     }
 
-    Write-Host '  (sombras no periodo: a mancha do dia, uniao dos passos; por que essa sombra responde)' -ForegroundColor DarkGray
+    Write-Host '  (sombras no periodo: a mancha do dia em hachura, uniao dos passos; por que essa sombra responde; analises em topicos)' -ForegroundColor DarkGray
     return $true
 }
 
+<#
+    As sombras pelo BOTAO da janela (04/10/2026 e 42.1). O botao roda fora de
+    um comando; o vigia tomava o que a sombra mexia por edicao do usuario e,
+    no proximo comando, marcava as mesas pendentes. Aqui: arvore fora da
+    fileira, o mesmo caminho do botao, um REGEN depois. Exige hachuras
+    magenta no chao e sobre as mesas, nenhum modulo vermelho de pendente,
+    nenhum "pendente" escrito, nenhum modulo com a cor ou a camada mudada, e
+    os botoes Ocultar e Mostrar (fora de comando) desligando e ligando a
+    camada das sombras.
+#>
 function Testar-SombrasJanela {
     param([string] $Desenho)
 
-    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-janela--sonda' `
-                                -Script (Join-Path $PSScriptRoot 'clivus-terreno.scr')
+    $terreno = Sondar-TerrenoDasSombras -Desenho $Desenho -Rotulo 'clivus-sombras-janela'
+    if ($null -eq $terreno) { return $false }
 
-    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
-        $problemas.Add("clivus-sombras-janela: nao achei o centro do terreno. Veja $($sonda.Saida)")
-        return $false
-    }
-
-    $invariante = [Globalization.CultureInfo]::InvariantCulture
-    $centroX = [double]::Parse($Matches[1], $invariante)
-    $centroY = [double]::Parse($Matches[2], $invariante)
-
-    function Ponto3([double] $dx, [double] $dy, [double] $z) {
-        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
-    }
-
-    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-janela' `
-        -Script (Join-Path $PSScriptRoot 'clivus-sombras-janela.scr') `
-        -Substituicoes @{
-            '{{A1}}'   = (Ponto3 -50 -50 0)
-            '{{A2}}'   = (Ponto3  50 -50 0)
-            '{{A3}}'   = (Ponto3  50  50 0)
-            '{{A4}}'   = (Ponto3 -50  50 0)
-            '{{L1}}'   = (Ponto3 -50 -50 0)
-            '{{L2}}'   = (Ponto3 -50  50 0)
-            '{{LADO}}' = (Ponto3   0   0 0)
-        }
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-janela' -Script (Join-Path $PSScriptRoot 'clivus-sombras-janela.scr') -Substituicoes (Pontos-DasSombras $terreno)
 
     if ($r.Estourou -or $r.Codigo -ne 0) {
         $problemas.Add("clivus-sombras-janela terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
         return $false
     }
 
-    if ($r.Texto -notmatch 'CLIVUS_JANELA sombra=(\d+) vermelhos=(\d+) contornos=(\d+)') {
+    if ($r.Texto -notmatch 'CLIVUS_JANELA chao=(\d+) mesa=(\d+) modulos=(\d+) vermelhos=(\d+) igual=(\d) oculta=(\d) mostra=(\d) fim') {
         $problemas.Add("clivus-sombras-janela: sem o resumo. Veja $($r.Saida)")
         return $false
     }
 
-    $sombra = [int]$Matches[1]; $vermelhos = [int]$Matches[2]; $contornos = [int]$Matches[3]
+    $m = $Matches
     $depois = $r.Texto.Substring($r.Texto.IndexOf('CLIVUS_JANELA_ANTES'))
 
     $erros = @()
-    if ($sombra -le 0) { $erros += 'nenhum modulo com cor de sombra' }
-    if ($vermelhos -gt 0) { $erros += "$vermelhos modulo(s) vermelhos de pendente (o vigia tomou a sombra por edicao)" }
+    if ([int]$m[1] -lt 1) { $erros += 'nenhuma hachura magenta de sombra no chao' }
+    if ([int]$m[2] -lt 1) { $erros += 'nenhuma hachura magenta de sombra sobre as mesas (a arvore ao norte da F1.3)' }
+    if ([int]$m[3] -lt 1) { $erros += 'nenhum modulo com sombra no registro dos motivos' }
+    if ([int]$m[4] -gt 0) { $erros += "$($m[4]) modulo(s) vermelhos de pendente (o vigia tomou a sombra por edicao)" }
     if ($depois -match 'pendente') { $erros += 'o vigia escreveu "pendente" depois da sombra' }
-    if ($contornos -lt 2) { $erros += "so $contornos contorno(s): a sombra nao foi desenhada no chao e sobre as mesas" }
+    if ($m[5] -ne '1') { $erros += 'a sombra mudou a cor ou a camada de modulo (nao pinta mais o bloco)' }
+    if ($m[6] -ne '1') { $erros += 'Ocultar nao desligou a camada CLIVUS_SOMBRA' }
+    if ($m[7] -ne '1') { $erros += 'Mostrar nao ligou a camada CLIVUS_SOMBRA de novo' }
+    if ($r.Texto -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) { $erros += 'o SECURELOAD nao voltou ao que era' }
 
     if ($erros.Count -gt 0) {
         $problemas.Add("clivus-sombras-janela: $($erros -join '; '). Veja $($r.Saida)")
         return $false
     }
 
-    Write-Host "  (sombras pela janela: $sombra modulo(s) com sombra, nenhum pendente, $contornos contorno(s), no chao e sobre as mesas)" -ForegroundColor DarkGray
+    Write-Host "  (sombras pela janela: $($m[1]) hachura(s) no chao e $($m[2]) sobre mesas, $($m[3]) modulo(s) com sombra no registro, nenhum mexido nem pendente; ocultar e mostrar pela janela)" -ForegroundColor DarkGray
     return $true
 }
 
 <#
-    A sombra das MESAS e o Cancelar (05/10/2026, Renan: "o motor de sombras
-    tem que gerar as sombras de todos objetos do desenho"; "um botao de
-    cancelar a qualquer momento"). Usina sem arvore: as 07:30 de 21/06/2026
-    as mesas fazem sombra no chao (cota na faixa do terreno, regra 5) e na
-    fileira de tras (no plano da mesa); o ano cancelado no 5o passo do
-    andamento diz "Cancelado; nada foi desenhado." e nao muda nada; o dia
-    inteiro desenha a mancha das mesas no chao.
+    A sombra das MESAS e o Cancelar (05/10/2026 e 42.1, Renan: "as mesas
+    geram sombras e eu nao estou vendo"). Usina sem arvore: as 07:30 de
+    21/06/2026 as mesas fazem sombra no chao (hachura com a cota na faixa do
+    terreno, regra 5) e na fileira de tras (no plano da mesa); o ano
+    cancelado no 5o passo do andamento diz "Cancelado; nada foi desenhado." e
+    nao muda nada; o dia inteiro desenha a mancha das mesas no chao.
 #>
 function Testar-SombrasMesas {
     param([string] $Desenho)
 
-    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-mesas--sonda' `
-                                -Script (Join-Path $PSScriptRoot 'clivus-terreno.scr')
+    $terreno = Sondar-TerrenoDasSombras -Desenho $Desenho -Rotulo 'clivus-sombras-mesas'
+    if ($null -eq $terreno) { return $false }
 
-    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
-        $problemas.Add("clivus-sombras-mesas: nao achei o centro do terreno. Veja $($sonda.Saida)")
-        return $false
-    }
-
-    $invariante = [Globalization.CultureInfo]::InvariantCulture
-    $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
-    $centroX = [double]::Parse($Matches[1], $invariante)
-    $centroY = [double]::Parse($Matches[2], $invariante)
-
-    if ($sonda.Texto -notmatch 'cotas:\s+(-?[\d.,]+) m a (-?[\d.,]+) m') {
-        $problemas.Add("clivus-sombras-mesas: nao achei a faixa de cotas do terreno. Veja $($sonda.Saida)")
-        return $false
-    }
-
-    $minima = [double]::Parse($Matches[1], $ptbr)
-    $maxima = [double]::Parse($Matches[2], $ptbr)
-
-    function Ponto3([double] $dx, [double] $dy, [double] $z) {
-        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
-    }
-
-    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-mesas' `
-        -Script (Join-Path $PSScriptRoot 'clivus-sombras-mesas.scr') `
-        -Substituicoes @{
-            '{{A1}}'   = (Ponto3 -50 -50 0)
-            '{{A2}}'   = (Ponto3  50 -50 0)
-            '{{A3}}'   = (Ponto3  50  50 0)
-            '{{A4}}'   = (Ponto3 -50  50 0)
-            '{{L1}}'   = (Ponto3 -50 -50 0)
-            '{{L2}}'   = (Ponto3 -50  50 0)
-            '{{LADO}}' = (Ponto3   0   0 0)
-        }
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-mesas' -Script (Join-Path $PSScriptRoot 'clivus-sombras-mesas.scr') -Substituicoes (Pontos-DasSombras $terreno)
 
     if ($r.Estourou -or $r.Codigo -ne 0) {
         $problemas.Add("clivus-sombras-mesas terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
         return $false
     }
 
-    if ($r.Texto -notmatch 'CLIVUS_SOMBRAS_MESAS chao=(\d+) zmin=(-?[\d.]+) zmax=(-?[\d.]+) mesa=(\d+) mzmin=(-?[\d.E+]+) mzmax=(-?[\d.E+]+) iguais=(\d) dia=(\d+)') {
+    if ($r.Texto -notmatch 'CLIVUS_SOMBRAS_MESAS chao=(\d+) zmin=(-?[\d.E+]+) zmax=(-?[\d.E+]+) mesa=(\d+) mzmin=(-?[\d.E+]+) mzmax=(-?[\d.E+]+) iguais=(\d) dia=(\d+) repintou=(\d) fim') {
         $problemas.Add("clivus-sombras-mesas: sem o resumo. Veja $($r.Saida)")
         return $false
     }
 
+    $inv = [Globalization.CultureInfo]::InvariantCulture
     $m = $Matches
-    $chao = [int] $m[1]; $zmin = [double]::Parse($m[2], $invariante); $zmax = [double]::Parse($m[3], $invariante)
-    $mesa = [int] $m[4]; $iguais = $m[7]; $dia = [int] $m[8]
+    $chao = [int] $m[1]; $mesa = [int] $m[4]; $dia = [int] $m[8]
+    $minima = $terreno.Minima; $maxima = $terreno.Maxima
 
     $erros = @()
-    if ($r.Texto -notmatch '0 .rvore\(s\)') { $erros += 'o desenho tinha arvore (o teste e sem arvore)' }
-    if ($chao -lt 1) { $erros += 'as 07:30, sem arvore, nenhuma sombra de mesa no chao' }
-    if ($mesa -lt 1) { $erros += 'as 07:30 nenhuma sombra de mesa sobre a fileira de tras' }
-    if ($chao -ge 1 -and ($zmin -lt ($minima - 0.01) -or $zmax -gt ($maxima + 0.1))) { $erros += "a sombra das mesas no chao vai da cota $zmin a $zmax, fora do terreno ($minima a $maxima)" }
-    if ($mesa -ge 1) {
-        $mzmin = [double]::Parse($m[5], $invariante); $mzmax = [double]::Parse($m[6], $invariante)
-        if ($mzmin -lt ($minima - 0.01) -or $mzmax -gt ($maxima + 6)) { $erros += "a sombra sobre as mesas vai da cota $mzmin a $mzmax, longe do terreno ($minima a $maxima)" }
+    if ($r.Texto -notmatch 'e 0 .rvore\(s\) fazendo sombra') { $erros += 'o desenho tinha arvore fazendo sombra (o teste e sem arvore)' }
+    if ($chao -lt 1) { $erros += 'as 07:30, sem arvore, nenhuma hachura de sombra de mesa no chao' }
+    if ($mesa -lt 1) { $erros += 'as 07:30 nenhuma hachura de sombra sobre a fileira de tras' }
+    if ($chao -ge 1) {
+        $zmin = [double]::Parse($m[2], $inv); $zmax = [double]::Parse($m[3], $inv)
+        if ($zmin -lt ($minima - 0.01) -or $zmax -gt ($maxima + 0.2)) { $erros += "as hachuras do chao vao da cota $zmin a $zmax, fora do terreno ($minima a $maxima)" }
     }
-    if ($r.Texto -notmatch 'Sombra das .rvores e das mesas desenhada .s 21/06/2026 07:30') { $erros += 'a frase nao diz que a sombra das mesas foi desenhada' }
+    if ($mesa -ge 1) {
+        $mzmin = [double]::Parse($m[5], $inv); $mzmax = [double]::Parse($m[6], $inv)
+        if ($mzmin -lt ($minima - 0.01) -or $mzmax -gt ($maxima + 6)) { $erros += "as hachuras sobre as mesas vao da cota $mzmin a $mzmax, longe do terreno ($minima a $maxima)" }
+    }
+    if ($r.Texto -notmatch 'com sombra em \d+ mesa\(s\) do desenho inteiro; o pior: F\S+ \d+% \(\S+\) .s 07:30') { $erros += 'o resumo nao diz quantos modulos e mesas, e o pior as 07:30' }
+    if ($r.Texto -notmatch '(\d+) por outra mesa' -or [int]$Matches[1] -lt 1) { $erros += 'as 07:30 nenhum modulo na sombra de outra mesa' }
     if ($r.Texto -notmatch 'SOMBRAS_ANDAMENTO Calculando \d\d/\d\d \(\d+ de 365\)') { $erros += 'o andamento nao mostra o dia sendo calculado (dd/mm, n de 365)' }
     if ($r.Texto -notmatch 'SOMBRAS Cancelado; nada foi desenhado\.') { $erros += 'o cancelar nao disse "Cancelado; nada foi desenhado."' }
-    if ($iguais -ne '1') { $erros += 'o cancelar mudou o desenho (contornos ou cores)' }
+    if ($m[7] -ne '1') { $erros += 'o cancelar mudou o desenho (sombras ou cores)' }
     if ($dia -lt 1) { $erros += 'o dia inteiro nao desenhou a mancha das mesas no chao' }
+    if ($m[9] -ne '0') { $erros += 'a sombra mudou a cor de modulo (nao pinta mais o bloco)' }
 
     if ($erros.Count -gt 0) {
         $problemas.Add("clivus-sombras-mesas: $($erros -join '; '). Veja $($r.Saida)")
         return $false
     }
 
-    Write-Host "  (sombras das mesas: 07:30 com $chao contorno(s) no chao e $mesa sobre as mesas, cota na faixa do terreno; ano cancelado sem mudar nada; dia com $dia no chao)" -ForegroundColor DarkGray
+    Write-Host "  (sombras das mesas: 07:30 com $chao hachura(s) no chao e $mesa sobre as mesas, cota na faixa do terreno; ano cancelado sem mudar nada; dia com $dia no chao)" -ForegroundColor DarkGray
     return $true
 }
 
 <#
-    Sombras (9.7 e 9.8): usina mista e uma arvore grande no meio da F1.3. As
-    09:00 de 21/06/2026 a sombra e desenhada no terreno (cota na faixa dele,
-    regra 5) e marca modulos; Apagar tira os contornos e devolve exatamente
-    a cor de antes de cada modulo; o dia inteiro marca, pelo pior caso, pelo
-    menos os modulos do instante.
+    Sombras (9.7, 9.8 e 42.1): usina mista e uma arvore grande no meio da
+    F1.3. As 09:00 de 21/06/2026 a sombra e desenhada em hachura SOLID
+    magenta, transparente, na camada CLIVUS_SOMBRA, no chao e sobre as mesas;
+    a cota de cada vertice das hachuras do chao (lida da entidade) fica na
+    faixa do terreno, e uma amostra fica de 3,5 a 15 cm acima dele no mesmo
+    ponto (CLIVUS_COORD); nenhum modulo e repintado. Apagar (Tudo) tira
+    tudo; o dia inteiro desenha a mancha; as 07:30 a fileira da frente faz
+    sombra na de tras.
 #>
 function Testar-Sombras {
     param([string] $Desenho)
 
-    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras--sonda' `
-                                -Script (Join-Path $PSScriptRoot 'clivus-terreno.scr')
+    $terreno = Sondar-TerrenoDasSombras -Desenho $Desenho -Rotulo 'clivus-sombras'
+    if ($null -eq $terreno) { return $false }
 
-    if ($sonda.Texto -notmatch 'centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
-        $problemas.Add("clivus-sombras: nao achei o centro do terreno. Veja $($sonda.Saida)")
-        return $false
-    }
-
-    $invariante = [Globalization.CultureInfo]::InvariantCulture
-    $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
-    $centroX = [double]::Parse($Matches[1], $invariante)
-    $centroY = [double]::Parse($Matches[2], $invariante)
-
-    if ($sonda.Texto -notmatch 'cotas:\s+(-?[\d.,]+) m a (-?[\d.,]+) m') {
-        $problemas.Add("clivus-sombras: nao achei a faixa de cotas do terreno. Veja $($sonda.Saida)")
-        return $false
-    }
-
-    $minima = [double]::Parse($Matches[1], $ptbr)
-    $maxima = [double]::Parse($Matches[2], $ptbr)
-
-    function Ponto3([double] $dx, [double] $dy, [double] $z) {
-        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
-    }
-
-    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras' `
-        -Script (Join-Path $PSScriptRoot 'clivus-sombras.scr') `
-        -Substituicoes @{
-            '{{A1}}'   = (Ponto3 -50 -50 0)
-            '{{A2}}'   = (Ponto3  50 -50 0)
-            '{{A3}}'   = (Ponto3  50  50 0)
-            '{{A4}}'   = (Ponto3 -50  50 0)
-            '{{L1}}'   = (Ponto3 -50 -50 0)
-            '{{L2}}'   = (Ponto3 -50  50 0)
-            '{{LADO}}' = (Ponto3   0   0 0)
-        }
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras' -Script (Join-Path $PSScriptRoot 'clivus-sombras.scr') -Substituicoes (Pontos-DasSombras $terreno)
 
     if ($r.Estourou -or $r.Codigo -ne 0) {
         $problemas.Add("clivus-sombras terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
         return $false
     }
 
-    if ($r.Texto -notmatch 'CLIVUS_SOMBRAS instante=(\d+) zmin=(-?[\d.]+) zmax=(-?[\d.]+) marcados=(\d+) apagado=(\d+) marcadosdepois=(\d+) volta=(\d) dia=(\d+) marcadosdia=(\d+)') {
+    if ($r.Texto -notmatch 'CLIVUS_SOMBRAS chao=(\d+) mesa=(\d+) bordas=(\d+) zmin=(-?[\d.E+]+) zmax=(-?[\d.E+]+) naomagenta=(\d+) foradacamada=(\d+) semtransparencia=(\d+) naosolid=(\d+) repintou=(\d) apagado=(\d+) dia=(\d+) repintoudia=(\d) modulos=(\d+) modapagado=(\d+) modulosdia=(\d+) faltamnodia=(\d+) fim') {
         $problemas.Add("clivus-sombras: nao consegui ler o LISP. Veja $($r.Saida)")
         return $false
     }
 
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    $ptbr = [Globalization.CultureInfo]::GetCultureInfo('pt-BR')
     $m = $Matches
-    $contornos = [int] $m[1]; $zmin = [double]::Parse($m[2], $invariante); $zmax = [double]::Parse($m[3], $invariante)
-    $marcados = [int] $m[4]; $marcadosDia = [int] $m[9]
+    $chao = [int] $m[1]; $mesa = [int] $m[2]
 
-    if ($contornos -lt 2 -or $marcados -lt 1) {
-        $problemas.Add("clivus-sombras: as 09:00 esperava a sombra do tronco e da copa desenhadas e modulos marcados; deu $contornos contorno(s) e $marcados modulo(s). Veja $($r.Saida)")
-        return $false
+    $erros = @()
+    if ($chao -lt 1) { $erros += 'as 09:00 nenhuma hachura de sombra no chao' }
+    if ($mesa -lt 1) { $erros += 'as 09:00 nenhuma hachura de sombra sobre as mesas (a arvore no meio da F1.3)' }
+    if ([int] $m[3] -lt 1) { $erros += 'sem a borda magenta da sombra' }
+    if ($chao -ge 1) {
+        $zmin = [double]::Parse($m[4], $inv); $zmax = [double]::Parse($m[5], $inv)
+        if ($zmin -lt ($terreno.Minima - 0.01) -or $zmax -gt ($terreno.Maxima + 0.2)) { $erros += "as hachuras do chao vao da cota $zmin a $zmax, fora do terreno ($($terreno.Minima) a $($terreno.Maxima))" }
     }
+    if ([int] $m[6] -gt 0) { $erros += "$($m[6]) hachura(s) de sombra que nao sao magenta" }
+    if ([int] $m[7] -gt 0) { $erros += "$($m[7]) hachura(s) de sombra fora da camada CLIVUS_SOMBRA" }
+    if ([int] $m[8] -gt 0) { $erros += "$($m[8]) hachura(s) de sombra sem a transparencia de 50%" }
+    if ([int] $m[9] -gt 0) { $erros += "$($m[9]) hachura(s) de sombra que nao sao SOLID" }
+    if ($m[10] -ne '0') { $erros += 'a sombra repintou modulo (cor ou camada)' }
+    if ([int] $m[11] -ne 0) { $erros += "Apagar (Tudo) deixou $($m[11]) entidade(s) de sombra" }
+    if ([int] $m[12] -lt 1) { $erros += 'o dia inteiro nao desenhou a mancha no chao' }
+    if ($m[13] -ne '0') { $erros += 'o dia inteiro repintou modulo' }
+    if ([int] $m[14] -lt 1) { $erros += 'as 09:00 nenhum modulo com sombra no registro dos motivos (a arvore no meio da F1.3)' }
+    if ([int] $m[15] -ne 0) { $erros += "Apagar (Tudo) deixou $($m[15]) modulo(s) no registro dos motivos" }
+    if ([int] $m[16] -lt [int] $m[14] -or [int] $m[17] -ne 0) { $erros += "o dia inteiro (pior caso) deveria guardar pelo menos os $($m[14]) modulo(s) das 09:00; guardou $($m[16]), e $($m[17]) das 09:00 ficaram de fora" }
 
-    if ($zmin -lt ($minima - 0.01) -or $zmax -gt ($maxima + 0.1)) {
-        $problemas.Add("clivus-sombras: a sombra vai da cota $zmin a $zmax, fora do terreno ($minima a $maxima). Veja $($r.Saida)")
-        return $false
+    # A amostra: a cota de cada vertice de hachura do chao contra a do terreno no mesmo ponto.
+    $i = $r.Texto.IndexOf('CLIVUS_AMOSTRA_INICIO'); $j = $r.Texto.IndexOf('CLIVUS_AMOSTRA_FIM')
+    $amostra = if ($i -ge 0 -and $j -gt $i) { $r.Texto.Substring($i, $j - $i) } else { '' }
+    $hv = [regex]::Matches($amostra, 'CLIVUS_HV z=(-?[\d.]+)')
+    $chaoNoPonto = [regex]::Matches($amostra, '(?m)^\s+X [\d\.,]+\s+Y [\d\.,]+\s+Z ([\d\.,-]+)\s*$')
+
+    if ($hv.Count -lt 1 -or $hv.Count -ne $chaoNoPonto.Count) {
+        $erros += "a amostra das cotas das hachuras do chao nao veio inteira ($($hv.Count) vertice(s), $($chaoNoPonto.Count) cota(s) do terreno)"
     }
+    else {
+        $folgas = for ($k = 0; $k -lt $hv.Count; $k++) {
+            [double]::Parse($hv[$k].Groups[1].Value, $inv) - [double]::Parse(($chaoNoPonto[$k].Groups[1].Value -replace '\.', ''), $ptbr)
+        }
 
-    if ([int] $m[5] -ne 0 -or [int] $m[6] -ne 0 -or $m[7] -ne '1') {
-        $problemas.Add("clivus-sombras: Apagar deveria tirar os contornos ($($m[5]) ficaram), as marcas ($($m[6]) ficaram) e devolver a cor de antes (volta=$($m[7])). Veja $($r.Saida)")
-        return $false
-    }
-
-    if ([int] $m[8] -lt 2 -or $marcadosDia -lt $marcados) {
-        $problemas.Add("clivus-sombras: o dia inteiro deveria desenhar a sombra do pior instante e marcar pelo menos os $marcados modulos das 09:00; deu $($m[8]) contorno(s) e $marcadosDia modulo(s). Veja $($r.Saida)")
-        return $false
+        $longe = @($folgas | Where-Object { $_ -lt 0.035 -or $_ -gt 0.15 })
+        if ($longe.Count -gt 0) { $erros += "$($longe.Count) de $($hv.Count) vertice(s) de hachura do chao fora de 3,5 a 15 cm acima do terreno (ex.: $([Math]::Round($longe[0], 3)) m)" }
     }
 
     # As mesas tambem fazem sombra: as 07:30 a fileira da frente pega a de tras.
-    if ($r.Texto -notmatch '07:30 \(fuso[^\r\n]*?(\d+) por .rvore, (\d+) por outra mesa, (\d+) pelo terreno' -or [int] $Matches[2] -lt 1) {
-        $problemas.Add("clivus-sombras: as 07:30 esperava modulos na sombra de outra mesa (fileira na fileira). Veja $($r.Saida)")
+    $k0730 = $r.Texto.IndexOf('CLIVUS_SOMBRAS_0730')
+    $depois0730 = if ($k0730 -ge 0) { $r.Texto.Substring($k0730) } else { '' }
+    if ($depois0730 -notmatch '(\d+) por .rvore, (\d+) por outra mesa, (\d+) pelo terreno' -or [int] $Matches[2] -lt 1) {
+        $erros += 'as 07:30 nenhum modulo na sombra de outra mesa (fileira na fileira)'
+    }
+
+    if ($erros.Count -gt 0) {
+        $problemas.Add("clivus-sombras: $($erros -join '; '). Veja $($r.Saida)")
         return $false
     }
 
     $porMesa = [int] $Matches[2]; $porTerreno = [int] $Matches[3]
+    Write-Host "  (sombras: 09:00 com $chao hachura(s) no chao e $mesa sobre mesas, magenta, $($hv.Count) vertice(s) de 3,5 a 15 cm acima do terreno; apagadas; nenhum modulo repintado; 07:30 com $porMesa por outra mesa e $porTerreno pelo terreno)" -ForegroundColor DarkGray
+    return $true
+}
 
-    Write-Host "  (sombras: 09:00 com $contornos contornos e $marcados modulo(s); apagadas com a cor de volta; dia inteiro com $marcadosDia modulo(s) no pior caso; 07:30 com $porMesa por outra mesa e $porTerreno pelo terreno)" -ForegroundColor DarkGray
+<#
+    O ESCOPO das sombras (42.1, Renan: "vou analisar area por area para nao
+    travar o PC, ai vou querer apagar as sombras de algumas areas, recaldular
+    de outras"). A area Usina (100 x 100 m) com a usina, e dentro dela a Area
+    Oeste e a Area Leste. Conferido pela area gravada no XData de cada
+    entidade de sombra: calcular a Oeste desenha so nela; calcular a Leste
+    depois nao mexe na Oeste; apagar a Oeste deixa a Leste igual; a selecao
+    (F1.1) desenha so perto dela; ocultar e mostrar; as analises; nenhum
+    modulo repintado; apagar tudo.
+#>
+function Testar-SombrasEscopo {
+    param([string] $Desenho)
+
+    $terreno = Sondar-TerrenoDasSombras -Desenho $Desenho -Rotulo 'clivus-sombras-escopo'
+    if ($null -eq $terreno) { return $false }
+
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    function P([double] $dx, [double] $dy) { [string]::Format($inv, '{0:0.###},{1:0.###},0', $terreno.X + $dx, $terreno.Y + $dy) }
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-escopo' -Script (Join-Path $PSScriptRoot 'clivus-sombras-escopo.scr') -Substituicoes @{
+        '{{U1}}' = (P -50 -50); '{{U2}}' = (P 50 -50); '{{U3}}' = (P 50 50); '{{U4}}' = (P -50 50)
+        '{{A1}}' = (P -50 -50); '{{A2}}' = (P 0 -50); '{{A3}}' = (P 0 50); '{{A4}}' = (P -50 50)
+        '{{B1}}' = (P 0 -50); '{{B2}}' = (P 50 -50); '{{B3}}' = (P 50 50); '{{B4}}' = (P 0 50)
+        '{{L1}}' = (P -50 -50); '{{L2}}' = (P -50 50); '{{LADO}}' = (P 0 0)
+    }
+
+    if ($r.Estourou -or $r.Codigo -ne 0 -or $r.Texto -notmatch 'CLIVUS_ESCOPO_FIM oculta=(\d) mostra=(\d) repintou=(\d) fim') {
+        $problemas.Add("clivus-sombras-escopo terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
+        return $false
+    }
+
+    $oculta = $Matches[1]; $mostra = $Matches[2]; $repintou = $Matches[3]
+    $t = $r.Texto
+
+    function Par([string] $rotulo) {
+        $m = [regex]::Match($t, "CLIVUS_ESCOPO $rotulo oeste=(\d+) leste=(\d+) usina=(\d+) ho=(\d+) hl=(\d+) todas=(\d+) fim")
+        if (-not $m.Success) { return $null }
+        return [pscustomobject]@{
+            Oeste = [int] $m.Groups[1].Value; Leste = [int] $m.Groups[2].Value; Usina = [int] $m.Groups[3].Value
+            HO = [int] $m.Groups[4].Value; HL = [int] $m.Groups[5].Value; Todas = [int] $m.Groups[6].Value
+        }
+    }
+
+    $erros = @()
+    if ($t -notmatch 'CLIVUS_ESCOPO_AREAS usina=1 oeste=1 leste=1') {
+        $problemas.Add("clivus-sombras-escopo: as tres areas nao foram criadas. Veja $($r.Saida)")
+        return $false
+    }
+
+    $oeste = Par 'OESTE'; $leste = Par 'LESTE'; $semOeste = Par 'SEM_OESTE'; $selecao = Par 'SELECAO'; $tudo = Par 'TUDO'
+    if ($null -in @($oeste, $leste, $semOeste, $selecao, $tudo)) {
+        $problemas.Add("clivus-sombras-escopo: o LISP nao contou as sombras de cada passo. Veja $($r.Saida)")
+        return $false
+    }
+
+    if ($oeste.HO -lt 1 -or $oeste.Leste -ne 0 -or $oeste.Usina -ne 0) { $erros += "calcular a Oeste: $($oeste.HO) hachura(s) na Oeste (>0), $($oeste.Leste) entidade(s) na Leste (0), $($oeste.Usina) na Usina (0)" }
+    if ($t -notmatch 'com sombra em \d+ mesa\(s\) de Area Oeste|Nenhum m\S+dulo de Area Oeste com sombra') { $erros += 'o resumo da Oeste nao diz o escopo' }
+    if ($leste.Oeste -ne $oeste.Oeste -or $leste.HL -lt 1 -or $leste.Usina -ne 0) { $erros += "calcular a Leste depois: a Oeste foi de $($oeste.Oeste) para $($leste.Oeste) entidade(s) (tinha de ficar), $($leste.HL) hachura(s) na Leste (>0)" }
+    if ($semOeste.Oeste -ne 0 -or $semOeste.Leste -ne $leste.Leste) { $erros += "apagar a Oeste: sobraram $($semOeste.Oeste) na Oeste (0) e a Leste foi de $($leste.Leste) para $($semOeste.Leste) (tinha de ficar)" }
+    if ($selecao.HO -lt 1 -or $selecao.Oeste -ge $oeste.Oeste -or $selecao.Leste -ne $leste.Leste) { $erros += "a selecao (F1.1): $($selecao.HO) hachura(s) na Oeste (>0 e menos que as $($oeste.Oeste) entidade(s) da Oeste inteira, deu $($selecao.Oeste)), a Leste foi de $($leste.Leste) para $($selecao.Leste)" }
+    if ($oculta -ne '1') { $erros += 'Ocultar nao desligou a camada CLIVUS_SOMBRA' }
+    if ($mostra -ne '1') { $erros += 'Mostrar nao ligou a camada CLIVUS_SOMBRA de novo' }
+    if ($repintou -ne '0') { $erros += 'a sombra repintou modulo' }
+    if ($tudo.Todas -ne 0) { $erros += "apagar tudo deixou $($tudo.Todas) entidade(s) de sombra" }
+
+    $i = $t.IndexOf('CLIVUS_ESCOPO_ANALISES'); $j = $t.IndexOf('CLIVUS_ESCOPO_FIM_ANALISES')
+    $analises = if ($i -ge 0 -and $j -gt $i) { $t.Substring($i, $j - $i) } else { '' }
+    if ($analises -notmatch 'SOMBRA_TOPICO 1 Area Leste') { $erros += 'as analises nao listam a Area Leste' }
+    if ($analises -match 'SOMBRA_TOPICO 1 Area Oeste .{1,4}(\d+) mesa' -and [int] $Matches[1] -ne 1) { $erros += "as analises listam $($Matches[1]) mesa(s) na Oeste depois de apagar a area e calcular so a F1.1" }
+
+    if ($t -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) { $erros += 'o SECURELOAD nao voltou ao que era' }
+
+    if ($erros.Count -gt 0) {
+        $problemas.Add("clivus-sombras-escopo: $($erros -join '; '). Veja $($r.Saida)")
+        return $false
+    }
+
+    Write-Host "  (escopo: Oeste com $($oeste.HO) hachura(s); a Leste ($($leste.HL)) nao mexeu na Oeste; apagar a Oeste deixou a Leste; a selecao so perto da F1.1 ($($selecao.HO)); ocultar e mostrar; nada repintado; apagar tudo)" -ForegroundColor DarkGray
     return $true
 }
 
@@ -4592,6 +4685,10 @@ function Testar-Ativar {
 
 . (Join-Path $PSScriptRoot 'areas.ps1')
 
+# ---- as sombras (9.7, 9.8 e a revisao de 31/10/2026, 42.1) -----------------
+
+$script:CasosSombras = @('Testar-Sombras', 'Testar-SombrasJanela', 'Testar-SombrasPorQue', 'Testar-SombrasMesas', 'Testar-SombrasEscopo')
+
 # ---- a licenca da rodada ---------------------------------------------------
 
 # Com a chave publica de producao embutida, sem licenca todo comando do
@@ -4640,9 +4737,9 @@ if ($SoTermoVision) {
     exit 1
 }
 
-if ($SoEletrica -or $SoDrenagem -or $SoBifila -or $SoCampo -or $SoEstruturas -or $SoAreas) {
-    $casos = if ($SoDrenagem) { $CasosDrenagem } elseif ($SoBifila) { $CasosBifila } elseif ($SoCampo) { $CasosCampo } elseif ($SoEstruturas) { $CasosEstruturas } elseif ($SoAreas) { $CasosAreas } else { $CasosEletricos }
-    $nomeDaParte = if ($SoDrenagem) { 'Drenagem' } elseif ($SoBifila) { 'Bifila' } elseif ($SoCampo) { 'Campo' } elseif ($SoEstruturas) { 'Estruturas' } elseif ($SoAreas) { 'Areas' } else { 'Eletrica' }
+if ($SoEletrica -or $SoDrenagem -or $SoBifila -or $SoCampo -or $SoEstruturas -or $SoAreas -or $SoSombras) {
+    $casos = if ($SoDrenagem) { $CasosDrenagem } elseif ($SoBifila) { $CasosBifila } elseif ($SoCampo) { $CasosCampo } elseif ($SoEstruturas) { $CasosEstruturas } elseif ($SoAreas) { $CasosAreas } elseif ($SoSombras) { $CasosSombras } else { $CasosEletricos }
+    $nomeDaParte = if ($SoDrenagem) { 'Drenagem' } elseif ($SoBifila) { 'Bifila' } elseif ($SoCampo) { 'Campo' } elseif ($SoEstruturas) { 'Estruturas' } elseif ($SoAreas) { 'Areas' } elseif ($SoSombras) { 'Sombras' } else { 'Eletrica' }
     foreach ($caso in $casos | Where-Object { $_ -like "*$Filtro*" }) {
         $total++
         if (& $caso -Desenho $desenhos[0]) { $passaram++ }
@@ -4872,21 +4969,12 @@ else {
     $total++
     if (Testar-Arvore -Desenho $desenhos[0]) { $passaram++ }
 
-    # Sombras num instante e no dia inteiro, pior caso (9.7 e 9.8).
-    $total++
-    if (Testar-Sombras -Desenho $desenhos[0]) { $passaram++ }
-
-    # As sombras pelo botao da janela (fora de comando), arvore fora da fileira.
-    $total++
-    if (Testar-SombrasJanela -Desenho $desenhos[0]) { $passaram++ }
-
-    # O periodo: contornos hora a hora do pior dia e o "Por que essa sombra?".
-    $total++
-    if (Testar-SombrasPorQue -Desenho $desenhos[0]) { $passaram++ }
-
-    # A sombra das mesas (no chao e na fileira de tras) e o Cancelar do andamento.
-    $total++
-    if (Testar-SombrasMesas -Desenho $desenhos[0]) { $passaram++ }
+    # As sombras (9.7, 9.8 e 42.1): hachura magenta no chao e sobre as mesas,
+    # a janela, o periodo e o porque, as mesas e o cancelar, o escopo.
+    foreach ($caso in $CasosSombras) {
+        $total++
+        if (& $caso -Desenho $desenhos[0]) { $passaram++ }
+    }
 
     # 3D no navegador (9.9).
     $total++
