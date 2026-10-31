@@ -151,21 +151,23 @@ public static partial class PluginInfo
     public const string ComandoUsinaObjetosAutomatico = "CLIVUS_USINA_OBJETOS_AUTO";
 
     /// <summary>
-    /// Comando que exporta os módulos selecionados para o PVsyst: seleção,
-    /// formato, arquivo.
+    /// Comando que exporta as mesas escolhidas para o PVsyst: o escopo, o
+    /// arquivo, e o PV Collada com uma fiada por mesa (6.5).
     /// </summary>
     public const string ComandoExportar = "CLIVUS_EXPORTAR";
 
     /// <summary>
-    /// Comando que exporta TODOS os módulos do desenho em DAE para o caminho
-    /// pedido na linha de comando, sem janela. Existe para o teste de nível 2.
+    /// Comando que exporta TODOS os módulos do desenho para o caminho pedido
+    /// na linha de comando, sem janela: ".pvc" uma fiada por mesa, o resto o
+    /// DAE de uma face por módulo. Existe para o teste de nível 2.
     /// </summary>
     public const string ComandoExportarAutomatico = "CLIVUS_EXPORTAR_AUTO";
 
     /// <summary>
-    /// Comando que exporta em DAE as mesas de um escopo (42.4: uma área, várias,
+    /// Comando que exporta as mesas de um escopo (42.4: uma área, várias,
     /// todas ou as mesas escolhidas), pelos nomes, como o CLIVUS_SOMBRAS_ESCOPO_AUTO,
-    /// para o caminho pedido. Para o teste de nível 2.
+    /// para o caminho pedido, no formato pela extensão (como o CLIVUS_EXPORTAR_AUTO).
+    /// Para o teste de nível 2.
     /// </summary>
     public const string ComandoExportarEscopoAutomatico = "CLIVUS_EXPORTAR_ESCOPO_AUTO";
 

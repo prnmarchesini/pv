@@ -451,9 +451,10 @@ public static class ExportCommands
 
     /// <summary>
     /// O arquivo, pela janela de salvar do Windows. O nome sugerido é o do
-    /// desenho, e a pasta é a dele quando o desenho já foi salvo. O PV Collada
-    /// vai com ".pvc", a extensão que o help do PVsyst dá para ele; quem
-    /// escrever ".dae" leva o mesmo conteúdo, como o "_export.dae" do PVcase.
+    /// desenho, e a pasta é a dele quando o desenho já foi salvo. Sempre
+    /// ".pvc", a extensão que o help do PVsyst dá para o PV Collada (o que vier
+    /// sem ela ganha ela no fim): ".dae" fica para o DAE de uma face por
+    /// módulo, que só os comandos automáticos gravam.
     /// </summary>
     private static string? PerguntarArquivo(Editor editor, Document documento)
     {
@@ -472,9 +473,7 @@ public static class ExportCommands
             return null;
         }
 
-        return caminho.EndsWith(".pvc", StringComparison.OrdinalIgnoreCase) || caminho.EndsWith(".dae", StringComparison.OrdinalIgnoreCase)
-            ? caminho
-            : caminho + ".pvc";
+        return caminho.EndsWith(".pvc", StringComparison.OrdinalIgnoreCase) ? caminho : caminho + ".pvc";
     }
 
     /// <summary>

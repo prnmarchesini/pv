@@ -6,9 +6,10 @@ namespace Clivus.Core;
 /// <param name="Column">A coluna (0 na ponta em que a mesa começa).</param>
 /// <param name="Row">A fileira (0 na de baixo, a da ponta baixa do módulo).</param>
 /// <param name="Corners">
-/// Os quatro cantos, em metro, como o desenho grava a face: começo e fim da
-/// borda baixa, fim e começo da borda alta. A ordem só é usada quando a mesa
-/// tem uma coluna (ou uma fileira) e não há vizinho para dar o sentido.
+/// Os quatro cantos, em metro, em volta da face (o desenho grava começo e fim
+/// da borda baixa, fim e começo da borda alta). Os eixos da mesa saem das
+/// colunas, das fileiras e da normal, não da ordem dos cantos; ela só escolhe
+/// o comprimento numa mesa de um módulo só.
 /// </param>
 public sealed record PvModuleFace(int Column, int Row, IReadOnlyList<Point3> Corners);
 
@@ -61,12 +62,14 @@ public sealed record PvTableFrames(IReadOnlyList<PvFrame> Frames, bool OffGrid, 
 /// lado; o PVsyst conta os módulos por essas medidas.
 ///
 /// O retângulo sai das faces dos módulos desenhados, não do perfil: é o que
-/// está no desenho que vai. Os eixos da mesa saem das colunas e das fileiras
-/// (o centro da primeira à última); a medida do módulo e os vãos, das faces
-/// projetadas nesses eixos. A mesa é rígida (regra sagrada 2), então as faces
-/// ficam numa grade; uma mesa com buraco (módulo apagado) vai em pedaços
-/// retangulares, e uma com módulo fora da grade vai módulo a módulo, para
-/// nenhum módulo sobrar nem faltar no PVsyst.
+/// está no desenho que vai. A normal da mesa sai das diagonais das faces; o
+/// comprimento, das colunas (o centro da primeira à última); a descida é a
+/// normal × comprimento, no sentido das fileiras; a medida do módulo e os
+/// vãos, das faces projetadas nesses eixos. A mesa é rígida (regra sagrada
+/// 2), então as faces ficam numa grade; uma mesa com buraco (módulo apagado)
+/// vai em pedaços retangulares, e uma com módulo fora da grade vai módulo a
+/// módulo, para nenhum módulo sobrar nem faltar no PVsyst. Face espremida e
+/// dois módulos na mesma célula deixam a mesa de fora, com o motivo.
 ///
 /// As medidas vão ao milímetro, como o PVcase escreve, e o retângulo é
 /// refeito com elas (centrado no desenhado): assim colunas × largura + vãos
@@ -94,6 +97,9 @@ public static class PvFrames
     /// </summary>
     public const double DefaultThickness = 0.035;
 
+    /// <summary>O menor lado de uma face de módulo, em metro; menos que isto é face espremida.</summary>
+    private const double MenorLado = 0.01;
+
     /// <summary>
     /// As fiadas de uma mesa.
     /// </summary>
@@ -113,15 +119,30 @@ public static class PvFrames
         if (faces.Any(f => f is null || f.Corners is not { Count: 4 } || !f.Corners.All(c => c.IsFinite) || f.Column < 0 || f.Row < 0))
             return new([], false, Tr.T("há face de módulo sem quatro cantos"));
 
-        // Os eixos: u ao longo das colunas, v subindo as fileiras.
-        var u = Normalizar(Eixo(faces, f => f.Row, f => f.Column, f => Menos(f.Corners[1], f.Corners[0])));
-        var vBruto = Eixo(faces, f => f.Column, f => f.Row, f => Menos(f.Corners[3], f.Corners[0]));
-        var v = Normalizar(Menos(vBruto, Vezes(u, Ponto(vBruto, u))));
+        // Duas faces na mesma coluna e fileira (um desfazer pela metade) contariam
+        // o módulo duas vezes no PVsyst.
+        var celulas = new HashSet<(int, int)>();
+        if (faces.Any(f => !celulas.Add((f.Column, f.Row))))
+            return new([], false, Tr.T("há dois módulos na mesma coluna e fileira"));
 
-        if (!Finito(u) || !Finito(v)) return new([], false, Tr.T("a face do módulo não tem área"));
-
-        var normal = Cruzado(u, v);
+        // A normal da mesa, pelas diagonais de cada face (que não dependem da
+        // ordem dos cantos), virada para cima.
+        var normal = Normal(faces);
+        if (!Finito(normal)) return new([], false, Tr.T("há face de módulo sem área"));
         if (Math.Abs(normal.Z) < 1e-6) return new([], false, Tr.T("a mesa está de pé"));
+
+        // Os eixos no plano: u ao longo das colunas, v subindo as fileiras (a 0 é
+        // a de baixo). Sem duas colunas, u sai das fileiras; sem vizinho nenhum
+        // (um módulo só), da aresta mais deitada da face. v é a normal × u: nunca
+        // fica paralelo a u, qualquer que seja a ordem dos cantos.
+        var porColunas = Direcao(faces, f => f.Row, f => f.Column);
+        var porFileiras = Direcao(faces, f => f.Column, f => f.Row);
+        var uBruto = porColunas ?? (porFileiras is { } subida ? Cruzado(subida, normal) : ArestaMaisDeitada(faces[0]));
+        var u = Normalizar(Menos(uBruto, Vezes(normal, Ponto(uBruto, normal))));
+        if (!Finito(u)) return new([], false, Tr.T("há face de módulo sem área"));
+
+        var v = Cruzado(normal, u);
+        if (porFileiras is { } fileirasSobem ? Ponto(v, fileirasSobem) < 0 : v.Z < 0) v = Vezes(v, -1);
 
         // Tudo projetado nos eixos, a partir do centro da primeira face.
         var origem = Centro(faces[0]);
@@ -130,7 +151,6 @@ public static class PvFrames
         var s1 = new double[n];
         var t0 = new double[n];
         var t1 = new double[n];
-        var unitaria = Normalizar(normal);
         var foraDoPlano = false;
 
         for (var i = 0; i < n; i++)
@@ -146,17 +166,19 @@ public static class PvFrames
                 s0[i] = Math.Min(s0[i], s); s1[i] = Math.Max(s1[i], s);
                 t0[i] = Math.Min(t0[i], t); t1[i] = Math.Max(t1[i], t);
 
-                if (Math.Abs(Ponto(d, unitaria)) > GridTolerance) foraDoPlano = true;
+                if (Math.Abs(Ponto(d, normal)) > GridTolerance) foraDoPlano = true;
             }
         }
+
+        // Uma face espremida (um lado de menos de 1 cm) não é módulo: a mesa
+        // fica de fora com o motivo, e as outras saem.
+        if (Enumerable.Range(0, n).Any(i => s1[i] - s0[i] < MenorLado || t1[i] - t0[i] < MenorLado))
+            return new([], false, Tr.T("há face de módulo sem área"));
 
         var largura = Mediana(Enumerable.Range(0, n).Select(i => s1[i] - s0[i]));
         var altura = Mediana(Enumerable.Range(0, n).Select(i => t1[i] - t0[i]));
         var vaoX = Vao(faces, f => f.Row, f => f.Column, i => s0[i], i => s1[i]);
         var vaoY = Vao(faces, f => f.Column, f => f.Row, i => t0[i], i => t1[i]);
-
-        var celulas = new HashSet<(int, int)>();
-        var repetida = faces.Any(f => !celulas.Add((f.Column, f.Row)));
 
         var colunaMinima = faces.Min(f => f.Column);
         var fileiraMinima = faces.Min(f => f.Row);
@@ -165,7 +187,7 @@ public static class PvFrames
         var inicioX = Mediana(Enumerable.Range(0, n).Select(i => s0[i] - (faces[i].Column - colunaMinima) * passoX));
         var inicioY = Mediana(Enumerable.Range(0, n).Select(i => t0[i] - (faces[i].Row - fileiraMinima) * passoY));
 
-        var naGrade = !repetida && !foraDoPlano
+        var naGrade = !foraDoPlano
             && (vaoX ?? 0) > -GridTolerance && (vaoY ?? 0) > -GridTolerance
             && Enumerable.Range(0, n).All(i =>
                 Math.Abs(s0[i] - (inicioX + (faces[i].Column - colunaMinima) * passoX)) <= GridTolerance
@@ -273,13 +295,13 @@ public static class PvFrames
     }
 
     /// <summary>
-    /// Um eixo da mesa: em cada linha (as faces com o mesmo <paramref name="linha"/>),
-    /// a direção do centro da primeira ao da última. Sem linha com duas faces,
-    /// a aresta de cada face pela ordem dos cantos. A mediana, componente a
-    /// componente: um módulo arrastado não entorta a mesa inteira.
+    /// Uma direção da mesa: em cada linha (as faces com o mesmo <paramref name="linha"/>),
+    /// a do centro da primeira ao da última por <paramref name="indice"/>; a
+    /// mediana, componente a componente, para um módulo arrastado não entortar
+    /// a mesa inteira. Null sem linha com duas faces.
     /// </summary>
-    private static (double X, double Y, double Z) Eixo(
-        IReadOnlyList<PvModuleFace> faces, Func<PvModuleFace, int> linha, Func<PvModuleFace, int> indice, Func<PvModuleFace, (double X, double Y, double Z)> aresta)
+    private static (double X, double Y, double Z)? Direcao(
+        IReadOnlyList<PvModuleFace> faces, Func<PvModuleFace, int> linha, Func<PvModuleFace, int> indice)
     {
         var direcoes = new List<(double X, double Y, double Z)>();
 
@@ -293,18 +315,49 @@ public static class PvFrames
             if (Finito(direcao)) direcoes.Add(direcao);
         }
 
-        if (direcoes.Count == 0)
-        {
-            foreach (var face in faces)
-            {
-                var direcao = Normalizar(aresta(face));
-                if (Finito(direcao)) direcoes.Add(direcao);
-            }
-        }
-
-        if (direcoes.Count == 0) return (0, 0, 0);
+        if (direcoes.Count == 0) return null;
 
         return (Mediana(direcoes.Select(d => d.X)), Mediana(direcoes.Select(d => d.Y)), Mediana(direcoes.Select(d => d.Z)));
+    }
+
+    /// <summary>
+    /// A normal da mesa, para cima: a média das normais das faces, cada uma
+    /// pelas duas diagonais (c2 − c0 e c3 − c1, que dão o plano qualquer que
+    /// seja o canto de partida). Face espremida não entra; sem nenhuma boa, NaN.
+    /// </summary>
+    private static (double X, double Y, double Z) Normal(IReadOnlyList<PvModuleFace> faces)
+    {
+        (double X, double Y, double Z) soma = (0, 0, 0);
+        var boas = 0;
+
+        foreach (var face in faces)
+        {
+            var c = face.Corners;
+            var n = Cruzado(Menos(c[2], c[0]), Menos(c[3], c[1]));
+            if (Comprimento(n) < 1e-6) continue;
+
+            n = Normalizar(n);
+            soma = Mais(soma, n.Z < 0 ? Vezes(n, -1) : n);
+            boas++;
+        }
+
+        return boas == 0 ? (double.NaN, double.NaN, double.NaN) : Normalizar(soma);
+    }
+
+    /// <summary>
+    /// A aresta da face mais perto da horizontal (das duas que saem do canto 1):
+    /// numa mesa inclinada, a borda baixa, que é o sentido do comprimento.
+    /// </summary>
+    private static (double X, double Y, double Z) ArestaMaisDeitada(PvModuleFace face)
+    {
+        var c = face.Corners;
+        var a = Normalizar(Menos(c[1], c[0]));
+        var b = Normalizar(Menos(c[2], c[1]));
+
+        if (!Finito(a)) return b;
+        if (!Finito(b)) return a;
+
+        return Math.Abs(b.Z) < Math.Abs(a.Z) - 1e-9 ? b : a;
     }
 
     /// <summary>O vão entre vizinhas de uma mesma linha (a mediana), ou null sem vizinhas.</summary>

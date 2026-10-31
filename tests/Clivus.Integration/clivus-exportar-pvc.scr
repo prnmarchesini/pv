@@ -6,7 +6,8 @@
 ;     das faces das pontas, pela ordem gravada no desenho: o canto 0 da face
 ;     (0,0), o 1 da (cmax,0), o 2 da (cmax,rmax) e o 3 da (0,rmax). Sao os
 ;     quatro cantos da fiada dessa mesa no arquivo (a geometria mesa-<GUID>),
-;     ao milimetro, depois da matriz do no raiz e da origem do cabecalho.
+;     ao milimetro, depois da matriz do no raiz e da origem do cabecalho, na
+;     ordem do giro do PVcase (a borda baixa, p0 e p1, primeiro).
 
 (setq clivus:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)

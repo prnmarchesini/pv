@@ -1735,9 +1735,11 @@ function Testar-Exportar {
     para cima, oito vertices e os triangulos "3 1 2 1 3 0" em cada mesa, o
     frame_parameters com a medida do modulo e os vaos e o "generic". Cada
     fiada fecha EXATAMENTE com os modulos (colunas x largura + vaos, o que o
-    PVsyst conta), a soma dos modulos e a das faces do desenho, e os quatro
-    cantos da fiada da primeira mesa sao os cantos das faces das pontas dela
-    (lidos em LISP), ao milimetro, pela matriz e pela origem do cabecalho.
+    PVsyst conta) e gira como as do PVcase (a normal dos triangulos para
+    baixo, o fundo do lado dela, a borda baixa primeiro); a soma dos modulos
+    e a das faces do desenho; e os quatro cantos da fiada da primeira mesa
+    sao os cantos das faces das pontas dela (lidos em LISP), ao milimetro,
+    pela matriz e pela origem do cabecalho.
 #>
 function Testar-ExportarPvc {
     param([string] $Desenho)
@@ -1846,6 +1848,17 @@ function Testar-ExportarPvc {
         $w = [double]::Parse($fp.module_width, $inv); $h = [double]::Parse($fp.module_height, $inv)
         $sx = [double]::Parse($fp.module_x_spacing, $inv); $sy = [double]::Parse($fp.module_y_spacing, $inv)
 
+        # O giro do PVcase (revisao do 42.7, as 467 mesas dele e os exemplos do
+        # PVsyst): a normal do triangulo "3 1 2" para baixo (Y e o cima no
+        # arquivo), o fundo do lado dela, e a borda baixa primeiro (v0 v1).
+        $e1 = @(($n[3] - $n[9]), ($n[4] - $n[10]), ($n[5] - $n[11]))
+        $e2 = @(($n[6] - $n[9]), ($n[7] - $n[10]), ($n[8] - $n[11]))
+        $normalY = $e1[2] * $e2[0] - $e1[0] * $e2[2]
+        $fundoAcima = @(0..3 | Where-Object { $n[3 * ($_ + 4) + 1] -ge $n[3 * $_ + 1] }).Count
+        if ($normalY -ge 0 -or $fundoAcima -gt 0 -or ($n[1] + $n[4]) -ge ($n[7] + $n[10])) {
+            $erros += "a geometria $($g.id) nao gira como o PVcase (normal dos triangulos para baixo, fundo abaixo, borda baixa primeiro)"
+        }
+
         # Os cantos de volta ao desenho: a matriz (x, -z, y) e a origem.
         $v = @(0..3 | ForEach-Object { , @(($n[3 * $_] + $oE), (-$n[3 * $_ + 2] + $oN), ($n[3 * $_ + 1] + $oZ)) })
         function D($a, $b) { [math]::Sqrt([math]::Pow($a[0] - $b[0], 2) + [math]::Pow($a[1] - $b[1], 2) + [math]::Pow($a[2] - $b[2], 2)) }
@@ -1867,10 +1880,24 @@ function Testar-ExportarPvc {
     if ($null -eq $daPrimeira) { $erros += "o PVC nao tem a geometria mesa-$guid da primeira mesa" }
     else {
         if ($daPrimeira.Nc -ne $colunas -or $daPrimeira.Nr -ne $fileiras) { $erros += "a fiada da primeira mesa tem $($daPrimeira.Nc) x $($daPrimeira.Nr) modulos; o desenho, $colunas x $fileiras" }
+
+        # Os quatro cantos da fiada sao os quatro das faces das pontas (p0 e p1 na
+        # borda baixa, p2 e p3 na alta), ao milimetro; a ordem e a do giro do PVcase,
+        # mas v0 e v1 tem que ser os da borda baixa.
+        $usados = @{}
         for ($k = 0; $k -lt 4; $k++) {
-            $a = $daPrimeira.V[$k]; $b = $cantos[$k]
-            $d = [math]::Sqrt([math]::Pow($a[0] - $b[0], 2) + [math]::Pow($a[1] - $b[1], 2) + [math]::Pow($a[2] - $b[2], 2))
-            if ($d -gt 0.001) { $erros += "o canto $k da fiada da primeira mesa esta a $([math]::Round($d * 1000, 1)) mm do canto das faces do desenho" }
+            $a = $daPrimeira.V[$k]
+            $achou = -1
+            for ($j = 0; $j -lt 4; $j++) {
+                if ($usados.ContainsKey($j)) { continue }
+                $b = $cantos[$j]
+                if ([math]::Sqrt([math]::Pow($a[0] - $b[0], 2) + [math]::Pow($a[1] - $b[1], 2) + [math]::Pow($a[2] - $b[2], 2)) -le 0.001) { $achou = $j; break }
+            }
+            if ($achou -lt 0) { $erros += "o canto $k da fiada da primeira mesa nao e, ao milimetro, um dos cantos das faces das pontas do desenho" }
+            else {
+                $usados[$achou] = $true
+                if ($k -lt 2 -and $achou -gt 1) { $erros += "o canto $k da fiada da primeira mesa devia ser da borda baixa e e o p$achou do desenho" }
+            }
         }
     }
 

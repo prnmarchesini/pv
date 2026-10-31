@@ -15,7 +15,8 @@ namespace Clivus.Core;
 /// <list type="bullet">
 /// <item><description>cada mesa é uma geometria de oito vértices, a face de
 /// cima dos módulos e o fundo deles (a espessura do módulo abaixo), e dois
-/// triângulos da face de cima, "3 1 2 1 3 0";</description></item>
+/// triângulos da face de cima, "3 1 2 1 3 0", girando como os do PVcase (a
+/// normal deles para baixo, do lado do fundo);</description></item>
 /// <item><description>o material se chama "Frames";</description></item>
 /// <item><description><c>frame_parameters</c>: a largura e a altura do módulo
 /// (o lado menor e o maior), o vão ao longo da mesa e o vão entre as
@@ -164,8 +165,13 @@ public static class PvColladaWriter
         piece == 0 ? "mesa-" + table.ToString("N") : $"mesa-{table:N}-{piece + 1}";
 
     /// <summary>
-    /// A fiada como geometria: a face de cima (os quatro cantos, na ordem do
-    /// PVcase) e o fundo, a espessura do módulo abaixo, pela normal que sobe.
+    /// A fiada como geometria: a face de cima e o fundo, a espessura do módulo
+    /// abaixo. Os cantos vão no sentido do PVcase: a borda baixa primeiro (v0
+    /// v1), percorrida de modo que, vista de cima, a volta seja horária, e a
+    /// normal dos triângulos "3 1 2 1 3 0" aponte para baixo, para o lado do
+    /// fundo. É assim em todas as mesas dos quatro arquivos do PVcase e dos dois
+    /// exemplos do PVsyst, sem exceção (revisão do 42.7); a fiada anti-horária
+    /// vai com a borda baixa ao contrário (c1 c0 c3 c2).
     /// </summary>
     private static XElement Geometria(string id, PvFrame fiada, Point3 origin)
     {
@@ -178,11 +184,14 @@ public static class PvColladaWriter
         if (tamanho <= 1e-12) throw new ArgumentException($"A fiada {fiada.Name} não tem área.", nameof(fiada));
         if (Math.Abs(nz) / tamanho <= 1e-9) throw new ArgumentException($"A fiada {fiada.Name} está de pé.", nameof(fiada));
 
-        // A normal que sobe, qualquer que seja a ordem dos cantos.
+        // Horária vista de cima, como o PVcase.
+        IReadOnlyList<Point3> cima = nz > 0 ? [c[1], c[0], c[3], c[2]] : c;
+
+        // A normal que sobe, para o fundo ficar abaixo.
         var sinal = nz > 0 ? 1.0 : -1.0;
         nx = nx / tamanho * sinal; ny = ny / tamanho * sinal; nz = nz / tamanho * sinal;
 
-        var vertices = c.Concat(c.Select(p => new Point3(p.X - nx * fiada.Thickness, p.Y - ny * fiada.Thickness, p.Z - nz * fiada.Thickness)));
+        var vertices = cima.Concat(cima.Select(p => new Point3(p.X - nx * fiada.Thickness, p.Y - ny * fiada.Thickness, p.Z - nz * fiada.Thickness)));
         var posicoes = string.Join(" ", vertices.Select(p =>
         {
             var (x, y, z) = ToFile(p, origin);
@@ -224,9 +233,13 @@ public static class PvColladaWriter
     private static string Coordenada(double valor) =>
         Math.Abs(valor) < 5e-7 ? "0" : valor.ToString("0.######", CultureInfo.InvariantCulture);
 
-    /// <summary>Medida do módulo e vão em metro ao milímetro, como o PVcase ("1.303", "0.02").</summary>
+    /// <summary>
+    /// Medida do módulo e vão em metro ao milímetro, como o PVcase ("1.303",
+    /// "0.02"), sempre com o ponto: as referências leem número inteiro como
+    /// milímetro (992 no exemplo do PVsyst), e um módulo de 2 m sairia "2".
+    /// </summary>
     private static string Medida(double valor) =>
-        Math.Abs(valor) < 5e-4 ? "0" : valor.ToString("0.###", CultureInfo.InvariantCulture);
+        Math.Abs(valor) < 5e-4 ? "0.0" : valor.ToString("0.0##", CultureInfo.InvariantCulture);
 
     private static bool Positivo(double valor) => double.IsFinite(valor) && valor > 0;
 

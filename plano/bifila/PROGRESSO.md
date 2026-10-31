@@ -56,7 +56,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 42.5 A janela Áreas com as ações na linha (31/10/2026, tarde: "eu clico em apagar area e nao apaga. As ações precisam estar na linha"): dois cliques dá zoom, a lixeira (ou Del) apaga com aviso, F2 ou o segundo clique devagar renomeia, o botão direito tem o resto; embaixo, "Todas as áreas" (Hachurar, Tirar hachura, Limpar, Regerar, Apagar); o Apagar área, o Limpar e o Recalcular só com as mesas DA área. E o CLIVUS_3D com a janela de andamento e o Cancelar ("trava gostoso [...] sem MATAR MEU CAD"): AGUARDANDO VALIDAÇÃO — bc9b912; nível 2 `clivus-areas-acoes` (rodar.ps1 -SoAreas)
 - 42.6 As análises por escopo, o fundo e a borda dos textos e as colunas do biposte (31/10/2026, tarde: "Em analise eu tbm quero poder escolher o que analisar, uma area ou todas, isso para TODAS analises"; "texto ruim de ver, falta opção do texto de colocar o fundo e borda, isso para TODAS analises"; "em pilar, deveria ter a opção de analisar AMBOS pilares, cada um tem uma altura [...] uma coluna para cada pilar o da frente e o de traz, a cor pode ser o mesmo para ambos"): AGUARDANDO VALIDAÇÃO — `LineLimits`, `ThresholdRule.ForLine`, `AnalysisTally` V2 (o lugar e as linhas), `AnalysisTextLook`, `ThresholdForm`, 26 testes da etapa 42; nível 2 `clivus-analises-escopo` (rodar.ps1 -Caso Testar-AnalisesEscopo)
 - 42.5 e 42.6, a segunda rodada (31/10/2026, 14h40, na tela com a 0.1.5): "nao funciona o renomear. o F2 nao funciona tbm" (a coluna do nome, ligada só de ida, era só leitura para o DataGrid); "o texto fica por traz" (nas vistas sombreadas os módulos cobriam o texto: agora ele fica deitado no plano dos módulos, 0,15 m acima, como a seta da declividade); "TEM QUE EXISTIR ALINHAMENTO" (as áreas do seletor em colunas da mesma largura); "o botão direito anda muito devagar, o zoom, muito devagar" (a caixa do kWp e o menu do botão direito liam toda a seleção a cada pan e a cada clique): AGUARDANDO VALIDAÇÃO — nível 2 `clivus-areas` pelo F2 e pelo menu da linha (conferido que o teste pega o bug antigo)
-- 42.7 O PVsyst por mesa, como o PVcase (31/10/2026, noite, na tela com a 0.1.7: "tem um erro na exportação do PVsyst, é preciso exportar como mesa, exportar como modulo, vai me dificultar a modelagem"; "aqui é como o pvcase exporta", "agora vc consegue fazer igual"; é o 6.5 do plano principal): cada mesa vai como uma fiada do PVsyst com os módulos dentro (a medida do módulo e os vãos), num `.pvc` com a forma do arquivo do PVcase: AGUARDANDO VALIDAÇÃO — `PvFrames`, `PvColladaWriter`, 19 testes da etapa 6; nível 2 `clivus-exportar-pvc` (rodar.ps1 -Caso Testar-ExportarPvc), o PVC das duas áreas no `clivus-sombras-escopo` e o PVC da monoposte igual ao do biposte, 14 × 2 por mesa, no `-SoEstruturas`
+- 42.7 O PVsyst por mesa, como o PVcase (31/10/2026, noite, na tela com a 0.1.7: "tem um erro na exportação do PVsyst, é preciso exportar como mesa, exportar como modulo, vai me dificultar a modelagem"; "aqui é como o pvcase exporta", "agora vc consegue fazer igual"; é o 6.5 do plano principal): cada mesa vai como uma fiada do PVsyst com os módulos dentro (a medida do módulo e os vãos), num `.pvc` com a forma do arquivo do PVcase: AGUARDANDO VALIDAÇÃO — `PvFrames`, `PvColladaWriter`, 27 testes da etapa 6; nível 2 `clivus-exportar-pvc` (rodar.ps1 -Caso Testar-ExportarPvc), o PVC das duas áreas no `clivus-sombras-escopo` e o PVC da monoposte igual ao do biposte, 14 × 2 por mesa, no `-SoEstruturas`
 
 ## Observações
 
@@ -1067,12 +1067,14 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     fiada de módulos. O PVcase escreve as medidas em metro (1.303, 2.384, 0.02); a ajuda do
     PVsyst diz milímetro inteiro e o exemplo dele traz 992 num arquivo em polegada: foi em metro,
     como o PVcase, que é o que o PVsyst do Renan lê hoje.
-  - `PvFrames.FromFaces` monta a fiada das faces dos módulos desenhados (não do perfil): os eixos
-    da mesa saem do centro da primeira à última coluna e fileira (a mediana entre as linhas, para
-    um módulo arrastado não entortar a mesa), a medida do módulo e os vãos das faces projetadas
+  - `PvFrames.FromFaces` monta a fiada das faces dos módulos desenhados (não do perfil): a normal
+    sai das diagonais das faces, o comprimento do centro da primeira à última coluna (a mediana
+    entre as fileiras, para um módulo arrastado não entortar a mesa), a descida é a normal ×
+    comprimento no sentido das fileiras; a medida do módulo e os vãos saem das faces projetadas
     nesses eixos, ao milímetro, e o retângulo é refeito com elas, centrado no desenhado: assim a
-    conta do PVsyst fecha exata. Os cantos vão na ordem do PVcase (começo e fim da borda baixa,
-    fim e começo da borda alta), que é a ordem das faces no desenho.
+    conta do PVsyst fecha exata. No arquivo, a borda baixa vem primeiro (v0 v1) e a volta é a do
+    PVcase: horária vista de cima, com a normal dos triângulos para baixo (a nossa mesa desenhada
+    gira ao contrário, então ela vai com a borda baixa percorrida do fim para o começo).
   - Decisões minhas: a mesa com módulo apagado vai em pedaços retangulares (colunas seguidas com
     as mesmas fileiras), só com os módulos que estão no desenho, com " #2", " #3" no nome; a com
     módulo fora da grade (mais de 3 mm do lugar, ou fora do plano) vai módulo a módulo, cada um
@@ -1088,6 +1090,36 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     ("Fence", "Station", "Tree_trunk", "Tree_crown") e o terreno num CSV ao lado; o pedido foi a
     mesa. Se o Renan quiser os objetos que fazem sombra (as árvores do Clivus) e o relevo, é o
     passo seguinte.
+  - A revisão (subagente em worktree, no 6449e1b) achou e eu corrigi:
+    - o sentido dos triângulos: nas 467 mesas dos quatro arquivos do PVcase e nos dois exemplos do
+      PVsyst, sem exceção, a normal do triângulo "3 1 2" aponta para baixo no arquivo, do lado do
+      fundo da caixa; as nossas apontavam para cima (e a mesa espelhada, ou o carport com a água
+      para a esquerda, para baixo: o arquivo misturava os dois). Não dá para provar sem o PVsyst
+      que ele lê o sentido, mas é a única diferença do PVcase que mexe na orientação: agora toda
+      fiada gira como as dele. O teste novo falha com o escritor antigo (conferido);
+    - uma face espremida no meio das boas mandava a mesa módulo a módulo com uma fiada de 0 × 0,
+      e o escritor derrubava a exportação inteira: agora a mesa fica de fora com o motivo ("há
+      face de módulo sem área") e as outras saem;
+    - a medida inteira saía sem ponto ("2" para um módulo de 2 m): as referências leem inteiro
+      como milímetro (992 no exemplo do PVsyst); agora sempre com o ponto ("2.0");
+    - dois módulos na mesma coluna e fileira (um desfazer pela metade) iam módulo a módulo e o
+      PVsyst contaria o módulo duas vezes: agora a mesa fica de fora com o motivo;
+    - numa mesa de uma fileira com os cantos fora da ordem, a descida podia sair paralela ao
+      comprimento (em coordenada UTM, a sobra passava do limite) e a mesa saía deitada: agora a
+      descida é a normal × comprimento, e a normal sai das diagonais, que não dependem da ordem;
+    - o botão aceitava ".dae" com o conteúdo do PVC, enquanto os comandos automáticos gravam o DAE
+      antigo com ".dae": agora o botão grava sempre ".pvc"; a dica da ribbon ainda dizia "(DAE)";
+      o arquivo do Core passou a se chamar `PvFrames.cs`;
+    - testes: o sentido dos triângulos (mesa desenhada e espelhada), a mesa espelhada, a de uma
+      coluna, a de uma fileira com os cantos fora de ordem, a face espremida, a célula repetida, a
+      medida inteira, todos os módulos no módulo a módulo e a fiada centrada no desenhado; o nível
+      2 confere o giro do PVcase em todas as mesas do arquivo e os cantos da primeira como conjunto,
+      com a borda baixa primeiro.
+  - Ficou para a tela (anotado no roteiro 36): na importação, a orientação em "Best azimuth"
+    (padrão do PVsyst desde a 7.4.2): os pedaços de mesa com até 4 colunas no 2P e o módulo a
+    módulo têm o lado maior na descida, e com "Longest edge" o PVsyst giraria o azimute em 90°; e o
+    carport em paisagem com vãos diferentes nos dois sentidos (nenhuma referência tem), em que o
+    PVsyst poderia pôr o vão do outro sentido e perder uma fileira.
 
 ## Roteiro de tela (38.1 a 42.7)
 
@@ -1313,4 +1345,6 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     PVsyst" e a medida que foi ("… de 14 × 2 módulos de 1,134 × 2,456 m, vãos 0,02 e 0,02 m"). No
     PVsyst: Ficheiro › Importar › cena 3D, escolher o `.pvc`: não pergunta material; cada mesa
     entra como uma fiada "Por módulos" com 14 × 2 (abrir uma: a mesma tela da fiada feita à mão),
-    e o total de módulos do PVsyst é o do Clivus.
+    e o total de módulos do PVsyst é o do Clivus. Na tela da importação, deixe a orientação em "Best
+    azimuth" (o padrão). Se tiver carport em paisagem, conferir também uma fiada dele (o número de
+    fileiras).
