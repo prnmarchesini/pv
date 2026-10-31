@@ -65,8 +65,13 @@ public sealed record Scene3DLocation(double Latitude, double Longitude, double U
 /// <summary>Uma linha do resumo do 3D (42.2): mesas, módulos e potência DC; <paramref name="Outside"/> nas mesas fora das áreas.</summary>
 public sealed record Scene3DSummaryRow(string Name, int Tables, int Modules, double PowerKwp, bool Outside = false)
 {
-    /// <summary>Se a linha serve: contagens e potência sem sinal e finitas (o servidor recusa fora disso).</summary>
-    public bool IsValid => Tables >= 0 && Modules >= 0 && double.IsFinite(PowerKwp) && PowerKwp >= 0;
+    /// <summary>O teto de mesas, módulos e kWp numa linha (o servidor recusa acima).</summary>
+    public const double MaxValue = 1e9;
+
+    /// <summary>Se a linha serve: contagens e potência sem sinal, finitas e até <see cref="MaxValue"/> (o servidor recusa fora disso).</summary>
+    public bool IsValid =>
+        Tables is >= 0 and <= (int)MaxValue && Modules is >= 0 and <= (int)MaxValue
+        && double.IsFinite(PowerKwp) && PowerKwp is >= 0 and <= MaxValue;
 }
 
 /// <summary>

@@ -141,7 +141,8 @@ public class Viewer3DSunAndSummaryTests
         Assert.Equal("[]", Ler(Viewer3DPage.Json(Cena() with { Summary = semArea })).GetProperty("resumo").GetProperty("areas").GetRawText());
 
         // Linha que não serve fica de fora; sem um total que serve, nada de resumo.
-        var torto = resumo with { Types = [.. resumo.Types, new Scene3DSummaryRow("x", -1, 0, 0), new Scene3DSummaryRow("y", 1, 1, double.NaN)] };
+        var torto = resumo with { Types = [.. resumo.Types, new Scene3DSummaryRow("x", -1, 0, 0), new Scene3DSummaryRow("y", 1, 1, double.NaN), new Scene3DSummaryRow("z", 1, 1, 2e9)] };
+        Assert.True(new Scene3DSummaryRow("w", 1_000_000_000, 1_000_000_000, Scene3DSummaryRow.MaxValue).IsValid);
         Assert.Equal(2, Ler(Viewer3DPage.Json(Cena() with { Summary = torto })).GetProperty("resumo").GetProperty("tipos").GetArrayLength());
         Assert.False(Ler(Viewer3DPage.Json(Cena() with { Summary = resumo with { Total = resumo.Total with { PowerKwp = -1 } } })).TryGetProperty("resumo", out _));
         Assert.False(Ler(Viewer3DPage.Json(Cena())).TryGetProperty("resumo", out _));
