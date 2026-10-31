@@ -46,6 +46,37 @@ public class TableChangesTests
         Assert.Equal(Quando, removida.When);
     }
 
+    private static TableIdentity Mesa(string? motivo)
+    {
+        var limpa = new TableIdentity(Guid.NewGuid(), "F1.1", 700, 701, 0.17, Marked: false, Reason: null);
+        return motivo is null ? limpa : limpa.AsDirty(motivo);
+    }
+
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void PendenciaDoSalvarSoNaMesaComSolidoQueNaoSaiuDoLugar()
+    {
+        var movida = Mesa(PendingChanges.ReasonModified);
+
+        // A do salvar: movida ou editada, com sólido, no lugar.
+        Assert.True(PendingChanges.MayBeFromSave(movida, hasSolids: true, anchorMoved: false));
+
+        // Saiu do lugar, sem sólido (monoposte: salvar nunca a sujou) ou sem âncora para conferir.
+        Assert.False(PendingChanges.MayBeFromSave(movida, hasSolids: true, anchorMoved: true));
+        Assert.False(PendingChanges.MayBeFromSave(movida, hasSolids: false, anchorMoved: false));
+        Assert.False(PendingChanges.MayBeFromSave(movida, hasSolids: true, anchorMoved: null));
+    }
+
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void PendenciaDeOutroMotivoNuncaEDoSalvar()
+    {
+        Assert.False(PendingChanges.MayBeFromSave(Mesa(null), hasSolids: true, anchorMoved: false));
+        Assert.False(PendingChanges.MayBeFromSave(Mesa(PendingChanges.ReasonAppended), hasSolids: true, anchorMoved: false));
+        Assert.False(PendingChanges.MayBeFromSave(Mesa(PendingChanges.ReasonErased), hasSolids: true, anchorMoved: false));
+        Assert.False(PendingChanges.MayBeFromSave(Mesa("pedido do usuário"), hasSolids: true, anchorMoved: false));
+    }
+
     [Fact]
     [Trait("Etapa", "7")]
     public void OMotivoMaisGraveVence()

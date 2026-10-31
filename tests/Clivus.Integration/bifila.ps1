@@ -8,7 +8,164 @@
     tipo, e a cota de cada solido dentro da faixa do terreno (o alinhamento
     vem com Z 9999 de proposito: peca no Z do clique sai dali).
 #>
-$script:CasosBifila = @('Testar-Bifila', 'Testar-BifilaP1')
+$script:CasosBifila = @('Testar-Bifila', 'Testar-BifilaP1', 'Testar-Salvar')
+
+<#
+    Testar-Salvar (correcao de 30/10/2026, "depois de salvar as mesas ficaram
+    todas vermelhas"): o AutoCAD regrava os solidos do biposte ao salvar e
+    avisa "modificado" de cada um. Primeira metade: a fileira com o biposte,
+    SAVEAS e dois QSAVE, e nenhuma mesa pendente; um CHPROP num solido ainda
+    marca a mesa (o vigia continua valendo) e grava a chave VIGIA_SALVAR, que
+    o script tira para o desenho ficar como a versao antiga o deixava. Segunda
+    metade: ao abrir, a mesa volta a limpa, os solidos a cor da camada, a
+    chave fica gravada, e um QSAVE nao marca nada.
+#>
+function Testar-Salvar {
+    param([string] $Desenho)
+
+    $sonda = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-salvar--sonda' `
+                                -Script (Join-Path $PSScriptRoot 'clivus-terreno.scr')
+
+    if ($sonda.Texto -notmatch 'cotaMin=(-?[\d.]+) cotaMax=(-?[\d.]+) pontos=\d+ centroX=(-?[\d.]+) centroY=(-?[\d.]+)') {
+        $problemas.Add("clivus-salvar: nao achei o terreno. Veja $($sonda.Saida)")
+        return $false
+    }
+
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    $centroX = [double]::Parse($Matches[3], $inv)
+    $centroY = [double]::Parse($Matches[4], $inv)
+
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($inv, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
+
+    $copia = Join-Path $saida 'salvar.dwg'
+    if (Test-Path $copia) { Remove-Item $copia -Force }
+
+    $gravar = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-salvar-gravar' `
+        -Script (Join-Path $PSScriptRoot 'clivus-salvar-gravar.scr') `
+        -Substituicoes @{
+            '{{A1}}'    = (Ponto3 -50 -50 0)
+            '{{A2}}'    = (Ponto3  50 -50 0)
+            '{{A3}}'    = (Ponto3  50  50 0)
+            '{{A4}}'    = (Ponto3 -50  50 0)
+            '{{L1}}'    = (Ponto3 -50 -50 9999)
+            '{{L2}}'    = (Ponto3 -50  50 0)
+            '{{LADO}}'  = (Ponto3   0   0 0)
+            '{{SAIDA}}' = $copia
+        }
+
+    if ($gravar.Estourou -or $gravar.Codigo -ne 0 -or $gravar.Texto -notmatch 'CLIVUS_GRAVADO') {
+        $problemas.Add("clivus-salvar: a primeira metade nao terminou (codigo $($gravar.Codigo)). Veja $($gravar.Saida)")
+        return $false
+    }
+
+    # Uma linha do vigia (o eco do LISP traz a chave VIGIA_SALVAR, que nao conta).
+    $linhaDoVigia = 'VIGIA (F[\d.]+|c.pia|N.o consegui|ATEN)'
+
+    $ok = $true
+    $t = $gravar.Texto
+
+    # Salvar nao marca nada: nenhuma linha do vigia entre o SAVEAS e o fim dos QSAVE.
+    $inicio = $t.IndexOf('CLIVUS_SALVAR_ANTES')
+    $fim = $t.IndexOf('CLIVUS_SALVAR_SALVO')
+    if ($inicio -lt 0 -or $fim -lt $inicio) {
+        $problemas.Add("clivus-salvar: os marcos do salvar nao sairam. Veja $($gravar.Saida)")
+        return $false
+    }
+
+    if ($t.Substring($inicio, $fim - $inicio) -match $linhaDoVigia) {
+        $problemas.Add("clivus-salvar: o SAVEAS ou o QSAVE marcou mesa (o vigia viu o salvar como edicao). Veja $($gravar.Saida)")
+        $ok = $false
+    }
+
+    if ($t -match 'VIGIA [^\r\n]*comando _?(Q?SAVE|SAVEAS)') {
+        $problemas.Add("clivus-salvar: linha do vigia com o comando de salvar. Veja $($gravar.Saida)")
+        $ok = $false
+    }
+
+    $depois = $t.Substring($fim)
+    if ($depois -notmatch 'ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), 0 pendente\(s\)' -or $Matches[1] -ne $Matches[2] -or [int] $Matches[1] -lt 3) {
+        $problemas.Add("clivus-salvar: depois de salvar, o Estado nao diz todas as mesas limpas. Veja $($gravar.Saida)")
+        $ok = $false
+    }
+
+    if ($t -notmatch 'CLIVUS_SALVAR_SOLIDOS pintados=0') {
+        $problemas.Add("clivus-salvar: depois de salvar, ha solido do biposte pintado. Veja $($gravar.Saida)")
+        $ok = $false
+    }
+
+    # O vigia continua valendo para a edicao de verdade, e grava a chave.
+    if ($t -notmatch 'VIGIA F[\d.]+ pendente \(movida ou editada, comando CHPROP\)') {
+        $problemas.Add("clivus-salvar: o CHPROP num solido nao marcou a mesa. Veja $($gravar.Saida)")
+        $ok = $false
+    }
+
+    if ($t -notmatch 'CLIVUS_SALVAR_CHAVE_DEPOIS_DO_CHPROP=SIM' -or $t -notmatch 'CLIVUS_SALVAR_CHAVE_TIRADA=NAO') {
+        $problemas.Add("clivus-salvar: a chave VIGIA_SALVAR nao foi gravada pelo vigia (ou nao saiu). Veja $($gravar.Saida)")
+        $ok = $false
+    }
+
+    if ($t -notmatch 'CLIVUS_SALVAR_PINTADOS_DEPOIS_DO_CHPROP=(\d+)' -or [int] $Matches[1] -lt 2) {
+        $problemas.Add("clivus-salvar: a mesa marcada nao pintou os solidos dela. Veja $($gravar.Saida)")
+        $ok = $false
+    }
+
+    if ($t -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) {
+        $problemas.Add("clivus-salvar: o SECURELOAD nao voltou ao que era (primeira metade). Veja $($gravar.Saida)")
+        return $false
+    }
+
+    if (-not (Test-Path $copia)) {
+        $problemas.Add("clivus-salvar: o SAVEAS nao gravou $copia. Veja $($gravar.Saida)")
+        return $false
+    }
+
+    $abrir = Invoke-CoreConsole -Desenho $copia -Rotulo 'clivus-salvar-abrir' `
+        -Script (Join-Path $PSScriptRoot 'clivus-salvar-abrir.scr')
+
+    if ($abrir.Estourou -or $abrir.Codigo -ne 0) {
+        $problemas.Add("clivus-salvar: a segunda metade terminou mal (codigo $($abrir.Codigo)). Veja $($abrir.Saida)")
+        return $false
+    }
+
+    $a = $abrir.Texto
+
+    if ($a -notmatch 'CLIVUS_SALVAR_ABERTO chave=NAO pintados=(\d+)' -or [int] $Matches[1] -lt 2) {
+        $problemas.Add("clivus-salvar: o desenho nao abriu como a versao antiga deixava (sem chave, com a mesa pintada). Veja $($abrir.Saida)")
+        $ok = $false
+    }
+
+    if ($a -notmatch 'CLIVUS 1 mesa\(s\) estavam pendentes s. porque o desenho foi salvo') {
+        $problemas.Add("clivus-salvar: ao abrir, a mesa pendente pelo salvar nao foi limpa. Veja $($abrir.Saida)")
+        $ok = $false
+    }
+
+    if ($a -notmatch 'CLIVUS_SALVAR_CARREGADO chave=SIM pintados=0') {
+        $problemas.Add("clivus-salvar: depois do conserto, a chave nao ficou gravada ou sobrou solido pintado. Veja $($abrir.Saida)")
+        $ok = $false
+    }
+
+    $estados = [regex]::Matches($a, 'ESTADO (\d+) mesa\(s\), (\d+) limpa\(s\), 0 pendente\(s\)')
+    if ($estados.Count -lt 2 -or ($estados | Where-Object { $_.Groups[1].Value -ne $_.Groups[2].Value })) {
+        $problemas.Add("clivus-salvar: depois de abrir (e de salvar de novo), o Estado nao diz todas as mesas limpas. Veja $($abrir.Saida)")
+        $ok = $false
+    }
+
+    if ($a -match $linhaDoVigia) {
+        $problemas.Add("clivus-salvar: o vigia marcou mesa ao abrir ou ao salvar. Veja $($abrir.Saida)")
+        $ok = $false
+    }
+
+    if ($a -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) {
+        $problemas.Add("clivus-salvar: o SECURELOAD nao voltou ao que era (segunda metade). Veja $($abrir.Saida)")
+        return $false
+    }
+
+    if ($ok) { Write-Host '  (salvar: SAVEAS e dois QSAVE sem mesa pendente; o CHPROP ainda marca; ao abrir, a mesa sujada pelo salvar volta limpa e na cor da camada)' -ForegroundColor DarkGray }
+
+    return $ok
+}
 
 <#
     Testar-BifilaP1 (38.9): a GC800 da aba Fabricantes, com o P1 de 3,059 e o

@@ -111,15 +111,49 @@ public sealed record VendorStructure(
 /// <summary>
 /// As estruturas de fabricante que o Clivus conhece (38.7). Por enquanto, as
 /// duas da Arctech do projeto Aurora (plano/bifila/01-modelo-de-referencia.md).
+///
+/// Na janela de Mesa elas ficam na aba Modelos, numa seção por fabricante,
+/// depois da do biposte genérico (Renan, 31/10/2026: "não chama fabricante,
+/// chama modelos a aba, e aí, quero seções POR fabricantes"). O modelo
+/// apagado some da aba (os prontos vêm com o plugin: apagar é esconder, e o
+/// usuário traz de volta).
 /// </summary>
 public static class VendorStructures
 {
+    /// <summary>O identificador do biposte genérico entre os modelos (para apagar e trazer de volta).</summary>
+    public const string GenericModelId = "Genérico";
+
     /// <summary>Todas, na ordem em que aparecem na aba.</summary>
     public static IReadOnlyList<VendorStructure> All { get; } =
     [
         Arctech(BifilaVariant.Gc800),
         Arctech(BifilaVariant.Gc1000),
     ];
+
+    /// <summary>
+    /// As seções da aba Modelos: um fabricante e os modelos dele que não
+    /// foram apagados, na ordem do <see cref="All"/>. Fabricante sem modelo
+    /// sobrando não tem seção.
+    /// </summary>
+    /// <param name="hidden">Os identificadores apagados (<see cref="VendorStructure.Name"/>).</param>
+    public static IReadOnlyList<(string Manufacturer, IReadOnlyList<VendorStructure> Models)> ByManufacturer(IReadOnlyCollection<string> hidden)
+    {
+        ArgumentNullException.ThrowIfNull(hidden);
+
+        return All
+            .Where(e => !hidden.Contains(e.Name))
+            .GroupBy(e => e.Manufacturer, StringComparer.Ordinal)
+            .Select(g => (g.Key, (IReadOnlyList<VendorStructure>)g.ToList()))
+            .ToList();
+    }
+
+    /// <summary>Quantos dos modelos da aba (o genérico e os de fabricante) estão apagados.</summary>
+    public static int HiddenCount(IReadOnlyCollection<string> hidden)
+    {
+        ArgumentNullException.ThrowIfNull(hidden);
+
+        return (hidden.Contains(GenericModelId) ? 1 : 0) + All.Count(e => hidden.Contains(e.Name));
+    }
 
     private static VendorStructure Arctech(BifilaVariant variante)
     {

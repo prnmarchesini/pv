@@ -128,6 +128,29 @@ public sealed class PendingChanges
         _severidade[table] = Math.Max(severidade, _severidade.GetValueOrDefault(table));
     }
 
+    /// <summary>
+    /// Se a pendência da mesa pode ter vindo só do salvar. Até 30/10/2026,
+    /// salvar o desenho sujava toda mesa com peça sólida (o biposte): o
+    /// AutoCAD regrava cada sólido ao salvar e avisa "modificado", e o vigia
+    /// via edição ("depois de salvar as mesas ficaram todas vermelhas, bug dos
+    /// bravos"). Pode ser do salvar a pendência "movida ou editada" de mesa
+    /// com sólido que continua onde foi desenhada. Copiada, peça apagada,
+    /// pedido do usuário, mesa sem sólido e mesa sem âncora gravada (não dá
+    /// para saber se saiu do lugar) ficam pendentes.
+    /// </summary>
+    /// <param name="table">A identidade gravada no contorno.</param>
+    /// <param name="hasSolids">Se a mesa tem peça sólida (a estrutura do biposte).</param>
+    /// <param name="anchorMoved">Se o primeiro vértice do contorno saiu da âncora; null sem âncora.</param>
+    public static bool MayBeFromSave(TableIdentity table, bool hasSolids, bool? anchorMoved)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+
+        return table.Dirty
+            && string.Equals(table.DirtyReason, ReasonModified, StringComparison.Ordinal)
+            && hasSolids
+            && anchorMoved == false;
+    }
+
     /// <summary>Decide, esvazia o livro e devolve a decisão.</summary>
     /// <param name="when">A data das remoções.</param>
     public ChangeResolution Resolve(DateTime when)

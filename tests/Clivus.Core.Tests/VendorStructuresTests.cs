@@ -26,6 +26,59 @@ public class VendorStructuresTests
     /// <summary>A tolerância contra o motor: a mesma conta, só o ponto flutuante de diferença.</summary>
     private const double Motor = 1e-6;
 
+    // ------------------------------------------------- aba Modelos (31/10)
+
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void AAbaModelosTemUmaSecaoPorFabricanteSemOsApagados()
+    {
+        var todas = VendorStructures.ByManufacturer([]);
+        var arctech = Assert.Single(todas);
+        Assert.Equal("Arctech", arctech.Manufacturer);
+        Assert.Equal(VendorStructures.All.Select(e => e.Name), arctech.Models.Select(e => e.Name));
+
+        // Um apagado sai da seção; os dois apagados levam a seção junto.
+        var gc800 = VendorStructures.All[0].Name;
+        var semGc800 = Assert.Single(VendorStructures.ByManufacturer([gc800]));
+        Assert.DoesNotContain(semGc800.Models, e => e.Name == gc800);
+        Assert.Empty(VendorStructures.ByManufacturer(VendorStructures.All.Select(e => e.Name).ToList()));
+
+        // A contagem dos apagados conta o genérico e ignora o que não é modelo (de outra versão).
+        Assert.Equal(0, VendorStructures.HiddenCount([]));
+        Assert.Equal(2, VendorStructures.HiddenCount([VendorStructures.GenericModelId, gc800, "Modelo que não existe mais"]));
+    }
+
+    [Fact]
+    [Trait("Etapa", "38")]
+    public void OsModelosApagadosFicamNasPreferencias()
+    {
+        var pasta = Path.Combine(Path.GetTempPath(), "clivus-modelos-" + Guid.NewGuid().ToString("N"));
+        var arquivo = Path.Combine(pasta, "preferencias.json");
+
+        try
+        {
+            Assert.Empty(UserPreferences.Load(arquivo).HiddenModelIds);
+
+            new UserPreferences("es", ProfileTracking: false, [VendorStructures.GenericModelId, VendorStructures.All[1].Name]).Save(arquivo);
+            var lidas = UserPreferences.Load(arquivo);
+            Assert.Equal("es", lidas.Language);
+            Assert.False(lidas.ProfileTracking);
+            Assert.Equal([VendorStructures.GenericModelId, VendorStructures.All[1].Name], lidas.HiddenModelIds);
+
+            // Mudar outra preferência não traz os apagados de volta.
+            (lidas with { Language = "pt" }).Save(arquivo);
+            Assert.Equal(2, UserPreferences.Load(arquivo).HiddenModelIds.Count);
+
+            // Arquivo de antes (sem a lista): nenhum apagado.
+            File.WriteAllText(arquivo, "{\"idioma\": \"pt\", \"rastreio\": true}");
+            Assert.Empty(UserPreferences.Load(arquivo).HiddenModelIds);
+        }
+        finally
+        {
+            if (Directory.Exists(pasta)) Directory.Delete(pasta, recursive: true);
+        }
+    }
+
     // ----------------------------------------------------------- catálogo
 
     [Fact]

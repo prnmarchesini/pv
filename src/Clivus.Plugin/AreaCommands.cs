@@ -147,12 +147,14 @@ public static class AreaCommands
     /// LWPOLYLINE; arco vira trechos de até 1 m). A polilinha do usuário fica
     /// como está: a área é uma polilinha nova, assentada no terreno, na layer
     /// das áreas. A cota da polilinha não vale; vem do terreno, no
-    /// <see cref="Criar"/>, como a do clique.
+    /// <see cref="Criar"/>, como a do clique. Fechada é em planta: a 3D com a
+    /// ponta no começo (a até 1 cm, com qualquer cota) serve; a que não fecha
+    /// pergunta se fecha com uma reta da ponta ao começo (31/10/2026).
     /// </summary>
     private static IReadOnlyList<Point3d>? Selecionar(Editor editor, RastroDoTracado rastro)
     {
-        var opcoes = new PromptEntityOptions(Tr.T("\nClique na polilinha fechada que vira a área: "));
-        opcoes.SetRejectMessage(Tr.T("\nTem que ser uma polilinha."));
+        var opcoes = new PromptEntityOptions(Tr.T("\nClique na polilinha fechada (2D ou 3D) que vira a área: "));
+        opcoes.SetRejectMessage(Tr.T("\nTem que ser uma polilinha (2D ou 3D)."));
         opcoes.AddAllowedClass(typeof(Polyline), false);
         opcoes.AddAllowedClass(typeof(Polyline2d), false);
         opcoes.AddAllowedClass(typeof(Polyline3d), false);
@@ -167,6 +169,7 @@ public static class AreaCommands
             }
 
             List<Point3>? contorno;
+            var abertura = 0.0;
             using (var transacao = escolha.ObjectId.Database.TransactionManager.StartOpenCloseTransaction())
             {
                 var curva = (Curve)transacao.GetObject(escolha.ObjectId, OpenMode.ForRead);
@@ -177,18 +180,46 @@ public static class AreaCommands
                 }
 
                 contorno = LocalDosInversores.Contorno(curva, transacao);
+                if (contorno is null)
+                {
+                    abertura = LocalDosInversores.AberturaEmPlanta(curva);
+                    contorno = LocalDosInversores.Contorno(curva, transacao, aceitarAberta: true);
+                }
             }
 
-            if (contorno is null)
+            if (contorno is not { Count: >= 3 })
             {
-                editor.WriteMessage(Tr.T("\n  Essa polilinha não é fechada. Feche-a (PEDIT › Fechar) ou escolha outra.\n"));
+                editor.WriteMessage(Tr.T("\n  Essa polilinha tem menos de três vértices em planta. Escolha outra.\n"));
                 continue;
             }
+
+            if (abertura > 0 && !FecharAAberta(editor, abertura)) continue;
 
             var pontos = contorno.Select(p => new Point3d(p.X, p.Y, p.Z)).ToList();
             for (var i = 0; i < pontos.Count; i++) rastro.Acrescentar(pontos[i], pontos[(i + 1) % pontos.Count]);
             return pontos;
         }
+    }
+
+    /// <summary>
+    /// A polilinha escolhida não fecha: fecha com uma reta da ponta ao começo
+    /// (Enter), ou escolhe outra. A do usuário não muda: a área é nova.
+    /// </summary>
+    private static bool FecharAAberta(Editor editor, double abertura)
+    {
+        var fechar = Tr.T("Fechar");
+        var outra = Tr.T("Outra");
+
+        var pergunta = new PromptKeywordOptions(
+            Tr.F("\nEssa polilinha não fecha: a ponta está a {0:0.00} m do começo, em planta. Fechar a área com uma reta da ponta ao começo? [{1}/{2}] <{1}>: ", abertura, fechar, outra),
+            $"{fechar} {outra}")
+        {
+            AllowNone = true,
+        };
+
+        var resposta = editor.GetKeywords(pergunta);
+        return resposta.Status == PromptStatus.None
+            || (resposta.Status == PromptStatus.OK && resposta.StringResult != outra);
     }
 
     private static string? PerguntarNome(Editor editor) =>

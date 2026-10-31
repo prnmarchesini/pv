@@ -13,13 +13,19 @@ namespace Clivus.Plugin;
 /// volta (desfazer), a remoção é retirada do registro. Só isso: "mover,
 /// apagar ou copiar mesa: só marca e pinta. Nada mais."
 ///
-/// Três silêncios, sem os quais o vigia se morde:
+/// Quatro silêncios, sem os quais o vigia se morde:
 /// - durante os nossos comandos (CLIVUS_*), que desenham e pintam por dezenas
 ///   de entidades, nada é anotado;
 /// - durante desfazer/refazer (U, UNDO, REDO, MREDO, OOPS) nada suja: o
 ///   banco volta a um estado que já foi decidido; só o registro de remoções
 ///   acompanha o contorno que some ou volta;
-/// - enquanto o próprio vigia pinta, nada é anotado (pintar é modificar).
+/// - enquanto o próprio vigia pinta, nada é anotado (pintar é modificar);
+/// - enquanto o desenho é salvo (QSAVE, SAVE, SAVEAS, o salvamento
+///   automático, fechar salvando), nada é anotado: o AutoCAD regrava cada
+///   sólido (as peças do biposte) e avisa "modificado" de cada um. Sem isto,
+///   cada salvar deixava todas as mesas biposte pendentes e vermelhas
+///   (30/10/2026: "depois de salvar as mesas ficaram todas vermelhas, bug
+///   dos bravos"; <see cref="PendenciasDoSalvar"/> desfaz isso ao abrir).
 ///
 /// A paleta de Propriedades altera entidades SEM comando: o que ela toca
 /// fica no livro e é descarregado na primeira folga do AutoCAD (Idle), para
@@ -139,6 +145,9 @@ internal static class LayoutWatcher
         /// <summary>Há um descarregamento agendado para a folga do AutoCAD.</summary>
         private bool _folgaAgendada;
 
+        /// <summary>O desenho está sendo salvo: nada é anotado.</summary>
+        private bool _salvando;
+
         internal Vigia(Document documento)
         {
             _documento = documento;
@@ -152,6 +161,10 @@ internal static class LayoutWatcher
             _documento.CommandEnded += AoTerminarComando;
             _documento.CommandCancelled += AoTerminarComando;
             _documento.CommandFailed += AoTerminarComando;
+
+            _banco.BeginSave += AoComecarASalvar;
+            _banco.SaveComplete += AoTerminarDeSalvar;
+            _banco.AbortSave += AoDesistirDeSalvar;
         }
 
         internal void Soltar()
@@ -166,6 +179,10 @@ internal static class LayoutWatcher
                 _documento.CommandEnded -= AoTerminarComando;
                 _documento.CommandCancelled -= AoTerminarComando;
                 _documento.CommandFailed -= AoTerminarComando;
+
+                _banco.BeginSave -= AoComecarASalvar;
+                _banco.SaveComplete -= AoTerminarDeSalvar;
+                _banco.AbortSave -= AoDesistirDeSalvar;
 
                 if (_folgaAgendada) AcadApp.Idle -= NaFolga;
             }
@@ -198,6 +215,12 @@ internal static class LayoutWatcher
             _calados++;
         }
 
+        private void AoComecarASalvar(object? sender, DatabaseIOEventArgs e) => _salvando = true;
+
+        private void AoTerminarDeSalvar(object? sender, DatabaseIOEventArgs e) => _salvando = false;
+
+        private void AoDesistirDeSalvar(object? sender, EventArgs e) => _salvando = false;
+
         private void AoModificar(object? sender, ObjectEventArgs e) => Anotar(e.DBObject, ChangeKind.Modified);
 
         private void AoAcrescentar(object? sender, ObjectEventArgs e) => Anotar(e.DBObject, ChangeKind.Appended, mesmoCalado: true);
@@ -214,7 +237,7 @@ internal static class LayoutWatcher
         /// </summary>
         private void Anotar(DBObject objeto, ChangeKind tipo, bool mesmoCalado = false)
         {
-            if (_executando || objeto is not Entity entidade) return;
+            if (_executando || _salvando || objeto is not Entity entidade) return;
             if (_calados > 0 && !(mesmoCalado && _desfazendo)) return;
 
             try
@@ -328,7 +351,9 @@ internal static class LayoutWatcher
 
             try
             {
-                Executar(decisao, comando, soRegistro);
+                // Pendência marcada por este vigia (o que não suja ao salvar):
+                // o conserto ao abrir não mexe mais nas deste desenho.
+                if (Executar(decisao, comando, soRegistro) > 0) PendenciasDoSalvar.Lembrar(_banco);
             }
             catch (System.Exception erro)
             {
@@ -344,9 +369,10 @@ internal static class LayoutWatcher
         /// <summary>
         /// Suja e pinta as mesas tocadas; registra as removidas; tira do
         /// registro as que voltaram. Uma transação (o registro abre as suas
-        /// aninhadas, de propósito: se esta abortar, cai tudo junto).
+        /// aninhadas, de propósito: se esta abortar, cai tudo junto). Devolve
+        /// quantas mesas ficaram pendentes.
         /// </summary>
-        private void Executar(ChangeResolution decisao, string comando, bool soRegistro)
+        private int Executar(ChangeResolution decisao, string comando, bool soRegistro)
         {
             var editor = _documento.Editor;
 
@@ -383,10 +409,11 @@ internal static class LayoutWatcher
             if (sujas.Count == 0 && decisao.Removed.Count == 0 && decisao.Restored.Count == 0)
             {
                 transacao.Commit();
-                return;
+                return 0;
             }
 
             var mesas = LayoutScan.Tables(transacao, _banco);
+            var marcadas = 0;
 
             if (!soRegistro)
             {
@@ -395,6 +422,7 @@ internal static class LayoutWatcher
                     if (!mesas.TryGetValue(guid, out var mesa) || mesa.Identity is null) continue;
 
                     TableState.MarkDirty(transacao, mesa, motivo);
+                    marcadas++;
 
                     editor.WriteMessage(motivo == PendingChanges.ReasonAppended
                         ? Tr.F("\nVIGIA cópia de {0} pendente (copiada, comando {1}).\n", mesa.Identity.Label, comando)
@@ -430,6 +458,7 @@ internal static class LayoutWatcher
             }
 
             transacao.Commit();
+            return marcadas;
         }
     }
 }

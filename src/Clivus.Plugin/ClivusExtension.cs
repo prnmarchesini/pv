@@ -63,6 +63,17 @@ public sealed class ClivusExtension : IExtensionApplication
             return;
         }
 
+        // O registro de tudo (31/10/2026) antes da ribbon: se ela falhar, o
+        // que aconteceu até ali já fica escrito.
+        try
+        {
+            RegistroDeTudo.Instalar();
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Não foi possível ligar o registro de tudo.", erro);
+        }
+
         try
         {
             RegistroDeDiagnostico.Registrar($"Initialize: host com interface, versão {ClivusCommands.VersaoDoPlugin()}.");
@@ -126,7 +137,13 @@ public sealed class ClivusExtension : IExtensionApplication
         {
             RegistroDeDiagnostico.Registrar("Falha ao desinstalar a ribbon.", erro);
         }
+
+        if (TemInterface()) DesligarORegistroDeTudo();
     }
+
+    /// <summary>Fora do método embutido, como o painel: o registro de tudo toca tipos de janela.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void DesligarORegistroDeTudo() => RegistroDeTudo.Desinstalar();
 
     /// <summary>
     /// Verdadeiro so nos hosts que sabidamente tem ribbon. Falso no Core

@@ -338,14 +338,28 @@ public static class LocalDosInversores
         PluginXData.Load(e, SiteMark.Tipo, 1, SiteMark.FieldCount) is { } c ? SiteMark.Parse(c) : null;
 
     /// <summary>
-    /// Os vértices de uma polilinha fechada (ou com a ponta no começo), com a
-    /// cota que têm (o ponto que cair fora do terreno fica com ela, nunca
-    /// zero) e os arcos divididos em trechos de até 1 m; sem repetir o
-    /// primeiro no fim. Null se não é fechada.
+    /// Em planta, a ponta a até 1 cm do começo fecha a polilinha, com
+    /// qualquer cota: a 3D do cliente vem com a cota estragada, e o último
+    /// clique quase nunca cai em cima do primeiro (31/10/2026: "em selecionar
+    /// área, poligonal fechada, quero que seja possível usar 3D polilinha").
     /// </summary>
-    internal static List<Point3>? Contorno(Curve c, Transaction t)
+    internal const double FolgaDoFechamento = 0.01;
+
+    /// <summary>A distância em planta entre a ponta e o começo da curva.</summary>
+    internal static double AberturaEmPlanta(Curve c) =>
+        Math.Sqrt(Math.Pow(c.EndPoint.X - c.StartPoint.X, 2) + Math.Pow(c.EndPoint.Y - c.StartPoint.Y, 2));
+
+    /// <summary>
+    /// Os vértices de uma polilinha fechada (ou com a ponta no começo, em
+    /// planta), com a cota que têm (o ponto que cair fora do terreno fica com
+    /// ela, nunca zero) e os arcos divididos em trechos de até 1 m; sem
+    /// repetir o primeiro no fim. Null se não é fechada, a menos que
+    /// <paramref name="aceitarAberta"/> (aí o último trecho, de volta ao
+    /// começo, fica implícito).
+    /// </summary>
+    internal static List<Point3>? Contorno(Curve c, Transaction t, bool aceitarAberta = false)
     {
-        if (!c.Closed && c.StartPoint.DistanceTo(c.EndPoint) > 1e-6) return null;
+        if (!c.Closed && AberturaEmPlanta(c) > FolgaDoFechamento && !aceitarAberta) return null;
 
         var pontos = new List<Point3>();
         switch (c)
@@ -386,7 +400,7 @@ public static class LocalDosInversores
                 return null;
         }
 
-        if (pontos.Count > 1 && Math.Abs(pontos[0].X - pontos[^1].X) < 1e-6 && Math.Abs(pontos[0].Y - pontos[^1].Y) < 1e-6) pontos.RemoveAt(pontos.Count - 1);
+        if (pontos.Count > 1 && Math.Sqrt(Math.Pow(pontos[0].X - pontos[^1].X, 2) + Math.Pow(pontos[0].Y - pontos[^1].Y, 2)) <= FolgaDoFechamento) pontos.RemoveAt(pontos.Count - 1);
         return pontos;
     }
 

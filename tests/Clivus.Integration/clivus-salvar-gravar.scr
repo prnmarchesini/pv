@@ -1,0 +1,63 @@
+; Teste de nivel 2 do salvar (correcao de 30/10/2026, "depois de salvar as
+; mesas ficaram todas vermelhas"), primeira metade. Desenha a fileira 1 com o
+; biposte (as pecas da estrutura sao solidos), SALVA com SAVEAS e mais dois
+; QSAVE, e confere que nenhuma mesa ficou pendente: o AutoCAD regrava os
+; solidos ao salvar e avisa "modificado" de cada um, e o vigia nao pode ver
+; isso como edicao.
+;
+; Depois prepara a segunda metade (clivus-salvar-abrir.scr): muda a cor de
+; um solido com o CHPROP (o vigia marca a mesa, e isso continua valendo), tira
+; a chave VIGIA_SALVAR do dicionario, como num desenho da versao antiga, e
+; salva. Ao abrir, a mesa tem de voltar a limpa, com a cor da camada.
+;
+; O OSNAP e desligado para os pontos digitados chegarem crus.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+(command "_.NETLOAD" "{{DLL}}")
+(command "CLIVUS_TERRENO_AUTO")
+(command "CLIVUS_BIFILA_EXEMPLO_AUTO")
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area do salvar")
+(command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento do salvar")
+(command "CLIVUS_FILEIRA_AUTO")
+(setvar "OSMODE" clivus:osmode)
+
+(defun clivus:chave (/ d)
+  (if (setq d (dictsearch (namedobjdict) "CLIVUS"))
+    (if (dictsearch (cdr (assoc -1 d)) "VIGIA_SALVAR") "SIM" "NAO")
+    "NAO"))
+
+; Solidos com cor propria (62 ou 420): a mesa pendente pinta os dela.
+(defun clivus:pintados (/ ss i n e)
+  (setq ss (ssget "X" '((0 . "3DSOLID"))) i 0 n 0)
+  (if ss
+    (while (< i (sslength ss))
+      (setq e (entget (ssname ss i)))
+      (if (or (assoc 62 e) (assoc 420 e)) (setq n (1+ n)))
+      (setq i (1+ i))))
+  n)
+
+(setvar "FILEDIA" 0)
+(princ "\nCLIVUS_SALVAR_ANTES")
+(command "_.SAVEAS" "2018" "{{SAIDA}}")
+(command "_.QSAVE")
+(command "_.QSAVE")
+(princ "\nCLIVUS_SALVAR_SALVO")
+(command "CLIVUS_ESTADO")
+(princ (strcat "\nCLIVUS_SALVAR_SOLIDOS pintados=" (itoa (clivus:pintados))))
+
+; A segunda metade: uma edicao de verdade, e o desenho como a versao antiga deixava.
+(setq clivus:ss (ssget "X" '((0 . "3DSOLID"))))
+(command "_.CHPROP" (ssname clivus:ss 0) "" "_C" "3" "")
+(princ (strcat "\nCLIVUS_SALVAR_CHAVE_DEPOIS_DO_CHPROP=" (clivus:chave)))
+(princ (strcat "\nCLIVUS_SALVAR_PINTADOS_DEPOIS_DO_CHPROP=" (itoa (clivus:pintados))))
+(dictremove (cdr (assoc -1 (dictsearch (namedobjdict) "CLIVUS"))) "VIGIA_SALVAR")
+(princ (strcat "\nCLIVUS_SALVAR_CHAVE_TIRADA=" (clivus:chave)))
+(command "_.QSAVE")
+(setvar "FILEDIA" 1)
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ "\nCLIVUS_GRAVADO")
+(princ)

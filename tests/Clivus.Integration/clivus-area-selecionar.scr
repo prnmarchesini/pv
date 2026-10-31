@@ -5,6 +5,12 @@
 ; sair na cota do terreno), cria a area com [Selecionar], e confere que a
 ; polilinha do usuario ficou no desenho. Depois tenta fazer area da propria
 ; area: tem que recusar.
+;
+; Desde 31/10/2026 ("em selecionar area, poligonal fechada, quero que seja
+; possivel usar 3D polilinha"), mais duas, com 3DPOLY e cotas estragadas:
+; uma com a ponta no primeiro vertice em planta, mas com outra cota (sem o
+; "fechada" do AutoCAD), que vale como fechada; e uma aberta (triangulo sem
+; o ultimo lado), que pergunta e fecha com o Enter.
 
 (setq clivus:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
@@ -20,6 +26,20 @@
 (princ (strcat "\nCLIVUS_AREA_TIPO=" (cdr (assoc 0 (entget clivus:area)))))
 (princ (strcat "\nCLIVUS_AREA_Z=" (rtos (cadddr (assoc 10 (entget (entnext clivus:area)))) 2 3)))
 (command "CLIVUS_AREA" "Selecionar" clivus:area "")
+
+(setq clivus:osmode (getvar "OSMODE"))
+(setvar "OSMODE" 0)
+(command "_.3DPOLY" "{{Q1}}" "{{Q2}}" "{{Q3}}" "{{Q4}}" "{{Q5}}" "")
+(setq clivus:3d (entlast))
+(princ (strcat "\nCLIVUS_3D_FECHADA_PELO_AUTOCAD=" (if (= 1 (logand 1 (cdr (assoc 70 (entget clivus:3d))))) "SIM" "NAO")))
+(command "CLIVUS_AREA" "Selecionar" clivus:3d "Area da 3D")
+(princ (strcat "\nCLIVUS_3D_FICOU=" (if (entget clivus:3d) "SIM" "NAO")))
+
+(command "_.3DPOLY" "{{T1}}" "{{T2}}" "{{T3}}" "")
+(setq clivus:aberta (entlast))
+(command "CLIVUS_AREA" "Selecionar" clivus:aberta "" "Area aberta")
+(setvar "OSMODE" clivus:osmode)
+
 (command "CLIVUS_AREAS")
 (setvar "SECURELOAD" clivus:secureload)
 (princ "\nCLIVUS_FIM")

@@ -48,7 +48,10 @@ param(
     [switch] $SoEstruturas,
     # Só a janela Áreas (areas.ps1, etapa 41).
     [switch] $SoAreas,
-    [string] $Filtro = ''
+    [string] $Filtro = '',
+    # Só um caso da lista principal, pelo nome da função (Testar-AreaSelecionar),
+    # no primeiro desenho: para conferir um passo sem a rodada inteira.
+    [string] $Caso = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -972,6 +975,9 @@ function Testar-AreaSelecionar {
     function Ponto([double] $dx, [double] $dy) {
         [string]::Format($invariante, '{0:0.###},{1:0.###}', $centroX + $dx, $centroY + $dy)
     }
+    function Ponto3([double] $dx, [double] $dy, [double] $z) {
+        [string]::Format($invariante, '{0:0.###},{1:0.###},{2:0.###}', $centroX + $dx, $centroY + $dy, $z)
+    }
 
     $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-area-selecionar' `
         -Script (Join-Path $PSScriptRoot 'clivus-area-selecionar.scr') `
@@ -981,6 +987,16 @@ function Testar-AreaSelecionar {
             '{{P3}}' = (Ponto  50  50)
             '{{P4}}' = (Ponto -50  50)
             '{{NOME}}' = 'Area da polilinha'
+            # A 3D do cliente: cotas estragadas, e a ponta no primeiro vertice so em planta.
+            '{{Q1}}' = (Ponto3 -30 -30 0)
+            '{{Q2}}' = (Ponto3  30 -30 9999)
+            '{{Q3}}' = (Ponto3  30  30 -50)
+            '{{Q4}}' = (Ponto3 -30  30 123)
+            '{{Q5}}' = (Ponto3 -30 -30 777)
+            # A aberta: um triangulo sem o ultimo lado.
+            '{{T1}}' = (Ponto3 -20 -20 5000)
+            '{{T2}}' = (Ponto3  20 -20 0)
+            '{{T3}}' = (Ponto3   0  20 -9999)
         }
 
     if ($r.Texto -notmatch 'CLIVUS_FIM') {
@@ -1008,8 +1024,20 @@ function Testar-AreaSelecionar {
         return $false
     }
 
-    if (([regex]::Matches($r.Texto, 'NODESENHO ')).Count -ne 1) {
-        $problemas.Add("clivus-area-selecionar : a listagem nao tem exatamente uma area. Veja $($r.Saida)")
+    # A 3D com a ponta no primeiro vertice em planta (sem o "fechada" do AutoCAD) vira area, e fica no desenho.
+    if ($r.Texto -notmatch 'CLIVUS_3D_FECHADA_PELO_AUTOCAD=NAO' -or $r.Texto -notmatch 'Área criada: Area da 3D' -or $r.Texto -notmatch 'CLIVUS_3D_FICOU=SIM') {
+        $problemas.Add("clivus-area-selecionar : a polilinha 3D com a ponta no comeco (outra cota) nao virou area. Veja $($r.Saida)")
+        return $false
+    }
+
+    # A aberta pergunta, com a distancia da ponta ao comeco, e o Enter fecha.
+    if ($r.Texto -notmatch 'a ponta está a 44[,.]72 m do começo' -or $r.Texto -notmatch 'Área criada: Area aberta') {
+        $problemas.Add("clivus-area-selecionar : a polilinha 3D aberta nao perguntou (ponta a 44,72 m) ou nao virou area com o Enter. Veja $($r.Saida)")
+        return $false
+    }
+
+    if (([regex]::Matches($r.Texto, 'NODESENHO ')).Count -ne 3) {
+        $problemas.Add("clivus-area-selecionar : a listagem nao tem as tres areas (PLINE, 3D com a ponta no comeco, 3D aberta). Veja $($r.Saida)")
         return $false
     }
 
@@ -4620,6 +4648,20 @@ if ($SoEletrica -or $SoDrenagem -or $SoBifila -or $SoCampo -or $SoEstruturas -or
 
     if ($problemas.Count -eq 0 -and $passaram -eq $total) { Escrever-Linha $nomeDaParte "$passaram/$total" 'OK'; exit 0 }
     Escrever-Linha $nomeDaParte "$passaram/$total" 'FALHOU'
+    foreach ($p in $problemas) { Write-Host "  $p" -ForegroundColor Red }
+    exit 1
+}
+
+if ($Caso) {
+    $total++
+    if (& $Caso -Desenho $desenhos[0]) { $passaram++ }
+
+    $env:CLIVUS_LICENCAS = $licencaAntes.L
+    $env:CLIVUS_LICENCA_CHAVE_TESTE = $licencaAntes.C
+    $env:CLIVUS_LICENCA_ARQUIVO_TESTE = $licencaAntes.A
+
+    if ($problemas.Count -eq 0 -and $passaram -eq $total) { Escrever-Linha $Caso "$passaram/$total" 'OK'; exit 0 }
+    Escrever-Linha $Caso "$passaram/$total" 'FALHOU'
     foreach ($p in $problemas) { Write-Host "  $p" -ForegroundColor Red }
     exit 1
 }

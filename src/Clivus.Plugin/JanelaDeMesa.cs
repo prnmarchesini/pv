@@ -205,9 +205,9 @@ internal sealed class JanelaDeMesa : Window
     // Para onde os módulos olham, embaixo da inclinação: é do projeto (38.9).
     private readonly TextBlock _olhaPara = new() { FontSize = 11, Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) };
 
-    // A aba Fabricantes (38.7): as estruturas prontas, que vão para a aba do biposte.
-    private readonly TabItem _abaDosFabricantes = new();
-    private readonly TextBlock _recadoDosFabricantes = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+    // A aba Modelos (38.7; o nome de 31/10/2026): as estruturas prontas, que vão para a aba do biposte.
+    private readonly TabItem _abaDosModelos = new();
+    private readonly TextBlock _recadoDosModelos = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
 
     private readonly Button _botaoDosVaos = new()
     {
@@ -346,7 +346,7 @@ internal sealed class JanelaDeMesa : Window
             bifila: false);
         _cartaoBiposte = Cartao(
             Tr.T("Biposte"),
-            Tr.T("Dois pilares por pórtico (dianteiro e traseiro), viga e terças; mãos francesas e tirantes, se o seu tiver. Os prontos de fabricante estão na aba Fabricantes."),
+            Tr.T("Dois pilares por pórtico (dianteiro e traseiro), viga e terças; mãos francesas e tirantes, se o seu tiver. Os prontos de fabricante estão na aba Modelos."),
             bifila: true);
 
         Content = Montar();
@@ -415,13 +415,13 @@ internal sealed class JanelaDeMesa : Window
 
         _abaDaEstrutura.Content = AbaDaEstrutura();
 
-        _abaDosFabricantes.Header = Tr.T("Fabricantes");
-        _abaDosFabricantes.ToolTip = Tr.T("Estruturas prontas de fabricante, com as medidas dos desenhos deles: a escolhida vai para a aba do biposte.");
-        _abaDosFabricantes.Content = AbaDosFabricantes();
+        _abaDosModelos.Header = Tr.T("Modelos");
+        _abaDosModelos.ToolTip = Tr.T("O biposte genérico e as estruturas prontas, uma seção por fabricante, com as medidas dos desenhos deles: a escolhida vai para a aba do biposte.");
+        _abaDosModelos.Content = AbaDosModelos();
 
         _abas.Items.Add(_abaDoModulo);
         _abas.Items.Add(_abaDaEstrutura);
-        _abas.Items.Add(_abaDosFabricantes);
+        _abas.Items.Add(_abaDosModelos);
 
         var botoes = new StackPanel
         {
@@ -510,14 +510,19 @@ internal sealed class JanelaDeMesa : Window
     }
 
     /// <summary>
-    /// A aba Fabricantes (38.7): o biposte genérico, para montar o seu, e um
-    /// cartão por estrutura pronta, com as peças, a altura livre e os pilares
-    /// de catálogo. "Usar" enche a aba do biposte, onde tudo se muda, o nome
-    /// também (38.9: "em fabricante, não tem a porra de genérico, ou então, eu
-    /// escolho um modelo e edito ela, onde posso dar outro nome").
+    /// A aba Modelos (38.7, Fabricantes até 31/10/2026): o biposte genérico,
+    /// para montar o seu, e uma seção por fabricante com um cartão por
+    /// estrutura pronta (as peças, a altura livre e os pilares de catálogo).
+    /// "Usar" enche a aba do biposte, onde tudo se muda, o nome também (38.9:
+    /// "eu escolho um modelo e edito ela, onde posso dar outro nome").
+    /// "Apagar" tira o cartão da aba (Renan, 31/10/2026: "eu falei que quero
+    /// APAGAR os fabricantes, cadê? E não chama fabricante, chama modelos a
+    /// aba, e aí, quero seções POR fabricantes"); os prontos vêm com o
+    /// plugin, então apagar é esconder, e "Mostrar os apagados" traz de volta.
     /// </summary>
-    private UIElement AbaDosFabricantes()
+    private UIElement AbaDosModelos()
     {
+        var apagados = UserPreferences.Load(IdiomaDoPlugin.Arquivo).HiddenModelIds;
         var pilha = new StackPanel { Margin = new Thickness(12) };
 
         pilha.Children.Add(new TextBlock
@@ -525,15 +530,53 @@ internal sealed class JanelaDeMesa : Window
             Text = Tr.T("O biposte genérico, para montar o seu, e as estruturas prontas, com as medidas dos desenhos do fabricante. \"Usar\" enche a aba Biposte (o pórtico com P1, MF1, P2 e MF2, a tesoura, as terças e os tirantes), e lá tudo se muda, o nome também. O módulo continua o da primeira aba."),
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 10),
+            Margin = new Thickness(0, 0, 0, 6),
         });
 
-        var cartoes = new WrapPanel();
-        cartoes.Children.Add(CartaoDoGenerico());
-        foreach (var estrutura in VendorStructures.All) cartoes.Children.Add(CartaoDoFabricante(estrutura));
+        if (!apagados.Contains(VendorStructures.GenericModelId))
+        {
+            pilha.Children.Add(TituloDaSecao(Tr.T("Genérico")));
+            pilha.Children.Add(new WrapPanel { Children = { CartaoDoGenerico() } });
+        }
 
-        pilha.Children.Add(cartoes);
-        pilha.Children.Add(_recadoDosFabricantes);
+        foreach (var (fabricante, modelos) in VendorStructures.ByManufacturer(apagados))
+        {
+            pilha.Children.Add(TituloDaSecao(fabricante));
+
+            var cartoes = new WrapPanel();
+            foreach (var estrutura in modelos) cartoes.Children.Add(CartaoDoFabricante(estrutura));
+            pilha.Children.Add(cartoes);
+        }
+
+        var quantosApagados = VendorStructures.HiddenCount(apagados);
+        if (quantosApagados > 0)
+        {
+            var linha = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
+            linha.Children.Add(new TextBlock
+            {
+                Text = Tr.F("{0} modelo(s) apagado(s) desta aba.", quantosApagados),
+                FontSize = 11.5,
+                Foreground = Brushes.Gray,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+
+            var mostrar = new Button
+            {
+                Content = Tr.T("Mostrar os apagados"),
+                Height = 24,
+                Padding = new Thickness(10, 0, 10, 0),
+                Margin = new Thickness(10, 0, 0, 0),
+                ToolTip = Tr.T("Traz de volta para esta aba os modelos que você apagou."),
+            };
+            mostrar.Click += (_, _) => Protegido(() => MudarApagados(_ => [], Tr.T("Os modelos apagados voltaram para a aba.")), Tr.T("mostrar os modelos apagados"));
+            linha.Children.Add(mostrar);
+
+            pilha.Children.Add(linha);
+        }
+
+        // O recado é um só: sai da aba antiga antes de entrar na nova (a aba é remontada ao apagar).
+        (_recadoDosModelos.Parent as Panel)?.Children.Remove(_recadoDosModelos);
+        pilha.Children.Add(_recadoDosModelos);
 
         return new ScrollViewer
         {
@@ -543,15 +586,43 @@ internal sealed class JanelaDeMesa : Window
         };
     }
 
-    /// <summary>O cartão de uma estrutura de fabricante: o desenho do pórtico, o nome, as peças, o catálogo e o botão.</summary>
+    /// <summary>O título de uma seção da aba Modelos: o fabricante, ou "Genérico".</summary>
+    private static TextBlock TituloDaSecao(string titulo) => new()
+    {
+        Text = titulo,
+        FontSize = 14,
+        FontWeight = FontWeights.SemiBold,
+        Margin = new Thickness(0, 10, 0, 6),
+    };
+
+    /// <summary>
+    /// Muda a lista dos modelos apagados nas preferências e remonta a aba.
+    /// </summary>
+    private void MudarApagados(Func<IReadOnlyList<string>, IReadOnlyList<string>> mudar, string recado)
+    {
+        var preferencias = UserPreferences.Load(IdiomaDoPlugin.Arquivo);
+        (preferencias with { HiddenModels = mudar(preferencias.HiddenModelIds) }).Save(IdiomaDoPlugin.Arquivo);
+
+        _abaDosModelos.Content = AbaDosModelos();
+        _recadoDosModelos.Text = recado;
+    }
+
+    /// <summary>Apaga o modelo da aba (esconde; "Mostrar os apagados" traz de volta).</summary>
+    private void ApagarModelo(string id, string nome) =>
+        MudarApagados(
+            apagados => [.. apagados.Where(a => a != id), id],
+            Tr.F("{0} saiu da aba. \"Mostrar os apagados\", no fim da aba, traz de volta.", nome));
+
+    /// <summary>O cartão de uma estrutura de fabricante: o desenho do pórtico, o nome, as peças, o catálogo e os botões.</summary>
     private Border CartaoDoFabricante(VendorStructure estrutura) => CartaoDeEstrutura(
-        estrutura.Manufacturer,
+        string.Empty,
         estrutura.Model,
         [estrutura.Describe(), estrutura.DescribeCatalog()],
         estrutura.DescribeSource(),
         Tr.T("Usar esta estrutura"),
         () => UsarDoFabricante(estrutura),
-        estrutura.Name);
+        estrutura.Name,
+        () => ApagarModelo(estrutura.Name, estrutura.Name));
 
     /// <summary>
     /// O cartão do biposte genérico (38.9), o primeiro da aba: as peças do
@@ -574,17 +645,19 @@ internal sealed class JanelaDeMesa : Window
             null,
             Tr.T("Usar este"),
             UsarGenerico,
-            Tr.T("o biposte genérico"));
+            Tr.T("o biposte genérico"),
+            () => ApagarModelo(VendorStructures.GenericModelId, Tr.T("O biposte genérico")));
     }
 
-    /// <summary>Um cartão da aba Fabricantes: o desenho do pórtico, as linhas de texto e o botão.</summary>
-    private Border CartaoDeEstrutura(string emCima, string titulo, IReadOnlyList<string> linhas, string? fonte, string botao, Action usar, string nomeParaOErro)
+    /// <summary>Um cartão da aba Modelos: o desenho do pórtico, as linhas de texto e os botões Usar e Apagar.</summary>
+    private Border CartaoDeEstrutura(string emCima, string titulo, IReadOnlyList<string> linhas, string? fonte, string botao, Action usar, string nomeParaOErro, Action apagar)
     {
         var figura = FiguraDoTipo(bifila: true);
         DockPanel.SetDock(figura, Dock.Left);
 
         var textos = new StackPanel { Margin = new Thickness(10, 0, 0, 0) };
-        textos.Children.Add(new TextBlock { Text = emCima, FontSize = 11, Foreground = Brushes.Gray });
+        // O fabricante já é o título da seção; a linha de cima fica para o genérico.
+        if (emCima.Length > 0) textos.Children.Add(new TextBlock { Text = emCima, FontSize = 11, Foreground = Brushes.Gray });
         textos.Children.Add(new TextBlock { Text = titulo, FontSize = 13.5, FontWeight = FontWeights.SemiBold });
         foreach (var linha in linhas)
             textos.Children.Add(new TextBlock { Text = linha, FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
@@ -596,8 +669,6 @@ internal sealed class JanelaDeMesa : Window
             Content = botao,
             Height = 26,
             Padding = new Thickness(10, 0, 10, 0),
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(0, 8, 0, 0),
             ToolTip = Tr.T("Enche a aba do biposte com esta estrutura e abre a aba. O que estava nela é substituído; a monoposte fica guardada."),
         };
 
@@ -611,12 +682,25 @@ internal sealed class JanelaDeMesa : Window
             catch (Exception erro)
             {
                 _preenchendo = false;
-                RegistroDeDiagnostico.Registrar("Falha ao usar a estrutura da aba Fabricantes.", erro);
+                RegistroDeDiagnostico.Registrar("Falha ao usar a estrutura da aba Modelos.", erro);
                 Avisar(Tr.F("Não consegui usar a estrutura {0}: {1}", nomeParaOErro, erro.Message));
             }
         };
 
-        textos.Children.Add(botaoUsar);
+        var botaoApagar = new Button
+        {
+            Content = Tr.T("Apagar"),
+            Height = 26,
+            Padding = new Thickness(10, 0, 10, 0),
+            Margin = new Thickness(8, 0, 0, 0),
+            ToolTip = Tr.T("Tira este modelo da aba. A mesa que já usa as medidas dele não muda; \"Mostrar os apagados\", no fim da aba, traz de volta."),
+        };
+        botaoApagar.Click += (_, _) => Protegido(apagar, Tr.F("apagar {0}", nomeParaOErro));
+
+        var botoes = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
+        botoes.Children.Add(botaoUsar);
+        botoes.Children.Add(botaoApagar);
+        textos.Children.Add(botoes);
 
         var conteudo = new DockPanel { Margin = new Thickness(10) };
         conteudo.Children.Add(figura);
@@ -651,7 +735,7 @@ internal sealed class JanelaDeMesa : Window
 
         UsarNoBiposte(perfil, nome: null);
 
-        _recadoDosFabricantes.Text = mesmaLargura
+        _recadoDosModelos.Text = mesmaLargura
             ? Tr.F("A {0} está na aba Biposte; o nome continua \"{1}\" (mude no campo Nome, no alto da aba).", estrutura.Name, _nome.Text)
             : Tr.F("A {0} está na aba Biposte, com o vão-alvo: os vãos dela são para o módulo de {1} m de largura. O nome continua \"{2}\" (mude no campo Nome).", estrutura.Name, Numero(estrutura.Profile.Layout.Module.Width), _nome.Text);
     }
@@ -660,7 +744,7 @@ internal sealed class JanelaDeMesa : Window
     private void UsarGenerico()
     {
         UsarNoBiposte(BifilaReference.Generic(), nome: null);
-        _recadoDosFabricantes.Text = Tr.T("O biposte genérico está na aba Biposte: mude lá as peças, as medidas e o nome.");
+        _recadoDosModelos.Text = Tr.T("O biposte genérico está na aba Biposte: mude lá as peças, as medidas e o nome.");
     }
 
     /// <summary>A estrutura na aba do biposte, que abre; a monoposte fica guardada.</summary>
@@ -1337,7 +1421,7 @@ internal sealed class JanelaDeMesa : Window
 
         // Um biposte carregado substitui a aba do biposte, e com ela o recado
         // do fabricante; uma monoposte deixa a aba do biposte como estava.
-        if (perfil.IsBifila) _recadoDosFabricantes.Text = string.Empty;
+        if (perfil.IsBifila) _recadoDosModelos.Text = string.Empty;
 
         _altura.Text = Numero(perfil.Layout.Module.Height);
         _largura.Text = Numero(perfil.Layout.Module.Width);

@@ -1,0 +1,38 @@
+; Teste de nivel 2 do salvar, segunda metade: abre o desenho que a primeira
+; metade deixou (uma mesa pendente "movida ou editada", sem a chave
+; VIGIA_SALVAR, como a versao antiga deixava depois de salvar). Ao carregar
+; o plugin, a validacao de abertura limpa a mesa (continua onde foi
+; desenhada, e e biposte) e devolve a cor da camada aos solidos dela, sem
+; recalcular. A chave fica gravada: dali em diante, pendencia e do vigia
+; corrigido. Um QSAVE no fim nao pode marcar nada.
+
+(setq clivus:secureload (getvar "SECURELOAD"))
+(setvar "SECURELOAD" 0)
+
+(defun clivus:chave (/ d)
+  (if (setq d (dictsearch (namedobjdict) "CLIVUS"))
+    (if (dictsearch (cdr (assoc -1 d)) "VIGIA_SALVAR") "SIM" "NAO")
+    "NAO"))
+
+(defun clivus:pintados (/ ss i n e)
+  (setq ss (ssget "X" '((0 . "3DSOLID"))) i 0 n 0)
+  (if ss
+    (while (< i (sslength ss))
+      (setq e (entget (ssname ss i)))
+      (if (or (assoc 62 e) (assoc 420 e)) (setq n (1+ n)))
+      (setq i (1+ i))))
+  n)
+
+(princ (strcat "\nCLIVUS_SALVAR_ABERTO chave=" (clivus:chave) " pintados=" (itoa (clivus:pintados))))
+(command "_.NETLOAD" "{{DLL}}")
+(princ (strcat "\nCLIVUS_SALVAR_CARREGADO chave=" (clivus:chave) " pintados=" (itoa (clivus:pintados))))
+(command "CLIVUS_ESTADO")
+(setvar "FILEDIA" 0)
+(princ "\nCLIVUS_SALVAR_ANTES_DO_QSAVE")
+(command "_.QSAVE")
+(princ "\nCLIVUS_SALVAR_DEPOIS_DO_QSAVE")
+(command "CLIVUS_ESTADO")
+(setvar "FILEDIA" 1)
+(setvar "SECURELOAD" clivus:secureload)
+(princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
+(princ)

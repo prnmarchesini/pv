@@ -25,6 +25,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 38.7 Fabricantes, biposte genérico e a altura básica (P1 e P2): REPROVADO (30/10/2026, na tela: o P1 e o P2 não se mudavam, as medidas das mãos francesas não diziam nada, o desenho ruim, sem genérico em Fabricantes nem onde dar outro nome) — refeito no 38.9
 - 38.8 Os módulos no servidor do Clivus, com a validação da gestão: AGUARDANDO VALIDAÇÃO — servidor: clivussolar 2cc6561 (gate `validate_modulos`); plugin: `ModuleServiceReply` e `ModuleServer`, 37 testes
 - 38.9 A altura é da estrutura (P1 e P2 digitados), o pórtico peça por peça (P1, MF1, P2, MF2, tesoura, terças), o genérico em Fabricantes, a vista lateral nova, Norte/Sul e a lista de estruturas que voltava: AGUARDANDO VALIDAÇÃO — `StructureHeight`, `ForStructure`, perfil v5; nível 2 `clivus-bifila-p1` (rodar.ps1 -SoBifila)
+- 38.10 Salvar não suja mais o biposte (e o desenho que ficou vermelho se conserta ao abrir), o registro de tudo, a aba Modelos com seções por fabricante e Apagar, e a área pela polilinha 3D: AGUARDANDO VALIDAÇÃO — `PendingChanges.MayBeFromSave`, `PendenciasDoSalvar`, `RegistroDeTudo`, `VendorStructures.ByManufacturer`; nível 2 `clivus-salvar` (rodar.ps1 -SoBifila) e `clivus-area-selecionar` (rodar.ps1 -Caso Testar-AreaSelecionar)
 
 ## Etapa 39: o resto do Clivus
 
@@ -540,8 +541,59 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     pilares, ocupação, a mesa na divisa, a área vazia, o total de várias, a cota da hachura)
     e o nível 2 `clivus-areas` (duas áreas, o total igual ao Recontar, as hachuras acima das
     mesas, renomear, tirar e o Excel).
+- 38.10 (31/10/2026), pedidos da tela de 30/10 à noite: "eu cliquei em salvar e chega a dar
+  uma travada no cad [...] VIGIA Fx.y pendente (movida ou editada, comando QSAVE) [...] isso é
+  bug, corrija", "depois de salvar as mesas ficaram todas vermelhas, bug dos bravos", "quero
+  também que você gere logs de tudo", "eu falei que quero APAGAR os fabricantes, cadê? E não
+  chama fabricante, chama modelos a aba, e aí, quero seções POR fabricantes" e "em selecionar
+  área, poligonal fechada, quero que seja possível usar 3D polilinha". O que achei e assumi:
+  - **A causa do salvar:** reproduzido no Core Console (Itatiba, 5 mesas GC800): cada QSAVE
+    marcava as 5. Entre o começo e o fim do salvamento o AutoCAD avisa "modificado" de cada
+    sólido (130 peças da estrutura com o nosso XData nas 5 mesas; mais nenhuma entidade
+    nossa), e o vigia lia isso como edição. Desde o 38.2 (as peças da estrutura são sólidos),
+    todo salvar deixava todas as mesas biposte pendentes e vermelhas; a travada era o vigia
+    pintando centenas de mesas.
+  - **A correção:** o vigia não anota nada entre `BeginSave` e `SaveComplete`/`AbortSave` do
+    banco (QSAVE, SAVE, SAVEAS, o salvamento automático, fechar salvando). Árvores e drenagem
+    só olham blocos e polilinhas, que o salvar não mexe; ficaram como estavam.
+  - **O desenho que já ficou vermelho:** ao abrir (ou ao carregar o plugin com ele aberto), a
+    mesa pendente por "movida ou editada", com sólido, que continua onde foi desenhada (a
+    âncora do contorno no lugar) volta a limpa, com a cor de antes (a do Apagar › Cores: a do
+    tipo de mesa, a da camada, ou magenta na marcada), sem recalcular nem mover nada. A linha
+    de comando lista as mesas e lembra de usar Recalcular se alguma peça tinha sido mexida de
+    verdade. Uma vez por desenho: a chave `VIGIA_SALVAR` no dicionário, gravada no conserto e
+    na primeira pendência que o vigia corrigido marcar; com ela, nada mais é desfeito. Ficam
+    pendentes: copiada, peça apagada, pedido do usuário, monoposte e mesa sem âncora. Fica de
+    fora: a cor de análise que a mesa tinha (Pintar estouros) volta à do tipo; pintar de novo.
+  - **Logs de tudo** (só no Civil 3D com interface; o Core Console dos testes não escreve):
+    - a linha de comando inteira, pelo log do próprio AutoCAD (`LOGFILEMODE`), ligado na
+      pasta `%LOCALAPPDATA%\Clivus Solar\linha-de-comando` se o usuário não tinha ligado o
+      dele; arquivo com mais de 30 dias sai;
+    - no `clivus.log`: o Civil 3D, o Windows e a cultura ao carregar; cada desenho aberto e
+      fechado; cada comando, quando começou, quanto durou e como acabou (terminou, cancelado,
+      FALHOU), e o comando que começou e não terminou quando o desenho fechou; o erro que
+      escapa de uma janela, de uma tarefa ou de tudo, com a pilha;
+    - o `clivus.log` cheio (4 MB) vira `clivus.1.log` em vez de ser apagado.
+  - **A aba Modelos** (era Fabricantes): uma seção "Genérico" e uma por fabricante (hoje,
+    Arctech com a GC800 e a GC1000). Cada cartão tem Usar e **Apagar**. Os prontos vêm com o
+    plugin, então apagar é esconder: a lista fica em `preferencias.json`
+    (`modelosApagados`), vale para o usuário em qualquer desenho, e "Mostrar os apagados", no
+    fim da aba, traz todos de volta. A mesa que já usa as medidas de um modelo apagado não muda.
+  - **A área pela polilinha 3D:** a 3D já era aceita, mas só fechada pelo AutoCAD ou com a
+    ponta exatamente no começo, em 3D. A do cliente vem com a cota estragada: agora vale
+    fechada **em planta**, com a ponta a até 1 cm do começo e qualquer cota (o mesmo vale para
+    a área dos inversores, que usa a mesma leitura). A que não fecha pergunta "a ponta está a
+    X m do começo [...] [Fechar/Outra] <Fechar>": Fechar fecha com uma reta da ponta ao
+    começo (a polilinha do usuário não muda; a área é nova).
+  - Testes: no Core, a pendência que pode ser do salvar (só "movida ou editada", com sólido,
+    no lugar) e a aba Modelos (seções, apagados, preferências de antes sem a lista). No nível
+    2, `clivus-salvar` em duas metades (SAVEAS e dois QSAVE sem pendência; um CHPROP ainda
+    marca; o desenho sem a chave abre e a mesa volta limpa e na cor da camada; um QSAVE
+    depois não marca nada) e `clivus-area-selecionar` com as duas 3D (a com a ponta no começo
+    em outra cota, e a aberta, que pergunta e fecha com o Enter). O `rodar.ps1` ganhou
+    `-Caso <função>`, para rodar um caso da lista principal sozinho.
 
-## Roteiro de tela (38.1 a 41.1)
+## Roteiro de tela (38.1 a 41.1, e o 38.10)
 
 1. **Nova estrutura (38.1 e 38.5):** Configurações › Estruturas › Nova estrutura… › **Fixa**.
    A janela de Mesa abre na aba "Perfil e módulo"; clicar no cartão **Biposte** abre a aba
@@ -595,8 +647,8 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
    JAM66D46-720/LB", as medidas 2,384 × 1,303 × 0,033, a potência 720 e os dados elétricos
    enchem; a pergunta "Cadastrar agora, com o PAN?" › Sim: o módulo entra na lista. Fechar e
    abrir a janela, escolher esse módulo na lista: os dados elétricos vêm junto.
-9. **Fabricantes, P1 e P2 (38.9):** janela de Mesa › aba **Fabricantes**: o primeiro
-   cartão é o biposte genérico, depois as duas da Arctech. "Usar esta estrutura" na GC800: a
+9. **Modelos, P1 e P2 (38.9):** janela de Mesa › aba **Modelos** (era Fabricantes): o
+   primeiro cartão é o biposte genérico, depois as duas da Arctech. "Usar esta estrutura" na GC800: a
    aba Biposte abre (o nome não muda sozinho; o campo Nome está no alto da aba) e, no
    Pórtico, **P1 3,059**, **Livre sob o módulo 0,800**, MF1 1,244 (prende a 0,447 do topo do
    P1), **P2 3,888**, MF2 1,209 (a 0,773). Embaixo, a faixa que vale na usina. A vista lateral
@@ -632,3 +684,20 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     duplo clique). Hachurar todas: cada área com a cor da amostra, as mesas visíveis por
     baixo, o nome no meio; Tirar hachura numa só; Renomear (o nome de outra área é recusado);
     Exportar Excel: a aba Resumo e uma aba por área; Tirar todas.
+14. **Salvar (38.10):** abrir o desenho do Aurora que ficou com as mesas vermelhas: a linha
+    de comando diz "N mesa(s) estavam pendentes só porque o desenho foi salvo [...] voltaram ao
+    normal, sem recalcular" e as mesas voltam às cores de antes (a do tipo de mesa). Salvar
+    (Ctrl+S) duas ou três vezes: nenhuma linha VIGIA, sem travada, nada vermelho. Mover uma
+    mesa com o MOVE: ela fica pendente e vermelha (o vigia continua valendo); Recalcular
+    nela. Salvar, fechar e abrir: só ela tinha ficado pendente, e o conserto não a desfaz.
+15. **Modelos (38.10):** janela de Mesa › aba **Modelos**: a seção "Genérico" e a seção
+    "Arctech" (GC800 e GC1000). Apagar na GC1000: some, e no fim da aba aparece "1 modelo(s)
+    apagado(s)". Fechar e abrir a janela: continua apagada. **Mostrar os apagados**: volta.
+    Apagar as duas da Arctech: a seção some junto.
+16. **Área pela polilinha 3D (38.10):** Implantação › Área › **Selecionar** › clicar numa
+    polilinha 3D do cliente (fechada, ou com o último vértice em cima do primeiro em planta,
+    em qualquer cota): a área nasce no terreno. Numa 3D aberta, a pergunta diz a quantos
+    metros a ponta está do começo; Enter fecha, **Outra** deixa escolher outra.
+17. **Logs (38.10):** nada a fazer na tela. Quando aparecer um erro, diga a hora: o
+    `%LOCALAPPDATA%\Clivus Solar\clivus.log` tem cada comando com o tempo e os erros com a
+    pilha, e a pasta `linha-de-comando`, ao lado, tem a linha de comando inteira.

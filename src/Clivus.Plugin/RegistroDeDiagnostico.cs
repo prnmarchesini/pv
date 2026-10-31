@@ -12,16 +12,22 @@ namespace Clivus.Plugin;
 /// deixaria rastro nenhum - nem aba, nem mensagem, nem log. Uma falha ao
 /// montar a ribbon e justamente o caso em que nao ha onde escrever na tela.
 ///
-/// O arquivo fica em %LOCALAPPDATA%\Clivus Solar\clivus.log.
+/// O arquivo fica em %LOCALAPPDATA%\Clivus Solar\clivus.log. Cheio, ele vira
+/// clivus.1.log (o anterior a esse sai) e um novo comeca: o que aconteceu
+/// pouco antes de um erro nao se perde na virada (31/10/2026, "quero que voce
+/// gere logs de tudo [...] tendo log, voce podera analisar").
 /// </summary>
 internal static class RegistroDeDiagnostico
 {
     private static readonly object Tranca = new();
 
-    /// <summary>Acima disso o arquivo e reiniciado; e diagnostico, nao auditoria.</summary>
-    private const long TamanhoMaximoEmBytes = 1 * 1024 * 1024;
+    /// <summary>Acima disso o arquivo vira o anterior; e diagnostico, nao auditoria.</summary>
+    private const long TamanhoMaximoEmBytes = 4 * 1024 * 1024;
 
     internal static string Caminho { get; } = MontarCaminho();
+
+    /// <summary>A pasta do plugin, onde ficam os registros.</summary>
+    internal static string Pasta => Path.GetDirectoryName(Caminho) ?? Path.GetTempPath();
 
     internal static void Registrar(string mensagem, Exception? erro = null)
     {
@@ -40,7 +46,7 @@ internal static class RegistroDeDiagnostico
                 if (!string.IsNullOrEmpty(pasta)) Directory.CreateDirectory(pasta);
 
                 if (File.Exists(Caminho) && new FileInfo(Caminho).Length > TamanhoMaximoEmBytes)
-                    File.Delete(Caminho);
+                    File.Move(Caminho, Path.ChangeExtension(Caminho, ".1.log"), overwrite: true);
 
                 File.AppendAllText(Caminho, linha.AppendLine().ToString(), Encoding.UTF8);
             }

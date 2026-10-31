@@ -105,7 +105,7 @@ public static class ValidarCommands
     private const double ToleranciaDaAncora = 1e-3;
 
     /// <summary>Se o primeiro vértice do contorno está longe da âncora gravada.</summary>
-    private static bool Moveu(Transaction transacao, TableParts mesa)
+    internal static bool Moveu(Transaction transacao, TableParts mesa)
     {
         if (mesa.Identity?.Anchor is not { } ancora || mesa.Contour is not { } contorno) return false;
 
@@ -211,6 +211,7 @@ internal static class ValidacaoAoAbrir
                 return;
 
             AcertarCores(documento);
+            ConsertarPendenciasDoSalvar(documento);
 
             var validacao = ValidarCommands.Relatar(documento, Tr.T("AO ABRIR"));
 
@@ -220,6 +221,31 @@ internal static class ValidacaoAoAbrir
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao validar ao abrir o desenho.", erro);
+        }
+    }
+
+    /// <summary>
+    /// As mesas biposte que o salvar deixou pendentes até 30/10/2026 voltam
+    /// a limpas, uma vez por desenho (<see cref="PendenciasDoSalvar"/>).
+    /// </summary>
+    private static void ConsertarPendenciasDoSalvar(Document documento)
+    {
+        try
+        {
+            var limpas = PendenciasDoSalvar.Consertar(documento);
+            if (limpas.Count == 0) return;
+
+            var ordenadas = limpas.OrderBy(l => l, StringComparer.Ordinal).ToList();
+            var mostradas = string.Join(", ", ordenadas.Take(10));
+            if (ordenadas.Count > 10) mostradas = Tr.F("{0} e mais {1}", mostradas, ordenadas.Count - 10);
+
+            documento.Editor.WriteMessage(Tr.F(
+                "\nCLIVUS {0} mesa(s) estavam pendentes só porque o desenho foi salvo (erro corrigido em 30/10/2026). Continuam onde foram desenhadas e voltaram ao normal, sem recalcular: {1}. Se você mexeu numa peça de alguma delas, use Recalcular nela.\n",
+                limpas.Count, mostradas));
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao desfazer as pendências do salvar.", erro);
         }
     }
 
