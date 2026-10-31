@@ -154,27 +154,40 @@
   }
 
   /**
-   * O primeiro e o último minuto do dia com o sol acima do horizonte (a
-   * elevação com a refração maior que zero, como SunPosition.IsUp), ou null
-   * se ele não nasce (noite polar).
+   * O nascer e o pôr do sol no relógio do lugar, em minutos do dia: [nascer,
+   * pôr], o primeiro e o último minuto com o sol acima do horizonte (a
+   * elevação com a refração maior que zero, como SunPosition.IsUp). Com o
+   * fuso longe da longitude, o dia claro pode passar da meia-noite do
+   * relógio: aí o nascer vem depois do pôr. [0, 1439] no sol da meia-noite;
+   * null se o sol não nasce (noite polar).
    */
   function diaClaro(latitude, longitude, ano, mes, dia, fuso) {
-    const acima = min => posicao(latitude, longitude, ano, mes, dia, min, fuso).elevacao > 0;
-    let primeiro = null, ultimo = null;
+    const acima = min => posicao(latitude, longitude, ano, mes, dia, mod(min, 1440), fuso).elevacao > 0;
+    const passo = 10, amostras = [];
+    for (let min = 0; min < 1440; min += passo) amostras.push(acima(min));
 
-    for (let min = 0; min < 1440; min += 10) {
-      if (!acima(min)) continue;
-      if (primeiro === null) primeiro = min;
-      ultimo = min;
+    if (!amostras.includes(true)) return null;
+    if (!amostras.includes(false)) return [0, 1439];
+
+    // O nascer: a amostra acima depois de uma abaixo; o pôr: a acima antes de
+    // uma abaixo (em volta do dia, para o dia claro que passa da meia-noite).
+    const n = amostras.length;
+    let nascer = 0, por = 0;
+    for (let k = 0; k < n; k++) {
+      if (amostras[k] && !amostras[(k + n - 1) % n]) nascer = k * passo;
+      if (amostras[k] && !amostras[(k + 1) % n]) por = k * passo;
     }
 
-    if (primeiro === null) return null;
-
     // De 10 em 10 minutos achou; o minuto certo está nos 10 de antes e de depois.
-    while (primeiro > 0 && acima(primeiro - 1)) primeiro--;
-    while (ultimo < 1439 && acima(ultimo + 1)) ultimo++;
+    for (let i = 0; i < passo && acima(nascer - 1); i++) nascer = mod(nascer - 1, 1440);
+    for (let i = 0; i < passo && acima(por + 1); i++) por = mod(por + 1, 1440);
 
-    return [primeiro, ultimo];
+    return [nascer, por];
+  }
+
+  /** Se o minuto do relógio cai fora do dia claro [nascer, pôr] (que pode passar da meia-noite). */
+  function deNoite(claro, minutos) {
+    return claro[0] <= claro[1] ? minutos < claro[0] || minutos > claro[1] : minutos > claro[1] && minutos < claro[0];
   }
 
   // ------------------------------------------------- a luz e os controles
@@ -225,10 +238,28 @@
     render.shadowMap.autoUpdate = false;
     luz.castShadow = cSombras.checked;
     if (!luz.target.parent) cena.add(luz.target);
+
+    // O ponto que a sombra consulta no mapa é afastado da superfície ao longo
+    // da normal (contra a acne). A r128 usa a normal guardada no vértice, que
+    // numa face dupla (DoubleSide) não vira com o lado que o sol ilumina: a
+    // parede de canaleta com os triângulos ao contrário, ou o verso do
+    // módulo, faria sombra nela mesma de frente para o sol. Nos materiais
+    // Lambert (os da cena; o vértice deles conhece a luz) o afastamento vai
+    // sempre para o lado do sol.
+    const AFASTAMENTO = 'shadowWorldNormal * directionalLightShadows[ i ].shadowNormalBias';
+    const trecho = THREE.ShaderChunk.shadowmap_vertex;
+    const ladoDoSol = trecho.includes(AFASTAMENTO)
+      ? shader => {
+        shader.vertexShader = shader.vertexShader.replace('#include <shadowmap_vertex>', trecho.replace(AFASTAMENTO,
+          'shadowWorldNormal * ( dot( transformedNormal, directionalLights[ i ].direction ) < 0.0 ? - 1.0 : 1.0 ) * directionalLightShadows[ i ].shadowNormalBias'));
+      }
+      : null;
+
     mundo.traverse(x => {
       if (x.isMesh) {
         x.castShadow = true;
         x.receiveShadow = true;
+        if (ladoDoSol && x.material.isMeshLambertMaterial) x.material.onBeforeCompile = ladoDoSol;
       }
     });
 
@@ -241,9 +272,12 @@
     /**
      * Junta à caixa o que o objeto tem, visível ou não. A three r128 não
      * conhece a caixa das instâncias (os pilares): a de cada uma vem da
-     * matriz dela.
+     * matriz dela. Caixa com número que não serve (um NaN na cena) fica de
+     * fora: estragaria a sombra da cena inteira.
      */
     function juntar(caixa, objeto) {
+      const serve = () => [b.min.x, b.min.y, b.min.z, b.max.x, b.max.y, b.max.z].every(Number.isFinite);
+
       objeto.traverse(x => {
         const g = x.geometry;
         if (!g || !(x.isMesh || x.isLine || x.isPoints)) return;
@@ -252,10 +286,12 @@
         if (x.isInstancedMesh) {
           for (let i = 0; i < x.count; i++) {
             x.getMatrixAt(i, m4);
-            caixa.union(b.copy(g.boundingBox).applyMatrix4(m4.premultiply(x.matrixWorld)));
+            b.copy(g.boundingBox).applyMatrix4(m4.premultiply(x.matrixWorld));
+            if (serve()) caixa.union(b);
           }
         } else {
-          caixa.union(b.copy(g.boundingBox).applyMatrix4(x.matrixWorld));
+          b.copy(g.boundingBox).applyMatrix4(x.matrixWorld);
+          if (serve()) caixa.union(b);
         }
       });
     }
@@ -377,7 +413,7 @@
       if (sim) {
         claro = diaClaro(L.latitude, L.longitude, ano, mes, dia, L.fuso);
         if (!claro) sim = false;     // noite polar: nada a animar
-        else if (minutos < claro[0] || minutos >= claro[1]) {
+        else if (deNoite(claro, minutos) || minutos === claro[1]) {
           minutos = claro[0];
           atualizar();
         }
@@ -397,8 +433,8 @@
       const agora = performance.now();
       if (antes !== null) {
         // Aba escondida e de volta: no máximo um décimo de segundo de um quadro para o outro.
-        minutos += Math.min(agora - antes, 100) / 1000 * MINUTOS_POR_SEGUNDO;
-        if (minutos > claro[1]) minutos = claro[0];
+        minutos = mod(minutos + Math.min(agora - antes, 100) / 1000 * MINUTOS_POR_SEGUNDO, 1440);
+        if (deNoite(claro, minutos)) minutos = claro[0];
         atualizar();
       }
       antes = agora;
@@ -416,7 +452,11 @@
 
     cData.addEventListener('change', () => {
       const [a, m, dd] = cData.value.split('-').map(Number);
-      if (!(a >= 1000 && a <= 9999 && m >= 1 && m <= 12 && dd >= 1 && dd <= 31)) return;
+      // Data apagada ou fora do lugar: volta a que vale.
+      if (!(a >= 1000 && a <= 9999 && m >= 1 && m <= 12 && dd >= 1 && dd <= 31)) {
+        mostrarData();
+        return;
+      }
 
       const outroAno = a !== ano;
       ano = a; mes = m; dia = dd;

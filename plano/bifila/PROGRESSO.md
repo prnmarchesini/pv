@@ -45,7 +45,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 
 ## Etapa 42: as sombras
 
-- 42.2 O 3D com o sol (31/10/2026: "leve a simulacao de sombra para o 3D no navegador"): o navegador calcula o sol e faz a sombra em tempo real (data, hora, animar o dia, equinócios e solstícios, ligar a sombra), os pilares modelados (a seção e o giro do bloco), o item Resumo das camadas (mesas, módulos e kWp, por área e por tipo) e o logo do Clivus; na página pública, a propaganda que leva à landing: AGUARDANDO VALIDAÇÃO — `sol.js` e `resumo.js` (os mesmos no servidor), `Scene3DLocation`, `Scene3DPillarSection`, `Scene3DSummary`, 6 testes da etapa 42; servidor: clivussolar branch `sombras-3d`
+- 42.2 O 3D com o sol (31/10/2026: "leve a simulacao de sombra para o 3D no navegador"): o navegador calcula o sol e faz a sombra em tempo real (data, hora, animar o dia, equinócios e solstícios, ligar a sombra), os pilares modelados (a seção e o giro do bloco), o item Resumo das camadas (mesas, módulos e kWp, por área e por tipo) e o logo do Clivus; na página pública, a propaganda que leva à landing: AGUARDANDO VALIDAÇÃO — `sol.js` e `resumo.js` (os mesmos no servidor), `Scene3DLocation`, `Scene3DPillarSection`, `Scene3DSummary`, 7 testes da etapa 42 e `tools/conferir-sol.js` (linha "Sol (JS)" do placar); servidor: clivussolar branch `sombras-3d`
 
 ## Observações
 
@@ -711,8 +711,28 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     propaganda, que recolhe no × (e, no celular, sozinha no primeiro toque no 3D) e volta no
     logo. O botão leva a `CLIVUS_SITE_URL/{pt|en|es}/`, por padrão https://clivussolar.com, que
     ainda não tem DNS: no Coolify, pôr o domínio temporário do site até lá.
-  - Traduções: 13 frases novas sem inglês e espanhol (o Renan traduz depois); até lá, os dois
+  - Traduções: 14 frases novas sem inglês e espanhol (o Renan traduz depois); até lá, os dois
     casos de `TranslationCatalogTests` falham.
+  - Revisão (subagente), corrigido:
+    - a face dupla de costas para a própria normal (parede de canaleta com os triângulos ao
+      contrário, verso do módulo) fazia sombra nela mesma de frente para o sol: o afastamento
+      da consulta à sombra vai agora para o lado do sol (`onBeforeCompile` nos materiais
+      Lambert); conferido com duas paredes de enrolamentos opostos;
+    - a guarda permanente do JS contra o C#: `tests/dados/sol-referencia.json` (48 instantes
+      do C#), o teste que garante que ela é o C# de hoje e `tools/conferir-sol.js`, que o
+      placar roda quando há node (linha "Sol (JS)");
+    - a seção do pilar abaixo de 1 mm ia como 0 e o servidor recusaria a publicação;
+    - o aviso sai também com o lugar inválido e quando o resumo falha;
+    - o dia claro que passa da meia-noite do relógio (fuso longe da longitude) e a data
+      apagada no campo;
+    - a caixa com NaN não estraga mais a sombra da cena inteira; no servidor, número
+      gigante dá 400 (não 500) e o resumo vai até 10^9, com mesas e módulos inteiros;
+    - o nível 2 da 39.2 exige o resumo nas duas cenas (passava com os dois nulos).
+  - Fica para o Renan (privacidade): o 0,1° é arredondado no plugin; o servidor guarda o que
+    chegar. E dentro de 11 km a forma do terreno dá para casar com o relevo público (SRTM):
+    o lugar exato não sai, mas a região sim.
+  - No servidor, os scripts do 3D levam o hash do conteúdo na URL (`?v=`): sem isso, quem já
+    tinha aberto um 3D juntava o JS velho do cache com a página nova.
   - Desempenho: aqui não há placa de vídeo (o Chrome sem cabeça desenha na CPU). Numa usina de
     16.016 módulos e 6.864 pilares: 7,7 quadros/s com a sombra parada, 4,5 animando e 9,2 sem
     sombra. Só a proporção vale; o número de verdade é na tela.

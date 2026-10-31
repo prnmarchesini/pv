@@ -130,8 +130,13 @@ public static class Ver3DCommands
         if (cena.Faces.Count == 0 && cena.Trees.Count == 0)
             editor.WriteMessage(Tr.T("\n  ATENÇÃO: o desenho não tem módulo nem árvore do plugin; a página mostra só o terreno.\n"));
 
-        if (cena.Location is null)
+        // Sem lugar que sirva, a cena sai sem o "local" (Viewer3DPage.Json), e o usuário fica sabendo.
+        if (cena.Location is not { IsValid: true })
             editor.WriteMessage(Tr.T("\n  O desenho não tem localização (latitude e longitude): o 3D sai sem o sol e as sombras. Corrija em Terreno > Resumo > Localização.\n"));
+
+        // O resumo só falta quando a leitura das áreas falhou (o registro tem o porquê).
+        if (cena.Summary is null)
+            editor.WriteMessage(Tr.T("\n  O resumo da usina não saiu no 3D (o registro de diagnóstico diz o porquê).\n"));
 
         AvisarTerrenoMudado(editor, documento, terreno);
 

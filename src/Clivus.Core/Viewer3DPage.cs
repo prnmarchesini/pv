@@ -25,10 +25,16 @@ public sealed record Scene3DPillarSection(double Width, double Depth, double Rot
     /// <summary>A maior largura ou profundidade aceita, em metros (o servidor recusa acima).</summary>
     public const double MaxSize = 10;
 
-    /// <summary>Se a seção serve: medidas positivas até <see cref="MaxSize"/> e giro finito.</summary>
+    /// <summary>
+    /// A menor largura ou profundidade, em metros: a cena vai ao milímetro, e
+    /// abaixo disso o arredondamento daria 0, que o servidor recusa.
+    /// </summary>
+    public const double MinSize = 0.001;
+
+    /// <summary>Se a seção serve: medidas de <see cref="MinSize"/> a <see cref="MaxSize"/> e giro finito.</summary>
     public bool IsValid =>
-        double.IsFinite(Width) && Width is > 0 and <= MaxSize
-        && double.IsFinite(Depth) && Depth is > 0 and <= MaxSize
+        double.IsFinite(Width) && Width is >= MinSize and <= MaxSize
+        && double.IsFinite(Depth) && Depth is >= MinSize and <= MaxSize
         && double.IsFinite(Rotation);
 }
 
@@ -260,7 +266,7 @@ public static class Viewer3DPage
             // O "+ 0.0" tira o −0 (−0,04 arredondado).
             string G(double v) => comOrigem
                 ? (Math.Round(v, 7) + 0.0).ToString("0.#######", Inv)
-                : (Math.Round(v, PublishedLocationDecimals) + 0.0).ToString("0.#", Inv);
+                : (Math.Round(v, PublishedLocationDecimals) + 0.0).ToString("0." + new string('#', PublishedLocationDecimals), Inv);
 
             s.Append(",\"local\":{\"latitude\":").Append(G(lugar.Latitude))
                 .Append(",\"longitude\":").Append(G(lugar.Longitude))
@@ -434,8 +440,9 @@ public static class Viewer3DPage
 
         // Os scripts entram antes da cena e o título por último: um nome de
         // desenho (ou de área, no resumo) com "{{ORBITA}}" não pode virar o
-        // lugar onde o script entra. Na cena, "{{" vira "{{" (o mesmo
-        // texto para o JSON), e nenhuma marca sobra dentro dela.
+        // lugar onde o script entra. Na cena, o segundo "{" de cada "{{" vai
+        // com o escape do JSON (barra, u007b: o mesmo texto para o JSON), e
+        // nenhuma marca sobra dentro dela.
         static string H(string texto) => System.Net.WebUtility.HtmlEncode(texto);
 
         return Modelo

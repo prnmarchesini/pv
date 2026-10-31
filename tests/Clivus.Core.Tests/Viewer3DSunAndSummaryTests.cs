@@ -92,6 +92,13 @@ public class Viewer3DSunAndSummaryTests
         Assert.False(new Scene3DPillarSection(10.001, 0.1, 0).IsValid);
         Assert.True(new Scene3DPillarSection(Scene3DPillarSection.MaxSize, 0.1, -7).IsValid);
 
+        // Abaixo de 1 mm o arredondamento ao milímetro daria 0, que o servidor
+        // recusa (a publicação inteira): fica a padrão. 1 mm vai como 0.001.
+        var fina = cena with { Pillars = [new Scene3DPillar(314_011, 7_456_010.5, 701.5, 699, new Scene3DPillarSection(0.0004, 0.1, 0)), new Scene3DPillar(314_013, 7_456_010.5, 701.5, 699, new Scene3DPillarSection(Scene3DPillarSection.MinSize, 0.1, 0))] };
+        var finas = Ler(Viewer3DPage.Json(fina)).GetProperty("pilares");
+        Assert.Equal(4, finas[0].GetArrayLength());
+        Assert.Equal(0.001, finas[1][4].GetDouble(), 9);
+
         // O corpo do envio leva a mesma seção.
         var corpo = Ler(Viewer3DPage.PublishBody(cena, "0.1.0", "x")).GetProperty("cena").GetProperty("pilares");
         Assert.Equal(pilares.GetRawText(), corpo.GetRawText());
@@ -218,11 +225,47 @@ public class Viewer3DSunAndSummaryTests
     }
 
     /// <summary>
+    /// A tabela que confere o sol do navegador (tests/dados/sol-referencia.json)
+    /// é o <see cref="SolarCalculator"/> de hoje, instante por instante. O
+    /// tools/conferir-sol.js (o rodar-testes.ps1 roda quando há node) confere
+    /// o sol.js contra ela: as duas pontas juntas pegam o C# e o JS que se
+    /// separam. Mudou o C# de propósito: a tabela nova sai no diretório do
+    /// teste, para copiar, e o conferir-sol.js roda de novo.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "42")]
+    public void OSolDoCSharpBateComATabelaDoNavegador()
+    {
+        using var tabela = JsonDocument.Parse(File.ReadAllText(Repositorio.Caminho("tests", "dados", "sol-referencia.json")));
+        var linhas = tabela.RootElement.GetProperty("instantes").EnumerateArray().Select(l => l.EnumerateArray().Select(v => v.GetDouble()).ToArray()).ToList();
+        Assert.True(linhas.Count >= 40, $"a tabela tem só {linhas.Count} instantes");
+
+        var nova = new List<string>();
+        var diferentes = 0;
+
+        foreach (var l in linhas)
+        {
+            var quando = new DateTime((int)l[3], (int)l[4], (int)l[5]).AddMinutes(l[6]);
+            var p = SolarCalculator.Compute(l[0], l[1], quando, l[2]);
+            double[] calculado = [p.AzimuthDegrees, p.ElevationDegrees, p.DeclinationDegrees, p.EquationOfTimeMinutes];
+
+            if (calculado.Where((v, i) => Math.Abs(v - l[7 + i]) > 1e-9).Any()) diferentes++;
+            nova.Add("    [" + string.Join(", ", l.Take(7).Concat(calculado).Select(v => v.ToString("R", System.Globalization.CultureInfo.InvariantCulture))) + "]");
+        }
+
+        if (diferentes > 0)
+        {
+            var arquivo = Path.Combine(AppContext.BaseDirectory, "sol-referencia.json");
+            File.WriteAllText(arquivo, "{\n  \"descricao\": " + tabela.RootElement.GetProperty("descricao").GetRawText() + ",\n  \"instantes\": [\n" + string.Join(",\n", nova) + "\n  ]\n}\n");
+            Assert.Fail($"{diferentes} instante(s) da tabela não são o SolarCalculator de hoje. Se o C# mudou de propósito, a tabela nova está em {arquivo}: copie para tests/dados e rode node tools/conferir-sol.js.");
+        }
+    }
+
+    /// <summary>
     /// O sol do navegador é o porte do <see cref="SolarCalculator"/>: cada
     /// constante do NOAA (os números com casa decimal e os inteiros de três
-    /// algarismos ou mais) que o C# usa aparece no sol.js. A conferência dos
-    /// números (o JS contra o C#, instante por instante) foi feita com o
-    /// node no 42.2; esta guarda pega a constante trocada de um lado só.
+    /// algarismos ou mais) que o C# usa aparece no sol.js. Pega a constante
+    /// trocada de um lado só, mesmo sem o node para rodar o conferir-sol.js.
     /// </summary>
     [Fact]
     [Trait("Etapa", "42")]

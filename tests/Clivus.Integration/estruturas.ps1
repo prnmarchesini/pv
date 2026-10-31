@@ -311,8 +311,14 @@ function Testar-Estruturas {
             if ($a -ne $b) { $problemas.Add("${rotulo}: o 3D mudou com a estrutura em '$p'."); $ok = $false }
         }
 
-        # O resumo do 3D (42.2): o total e as áreas iguais (mesas, módulos e kWp);
-        # por tipo, o nome é o da estrutura, então só as somas.
+        # O resumo do 3D (42.2): as duas cenas o trazem, com mesas; o total e as
+        # áreas iguais (mesas, módulos e kWp); por tipo, o nome é o da
+        # estrutura, então só as somas.
+        foreach ($c in $cenas) {
+            if ($null -eq $c.resumo -or [int] $c.resumo.total.mesas -le 0 -or @($c.resumo.tipos).Count -lt 1) {
+                $problemas.Add("${rotulo}: o 3D saiu sem o resumo (ou com o resumo vazio)."); $ok = $false
+            }
+        }
         foreach ($parte in @('total', 'areas')) {
             $a = $cenas[0].resumo.$parte | ConvertTo-Json -Depth 8 -Compress
             $b = $cenas[1].resumo.$parte | ConvertTo-Json -Depth 8 -Compress

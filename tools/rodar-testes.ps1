@@ -284,6 +284,32 @@ if (-not (Test-Path $servidor)) {
     }
 }
 
+# ---- o sol do 3D (node) -----------------------------------------------------
+# Passo 42.2: o sol.js (o SolarCalculator portado para o navegador) contra a
+# tabela que o C# gera (o teste OSolDoCSharpBateComATabelaDoNavegador garante
+# a tabela). Sem node na maquina, a linha sai "sem node" e nao derruba o placar.
+
+if (Get-Command node -ErrorAction SilentlyContinue) {
+    $antes = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $saidaSol = & node (Join-Path $PSScriptRoot 'conferir-sol.js') 2>&1 | Out-String
+        $codigoSol = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $antes
+    }
+
+    if ($codigoSol -eq 0) {
+        Escrever-Linha 'Sol (JS)' '' 'OK'
+    } else {
+        Escrever-Linha 'Sol (JS)' '' 'FALHOU'
+        $problemas.Add("o sol.js nao bate com o C# (tools/conferir-sol.js):`n$saidaSol")
+    }
+} else {
+    Escrever-Linha 'Sol (JS)' '-' 'sem node'
+}
+
 # ---- instalador -------------------------------------------------------------
 # Gera o ClivusSolar-Setup.exe e instala e desinstala em silencio numa pasta
 # de teste (/teste=: plugins e dados dentro dela, registro com "_Teste"), sem
