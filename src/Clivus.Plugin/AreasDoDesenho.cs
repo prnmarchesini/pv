@@ -408,6 +408,34 @@ public static class AreasTestHooks
                     frase = AreasDoDesenho.Renomear(documento, todas, area, valores[2]);
                     break;
 
+                // O Renomear pela linha da janela (31/10/2026: "nao funciona o
+                // renomear. o F2 nao funciona tbm"): a janela de verdade, o menu
+                // do botão direito (ou o F2), a caixa do nome e o Enter.
+                case "renomear-na-linha" or "renomear-f2" when valores.Length > 2:
+                {
+                    if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
+                    {
+                        editor.WriteMessage("\nAREAS_ACAO a linha nao e STA\n");
+                        return null;
+                    }
+
+                    var janela = new JanelaDeAreas(documento);
+                    try
+                    {
+                        var conteudo = (System.Windows.FrameworkElement)janela.Content;
+                        conteudo.Measure(new System.Windows.Size(1100, 800));
+                        conteudo.Arrange(new System.Windows.Rect(0, 0, 1100, 800));
+                        conteudo.UpdateLayout();
+                        frase = janela.RenomearComoNaTela(valores[1], valores[2], pelaTecla: valores[0] == "renomear-f2");
+                    }
+                    finally
+                    {
+                        janela.Close();
+                    }
+
+                    break;
+                }
+
                 case "excel" when valores.Length > 1:
                     frase = AreasDoDesenho.Exportar(documento, AreasDoDesenho.Ler(documento).Resumo, valores[1]);
                     break;

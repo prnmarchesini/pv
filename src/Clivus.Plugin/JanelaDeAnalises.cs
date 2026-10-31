@@ -77,6 +77,7 @@ internal sealed class JanelaDeAnalises : Window
         IReadOnlySet<PillarLine> linhas = new HashSet<PillarLine>();
         Tentar(() => linhas = AnalisesIndependentes.Linhas(_database));
         Tentar(() => DarFundoAosTextosAntigos(documento));
+        Tentar(() => DeitarOsTextosAntigos(documento));
 
         var abas = new TabControl { Margin = new Thickness(10) };
 
@@ -155,6 +156,29 @@ internal sealed class JanelaDeAnalises : Window
             // texto, para o desenho sem análise não ficar modificado à toa.
             foreach (var tipo in AnalisesIndependentes.AplicarAparencia(_database, semEscolha, out _))
                 AnalisesIndependentes.GravarAparencia(_database, tipo, AnalysisTextLook.Default);
+        });
+    }
+
+    /// <summary>A marca no desenho de que os textos antigos já foram deitados no plano dos módulos.</summary>
+    private const string ChaveDosTextosDeitados = "ANALISE_TEXTOS_NO_PLANO";
+
+    /// <summary>
+    /// Os textos de ponta e de pilar de antes de 31/10/2026 ("o texto fica
+    /// por traz") vão para o plano dos módulos na primeira vez que a janela
+    /// abre; o desenho guarda que já foram.
+    /// </summary>
+    private void DeitarOsTextosAntigos(Document documento)
+    {
+        using (var marca = PluginDictionary.Load(_database, ChaveDosTextosDeitados))
+        {
+            if (marca is not null) return;
+        }
+
+        EscritaForaDeComando.Fazer(documento, () =>
+        {
+            var deitados = AnalisesIndependentes.DeitarTextosAntigos(_database);
+            PluginDictionary.Save(_database, ChaveDosTextosDeitados, new ResultBuffer(new TypedValue((int)DxfCode.Text, "1")));
+            if (deitados > 0) RegistroDeDiagnostico.Registrar($"Análises: {deitados} texto(s) antigos deitados no plano dos módulos.");
         });
     }
 
@@ -429,9 +453,9 @@ internal sealed class PainelDeAnalise : ScrollViewer
         IndependentKind.LowEdge => Tr.T("A altura livre da ponta baixa do módulo em cada pilar (PB; no biposte, uma por pórtico), escrita fora da borda baixa da mesa."),
         IndependentKind.HighEdge => Tr.T("A altura livre da ponta alta do módulo em cada pilar (PA; no biposte, uma por pórtico), escrita fora da borda alta da mesa."),
         IndependentKind.Slope => Tr.T("A declividade de cada mesa ao longo da fileira, com a seta descendo."),
-        IndependentKind.PillarBuried => Tr.T("A parte ENTERRADA de cada pilar (E): do terreno até a ponta de baixo. Escrita junto ao pilar, um pouco para a borda baixa."),
-        IndependentKind.PillarLength => Tr.T("O comprimento TOTAL de cada pilar (PT): parte livre mais parte enterrada. Escrito junto ao pilar, um pouco para a borda alta."),
-        _ => Tr.T("A parte LIVRE de cada pilar (P): do terreno até o topo, fora da terra. Escrita no topo dele."),
+        IndependentKind.PillarBuried => Tr.T("A parte ENTERRADA de cada pilar (E): do terreno até a ponta de baixo. Escrita junto ao pilar, um pouco para a borda baixa, deitada sobre os módulos."),
+        IndependentKind.PillarLength => Tr.T("O comprimento TOTAL de cada pilar (PT): parte livre mais parte enterrada. Escrito junto ao pilar, um pouco para a borda alta, deitado sobre os módulos."),
+        _ => Tr.T("A parte LIVRE de cada pilar (P): do terreno até o topo, fora da terra. Escrita sobre o pilar, deitada sobre os módulos."),
     };
 
     // O recado só ocupa lugar quando tem o que dizer (02/10/2026: "nada de espaço em branco").

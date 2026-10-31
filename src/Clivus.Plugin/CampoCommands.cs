@@ -241,8 +241,10 @@ public static class CampoCommands
 
         try
         {
-            var id = database.GetObjectId(false, new Handle(valor), 0);
-            if (id.IsNull || id.IsErased) return null;
+            // O registro pode ter área sem polilinha (o Validar e a janela
+            // Áreas avisam): o TryGetObjectId não lança, e cada leitura das
+            // áreas não deixa mais uma exceção e uma linha no log por área.
+            if (!database.TryGetObjectId(new Handle(valor), out var id) || id.IsNull || id.IsErased) return null;
 
             using var transacao = database.TransactionManager.StartOpenCloseTransaction();
             return transacao.GetObject(id, OpenMode.ForRead) is Polyline3d polilinha && AreaXData.Load(polilinha) is { } identidade

@@ -110,6 +110,14 @@ internal static class AutoSelecao
         private HashSet<Guid> _mesas = [];
         private string? _texto;
 
+        /// <summary>
+        /// A seleção da última conta. No fim de cada pan, zoom ou órbita a
+        /// caixa volta, e a seleção é a mesma: sem isto, cada pan abria de
+        /// novo todos os objetos selecionados (31/10/2026, "o zoom, muito
+        /// devagar").
+        /// </summary>
+        private ObjectId[] _ultimos = [];
+
         internal EscutaDaSelecao(Document documento)
         {
             _documento = documento;
@@ -165,6 +173,14 @@ internal static class AutoSelecao
                 }
 
                 var ids = selecao.Value.GetObjectIds();
+
+                if (_texto is not null && _mesas.Count > 0 && ids.SequenceEqual(_ultimos))
+                {
+                    Mostrar(_texto);
+                    return;
+                }
+
+                _ultimos = ids;
                 var mesas = SelecaoCommands.MesasTocadas(_documento, ids);
 
                 if (mesas.Count == 0)

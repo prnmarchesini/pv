@@ -54,6 +54,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 42.4 A exportação para o PVsyst por escopo (31/10/2026: "tenho que ter a liberdade de exportar uma area, varias, todas, e pode selecionar as mesas que eu quero se for o caso"): a mesma escolha da janela das sombras (`SeletorDeEscopo`), numa janela antes de pedir o arquivo: AGUARDANDO VALIDAÇÃO
 - 42.5 A janela Áreas com as ações na linha (31/10/2026, tarde: "eu clico em apagar area e nao apaga. As ações precisam estar na linha"): dois cliques dá zoom, a lixeira (ou Del) apaga com aviso, F2 ou o segundo clique devagar renomeia, o botão direito tem o resto; embaixo, "Todas as áreas" (Hachurar, Tirar hachura, Limpar, Regerar, Apagar); o Apagar área, o Limpar e o Recalcular só com as mesas DA área. E o CLIVUS_3D com a janela de andamento e o Cancelar ("trava gostoso [...] sem MATAR MEU CAD"): AGUARDANDO VALIDAÇÃO — bc9b912; nível 2 `clivus-areas-acoes` (rodar.ps1 -SoAreas)
 - 42.6 As análises por escopo, o fundo e a borda dos textos e as colunas do biposte (31/10/2026, tarde: "Em analise eu tbm quero poder escolher o que analisar, uma area ou todas, isso para TODAS analises"; "texto ruim de ver, falta opção do texto de colocar o fundo e borda, isso para TODAS analises"; "em pilar, deveria ter a opção de analisar AMBOS pilares, cada um tem uma altura [...] uma coluna para cada pilar o da frente e o de traz, a cor pode ser o mesmo para ambos"): AGUARDANDO VALIDAÇÃO — `LineLimits`, `ThresholdRule.ForLine`, `AnalysisTally` V2 (o lugar e as linhas), `AnalysisTextLook`, `ThresholdForm`, 26 testes da etapa 42; nível 2 `clivus-analises-escopo` (rodar.ps1 -Caso Testar-AnalisesEscopo)
+- 42.5 e 42.6, a segunda rodada (31/10/2026, 14h40, na tela com a 0.1.5): "nao funciona o renomear. o F2 nao funciona tbm" (a coluna do nome, ligada só de ida, era só leitura para o DataGrid); "o texto fica por traz" (nas vistas sombreadas os módulos cobriam o texto: agora ele fica deitado no plano dos módulos, 0,15 m acima, como a seta da declividade); "TEM QUE EXISTIR ALINHAMENTO" (as áreas do seletor em colunas da mesma largura); "o botão direito anda muito devagar, o zoom, muito devagar" (a caixa do kWp e o menu do botão direito liam toda a seleção a cada pan e a cada clique): AGUARDANDO VALIDAÇÃO — nível 2 `clivus-areas` pelo F2 e pelo menu da linha (conferido que o teste pega o bug antigo)
 
 ## Observações
 
@@ -973,6 +974,26 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     - a linha de comando do biposte não mostra mais a soma com o limite da monoposte; o
       "desenho inteiro" vai sem nome para o registro (a tela e o Excel o dizem no idioma da
       hora); o fundo dos textos antigos ao abrir a janela é uma varredura só.
+  - A segunda rodada (14h40, a 0.1.5 na tela):
+    - Renomear: a coluna do nome tinha a ligação só de ida, e o DataGrid do WPF força coluna
+      assim a só leitura: o F2, o menu e o clique devagar não abriam a edição. Agora a
+      ligação é de ida e volta, mas a volta não grava (`SoDeIda`); o menu abre a edição
+      depois de fechar (senão o foco que volta fecha a caixa). O nível 2 renomeia pelo F2 e
+      pelo menu na janela de verdade (`RenomearComoNaTela`); com a ligação antiga ele falha.
+    - O texto atrás dos módulos: o print mostrava o fundo cortado na diagonal, que é a vista
+      sombreada escondendo pela cota (a face inclinada dos módulos cruzando o texto em pé na
+      cota do topo do pilar). Os textos de ponta e de pilar agora ficam deitados no plano dos
+      módulos, 0,15 m acima na normal, como a seta da declividade sempre ficou; os antigos
+      se deitam na primeira abertura da janela (marca `ANALISE_TEXTOS_NO_PLANO`).
+    - O alinhamento: as caixas do seletor (Desenho inteiro e as áreas) na mesma grade, todas
+      da largura da maior.
+    - A navegação: o log mostra cada pan do botão do meio como `3DPAN2`, o pan 3D do
+      AutoCAD (vista em perspectiva ou estilo visual 3D), em que o zoom e o pan ficam
+      lentos perto do alvo; isso é da vista, não do Clivus. O que era do Clivus: a caixa
+      do kWp da seleção relia todos os objetos selecionados no fim de cada pan (agora
+      reaproveita a conta se a seleção é a mesma), o menu do botão direito abria cada
+      objeto selecionado (agora, achada a mesa, só abre curvas), e cada leitura das áreas
+      lançava uma exceção por área do registro sem polilinha (agora `TryGetObjectId`).
   - Ficaram como estão, de propósito: abrir a janela pela primeira vez grava o fundo nos
     textos antigos (o U desfaz); o Excel guarda a última quantificação de cada análise, e a
     coluna Onde diz de onde ela é (quantificar a Leste depois da Oeste troca o número); o
@@ -1185,3 +1206,8 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     - marcar outra área e Tirar cores: a primeira continua pintada; Apagar textos só na
       área marcada;
     - aba Quantidades e o Excel (aba Análises): a coluna Onde diz a área.
+34. **A segunda rodada (42.5/42.6):** na janela Áreas, F2 numa área, e também botão direito ›
+    Renomear: o nome abre para editar na linha; Enter grava. Em Análises, as áreas em colunas
+    alinhadas. Numa vista sombreada, os textos de Pilar livre e de PB/PA por cima dos módulos
+    (os antigos se ajeitam ao abrir a janela). Com muitas mesas selecionadas, o botão direito
+    e o pan sem demora do Clivus.

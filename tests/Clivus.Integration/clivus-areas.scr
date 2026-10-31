@@ -99,7 +99,12 @@
 (clivus-areas-pela-janela "ler")
 (princ "\nCLIVUS_AREAS_FIM_LER2")
 
-(clivus-areas-pela-janela "renomear" "Area Leste" "Area Leste 2")
+; 31/10/2026 ("nao funciona o renomear. o F2 nao funciona tbm"): pela linha
+; da janela de verdade, primeiro pelo F2 e depois pelo menu do botao direito.
+(clivus-areas-pela-janela "renomear-f2" "Area Leste" "Area Leste F2")
+(princ (strcat "\nCLIVUS_AREAS_RENOMEAR_F2 novo=" (itoa (clivus:areas-com-nome "Area Leste F2"))
+               " velho=" (itoa (clivus:areas-com-nome "Area Leste")) " fim"))
+(clivus-areas-pela-janela "renomear-na-linha" "Area Leste F2" "Area Leste 2")
 (princ (strcat "\nCLIVUS_AREAS_RENOMEAR novo=" (itoa (clivus:areas-com-nome "Area Leste 2"))
                " velho=" (itoa (clivus:areas-com-nome "Area Leste"))
                " letreiro=" (if (clivus:nome "Area Leste 2") "1" "0") " fim"))

@@ -29,6 +29,8 @@ internal static class MenuDeContexto
 {
     private static readonly List<(RXClass Classe, ContextMenuExtension Menu)> Menus = [];
 
+    private static readonly RXClass ClasseDaCurva = RXObject.GetClass(typeof(Curve));
+
     private static MenuItem? _raiz;
     private static readonly List<MenuItem> ItensDaArea = [];
     private static readonly List<MenuItem> ItensDaMesa = [];
@@ -158,6 +160,12 @@ internal static class MenuDeContexto
 
         foreach (var id in selecao.Value.GetObjectIds())
         {
+            // Com a mesa já achada, só uma curva pode ser a área ou a área de
+            // inversores: o resto (módulos, pilares, sólidos da estrutura) nem
+            // é aberto. Uma seleção de muitas mesas abria cada peça antes de
+            // o menu aparecer (31/10/2026, "o botão direito anda muito devagar").
+            if (mesa && !id.ObjectClass.IsDerivedFrom(ClasseDaCurva)) continue;
+
             if (transacao.GetObject(id, OpenMode.ForRead) is not Entity entidade) continue;
 
             if (!area && entidade is Polyline3d && AreaXData.Load(entidade) is not null) area = true;

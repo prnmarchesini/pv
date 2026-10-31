@@ -266,8 +266,13 @@ function Testar-Areas {
         $erros += 'a lista nao diz que as duas areas estao hachuradas'
     }
 
+    # O F2 e o menu do botao direito, pela linha da janela (a caixa do nome e o Enter).
+    if ($r.Texto -notmatch 'CLIVUS_AREAS_RENOMEAR_F2 novo=(\d+) velho=(\d+) fim' -or $Matches[1] -ne '1' -or $Matches[2] -ne '0') {
+        $erros += 'renomear pelo F2 na linha da janela nao trocou o nome (a linha entrou em edicao?)'
+    }
+
     if ($r.Texto -notmatch 'CLIVUS_AREAS_RENOMEAR novo=(\d+) velho=(\d+) letreiro=(\d) fim' -or $Matches[1] -ne '1' -or $Matches[2] -ne '0' -or $Matches[3] -ne '1') {
-        $erros += 'renomear: o XData da polilinha ou o letreiro nao ficaram com o nome novo'
+        $erros += 'renomear pelo menu da linha: o XData da polilinha ou o letreiro nao ficaram com o nome novo'
     }
 
     if ($r.Texto -notmatch 'CLIVUS_AREAS_TIRAR hachuras=(\d+) nomes=(\d+) oeste=(\d) fim' -or $Matches[1] -ne '1' -or $Matches[2] -ne '1' -or $Matches[3] -ne '0') {

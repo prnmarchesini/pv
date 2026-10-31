@@ -44,6 +44,14 @@ internal static class AnalisesIndependentes
     /// <summary>Quanto os textos da parte enterrada e do comprimento total saem do pilar, em planta, para não cobrir o da parte livre.</summary>
     private const double AfastamentoDosPilares = 0.45;
 
+    /// <summary>
+    /// Quanto o texto fica acima da face dos módulos, na normal do plano da
+    /// mesa: o mesmo da seta da declividade. O texto deitado no plano nunca
+    /// corta os módulos nas vistas sombreadas, onde o CAD esconde pela cota e
+    /// não pela ordem de desenho (31/10/2026, "o texto fica por traz").
+    /// </summary>
+    private const double AcimaDosModulos = 0.15;
+
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDoTexto = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(MText));
     private static readonly Autodesk.AutoCAD.Runtime.RXClass ClasseDaLinha = Autodesk.AutoCAD.Runtime.RXObject.GetClass(typeof(Line));
 
@@ -95,6 +103,57 @@ internal static class AnalisesIndependentes
 
         /// <summary>O rumo legível do texto, ao longo da fileira.</summary>
         internal double Rumo => LayoutDrawer.RumoLegivel(Cantos[1].X - Cantos[0].X, Cantos[1].Y - Cantos[0].Y);
+
+        /// <summary>
+        /// O ponto do plano dos módulos (o dos quatro cantos do contorno)
+        /// sobre (x, y) em planta, levantado <see cref="AcimaDosModulos"/> na
+        /// normal: onde o texto deitado no plano fica por cima dos módulos.
+        /// </summary>
+        internal Point3 NoPlano(double x, double y)
+        {
+            var (e1, e2) = (Menos(Cantos[1], Cantos[0]), Menos(Cantos[3], Cantos[0]));
+            var det = e1.X * e2.Y - e1.Y * e2.X;
+            var (dx, dy) = (x - Cantos[0].X, y - Cantos[0].Y);
+
+            // Contorno sem área em planta: a cota do meio dele.
+            var z = Math.Abs(det) < 1e-9
+                ? Cantos.Average(c => c.Z)
+                : Cantos[0].Z + (dx * e2.Y - dy * e2.X) / det * e1.Z + (e1.X * dy - e1.Y * dx) / det * e2.Z;
+
+            var n = Normal;
+            return new Point3(x + n.X * AcimaDosModulos, y + n.Y * AcimaDosModulos, z + n.Z * AcimaDosModulos);
+        }
+
+        /// <summary>A normal do plano dos módulos, para cima.</summary>
+        internal Point3 Normal
+        {
+            get
+            {
+                var e1 = Menos(Cantos[1], Cantos[0]);
+                var e2 = Menos(Cantos[3], Cantos[0]);
+                var n = new Point3(e1.Y * e2.Z - e1.Z * e2.Y, e1.Z * e2.X - e1.X * e2.Z, e1.X * e2.Y - e1.Y * e2.X);
+                var tamanho = Math.Sqrt(n.X * n.X + n.Y * n.Y + n.Z * n.Z);
+                if (tamanho < 1e-9) return new Point3(0, 0, 1);
+
+                var sinal = n.Z < 0 ? -1 : 1;
+                return new Point3(sinal * n.X / tamanho, sinal * n.Y / tamanho, sinal * n.Z / tamanho);
+            }
+        }
+
+        /// <summary>A direção do texto no plano, ao longo da fileira, no sentido que se lê em planta (como o da seta).</summary>
+        internal Point3 AoLongo
+        {
+            get
+            {
+                var d = Menos(Cantos[1], Cantos[0]);
+                var tamanho = Math.Sqrt(d.X * d.X + d.Y * d.Y + d.Z * d.Z);
+                if (tamanho < 1e-9) return new Point3(1, 0, 0);
+
+                d = new Point3(d.X / tamanho, d.Y / tamanho, d.Z / tamanho);
+                var legivel = LayoutDrawer.RumoLegivel(d.X, d.Y);
+                return Math.Abs(Math.IEEERemainder(Math.Atan2(d.Y, d.X) - legivel, 2 * Math.PI)) > 1e-6 ? new Point3(-d.X, -d.Y, -d.Z) : d;
+            }
+        }
 
         /// <summary>A declividade ao longo da fileira, na unidade dada, pela linha do meio da mesa (a mesma da seta).</summary>
         internal double Declividade(SlopeUnit unidade)
@@ -173,11 +232,10 @@ internal static class AnalisesIndependentes
                         var valor = (alta ? pilar.HighEdgeClearance : pilar.LowEdgeClearance) ?? double.NaN;
                         var naBorda = mesa.NaBorda(pilar.Station, alta);
 
-                        // Na borda, no plano da mesa (regra 5: a cota é a da
-                        // mesa, que acompanha o terreno), só afastado em planta.
-                        var onde = new Point3(naBorda.X + sinal * ux * AfastamentoDaBorda, naBorda.Y + sinal * uy * AfastamentoDaBorda, naBorda.Z);
-
-                        Texto(transacao, espaco, camada, mesa.Id, tipo, valor, onde, mesa.Rumo, unidade, estilo);
+                        // Na borda, afastado em planta, deitado no plano da
+                        // mesa (regra 5: a cota é a da mesa, que acompanha o
+                        // terreno) e um pouco acima dele.
+                        Texto(transacao, espaco, camada, mesa, tipo, valor, naBorda.X + sinal * ux * AfastamentoDaBorda, naBorda.Y + sinal * uy * AfastamentoDaBorda, unidade, estilo);
                         criados++;
                     }
 
@@ -202,11 +260,13 @@ internal static class AnalisesIndependentes
                         var valor = IndependentAnalysis.PillarValue(tipo, pilar);
                         var topo = ((BlockReference)transacao.GetObject(bloco, OpenMode.ForRead)).Position;
 
-                        // A cota é a do topo do pilar, que acompanha o terreno (regra 5).
-                        var onde = new Point3(topo.X + ux * desvio, topo.Y + uy * desvio, topo.Z);
-
-                        // A linha do pilar vai no texto: no biposte, cada linha é pintada pelos limites dela.
-                        Texto(transacao, espaco, camada, mesa.Id, tipo, valor, onde, mesa.Rumo, unidade, estilo, pilar.Line);
+                        // Sobre o pilar em planta, deitado no plano dos módulos
+                        // e um pouco acima (o topo do pilar fica embaixo deles:
+                        // ali o texto sumia nas vistas sombreadas). A cota é a
+                        // da mesa, que acompanha o terreno (regra 5). A linha do
+                        // pilar vai no texto: no biposte, cada linha é pintada
+                        // pelos limites dela.
+                        Texto(transacao, espaco, camada, mesa, tipo, valor, topo.X + ux * desvio, topo.Y + uy * desvio, unidade, estilo, pilar.Line);
                         criados++;
                     }
 
@@ -220,8 +280,8 @@ internal static class AnalisesIndependentes
     }
 
     private static void Texto(
-        Transaction transacao, BlockTableRecord espaco, string camada, Guid mesa, IndependentKind tipo,
-        double valor, Point3 onde, double rumo, SlopeUnit unidade, Action<MText> estilo, PillarLine linha = PillarLine.Single)
+        Transaction transacao, BlockTableRecord espaco, string camada, MesaLida mesa, IndependentKind tipo,
+        double valor, double x, double y, SlopeUnit unidade, Action<MText> estilo, PillarLine linha = PillarLine.Single)
     {
         var conteudo = double.IsFinite(valor)
             ? IndependentAnalysis.Label(tipo, valor, unidade)
@@ -229,20 +289,67 @@ internal static class AnalisesIndependentes
 
         var texto = new MText
         {
-            Location = new Point3d(onde.X, onde.Y, onde.Z),
             TextHeight = AlturaDoTexto,
             Layer = camada,
             Attachment = AttachmentPoint.MiddleCenter,
-            Rotation = rumo,
             Contents = conteudo,
         };
+
+        NoPlano(texto, mesa, x, y);
 
         espaco.AppendEntity(texto);
         transacao.AddNewlyCreatedDBObject(texto, true);
 
         // Depois do AppendEntity: o texto anotativo precisa do banco.
         estilo(texto);
-        LayoutXData.SaveAnalysisText(transacao, texto, new AnalysisTextIdentity(Guid.NewGuid(), mesa, tipo, valor, linha));
+        LayoutXData.SaveAnalysisText(transacao, texto, new AnalysisTextIdentity(Guid.NewGuid(), mesa.Id, tipo, valor, linha));
+    }
+
+    /// <summary>Deita o texto no plano dos módulos sobre (x, y), um pouco acima, lendo ao longo da fileira.</summary>
+    private static void NoPlano(MText texto, MesaLida mesa, double x, double y)
+    {
+        var n = mesa.Normal;
+        var ao = mesa.AoLongo;
+        var onde = mesa.NoPlano(x, y);
+
+        texto.Normal = new Vector3d(n.X, n.Y, n.Z);
+        texto.Location = new Point3d(onde.X, onde.Y, onde.Z);
+        texto.Direction = new Vector3d(ao.X, ao.Y, ao.Z);
+    }
+
+    /// <summary>
+    /// Os textos de ponta e de pilar inseridos antes de 31/10/2026 ficavam em
+    /// pé na cota do topo do pilar ou da borda, e nas vistas sombreadas os
+    /// módulos os cobriam. Deita no plano dos módulos, um pouco acima, os que
+    /// ainda estão na horizontal (o valor, a cor, o fundo e a borda ficam).
+    /// Quantos mudaram.
+    /// </summary>
+    internal static int DeitarTextosAntigos(Database database)
+    {
+        using var transacao = database.TransactionManager.StartTransaction();
+
+        var leitura = Ler(transacao, database);
+        var porMesa = leitura.Mesas.ToDictionary(m => m.Id);
+        var deitados = 0;
+
+        foreach (var (id, identidade) in leitura.Textos)
+        {
+            if (identidade.Kind == IndependentKind.Slope || !porMesa.TryGetValue(identidade.Table, out var mesa)) continue;
+            if (transacao.GetObject(id, OpenMode.ForRead) is not MText texto) continue;
+            // Já deitado: a normal da mesa e a cota do plano (com folga para o
+            // passo em planta que a normal dá ao levantar).
+            var n = mesa.Normal;
+            var noPlano = Math.Abs(texto.Normal.X - n.X) < 1e-6 && Math.Abs(texto.Normal.Y - n.Y) < 1e-6 && Math.Abs(texto.Normal.Z - n.Z) < 1e-6
+                && Math.Abs(texto.Location.Z - mesa.NoPlano(texto.Location.X, texto.Location.Y).Z) < 0.1;
+            if (noPlano) continue;
+
+            texto.UpgradeOpen();
+            NoPlano(texto, mesa, texto.Location.X, texto.Location.Y);
+            deitados++;
+        }
+
+        transacao.Commit();
+        return deitados;
     }
 
     // -------------------------------------------------------------- apagar
@@ -773,6 +880,8 @@ internal static class AnalisesIndependentes
     };
 
     private static Point3 Meio(Point3 a, Point3 b) => new((a.X + b.X) / 2, (a.Y + b.Y) / 2, (a.Z + b.Z) / 2);
+
+    private static Point3 Menos(Point3 a, Point3 b) => new(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
 
     private static double Distancia(Point3 a, Point3 b) =>
         Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y) + (a.Z - b.Z) * (a.Z - b.Z));

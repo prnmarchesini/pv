@@ -94,13 +94,16 @@ internal sealed class SeletorDeEscopo
         });
         _tudo.Unchecked += (_, _) => tentar(Aplicar);
 
+        // As caixas em colunas alinhadas (31/10/2026, "regra do sistema TEM QUE
+        // EXISTIR ALINHAMENTO"): o Desenho inteiro e as áreas na mesma grade,
+        // todas da largura da maior; o botão de escolher no desenho embaixo.
         var linhaDasAreas = new DockPanel { Margin = new Thickness(0, 3, 0, 3) };
         var r1 = new TextBlock { Text = rotulo, Width = 88, Margin = new Thickness(0, 4, 6, 0), VerticalAlignment = VerticalAlignment.Top };
         DockPanel.SetDock(r1, Dock.Left);
         linhaDasAreas.Children.Add(r1);
-        var dasAreas = new WrapPanel { Orientation = Orientation.Horizontal };
-        dasAreas.Children.Add(_tudo);
+        var dasAreas = new StackPanel();
         dasAreas.Children.Add(_areas);
+        areaNoDesenho.HorizontalAlignment = HorizontalAlignment.Left;
         dasAreas.Children.Add(areaNoDesenho);
         linhaDasAreas.Children.Add(dasAreas);
 
@@ -109,6 +112,9 @@ internal sealed class SeletorDeEscopo
         linhaDasMesas.Children.Add(_selecao);
         linhaDasMesas.Children.Add(mesasNoDesenho);
         linhaDasMesas.Children.Add(_limpar);
+
+        // O Desenho inteiro já na grade: se a leitura das áreas falhar, ele fica.
+        _areas.Children.Add(_tudo);
 
         var painel = new StackPanel();
         painel.Children.Add(linhaDasAreas);
@@ -129,7 +135,7 @@ internal sealed class SeletorDeEscopo
     /// <summary>Se o desenho inteiro está marcado.</summary>
     internal bool DesenhoInteiro => _tudo.IsChecked == true;
 
-    private IEnumerable<CheckBox> Caixas => _areas.Children.OfType<CheckBox>();
+    private IEnumerable<CheckBox> Caixas => _areas.Children.OfType<CheckBox>().Where(c => c.Tag is AreaDaLista);
 
     /// <summary>Lê as áreas do desenho para as caixas, mantendo as marcadas; com <paramref name="primeira"/>, marca a primeira que tem mesa.</summary>
     internal void LerAreas(bool primeira = false)
@@ -145,12 +151,24 @@ internal sealed class SeletorDeEscopo
         if (primeira && marcadas.Count == 0 && areas.FirstOrDefault(a => a.Mesas > 0) is { } comMesa) marcadas.Add(comMesa.Id);
 
         _areas.Children.Clear();
+        _areas.Children.Add(_tudo);
         foreach (var a in areas)
         {
             var caixa = new CheckBox { Content = a.ToString(), Tag = a, IsChecked = marcadas.Contains(a.Id), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 2, 14, 2) };
             caixa.Checked += (_, _) => _tentar(() => { _tudo.IsChecked = false; });
             _areas.Children.Add(caixa);
         }
+
+        // A coluna é a da caixa mais larga: as outras ocupam o mesmo espaço e
+        // ficam umas embaixo das outras.
+        var largura = 0.0;
+        foreach (UIElement caixa in _areas.Children)
+        {
+            caixa.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            largura = Math.Max(largura, caixa.DesiredSize.Width);
+        }
+
+        _areas.ItemWidth = largura > 0 ? Math.Ceiling(largura) : double.NaN;
 
         Aplicar();
     }

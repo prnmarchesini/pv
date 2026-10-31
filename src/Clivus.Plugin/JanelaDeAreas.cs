@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Autodesk.AutoCAD.ApplicationServices;
 using Clivus.Core;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
@@ -180,7 +181,10 @@ internal sealed class JanelaDeAreas : Window
         }
 
         _menuZoom = Item(Tr.T("Zoom"), Tr.T("Mostra na tela a linha escolhida: a área inteira, as mesas de fora das áreas ou, no total, todas."), Zoom, Tr.T("dois cliques"));
-        _menuRenomear = Item(Tr.T("Renomear"), Tr.T("Troca o nome da área (o que o Clivus mostra nas listas, na hachura e no Excel). O GUID, as mesas e o que a área segue não mudam."), ComecarARenomear, "F2");
+        // O menu fecha e devolve o foco à lista: a edição abre depois disso,
+        // senão o foco que volta fecha a caixa do nome na hora.
+        _menuRenomear = Item(Tr.T("Renomear"), Tr.T("Troca o nome da área (o que o Clivus mostra nas listas, na hachura e no Excel). O GUID, as mesas e o que a área segue não mudam."),
+            () => Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() => Tentar(ComecarARenomear))), "F2");
         _menuHachurar = Item(Tr.T("Hachurar"), Tr.T("Hachura a área com a cor dela (a da amostra na lista), 70 % transparente, com o nome no meio, acima do terreno e das mesas dela. Se já tinha hachura, troca."), () => Hachurar(todas: false));
         _menuTirar = Item(Tr.T("Tirar hachura"), Tr.T("Tira a hachura e o nome da área; a área e as mesas ficam."), () => Tirar(todas: false));
         _menuLimpar = Item(Tr.T("Limpar mesas"), Tr.T("Apaga as mesas da área (pilares, módulos, estrutura, strings); a área e o alinhamento ficam, prontos para gerar de novo. U desfaz."), () => Mandar(PluginInfo.ComandoApagarTudo, Tr.T("Limpar mesas")));
@@ -332,8 +336,15 @@ internal sealed class JanelaDeAreas : Window
             var coluna = new DataGridTextColumn
             {
                 Header = dica is null ? titulo : new TextBlock { Text = titulo, ToolTip = dica },
-                // Só leitura de ida: o nome editado vai pelo CellEditEnding, não pela ligação.
-                Binding = new Binding(campo) { Mode = BindingMode.OneWay },
+                // O nome editado vai pelo CellEditEnding, não pela ligação. A
+                // ligação do nome é de ida e volta, mas a volta não grava nada
+                // (SoDeIda): o DataGrid trata a coluna de ligação só de ida
+                // como só leitura, e o F2, o menu e o clique devagar não
+                // abriam a edição (31/10/2026, "nao funciona o renomear. o F2
+                // nao funciona tbm").
+                Binding = editavel
+                    ? new Binding(campo) { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.Explicit, Converter = SoDeIda.Instancia }
+                    : new Binding(campo) { Mode = BindingMode.OneWay },
                 Width = largura > 0 ? new DataGridLength(largura) : new DataGridLength(1, DataGridLengthUnitType.Star),
                 IsReadOnly = !editavel,
             };
@@ -642,9 +653,45 @@ internal sealed class JanelaDeAreas : Window
             return;
         }
 
+        _lista.ScrollIntoView(linha, _colunaNome);
+        _lista.UpdateLayout();
+        _lista.Focus();
         _lista.CurrentCell = new DataGridCellInfo(linha, _colunaNome);
-        _lista.BeginEdit();
+
+        if (!_lista.BeginEdit()) Recado(Tr.T("Não consegui abrir o nome para editar; use dois cliques devagar no nome."), true);
     }
+
+#if DEBUG
+    /// <summary>
+    /// Para o nível 2, o Renomear pelo caminho da tela: escolhe a linha, abre
+    /// a edição pelo menu (o mesmo do botão direito) ou pelo F2, escreve o
+    /// nome na caixa da linha e confirma, como o Enter. A frase do recado, ou
+    /// o que não andou.
+    /// </summary>
+    internal string RenomearComoNaTela(string atual, string novo, bool pelaTecla)
+    {
+        if (_lista.Items.OfType<Linha>().FirstOrDefault(l => l.Origem.Area?.Identity.DisplayName == atual) is not { } linha) return "sem a linha " + atual;
+
+        _lista.SelectedItem = linha;
+        _lista.UpdateLayout();
+
+        if (pelaTecla) ComecarARenomear();
+        else _menuRenomear.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+
+        Esvaziar();
+
+        if (_colunaNome.GetCellContent(linha) is not TextBox caixa) return "a linha nao entrou em edicao";
+
+        caixa.Text = novo;
+        if (!_lista.CommitEdit(DataGridEditingUnit.Row, true)) return "a edicao nao confirmou";
+
+        Esvaziar();
+        return _recado.Text;
+    }
+
+    /// <summary>Roda o que a janela deixou para depois (o BeginInvoke do menu e do renomear).</summary>
+    private void Esvaziar() => Dispatcher.Invoke(DispatcherPriority.ContextIdle, new Action(() => { }));
+#endif
 
     /// <summary>Grava o nome novo da área (editado na linha).</summary>
     private void Renomear(AreaNoDesenho area, string nome)
@@ -817,4 +864,18 @@ internal sealed class JanelaDeAreas : Window
         _recado.Foreground = erro ? Brushes.Firebrick : Brushes.ForestGreen;
         _recado.Text = texto;
     }
+}
+
+/// <summary>
+/// A ligação do nome da área na lista: mostra o valor e nunca grava de volta
+/// (o nome novo vai pelo Renomear, no fim da edição). Com ela a coluna fica
+/// editável, coisa que a ligação só de ida não deixa no DataGrid.
+/// </summary>
+internal sealed class SoDeIda : IValueConverter
+{
+    internal static readonly SoDeIda Instancia = new();
+
+    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) => value;
+
+    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) => Binding.DoNothing;
 }
