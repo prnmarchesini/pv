@@ -60,6 +60,13 @@ o PAN que enche o módulo e sobe para o serviço de módulos (38.6), a prova de
 que monoposte e biposte dão o mesmo resto (39.2, `rodar.ps1 -SoEstruturas`) e
 as mesas conforme os objetos do cliente (etapa 40, `rodar.ps1 -SoCampo`).
 
+## O primeiro cliente (desde 31/10/2026)
+
+A gestão de clientes e dos códigos de ativação, a área do cliente, a licença como
+identificação do plugin no servidor e as atualizações automáticas têm plano próprio em
+`plano/clientes/` (etapa 43): comece por `plano/clientes/LEIA-PRIMEIRO.md`. O lado web é
+o repositório `clivussolar` (em `C:\dev\clivussolar`); publicar é push na main dele.
+
 ## Regra de ouro
 
 **Um passo por vez. Ao terminar um passo, PARE e espere o Renan validar.** Não comece o passo seguinte, não "adiante" código, não faça nada fora do escopo do passo. Se achar algo que precisa ser feito fora do escopo, anote em `plano/PROGRESSO.md` na seção "Observações" e siga.
