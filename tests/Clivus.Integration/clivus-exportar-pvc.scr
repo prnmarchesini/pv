@@ -18,8 +18,23 @@
 (command "CLIVUS_AREA" "{{A1}}" "{{A2}}" "{{A3}}" "{{A4}}" "" "Area da exportacao")
 (command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento da exportacao")
 (command "CLIVUS_FILEIRA_AUTO")
+; 42.8: uma arvore fora da area, perto das mesas (tronco 3 x 0,4, copa 5 x 6): vai junto.
+(command "CLIVUS_ARVORE_AUTO" 3 0.4 5 6 "{{ARV}}" "")
 (setvar "OSMODE" clivus:osmode)
 (command "CLIVUS_EXPORTAR_AUTO" "{{PVC}}")
+
+; A arvore, pelo XData: o GUID e o pe (o ponto de insercao, no terreno).
+(setq clivus:arv (ssget "_X" '((0 . "INSERT") (-3 ("CLIVUS")))) clivus:j 0 clivus:pe nil)
+(if clivus:arv
+  (repeat (sslength clivus:arv)
+    (setq clivus:ea (entget (ssname clivus:arv clivus:j) '("CLIVUS"))
+          clivus:xa (cdr (car (cdr (assoc -3 clivus:ea)))))
+    (if (and (null clivus:pe) clivus:xa (= (cdr (car clivus:xa)) "Arvore"))
+      (setq clivus:pe (cdr (assoc 10 clivus:ea)) clivus:ga (cdr (nth 2 clivus:xa))))
+    (setq clivus:j (1+ clivus:j))))
+(princ (if clivus:pe
+  (strcat "\nCLIVUS_PVC_ARVORE guid=" clivus:ga " pe=" (rtos (car clivus:pe) 2 6) "," (rtos (cadr clivus:pe) 2 6) "," (rtos (caddr clivus:pe) 2 6) " fim")
+  "\nCLIVUS_PVC_ARVORE nenhuma"))
 
 (defun clivus:xdata (e) (cdr (car (cdr (assoc -3 (entget e '("CLIVUS")))))))
 (defun clivus:campo (xd k) (cdr (nth (+ 2 k) xd)))

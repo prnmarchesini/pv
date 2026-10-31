@@ -388,8 +388,14 @@ public static class ExportCommands
             return;
         }
 
-        var origem = PvColladaWriter.LocalOrigin(fiadas.Lista);
-        var documento = PvColladaWriter.Write(fiadas.Lista, DateTime.UtcNow, Environment.UserName, origem);
+        // O que vai junto (42.8, "quero exportar todos objetos"): as árvores e os
+        // equipamentos em campo perto das mesas, e o terreno num CSV ao lado.
+        var caixa = PvObjects.Extent(fiadas.Lista)!.Value;
+        var (objetos, arvores, equipamentos) = MontarObjetos(database, caixa);
+        var cruzadas = PvObjects.Crossings(fiadas.Lista);
+
+        var origem = PvColladaWriter.LocalOrigin(fiadas.Lista, objetos);
+        var documento = PvColladaWriter.Write(fiadas.Lista, objetos, DateTime.UtcNow, Environment.UserName, origem);
 
         var pasta = Path.GetDirectoryName(caminho);
         if (!string.IsNullOrEmpty(pasta)) Directory.CreateDirectory(pasta);
@@ -401,6 +407,13 @@ public static class ExportCommands
             documento.Save(escritor);
 
         var tamanho = new FileInfo(caminho).Length;
+
+        // O terreno, como o "_terrain.csv" do PVcase: os pontos do TIN perto das mesas, na mesma origem.
+        var doDesenho = AcadApp.DocumentManager.MdiActiveDocument is { } aberto && aberto.Database == database ? aberto : null;
+        var terreno = doDesenho is null ? null : TerrainCache.Get(doDesenho);
+        var pontos = terreno is null ? [] : PvObjects.TerrainPoints(terreno.Mesh.Triangles, caixa);
+        var csv = Path.Combine(pasta ?? string.Empty, Path.GetFileNameWithoutExtension(caminho) + "_terreno.csv");
+        if (pontos.Count >= 3) File.WriteAllText(csv, PvObjects.TerrainCsv(pontos, origem), new System.Text.UTF8Encoding(false));
 
         // As medidas que foram, sem repetir: "14 × 2 módulos de 1,134 × 2,456 m, vãos 0,02 e 0,02 m".
         var arranjos = fiadas.Lista
@@ -423,6 +436,22 @@ public static class ExportCommands
         if (fiadas.ModuloAModulo > 0)
             editor.WriteMessage(Tr.F("  {0} mesa(s) com módulo fora do lugar foram módulo a módulo.\n", fiadas.ModuloAModulo));
 
+        editor.WriteMessage(Tr.F("  + {0} árvore(s) e {1} equipamento(s) em campo, até {2:0} m das mesas.\n", arvores, equipamentos, PvObjects.Margin));
+
+        editor.WriteMessage(pontos.Count >= 3
+            ? Tr.F("  terreno: {0} ponto(s) em {1} (no PVsyst: Ficheiro › Importar › dados do terreno, CSV).\n", pontos.Count, csv)
+            : Tr.T("  terreno: o desenho não tem terreno processado perto das mesas; o CSV do terreno não saiu.\n"));
+
+        // Mesa atravessando mesa (a F16.4 e a F16.5 do Aurora, 31/10/2026): o
+        // PVsyst não aceita, e no campo elas não cabem. A exportação sai igual;
+        // o aviso diz onde corrigir no desenho.
+        foreach (var cruzada in cruzadas.Take(10))
+            editor.WriteMessage(Tr.F("  ATENÇÃO: {0} e {1} se cruzam em planta ({2:0.00} m²): o PVsyst não aceita uma mesa atravessando outra, e no campo elas não cabem. Corrija no desenho.\n",
+                cruzada.A.Name, cruzada.B.Name, cruzada.Area));
+
+        if (cruzadas.Count > 10)
+            editor.WriteMessage(Tr.F("  ATENÇÃO: e mais {0} par(es) de mesas que se cruzam.\n", cruzadas.Count - 10));
+
         editor.WriteMessage(
             Tr.F("  origem local: E={0:0.###} N={1:0.###} Z={2:0.###} m (as coordenadas do arquivo são relativas a ela)\n  No PVsyst: importe como cena 3D (3DS, DAE, PVC); cada mesa vira uma fiada com os módulos dentro.\n",
                 origem.X, origem.Y, origem.Z));
@@ -431,8 +460,81 @@ public static class ExportCommands
         {
             var inv = CultureInfo.InvariantCulture;
             editor.WriteMessage($"  PVC_FIADAS {fiadas.Lista.Count} MESAS {fiadas.Mesas} MODULOS {fiadas.Modulos} PEDACOS {fiadas.EmPedacos} FORA_DA_GRADE {fiadas.ModuloAModulo} DE_FORA {fiadas.DeFora.Count}\n");
+            editor.WriteMessage($"  PVC_OBJETOS ARVORES {arvores} EQUIPAMENTOS {equipamentos} TERRENO {(pontos.Count >= 3 ? pontos.Count : 0)} CRUZADAS {cruzadas.Count}\n");
             editor.WriteMessage($"  ORIGEM E={origem.X.ToString("R", inv)} N={origem.Y.ToString("R", inv)} Z={origem.Z.ToString("R", inv)}\n");
         }
+    }
+
+    /// <summary>
+    /// Os objetos que fazem sombra perto das mesas (42.8): as árvores, como os
+    /// dois cilindros da sombra, e os equipamentos em campo, como a caixa do
+    /// bloco de cada um (as cópias de um COPY também: estão no campo).
+    /// </summary>
+    private static (List<PvObject> Objetos, int Arvores, int Equipamentos) MontarObjetos(
+        Database database, (double MinX, double MinY, double MaxX, double MaxY) caixa)
+    {
+        var objetos = new List<PvObject>();
+        int arvores = 0, equipamentos = 0;
+        var cadastro = ConfiguracaoEletricaStore.Ler(database).Setup;
+
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+
+        foreach (var (_, pe, arvore) in ArvoreCommands.Ler(transacao, database))
+        {
+            if (!PvObjects.Near(caixa, [new Point3(pe.X, pe.Y, pe.Z)])) continue;
+
+            objetos.AddRange(PvObjects.Tree(arvore.Id, Tr.T("Árvore"), pe.X, pe.Y, pe.Z, arvore.Spec));
+            arvores++;
+        }
+
+        foreach (var ((tipo, id), referencias) in EquipamentoEmCampo.Posicionados(transacao, database))
+        {
+            var nome = cadastro.FindEquipment(tipo, id)?.Tag is { Length: > 0 } tag ? tag : tipo.ToString();
+            var copia = 0;
+
+            foreach (var referencia in referencias.OrderBy(r => r.Handle.Value))
+            {
+                if (transacao.GetObject(referencia, OpenMode.ForRead) is not BlockReference bloco || CaixaDoEquipamento(transacao, bloco) is not { } caixaDele) continue;
+                if (!PvObjects.Near(caixa, caixaDele.Baixo)) continue;
+
+                objetos.Add(PvObjects.Box($"equipamento-{tipo}-{id:N}-{++copia}", nome, PvObjectKind.Station, caixaDele.Baixo, caixaDele.Alto));
+                equipamentos++;
+            }
+        }
+
+        transacao.Commit();
+        return (objetos, arvores, equipamentos);
+    }
+
+    /// <summary>
+    /// A caixa do equipamento no desenho: o sólido do bloco (a caixa do
+    /// cadastro, de pé na base), levado pela posição e pelo giro da referência.
+    /// Os quatro cantos de baixo e os quatro de cima, na mesma ordem.
+    /// </summary>
+    private static (IReadOnlyList<Point3> Baixo, IReadOnlyList<Point3> Alto)? CaixaDoEquipamento(Transaction transacao, BlockReference bloco)
+    {
+        var definicao = (BlockTableRecord)transacao.GetObject(bloco.BlockTableRecord, OpenMode.ForRead);
+
+        foreach (ObjectId id in definicao)
+        {
+            if (transacao.GetObject(id, OpenMode.ForRead) is not Solid3d solido) continue;
+
+            Extents3d e;
+            try { e = solido.GeometricExtents; }
+            catch (Autodesk.AutoCAD.Runtime.Exception) { continue; }
+
+            Point3 Canto(double x, double y, double z)
+            {
+                var p = new Autodesk.AutoCAD.Geometry.Point3d(x, y, z).TransformBy(bloco.BlockTransform);
+                return new Point3(p.X, p.Y, p.Z);
+            }
+
+            var (a, b) = (e.MinPoint, e.MaxPoint);
+            return ([Canto(a.X, a.Y, a.Z), Canto(b.X, a.Y, a.Z), Canto(b.X, b.Y, a.Z), Canto(a.X, b.Y, a.Z)],
+                    [Canto(a.X, a.Y, b.Z), Canto(b.X, a.Y, b.Z), Canto(b.X, b.Y, b.Z), Canto(a.X, b.Y, b.Z)]);
+        }
+
+        return null;
     }
 
     /// <summary>Diz o que fazer com faces de GUID repetido; false para não exportar.</summary>

@@ -1761,6 +1761,8 @@ function Testar-ExportarPvc {
 
     $pvc = Join-Path $saida 'nivel2-clivus-exportar.pvc'
     if (Test-Path $pvc) { Remove-Item $pvc -Force }
+    $csv = Join-Path $saida 'nivel2-clivus-exportar_terreno.csv'
+    if (Test-Path $csv) { Remove-Item $csv -Force }
     $png = Join-Path $saida 'clivus-exportar-pvc-janela.png'
     if (Test-Path $png) { Remove-Item $png -Force }
 
@@ -1774,6 +1776,7 @@ function Testar-ExportarPvc {
             '{{L1}}'   = (Ponto3 -50 -50 0)
             '{{L2}}'   = (Ponto3 -50  50 0)
             '{{LADO}}' = (Ponto3   0   0 0)
+            '{{ARV}}'  = (Ponto3 -55   0 0)
             '{{PVC}}'  = $pvc
             '{{PNG}}'  = $png.Replace('\', '/')
         }
@@ -1816,7 +1819,8 @@ function Testar-ExportarPvc {
 
     # A forma do PVcase.
     $materiais = @($xml.SelectNodes('//c:library_materials/c:material', $ns))
-    if ($materiais.Count -ne 1 -or $materiais[0].name -ne 'Frames') { $erros += 'esperava um material so, chamado Frames' }
+    # As mesas no Frames; a arvore (42.8) no Tree_trunk e no Tree_crown, os nomes do PVcase.
+    if ((@($materiais | ForEach-Object { $_.name }) -join ',') -ne 'Frames,Tree_trunk,Tree_crown') { $erros += "esperava os materiais Frames, Tree_trunk e Tree_crown; veio $(@($materiais | ForEach-Object { $_.name }) -join ', ')" }
     if ($null -ne $xml.SelectSingleNode('//c:asset/c:up_axis', $ns)) { $erros += 'o PVC nao devia ter up_axis (o do PVcase e Y para cima, sem ele)' }
     $unidade = $xml.SelectSingleNode('//c:asset/c:unit', $ns)
     if ($null -eq $unidade -or $unidade.meter -ne '1') { $erros += 'a unidade do PVC nao e o metro' }
@@ -1832,9 +1836,11 @@ function Testar-ExportarPvc {
         $erros += 'a origem do cabecalho difere da dita pelo comando'
     }
 
-    $geometrias = @($xml.SelectNodes('//c:library_geometries/c:geometry', $ns))
+    # As fiadas sao as geometrias com frame_parameters; a arvore vai em outras duas.
+    $geometrias = @($xml.SelectNodes('//c:library_geometries/c:geometry[c:mesh/c:frame_parameters]', $ns))
+    $todas = @($xml.SelectNodes('//c:library_geometries/c:geometry', $ns))
     $instancias = @($xml.SelectNodes('//c:visual_scene//c:instance_geometry', $ns))
-    if ($geometrias.Count -ne $mesas -or $instancias.Count -ne $mesas) { $erros += "o desenho tem $mesas mesa(s); o PVC tem $($geometrias.Count) geometria(s) e $($instancias.Count) instancia(s)" }
+    if ($geometrias.Count -ne $mesas -or $todas.Count -ne $mesas + 2 -or $instancias.Count -ne $todas.Count) { $erros += "o desenho tem $mesas mesa(s) e uma arvore; o PVC tem $($geometrias.Count) fiada(s), $($todas.Count) geometria(s) e $($instancias.Count) instancia(s)" }
 
     $somaDeModulos = 0
     $daPrimeira = $null
@@ -1897,6 +1903,48 @@ function Testar-ExportarPvc {
             else {
                 $usados[$achou] = $true
                 if ($k -lt 2 -and $achou -gt 1) { $erros += "o canto $k da fiada da primeira mesa devia ser da borda baixa e e o p$achou do desenho" }
+            }
+        }
+    }
+
+    # 42.8: a arvore (tronco e copa, cilindros de 12 lados, nos materiais do
+    # PVcase) e o terreno no CSV ao lado; nenhuma mesa cruzada.
+    if ($t -notmatch 'PVC_OBJETOS ARVORES (\d+) EQUIPAMENTOS (\d+) TERRENO (\d+) CRUZADAS (\d+)') { $erros += 'o comando nao disse os objetos do PVC' }
+    else {
+        $terreno = [int] $Matches[3]
+        if ([int] $Matches[1] -ne 1 -or [int] $Matches[2] -ne 0 -or $terreno -lt 3 -or [int] $Matches[4] -ne 0) { $erros += "os objetos do PVC: $($Matches[0]) (esperava 1 arvore, 0 equipamento, o terreno e nenhuma cruzada)" }
+
+        if ($t -notmatch 'CLIVUS_PVC_ARVORE guid=([0-9A-Fa-f-]+) pe=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+) fim') { $erros += 'nao consegui ler a arvore em LISP' }
+        else {
+            $ga = $Matches[1].Replace('-', '').ToLowerInvariant()
+            $pe = @([double]::Parse($Matches[2], $inv), [double]::Parse($Matches[3], $inv), [double]::Parse($Matches[4], $inv))
+            foreach ($parte in @(@{ Id = "arvore-$ga-tronco"; Mat = 'Material1'; Raio = 0.2; De = 0.0; Ate = 3.0 }, @{ Id = "arvore-$ga-copa"; Mat = 'Material2'; Raio = 3.0; De = 3.0; Ate = 8.0 })) {
+                $g = $xml.SelectSingleNode("//c:library_geometries/c:geometry[@id='$($parte.Id)']", $ns)
+                if ($null -eq $g) { $erros += "o PVC nao tem a geometria $($parte.Id)"; continue }
+                if ($g.SelectSingleNode('.//c:triangles', $ns).GetAttribute('material') -ne $parte.Mat) { $erros += "a geometria $($parte.Id) nao esta no $($parte.Mat)" }
+                $n = @($g.SelectSingleNode('.//c:float_array', $ns).InnerText.Trim() -split '\s+' | ForEach-Object { [double]::Parse($_, $inv) })
+                $zs = @(); $raios = @()
+                for ($k = 0; $k + 2 -lt $n.Count; $k += 3) {
+                    $zs += $n[$k + 1] + $oZ - $pe[2]
+                    $raios += [math]::Sqrt([math]::Pow($n[$k] + $oE - $pe[0], 2) + [math]::Pow(-$n[$k + 2] + $oN - $pe[1], 2))
+                }
+                $zMin = ($zs | Measure-Object -Minimum).Minimum; $zMax = ($zs | Measure-Object -Maximum).Maximum
+                if ($n.Count -ne 72 -or [math]::Abs($zMin - $parte.De) -gt 0.001 -or [math]::Abs($zMax - $parte.Ate) -gt 0.001 -or @($raios | Where-Object { [math]::Abs($_ - $parte.Raio) -gt 0.001 }).Count -gt 0) {
+                    $erros += "a geometria $($parte.Id) nao e o cilindro da arvore ($($n.Count / 3) vertices, de $zMin a $zMax m do pe)"
+                }
+            }
+        }
+
+        if (-not (Test-Path $csv)) { $erros += "o CSV do terreno $csv nao saiu" }
+        else {
+            $linhas = @(Get-Content $csv | Where-Object { $_ -ne '' })
+            $ruins = @($linhas | Where-Object { $_ -notmatch '^-?\d+(\.\d+)? -?\d+(\.\d+)? -?\d+(\.\d+)?$' })
+            if ($linhas.Count -ne $terreno -or $ruins.Count -gt 0) { $erros += "o CSV do terreno tem $($linhas.Count) linha(s) ($($ruins.Count) fora do 'X Y Z'); o comando disse $terreno" }
+            else {
+                # Relativo a origem do PVC: perto de zero, e cercando as mesas.
+                $xy = @($linhas | ForEach-Object { $p = $_ -split ' '; , @([double]::Parse($p[0], $inv), [double]::Parse($p[1], $inv)) })
+                $longe = @($xy | Where-Object { [math]::Abs($_[0]) -gt 2000 -or [math]::Abs($_[1]) -gt 2000 }).Count
+                if ($longe -gt 0) { $erros += "o CSV do terreno tem $longe ponto(s) longe da origem do PVC" }
             }
         }
     }

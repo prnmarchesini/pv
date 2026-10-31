@@ -57,6 +57,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 42.6 As análises por escopo, o fundo e a borda dos textos e as colunas do biposte (31/10/2026, tarde: "Em analise eu tbm quero poder escolher o que analisar, uma area ou todas, isso para TODAS analises"; "texto ruim de ver, falta opção do texto de colocar o fundo e borda, isso para TODAS analises"; "em pilar, deveria ter a opção de analisar AMBOS pilares, cada um tem uma altura [...] uma coluna para cada pilar o da frente e o de traz, a cor pode ser o mesmo para ambos"): AGUARDANDO VALIDAÇÃO — `LineLimits`, `ThresholdRule.ForLine`, `AnalysisTally` V2 (o lugar e as linhas), `AnalysisTextLook`, `ThresholdForm`, 26 testes da etapa 42; nível 2 `clivus-analises-escopo` (rodar.ps1 -Caso Testar-AnalisesEscopo)
 - 42.5 e 42.6, a segunda rodada (31/10/2026, 14h40, na tela com a 0.1.5): "nao funciona o renomear. o F2 nao funciona tbm" (a coluna do nome, ligada só de ida, era só leitura para o DataGrid); "o texto fica por traz" (nas vistas sombreadas os módulos cobriam o texto: agora ele fica deitado no plano dos módulos, 0,15 m acima, como a seta da declividade); "TEM QUE EXISTIR ALINHAMENTO" (as áreas do seletor em colunas da mesma largura); "o botão direito anda muito devagar, o zoom, muito devagar" (a caixa do kWp e o menu do botão direito liam toda a seleção a cada pan e a cada clique): AGUARDANDO VALIDAÇÃO — nível 2 `clivus-areas` pelo F2 e pelo menu da linha (conferido que o teste pega o bug antigo)
 - 42.7 O PVsyst por mesa, como o PVcase (31/10/2026, noite, na tela com a 0.1.7: "tem um erro na exportação do PVsyst, é preciso exportar como mesa, exportar como modulo, vai me dificultar a modelagem"; "aqui é como o pvcase exporta", "agora vc consegue fazer igual"; é o 6.5 do plano principal): cada mesa vai como uma fiada do PVsyst com os módulos dentro (a medida do módulo e os vãos), num `.pvc` com a forma do arquivo do PVcase: AGUARDANDO VALIDAÇÃO — `PvFrames`, `PvColladaWriter`, 27 testes da etapa 6; nível 2 `clivus-exportar-pvc` (rodar.ps1 -Caso Testar-ExportarPvc), o PVC das duas áreas no `clivus-sombras-escopo` e o PVC da monoposte igual ao do biposte, 14 × 2 por mesa, no `-SoEstruturas`
+- 42.8 O PVsyst com todos os objetos e as mesas que se cruzam (31/10/2026, noite: "mano, faça tudo, quero exportar todos objetos"; e, com a 0.1.8 no PVsyst do Aurora, "veio um erro" com o print de uma mesa atravessada na vizinha): vão junto, como o PVcase manda, as árvores (o tronco e a copa, os cilindros da sombra, no "Tree_trunk" e no "Tree_crown"), os equipamentos em campo (subestação, trafo, inversor, combiner: a caixa do bloco, na "Station") até 100 m das mesas exportadas, e o terreno num CSV ao lado (`<arquivo>_terreno.csv`, X Y Z na origem do PVC); e a exportação avisa as mesas que se cruzam em planta: AGUARDANDO VALIDAÇÃO — `PvObjects`, `PvColladaWriter` com objetos, 7 testes da etapa 6; nível 2 `clivus-exportar-pvc` com a árvore e o CSV, e as estruturas com a árvore e os 2 inversores
 
 ## Observações
 
@@ -1121,7 +1122,31 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     carport em paisagem com vãos diferentes nos dois sentidos (nenhuma referência tem), em que o
     PVsyst poderia pôr o vão do outro sentido e perder uma fileira.
 
-## Roteiro de tela (38.1 a 42.7)
+- 42.8, os objetos e as mesas que se cruzam (31/10/2026, noite):
+  - O "erro" do print: no PVC do Aurora (o `PLAT A_Perfiles.pvc` das 18:46, 589 mesas, todas 14 × 2) há
+    um par só de fiadas que se sobrepõem em planta, a F16.4 e a F16.5, vizinhas na fileira num trecho
+    muito inclinado: a F16.4 desce 3,2 m ao longo dela (17,7 %), a F16.5 desce 5,8 m (33 %), e a F16.5
+    começa 21 cm antes de a F16.4 acabar (10 cm na borda alta), quase na mesma cota: 0,70 m². No
+    PVsyst uma parece atravessar a outra. A fiada é o retângulo das faces dos módulos (grade de 3 mm,
+    medida ao milímetro), então a sobreposição está no desenho; não consegui abrir a cópia do DWG no
+    Core Console para ver (ele parou ao carregar o Aurora). A exportação agora diz "ATENÇÃO: F16.4 e
+    F16.5 se cruzam em planta (0,70 m²) ... Corrija no desenho" (`PvObjects.Crossings`, recorte de
+    Sutherland–Hodgman em planta, pedaços da mesma mesa não contam) e grava igual.
+  - Os objetos, como o PVcase: os materiais com os ids e as cores dele (Material1 Tree_trunk, Material2
+    Tree_crown, Material4 Station), só os que aparecem; a árvore como os dois cilindros que a sombra do
+    Clivus usa (12 lados; o PVcase faz a copa em esfera, mas a nossa árvore é o "pirulito" do 9.4); o
+    equipamento como a caixa do sólido do bloco, levada pela posição e pelo giro da referência, com os
+    triângulos na ordem das caixas do PVcase ("0 1 2 0 2 3 0 1 5 ..."). A cerca o Clivus não desenha.
+  - O terreno: os vértices do TIN a até 100 m da caixa das mesas exportadas, sem repetir, num CSV ao
+    lado do PVC ("X Y Z" em metro com ponto, na mesma origem local e Z para cima), o formato do "Import
+    ground data" do PVsyst e do "_terrain.csv" do PVcase. O PVsyst triangula e oferece simplificar
+    acima de 100 mil faces.
+  - Decisões minhas: só vai o que está a até 100 m das mesas exportadas (o escopo é das mesas, e o que
+    está longe não faz sombra nelas); as cópias de um equipamento (COPY) vão também, porque estão no
+    campo; sem terreno processado, o CSV não sai e a linha de comando diz; não há caixa para desligar
+    objetos na janela ("faça tudo").
+
+## Roteiro de tela (38.1 a 42.8)
 
 1. **Nova estrutura (38.1 e 38.5):** Configurações › Estruturas › Nova estrutura… › **Fixa**.
    A janela de Mesa abre na aba "Perfil e módulo"; clicar no cartão **Biposte** abre a aba
@@ -1348,3 +1373,9 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     e o total de módulos do PVsyst é o do Clivus. Na tela da importação, deixe a orientação em "Best
     azimuth" (o padrão). Se tiver carport em paisagem, conferir também uma fiada dele (o número de
     fileiras).
+37. **Os objetos e as mesas que se cruzam (42.8), no Aurora:** Exportar para o PVsyst: a linha de comando
+    diz "+ N árvore(s) e N equipamento(s) em campo" e "terreno: N ponto(s) em ..._terreno.csv", e
+    "ATENÇÃO: F16.4 e F16.5 se cruzam em planta" (conferir no CAD a emenda das duas: a F16.5 entra 21 cm
+    na F16.4; Recalcular a F16.5 ou mudar a inclinação). No PVsyst: a cena 3D com as árvores e os
+    inversores em campo; Ficheiro › Importar › dados do terreno (CSV) com o `_terreno.csv`: o terreno sob
+    as mesas, com a mesma escolha de rotação de 180° da cena.

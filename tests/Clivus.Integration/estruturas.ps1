@@ -225,16 +225,29 @@ function Testar-Estruturas {
         $problemas.Add("${rotulo}: o PVC do PVsyst mudou com a estrutura ($($pm.N) numeros, soma $($pm.S); $($pb.N), soma $($pb.S)).")
         $ok = $false
     }
+    $objetosDoPvc = @()
     foreach ($rodada in @($mono, $bi)) {
         if ($rodada.R.Texto -notmatch 'PVC_FIADAS (\d+) MESAS (\d+) MODULOS (\d+) PEDACOS 0 FORA_DA_GRADE 0 DE_FORA 0' -or $Matches[1] -ne $Matches[2] -or [int] $Matches[3] -ne 28 * [int] $Matches[2]) {
             $problemas.Add("${rotulo}: o PVC nao saiu com uma fiada de 28 modulos por mesa ($([regex]::Match($rodada.R.Texto, 'PVC_FIADAS[^\r\n]*').Value)).")
             $ok = $false
         }
+
+        # 42.8: a arvore e os inversores postos em campo vao junto, e o terreno no CSV; nenhuma mesa cruzada.
+        $linha = [regex]::Match($rodada.R.Texto, 'PVC_OBJETOS ARVORES (\d+) EQUIPAMENTOS (\d+) TERRENO (\d+) CRUZADAS (\d+)')
+        if (-not $linha.Success -or $linha.Groups[1].Value -ne '1' -or [int] $linha.Groups[2].Value -lt 1 -or [int] $linha.Groups[3].Value -lt 3 -or $linha.Groups[4].Value -ne '0') {
+            $problemas.Add("${rotulo}: o PVC nao levou a arvore, os equipamentos em campo e o terreno ($($linha.Value)).")
+            $ok = $false
+        }
+        $objetosDoPvc += $linha.Value
+    }
+    if ($objetosDoPvc.Count -eq 2 -and $objetosDoPvc[0] -ne $objetosDoPvc[1]) {
+        $problemas.Add("${rotulo}: os objetos do PVC mudaram com a estrutura ($($objetosDoPvc[0]); $($objetosDoPvc[1])).")
+        $ok = $false
     }
     [xml] $px = [IO.File]::ReadAllText($bi.Arquivos.PVC)
     $pns = New-Object System.Xml.XmlNamespaceManager($px.NameTable)
     $pns.AddNamespace('c', 'http://www.collada.org/2005/11/COLLADASchema')
-    foreach ($g in @($px.SelectNodes('//c:library_geometries/c:geometry', $pns))) {
+    foreach ($g in @($px.SelectNodes('//c:library_geometries/c:geometry[c:mesh/c:frame_parameters]', $pns))) {
         $n = @($g.SelectSingleNode('.//c:float_array', $pns).InnerText.Trim() -split '\s+' | ForEach-Object { [double]::Parse($_, $inv) })
         $fp = $g.SelectSingleNode('c:mesh/c:frame_parameters', $pns)
         $w = [double]::Parse($fp.module_width, $inv); $h = [double]::Parse($fp.module_height, $inv)

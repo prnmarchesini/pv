@@ -49,16 +49,38 @@ public static class PvColladaWriter
     private const string MaterialId = "Material0";
 
     /// <summary>
-    /// Escreve o documento.
+    /// Os materiais dos objetos, com o id, o nome e a cor que o PVcase usa
+    /// (o "Frames" das mesas é o Material0).
+    /// </summary>
+    private static readonly IReadOnlyDictionary<PvObjectKind, (string Id, string Name, string Color)> MateriaisDosObjetos =
+        new Dictionary<PvObjectKind, (string Id, string Name, string Color)>
+        {
+            [PvObjectKind.TreeTrunk] = ("Material1", "Tree_trunk", "0.5 0.375 0.25 1"),
+            [PvObjectKind.TreeCrown] = ("Material2", "Tree_crown", "0.25 1 0 1"),
+            [PvObjectKind.Station] = ("Material4", "Station", "0.25 1 0 1"),
+        };
+
+    /// <summary>
+    /// Escreve o documento só com as mesas.
     /// </summary>
     /// <param name="frames">As fiadas, uma por mesa (ou por pedaço de mesa).</param>
     /// <param name="createdAt">A data do arquivo, no cabeçalho.</param>
     /// <param name="author">Quem gerou, no cabeçalho.</param>
     /// <param name="origin">A origem local, em metro, no sistema do desenho; subtraída de todos os cantos.</param>
     /// <exception cref="ArgumentException">Nenhuma fiada, fiada sem quatro cantos finitos, sem área ou de pé, medida impossível, origem não finita.</exception>
-    public static XDocument Write(IReadOnlyList<PvFrame> frames, DateTime createdAt, string author, Point3 origin)
+    public static XDocument Write(IReadOnlyList<PvFrame> frames, DateTime createdAt, string author, Point3 origin) =>
+        Write(frames, [], createdAt, author, origin);
+
+    /// <summary>
+    /// Escreve o documento com as mesas e os objetos que fazem sombra (as
+    /// árvores e os equipamentos em campo, 42.8), cada objeto uma geometria
+    /// com o material dele.
+    /// </summary>
+    /// <exception cref="ArgumentException">O que a outra recusa, ou objeto sem vértice finito, sem triângulo, com índice fora ou id repetido.</exception>
+    public static XDocument Write(IReadOnlyList<PvFrame> frames, IReadOnlyList<PvObject> objects, DateTime createdAt, string author, Point3 origin)
     {
         ArgumentNullException.ThrowIfNull(frames);
+        ArgumentNullException.ThrowIfNull(objects);
         ArgumentException.ThrowIfNullOrWhiteSpace(author);
 
         if (!origin.IsFinite) throw new ArgumentException("A origem local não é finita.", nameof(origin));
@@ -77,9 +99,21 @@ public static class PvColladaWriter
                 throw new ArgumentException($"A fiada {fiada.Name} tem medida impossível.", nameof(frames));
         }
 
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var objeto in objects)
+        {
+            if (objeto is null || string.IsNullOrWhiteSpace(objeto.Id) || objeto.Vertices is not { Count: >= 3 } || !objeto.Vertices.All(v => v.IsFinite)
+                || objeto.Triangles is not { Count: > 0 } || objeto.Triangles.Count % 3 != 0 || objeto.Triangles.Any(i => i < 0 || i >= objeto.Vertices.Count))
+                throw new ArgumentException($"O objeto {objeto?.Name} não tem vértices finitos e triângulos que caibam neles.", nameof(objects));
+
+            if (!ids.Add(objeto.Id) || objeto.Id.StartsWith("mesa-", StringComparison.Ordinal))
+                throw new ArgumentException($"O objeto {objeto.Id} aparece duas vezes.", nameof(objects));
+        }
+
         var geometrias = new XElement(Ns + "library_geometries");
-        var mesas = new XElement(Ns + "node",
-            new XAttribute("id", "mesas"), new XAttribute("name", "Mesas"), new XAttribute("sid", "mesas"),
+        var cenaDoClivus = new XElement(Ns + "node",
+            new XAttribute("id", "clivus"), new XAttribute("name", "Mesas e objetos"), new XAttribute("sid", "clivus"),
             new XElement(Ns + "matrix", new XAttribute("sid", "matrix"), "1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"));
         var pedacos = new Dictionary<Guid, int>();
 
@@ -90,12 +124,19 @@ public static class PvColladaWriter
 
             var id = GeometryId(fiada.Table, pedaco);
             geometrias.Add(Geometria(id, fiada, origin));
-            mesas.Add(new XElement(Ns + "instance_geometry",
-                new XAttribute("url", "#" + id),
-                new XElement(Ns + "bind_material",
-                    new XElement(Ns + "technique_common",
-                        new XElement(Ns + "instance_material", new XAttribute("symbol", MaterialId), new XAttribute("target", "#" + MaterialId))))));
+            cenaDoClivus.Add(Instancia(id, MaterialId));
         }
+
+        foreach (var objeto in objects)
+        {
+            var material = MateriaisDosObjetos[objeto.Kind].Id;
+            geometrias.Add(GeometriaDoObjeto(objeto, material, origin));
+            cenaDoClivus.Add(Instancia(objeto.Id, material));
+        }
+
+        // O Frames sempre; os dos objetos, os que aparecem, na ordem dos ids do PVcase.
+        var materiais = new List<(string Id, string Name, string Color)> { (MaterialId, FramesMaterial, "0.25 0.5 0 1") };
+        materiais.AddRange(objects.Select(o => MateriaisDosObjetos[o.Kind]).Distinct().OrderBy(m => m.Id, StringComparer.Ordinal));
 
         var quando = createdAt.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
 
@@ -110,18 +151,18 @@ public static class PvColladaWriter
                 new XElement(Ns + "modified", quando),
                 new XElement(Ns + "unit", new XAttribute("name", "meter"), new XAttribute("meter", "1"))),
             new XElement(Ns + "library_materials",
-                new XElement(Ns + "material",
-                    new XAttribute("id", MaterialId), new XAttribute("name", FramesMaterial),
-                    new XElement(Ns + "instance_effect", new XAttribute("url", "#" + MaterialId + "-fx")))),
+                materiais.Select(m => new XElement(Ns + "material",
+                    new XAttribute("id", m.Id), new XAttribute("name", m.Name),
+                    new XElement(Ns + "instance_effect", new XAttribute("url", "#" + m.Id + "-fx"))))),
             new XElement(Ns + "library_effects",
-                new XElement(Ns + "effect",
-                    new XAttribute("id", MaterialId + "-fx"), new XAttribute("name", MaterialId),
+                materiais.Select(m => new XElement(Ns + "effect",
+                    new XAttribute("id", m.Id + "-fx"), new XAttribute("name", m.Id),
                     new XElement(Ns + "profile_COMMON",
                         new XElement(Ns + "technique",
                             new XAttribute("sid", "standard"),
                             new XElement(Ns + "lambert",
                                 new XElement(Ns + "diffuse",
-                                    new XElement(Ns + "color", new XAttribute("sid", "diffuse"), "0.25 0.5 0 1"))))))),
+                                    new XElement(Ns + "color", new XAttribute("sid", "diffuse"), m.Color)))))))),
             geometrias,
             new XElement(Ns + "library_visual_scenes",
                 new XElement(Ns + "visual_scene",
@@ -129,7 +170,7 @@ public static class PvColladaWriter
                     new XElement(Ns + "node",
                         new XAttribute("id", "raiz"), new XAttribute("name", PluginInfo.Nome), new XAttribute("sid", "raiz"),
                         new XElement(Ns + "matrix", new XAttribute("sid", "matrix"), RootMatrix),
-                        mesas))),
+                        cenaDoClivus))),
             new XElement(Ns + "scene",
                 new XElement(Ns + "instance_visual_scene", new XAttribute("url", "#cena"))));
 
@@ -140,11 +181,17 @@ public static class PvColladaWriter
     /// Uma origem local para as fiadas: o menor X, Y e Z entre os cantos,
     /// arredondados para baixo ao metro inteiro, como a do DAE.
     /// </summary>
-    public static Point3 LocalOrigin(IReadOnlyList<PvFrame> frames)
+    public static Point3 LocalOrigin(IReadOnlyList<PvFrame> frames) => LocalOrigin(frames, []);
+
+    /// <summary>A origem local das fiadas e dos objetos juntos.</summary>
+    public static Point3 LocalOrigin(IReadOnlyList<PvFrame> frames, IReadOnlyList<PvObject> objects)
     {
         ArgumentNullException.ThrowIfNull(frames);
+        ArgumentNullException.ThrowIfNull(objects);
 
-        var cantos = frames.Where(f => f?.Corners is not null).SelectMany(f => f.Corners).Where(c => c.IsFinite).ToList();
+        var cantos = frames.Where(f => f?.Corners is not null).SelectMany(f => f.Corners)
+            .Concat(objects.Where(o => o?.Vertices is not null).SelectMany(o => o.Vertices))
+            .Where(c => c.IsFinite).ToList();
         if (cantos.Count == 0) return new Point3(0, 0, 0);
 
         return new Point3(Math.Floor(cantos.Min(c => c.X)), Math.Floor(cantos.Min(c => c.Y)), Math.Floor(cantos.Min(c => c.Z)));
@@ -225,6 +272,46 @@ public static class PvColladaWriter
                     new XElement(Ns + "module_manufacturer", GenericModule),
                     new XElement(Ns + "module_name", GenericModule))));
     }
+
+    /// <summary>Um objeto como geometria: os vértices (com Y para cima) e os triângulos dele, no material dele.</summary>
+    private static XElement GeometriaDoObjeto(PvObject objeto, string material, Point3 origin)
+    {
+        var id = objeto.Id;
+        var posicoes = string.Join(" ", objeto.Vertices.Select(p =>
+        {
+            var (x, y, z) = ToFile(p, origin);
+            return $"{Coordenada(x)} {Coordenada(y)} {Coordenada(z)}";
+        }));
+
+        return new XElement(Ns + "geometry",
+            new XAttribute("id", id),
+            new XAttribute("name", objeto.Name),
+            new XElement(Ns + "mesh",
+                new XElement(Ns + "source",
+                    new XAttribute("id", id + "-pos"),
+                    new XElement(Ns + "float_array", new XAttribute("id", id + "-pos-array"),
+                        new XAttribute("count", (3 * objeto.Vertices.Count).ToString(CultureInfo.InvariantCulture)), posicoes),
+                    new XElement(Ns + "technique_common",
+                        new XElement(Ns + "accessor",
+                            new XAttribute("source", "#" + id + "-pos-array"),
+                            new XAttribute("count", objeto.Vertices.Count.ToString(CultureInfo.InvariantCulture)), new XAttribute("stride", "3"),
+                            Param("X"), Param("Y"), Param("Z")))),
+                new XElement(Ns + "vertices",
+                    new XAttribute("id", id + "-vtx"),
+                    new XElement(Ns + "input", new XAttribute("semantic", "POSITION"), new XAttribute("source", "#" + id + "-pos"))),
+                new XElement(Ns + "triangles",
+                    new XAttribute("count", (objeto.Triangles.Count / 3).ToString(CultureInfo.InvariantCulture)),
+                    new XAttribute("material", material),
+                    new XElement(Ns + "input", new XAttribute("offset", "0"), new XAttribute("semantic", "VERTEX"), new XAttribute("source", "#" + id + "-vtx")),
+                    new XElement(Ns + "p", string.Join(" ", objeto.Triangles.Select(i => i.ToString(CultureInfo.InvariantCulture)))))));
+    }
+
+    private static XElement Instancia(string id, string material) =>
+        new(Ns + "instance_geometry",
+            new XAttribute("url", "#" + id),
+            new XElement(Ns + "bind_material",
+                new XElement(Ns + "technique_common",
+                    new XElement(Ns + "instance_material", new XAttribute("symbol", material), new XAttribute("target", "#" + material)))));
 
     private static XElement Param(string nome) =>
         new(Ns + "param", new XAttribute("name", nome), new XAttribute("type", "float"));
