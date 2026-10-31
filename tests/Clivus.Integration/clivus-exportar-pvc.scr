@@ -74,6 +74,15 @@
 
 ; A janela do PVsyst desenhada num PNG, com o texto do 6.5 (memoria "conferir a tela renderizada").
 (clivus-renderizar-janela "pvsyst" "{{PNG}}" "600")
+
+; 42.9: o resumo da primeira mesa pelo caminho do botao direito (a selecao
+; feita antes do comando), e a janela dele num PNG.
+(if clivus:lista
+  (progn
+    (sssetfirst nil (ssadd (cdr (assoc -1 (caddr (car clivus:lista))))))
+    (command "CLIVUS_RESUMO_MESA")
+    (sssetfirst nil nil)
+    (clivus-renderizar-janela "resumo" "{{PNG_RESUMO}}" "1100" clivus:t0)))
 (setvar "SECURELOAD" clivus:secureload)
 (princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
 (princ)

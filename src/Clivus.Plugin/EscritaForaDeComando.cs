@@ -136,9 +136,9 @@ public static class GanchosDeTeste
     }
 
     /// <summary>
-    /// A janela das sombras ou a do PVsyst desenhada num PNG, sem abrir
-    /// (memória "conferir a tela renderizada"): (clivus-renderizar-janela
-    /// "sombras"|"pvsyst" "caminho.png" largura). A largura é a do conteúdo,
+    /// A janela das sombras, a do PVsyst (e as outras do switch) desenhada num
+    /// PNG, sem abrir (memória "conferir a tela renderizada"):
+    /// (clivus-renderizar-janela "sombras"|"pvsyst"|... "caminho.png" largura). A largura é a do conteúdo,
     /// para ver se a linha quebra em vez de cortar. Devolve T, ou nil se a
     /// linha do Core Console não é STA (o WPF exige).
     /// </summary>
@@ -158,6 +158,9 @@ public static class GanchosDeTeste
         System.Windows.Window janela = valores[0] switch
         {
             "pvsyst" => new JanelaDoPvsyst(documento, []),
+            // O resumo da mesa (42.9): (clivus-renderizar-janela "resumo" "caminho.png" largura "GUID da mesa").
+            "resumo" when valores.Length >= 4 && Guid.TryParse(valores[3], out var mesa) && ResumoDaMesaCommands.Montar(documento, mesa) is { } resumo
+                => new JanelaDoResumoDaMesa(resumo),
             "areas" => new JanelaDeAreas(documento),
             "analises" => new JanelaDeAnalises(documento, () => { }),
             "mesa" => new JanelaDeMesa(

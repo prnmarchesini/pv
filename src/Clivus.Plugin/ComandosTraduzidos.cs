@@ -642,6 +642,12 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_RENOMBRAR_BLOQUES")]
     public static void CLIVUS_RENOMBRAR_BLOQUES() => RenomearCommands.Renomear();
 
+    [CommandMethod("CLIVUS_TABLE_SUMMARY", CommandFlags.UsePickSet)]
+    public static void CLIVUS_TABLE_SUMMARY() => ResumoDaMesaCommands.Resumo();
+
+    [CommandMethod("CLIVUS_RESUMEN_MESA", CommandFlags.UsePickSet)]
+    public static void CLIVUS_RESUMEN_MESA() => ResumoDaMesaCommands.Resumo();
+
     [CommandMethod("CLIVUS_CABLE_ROUTES_DELETE")]
     public static void CLIVUS_CABLE_ROUTES_DELETE() => RotaDeCabosCampo.Apagar();
 

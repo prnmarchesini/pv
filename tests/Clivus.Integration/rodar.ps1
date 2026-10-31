@@ -1765,6 +1765,8 @@ function Testar-ExportarPvc {
     if (Test-Path $csv) { Remove-Item $csv -Force }
     $png = Join-Path $saida 'clivus-exportar-pvc-janela.png'
     if (Test-Path $png) { Remove-Item $png -Force }
+    $pngResumo = Join-Path $saida 'clivus-resumo-da-mesa.png'
+    if (Test-Path $pngResumo) { Remove-Item $pngResumo -Force }
 
     $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-exportar-pvc' `
         -Script (Join-Path $PSScriptRoot 'clivus-exportar-pvc.scr') `
@@ -1779,6 +1781,7 @@ function Testar-ExportarPvc {
             '{{ARV}}'  = (Ponto3 -55   0 0)
             '{{PVC}}'  = $pvc
             '{{PNG}}'  = $png.Replace('\', '/')
+            '{{PNG_RESUMO}}' = $pngResumo.Replace('\', '/')
         }
 
     $erros = @()
@@ -1950,6 +1953,31 @@ function Testar-ExportarPvc {
     }
 
     if ($t -notmatch 'RENDER pvsyst \d+x\d+' -or -not (Test-Path $png)) { $erros += "a janela do PVsyst nao foi desenhada em $png" }
+
+    # 42.9: o resumo da primeira mesa pelo botao direito (a selecao antes do
+    # comando): os modulos, e o tilt e o rumo iguais aos do plano da fiada dela
+    # no PVC; a janela desenhada num PNG.
+    if ($t -notmatch 'RESUMO_MESA modulos=(\d+) colunas=(\d+) fileiras=(\d+) tilt=(\S+) tiltProjeto=(\S+) voltada=(\S+) pvsyst=(\S+) giro=(\S+) terreno=(\S+) terrenoDesce=(\S+) pilares=(\d+) kwp=(\S+) comprimento=(\S+) fim') {
+        $erros += 'o resumo da mesa nao saiu'
+    }
+    elseif ($null -ne $daPrimeira) {
+        $rm = $Matches
+        $v = $daPrimeira.V
+        $a = @(($v[1][0] - $v[0][0]), ($v[1][1] - $v[0][1]), ($v[1][2] - $v[0][2]))
+        $b = @(($v[3][0] - $v[0][0]), ($v[3][1] - $v[0][1]), ($v[3][2] - $v[0][2]))
+        $nrm = @(($a[1] * $b[2] - $a[2] * $b[1]), ($a[2] * $b[0] - $a[0] * $b[2]), ($a[0] * $b[1] - $a[1] * $b[0]))
+        if ($nrm[2] -lt 0) { $nrm = @(-$nrm[0], -$nrm[1], -$nrm[2]) }
+        $tam = [math]::Sqrt($nrm[0] * $nrm[0] + $nrm[1] * $nrm[1] + $nrm[2] * $nrm[2])
+        $tiltDaFiada = [math]::Acos($nrm[2] / $tam) * 180 / [math]::PI
+        $rumoDaFiada = [math]::Atan2($nrm[0], $nrm[1]) * 180 / [math]::PI; if ($rumoDaFiada -lt 0) { $rumoDaFiada += 360 }
+        $tiltDoResumo = [double]::Parse($rm[4], $inv)
+        $rumoDoResumo = [double]::Parse($rm[6], $inv)
+        $dRumo = [math]::Abs((($rumoDoResumo - $rumoDaFiada) + 540) % 360 - 180)
+        if ([int] $rm[1] -ne $colunas * $fileiras -or [int] $rm[2] -ne $colunas -or [int] $rm[3] -ne $fileiras) { $erros += "o resumo diz $($rm[1]) modulos ($($rm[2]) x $($rm[3])); a mesa tem $colunas x $fileiras" }
+        if ([math]::Abs($tiltDoResumo - $tiltDaFiada) -gt 0.05 -or $dRumo -gt 0.1) { $erros += "o resumo diz tilt $tiltDoResumo e rumo $rumoDoResumo; a fiada da mesa no PVC tem $([math]::Round($tiltDaFiada, 3)) e $([math]::Round($rumoDaFiada, 3))" }
+        if ([int] $rm[11] -lt 2 -or $rm[12] -eq '-' -or $rm[9] -eq '-') { $erros += "o resumo veio sem pilares, potencia ou terreno ($($rm[0]))" }
+        if ($t -notmatch 'RENDER resumo \d+x\d+' -or -not (Test-Path $pngResumo)) { $erros += "a janela do resumo nao foi desenhada em $pngResumo" }
+    }
 
     if ($t -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) { $erros += 'o SECURELOAD nao voltou ao que era' }
 

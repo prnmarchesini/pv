@@ -55,6 +55,10 @@ internal static class MenuDeContexto
         // 10/10/2026, Renan (item 14): "Trocar potência do módulo", uma
         // simulação para a usina inteira, sem mexer no tamanho.
         ItensDaArea.Add(Item(Tr.T("Trocar potência do módulo…"), PluginInfo.ComandoTrocarPotencia));
+        // 31/10/2026, Renan: "quero clicar com o botão direito, no menu Clivus de um
+        // objeto, quero ter resumo [...] eu queria ver a inclinação de uma mesa, o
+        // tilt, e não sabia como ver".
+        ItensDaMesa.Add(Item(Tr.T("Resumo da mesa…"), PluginInfo.ComandoResumoMesa));
         ItensDaMesa.Add(Item(Tr.T("Mudar inclinação (alturas das pontas)"), PluginInfo.ComandoPontas));
         ItensDaMesa.Add(Item(Tr.T("Recalcular esta mesa"), PluginInfo.ComandoRecalcular));
 
