@@ -98,11 +98,13 @@ contrato em `plano/contrato-ativacao.md`, seção "Etapa 43").
 
 Os três são o mesmo app:
 
-- `ServidorDeProducao` (3D e licenças): `https://clivus.marcheng.com.br` desde
-  31/10/2026. O domínio temporário do Coolify
+- `ServidorDeProducao` (3D e licenças): `https://app-clivus.marcheng.com.br` desde a
+  0.1.3 (31/10/2026). A 0.1.0 a 0.1.2 falam com `https://clivus.marcheng.com.br`,
+  que virou a landing mas segue mandando `/api`, `/3d` e `/estatico` para o app;
+  o domínio temporário do Coolify
   (`https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io`) segue no mesmo
-  app para o plugin instalado antes disso; sem `CLIVUS_SERVIDOR_URL` no
-  Coolify, o link do 3D sai no host em que o pedido chegou.
+  app. Com `CLIVUS_SERVIDOR_URL=https://app-clivus.marcheng.com.br` no Coolify, o
+  link do 3D sai sempre no app.
 - `PortalDoApp`: o mesmo endereço, onde o cliente gera o código.
 - A variável `CLIVUS_SERVIDOR` vale por cima do embutido (para teste).
   `CLIVUS_LICENCAS` separa só o endereço das licenças.

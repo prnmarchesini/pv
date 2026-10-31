@@ -289,18 +289,22 @@ public static partial class PluginInfo
     /// onde a atualização aceita baixar o instalador, além do próprio servidor
     /// (<see cref="PluginUpdate.WhyUrlRejected"/>). É o mesmo <c>$site</c> do
     /// tools/gerar-instalador.ps1: mudou um, muda o outro, numa versão do
-    /// plugin que saia antes da troca (as instaladas só baixam daqui).
+    /// plugin que saia antes da troca (as instaladas só baixam daqui). Desde
+    /// 31/10/2026 a landing é clivus.marcheng.com.br (Renan: "no clivus.marcheng
+    /// coloque a landing page").
     /// </summary>
-    public const string SiteDeDownload = "https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io";
+    public const string SiteDeDownload = "https://clivus.marcheng.com.br";
+
+    /// <summary>O endereço temporário da landing no Coolify, que segue no ar (o site de download até 31/10/2026).</summary>
+    public const string SiteDeDownloadTemporario = "https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io";
 
     /// <summary>
     /// De onde a atualização aceita baixar o instalador, além do servidor
-    /// configurado: o site de download e o domínio do servidor
-    /// (clivus.marcheng.com.br, com HTTPS no ar desde 31/10/2026), que vale
-    /// mesmo com CLIVUS_SERVIDOR apontando para outro lugar. Domínio que não
-    /// é do Renan nunca entra aqui.
+    /// configurado: a landing (o domínio e o temporário) e o domínio do
+    /// servidor, que valem mesmo com CLIVUS_SERVIDOR apontando para outro
+    /// lugar. Domínio que não é do Renan nunca entra aqui.
     /// </summary>
-    public static readonly IReadOnlyList<string> EnderecosDeDownload = [SiteDeDownload, "https://clivus.marcheng.com.br"];
+    public static readonly IReadOnlyList<string> EnderecosDeDownload = [SiteDeDownload, SiteDeDownloadTemporario, ServidorDeProducao];
 
     /// <summary>Troca a mesa clicada por uma ou mais de outro tipo, travando um lado (9.2).</summary>
     public const string ComandoTrocarMesa = "CLIVUS_TROCAR_MESA";
@@ -391,12 +395,13 @@ public static partial class PluginInfo
     /// <summary>
     /// O endereço de produção do servidor (3D, licenças e portal do app),
     /// embutido para não depender de variável de ambiente (plano/seguranca.md);
-    /// CLIVUS_SERVIDOR vale por cima. Desde 31/10/2026 é o domínio da
-    /// Marcheng; o servidor segue atendendo também no temporário do Coolify
-    /// (h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io), que o plugin
-    /// instalado antes disso ainda usa, e devolve o link no host do pedido.
+    /// CLIVUS_SERVIDOR vale por cima. Desde 31/10/2026 (0.1.3) é o
+    /// app-clivus.marcheng.com.br: o clivus.marcheng.com.br virou a landing,
+    /// mas o /api, o /3d e o /estatico dele seguem indo para o app (o plugin
+    /// 0.1.0 a 0.1.2 fala com ele), e o temporário do Coolify
+    /// (h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io) segue no ar.
     /// </summary>
-    public const string ServidorDeProducao = "https://clivus.marcheng.com.br";
+    public const string ServidorDeProducao = "https://app-clivus.marcheng.com.br";
 
     /// <summary>
     /// As chaves públicas que assinam licenças, por <c>kid</c> (SubjectPublicKeyInfo,

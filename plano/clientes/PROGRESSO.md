@@ -175,13 +175,13 @@ Roteiro de tela (43.1 a 43.5), o caminho do primeiro cliente:
 4. Abrir de novo: o aviso da DLL não assinada (Always Load) e o Sobre com 0.1.1; o registro
    fica em `%LOCALAPPDATA%\Clivus Solar\atualizacao.log`. Daí em diante o PC fica com o
    bundle Release do instalador, até o próximo `instalar.ps1`.
-5. Navegador: https://clivus.marcheng.com.br/entrar com a conta Develop › Gestão › Clientes ›
+5. Navegador: https://adm-clivus.marcheng.com.br (abre a gestão) com a conta Develop › Clientes ›
    Novo cliente (e-mail, empresa, plano Cliente, validade, 2 computadores, "Gerar já o
    código"). A senha inicial e o código aparecem uma vez só: copiar a "Mensagem pronta".
 6. Com a conta nova (outra janela anônima): a troca de senha no primeiro acesso, o código, o
    download da 0.1.1 com o SHA-256 e a lista de computadores.
 7. Num PC do cliente (ou o seu, depois de desinstalar): instalar a 0.1.1, ativar com o código
-   e publicar um 3D; o link sai em clivus.marcheng.com.br e o projeto aparece na área do
+   e publicar um 3D; o link sai em app-clivus.marcheng.com.br e o projeto aparece na área do
    cliente da conta nova (não na Develop).
 
 Pendente do Renan: o e-mail de suporte que a área do cliente mostra (`CLIVUS_SUPORTE_EMAIL`).

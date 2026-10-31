@@ -100,9 +100,34 @@ CANAL.md). A página local continua com a origem verdadeira.
   tipo de mesa), cada linha com o `nome` e os mesmos três números. Números
   sem sinal; até 1000 linhas por lista. Sem ele, o item "Resumo" não
   aparece.
+- `terreno.tin` (opcional, desde 31/10/2026, passo 42.3: "comeu modulo, é
+  mentira, nao comeu no cad"): o terreno de verdade, `{"v": [x,y,z, ...],
+  "t": [a,b,c, ...]}`, os vértices sem repetição (relativos à origem, como as
+  faces) e três índices inteiros por triângulo. Com ele, o visualizador
+  desenha o terreno pelo TIN; a grade continua vindo (o visualizador antigo
+  e a caixa da cena). A grade de 2,8 m do Aurora ficava até 0,43 m acima do
+  TIN no pé do talude. O plugin manda até 1 milhão de triângulos; o servidor
+  aceita de 3 a 2.000.000 vértices e até 4.000.000 triângulos.
+- `momentos` (opcional, desde 31/10/2026, passo 42.3: "deveria no mínimo ter
+  um botão 'ver momento que causa sombras'"): `[{"quando": "AAAA-MM-DDTHH:MM",
+  "modulos": N}, ...]`, em ordem, até 10.000: os instantes, no relógio da
+  usina (o `fuso` do `local`), em que módulos tiveram a pior sombra na análise
+  de sombras do CAD (o registro dos motivos), e quantos. As `faces` desses
+  módulos trazem mais dois números: `f[13]`, a posição do momento na lista
+  (inteiro), e `f[14]`, a fração da pior sombra (acima de 0 e até 1); as
+  outras continuam com 13. O botão "Ver o momento que causa sombra" leva o
+  sol ao momento e destaca os módulos dele.
+- `sombrasGrupo` (opcional, desde 31/10/2026, passo 42.3): para cada anel de
+  `sombras`, a hachura dele (inteiro a partir de 0). Os anéis de uma hachura
+  estão num plano, e o de dentro de outro é furo: o visualizador preenche em
+  magenta com os furos. Sem ele, cada anel sozinho.
+- A cor das `faces` é a do módulo sem a pintura roxa da versão antiga das
+  sombras (até 30/10/2026): o 3D não mostra como sombra uma conta que não
+  vale mais.
 - Listas vazias são válidas; `terreno` pode faltar. O servidor recusa com
-  `400` o `local`, a seção do pilar ou o `resumo` fora do formato acima (NaN
-  e infinito também); `null` vale como ausente.
+  `400` o `local`, a seção do pilar, o `resumo`, o `tin`, os `momentos`, o
+  `sombrasGrupo` ou a face de 15 números fora do formato acima (NaN e
+  infinito também); `null` vale como ausente.
 
 ## O que o servidor responde
 
@@ -241,10 +266,12 @@ O que o plugin exige (fora disso, ignora a versão e registra o erro):
   O plugin oferece só se ela for maior que a instalada.
 - `url`: absoluta e HTTPS, no mesmo host (e porta) do servidor
   (`CLIVUS_SERVIDOR` ou o de produção) ou de um dos endereços de download
-  (`PluginInfo.EnderecosDeDownload`): o site de download, hoje
-  `https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io` (o `$site` do
-  `tools/gerar-instalador.ps1`), e o domínio novo do servidor,
-  `https://clivus.marcheng.com.br`. Redirecionamento: até 3, cada endereço
+  (`PluginInfo.EnderecosDeDownload`): a landing, `https://clivus.marcheng.com.br`
+  desde 31/10/2026 (o `$site` do `tools/gerar-instalador.ps1`), o endereço
+  temporário dela (`https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io`)
+  e o servidor, `https://app-clivus.marcheng.com.br`. A 0.1.0 a 0.1.2 aceitam a
+  landing nova porque `clivus.marcheng.com.br` já estava na lista delas.
+  Redirecionamento: até 3, cada endereço
   novo pela mesma regra. Outro host, o plugin recusa: um servidor
   comprometido não manda rodar um executável de qualquer lugar. Um site de
   download novo pede uma versão do plugin que saia antes (as instaladas só

@@ -7,11 +7,13 @@ no servidor. Escrito pelo agente do servidor em 04/10/2026. Contexto completo:
 
 ## O que já está pronto do lado do servidor
 
-- **App** (API, 3D e área do cliente): `https://clivus.marcheng.com.br` desde
-  31/10/2026 (antes, `https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io`,
-  que continua atendendo o plugin instalado antes disso). Já está embutido
-  no plugin (`PluginInfo.ServidorDeProducao`), então não precisa de
-  `CLIVUS_SERVIDOR`.
+- **App** (API, 3D e área do cliente): `https://app-clivus.marcheng.com.br` desde
+  31/10/2026, à tarde (a gestão também em `https://adm-clivus.marcheng.com.br`).
+  `https://clivus.marcheng.com.br` virou a landing, mas o `/api`, o `/3d` e o
+  `/estatico` dele seguem indo para o app (o plugin 0.1.0 a 0.1.2 fala com ele), e
+  `https://h5rxptnbwh7bvaufisadgzos.177.153.20.214.sslip.io` continua atendendo.
+  Já está embutido no plugin (`PluginInfo.ServidorDeProducao`, 0.1.3), então não
+  precisa de `CLIVUS_SERVIDOR`.
 - **Conta Develop** no app: `develop@clivussolar.com`, plano `develop`. Tudo o
   que o plugin publica cai nos projetos dela, e as licenças dela saem com
   `"plano": "develop"`.

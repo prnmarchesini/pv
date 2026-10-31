@@ -153,10 +153,12 @@ O que o plugin exige (fora disso, ignora a versão e registra o erro):
   O plugin oferece só se ela for maior que a instalada.
 - `url`: absoluta e HTTPS, no mesmo host (e porta) do servidor
   (`CLIVUS_SERVIDOR` ou o de produção) ou de um dos endereços de download
-  (`PluginInfo.EnderecosDeDownload`): o site de download, hoje
-  `https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io` (o `$site` do
-  `tools/gerar-instalador.ps1`), e o domínio novo do servidor,
-  `https://clivus.marcheng.com.br`. Redirecionamento: até 3, cada endereço
+  (`PluginInfo.EnderecosDeDownload`): a landing, `https://clivus.marcheng.com.br`
+  desde 31/10/2026 (o `$site` do `tools/gerar-instalador.ps1`), o endereço
+  temporário dela (`https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io`)
+  e o servidor, `https://app-clivus.marcheng.com.br`. A 0.1.0 a 0.1.2 aceitam a
+  landing nova porque `clivus.marcheng.com.br` já estava na lista delas.
+  Redirecionamento: até 3, cada endereço
   novo pela mesma regra. Outro host, o plugin recusa: um servidor
   comprometido não manda rodar um executável de qualquer lugar. Um site de
   download novo pede uma versão do plugin que saia antes (as instaladas só

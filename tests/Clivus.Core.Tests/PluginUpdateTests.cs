@@ -181,22 +181,27 @@ public class PluginUpdateTests
     }
 
     /// <summary>
-    /// Revisão: os endereços de download incluem o domínio novo do servidor
-    /// (com eles, o plugin de hoje aceita o instalador servido de lá depois
-    /// da troca) e nenhum domínio que não seja do Renan.
+    /// Os endereços de download (31/10/2026: a landing em clivus.marcheng.com.br,
+    /// o app em app-clivus): a landing nos dois endereços dela e o domínio do
+    /// servidor, e nenhum domínio que não seja do Renan.
     /// </summary>
     [Fact]
     [Trait("Etapa", "43")]
-    public void OsEnderecosDeDownloadSaoOSiteEODominioNovo()
+    public void OsEnderecosDeDownloadSaoALandingEOServidor()
     {
-        Assert.Equal([PluginInfo.SiteDeDownload, "https://clivus.marcheng.com.br"], PluginInfo.EnderecosDeDownload);
+        Assert.Equal("https://clivus.marcheng.com.br", PluginInfo.SiteDeDownload);
+        Assert.Equal("https://app-clivus.marcheng.com.br", PluginInfo.ServidorDeProducao);
+        Assert.Equal([PluginInfo.SiteDeDownload, PluginInfo.SiteDeDownloadTemporario, PluginInfo.ServidorDeProducao], PluginInfo.EnderecosDeDownload);
         Assert.All(PluginInfo.EnderecosDeDownload, e => Assert.Null(Viewer3DPage.WhyServerUnsafe(e)));
         Assert.DoesNotContain(PluginInfo.EnderecosDeDownload, e => e.Contains("clivussolar.com", StringComparison.OrdinalIgnoreCase));
 
         string?[] confiaveis = [Servidor, .. PluginInfo.EnderecosDeDownload];
-        Assert.Null(PluginUpdate.WhyUrlRejected("https://clivus.marcheng.com.br/baixar/ClivusSolar-Setup-0.1.1.exe", confiaveis));
+        Assert.Null(PluginUpdate.WhyUrlRejected("https://clivus.marcheng.com.br/baixar/ClivusSolar-Setup-0.1.3.exe", confiaveis));
+        Assert.Null(PluginUpdate.WhyUrlRejected("https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io/baixar/ClivusSolar-Setup-0.1.1.exe", confiaveis));
+        Assert.Null(PluginUpdate.WhyUrlRejected("https://app-clivus.marcheng.com.br/baixar/ClivusSolar-Setup-0.1.3.exe", confiaveis));
         Assert.NotNull(PluginUpdate.WhyUrlRejected("https://marcheng.com.br/baixar/a.exe", confiaveis));
         Assert.NotNull(PluginUpdate.WhyUrlRejected("https://outro.marcheng.com.br/baixar/a.exe", confiaveis));
+        Assert.NotNull(PluginUpdate.WhyUrlRejected("https://adm-clivus.marcheng.com.br/baixar/a.exe", confiaveis));
         Assert.NotNull(PluginUpdate.WhyUrlRejected("https://clivussolar.com/baixar/a.exe", confiaveis));
     }
 

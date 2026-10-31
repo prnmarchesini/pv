@@ -190,6 +190,40 @@
     return claro[0] <= claro[1] ? minutos < claro[0] || minutos > claro[1] : minutos > claro[1] && minutos < claro[0];
   }
 
+  // ------------------------------------ os momentos da análise de sombras
+
+  const QUANDO = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
+
+  /**
+   * Os momentos da análise de sombras do CAD (cena.momentos: [{quando:
+   * 'AAAA-MM-DDTHH:MM', modulos: N}], no relógio da usina) que servem, na
+   * ordem do tempo: [{indice, ano, mes, dia, minutos, modulos}], o indice o
+   * da lista da cena (o f[13] das faces). O que não serve fica de fora.
+   */
+  function lerMomentos(lista) {
+    const saida = [];
+    if (!Array.isArray(lista)) return saida;
+
+    lista.forEach((m, indice) => {
+      const achado = m && typeof m.quando === 'string' ? QUANDO.exec(m.quando) : null;
+      if (!achado || !Number.isInteger(m.modulos) || m.modulos < 1) return;
+
+      const [ano, mes, dia, hora, minuto] = achado.slice(1).map(Number);
+      const data = new Date(Date.UTC(ano, mes - 1, dia));
+      if (ano < 1000 || data.getUTCMonth() !== mes - 1 || data.getUTCDate() !== dia || hora > 23 || minuto > 59) return;
+
+      saida.push({ indice, ano, mes, dia, minutos: 60 * hora + minuto, modulos: m.modulos });
+    });
+
+    // O contrato já manda em ordem; aqui é só a garantia.
+    return saida.sort((a, b) => a.ano - b.ano || a.mes - b.mes || a.dia - b.dia || a.minutos - b.minutos || a.indice - b.indice);
+  }
+
+  /** O modelo de texto da página com os campos {nome} trocados; o campo que não veio fica como está. */
+  function preencher(modelo, campos) {
+    return String(modelo || '').replace(/\{(\w+)\}/g, (x, nome) => (Object.prototype.hasOwnProperty.call(campos, nome) ? campos[nome] : x));
+  }
+
   // ------------------------------------------------- a luz e os controles
 
   // A animação: uma hora do dia por segundo (um dia de 12 h em 12 s).
@@ -208,6 +242,14 @@
    * das camadas que a sombra cobre), o.forcaSol e o.forcaCeu (as intensidades
    * com o sol). Devolve { refazer, quadro }: refazer() quando o exagero ou as
    * camadas mudam; quadro() a cada quadro (a animação).
+   *
+   * Os momentos da análise de sombras do CAD (31/10/2026): com o.D.momentos e
+   * os controles na página (#solMomentos, com o #solMomento, o
+   * #solMomentoVer e, se quiser, #solMomentoAntes, #solMomentoDepois e
+   * #solMomentoTexto), o sol vai ao momento escolhido e os módulos dele
+   * (o.D.faces com f[13]) se destacam na camada o.camadas.mesas. Sem os
+   * controles, nada disso; o mesmo com o texto do botão de animar
+   * (#solTocarIcone e #solTocarTexto, dentro do #solTocar).
    */
   function montar(o) {
     const L = o.D && o.D.local;
@@ -218,9 +260,11 @@
     const el = id => document.getElementById(id);
     const cSombras = el('solSombras'), cData = el('solData'), cHora = el('solHora'),
       cHoraTexto = el('solHoraTexto'), cTocar = el('solTocar'), cTexto = el('solTexto');
+    const cTocarIcone = el('solTocarIcone'), cTocarTexto = el('solTocarTexto');
     const botoes = Array.from(painel.querySelectorAll('[data-marco]'));
     const lingua = document.documentElement.lang || undefined;
     const umaCasa = new Intl.NumberFormat(lingua, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const inteiro = new Intl.NumberFormat(lingua, { maximumFractionDigits: 0 });
     const diaMes = new Intl.DateTimeFormat(lingua, { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
     const dois = v => String(v).padStart(2, '0');
 
@@ -255,8 +299,10 @@
       }
       : null;
 
+    // O que só marca (as hachuras de sombra do CAD, o destaque dos módulos)
+    // leva userData.semSombra: não faz nem recebe a sombra do sol.
     mundo.traverse(x => {
-      if (x.isMesh) {
+      if (x.isMesh && !x.userData.semSombra) {
         x.castShadow = true;
         x.receiveShadow = true;
         if (ladoDoSol && x.material.isMeshLambertMaterial) x.material.onBeforeCompile = ladoDoSol;
@@ -368,6 +414,88 @@
     // O dia e a hora do relógio da usina.
     let ano, mes, dia, minutos, datas = [], claro = null, tocando = false, antes = null;
 
+    // Os momentos da análise de sombras do CAD (31/10/2026, Renan: "ver
+    // momento que causa sombras"): os instantes, no relógio da usina, em que
+    // módulos tiveram a pior sombra na análise do CAD. O sol vai para o
+    // momento escolhido e os módulos dele (a face com f[13] = o índice do
+    // momento) ficam em magenta: a sombra do sol tem de cair sobre eles.
+    const momentos = lerMomentos(o.D.momentos);
+    const cMomentos = el('solMomentos'), cMomento = el('solMomento'), cVer = el('solMomentoVer'),
+      cAntes = el('solMomentoAntes'), cDepois = el('solMomentoDepois'), cMomentoTexto = el('solMomentoTexto');
+    const comMomentos = momentos.length > 0 && !!(cMomentos && cMomento && cVer);
+    let destaque = null, atual = 0;
+
+    // As faces de cada momento, juntadas uma vez.
+    const facesDoMomento = new Map();
+    if (comMomentos) {
+      for (const f of (Array.isArray(o.D.faces) ? o.D.faces : [])) {
+        if (!Array.isArray(f) || f.length < 15 || !Number.isInteger(f[13])) continue;
+        const lista = facesDoMomento.get(f[13]);
+        if (lista) lista.push(f);
+        else facesDoMomento.set(f[13], [f]);
+      }
+    }
+
+    // O destaque: magenta translúcido por cima das faces (polygonOffset mais
+    // forte que o delas) e o contorno de cada módulo, sem fazer nem receber
+    // sombra, na camada das mesas (some com elas). O preenchimento é leve: a
+    // sombra do sol no módulo tem de aparecer por baixo dele.
+    const materiaisDoDestaque = comMomentos
+      ? [new THREE.MeshBasicMaterial({
+        color: 0xff00ff, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide,
+        polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
+      }), new THREE.LineBasicMaterial({ color: 0xff40ff, depthWrite: false })]
+      : null;
+    // A linha não tem polygonOffset: o mesmo empurrão para a câmera vai no
+    // shader (uns 4 passos da profundidade de 24 bits), senão o contorno some
+    // dentro do módulo visto de longe.
+    if (comMomentos) {
+      materiaisDoDestaque[1].onBeforeCompile = shader => {
+        shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n\tgl_Position.z -= 5.0e-7 * gl_Position.w;');
+      };
+    }
+
+    /** Tira o destaque e o texto dele (a pessoa mexeu no dia, na hora ou na animação). */
+    function apagarDestaque() {
+      if (destaque) {
+        destaque.parent.remove(destaque);
+        destaque.traverse(x => { if (x.geometry) x.geometry.dispose(); });
+        destaque = null;
+      }
+      if (cMomentoTexto) cMomentoTexto.hidden = true;
+      if (comMomentos) cVer.setAttribute('aria-pressed', 'false');
+    }
+
+    /** Destaca os módulos do momento m e escreve quantos são. */
+    function destacar(m) {
+      apagarDestaque();
+
+      const pos = [], bordas = [];
+      for (const f of facesDoMomento.get(m.indice) || []) {
+        // Desenho (x leste, y norte, z cima) -> three (x, z, -y), como a cena.
+        const v = [0, 1, 2, 3].map(k => [f[3 * k], f[3 * k + 2], -f[3 * k + 1]]);
+        for (const k of [0, 1, 2, 0, 2, 3]) pos.push(v[k][0], v[k][1], v[k][2]);
+        for (const k of [0, 1, 1, 2, 2, 3, 3, 0]) bordas.push(v[k][0], v[k][1], v[k][2]);
+      }
+
+      if (pos.length) {
+        const g = new THREE.BufferGeometry(), b = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        b.setAttribute('position', new THREE.Float32BufferAttribute(bordas, 3));
+        destaque = new THREE.Group();
+        destaque.add(new THREE.Mesh(g, materiaisDoDestaque[0]), new THREE.LineSegments(b, materiaisDoDestaque[1]));
+        destaque.traverse(x => { x.userData.semSombra = true; x.renderOrder = 2; });
+        ((o.camadas && o.camadas.mesas) || mundo).add(destaque);
+      }
+
+      if (cMomentoTexto) {
+        const t = cMomentos.dataset;
+        cMomentoTexto.textContent = preencher(m.modulos === 1 ? t.destaqueum : t.destaque, { n: inteiro.format(m.modulos) });
+        cMomentoTexto.hidden = !cMomentoTexto.textContent;
+      }
+      cVer.setAttribute('aria-pressed', 'true');
+    }
+
     /** Hoje, agora, no relógio da usina (não no do navegador); de noite, 10h. */
     function hoje() {
       const agora = new Date(Date.now() + L.fuso * 3600000);
@@ -421,10 +549,36 @@
 
       tocando = sim;
       antes = null;
-      cTocar.textContent = sim ? '❚❚' : '▶';
+      (cTocarIcone || cTocar).textContent = sim ? '❚❚' : '▶';
       cTocar.title = sim ? painel.dataset.pausar : painel.dataset.animar;
+      if (cTocarTexto) cTocarTexto.textContent = cTocar.title;
       cTocar.setAttribute('aria-label', cTocar.title);
       cTocar.setAttribute('aria-pressed', String(sim));
+    }
+
+    /** Leva o sol ao dia e à hora do relógio da usina, parado: a luz, a sombra, a data e a régua. */
+    function irPara(a, m, d, min) {
+      const outroAno = a !== ano;
+      ano = a; mes = m; dia = d; minutos = min;
+      if (outroAno) rotular();
+      mostrarData();
+      tocar(false);
+      atualizar();
+    }
+
+    function setas() {
+      if (cAntes) cAntes.disabled = atual <= 0;
+      if (cDepois) cDepois.disabled = atual >= momentos.length - 1;
+    }
+
+    /** O momento k (na ordem do tempo): o sol vai para lá e os módulos dele se destacam. */
+    function verMomento(k) {
+      atual = Math.max(0, Math.min(momentos.length - 1, k));
+      const m = momentos[atual];
+      cMomento.value = String(atual);
+      setas();
+      irPara(m.ano, m.mes, m.dia, m.minutos);
+      destacar(m);
     }
 
     function quadro() {
@@ -445,12 +599,15 @@
       render.shadowMap.needsUpdate = true;
     });
 
+    // Mexer na hora, na data, na animação ou nos atalhos tira o destaque do momento.
     cHora.addEventListener('input', () => {
+      apagarDestaque();
       minutos = Number(cHora.value);
       atualizar();
     });
 
     cData.addEventListener('change', () => {
+      apagarDestaque();
       const [a, m, dd] = cData.value.split('-').map(Number);
       // Data apagada ou fora do lugar: volta a que vale.
       if (!(a >= 1000 && a <= 9999 && m >= 1 && m <= 12 && dd >= 1 && dd <= 31)) {
@@ -465,17 +622,45 @@
       atualizar();
     });
 
-    cTocar.addEventListener('click', () => tocar(!tocando));
+    cTocar.addEventListener('click', () => {
+      apagarDestaque();
+      tocar(!tocando);
+    });
 
     for (const b of botoes) {
       b.addEventListener('click', () => {
         const marco = datas[Number(b.dataset.marco)];
         if (!marco) return;
+        apagarDestaque();
         [mes, dia] = marco;
         mostrarData();
         if (tocando) tocar(true);
         atualizar();
       });
+    }
+
+    // Os momentos na lista, na ordem do tempo, com o de mais módulos já
+    // escolhido (no empate, o primeiro); o sol só vai quando a pessoa pede.
+    if (comMomentos) {
+      const t = cMomentos.dataset;
+      cMomento.replaceChildren(...momentos.map((m, k) => {
+        const opcao = document.createElement('option');
+        opcao.value = String(k);
+        opcao.textContent = preencher((m.modulos === 1 ? t.opcaoum : t.opcao) || '{ano}-{mes}-{dia} {hora} · {n}', {
+          dia: dois(m.dia), mes: dois(m.mes), ano: String(m.ano),
+          hora: dois(Math.floor(m.minutos / 60)) + ':' + dois(m.minutos % 60), n: inteiro.format(m.modulos),
+        });
+        return opcao;
+      }));
+      atual = momentos.reduce((melhor, m, k) => (m.modulos > momentos[melhor].modulos ? k : melhor), 0);
+      cMomento.value = String(atual);
+      setas();
+
+      cMomento.addEventListener('change', () => verMomento(Number(cMomento.value)));
+      cVer.addEventListener('click', () => verMomento(Number(cMomento.value)));
+      if (cAntes) cAntes.addEventListener('click', () => verMomento(atual - 1));
+      if (cDepois) cDepois.addEventListener('click', () => verMomento(atual + 1));
+      cMomentos.hidden = false;
     }
 
     hoje();

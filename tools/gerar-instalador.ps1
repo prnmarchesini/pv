@@ -71,7 +71,8 @@ if ($Enviar) {
     # atualizacao so baixa o instalador dele ou do servidor. Mudou um, muda o
     # outro, numa versao do plugin que saia antes da troca.
     $servidor = 'clivus-upload@177.153.20.214'
-    $site = 'https://noxsbamrcobkfhfkcl3iva7x.177.153.20.214.sslip.io/baixar'
+    # A landing em clivus.marcheng.com.br desde 31/10/2026 (o sslip dela segue no ar).
+    $site = 'https://clivus.marcheng.com.br/baixar'
     $chave = Join-Path $HOME '.ssh\clivus_kinghost'
     if (-not (Test-Path $chave)) { Write-Host "Sem a chave $chave." -ForegroundColor Red; exit 1 }
 
