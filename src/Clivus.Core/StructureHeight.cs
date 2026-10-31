@@ -28,7 +28,11 @@ public static class StructureHeight
         ArgumentNullException.ThrowIfNull(geometry);
 
         if (geometry.Frame?.Bifila?.FrontPillar is not { } p1) return null;
-        if ((geometry.Frame.MinEmbedment ?? fallbackEmbedment) is not { } enterro) return null;
+
+        // O enterro nominal da frente (38.12, Renan: "aqui é o enterro mínimo,
+        // não é para levantar a estrutura [...] o nominal, para gerar o
+        // desenho"); sem nominal, o mínimo, como antes.
+        if ((geometry.Frame.NominalEmbedment ?? geometry.Frame.MinEmbedment ?? fallbackEmbedment) is not { } enterro) return null;
 
         return p1 - enterro + geometry.PillarTopDrop - geometry.PillarRow * Math.Sin(tiltRadians);
     }
@@ -61,8 +65,12 @@ public static class StructureHeight
         if (LowEdge(geometry, tiltRadians, fallbackEmbedment) is null) return null;
 
         // Os dois topos ficam à mesma distância da face dos módulos: a
-        // diferença entre os pilares é a subida da face entre os dois eixos.
-        return p1 + (tras - geometry.PillarRow) * Math.Sin(tiltRadians);
+        // diferença entre os pilares é a subida da face entre os dois eixos,
+        // mais a diferença dos enterros nominais (38.12: cada linha tem o seu).
+        var frente = geometry.Frame.NominalEmbedment ?? geometry.Frame.MinEmbedment ?? fallbackEmbedment ?? 0;
+        var bifila = geometry.Frame.Bifila;
+        var atras = bifila.RearNominalEmbedment ?? (bifila.RearMinEmbedment is { } minimo ? Math.Max(minimo, frente) : frente);
+        return p1 + (tras - geometry.PillarRow) * Math.Sin(tiltRadians) + (atras - frente);
     }
 
     /// <summary>

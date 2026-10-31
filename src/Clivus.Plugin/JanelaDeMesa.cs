@@ -119,6 +119,17 @@ internal sealed class JanelaDeMesa : Window
     private readonly TextBox _balanco = Campo();
     private readonly TextBox _enterro = Campo();
 
+    // O enterro (38.12, Renan, 31/10/2026: "enterro nominal, para usar no
+    // desenho, tendo o enterro mínimo e máximo"; "no biposte, o enterro mínimo
+    // e máximo é POR PILAR"): o _enterro é o mínimo; no biposte, os três da
+    // frente ficam na Estrutura e os de trás na seção do pórtico.
+    private readonly TextBox _enterroNominal = Campo();
+    private readonly TextBox _enterroMaximo = Campo();
+    private readonly TextBox _enterroTrasMinimo = Campo();
+    private readonly TextBox _enterroTrasNominal = Campo();
+    private readonly TextBox _enterroTrasMaximo = Campo();
+    private readonly TextBlock _rotuloEnterro = new();
+
     // Biposte (a bifila, 38.1): as seções dele só aparecem na aba do biposte.
     private bool _bifila;
     private readonly List<GroupBox> _secoesDoBiposte = [];
@@ -393,6 +404,47 @@ internal sealed class JanelaDeMesa : Window
     // ------------------------------------------------------------- montagem
 
     private static TextBox Campo() => new() { Margin = new Thickness(0, 2, 0, 6), Height = 24 };
+
+    /// <summary>Três campos lado a lado numa linha só (o mínimo, o nominal e o máximo do enterro, 38.12).</summary>
+    private static ContentControl TresCampos(TextBox a, TextBox b, TextBox c)
+    {
+        var grade = new Grid();
+        for (var i = 0; i < 3; i++) grade.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        foreach (var (campo, i) in new[] { (a, 0), (b, 1), (c, 2) })
+        {
+            campo.Margin = new Thickness(i == 0 ? 0 : 3, 2, i == 2 ? 0 : 3, 6);
+            Grid.SetColumn(campo, i);
+            grade.Children.Add(campo);
+        }
+
+        a.ToolTip = Tr.T("O mínimo que a estaca fica dentro do solo. Em branco, o mínimo do projeto.");
+        b.ToolTip = Tr.T("O enterro nominal: o do desenho da estrutura no chão plano. Em branco, o mínimo.");
+        c.ToolTip = Tr.T("O máximo que a estaca pode afundar. Em branco, o do projeto.");
+
+        return new ContentControl { Content = grade, IsTabStop = false, Focusable = false };
+    }
+
+    /// <summary>A dica da linha do enterro.</summary>
+    private static string DicaDoEnterro() =>
+        Tr.T("O enterro da estaca: o mínimo, o nominal e o máximo. O nominal é o do desenho da estrutura no chão plano (no biposte, é com ele que o P1 dá a altura). Na usina, a estaca do catálogo (P1, P2) afunda o que o terreno pedir entre o mínimo e o máximo; se nem com o mínimo ela alcança, cresce com o mínimo enterrado, e o que fica acima da terra é consequência. Sem catálogo (a monoposte), a estaca sai com o nominal. Em branco: o mínimo e o máximo do projeto, e o nominal igual ao mínimo.");
+
+    /// <summary>Um campo de número opcional: em branco é null; escrito e ilegível, o motivo.</summary>
+    private static bool Opcional(TextBox campo, string nome, out double? valor, out string motivo)
+    {
+        valor = null;
+        motivo = string.Empty;
+        if (string.IsNullOrWhiteSpace(campo.Text)) return true;
+
+        if (!NumberInput.TryParseMeasure(campo.Text, out var lido))
+        {
+            motivo = Tr.F("não consigo ler o número do campo \"{0}\".", nome);
+            return false;
+        }
+
+        valor = lido;
+        return true;
+    }
 
     /// <summary>A frase com a primeira letra maiúscula.</summary>
     private static string Maiuscula(string frase) =>
@@ -982,7 +1034,7 @@ internal sealed class JanelaDeMesa : Window
         Linha(Tr.T("Pilar na tesoura T2 (m)"), _pilarNaTesoura, Tr.T("Onde o pilar encosta na tesoura, medido da ponta baixa dela."), _rotuloT2);
         Linha(Tr.T("Pilar: largura ao longo da fileira (m)"), _pilarLargura, Tr.T("Lado da seção do pilar no sentido da fileira (comprimento da mesa)."));
         Linha(Tr.T("Pilar: largura na inclinação (m)"), _pilarProfundidade, Tr.T("Lado da seção do pilar no sentido da inclinação (tesoura)."));
-        Linha(Tr.T("Enterro mínimo T3 (m)"), _enterro, Tr.T("O mínimo que o pilar fica dentro do solo. Em branco, vale o enterro mínimo da configuração do projeto."));
+        Linha(Tr.T("Enterro mín. · nominal · máx. (m)"), TresCampos(_enterro, _enterroNominal, _enterroMaximo), DicaDoEnterro(), _rotuloEnterro);
         Linha(Tr.T("Vão-alvo entre pilares (m)"), _vaoAlvo, Tr.T("Vão pretendido; a tabela divide a mesa em vãos iguais perto dele. Não vale quando há vãos escritos."));
         pilha.Children.Add(_botaoDosVaos);
         pilha.Children.Add(_resumoDosVaos);
@@ -1000,6 +1052,8 @@ internal sealed class JanelaDeMesa : Window
         Linha(Tr.T("MF1: mão francesa do P1 (m)"), _bfMaoFrente, Tr.T("O comprimento da mão francesa do pilar dianteiro (ex.: 1,244). Zero: sem mão francesa."));
         Linha(Tr.T("MF1: abaixo do topo do P1 (m)"), _bfMaoFrenteAbaixo, Tr.T("Onde a MF1 prende no P1, medido do topo do pilar para baixo (ex.: 0,447). A outra ponta vai na tesoura, onde o comprimento alcança. A vista lateral mostra a cota."));
         Linha(Tr.T("P2: pilar traseiro, o maior (m)"), _bfP2, Tr.T("O pilar traseiro inteiro, como o fabricante cota (ex.: 3,888). No chão plano ele precisa do P1 mais a subida da tesoura entre os dois; o que passar disso é a folga para o chão caindo para trás."));
+        Linha(Tr.T("P2: enterro mín. · nominal · máx. (m)"), TresCampos(_enterroTrasMinimo, _enterroTrasNominal, _enterroTrasMaximo),
+            Tr.T("O enterro do pilar de trás, que pode ser outro que o da frente. Na usina a estaca é a do P2 e o enterro é o que o terreno der, entre o mínimo e o máximo; se nem com o mínimo ela alcança, ela cresce com o mínimo enterrado; se afundaria além do máximo, é cortada. O nominal é o do chão plano. Em branco, os da frente."));
         Linha(Tr.T("MF2: mão francesa do P2 (m)"), _bfMaoTras, Tr.T("O comprimento da mão francesa do pilar traseiro (ex.: 1,209). Zero: sem mão francesa."));
         Linha(Tr.T("MF2: abaixo do topo do P2 (m)"), _bfMaoTrasAbaixo, Tr.T("Onde a MF2 prende no P2, medido do topo do pilar para baixo (ex.: 0,773)."));
         Linha(Tr.T("Entre P1 e P2, na horizontal (m)"), _bfEntrePilares, Tr.T("Distância entre os eixos do P1 e do P2, em planta (ex.: 3,00). O T2 da seção Estrutura é onde o P1 encosta na tesoura."));
@@ -1033,7 +1087,8 @@ internal sealed class JanelaDeMesa : Window
         _arranjo.SelectionChanged += (_, _) => Recalcular();
         _modelo.SelectionChanged += (_, _) => Protegido(TrocarModulo, Tr.T("trocar o módulo"));
         _salvos.SelectionChanged += (_, _) => CarregarSalvo();
-        _enterro.TextChanged += (_, _) => Recalcular();
+        foreach (var campo in new[] { _enterro, _enterroNominal, _enterroMaximo, _enterroTrasMinimo, _enterroTrasNominal, _enterroTrasMaximo })
+            campo.TextChanged += (_, _) => Recalcular();
         _botaoDosVaos.Click += (_, _) => EscreverVaos();
         _cadastrarModulo.Click += (_, _) => CadastrarModulo();
         _carregarPan.Click += (_, _) => CarregarPan();
@@ -1141,6 +1196,9 @@ internal sealed class JanelaDeMesa : Window
         _bfTopo.Text = Numero(b.PillarTopDrop);
         _bfP1.Text = b.FrontPillar is { } p1 ? Numero(p1) : string.Empty;
         _bfP2.Text = b.RearPillar is { } p2 ? Numero(p2) : string.Empty;
+        _enterroTrasMinimo.Text = b.RearMinEmbedment is { } minimoTras ? Numero(minimoTras) : string.Empty;
+        _enterroTrasNominal.Text = b.RearNominalEmbedment is { } nominalTras ? Numero(nominalTras) : string.Empty;
+        _enterroTrasMaximo.Text = b.RearMaxEmbedment is { } maximoTras ? Numero(maximoTras) : string.Empty;
         PreencherMaos(b);
         _bfTercaBorda.Text = Numero(b.PurlinFromModuleEdge);
         _bfTercaBarra.Text = Numero(b.PurlinMaxBar);
@@ -1396,7 +1454,7 @@ internal sealed class JanelaDeMesa : Window
     private void LivreMudou()
     {
         if (_preenchendo || !_bfLivre.IsKeyboardFocusWithin) return;
-        if (_ultimoPerfil is not { Frame.Bifila: not null } perfil || perfil.Frame.MinEmbedment is not { } t3) return;
+        if (_ultimoPerfil is not { Frame.Bifila: not null } perfil || (perfil.Frame.NominalEmbedment ?? perfil.Frame.MinEmbedment) is not { } t3) return;
         if (!NumberInput.TryParseMeasure(_bfLivre.Text, out var livre) || livre <= 0) return;
 
         var geometria = TableGeometry.Local(perfil.Layout, perfil.Frame.Pillars(perfil.Layout), perfil.Frame);
@@ -1455,6 +1513,8 @@ internal sealed class JanelaDeMesa : Window
         _vaoAlvo.Text = Numero(perfil.Frame.PillarSpanTarget);
         _balanco.Text = Numero(perfil.Frame.PillarCantilever);
         _enterro.Text = perfil.Frame.MinEmbedment is { } t3 ? Numero(t3) : string.Empty;
+        _enterroNominal.Text = perfil.Frame.NominalEmbedment is { } nominal ? Numero(nominal) : string.Empty;
+        _enterroMaximo.Text = perfil.Frame.MaxEmbedment is { } maximo ? Numero(maximo) : string.Empty;
         _vaosEscritos = perfil.Frame.PillarSpans;
 
         Selecionar(_arranjo, perfil.Layout.Arrangement);
@@ -1470,7 +1530,7 @@ internal sealed class JanelaDeMesa : Window
     private IEnumerable<TextBox> CamposDaAba() =>
     [
         _quantidade, _espacamentoH, _espacamentoV, _sobraEsquerda, _sobraDireita, _inclinacao,
-        _tesoura, _pilarNaTesoura, _pilarLargura, _pilarProfundidade, _enterro, _vaoAlvo, _balanco,
+        _tesoura, _pilarNaTesoura, _pilarLargura, _pilarProfundidade, _enterro, _enterroNominal, _enterroMaximo, _vaoAlvo, _balanco,
     ];
 
     private Rascunho Capturar() => new([.. CamposDaAba().Select(c => c.Text)], _arranjo.SelectedIndex, _vaosEscritos);
@@ -1532,6 +1592,9 @@ internal sealed class JanelaDeMesa : Window
             ? Tr.T("Onde o pilar dianteiro encosta na viga, medido da ponta baixa dela (ex.: 0,498). O traseiro sai da distância entre os pilares, na seção Pórtico.")
             : Tr.T("Onde o pilar encosta na tesoura, medido da ponta baixa dela.");
 
+        // No biposte, a linha do enterro da Estrutura é a do P1; a do P2 fica no pórtico (38.12).
+        _rotuloEnterro.Text = _bifila ? Tr.T("P1: enterro mín. · nominal · máx. (m)") : Tr.T("Enterro mín. · nominal · máx. (m)");
+
         _cartaoMonoposte.IsChecked = !_bifila;
         _cartaoBiposte.IsChecked = _bifila;
     }
@@ -1575,19 +1638,11 @@ internal sealed class JanelaDeMesa : Window
         NumberInput.TryParseMeasure(_vaoAlvo.Text, out var vao);
         NumberInput.TryParseMeasure(_balanco.Text, out var balanco);
 
-        // T3 é opcional: em branco, vale o da configuração do projeto.
-        double? enterro = null;
-
-        if (!string.IsNullOrWhiteSpace(_enterro.Text))
-        {
-            if (!NumberInput.TryParseMeasure(_enterro.Text, out var t3))
-            {
-                motivo = Tr.F("não consigo ler o número do campo \"{0}\".", Tr.T("Enterro mínimo T3"));
-                return null;
-            }
-
-            enterro = t3;
-        }
+        // O enterro é opcional, campo a campo (38.12): em branco, o mínimo é o
+        // do projeto, o nominal é o mínimo e o máximo é o do projeto.
+        if (!Opcional(_enterro, Tr.T("Enterro mínimo"), out var enterro, out motivo)) return null;
+        if (!Opcional(_enterroNominal, Tr.T("Enterro nominal"), out var enterroNominal, out motivo)) return null;
+        if (!Opcional(_enterroMaximo, Tr.T("Enterro máximo"), out var enterroMaximo, out motivo)) return null;
 
         if (!NumberInput.TryParseCount(_quantidade.Text, out var quantidade))
         {
@@ -1611,6 +1666,15 @@ internal sealed class JanelaDeMesa : Window
             return null;
         }
 
+        if (bifila is not null)
+        {
+            if (!Opcional(_enterroTrasMinimo, Tr.T("P2: enterro mínimo"), out var minimoTras, out motivo)) return null;
+            if (!Opcional(_enterroTrasNominal, Tr.T("P2: enterro nominal"), out var nominalTras, out motivo)) return null;
+            if (!Opcional(_enterroTrasMaximo, Tr.T("P2: enterro máximo"), out var maximoTras, out motivo)) return null;
+
+            bifila = bifila with { RearMinEmbedment = minimoTras, RearNominalEmbedment = nominalTras, RearMaxEmbedment = maximoTras };
+        }
+
         var perfil = new TableProfile(
             _nome.Text,
             new TableLayout(
@@ -1622,6 +1686,8 @@ internal sealed class JanelaDeMesa : Window
             {
                 PillarSpans = _vaosEscritos,
                 MinEmbedment = enterro,
+                NominalEmbedment = enterroNominal,
+                MaxEmbedment = enterroMaximo,
                 Bifila = bifila,
             },
             graus * Math.PI / 180)
@@ -1730,7 +1796,7 @@ internal sealed class JanelaDeMesa : Window
             var basica = AlturaBasica(perfil);
 
             _planta.Mostrar(geometria);
-            _corte.Mostrar(geometria, perfil.TiltRadians, perfil.Frame.MinEmbedment, perfil.Frame.Bifila, basica);
+            _corte.Mostrar(geometria, perfil.TiltRadians, perfil.Frame.NominalEmbedment ?? perfil.Frame.MinEmbedment, perfil.Frame.Bifila, basica);
 
             var potencia = perfil.Layout.ModuleCount * perfil.Layout.Module.PowerWatts / 1000;
 
@@ -2264,9 +2330,9 @@ internal sealed class JanelaDeMesa : Window
             }
             else
             {
-                var enterro = perfil.Frame.MinEmbedment is null
+                var enterro = perfil.Frame.MinEmbedment is null && perfil.Frame.NominalEmbedment is null
                     ? Tr.F("{0} m enterrados, o mínimo do projeto", Numero(basica.Embedment))
-                    : Tr.F("{0} m enterrados, o T3", Numero(basica.Embedment));
+                    : Tr.F("{0} m enterrados, o nominal", Numero(basica.Embedment));
 
                 _bfAlturaBasica.Text = Tr.F(
                     "P1 e P2 em branco: a altura vem da faixa do projeto. No chão plano, com a ponta baixa em {0} m (a mínima do projeto, Configurações › Parâmetros) e {1}, o P1 dá {2} m e o P2 {3} m.",

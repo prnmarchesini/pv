@@ -104,6 +104,10 @@ public sealed record BifilaFrame(
     /// <summary>Menor barra de terça: abaixo disso a terça vira só emenda.</summary>
     private const double MenorBarra = 1.0;
 
+    /// <summary>O enterro de 1 mm a 5 m, como o do <see cref="TableFrame"/>.</summary>
+    private const double MenorEnterro = 0.001;
+    private const double MaiorEnterro = 5.0;
+
     private readonly int[] _vaos = Ordenar(RodSpans);
 
     /// <summary>
@@ -125,6 +129,18 @@ public sealed record BifilaFrame(
     /// são 10 % em 3 m). Vem junto com o P1.
     /// </summary>
     public double? RearPillar { get; init; }
+
+    /// <summary>
+    /// O enterro mínimo do pilar de trás (38.12, Renan: "no biposte, o enterro
+    /// mínimo e máximo é POR PILAR, o da frente e de traz"). Null: o da frente.
+    /// </summary>
+    public double? RearMinEmbedment { get; init; }
+
+    /// <summary>O enterro nominal do pilar de trás (o do desenho no chão plano). Null: o da frente.</summary>
+    public double? RearNominalEmbedment { get; init; }
+
+    /// <summary>O enterro máximo do pilar de trás. Null: o da frente.</summary>
+    public double? RearMaxEmbedment { get; init; }
 
     /// <inheritdoc cref="BifilaFrame" path="/param[@name='RodSpans']"/>
     public IReadOnlyList<int> RodSpans
@@ -181,6 +197,15 @@ public sealed record BifilaFrame(
 
             if (FrontPillar is { } menor && RearPillar is { } maior && maior <= menor)
                 return Tr.T("o P2 (o traseiro) tem que ser maior que o P1 (o dianteiro)");
+
+            foreach (var (valor, nome) in new[] { (RearMinEmbedment, Tr.T("mínimo")), (RearNominalEmbedment, Tr.T("nominal")), (RearMaxEmbedment, Tr.T("máximo")) })
+            {
+                if (valor is { } v && (!double.IsFinite(v) || v < MenorEnterro || v > MaiorEnterro))
+                    return Tr.F("o enterro {0} do pilar de trás precisa ficar entre 0,001 e {1:0} m (o campo é em metro)", nome, MaiorEnterro);
+            }
+
+            if (EmbedmentRange.WhyInvalid(RearMinEmbedment, RearNominalEmbedment, RearMaxEmbedment) is { } porOrdem)
+                return Tr.F("no pilar de trás, {0}", porOrdem);
 
             if (PorQueAMaoNaoServe(FrontBraceLength, FrontBraceBelowTop, Tr.T("dianteiro")) is { } frente) return frente;
             if (PorQueAMaoNaoServe(RearBraceLength, RearBraceBelowTop, Tr.T("traseiro")) is { } tras) return tras;

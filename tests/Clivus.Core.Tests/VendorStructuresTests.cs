@@ -211,8 +211,10 @@ public class VendorStructuresTests
     /// Com o P1 (38.9), a altura é da estrutura, qualquer que seja a faixa do
     /// projeto: o motor inteiro assenta a mesa no chão plano na ponta baixa
     /// que o P1 dá (subida para a grade de 1 cm, nunca abaixo), e os pilares
-    /// saem o P1 e o P2 de chão plano, com menos de 1 cm a mais. Com a faixa de
-    /// 0,30 a 0,80 (abaixo do P1), a mesa não fica sem folga.
+    /// da frente saem o P1, com menos de 1 cm a mais. Com a faixa de 0,30 a
+    /// 0,80 (abaixo do P1), a mesa não fica sem folga. Os de trás (38.12,
+    /// "Estaca do catálogo") saem a estaca do P2 com a folga dele enterrada,
+    /// se o enterro cabe no máximo; senão, cortados com o máximo enterrado.
     /// </summary>
     [Theory]
     [Trait("Etapa", "38")]
@@ -235,7 +237,26 @@ public class VendorStructuresTests
         Assert.Equal(daEstrutura, basica.LowEdge, Motor);
         Assert.All(pontasBaixas, pb => Assert.InRange(pb, daEstrutura - 1e-9, daEstrutura + 0.01));
         Assert.All(pilares.Where(p => p.Line == PillarLine.Front), p => Assert.InRange(p.Length!.Value, basica.P1 - 1e-9, basica.P1 + 0.01));
-        Assert.All(pilares.Where(p => p.Line == PillarLine.Rear), p => Assert.InRange(p.Length!.Value, basica.P2!.Value - 1e-9, basica.P2!.Value + 0.01));
+        Assert.All(pilares.Where(p => p.Line == PillarLine.Rear), p =>
+        {
+            var faixa = p.Range!;
+            var catalogo = perfil.Frame.Bifila!.RearPillar!.Value;
+            var livre = p.FreeHeight!.Value;
+
+            // A estaca do catálogo com o enterro que sobra; se ele passa do
+            // máximo, cortada com o máximo; se fica abaixo do mínimo (a mesa
+            // subiu para a grade de 1 cm), ela cresce com o mínimo.
+            var esperado = (catalogo - livre) switch
+            {
+                var e when e > faixa.Max => livre + faixa.Max,
+                var e when e < faixa.Min => livre + faixa.Min,
+                _ => catalogo,
+            };
+
+            Assert.Equal(esperado, p.Length!.Value, Motor);
+            Assert.InRange(p.Embedment, faixa.Min - 1e-9, faixa.Max + 1e-9);
+            Assert.True(p.Length!.Value >= basica.P2!.Value - 1e-9, "a estaca de trás nunca é menor que a do chão plano");
+        });
     }
 
     /// <summary>

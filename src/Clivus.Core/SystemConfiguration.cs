@@ -125,10 +125,16 @@ public sealed record SystemConfiguration(
     /// pontas à mão) nenhuma, e a mesma bifila saía com 2,20 de enterro num
     /// comando e 1,10 em outro.
     /// </summary>
-    public SystemConfiguration WithEmbedmentOf(TableFrame? estrutura) =>
-        estrutura?.MinEmbedment is { } t3
-            ? this with { MinEmbedment = t3, MaxEmbedment = Math.Max(MaxEmbedment, t3) }
-            : this;
+    public SystemConfiguration WithEmbedmentOf(TableFrame? estrutura)
+    {
+        if (estrutura is null || (estrutura.MinEmbedment is null && estrutura.NominalEmbedment is null && estrutura.MaxEmbedment is null)) return this;
+
+        // 38.12: o nominal e o máximo da estrutura entram junto; o máximo
+        // nunca fica abaixo do mínimo nem do nominal.
+        var minimo = estrutura.MinEmbedment ?? MinEmbedment;
+        var maximo = estrutura.MaxEmbedment ?? Math.Max(MaxEmbedment, estrutura.NominalEmbedment ?? minimo);
+        return this with { MinEmbedment = minimo, MaxEmbedment = Math.Max(maximo, Math.Max(minimo, estrutura.NominalEmbedment ?? minimo)) };
+    }
 
     /// <summary>
     /// A configuração para uma mesa desta estrutura: o T3 dela

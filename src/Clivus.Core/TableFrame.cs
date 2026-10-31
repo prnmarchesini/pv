@@ -79,9 +79,54 @@ public sealed record TableFrame(
 
     /// <summary>
     /// T3: o mínimo que o pilar fica enterrado, em metro, ou null quando a
-    /// estrutura não diz (vale o da configuração do projeto).
+    /// estrutura não diz (vale o da configuração do projeto). No biposte, o do
+    /// pilar da frente (o de trás tem o dele em <see cref="BifilaFrame"/>).
     /// </summary>
     public double? MinEmbedment { get; init; }
+
+    /// <summary>
+    /// O enterro nominal (38.12): o do desenho da estrutura no chão plano (é
+    /// com ele que o P1 dá a altura do biposte) e o da estaca da monoposte.
+    /// Null: o mínimo, como antes do 38.12.
+    /// </summary>
+    public double? NominalEmbedment { get; init; }
+
+    /// <summary>O enterro máximo (38.12): até onde a estaca do catálogo pode afundar. Null: o do projeto.</summary>
+    public double? MaxEmbedment { get; init; }
+
+    /// <summary>
+    /// O enterro de uma linha de pilares (38.12): o da frente (e o da
+    /// monoposte) pelos campos desta estrutura, o de trás pelos do
+    /// <see cref="Bifila"/>, que, em branco, são os da frente. O que a
+    /// estrutura não diz vem do projeto.
+    /// </summary>
+    public EmbedmentRange EmbedmentFor(PillarLine linha, double projectMin, double projectMax)
+    {
+        if (linha == PillarLine.Rear && Bifila is { } bifila)
+        {
+            var frente = EmbedmentFor(PillarLine.Front, projectMin, projectMax);
+            return EmbedmentRange.Of(
+                bifila.RearMinEmbedment ?? frente.Min,
+                bifila.RearNominalEmbedment ?? (bifila.RearMinEmbedment is { } minimo ? Math.Max(minimo, frente.Nominal) : frente.Nominal),
+                bifila.RearMaxEmbedment ?? MaxEmbedment,
+                projectMin,
+                projectMax);
+        }
+
+        return EmbedmentRange.Of(MinEmbedment, NominalEmbedment, MaxEmbedment, projectMin, projectMax);
+    }
+
+    /// <summary>
+    /// O comprimento da estaca do catálogo da linha (38.12): o P1 na frente e
+    /// o P2 atrás, no biposte que os tem; null na monoposte (lá a estaca sai
+    /// com o enterro nominal).
+    /// </summary>
+    public double? CatalogStake(PillarLine linha) => linha switch
+    {
+        PillarLine.Front => Bifila?.FrontPillar,
+        PillarLine.Rear => Bifila?.RearPillar,
+        _ => null,
+    };
 
     /// <summary>
     /// A parte bifila (passo 37.1): o pilar traseiro de cada pórtico, as mãos
@@ -157,6 +202,15 @@ public sealed record TableFrame(
             // alguém digitando em centímetro num campo em metro.
             if (MinEmbedment is { } t3 && (!double.IsFinite(t3) || t3 < MenorEnterro || t3 > MaiorEnterro))
                 return Tr.F("o enterro mínimo do pilar (T3) não é uma medida válida: precisa ficar entre 0,001 e {0:0} m (o campo é em metro)", MaiorEnterro);
+
+            if (NominalEmbedment is { } nominal && (!double.IsFinite(nominal) || nominal < MenorEnterro || nominal > MaiorEnterro))
+                return Tr.F("o enterro nominal do pilar não é uma medida válida: precisa ficar entre 0,001 e {0:0} m (o campo é em metro)", MaiorEnterro);
+
+            if (MaxEmbedment is { } maximo && (!double.IsFinite(maximo) || maximo < MenorEnterro || maximo > MaiorEnterro))
+                return Tr.F("o enterro máximo do pilar não é uma medida válida: precisa ficar entre 0,001 e {0:0} m (o campo é em metro)", MaiorEnterro);
+
+            if (EmbedmentRange.WhyInvalid(MinEmbedment, NominalEmbedment, MaxEmbedment) is { } porOrdem)
+                return Bifila is null ? porOrdem : Tr.F("no pilar da frente, {0}", porOrdem);
 
             if (_vaos is not null)
             {

@@ -160,8 +160,15 @@ public static class GanchosDeTeste
             "pvsyst" => new JanelaDoPvsyst(documento, []),
             "areas" => new JanelaDeAreas(documento),
             "analises" => new JanelaDeAnalises(documento, () => { }),
+            "mesa" => new JanelaDeMesa(
+                new TableProfileStore(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clivus-render-mesa")),
+                VendorStructures.All.First(e => e.Model.Contains("GC800MM", StringComparison.Ordinal)).Profile,
+                projeto: SystemConfiguration.Default),
             _ => new JanelaDeSombras(documento),
         };
+
+        // A janela da Mesa na aba da estrutura (o biposte, 38.12): (clivus-renderizar-janela "mesa" "caminho.png" largura).
+        if (janela is JanelaDeMesa && AcharAbas(janela.Content as System.Windows.DependencyObject) is { } abasDaMesa) abasDaMesa.SelectedIndex = 1;
 
         // A aba das análises a mostrar: (clivus-renderizar-janela "analises" "caminho.png" largura "PillarAbove").
         if (janela is JanelaDeAnalises && valores.Length >= 4 && Enum.TryParse<IndependentKind>(valores[3], out var aba)
@@ -344,6 +351,20 @@ public static class GanchosDeTeste
             transacao.Commit();
             return antigos;
         });
+    }
+
+    /// <summary>O primeiro TabControl dentro do conteúdo, pela árvore lógica.</summary>
+    private static System.Windows.Controls.TabControl? AcharAbas(System.Windows.DependencyObject? raiz)
+    {
+        if (raiz is null) return null;
+        if (raiz is System.Windows.Controls.TabControl abas) return abas;
+
+        foreach (var filho in System.Windows.LogicalTreeHelper.GetChildren(raiz).OfType<System.Windows.DependencyObject>())
+        {
+            if (AcharAbas(filho) is { } achadas) return achadas;
+        }
+
+        return null;
     }
 
     /// <summary>(clivus-sombras-modulos): os handles dos blocos dos módulos com sombra no registro dos motivos, ou nil.</summary>

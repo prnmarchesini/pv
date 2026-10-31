@@ -27,6 +27,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 38.9 A altura é da estrutura (P1 e P2 digitados), o pórtico peça por peça (P1, MF1, P2, MF2, tesoura, terças), o genérico em Fabricantes, a vista lateral nova, Norte/Sul e a lista de estruturas que voltava: AGUARDANDO VALIDAÇÃO — `StructureHeight`, `ForStructure`, perfil v5; nível 2 `clivus-bifila-p1` (rodar.ps1 -SoBifila)
 - 38.11 O terreno volta à memória ao abrir o desenho, sem modificá-lo, e Área, Alinhamento, Coordenada e as janelas da drenagem carregam sozinhos: AGUARDANDO VALIDAÇÃO — `TerrainCommands.CarregarDoCarimbo`; nível 2 `clivus-carimbo` (rodar.ps1 -Caso Testar-Carimbo)
 - 38.10 Salvar não suja mais o biposte (e o desenho que ficou vermelho se conserta ao abrir), o registro de tudo, a aba Modelos com seções por fabricante e Apagar, e a área pela polilinha 3D: AGUARDANDO VALIDAÇÃO — `PendingChanges.MayBeFromSave`, `PendenciasDoSalvar`, `RegistroDeTudo`, `VendorStructures.ByManufacturer`; nível 2 `clivus-salvar` (rodar.ps1 -SoBifila) e `clivus-area-selecionar` (rodar.ps1 -Caso Testar-AreaSelecionar)
+- 38.12 O enterro mínimo, nominal e máximo, por linha de pilar no biposte, e a estaca do catálogo (31/10/2026, tarde: "aqui é o enterro mínimo, não é para levantar a estrutura [...] enterro nominal, para usar no desenho"; "no biposte, o enterro mínimo e máximo é POR PILAR, o da frente e de traz"; a escolha "Estaca do catálogo"): AGUARDANDO VALIDAÇÃO — `EmbedmentRange` (Stake, Of), `TableFrame.NominalEmbedment/MaxEmbedment/EmbedmentFor/CatalogStake`, `BifilaFrame.Rear*Embedment`, o motor (`PillarCalculator`) e a altura (`StructureHeight`) pelo nominal; 13 testes; nível 2 -SoBifila (com a janela da Mesa num PNG), -SoEstruturas, -SoCampo
 
 ## Etapa 39: o resto do Clivus
 
@@ -630,6 +631,33 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     abrir, só a inteira e no lugar volta.
   - Fica para a tela: o salvamento automático (SAVETIME) e o SAVEAS em DXF não passam no
     Core Console; o roteiro 14 pede para conferir.
+- 38.12 (31/10/2026, tarde), o enterro. Pedidos do Renan, com o print da aba Biposte (o campo
+  "Enterro mínimo T3" e o "livre 2,000" da vista lateral): "aqui é o enterro mínimo, não é para
+  levantar a estrutura, aí coloca então: enterro nominal, para usar no desenho, tendo o enterro
+  mínimo e máximo, vc vai saber até onde pode chegar, e o nominal, para gerar o desenho. veja isso
+  na estrutura monoposte"; e depois: "no biposte, o enterro mínimo e máximo é POR PILAR, o da
+  frente e de traz e vc vai seguir isso para projetar, aí o tamanho da estaca, essa pode
+  explodir [...] o pilar fica com 7m por exemplo, foda-se eu tenho que respeitar o enterrado, o
+  que ficar livre pra cima da terra é consequência". Perguntei como cada pilar é dimensionado e
+  ele escolheu **Estaca do catálogo**. O que ficou:
+  - Na janela da Mesa, a linha "Enterro mín. · nominal · máx. (m)" na Estrutura (no biposte, a
+    do P1) e "P2: enterro mín. · nominal · máx. (m)" no pórtico. Cada campo pode ficar em branco:
+    o mínimo e o máximo vêm do projeto; o nominal é o mínimo (o enterro de antes); os do P2 são
+    os do P1. A monoposte tem a mesma linha.
+  - A estaca (`EmbedmentRange.Stake`): no biposte, a do catálogo (P1 na frente, P2 atrás) com o
+    enterro que o terreno der; se ficaria abaixo do mínimo, ela cresce com o mínimo enterrado;
+    se passaria do máximo, é cortada com o máximo. Sem catálogo (a monoposte, ou o biposte sem
+    P1/P2), a estaca sai com o nominal. A análise do enterro usa a faixa da linha do pilar.
+  - A altura da estrutura (o P1 no chão plano) vem do enterro nominal da frente, não do mínimo;
+    o P2 de chão plano leva o nominal de trás.
+  - Assumi: no chão plano, o pilar de trás sai com a estaca inteira do P2 e a folga dele enterrada
+    (na GC800, 3,888 m com 2,49 m enterrados, dentro do máximo de 2,5 m do projeto); antes saía
+    cortado no P2 de chão plano (3,59 m com 2,2 m). A prova do 38.9
+    (`ComP1OMotorAssentaAMesaNaAlturaDaEstrutura`) passou a conferir a estaca de trás pela regra
+    nova (a do catálogo, cortada com o máximo ou crescida com o mínimo), e nunca menor que a do
+    chão plano.
+  - O perfil de antes abre igual: os campos novos são opcionais no arquivo (gravados só quando
+    escritos).
 - 38.11 (31/10/2026), pedido da tela: "quando o cad abre, ele não tá carregando o terreno,
   isso é erro". O terreno processado só vive na memória. Ao reabrir, os comandos que passam
   pelo `ExigirTerreno` reprocessavam sozinhos. Já Área, Alinhamento, Coordenada, Flechas e as
@@ -1211,3 +1239,8 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     alinhadas. Numa vista sombreada, os textos de Pilar livre e de PB/PA por cima dos módulos
     (os antigos se ajeitam ao abrir a janela). Com muitas mesas selecionadas, o botão direito
     e o pan sem demora do Clivus.
+35. **O enterro (38.12):** Mesa › aba Biposte: na Estrutura, "P1: enterro mín. · nominal · máx.";
+    no pórtico, "P2: enterro mín. · nominal · máx.". Mudar o mínimo não muda a altura da estrutura
+    (o "livre" da vista lateral); mudar o nominal muda. Gerar uma fileira no Aurora: em Análises ›
+    Pilar enterrado, cada pilar com o enterro que o terreno deu, entre o mínimo e o máximo da
+    linha dele; onde nem com o mínimo a estaca alcança, ela cresce (Pilar total maior que o P1/P2).

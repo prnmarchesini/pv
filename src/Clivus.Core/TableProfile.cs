@@ -291,9 +291,14 @@ public sealed record TableProfile(
     {
         ArgumentNullException.ThrowIfNull(projeto);
 
-        if (StructureLowEdge is { } daEstrutura) return PillarsOnFlatGround(daEstrutura, Frame.MinEmbedment!.Value);
+        // O enterro nominal de cada linha (38.12): é o do desenho no chão plano.
+        var comAMesa = projeto.WithEmbedmentOf(Frame);
+        var frente = Frame.EmbedmentFor(PillarLine.Front, comAMesa.MinEmbedment, comAMesa.MaxEmbedment).Nominal;
+        var tras = Frame.EmbedmentFor(PillarLine.Rear, comAMesa.MinEmbedment, comAMesa.MaxEmbedment).Nominal;
 
-        return PillarsOnFlatGround(ViableElevations.FlatGroundLowEdge(projeto), projeto.WithEmbedmentOf(Frame).MinEmbedment);
+        if (StructureLowEdge is { } daEstrutura) return PillarsOnFlatGround(daEstrutura, frente, tras);
+
+        return PillarsOnFlatGround(ViableElevations.FlatGroundLowEdge(projeto), frente, tras);
     }
 
     /// <summary>
@@ -302,9 +307,10 @@ public sealed record TableProfile(
     /// livre exata (<see cref="PillarsAtBasicHeight"/> usa a da grade).
     /// </summary>
     /// <param name="lowEdge">A ponta baixa: a face de cima do módulo na ponta baixa, acima do chão.</param>
-    /// <param name="embedment">O enterro.</param>
+    /// <param name="embedment">O enterro do P1.</param>
+    /// <param name="rearEmbedment">O enterro do P2; null, o do P1.</param>
     /// <exception cref="InvalidOperationException">Com o perfil inválido.</exception>
-    public BasicPillars PillarsOnFlatGround(double lowEdge, double embedment)
+    public BasicPillars PillarsOnFlatGround(double lowEdge, double embedment, double? rearEmbedment = null)
     {
         if (WhyInvalid is { } motivo) throw new InvalidOperationException(motivo);
 
@@ -319,7 +325,8 @@ public sealed record TableProfile(
             lowEdge,
             embedment,
             Livre(geometria.PillarRow),
-            geometria.RearPillarRow is { } tras ? Livre(tras) : null);
+            geometria.RearPillarRow is { } tras ? Livre(tras) : null,
+            geometria.RearPillarRow is null ? null : rearEmbedment);
     }
 
     /// <summary>
@@ -384,6 +391,8 @@ public sealed record TableProfile(
                 PillarCantilever = Frame.PillarCantilever,
                 PillarSpans = Frame.PillarSpans?.ToArray(),
                 MinEmbedment = Frame.MinEmbedment,
+                NominalEmbedment = Frame.NominalEmbedment,
+                MaxEmbedment = Frame.MaxEmbedment,
                 Bifila = Frame.Bifila is { } b
                     ? new BifilaNoArquivo
                     {
@@ -405,6 +414,9 @@ public sealed record TableProfile(
                         RodDiameter = b.RodDiameter,
                         FrontPillar = b.FrontPillar,
                         RearPillar = b.RearPillar,
+                        RearMinEmbedment = b.RearMinEmbedment,
+                        RearNominalEmbedment = b.RearNominalEmbedment,
+                        RearMaxEmbedment = b.RearMaxEmbedment,
                     }
                     : null,
             },
@@ -528,6 +540,11 @@ public sealed record TableProfile(
                 // o vão-alvo e o enterro da configuração, como sempre abriu.
                 PillarSpans = arquivo.Frame.PillarSpans,
                 MinEmbedment = arquivo.Frame.MinEmbedment,
+
+                // Opcionais desde o 38.12: o perfil de antes abre com o nominal
+                // igual ao mínimo e o máximo do projeto, como sempre abriu.
+                NominalEmbedment = arquivo.Frame.NominalEmbedment,
+                MaxEmbedment = arquivo.Frame.MaxEmbedment,
                 Bifila = arquivo.Frame.Bifila is { } b ? LerBifila(b, comPilares: versao == VersaoBifilaComPilares) : null,
             },
             Exigir(arquivo.TiltDegrees, "tiltDegrees") * Math.PI / 180)
@@ -590,6 +607,9 @@ public sealed record TableProfile(
         {
             FrontPillar = comPilares ? Exigir(b.FrontPillar, "frame.bifila.frontPillar") : null,
             RearPillar = comPilares ? Exigir(b.RearPillar, "frame.bifila.rearPillar") : null,
+            RearMinEmbedment = b.RearMinEmbedment,
+            RearNominalEmbedment = b.RearNominalEmbedment,
+            RearMaxEmbedment = b.RearMaxEmbedment,
         };
     }
 
@@ -695,6 +715,12 @@ public sealed record TableProfile(
         public double? MinEmbedment { get; init; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double? NominalEmbedment { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double? MaxEmbedment { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public BifilaNoArquivo? Bifila { get; init; }
     }
 
@@ -723,6 +749,15 @@ public sealed record TableProfile(
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public double? RearPillar { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double? RearMinEmbedment { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double? RearNominalEmbedment { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double? RearMaxEmbedment { get; init; }
     }
 
     private sealed class SecaoNoArquivo

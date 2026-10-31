@@ -98,11 +98,11 @@ internal sealed class CorteDaMesa : FrameworkElement
     /// altura básica (38.7), o chão na ponta baixa mínima do projeto e os
     /// pilares cotados, P1 e P2.
     /// </summary>
-    internal void Mostrar(TableGeometry mesa, double tiltRadians, double? enterroMinimo = null, BifilaFrame? bifila = null, BasicPillars? basica = null)
+    internal void Mostrar(TableGeometry mesa, double tiltRadians, double? enterroNominal = null, BifilaFrame? bifila = null, BasicPillars? basica = null)
     {
         _mesa = mesa;
         _tilt = tiltRadians;
-        _enterro = enterroMinimo;
+        _enterro = enterroNominal;
         _bifila = mesa.RearPillarRow is null ? null : bifila;
         _basica = _bifila is null ? null : basica;
         _recado = null;
@@ -216,9 +216,9 @@ internal sealed class CorteDaMesa : FrameworkElement
         DesenharSolo(tela, ySolo, encosto.X);
 
         if (_enterro is { } escrito)
-            CotaVertical(tela, encosto.X - 26, ySolo, yPe, $"T3 {Medida(escrito)}", Terra, aEsquerda: true);
+            CotaVertical(tela, encosto.X - 26, ySolo, yPe, Tr.F("enterro {0}", Medida(escrito)), Terra, aEsquerda: true);
         else
-            Escrever(tela, Tr.T("T3: o da configuração"), Fraco, 10, new Point(encosto.X + 8, (ySolo + yPe) / 2 - 7));
+            Escrever(tela, Tr.T("Enterro: o da configuração"), Fraco, 10, new Point(encosto.X + 8, (ySolo + yPe) / 2 - 7));
 
         Angulo(tela, No(0), k);
 
@@ -423,15 +423,18 @@ internal sealed class CorteDaMesa : FrameworkElement
         // o nome do chão caindo), antes das outras cotas: a do P1 inteiro vai
         // por fora do texto dele (revisão do 38.9: sem a MF1, as duas caíam na
         // mesma linha).
-        var nomeDoEnterro = _enterro is { } escrito ? $"T3 {Medida(escrito)}"
+        var nomeDoEnterro = _enterro is { } escrito ? Tr.F("enterro {0}", Medida(escrito))
             : _basica is { } doProjeto ? Tr.F("enterro {0} (projeto)", Medida(doProjeto.Embedment))
             : null;
+
+        // O P2 com o enterro nominal dele, se a mesa tem um (38.12).
+        var nomeDoEnterroTras = bifila.RearNominalEmbedment is { } nominalTras ? Tr.F("enterro {0}", Medida(nominalTras)) : nomeDoEnterro;
 
         var foraDoT3 = xFrente - 12;
         if (nomeDoEnterro is not null)
         {
             foraDoT3 = CotaVertical(tela, xFrente - 12, ySolo, yPe, nomeDoEnterro, Terra, aEsquerda: true);
-            if (folga > 0.0005) CotaVertical(tela, xTras - 12, yChaoAtras, yPeTras, nomeDoEnterro, Terra, aEsquerda: true);
+            if (folga > 0.0005 && nomeDoEnterroTras is not null) CotaVertical(tela, xTras - 12, yChaoAtras, yPeTras, nomeDoEnterroTras, Terra, aEsquerda: true);
         }
 
         // Os pilares inteiros e onde as mãos francesas prendem: do P1 para a

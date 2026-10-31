@@ -315,6 +315,7 @@ function Testar-Bifila {
             '{{ZMAX}}' = $cotaMax.ToString('0.###', $inv)
             '{{XLSX}}' = $planilha
             '{{HTML}}' = $html
+            '{{PNG_MESA}}' = ((Join-Path $saida 'clivus-bifila-janela-da-mesa.png') -replace '\\', '/')
         }
 
     if ($r.Estourou -or $r.Codigo -ne 0) {

@@ -15,9 +15,11 @@ namespace Clivus.Core;
 /// </param>
 /// <param name="FreeHeight">O que fica acima do terreno (P3), ou null sem terreno.</param>
 /// <param name="Embedment">
-/// O que fica enterrado (P2): o enterro mínimo da configuração, sempre — é
-/// o comprimento ideal que se entrega. Num pilar com problema o número está
-/// aqui do mesmo jeito, e não é medida: é o mínimo que ele teria.
+/// O que fica enterrado (P2). Desde o 38.12, pela estaca da linha
+/// (<see cref="EmbedmentRange.Stake"/>): a estaca do catálogo com o enterro
+/// que o terreno dá, entre o mínimo e o máximo; sem catálogo, o nominal. Num
+/// pilar com problema o número está aqui do mesmo jeito, e não é medida: é o
+/// nominal que ele teria.
 /// </param>
 /// <param name="Length">O comprimento ideal (P1): altura livre mais enterro, ou null sem terreno ou quando não há pilar possível.</param>
 /// <param name="Problem">
@@ -44,7 +46,8 @@ public sealed record PillarResult(
     string? Problem,
     double? LowEdgeClearance = null,
     double? HighEdgeClearance = null,
-    PillarLine Line = PillarLine.Single)
+    PillarLine Line = PillarLine.Single,
+    EmbedmentRange? Range = null)
 {
     /// <summary>Se o pilar está de pé como deve: tem terreno, altura livre e enterro.</summary>
     public bool IsSound => Problem is null;
@@ -178,16 +181,22 @@ public static class PillarCalculator
                 // desce. Na monoposte a queda é zero e o topo é o âncora.
                 var ancora = colocacao.Apply(p.Anchor);
                 var topo = ancora with { Z = ancora.Z - geometry.PillarTopDrop };
-                var enterro = configuration.MinEmbedment;
+
+                // O enterro da linha do pilar (38.12): na monoposte e na
+                // frente, o da estrutura; atrás, o do pilar de trás. O que a
+                // estrutura não diz vem da configuração.
+                var faixa = geometry.Frame?.EmbedmentFor(p.Line, configuration.MinEmbedment, configuration.MaxEmbedment)
+                    ?? EmbedmentRange.Of(null, null, null, configuration.MinEmbedment, configuration.MaxEmbedment);
+                var enterro = faixa.Nominal;
 
                 if (semGiro is not null)
-                    return new PillarResult(p.Station, topo.X, topo.Y, null, topo.Z, null, enterro, null, semGiro, Line: p.Line);
+                    return new PillarResult(p.Station, topo.X, topo.Y, null, topo.Z, null, enterro, null, semGiro, Line: p.Line, Range: faixa);
 
                 if (!terrain.TryGetZ(topo.X, topo.Y, out var terreno))
                 {
                     return new PillarResult(
                         p.Station, topo.X, topo.Y, null, topo.Z, null, enterro, null,
-                        Tr.T("o pé do pilar caiu fora do terreno"), Line: p.Line);
+                        Tr.T("o pé do pilar caiu fora do terreno"), Line: p.Line, Range: faixa);
                 }
 
                 var livre = topo.Z - terreno;
@@ -198,11 +207,18 @@ public static class PillarCalculator
                 var pontaBaixa = Altura(colocacao.Apply(new Point3(p.Station, 0, 0)), terrain);
                 var pontaAlta = Altura(colocacao.Apply(new Point3(p.Station, geometry.Depth, 0)), terrain);
 
-                // Regra sagrada 1: o pilar nunca flutua. Aqui o enterro é o
-                // mínimo por construção; o que pode faltar é a altura livre,
-                // quando a mesa desce até o chão naquele pé. E acima da
-                // escala do Core é um vértice espúrio da superfície, não um
-                // pilar: marcado, sem comprimento.
+                // A estaca (38.12, "Estaca do catálogo"): a do catálogo com o
+                // enterro que sobra, entre o mínimo e o máximo; ela cresce com
+                // o mínimo quando nem assim alcança, e é cortada com o máximo
+                // quando afundaria demais. Sem catálogo, o nominal. Só com
+                // altura livre: sem ela o pilar é o problema de baixo.
+                if (livre > 0) enterro = faixa.Stake(livre, geometry.Frame?.CatalogStake(p.Line)).Embedment;
+
+                // Regra sagrada 1: o pilar nunca flutua. O enterro fica entre o
+                // mínimo e o máximo por construção; o que pode faltar é a
+                // altura livre, quando a mesa desce até o chão naquele pé. E
+                // acima da escala do Core é um vértice espúrio da superfície,
+                // não um pilar: marcado, sem comprimento.
                 var problema = FloatingPillar.Check(livre, enterro)
                     ?? (livre > PillarSizing.MaiorAlturaLivre
                         ? Tr.F("altura livre de {0:0.#} m: fora de escala, o terreno sob este pé não é confiável", livre)
@@ -211,7 +227,7 @@ public static class PillarCalculator
                 double? comprimento = problema is null ? PillarSizing.Length(livre, enterro) : null;
 
                 return new PillarResult(
-                    p.Station, topo.X, topo.Y, terreno, topo.Z, livre, enterro, comprimento, problema, pontaBaixa, pontaAlta, p.Line);
+                    p.Station, topo.X, topo.Y, terreno, topo.Z, livre, enterro, comprimento, problema, pontaBaixa, pontaAlta, p.Line, faixa);
             })
             .ToList();
 

@@ -175,7 +175,8 @@ public static class TableAnalysis
                 ? new PillarReport(
                     p,
                     rules.Evaluate(AnalysisKind.PillarLength, comprimento, configuration),
-                    rules.Evaluate(AnalysisKind.Embedment, p.Embedment, configuration))
+                    // O enterro pela faixa da linha do pilar (38.12): atrás pode ser outra.
+                    rules.Evaluate(AnalysisKind.Embedment, p.Embedment, p.Range is { } faixa ? configuration with { MinEmbedment = faixa.Min, MaxEmbedment = faixa.Max } : configuration))
                 : new PillarReport(p, Desligado(AnalysisKind.PillarLength), Desligado(AnalysisKind.Embedment)))
             .ToList();
 

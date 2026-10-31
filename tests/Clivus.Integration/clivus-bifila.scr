@@ -141,6 +141,9 @@
                " arestas=" (itoa clivus:arestas) " dentro=" (itoa clivus:dentro) " pertos=" (itoa clivus:pertos)
                " zmin=" (rtos clivus:zmin 2 3) " zmax=" (rtos clivus:zmax 2 3)))
 (princ (strcat "\nCLIVUS_BIFILA3 alturas=" (itoa clivus:alturas) " sobra=" (itoa clivus:sobra) " sobrap=" (itoa clivus:sobrap)))
+; 38.12: a janela da Mesa na aba do biposte, com o enterro minimo, nominal e
+; maximo do P1 e do P2, desenhada num PNG (conferida a olho).
+(clivus-renderizar-janela "mesa" "{{PNG_MESA}}" "1500")
 (setvar "SECURELOAD" clivus:secureload)
 (princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
 (princ)
