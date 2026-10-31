@@ -22,8 +22,9 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 38.4 Lista de material na tela: AGUARDANDO VALIDAÇÃO
 - 38.5 A janela de Mesa em abas: AGUARDANDO VALIDAÇÃO
 - 38.6 O PAN enche o módulo e sobe para o servidor: AGUARDANDO VALIDAÇÃO — serviço: `servidor/tests/test_pan.py`
-- 38.7 Fabricantes, biposte genérico e a altura básica (P1 e P2): AGUARDANDO VALIDAÇÃO — `VendorStructures`, `PillarsAtBasicHeight`, 22 testes contra o motor
+- 38.7 Fabricantes, biposte genérico e a altura básica (P1 e P2): REPROVADO (30/10/2026, na tela: o P1 e o P2 não se mudavam, as medidas das mãos francesas não diziam nada, o desenho ruim, sem genérico em Fabricantes nem onde dar outro nome) — refeito no 38.9
 - 38.8 Os módulos no servidor do Clivus, com a validação da gestão: AGUARDANDO VALIDAÇÃO — servidor: clivussolar 2cc6561 (gate `validate_modulos`); plugin: `ModuleServiceReply` e `ModuleServer`, 37 testes
+- 38.9 A altura é da estrutura (P1 e P2 digitados), o pórtico peça por peça (P1, MF1, P2, MF2, tesoura, terças), o genérico em Fabricantes, a vista lateral nova, Norte/Sul e a lista de estruturas que voltava: AGUARDANDO VALIDAÇÃO — `StructureHeight`, `ForStructure`, perfil v5; nível 2 `clivus-bifila-p1` (rodar.ps1 -SoBifila)
 
 ## Etapa 39: o resto do Clivus
 
@@ -33,7 +34,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 ## Etapa 40: mesas conforme os objetos do cliente
 
 - 40.1 Reconhecer as mesas do cliente: VALIDADO (automático) — `FieldObjects`, 21 testes; nos 641 objetos do Aurora: 609 mesas em 101 fileiras, 18 repetidos e 14 sobrepostos
-- 40.2 Gerar conforme objetos em campo: AGUARDANDO VALIDAÇÃO — nível 2 `clivus-campo` (rodar.ps1 -SoCampo)
+- 40.2 Gerar conforme objetos em campo: AGUARDANDO VALIDAÇÃO — reprovado na tela em 30/10/2026 (nada era gerado: pelo Z, os objetos olhavam para o sul e o projeto para o norte) e refeito: só X e Y, alinhamento Direita/Centro/Esquerda, o lado da ponta baixa do projeto; nível 2 `clivus-campo` (rodar.ps1 -SoCampo)
 
 ## Observações
 
@@ -368,6 +369,97 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - Bateria completa de 30/10/2026 (18:06 a 18:20), no a9220e7, o mesmo instalado às 18:00:
   tudo verde. Nível 1: Core 2365 e Geo 264; nível 2 100/100; serviço 53/53; instalador e
   acervo ok. O SECURELOAD voltou a 1 em todos os perfis.
+- 38.9 (30/10/2026), o 38.7 refeito depois da tela. Pedidos do Renan: "Porque raios eu não
+  consigo alterar as alturas? A altura está no print, 3059 P1 e 3888 P2, em fabricante, não
+  tem genérico, ou então eu escolho um modelo e edito ela, onde posso dar outro nome", "é
+  PILAR P1, Mão francesa MF1, pilar P2, Mão francesa MF2, aí tem as terças, as tesouras",
+  "não tenho a menor ideia o que são essas medidas" (onde a mão francesa pega), o desenho
+  de legenda ruim, "eu já apaguei esses [perfis] umas 10x, salvo no desenho e volta" e "a
+  inclinação dos módulos para o norte ou sul, depende do local". O que assumi:
+  - **A altura é da estrutura.** O P1 e o P2 são campos do biposte (`BifilaFrame.FrontPillar`
+    e `RearPillar`; o perfil vai na versão 5). O P1 é o pilar dianteiro inteiro no chão
+    plano: com o T3 (que ele exige), dá a ponta baixa da estrutura (`StructureHeight.LowEdge`;
+    a GC800 dá 0,833, os 0,800 livres do catálogo), e essa é a ponta baixa mínima das mesas
+    dela na usina, no lugar da mínima do projeto (`SystemConfiguration.ForStructure`, como o
+    T3 manda no enterro). A máxima é a do projeto, mas com pelo menos a folga que a faixa
+    do projeto tem: com 0,30 a 0,80, a GC800 vai de 0,833 a 1,333; com 0,84 a 1,60, de 0,833
+    a 1,60. A fileira resolve com a faixa mais exigente das suas mesas (numa fileira de um
+    tipo só, a dele). Os comandos dizem a faixa ("Altura da estrutura: ...").
+  - O **P2** é o de catálogo: no chão plano o traseiro precisa do P1 mais a subida da tesoura
+    entre os dois (3,588 na GC800); o que passa disso é a folga para o chão caindo para trás
+    (0,300 = 10 % em 3,00 m; 0,600 = 20 % na GC1000), dita embaixo do pórtico e desenhada. O
+    P2 menor que o de chão plano é recusado com o motivo. O motor continua calculando cada
+    pilar pelo terreno (o comprimento é saída): o P2 não limita a mesa.
+  - Os dois em branco: a altura vem da faixa do projeto, como no 38.7 (os perfis gravados
+    antes abrem assim); um só escrito não fecha.
+  - No terreno, o P1 é o dianteiro mais curto onde o motor deixa a mesa dentro da faixa; onde
+    o terreno a força para fora (o relatório diz "ponta(s) baixa(s) fora"), um pilar pode
+    sair abaixo dele, como sempre foi com a faixa. A grade de 1 cm do motor põe os pilares
+    até 1 cm acima do P1 no plano.
+  - **O pórtico peça por peça**: a seção "Pórtico: pilares e mãos francesas" tem P1, MF1 (e
+    onde ela prende no P1, abaixo do topo), P2, MF2 (idem), a distância entre P1 e P2 e o
+    topo abaixo dos módulos; tesoura e terças nas seções delas. O nome também na aba
+    Biposte (o mesmo da primeira).
+  - **Fabricantes**: o primeiro cartão é o biposte genérico, agora com as peças do pórtico de
+    referência (P1 3,059, MF1 1,244, P2 3,588, MF2 1,209, tesoura 4,03, T3 2,20), sem
+    tirante. "Usar" num fabricante põe o nome dele na mesa ("Arctech 2P14 GC800"), que se
+    muda na aba; o genérico mantém o nome. As estruturas de fabricante trazem o P1 e o P2 do
+    catálogo (3,059/3,888 e 3,259/4,388). O aviso "no projeto, altura livre mínima de 104
+    cm" saiu: a altura vem do P1.
+  - **A vista lateral** foi redesenhada como o desenho do fabricante: os pilares inteiros, do
+    topo ao pé, com o nome e o comprimento (P1 à esquerda, P2 à direita); as mãos francesas
+    com o nome, o comprimento e a cota de onde prendem; a tesoura e as terças; o chão plano
+    na altura do P1 e, com a folga do P2, o chão caindo para trás que ele alcança; a altura
+    livre sob o módulo; a distância entre os pilares; T1 e T2 em cima. O enterro sai cortado
+    (a quebra), com a cota do valor inteiro: os 2,20 m achatavam o desenho. A vista lateral
+    ganhou altura na janela (a planta cabe em menos). Conferida renderizada fora do Civil 3D
+    (GC800, GC1000, genérico e o perfil sem P1).
+  - **Norte ou sul**: é do projeto (o mesmo para toda a usina), em Configurações › Parâmetros,
+    agora com os botões Norte e Sul ao lado do azimute; a janela de Mesa diz para onde os
+    módulos olham, embaixo da inclinação. Com a latitude do terreno (a gravada ou a da
+    geolocalização do desenho), Parâmetros e o Conforme objetos avisam quando a mesa olha
+    para o lado errado do hemisfério (o Panamá olhando para o norte).
+  - **A lista que voltava**: a lista das Configurações junta as mesas do desenho com os perfis
+    da pasta do usuário (a biblioteca); o Remover tirava só do desenho, e o perfil voltava da
+    pasta. Agora, ao salvar, a mesa removida sai também da biblioteca: o arquivo vai para a
+    subpasta "removidos" (`TableProfileStore.MoveToRemoved`), não some.
+  - Testes: no Core, o P1 que dá a ponta baixa e a volta, a folga do P2 igual ao declive do
+    catálogo (10 % e 20 %), a faixa da mesa com P1 em quatro faixas de projeto, o motor
+    inteiro assentando a mesa na altura do P1 com a faixa do projeto abaixo dela, os P1/P2
+    que não fecham (cada um com o motivo), o perfil v5 de ida e volta (e o v4 sem eles), o
+    genérico com as peças, a biblioteca que guarda o removido e o aviso do hemisfério. No
+    nível 2, `clivus-bifila-p1`: a GC800 com P1 num projeto de 0,30 a 0,80; nas mesas dentro
+    da faixa nenhum pilar abaixo do P1, e a linha da altura da estrutura.
+- 40.2, refeito depois da tela (30/10/2026). O Renan escolheu 80 objetos: 78 viravam mesa e
+  "Nada foi gerado", porque pelo Z deles os objetos olhavam para o sul e o projeto para o
+  norte. Pedidos: "o objeto do cliente está em 2D, o eixo Z deve estar cagado, então gere a
+  mesa respeitando apenas X e Y e encaixe a Z no terreno" e "no máximo o sistema tem que
+  pedir 'respeitar qual eixo: Direita, centro ou esquerda' [...] se eu escolher direita, ele
+  alinha na direita e estoura a esquerda". O que assumi:
+  - **Só X e Y**: o objeto vira pegada em planta; o Z dos vértices não entra em nada (pode vir
+    0, 9999 ou torto). O comprimento é o de planta, a largura é a distância entre os lados
+    maiores (4,715 na GC800 a 10°), e o retângulo inclinado na rampa, que de cima é um
+    paralelogramo, passa com 3° de folga no ângulo reto. O comprimento em planta tem 1,5 % de
+    folga para "tamanho diferente" (a rampa encurta o objeto 3D visto de cima). Saíram a
+    inclinação e o lado da ponta baixa do objeto, e com eles as divergências de inclinação,
+    de ponta baixa trocada e de projeto virado.
+  - **O lado da ponta baixa é do projeto** (o azimute em Parâmetros), e nada é recusado por
+    ele; o relatório diz para onde as mesas olham e de onde isso vem.
+  - **A única pergunta** depois dos objetos: "Alinhar a mesa no objeto pela
+    [Direita/Centro/Esquerda] <Centro>". Direita é o leste na planta com o norte para cima (na
+    fileira norte-sul, o norte). A ponta escolhida dos módulos (ou da mesa inteira, quando o
+    objeto é ela) cai na do objeto, e a diferença sobra do outro lado; no centro, metade para
+    cada lado. A área guarda o alinhamento (registro v2; o v1 vale centro), e o Regerar área
+    usa o mesmo. A confirmação "Continuar? [Sim/Não]" saiu (o U desfaz).
+  - **A mesa de tamanho mais perto**: o objeto vira a mesa em uso de tamanho mais perto (a área
+    dos módulos ou a mesa inteira; a largura de planta ou da inclinação), até 15 %; mais
+    longe que isso não é mesa (cerca, lote) e sai como "sem mesa do tamanho". O relatório diz
+    quanto a mesa tem a mais ou a menos que o objeto.
+  - Testes: no Core, o Z que não muda nada (0, 9999, cada vértice numa cota, NaN), o
+    paralelogramo do D6D4 em planta, a rampa que não vira divergência, o lado da ponta baixa
+    do projeto nos dois sentidos, o alinhamento pela direita, centro e esquerda com o projeto
+    olhando para o sul e para o norte, a direita no leste, a mesa de tamanho mais perto. No
+    nível 2, `clivus-campo` de novo (os objetos com Z 9999).
 
 ## Roteiro de tela (38.1 a 40.2)
 
