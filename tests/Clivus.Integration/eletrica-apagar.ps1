@@ -5,8 +5,10 @@
 
       - "12345" leva tudo de uma vez e um U devolve o desenho exatamente como
         estava (uma transacao, um passo do desfazer);
-      - 3 (sombras): os contornos e etiquetas somem, os registros zeram e os
-        modulos marcados voltam a cor de antes (a da analise, vermelha);
+      - 3 (sombras): as hachuras somem, os registros zeram e os modulos que
+        a sombra de antes de 31/10/2026 pintava de roxo (o desenho antigo,
+        montado pelo gancho clivus-sombra-antiga) voltam a cor de antes (a
+        da analise, vermelha); a sombra de hoje nao pinta modulo nenhum;
       - 1 (cores): nenhuma peca fica com cor de analise, sombra ou pendencia;
         cada modulo com a cor do contorno da mesa dele, pilar de mesa que cabe
         ByLayer, strings e sinais ByLayer, textos de analise ByLayer;
@@ -73,6 +75,11 @@ function Testar-Apagar {
     if ($i['inv'] -ne '4' -or $i['trafos'] -ne '2' -or $i['ucs'] -ne '1' -or $i['modelos'] -ne '1') { $erros += "o cadastro de partida nao e 4 inversores, 2 trafos, 1 UC, 1 modelo" }
     if ((N 'inicio' 'SinalString') -ne 4 * (N 'inicio' 'String')) { $erros += 'cada string devia ter 2 sinais e 2 circulos' }
     if ((N 'inicio' 'usuario') -ne 4) { $erros += 'as 4 entidades do usuario nao foram criadas' }
+    # Os roxos sao so os 30 do desenho antigo: a sombra de hoje nao pinta modulo.
+    if ($t -notmatch 'CLIVUS_SOMBRA_ANTIGA=30') { $erros += 'o desenho antigo (30 modulos pintados pela sombra de antes) nao foi montado' }
+    elseif ((N 'inicio' 'modsombra') -ne 30 -or (N 'inicio' 'sombrapint') -ne 31) {
+        $erros += "a sombra de hoje mexeu na cor dos modulos (roxos: $($i['modsombra']) de 30, registro: $($i['sombrapint']) de 31)"
+    }
 
     # O que nunca muda, em nenhuma etapa: as pecas das mesas e o resto do desenho.
     $fixas = 'Mesa', 'Modulo', 'Pilar', 'Face', 'Arvore', 'Area', 'Alinhamento', 'modelos', 'tipos', 'usuario'

@@ -67,6 +67,9 @@
 (command "CLIVUS_ARVORE_AUTO" 4 0.6 10 8 clivus:meio "")
 (command "CLIVUS_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "09:00" "09:00" "30" "-3" "1")
 (setvar "OSMODE" clivus:osmode)
+; O desenho de antes de 31/10/2026: a sombra de entao pintava os modulos de roxo.
+(setq clivus:antigas (clivus-sombra-antiga 30))
+(princ (strcat "\nCLIVUS_SOMBRA_ANTIGA=" (if clivus:antigas (itoa clivus:antigas) "nil")))
 
 ; As entidades do usuario: duas em camadas do plugin, sem o nosso XData.
 (setq clivus:x (car clivus:meio) clivus:y (cadr clivus:meio) clivus:usuario nil)

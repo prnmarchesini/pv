@@ -136,6 +136,48 @@ public static class GanchosDeTeste
         return handles.Count == 0 ? null : new ResultBuffer(handles.Select(h => new TypedValue((int)LispDataType.Text, h)).ToArray());
     }
 
+    /// <summary>
+    /// O desenho de antes de 31/10/2026, quando a sombra pintava o módulo
+    /// (lilás, violeta e roxo pela fração) e guardava a cor de antes em
+    /// SOMBRA_PINTADAS: (clivus-sombra-antiga n) pinta assim os n primeiros
+    /// módulos, calado como o comando de então, para o nível 2 conferir que o
+    /// Apagar sombras ainda os devolve. Devolve quantos pintou.
+    /// </summary>
+    [LispFunction("CLIVUS-SOMBRA-ANTIGA")]
+    public static object? SombraAntiga(ResultBuffer argumentos)
+    {
+        var valores = Valores(argumentos);
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (valores.Length < 1 || !int.TryParse(valores[0], out var quantos) || documento is null) return null;
+
+        var database = documento.Database;
+        return EscritaForaDeComando.Fazer(documento, () =>
+        {
+            double[] fracoes = [0.1, 0.4, 0.9];
+            var pintadas = new List<string> { "V1" };
+
+            using (var transacao = database.TransactionManager.StartTransaction())
+            {
+                var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
+                foreach (ObjectId id in espaco)
+                {
+                    if (pintadas.Count > quantos) break;
+                    if (transacao.GetObject(id, OpenMode.ForRead) is not BlockReference modulo || LayoutXData.LoadModule(modulo) is null) continue;
+
+                    var cor = SombrasCommands.CorDaFracao(fracoes[(pintadas.Count - 1) % fracoes.Length]);
+                    modulo.UpgradeOpen();
+                    pintadas.Add(modulo.Handle + "=" + PecasPintadas.Texto(modulo.Color));
+                    modulo.Color = Autodesk.AutoCAD.Colors.Color.FromRgb(cor.R, cor.G, cor.B);
+                }
+
+                transacao.Commit();
+            }
+
+            PluginDictionary.Save(database, "SOMBRA_PINTADAS", new ResultBuffer(pintadas.Select(p => new TypedValue((int)DxfCode.Text, p)).ToArray()));
+            return pintadas.Count - 1;
+        });
+    }
+
     private static string[] Valores(ResultBuffer? argumentos) =>
         argumentos?.AsArray().Select(v => Convert.ToString(v.Value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty).ToArray() ?? [];
 
