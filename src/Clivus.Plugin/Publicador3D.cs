@@ -65,6 +65,11 @@ internal static class Publicador3D
             using var pedido = new HttpRequestMessage(HttpMethod.Post, endereco + "/api/v1/cenas") { Content = conteudo };
             var autorizacao = Autorizacao();
             if (autorizacao is not null) pedido.Headers.Authorization = new AuthenticationHeaderValue(autorizacao.Scheme, autorizacao.Parameter);
+
+            // O servidor recusa a chave (ou a licença) antes de o corpo ir: com o
+            // TIN (42.3) a cena passa de 10 MB, e o 401 no meio do envio virava
+            // "Error while copying content to a stream" em vez de "chave não aceita".
+            pedido.Headers.ExpectContinue = true;
             // O erro do servidor volta no idioma da tela (etapa 10).
             pedido.Headers.AcceptLanguage.ParseAdd(Tr.AcceptLanguage);
 
