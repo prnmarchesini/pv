@@ -36,10 +36,10 @@ internal sealed class JanelaDeAreas : Window
 {
     private static readonly Dictionary<Document, JanelaDeAreas> Abertas = [];
 
-    /// <summary>Uma linha da lista, com os números já escritos na cultura da tela.</summary>
+    /// <summary>Uma linha da lista, com os números já escritos na cultura da tela; <paramref name="Apagavel"/> só na linha de área.</summary>
     internal sealed record Linha(
         LinhaDasAreas Origem, Brush Amostra, string Nome, string Hectares, string Mesas, string Modulos, string Kwp, string Pilares,
-        string Tipos, string Objetos, string Hachura, bool Total, string Dica);
+        string Tipos, string Objetos, string Hachura, bool Total, string Dica, bool Apagavel);
 
     /// <summary>Uma linha da contagem por tipo de mesa.</summary>
     internal sealed record LinhaDoTipo(string Tipo, string Mesas, string Modulos, string Kwp);
@@ -47,10 +47,12 @@ internal sealed class JanelaDeAreas : Window
     private readonly Document _documento;
     private LeituraDasAreas? _leitura;
 
+    // A lista edita só o nome da área (F2 ou o clique lento, como nas pastas do
+    // Windows, 31/10/2026); as outras colunas são só leitura.
     private readonly DataGrid _lista = new()
     {
         AutoGenerateColumns = false,
-        IsReadOnly = true,
+        IsReadOnly = false,
         CanUserAddRows = false,
         CanUserDeleteRows = false,
         CanUserSortColumns = false,
@@ -82,30 +84,37 @@ internal sealed class JanelaDeAreas : Window
     private readonly TextBlock _avisos = new() { Foreground = Brushes.Firebrick, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0), Visibility = Visibility.Collapsed };
     private readonly TextBlock _recado = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
 
-    private readonly Button _zoom;
-    private readonly Button _hachurar;
-    private readonly Button _tirar;
-    private readonly Button _renomear;
+    // As ações de uma área ficam na linha dela (31/10/2026, Renan: "As ações
+    // precisam estar na linha (apagar, renomear, regerar, etc). Dois cliques dá
+    // zoom, símbolo de lixeira para apagar com aviso, [...] F2, renomear,
+    // botão direito, opções de hachurar área, tirar hachura, regerar, apagar"):
+    // o duplo clique, a lixeira, o F2 e o menu do botão direito. Embaixo,
+    // as de todas as áreas.
+    private readonly DataGridTextColumn _colunaNome;
+    private readonly MenuItem _menuZoom;
+    private readonly MenuItem _menuRenomear;
+    private readonly MenuItem _menuHachurar;
+    private readonly MenuItem _menuTirar;
+    private readonly MenuItem _menuLimpar;
+    private readonly MenuItem _menuRegerar;
+    private readonly MenuItem _menuRecalcular;
+    private readonly MenuItem _menuApagar;
+
     private readonly Button _hachurarTodas;
     private readonly Button _tirarTodas;
-
-    // As ações sobre as mesas da área e a própria área (30/10/2026: "quero um
-    // botão para APAGAR área [...] e quando tem mesas, quero as opções de
-    // limpar, regerar, recalcular"): comandos na linha de comando, com a área
-    // pedida pela janela.
-    private readonly Button _limpar;
-    private readonly Button _regerar;
-    private readonly Button _recalcular;
-    private readonly Button _apagarArea;
+    private readonly Button _limparTodas;
+    private readonly Button _regerarTodas;
+    private readonly Button _apagarTodas;
 
     /// <summary>Os comandos que mudam o que a lista mostra: a lista se lê de novo quando um deles termina.</summary>
     private static readonly HashSet<string> ComandosQueMudamAsAreas = new(StringComparer.OrdinalIgnoreCase)
     {
         PluginInfo.ComandoAreaApagar, PluginInfo.ComandoAreaRecalcular, PluginInfo.ComandoApagarTudo, PluginInfo.ComandoRefazer,
+        PluginInfo.ComandoAreasLimpar, PluginInfo.ComandoAreasRegerar, PluginInfo.ComandoAreasApagar,
         PluginInfo.ComandoArea, PluginInfo.ComandoUsina, PluginInfo.ComandoFileira, PluginInfo.ComandoReindexar, "U", "UNDO", "REDO", "ERASE",
     };
 
-    private JanelaDeAreas(Document documento)
+    internal JanelaDeAreas(Document documento)
     {
         _documento = documento;
 
@@ -116,7 +125,7 @@ internal sealed class JanelaDeAreas : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        MontarColunas();
+        _colunaNome = MontarColunas();
 
         _lista.SelectionChanged += (_, _) => Tentar(MostrarDetalhe);
         _lista.MouseDoubleClick += (_, e) => Tentar(() =>
@@ -125,6 +134,66 @@ internal sealed class JanelaDeAreas : Window
             if (e.OriginalSource is DependencyObject alvo && ItemsControl.ContainerFromElement(_lista, alvo) is DataGridRow) Zoom();
         });
 
+        // O nome se edita na linha: F2, ou o segundo clique, devagar, no nome
+        // da área já escolhida (o duplo clique é o zoom).
+        _lista.BeginningEdit += (_, e) =>
+        {
+            if (e.Column != _colunaNome || e.Row.Item is not Linha { Apagavel: true } || e.EditingEventArgs is MouseButtonEventArgs { ClickCount: > 1 }) e.Cancel = true;
+        };
+        _lista.CellEditEnding += (_, e) =>
+        {
+            if (e.EditAction != DataGridEditAction.Commit || e.Row.Item is not Linha { Origem.Area: { } area } || e.EditingElement is not TextBox caixa) return;
+
+            var nome = caixa.Text.Trim();
+            if (nome.Length == 0 || nome == area.Identity.DisplayName) return;
+
+            // Depois que a edição fecha: ler a lista de novo no meio dela quebra o DataGrid.
+            Dispatcher.BeginInvoke(new Action(() => Tentar(() => Renomear(area, nome))));
+        };
+        _lista.PreviewKeyDown += (_, e) => Tentar(() =>
+        {
+            if (_lista.IsKeyboardFocusWithin && Keyboard.FocusedElement is TextBox) return;   // editando o nome
+
+            if (e.Key == Key.F2)
+            {
+                ComecarARenomear();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Delete && Escolhida?.Area is not null)
+            {
+                ApagarArea();
+                e.Handled = true;
+            }
+        });
+
+        // O botão direito escolhe a linha debaixo dele e abre o menu dela.
+        _lista.PreviewMouseRightButtonDown += (_, e) =>
+        {
+            if (e.OriginalSource is DependencyObject alvo && ItemsControl.ContainerFromElement(_lista, alvo) is DataGridRow linha) linha.IsSelected = true;
+        };
+
+        MenuItem Item(string texto, string dica, Action acao, string atalho = "")
+        {
+            var m = new MenuItem { Header = texto, ToolTip = dica, InputGestureText = atalho };
+            m.Click += (_, _) => Tentar(acao);
+            return m;
+        }
+
+        _menuZoom = Item(Tr.T("Zoom"), Tr.T("Mostra na tela a linha escolhida: a área inteira, as mesas de fora das áreas ou, no total, todas."), Zoom, Tr.T("dois cliques"));
+        _menuRenomear = Item(Tr.T("Renomear"), Tr.T("Troca o nome da área (o que o Clivus mostra nas listas, na hachura e no Excel). O GUID, as mesas e o que a área segue não mudam."), ComecarARenomear, "F2");
+        _menuHachurar = Item(Tr.T("Hachurar"), Tr.T("Hachura a área com a cor dela (a da amostra na lista), 70 % transparente, com o nome no meio, acima do terreno e das mesas dela. Se já tinha hachura, troca."), () => Hachurar(todas: false));
+        _menuTirar = Item(Tr.T("Tirar hachura"), Tr.T("Tira a hachura e o nome da área; a área e as mesas ficam."), () => Tirar(todas: false));
+        _menuLimpar = Item(Tr.T("Limpar mesas"), Tr.T("Apaga as mesas da área (pilares, módulos, estrutura, strings); a área e o alinhamento ficam, prontos para gerar de novo. U desfaz."), () => Mandar(PluginInfo.ComandoApagarTudo, Tr.T("Limpar mesas")));
+        _menuRegerar = Item(Tr.T("Regerar"), Tr.T("Apaga as mesas da área e gera de novo com a configuração e o terreno de hoje (a área que segue os objetos do cliente, pelos mesmos objetos). Pode perguntar o alinhamento na linha de comando."), () => Mandar(PluginInfo.ComandoRefazer, Tr.T("Regerar")));
+        _menuRecalcular = Item(Tr.T("Recalcular"), Tr.T("Recalcula, onde estão, todas as mesas da área: pilares e pontas baixas no terreno de hoje, com a configuração atual. Nada muda de lugar."), () => Mandar(PluginInfo.ComandoAreaRecalcular, Tr.T("Recalcular")));
+        _menuApagar = Item(Tr.T("Apagar área…"), Tr.T("Apaga a área (a linha, a hachura e o registro) e as mesas dela, depois de perguntar. U desfaz."), ApagarArea, "Del");
+
+        var menu = new ContextMenu();
+        foreach (var x in new object[] { _menuZoom, _menuRenomear, new Separator(), _menuHachurar, _menuTirar, new Separator(), _menuLimpar, _menuRegerar, _menuRecalcular, new Separator(), _menuApagar })
+            menu.Items.Add(x);
+        menu.Opened += (_, _) => Tentar(MostrarDetalhe);
+        _lista.ContextMenu = menu;
+
         Button Botao(string texto, string dica, Action acao)
         {
             var b = new Button { Content = texto, Height = 26, Padding = new Thickness(10, 0, 10, 0), Margin = new Thickness(0, 0, 6, 0), ToolTip = dica };
@@ -132,50 +201,39 @@ internal sealed class JanelaDeAreas : Window
             return b;
         }
 
-        _zoom = Botao(Tr.T("Zoom"), Tr.T("Mostra na tela a linha escolhida: a área inteira, as mesas de fora das áreas ou, no total, todas. O duplo clique na linha faz o mesmo."), Zoom);
-        _hachurar = Botao(Tr.T("Hachurar"), Tr.T("Hachura a área escolhida com a cor dela (a da amostra na lista), 70 % transparente, com o nome no meio, acima do terreno e das mesas dela. Se já tinha hachura, troca."), () => Hachurar(todas: false));
-        _tirar = Botao(Tr.T("Tirar hachura"), Tr.T("Tira a hachura e o nome da área escolhida; a área e as mesas ficam."), () => Tirar(todas: false));
-        _renomear = Botao(Tr.T("Renomear…"), Tr.T("Troca o nome da área (o que o Clivus mostra nas listas, na hachura e no Excel). O GUID, as mesas e o que a área segue não mudam."), Renomear);
-        _hachurarTodas = Botao(Tr.T("Hachurar todas"), Tr.F("Hachura todas as áreas, cada uma com uma cor diferente, na camada {0}.", HachuraDasAreas.Camada), () => Hachurar(todas: true));
-        _tirarTodas = Botao(Tr.T("Tirar todas"), Tr.T("Tira todas as hachuras de área do desenho (também as de área que não existe mais)."), () => Tirar(todas: true));
-
-        _limpar = Botao(Tr.T("Limpar mesas"), Tr.T("Apaga as mesas da área escolhida (pilares, módulos, estrutura, strings); a área e o alinhamento ficam, prontos para gerar de novo. U desfaz."), () => Mandar(PluginInfo.ComandoApagarTudo, Tr.T("Limpar mesas")));
-        _regerar = Botao(Tr.T("Regerar"), Tr.T("Apaga as mesas da área escolhida e gera de novo com a configuração e o terreno de hoje (a área que segue os objetos do cliente, pelos mesmos objetos). Pode perguntar o alinhamento na linha de comando."), () => Mandar(PluginInfo.ComandoRefazer, Tr.T("Regerar")));
-        _recalcular = Botao(Tr.T("Recalcular"), Tr.T("Recalcula, onde estão, todas as mesas da área escolhida: pilares e pontas baixas no terreno de hoje, com a configuração atual. Nada muda de lugar."), () => Mandar(PluginInfo.ComandoAreaRecalcular, Tr.T("Recalcular")));
-        _apagarArea = Botao(Tr.T("Apagar área…"), Tr.T("Apaga a área escolhida (a linha, a hachura e o registro). Se ela tem mesas, pergunta antes e as apaga junto; a área repetida (a mesma linha de outra) sai sozinha. U desfaz."), ApagarArea);
+        // Embaixo, o que vale para todas as áreas (o título da seção já diz "todas").
+        _hachurarTodas = Botao(Tr.T("Hachurar"), Tr.F("Hachura todas as áreas, cada uma com uma cor diferente, na camada {0}.", HachuraDasAreas.Camada), () => Hachurar(todas: true));
+        _tirarTodas = Botao(Tr.T("Tirar hachura"), Tr.T("Tira todas as hachuras de área do desenho (também as de área que não existe mais)."), () => Tirar(todas: true));
+        _limparTodas = Botao(Tr.T("Limpar"), Tr.T("Apaga as mesas de todas as áreas (cada área as dela); as áreas e os alinhamentos ficam. Pergunta antes. U desfaz."), () => Todas(PluginInfo.ComandoAreasLimpar));
+        _regerarTodas = Botao(Tr.T("Regerar"), Tr.T("Regera todas as áreas: a que segue os objetos do cliente, por eles; as outras, pelo alinhamento. Pergunta antes. U desfaz."), () => Todas(PluginInfo.ComandoAreasRegerar));
+        _apagarTodas = Botao(Tr.T("Apagar"), Tr.T("Apaga todas as áreas, cada uma com as mesas dela. Pergunta antes. U desfaz."), () => Todas(PluginInfo.ComandoAreasApagar));
 
         var exportar = Botao(Tr.T("Exportar Excel…"), Tr.T("Excel com a aba Resumo (uma linha por área e o total) e uma aba por área com a contagem por tipo de mesa, os pilares e a ocupação."), Exportar);
         var atualizar = Botao(Tr.T("Atualizar"), Tr.T("Lê o desenho de novo (depois de gerar, apagar ou mexer em mesas e áreas com a janela aberta)."), Preencher);
         var fechar = new Button { Content = Tr.T("Fechar"), Height = 26, Width = 80, IsCancel = true, ToolTip = Tr.T("Fecha a janela; as hachuras ficam.") };
         fechar.Click += (_, _) => Tentar(Close);
 
-        var daEscolhida = new StackPanel { Orientation = Orientation.Horizontal };
-        foreach (var b in new[] { _zoom, _hachurar, _tirar, _renomear }) daEscolhida.Children.Add(b);
-        daEscolhida.Children.Add(new Border { Width = 1, Margin = new Thickness(4, 3, 10, 3), Background = Brushes.Silver });
-        daEscolhida.Children.Add(_hachurarTodas);
-        daEscolhida.Children.Add(_tirarTodas);
+        var todas = new WrapPanel { Orientation = Orientation.Horizontal };
+        todas.Children.Add(new TextBlock { Text = Tr.T("Todas as áreas:"), FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) });
+        foreach (var b in new[] { _hachurarTodas, _tirarTodas }) todas.Children.Add(b);
+        todas.Children.Add(new Border { Width = 1, Height = 20, Margin = new Thickness(4, 3, 10, 3), Background = Brushes.Silver });
+        foreach (var b in new[] { _limparTodas, _regerarTodas, _apagarTodas }) todas.Children.Add(b);
 
         var finais = new StackPanel { Orientation = Orientation.Horizontal };
         finais.Children.Add(exportar);
         finais.Children.Add(atualizar);
         finais.Children.Add(fechar);
 
-        var botoes = new DockPanel { Margin = new Thickness(0, 10, 0, 0), LastChildFill = false };
+        var botoes = new DockPanel { Margin = new Thickness(0, 10, 0, 0), LastChildFill = true };
         DockPanel.SetDock(finais, Dock.Right);
         botoes.Children.Add(finais);
-        botoes.Children.Add(daEscolhida);
-
-        var daArea = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
-        daArea.Children.Add(new TextBlock { Text = Tr.T("Mesas da área:"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0), Foreground = Brushes.Gray });
-        foreach (var b in new[] { _limpar, _regerar, _recalcular }) daArea.Children.Add(b);
-        daArea.Children.Add(new Border { Width = 1, Margin = new Thickness(4, 3, 10, 3), Background = Brushes.Silver });
-        daArea.Children.Add(_apagarArea);
+        botoes.Children.Add(todas);
 
         var corpo = new StackPanel();
         corpo.Children.Add(_lista);
         corpo.Children.Add(new TextBlock
         {
-            Text = Tr.T("Cada mesa conta na área onde está o centro dela (dentro de duas, na menor); \"na divisa\" é mesa com canto fora da área. O total é o desenho inteiro, como o Recontar."),
+            Text = Tr.T("Na linha da área: dois cliques dá zoom, F2 (ou o segundo clique, devagar, no nome) renomeia, a lixeira (ou Del) apaga, e o botão direito tem o resto (hachurar, limpar, regerar, recalcular). Cada mesa conta na área onde está o centro dela (dentro de duas, na menor); \"na divisa\" é mesa com canto fora da área. O total é o desenho inteiro, como o Recontar."),
             Foreground = Brushes.Gray,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 4, 0, 0),
@@ -184,7 +242,6 @@ internal sealed class JanelaDeAreas : Window
         corpo.Children.Add(_titulo);
         corpo.Children.Add(Detalhe());
         corpo.Children.Add(botoes);
-        corpo.Children.Add(daArea);
         corpo.Children.Add(_recado);
 
         Content = new Border { Padding = new Thickness(12), Child = corpo };
@@ -254,7 +311,8 @@ internal sealed class JanelaDeAreas : Window
 
     // ------------------------------------------------------------ montagem
 
-    private void MontarColunas()
+    /// <summary>As colunas da lista; devolve a do nome (a única que se edita).</summary>
+    private DataGridTextColumn MontarColunas()
     {
         var direita = new Style(typeof(TextBlock));
         direita.Setters.Add(new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Right));
@@ -267,22 +325,25 @@ internal sealed class JanelaDeAreas : Window
         amostra.SetValue(Border.BorderThicknessProperty, new Thickness(1));
         amostra.SetValue(Border.MarginProperty, new Thickness(2));
         amostra.SetBinding(Border.BackgroundProperty, new Binding(nameof(Linha.Amostra)));
-        _lista.Columns.Add(new DataGridTemplateColumn { Header = string.Empty, Width = 24, CellTemplate = new DataTemplate { VisualTree = amostra } });
+        _lista.Columns.Add(new DataGridTemplateColumn { Header = string.Empty, Width = 24, IsReadOnly = true, CellTemplate = new DataTemplate { VisualTree = amostra } });
 
-        void Coluna(string titulo, string campo, double largura, bool numero, string? dica = null)
+        DataGridTextColumn Coluna(string titulo, string campo, double largura, bool numero, string? dica = null, bool editavel = false)
         {
             var coluna = new DataGridTextColumn
             {
                 Header = dica is null ? titulo : new TextBlock { Text = titulo, ToolTip = dica },
-                Binding = new Binding(campo),
+                // Só leitura de ida: o nome editado vai pelo CellEditEnding, não pela ligação.
+                Binding = new Binding(campo) { Mode = BindingMode.OneWay },
                 Width = largura > 0 ? new DataGridLength(largura) : new DataGridLength(1, DataGridLengthUnitType.Star),
+                IsReadOnly = !editavel,
             };
 
             if (numero) coluna.ElementStyle = direita;
             _lista.Columns.Add(coluna);
+            return coluna;
         }
 
-        Coluna(Tr.T("Área"), nameof(Linha.Nome), 170, false);
+        var nome = Coluna(Tr.T("Área"), nameof(Linha.Nome), 170, false, Tr.T("F2, ou o segundo clique devagar no nome, renomeia a área."), editavel: true);
         Coluna(Tr.T("ha"), nameof(Linha.Hectares), 70, true, Tr.T("A área em planta, em hectares."));
         Coluna(Tr.T("Mesas"), nameof(Linha.Mesas), 62, true);
         Coluna(Tr.T("Módulos"), nameof(Linha.Modulos), 72, true);
@@ -291,6 +352,24 @@ internal sealed class JanelaDeAreas : Window
         Coluna(Tr.T("Tipos de mesa"), nameof(Linha.Tipos), 0, false);
         Coluna(Tr.T("Objetos"), nameof(Linha.Objetos), 62, false, Tr.T("Se a área segue os objetos do cliente (Conforme objetos): o Regerar área a refaz por eles."));
         Coluna(Tr.T("Hachura"), nameof(Linha.Hachura), 64, false);
+
+        // A lixeira na linha de cada área: apaga depois de perguntar (31/10/2026).
+        var lixeira = new FrameworkElementFactory(typeof(Button));
+        lixeira.SetValue(ContentProperty, "");
+        lixeira.SetValue(FontFamilyProperty, new FontFamily("Segoe MDL2 Assets"));
+        lixeira.SetValue(Button.BackgroundProperty, Brushes.Transparent);
+        lixeira.SetValue(Button.BorderThicknessProperty, new Thickness(0));
+        lixeira.SetValue(Button.PaddingProperty, new Thickness(4, 1, 4, 1));
+        lixeira.SetValue(Button.CursorProperty, Cursors.Hand);
+        lixeira.SetValue(ToolTipProperty, Tr.T("Apagar a área (pergunta antes)"));
+        lixeira.SetBinding(VisibilityProperty, new Binding(nameof(Linha.Apagavel)) { Converter = new BooleanToVisibilityConverter() });
+        lixeira.AddHandler(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, new RoutedEventHandler((s, _) => Tentar(() =>
+        {
+            if (s is not FrameworkElement { DataContext: Linha linha }) return;
+            _lista.SelectedItem = linha;
+            ApagarArea();
+        })));
+        _lista.Columns.Add(new DataGridTemplateColumn { Header = string.Empty, Width = 32, IsReadOnly = true, CellTemplate = new DataTemplate { VisualTree = lixeira } });
 
         // O total em negrito; a dica da linha diz quem é a área (criação, handle, GUID).
         var estilo = new Style(typeof(DataGridRow));
@@ -304,6 +383,8 @@ internal sealed class JanelaDeAreas : Window
         _tipos.Columns.Add(new DataGridTextColumn { Header = Tr.T("Mesas"), Binding = new Binding(nameof(LinhaDoTipo.Mesas)), Width = 58, ElementStyle = direita });
         _tipos.Columns.Add(new DataGridTextColumn { Header = Tr.T("Módulos"), Binding = new Binding(nameof(LinhaDoTipo.Modulos)), Width = 68, ElementStyle = direita });
         _tipos.Columns.Add(new DataGridTextColumn { Header = "kWp", Binding = new Binding(nameof(LinhaDoTipo.Kwp)), Width = 78, ElementStyle = direita });
+
+        return nome;
     }
 
     /// <summary>O resumo da linha escolhida, em três colunas.</summary>
@@ -390,7 +471,9 @@ internal sealed class JanelaDeAreas : Window
 
         _avisos.Text = string.Join("\n", _leitura.Avisos);
         _avisos.Visibility = _leitura.Avisos.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        _hachurarTodas.IsEnabled = _leitura.Areas.Count > 0;
+
+        var comAreas = _leitura.Areas.Count > 0;
+        foreach (var b in new[] { _hachurarTodas, _limparTodas, _regerarTodas, _apagarTodas }) b.IsEnabled = comAreas;
 
         var semArea = Tr.T("Nenhuma área neste desenho. Use o botão Área.");
         if (_leitura.Areas.Count == 0) Recado(semArea, true);
@@ -428,7 +511,8 @@ internal sealed class JanelaDeAreas : Window
             l.Area is not null && r.FollowsObjects ? Tr.T("sim") : string.Empty,
             l.Area is not null && l.Hachurada ? Tr.T("sim") : string.Empty,
             r.Kind == AreaRowKind.Total,
-            dica);
+            dica,
+            l.Area is not null);
     }
 
     /// <summary>O resumo da linha escolhida e quais botões valem para ela.</summary>
@@ -437,16 +521,17 @@ internal sealed class JanelaDeAreas : Window
         var linha = Escolhida;
         var area = linha?.Area;
 
-        _zoom.IsEnabled = linha is not null;
-        _hachurar.IsEnabled = area is not null;
-        _tirar.IsEnabled = area is not null && linha!.Hachurada;
-        _renomear.IsEnabled = area is not null;
+        // O menu do botão direito vale para a linha escolhida.
+        _menuZoom.IsEnabled = linha is not null;
+        _menuRenomear.IsEnabled = area is not null;
+        _menuHachurar.IsEnabled = area is not null;
+        _menuTirar.IsEnabled = area is not null && linha!.Hachurada;
 
         var comMesas = area is not null && linha!.Resumo.Census.Tables > 0;
-        _limpar.IsEnabled = comMesas;
-        _recalcular.IsEnabled = comMesas;
-        _regerar.IsEnabled = area is not null;
-        _apagarArea.IsEnabled = area is not null;
+        _menuLimpar.IsEnabled = comMesas;
+        _menuRecalcular.IsEnabled = comMesas;
+        _menuRegerar.IsEnabled = area is not null;
+        _menuApagar.IsEnabled = area is not null;
 
         if (linha is null)
         {
@@ -548,24 +633,33 @@ internal sealed class JanelaDeAreas : Window
         Fazer(() => AreasDoDesenho.TirarHachura(_documento, leitura.Areas, area));
     }
 
-    private void Renomear()
+    /// <summary>Abre o nome da área escolhida para editar na própria linha (o F2).</summary>
+    private void ComecarARenomear()
     {
-        if (_leitura is not { } leitura || Escolhida?.Area is not { } area)
+        if (_lista.SelectedItem is not Linha { Apagavel: true } linha)
         {
             Recado(Tr.T("Escolha uma área na lista."), true);
             return;
         }
 
-        var janela = new JanelaDeNome(Tr.T("Renomear a área"), Tr.F("Novo nome da área \"{0}\":", area.Identity.DisplayName), area.Identity.DisplayName);
-        if (AcadApp.ShowModalWindow(janela) != true || janela.Nome is not { } nome) return;
-        if (nome == area.Identity.DisplayName) return;
+        _lista.CurrentCell = new DataGridCellInfo(linha, _colunaNome);
+        _lista.BeginEdit();
+    }
+
+    /// <summary>Grava o nome novo da área (editado na linha).</summary>
+    private void Renomear(AreaNoDesenho area, string nome)
+    {
+        if (_leitura is not { } leitura) return;
 
         Fazer(() => AreasDoDesenho.Renomear(_documento, leitura.Areas, area, nome));
     }
 
     /// <summary>
-    /// Apagar a área escolhida: vazia (ou repetida de outra), vai direto; com
-    /// mesas, pergunta aqui, e o comando não pergunta de novo.
+    /// Apagar a área escolhida: pergunta aqui, sempre (a lixeira, o Del e o
+    /// menu), com o que vai junto, e o comando não pergunta de novo na linha
+    /// de comando (31/10/2026: a pergunta ia para a linha de comando, ninguém
+    /// a via, e "clico em apagar área e não apaga"). As mesas que vão são as
+    /// DA área, as que a lista conta nela.
     /// </summary>
     private void ApagarArea()
     {
@@ -576,19 +670,53 @@ internal sealed class JanelaDeAreas : Window
         }
 
         var repetida = EscolhaDeArea.Repetidas(leitura.Areas, area).Count > 1;
-        var mesas = linha.Resumo.Census.Tables;
+        var mesas = repetida ? 0 : linha.Resumo.Census.Tables;
 
-        if (!repetida && mesas > 0)
+        var pergunta = mesas > 0
+            ? Tr.F("A área \"{0}\" tem {1} mesa(s). Apagar a área apaga as mesas, os pilares, a estrutura e as strings dela também (U desfaz).\n\nApagar a área e as mesas?", area.Identity.DisplayName, mesas)
+            : Tr.F("Apagar a área \"{0}\"? Ela não tem mesa dela (as mesas que estão dentro dela contam em outra área e ficam). U desfaz.", area.Identity.DisplayName);
+        if (MessageBox.Show(this, pergunta, Tr.T("Apagar área"), MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+
+        AreaAcoesCommands.ConfirmadaPelaJanela = area.Id;
+        Mandar(PluginInfo.ComandoAreaApagar, Tr.T("Apagar área"));
+    }
+
+    /// <summary>
+    /// O "todas as áreas" de baixo (Limpar, Regerar, Apagar): pergunta aqui,
+    /// com quantas áreas e mesas, e manda o comando, que não pergunta de novo.
+    /// </summary>
+    private void Todas(string comando)
+    {
+        if (_leitura is not { } leitura || leitura.Areas.Count == 0)
         {
-            var pergunta = Tr.F(
-                "A área \"{0}\" tem {1} mesa(s). Apagar a área apaga as mesas, os pilares, a estrutura e as strings dela também (U desfaz).\n\nApagar a área e as mesas?",
-                area.Identity.DisplayName, mesas);
-            if (MessageBox.Show(this, pergunta, Tr.T("Apagar área"), MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
-
-            AreaAcoesCommands.ConfirmadaPelaJanela = area.Id;
+            Recado(Tr.T("Nenhuma área neste desenho. Use o botão Área."), true);
+            return;
         }
 
-        Mandar(PluginInfo.ComandoAreaApagar, Tr.T("Apagar área"));
+        if (AcadApp.DocumentManager.MdiActiveDocument != _documento)
+        {
+            Recado(Tr.T("Este desenho não é o ativo: clique nele e repita."), true);
+            return;
+        }
+
+        var areas = EscolhaDeArea.Distintas(leitura.Areas).Count;
+        var mesas = leitura.Linhas.Where(l => l.Area is not null).Sum(l => l.Resumo.Census.Tables);
+
+        var (pergunta, titulo) = comando switch
+        {
+            PluginInfo.ComandoAreasLimpar => (Tr.F("Apagar as {0} mesa(s) das {1} área(s)? As áreas e os alinhamentos ficam. U desfaz.", mesas, areas), Tr.T("Limpar todas as áreas")),
+            PluginInfo.ComandoAreasRegerar => (Tr.F("Regerar as {0} área(s)? As mesas delas são apagadas e geradas de novo com a configuração e o terreno de hoje (a área que segue os objetos do cliente, por eles). U desfaz.", areas), Tr.T("Regerar todas as áreas")),
+            _ => (Tr.F("Apagar as {0} área(s) e as {1} mesa(s) delas? U desfaz.", areas, mesas), Tr.T("Apagar todas as áreas")),
+        };
+        if (MessageBox.Show(this, pergunta, titulo, MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+
+        // Sem interface (Core Console) o SendStringToExecute fora de comando derruba o processo.
+        if (!ClivusExtension.TemInterface()) return;
+
+        AreaAcoesCommands.TodasConfirmadasPelaJanela = true;
+        var cancelar = string.IsNullOrEmpty(_documento.CommandInProgress) ? string.Empty : "\x03\x03";
+        _documento.SendStringToExecute($"{cancelar}_{comando} ", true, false, false);
+        Recado(Tr.F("{0}: veja a linha de comando.", titulo), false);
     }
 
     /// <summary>

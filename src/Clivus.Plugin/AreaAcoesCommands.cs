@@ -50,6 +50,125 @@ public static class AreaAcoesCommands
         }
     }
 
+    /// <summary>A janela Áreas já perguntou o "todas" da parte de baixo: o comando não pergunta de novo.</summary>
+    internal static bool TodasConfirmadasPelaJanela;
+
+    /// <summary>
+    /// CLIVUS_AREAS_LIMPAR: as mesas de todas as áreas (cada área as dela);
+    /// as áreas e os alinhamentos ficam (31/10/2026, Renan: "Limpar todas
+    /// áreas, apagar todas áreas, regerar todas áreas").
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoAreasLimpar)]
+    public static void LimparTodas() => Todas(Tr.T("Limpar as mesas de todas as áreas"), (editor, documento, areas) =>
+    {
+        var mesas = 0;
+        foreach (var area in areas)
+        {
+            var dela = MesasDaArea(documento.Database, AreasDoDesenho.Varrer(documento.Database), area);
+            if (dela.Count == 0) continue;
+
+            ApagarTudoCommands.Executar(editor, documento, (area.Contorno, area.Identity.DisplayName), dela.ToHashSet());
+            mesas += dela.Count;
+        }
+
+        editor.WriteMessage(Tr.F("\nAREAS {0} mesa(s) apagada(s) em {1} área(s); as áreas ficam. U desfaz.\n", mesas, areas.Count));
+    });
+
+    /// <summary>
+    /// CLIVUS_AREAS_REGERAR: regera todas as áreas, da maior para a menor (a de
+    /// dentro fica com o desenho dela): a que segue os objetos do cliente, por
+    /// eles; as outras, pelo alinhamento (perguntado uma vez só, se o desenho
+    /// tem mais de um).
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoAreasRegerar)]
+    public static void RegerarTodas() => Todas(Tr.T("Regerar todas as áreas"), (editor, documento, areas) =>
+    {
+        var terreno = FileiraCommands.ExigirTerreno(editor, documento);
+        if (terreno is null) return;
+
+        var perfil = FileiraCommands.PerfilDaMesa(editor);
+        (IReadOnlyList<Point3> Vertices, AlignmentIdentity Identidade)? alinhamento = null;
+        var perguntou = false;
+        var regeradas = 0;
+
+        foreach (var area in areas.OrderByDescending(a => InverterSites.PlanArea(a.Contorno)))
+        {
+            if (CampoCommands.RefazerSeSegueObjetos(editor, documento, terreno, area.Contorno, () => perfil) is not null)
+            {
+                regeradas++;
+                continue;
+            }
+
+            if (!perguntou)
+            {
+                alinhamento = FileiraCommands.EscolherAlinhamento(editor, documento);
+                perguntou = true;
+            }
+
+            if (alinhamento is null)
+            {
+                editor.WriteMessage(Tr.F("\nAREAS {0} ficou como estava: sem alinhamento para regerar.\n", area.Identity.DisplayName));
+                continue;
+            }
+
+            RefazerCommands.Executar(editor, documento, terreno, (area.Contorno, area.Identity.DisplayName), alinhamento.Value, perfil);
+            regeradas++;
+        }
+
+        editor.WriteMessage(Tr.F("\nAREAS {0} de {1} área(s) regerada(s). U desfaz.\n", regeradas, areas.Count));
+    });
+
+    /// <summary>CLIVUS_AREAS_APAGAR: todas as áreas, cada uma com as mesas dela.</summary>
+    [CommandMethod(PluginInfo.ComandoAreasApagar)]
+    public static void ApagarTodas() => Todas(Tr.T("Apagar todas as áreas e as mesas delas"), (editor, documento, areas) =>
+    {
+        foreach (var area in areas.OrderBy(a => InverterSites.PlanArea(a.Contorno)))
+            ApagarArea(editor, documento, area, confirmada: true);
+    });
+
+    /// <summary>
+    /// O "todas" da janela e da linha de comando: as áreas do desenho (as
+    /// repetidas uma vez só), a pergunta (a janela já perguntou:
+    /// <see cref="TodasConfirmadasPelaJanela"/>) e a ação.
+    /// </summary>
+    private static void Todas(string oQue, Action<Editor, Document, List<AreaNoDesenho>> acao)
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+        var confirmadas = TodasConfirmadasPelaJanela;
+        TodasConfirmadasPelaJanela = false;
+
+        try
+        {
+            var areas = EscolhaDeArea.Distintas(AreasDoDesenho.Varrer(documento.Database));
+            if (areas.Count == 0)
+            {
+                editor.WriteMessage(Tr.T("\nAREAS Nenhuma área neste desenho.\n"));
+                return;
+            }
+
+            if (!confirmadas)
+            {
+                var pergunta = new PromptKeywordOptions(Tr.F("\n{0} ({1} área(s))?", oQue, areas.Count) + " [Sim/Não] <Não>", "Sim Não") { AllowNone = true };
+                var resposta = editor.GetKeywords(pergunta);
+                if (resposta.Status != PromptStatus.OK || resposta.StringResult != "Sim")
+                {
+                    editor.WriteMessage(Tr.T("\nNada foi feito.\n"));
+                    return;
+                }
+            }
+
+            acao(editor, documento, areas);
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar($"Falha em: {oQue}.", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui: {0}\n", erro.Message));
+        }
+    }
+
     /// <summary>CLIVUS_AREA_RECALCULAR: todas as mesas da área, onde estão, com o terreno e a configuração de hoje.</summary>
     [CommandMethod(PluginInfo.ComandoAreaRecalcular, CommandFlags.UsePickSet)]
     public static void Recalcular()
@@ -67,7 +186,9 @@ public static class AreaAcoesCommands
             var area = EscolhaDeArea.Pedir(editor, documento);
             if (area is null) return;
 
-            var mesas = MesasComOCentroDentro(documento.Database, area.Contorno);
+            // As mesas DA área (a regra da janela: o centro dentro, e dentro de
+            // duas, a menor): a "Area 1" que repete a "area1" não recalcula as dela.
+            var mesas = MesasDaArea(documento.Database, AreasDoDesenho.Varrer(documento.Database), area);
 
             if (mesas.Count == 0)
             {
@@ -87,10 +208,12 @@ public static class AreaAcoesCommands
 
     /// <summary>
     /// Apaga a área: a linha, a hachura, o registro e o "segue os objetos".
-    /// Com mesas dentro, elas vão junto (o Apagar tudo da área), depois de
-    /// perguntar (a janela já perguntou: <paramref name="confirmada"/>). A
-    /// área repetida (outra com o mesmo contorno) sai sozinha: as mesas são
-    /// da outra.
+    /// As mesas DELA vão junto (a regra da janela Áreas: o centro dentro, e
+    /// dentro de duas, a menor), depois de perguntar (a janela já perguntou:
+    /// <paramref name="confirmada"/>). A área repetida (outra com o mesmo
+    /// contorno) ou a que só cobre as de outra área menor sai sozinha: as
+    /// mesas são da outra (31/10/2026: a "Area 1" do Aurora, quase igual à
+    /// "area1", ia levar as 78 mesas dela).
     /// </summary>
     internal static void ApagarArea(Editor editor, Document documento, AreaNoDesenho area, bool confirmada)
     {
@@ -100,15 +223,15 @@ public static class AreaAcoesCommands
 
         if (gemeas.Count == 0)
         {
-            var mesas = MesasComOCentroDentro(database, area.Contorno).Count;
+            var dela = MesasDaArea(database, todas, area);
 
-            if (mesas > 0 && !confirmada && !Confirmar(editor, area, mesas))
+            if (dela.Count > 0 && !confirmada && !Confirmar(editor, area, dela.Count))
             {
                 editor.WriteMessage(Tr.T("\nNada foi apagado.\n"));
                 return;
             }
 
-            if (mesas > 0) ApagarTudoCommands.Executar(editor, documento, (area.Contorno, area.Identity.DisplayName));
+            if (dela.Count > 0) ApagarTudoCommands.Executar(editor, documento, (area.Contorno, area.Identity.DisplayName), dela.ToHashSet());
         }
 
         var hachuras = HachuraDasAreas.Apagar(database, todas, area);
@@ -144,11 +267,33 @@ public static class AreaAcoesCommands
         return resposta.Status == PromptStatus.OK && resposta.StringResult == "Sim";
     }
 
-    /// <summary>As mesas com o centro dentro da área (a regra da janela Áreas e do Recontar por área).</summary>
-    internal static List<Guid> MesasComOCentroDentro(Database database, IReadOnlyList<Point3> area)
+    /// <summary>
+    /// As mesas DA área cuja linha é este contorno (o Limpar mesas da janela e
+    /// do botão direito), ou null se o contorno não é de uma área registrada
+    /// (aí vale tudo o que está dentro, como sempre).
+    /// </summary>
+    internal static IReadOnlySet<Guid>? MesasDaAreaDoContorno(Database database, IReadOnlyList<Point3> contorno)
+    {
+        var todas = AreasDoDesenho.Varrer(database);
+
+        static bool Igual(IReadOnlyList<Point3> a, IReadOnlyList<Point3> b) =>
+            a.Count == b.Count && a.Zip(b).All(p => Math.Abs(p.First.X - p.Second.X) < 1e-6 && Math.Abs(p.First.Y - p.Second.Y) < 1e-6);
+
+        return todas.FirstOrDefault(a => Igual(a.Contorno, contorno)) is { } area ? MesasDaArea(database, todas, area).ToHashSet() : null;
+    }
+
+    /// <summary>
+    /// As mesas DA área: o centro dentro dela e, dentro de duas, a menor (a
+    /// regra da janela Áreas, do resumo e do Recontar, <see cref="AreaSummary.AreaOf"/>).
+    /// A área é a polilinha (o ObjectId): duas cópias com o mesmo GUID contam
+    /// cada uma as suas.
+    /// </summary>
+    internal static List<Guid> MesasDaArea(Database database, IReadOnlyList<AreaNoDesenho> todas, AreaNoDesenho area)
     {
         var mesas = new List<Guid>();
-        if (area.Count < 3) return mesas;
+        if (area.Contorno.Count < 3) return mesas;
+
+        var entradas = todas.Select(a => new AreaInput(a.Identity.Id, a.Identity.DisplayName, a.Contorno, false)).ToList();
 
         using var transacao = database.TransactionManager.StartOpenCloseTransaction();
 
@@ -160,9 +305,10 @@ public static class AreaAcoesCommands
             var cantos = FileiraCommands.Vertices(polilinha, transacao);
             if (cantos.Count == 0) continue;
 
-            if (Polygons.Contains(area, cantos.Average(p => p.X), cantos.Average(p => p.Y))) mesas.Add(mesa.Identity.Id);
+            if (AreaSummary.AreaOf(cantos, entradas) is { } i && todas[i].Id == area.Id) mesas.Add(mesa.Identity.Id);
         }
 
         return mesas;
     }
+
 }

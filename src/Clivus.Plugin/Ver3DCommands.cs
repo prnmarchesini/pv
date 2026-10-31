@@ -32,9 +32,36 @@ public static class Ver3DCommands
 
         var editor = documento.Editor;
 
+        // A janela "Exportando o 3D para a web" (31/10/2026, Renan: "Comando
+        // clivus 3D trava gostoso [...] tela de exportando para web... com a %
+        // de carregamento e opção de cancelar, sem MATAR MEU CAD"): a leitura
+        // do desenho anda na linha do AutoCAD e redesenha a janela a cada
+        // passo; a cena, a compressão e o envio vão para outra linha.
+        JanelaDeProgresso? janela = null;
+
         try
         {
-            var cena = Montar(documento);
+            if (ClivusExtension.TemInterface())
+            {
+                try
+                {
+                    janela = JanelaDeProgresso.Abrir(null, Tr.T("Exportando o 3D para a web"), podeCancelar: true);
+                }
+                catch (System.Exception erro)
+                {
+                    RegistroDeDiagnostico.Registrar("Falha ao abrir o andamento do 3D.", erro);
+                    janela = null;
+                }
+            }
+
+            void Andar(double porcento, string texto)
+            {
+                if (janela is null) return;
+                janela.Avancar(porcento, texto);
+                if (janela.Cancelado) throw new OperationCanceledException();
+            }
+
+            var cena = Montar(documento, Andar);
             if (cena is null) return;
 
             // Com o servidor 3D configurado, a usina vai para ele e o link
@@ -42,7 +69,7 @@ public static class Ver3DCommands
             // falhar, a página local de sempre.
             if (Publicador3D.Endereco is not null)
             {
-                var link = Publicar(documento, cena);
+                var link = Publicar(documento, cena, janela);
                 if (link is not null)
                 {
                     Process.Start(new ProcessStartInfo(link) { UseShellExecute = true });
@@ -53,14 +80,30 @@ public static class Ver3DCommands
                 editor.WriteMessage(Tr.T("  Gravo a página no PC, como antes.\n"));
             }
 
+            Andar(95, Tr.T("Gravando a página no PC..."));
             var caminho = Gravar(documento, cena, Caminho(documento));
             Process.Start(new ProcessStartInfo(caminho) { UseShellExecute = true });
             editor.WriteMessage(Tr.T("  Aberta no navegador padrão. O arquivo pode ser mandado por e-mail: abre sem internet.\n"));
+        }
+        catch (OperationCanceledException)
+        {
+            editor.WriteMessage(Tr.T("\n3D cancelado: nada foi publicado.\n"));
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao gerar o 3D.", erro);
             editor.WriteMessage(Tr.F("\nNão consegui gerar o 3D: {0}\n", erro.Message));
+        }
+        finally
+        {
+            try
+            {
+                janela?.Fechar();
+            }
+            catch (System.Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao fechar o andamento do 3D.", erro);
+            }
         }
     }
 
@@ -115,15 +158,16 @@ public static class Ver3DCommands
         return Path.Combine(pasta, $"{nome} - 3D.html");
     }
 
-    /// <summary>A cena do desenho, ou null (sem terreno, com a mensagem).</summary>
-    private static Scene3D? Montar(Document documento)
+    /// <summary>A cena do desenho, ou null (sem terreno, com a mensagem). <paramref name="andar"/>: a porcentagem e o que está sendo lido (e o Cancelar).</summary>
+    private static Scene3D? Montar(Document documento, Action<double, string>? andar = null)
     {
         var editor = documento.Editor;
 
         var terreno = FileiraCommands.ExigirTerreno(editor, documento);
         if (terreno is null) return null;
 
-        var (cena, modulosFora, pilaresFora) = Viewer3DPage.OnTerrain(Cena(documento, terreno), (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null);
+        var (cena, modulosFora, pilaresFora) = Viewer3DPage.OnTerrain(Cena(documento, terreno, andar), (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null);
+        andar?.Invoke(58, Tr.T("Conferindo o terreno debaixo das mesas..."));
 
         if (modulosFora + pilaresFora > 0)
             editor.WriteMessage(Tr.F("\n  {0} módulo(s) e {1} pilar(es) sem terreno embaixo ficaram fora do 3D (no desenho estão planos na cota 0 e marcados).\n", modulosFora, pilaresFora));
@@ -212,14 +256,44 @@ public static class Ver3DCommands
         return caminho;
     }
 
-    /// <summary>Publica no servidor 3D. O link, ou null (com o erro dito).</summary>
-    private static string? Publicar(Document documento, Scene3D cena)
+    /// <summary>
+    /// Publica no servidor 3D. O link, ou null (com o erro dito). Com a
+    /// <paramref name="janela"/> de andamento, a cena em JSON, a compressão e o
+    /// envio correm em outra linha, e esta (a do AutoCAD) só redesenha a janela
+    /// e repassa o Cancelar (<see cref="OperationCanceledException"/>).
+    /// </summary>
+    private static string? Publicar(Document documento, Scene3D cena, JanelaDeProgresso? janela = null)
     {
         var editor = documento.Editor;
         var relogio = Stopwatch.StartNew();
+        var versao = PluginInfo.VersaoLegivel(ClivusCommands.VersaoDoPlugin());
 
-        var corpo = Viewer3DPage.PublishBody(cena, PluginInfo.VersaoLegivel(ClivusCommands.VersaoDoPlugin()), cena.Title);
-        var (publicada, erro) = Publicador3D.Publicar(corpo);
+        // O que a outra linha conta, lido aqui a cada volta.
+        var fracao = 0.0;
+        var texto = Tr.T("Montando a cena 3D...");
+        using var cancelar = new CancellationTokenSource();
+
+        var envio = Task.Run(() => Publicador3D.PublicarAsync(Viewer3DPage.PublishBody(cena, versao, cena.Title), (f, t) =>
+        {
+            Volatile.Write(ref fracao, f);
+            Volatile.Write(ref texto, t);
+        }, cancelar.Token));
+
+        while (!envio.IsCompleted)
+        {
+            if (janela is not null)
+            {
+                janela.Avancar(60 + 38 * Volatile.Read(ref fracao), Volatile.Read(ref texto));
+                if (janela.Cancelado) cancelar.Cancel();
+            }
+
+            envio.Wait(40);
+        }
+
+        // Cancelado na janela: o envio para no próximo pedaço e nada fica publicado.
+        if (cancelar.IsCancellationRequested) throw new OperationCanceledException();
+
+        var (publicada, erro) = envio.GetAwaiter().GetResult();
         relogio.Stop();
 
         if (publicada is null)
@@ -244,9 +318,10 @@ public static class Ver3DCommands
         return publicada.Url;
     }
 
-    private static Scene3D Cena(Document documento, ProcessedTerrain terreno)
+    private static Scene3D Cena(Document documento, ProcessedTerrain terreno, Action<double, string>? andar = null)
     {
         var database = documento.Database;
+        andar?.Invoke(2, Tr.T("Lendo o terreno..."));
 
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
 
@@ -269,6 +344,7 @@ public static class Ver3DCommands
         var faces = new List<Scene3DFace>();
         var pilares = new List<Scene3DPillar>();
         var arvores = new List<Scene3DTree>();
+        andar?.Invoke(8, Tr.T("Lendo os módulos, os pilares e as árvores..."));
 
         // A análise de sombras do CAD (42.3): o momento e a fração de cada
         // módulo com sombra, e a cor de antes dos pintados pela versão antiga.
@@ -290,9 +366,12 @@ public static class Ver3DCommands
             var cores = new Dictionary<Guid, RgbColor>();
             var sombraDoModulo = new Dictionary<Guid, Scene3DFaceShadow>();
             var facesLidas = new List<(Guid Modulo, List<Point3> Cantos)>();
+            var total = Math.Max(1, espaco.Cast<ObjectId>().Count());
+            var lidas = 0;
 
             foreach (ObjectId id in espaco)
             {
+                if (++lidas % 4000 == 0) andar?.Invoke(8 + 30.0 * lidas / total, Tr.F("Lendo os módulos, os pilares e as árvores ({0:N0} de {1:N0} objetos)...", lidas, total));
                 if (id.IsErased) continue;
                 var dxf = id.ObjectClass.DxfName;
                 if (dxf != "3DFACE" && dxf != "INSERT") continue;
@@ -335,13 +414,15 @@ public static class Ver3DCommands
         }
 
         var titulo = Path.GetFileNameWithoutExtension(documento.Name);
+        andar?.Invoke(38, Tr.T("Lendo as canaletas e o carport..."));
         // O carport (36.1) vai junto com as canaletas: faces prontas, na cor de cada peça.
         var extras = Canaletas(database, terreno);
         extras.AddRange(CarportCommands.Faces3D(database, (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null));
 
         // A bifila (39.1): as vigas, mãos francesas, terças e tirantes, com
         // as faces lidas dos próprios sólidos do desenho.
-        extras.AddRange(EstruturaDaBifila(database));
+        extras.AddRange(EstruturaDaBifila(database, andar));
+        andar?.Invoke(55, Tr.T("Lendo o resumo das áreas..."));
 
         // As hachuras de sombra do CAD não vão (31/10/2026, Renan: "Nao quero que
         // leve o magenta no 3d web, a web ja tem sombra propria"): a sombra do 3D é
@@ -389,16 +470,19 @@ public static class Ver3DCommands
     /// menos o meio do eixo gravado é o quanto ela andou. Explodir o sólido,
     /// como no começo, eram 13 mil sólidos explodidos numa usina de 500 mesas.
     /// </summary>
-    private static List<Scene3DFace> EstruturaDaBifila(Database database)
+    private static List<Scene3DFace> EstruturaDaBifila(Database database, Action<double, string>? andar = null)
     {
         var faces = new List<Scene3DFace>();
 
         using var transacao = database.TransactionManager.StartOpenCloseTransaction();
         var tabela = (BlockTable)transacao.GetObject(database.BlockTableId, OpenMode.ForRead);
         var espaco = (BlockTableRecord)transacao.GetObject(tabela[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+        var total = Math.Max(1, espaco.Cast<ObjectId>().Count());
+        var lidas = 0;
 
         foreach (ObjectId id in espaco)
         {
+            if (++lidas % 4000 == 0) andar?.Invoke(40 + 15.0 * lidas / total, Tr.T("Lendo a estrutura do biposte..."));
             if (id.ObjectClass.DxfName != "3DSOLID") continue;
             if (transacao.GetObject(id, OpenMode.ForRead) is not Solid3d solido || LayoutXData.LoadStructure(solido) is not { } peca) continue;
 

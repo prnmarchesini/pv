@@ -35,7 +35,9 @@ public static class ApagarTudoCommands
             var area = RefazerCommands.AreaDaSelecao(editor, documento) ?? FileiraCommands.EscolherArea(editor, documento);
             if (area is null) return;
 
-            Executar(editor, documento, area.Value);
+            // Só as mesas da área (31/10/2026): a que repete outra, ou tem outra
+            // dentro, não leva as mesas da outra.
+            Executar(editor, documento, area.Value, AreaAcoesCommands.MesasDaAreaDoContorno(documento.Database, area.Value.Vertices));
         }
         catch (System.Exception erro)
         {
@@ -80,13 +82,18 @@ public static class ApagarTudoCommands
         }
     }
 
-    internal static void Executar(Editor editor, Document documento, (IReadOnlyList<Point3> Vertices, string Nome) area)
+    /// <param name="soEstas">
+    /// As mesas que podem ir (as da área, pela regra da janela Áreas, 31/10/2026);
+    /// null: tudo o que toca a linha, como sempre foi. Com elas, as notas órfãs
+    /// ficam: por dentro da linha pode haver outra área.
+    /// </param>
+    internal static void Executar(Editor editor, Document documento, (IReadOnlyList<Point3> Vertices, string Nome) area, IReadOnlySet<Guid>? soEstas = null)
     {
         var database = documento.Database;
 
-        var apagadas = LayoutEraser.ApagarDentro(database, area.Vertices);
+        var apagadas = LayoutEraser.ApagarDentro(database, area.Vertices, soEstas);
         CarportCommands.LimparFilasSemVao(database);
-        var orfas = LayoutEraser.ApagarOrfasDentro(database, area.Vertices);
+        var orfas = soEstas is null ? LayoutEraser.ApagarOrfasDentro(database, area.Vertices) : 0;
 
         // A área vazia deixa de seguir os objetos do cliente (40.2): o Regerar volta ao alinhamento.
         if (CampoCommands.Esquecer(database, area.Vertices))

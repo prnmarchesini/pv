@@ -54,6 +54,9 @@ function Testar-AcoesDaArea {
             '{{C1}}' = (Ponto3 -50 -50 9999); '{{C2}}' = (Ponto3 0 -50 -40); '{{C3}}' = (Ponto3 0 50 777); '{{C4}}' = (Ponto3 -50 50 0)
             '{{NA_LINHA}}' = (Ponto3 -50 10 0)
             '{{DENTRO_LESTE}}' = (Ponto3 25 0 0)
+            # A area 1 m maior por fora da Oeste (31/10/2026) e um ponto na linha dela.
+            '{{G1}}' = (Ponto3 -51 -51 0); '{{G2}}' = (Ponto3 1 -51 0); '{{G3}}' = (Ponto3 1 51 0); '{{G4}}' = (Ponto3 -51 51 0)
+            '{{NA_LINHA_G}}' = (Ponto3 -51 10 0)
         }
 
     if ($r.Estourou -or $r.Codigo -ne 0 -or $r.Texto -notmatch 'CLIVUS_FIM') {
@@ -94,6 +97,12 @@ function Testar-AcoesDaArea {
 
     if ($t -notmatch 'Nenhuma mesa dentro de Area Leste' -or -not (Espera 'RECALCULADO' 2 $mesas 'o recalcular mudou as areas ou as mesas')) { $ok = $false }
 
+    # 31/10/2026: a area de fora, quase igual a Oeste, sai sozinha; as mesas sao da Oeste e ficam.
+    if (-not (Espera 'COM_GEMEA' 3 $mesas 'a area 1 m maior por fora da Oeste nao foi criada')) { $ok = $false }
+    $gemea = $t.Substring($t.IndexOf('CLIVUS_ACOES APAGAR_GEMEA'))
+    $gemea = $gemea.Substring(0, [Math]::Max(0, $gemea.IndexOf('CLIVUS_ACOES SEM_GEMEA')))
+    if ($gemea -notmatch 'AREA Area Oeste B apagada' -or $gemea -match 'Apagar\?' -or -not (Espera 'SEM_GEMEA' 2 $mesas 'apagar a area de fora levou mesa da Oeste (ou perguntou)')) { $ok = $false }
+
     if ($t -notmatch 'AREA Area Leste apagada' -or -not (Espera 'SEM_LESTE' 1 $mesas 'a Leste vazia nao foi apagada')) { $ok = $false }
 
     if ($t -notmatch 'Nada foi apagado' -or -not (Espera 'OESTE_FICOU' 1 $mesas 'o Enter (Nao) apagou a Oeste')) { $ok = $false }
@@ -106,6 +115,16 @@ function Testar-AcoesDaArea {
     }
 
     if (-not (Espera 'DEPOIS_DO_U' 1 $mesas 'o U nao devolveu a Oeste e as mesas')) { $ok = $false }
+
+    # 31/10/2026: o "todas as areas" (Limpar, U, Regerar).
+    if ($t -notmatch "AREAS $mesas mesa\(s\) apagada\(s\) em 1 .rea" -or -not (Espera 'TODAS_LIMPAS' 1 0 'Limpar todas nao tirou as mesas (ou tirou a area)')) { $ok = $false }
+    if (-not (Espera 'LIMPAS_DESFEITO' 1 $mesas 'o U nao devolveu as mesas do Limpar todas')) { $ok = $false }
+    $regeradas = Conta 'TODAS_REGERADAS'
+    if ($t -notmatch 'AREAS 1 de 1 .rea\(s\) regerada' -or $null -eq $regeradas -or $regeradas[0] -ne 1 -or $regeradas[1] -lt 1) {
+        $problemas.Add("clivus-areas-acoes: Regerar todas nao regerou a Oeste (veio $($regeradas -join ' e ')). Veja $($r.Saida)")
+        $ok = $false
+    }
+
     if (-not (Espera 'DE_NOVO' 0 0 'depois do U, a Oeste nao foi apagada de novo')) { $ok = $false }
 
     if ($t -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) {

@@ -198,6 +198,24 @@ public static class ComandosTraduzidos
     [CommandMethod("CLIVUS_BORRAR_TODO", CommandFlags.UsePickSet)]
     public static void CLIVUS_BORRAR_TODO() => ApagarTudoCommands.ApagarTudo();
 
+    [CommandMethod("CLIVUS_AREAS_ERASE")]
+    public static void CLIVUS_AREAS_ERASE() => AreaAcoesCommands.ApagarTodas();
+
+    [CommandMethod("CLIVUS_AREAS_BORRAR")]
+    public static void CLIVUS_AREAS_BORRAR() => AreaAcoesCommands.ApagarTodas();
+
+    [CommandMethod("CLIVUS_AREAS_CLEAR")]
+    public static void CLIVUS_AREAS_CLEAR() => AreaAcoesCommands.LimparTodas();
+
+    [CommandMethod("CLIVUS_AREAS_LIMPIAR")]
+    public static void CLIVUS_AREAS_LIMPIAR() => AreaAcoesCommands.LimparTodas();
+
+    [CommandMethod("CLIVUS_AREAS_REGENERATE")]
+    public static void CLIVUS_AREAS_REGENERATE() => AreaAcoesCommands.RegerarTodas();
+
+    [CommandMethod("CLIVUS_AREAS_REGENERAR")]
+    public static void CLIVUS_AREAS_REGENERAR() => AreaAcoesCommands.RegerarTodas();
+
     [CommandMethod("CLIVUS_AREA_ERASE", CommandFlags.UsePickSet)]
     public static void CLIVUS_AREA_ERASE() => AreaAcoesCommands.Apagar();
 

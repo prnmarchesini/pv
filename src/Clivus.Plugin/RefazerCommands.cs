@@ -215,7 +215,8 @@ internal sealed record Erased(IReadOnlyList<Guid> Tables, int Entities, Eletrica
 /// </summary>
 internal static class LayoutEraser
 {
-    internal static Erased ApagarDentro(Database database, IReadOnlyList<Point3> area)
+    /// <param name="soEstas">Só estas mesas (as da área pela regra da janela Áreas); null: toda mesa que toca a área.</param>
+    internal static Erased ApagarDentro(Database database, IReadOnlyList<Point3> area, IReadOnlySet<Guid>? soEstas = null)
     {
         ArgumentNullException.ThrowIfNull(database);
         ArgumentNullException.ThrowIfNull(area);
@@ -230,6 +231,8 @@ internal static class LayoutEraser
         {
             foreach (var (guid, mesa) in LayoutScan.Tables(transacao, database))
             {
+                if (soEstas is not null && !soEstas.Contains(guid)) continue;
+
                 var referencias = mesa.Contours.Count > 0 ? mesa.Contours : mesa.All.Take(1).ToList();
 
                 if (!referencias.Any(id => Pontos(transacao, id).Any(p => Polygons.Contains(area, p.X, p.Y)))) continue;

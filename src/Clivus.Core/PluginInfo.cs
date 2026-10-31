@@ -68,6 +68,15 @@ public static partial class PluginInfo
     /// <summary>Comando que apaga uma área (com as mesas dela, depois de perguntar): a janela Áreas e a linha de comando.</summary>
     public const string ComandoAreaApagar = "CLIVUS_AREA_APAGAR";
 
+    /// <summary>Apaga as mesas de todas as áreas (cada área as dela); as áreas ficam (31/10/2026).</summary>
+    public const string ComandoAreasLimpar = "CLIVUS_AREAS_LIMPAR";
+
+    /// <summary>Regera todas as áreas: pelos objetos do cliente ou pelo alinhamento (31/10/2026).</summary>
+    public const string ComandoAreasRegerar = "CLIVUS_AREAS_REGERAR";
+
+    /// <summary>Apaga todas as áreas, cada uma com as mesas dela (31/10/2026).</summary>
+    public const string ComandoAreasApagar = "CLIVUS_AREAS_APAGAR";
+
     /// <summary>Comando que recalcula, onde estão, todas as mesas de uma área (o terreno e a configuração de hoje).</summary>
     public const string ComandoAreaRecalcular = "CLIVUS_AREA_RECALCULAR";
 

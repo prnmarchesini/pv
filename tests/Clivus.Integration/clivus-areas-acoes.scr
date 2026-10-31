@@ -54,6 +54,16 @@
 (command "CLIVUS_AREA_RECALCULAR" "{{DENTRO_LESTE}}")
 (clivus:contar "RECALCULADO")
 
+; 31/10/2026 (tela do Aurora: a "Area 1" quase igual a "area1" ia levar as 78
+; mesas dela): uma area 1 m maior por fora da Oeste. As mesas contam na menor
+; (a Oeste); apagar a de fora (clique na linha dela) leva so a linha, sem
+; perguntar, e as mesas ficam.
+(command "CLIVUS_AREA" "{{G1}}" "{{G2}}" "{{G3}}" "{{G4}}" "" "Area Oeste B")
+(clivus:contar "COM_GEMEA")
+(princ "\nCLIVUS_ACOES APAGAR_GEMEA")
+(command "CLIVUS_AREA_APAGAR" "{{NA_LINHA_G}}")
+(clivus:contar "SEM_GEMEA")
+
 (princ "\nCLIVUS_ACOES APAGAR_LESTE")
 (command "CLIVUS_AREA_APAGAR" "{{DENTRO_LESTE}}")
 (clivus:contar "SEM_LESTE")
@@ -69,6 +79,15 @@
 ; (Sem linha em branco aqui: no script ela e um Enter, que repete um comando, e o U desfaria esse.)
 (command "_.U")
 (clivus:contar "DEPOIS_DO_U")
+; 31/10/2026: o "todas as areas" de baixo da janela. Limpar tira as mesas e
+; deixa a area; o U devolve; Regerar gera de novo (o perfil e o do PC: so se
+; confere que voltou a ter mesa).
+(command "CLIVUS_AREAS_LIMPAR" "Sim")
+(clivus:contar "TODAS_LIMPAS")
+(command "_.U")
+(clivus:contar "LIMPAS_DESFEITO")
+(command "CLIVUS_AREAS_REGERAR" "Sim")
+(clivus:contar "TODAS_REGERADAS")
 (command "CLIVUS_AREA_APAGAR" "Sim")
 (clivus:contar "DE_NOVO")
 (command "CLIVUS_VALIDAR")

@@ -155,7 +155,12 @@ public static class GanchosDeTeste
             return null;
         }
 
-        System.Windows.Window janela = valores[0] == "pvsyst" ? new JanelaDoPvsyst(documento, []) : new JanelaDeSombras(documento);
+        System.Windows.Window janela = valores[0] switch
+        {
+            "pvsyst" => new JanelaDoPvsyst(documento, []),
+            "areas" => new JanelaDeAreas(documento),
+            _ => new JanelaDeSombras(documento),
+        };
         var conteudo = (System.Windows.FrameworkElement)janela.Content;
         conteudo.Measure(new System.Windows.Size(largura, double.PositiveInfinity));
         conteudo.Arrange(new System.Windows.Rect(0, 0, largura, conteudo.DesiredSize.Height));
