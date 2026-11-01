@@ -59,6 +59,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
 - 42.7 O PVsyst por mesa, como o PVcase (31/10/2026, noite, na tela com a 0.1.7: "tem um erro na exportação do PVsyst, é preciso exportar como mesa, exportar como modulo, vai me dificultar a modelagem"; "aqui é como o pvcase exporta", "agora vc consegue fazer igual"; é o 6.5 do plano principal): cada mesa vai como uma fiada do PVsyst com os módulos dentro (a medida do módulo e os vãos), num `.pvc` com a forma do arquivo do PVcase: AGUARDANDO VALIDAÇÃO — `PvFrames`, `PvColladaWriter`, 27 testes da etapa 6; nível 2 `clivus-exportar-pvc` (rodar.ps1 -Caso Testar-ExportarPvc), o PVC das duas áreas no `clivus-sombras-escopo` e o PVC da monoposte igual ao do biposte, 14 × 2 por mesa, no `-SoEstruturas`
 - 42.8 O PVsyst com todos os objetos e as mesas que se cruzam (31/10/2026, noite: "mano, faça tudo, quero exportar todos objetos"; e, com a 0.1.8 no PVsyst do Aurora, "veio um erro" com o print de uma mesa atravessada na vizinha): vão junto, como o PVcase manda, as árvores (o tronco e a copa, os cilindros da sombra, no "Tree_trunk" e no "Tree_crown"), os equipamentos em campo (subestação, trafo, inversor, combiner: a caixa do bloco, na "Station") até 100 m das mesas exportadas, e o terreno num CSV ao lado (`<arquivo>_terreno.csv`, X Y Z na origem do PVC); e a exportação avisa as mesas que se cruzam em planta: AGUARDANDO VALIDAÇÃO — `PvObjects`, `PvColladaWriter` com objetos, 8 testes da etapa 6; nível 2 `clivus-exportar-pvc` com a árvore e o CSV, e as estruturas com a árvore e os 2 inversores
 - 42.9 O resumo da mesa no botão direito (31/10/2026, noite: "quero poder clicar com o botão direito, no menu Clivus de um objeto, quero ter resumo e aí quero que me mostre a inclinação da mesa em relação ao azimute (o tilt), a inclinação do terreno e para qual lado, quantos módulos, potência, tipo de estrutura, enfim, crie um resumo completo e legal"; "eu queria ver a inclinação de uma mesa, o tilt, e não sabia como ver"): Clivus Solar › "Resumo da mesa…" (`CLIVUS_RESUMO_MESA`) abre a janela com a orientação (o tilt dos módulos e o do projeto, para onde a mesa olha, o azimute do PVsyst pelo hemisfério, o giro ao longo da mesa), o terreno sob a mesa (inclinação e para que lado desce, ao longo e na largura), a mesa (tipo, estrutura, arranjo, tamanho, estado), os módulos (modelo, quantidade, kWp) e os pilares (quantos, livre, enterro, comprimento, as pontas ao chão), com Copiar: AGUARDANDO VALIDAÇÃO — `TableSummaries`, 16 testes da etapa 42; nível 2 no `clivus-exportar-pvc` (pelo botão direito, o tilt e o rumo iguais aos da fiada no PVC, e a janela num PNG)
+- 42.10 O nome da usina no 3D (31/10/2026, noite: "na hora de exportar o 3D eu quero que apareça a opção de colocar o nome no desenho, porque hoje eu exporto e fica o nome do arquivo do dwg, isso é ruim"): o CLIVUS_3D abre antes a janela "Publicar o 3D" com o nome na caixa (o gravado no desenho; da primeira vez, o do arquivo); o OK grava o nome no dicionário do plugin quando ele muda (aceitar o nome do arquivo não mexe no desenho), e o nome vai no título da página, no "desenho" e no "titulo" do envio (o projeto da área do cliente) e na linha de comando ("Nome no 3D: ..."); Cancelar não publica nada: AGUARDANDO VALIDAÇÃO — `PlantName`, `NomeDaUsina`, 17 testes; nível 2 no `clivus-3d` (o nome do arquivo aceito, sem gravar, no título) e no `clivus-publicar` (o nome com til no corpo recebido e a janela num PNG), pelo `CLIVUS_3D_NOME_AUTO` (o OK da janela)
 
 ## Observações
 
@@ -1188,7 +1189,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     equipamento não têm teste próprio (o `BlockTransform` do AutoCAD cuida dos dois; o nível 2 conta
     os equipamentos).
 
-## Roteiro de tela (38.1 a 42.9)
+## Roteiro de tela (38.1 a 42.10)
 
 1. **Nova estrutura (38.1 e 38.5):** Configurações › Estruturas › Nova estrutura… › **Fixa**.
    A janela de Mesa abre na aba "Perfil e módulo"; clicar no cartão **Biposte** abre a aba
@@ -1426,3 +1427,8 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
     da mesa), o terreno sob a mesa (inclinação e para onde desce), a mesa, os módulos (modelo, quantidade,
     kWp) e os pilares. Numa mesa do Aurora que olha para o sul, o azimute do PVsyst perto de 0°. Copiar e
     colar num bloco de notas: o mesmo texto. Sem nada selecionado, o comando pede para clicar na mesa.
+39. **O nome da usina no 3D (42.10):** no Aurora, clicar em 3D: antes do andamento, a janela "Publicar o 3D"
+    com "PLAT A_Perfiles" na caixa. Trocar por "UFV Aurora" e OK: a página abre com "UFV Aurora" no título,
+    a linha de comando diz "Nome no 3D: UFV Aurora", e na área do cliente o projeto se chama "UFV Aurora".
+    Clicar em 3D de novo: a caixa já vem com "UFV Aurora"; salvar, fechar e reabrir o desenho: continua.
+    Cancelar na janela: "3D cancelado: nada foi publicado."

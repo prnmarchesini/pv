@@ -2,6 +2,8 @@
 ; sombra das 09:00 de 21/06/2026; a pagina e gravada (sem abrir o navegador)
 ; em {{HTML}}. O runner le o arquivo: um so, sem nada de fora, com tantas
 ; faces quantas 3DFACE o desenho tem, a arvore, as sombras e o terreno.
+; O nome da usina (42.10): aceitar o nome do arquivo ({{ARQUIVO}}) nao grava
+; nada no desenho, e a pagina leva esse nome no titulo.
 
 (setq clivus:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
@@ -15,6 +17,7 @@
 (command "CLIVUS_ARVORE_AUTO" 4 0.6 10 8 "{{P}}" "")
 (setvar "OSMODE" clivus:osmode)
 (command "CLIVUS_SOMBRAS_AUTO" "21/06/2026" "21/06/2026" "09:00" "09:00" "30" "-3" "1")
+(command "CLIVUS_3D_NOME_AUTO" "{{ARQUIVO}}")
 (command "CLIVUS_3D_AUTO" "{{HTML}}")
 
 (defun clivus:conta (ss) (if ss (sslength ss) 0))

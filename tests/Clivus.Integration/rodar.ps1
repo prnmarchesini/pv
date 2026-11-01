@@ -4842,6 +4842,9 @@ function Testar-Ver3D {
     $html = Join-Path $saida 'clivus-3d.html'
     if (Test-Path $html) { Remove-Item $html -Force }
 
+    # 42.10: aceitar o nome do arquivo (o que a janela traz da primeira vez) nao grava nada no desenho.
+    $arquivo = [IO.Path]::GetFileNameWithoutExtension($Desenho)
+
     $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-3d' `
         -Script (Join-Path $PSScriptRoot 'clivus-3d.scr') `
         -Substituicoes @{
@@ -4854,6 +4857,7 @@ function Testar-Ver3D {
             '{{LADO}}' = (Ponto3   0   0 0)
             '{{P}}'    = (Ponto3 -30   0 0)
             '{{HTML}}' = $html
+            '{{ARQUIVO}}' = $arquivo
         }
 
     if ($r.Estourou -or $r.Codigo -ne 0) {
@@ -4888,6 +4892,12 @@ function Testar-Ver3D {
     if (@($cena.sombras).Count -ne 0) { $erros += "$(@($cena.sombras).Count) contorno(s) de sombra do CAD no 3D (nao vai mais magenta nenhum)" }
     if ($null -eq $cena.terreno -or @($cena.terreno.z | Where-Object { $null -ne $_ }).Count -lt 100) { $erros += 'terreno vazio' }
 
+    # 42.10: o nome da usina. Sem nome dado, o do arquivo; aceitar esse nome nao mexe no desenho.
+    if ($r.Texto -notmatch 'CLIVUS_3D_NOME nome=\[(.*?)\] gravado=(\d)') { $erros += 'o CLIVUS_3D_NOME_AUTO nao respondeu' }
+    elseif ($Matches[1] -ne $arquivo -or $Matches[2] -ne '0') { $erros += "o nome do arquivo aceito deu nome=[$($Matches[1])] gravado=$($Matches[2]) (esperava [$arquivo] e 0)" }
+    if ($cena.titulo -ne $arquivo) { $erros += "a cena tem o titulo [$($cena.titulo)] (esperava o nome do arquivo, [$arquivo])" }
+    if ($texto -notmatch ('<title>[^<]*' + [regex]::Escape($arquivo))) { $erros += 'o titulo da pagina nao tem o nome da usina' }
+
     # 42.3: o TIN de verdade vai junto com a grade (a grade cobria o canto de modulos no pe do talude).
     # Campo opcional lido sem quebrar o StrictMode.
     function Campo($objeto, [string] $nome) { if ($null -ne $objeto -and $objeto.PSObject.Properties[$nome]) { $objeto.$nome } else { $null } }
@@ -4913,7 +4923,7 @@ function Testar-Ver3D {
         return $false
     }
 
-    Write-Host "  (3d: $faces faces ($($comSombra.Count) com sombra em $($momentos.Count) momento(s)), $pilares pilares, 1 arvore, $(@($cena.sombras).Count) sombras, terreno $($cena.terreno.colunas) x $($cena.terreno.linhas) e TIN de $(@($tin.t).Count / 3) triangulos; $([math]::Round((Get-Item $html).Length / 1MB, 1)) MB)" -ForegroundColor DarkGray
+    Write-Host "  (3d: $faces faces ($($comSombra.Count) com sombra em $($momentos.Count) momento(s)), $pilares pilares, 1 arvore, $(@($cena.sombras).Count) sombras, terreno $($cena.terreno.colunas) x $($cena.terreno.linhas) e TIN de $(@($tin.t).Count / 3) triangulos; $([math]::Round((Get-Item $html).Length / 1MB, 1)) MB; o nome do arquivo, $arquivo, sem gravar)" -ForegroundColor DarkGray
     return $true
 }
 
@@ -4957,7 +4967,13 @@ function Testar-Publicar3D {
         '{{L1}}'   = (Ponto3 -50 -50 0)
         '{{L2}}'   = (Ponto3 -50  50 0)
         '{{LADO}}' = (Ponto3   0   0 0)
+        '{{PNG}}'  = (Join-Path $saida 'clivus-publicar-nome3d.png').Replace('\', '/')
     }
+
+    # 42.10: o nome dado na janela (aqui pelo CLIVUS_3D_NOME_AUTO, com o a com til do roteiro).
+    $nomeDado = "Usina S$([char]0xE3)o Jo$([char]0xE3)o 3D"
+    $png = Join-Path $saida 'clivus-publicar-nome3d.png'
+    if (Test-Path $png) { Remove-Item $png -Force }
 
     $porta = 18765
     $chave = 'chave-de-teste-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
@@ -5023,7 +5039,20 @@ function Testar-Publicar3D {
             return $false
         }
 
-        Write-Host "  (publicar: $faces faces recebidas pelo servidor falso, link $link; chave errada recusada)" -ForegroundColor DarkGray
+        $erros = @()
+        if ($r.Texto -notmatch 'CLIVUS_3D_NOME nome=\[(.*?)\] gravado=(\d)') { $erros += 'o CLIVUS_3D_NOME_AUTO nao respondeu' }
+        elseif ($Matches[1] -ne $nomeDado -or $Matches[2] -ne '1') { $erros += "o nome dado deu nome=[$($Matches[1])] gravado=$($Matches[2]) (esperava [$nomeDado] e 1)" }
+        if ($corpo.desenho -ne $nomeDado) { $erros += "o desenho do corpo e [$($corpo.desenho)] (esperava [$nomeDado])" }
+        if ($corpo.cena.titulo -ne $nomeDado) { $erros += "o titulo da cena e [$($corpo.cena.titulo)] (esperava [$nomeDado])" }
+        if ($r.Texto.IndexOf("Nome no 3D: $nomeDado") -lt 0) { $erros += 'a linha de comando nao diz o nome no 3D' }
+        if (-not (Test-Path $png) -or (Get-Item $png).Length -lt 2000) { $erros += "a janela do nome nao saiu no PNG ($png)" }
+
+        if ($erros.Count -gt 0) {
+            $problemas.Add("clivus-publicar: $($erros -join '; '). Veja $recebido e $($r.Saida)")
+            return $false
+        }
+
+        Write-Host "  (publicar: $faces faces recebidas pelo servidor falso, link $link; chave errada recusada; o nome $nomeDado no desenho e no titulo, a janela em $png)" -ForegroundColor DarkGray
         return $true
     }
     finally {

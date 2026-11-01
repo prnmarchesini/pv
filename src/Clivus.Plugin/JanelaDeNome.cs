@@ -21,7 +21,8 @@ internal sealed class JanelaDeNome : Window
     /// <param name="titulo">O título da janela.</param>
     /// <param name="pergunta">A pergunta, em cima da caixa.</param>
     /// <param name="inicial">O nome que já vem na caixa, selecionado (renomear), ou null.</param>
-    internal JanelaDeNome(string titulo, string pergunta, string? inicial = null)
+    /// <param name="dica">Uma linha em cinza embaixo da caixa (para onde o nome vai), ou null.</param>
+    internal JanelaDeNome(string titulo, string pergunta, string? inicial = null, string? dica = null)
     {
         Title = titulo;
         Width = 420;
@@ -36,6 +37,9 @@ internal sealed class JanelaDeNome : Window
         _caixa = new TextBox { MaxLength = Perguntas.MaiorNome, Margin = new Thickness(0, 0, 0, 6) };
         _caixa.TextChanged += (_, _) => Conferir();
         painel.Children.Add(_caixa);
+
+        if (!string.IsNullOrEmpty(dica))
+            painel.Children.Add(new TextBlock { Text = dica, TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.DimGray, Margin = new Thickness(0, 0, 0, 6) });
 
         _aviso = new TextBlock { Foreground = System.Windows.Media.Brushes.DarkRed, Margin = new Thickness(0, 0, 0, 8) };
         painel.Children.Add(_aviso);

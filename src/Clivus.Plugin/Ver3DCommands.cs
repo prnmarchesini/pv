@@ -20,7 +20,8 @@ namespace Clivus.Plugin;
 /// A página fica ao lado do desenho ("nome do desenho - 3D.html"); desenho
 /// nunca salvo, em Documentos. Com o servidor 3D configurado (CLIVUS_SERVIDOR),
 /// a usina é publicada nele e o link abre em qualquer aparelho
-/// (plano/contrato-servidor-3d.md).
+/// (plano/contrato-servidor-3d.md). Desde o 42.10, antes de tudo, a janela
+/// pergunta o nome da usina, que fica gravado no desenho (<see cref="NomeDaUsina"/>).
 /// </summary>
 public static class Ver3DCommands
 {
@@ -41,8 +42,20 @@ public static class Ver3DCommands
 
         try
         {
+            // O nome da usina (42.10), antes de tudo: vai no título da página,
+            // no link e na área do cliente, e fica gravado no desenho.
+            var titulo = NomeDaUsina.Atual(documento);
+
             if (ClivusExtension.TemInterface())
             {
+                if (NomeDaUsina.Perguntar(documento) is not { } nome)
+                {
+                    editor.WriteMessage(Tr.T("\n3D cancelado: nada foi publicado.\n"));
+                    return;
+                }
+
+                titulo = nome;
+
                 try
                 {
                     janela = JanelaDeProgresso.Abrir(null, Tr.T("Exportando o 3D para a web"), podeCancelar: true);
@@ -61,7 +74,7 @@ public static class Ver3DCommands
                 if (janela.Cancelado) throw new OperationCanceledException();
             }
 
-            var cena = Montar(documento, Andar);
+            var cena = Montar(documento, titulo, Andar);
             if (cena is null) return;
 
             // Com o servidor 3D configurado, a usina vai para ele e o link
@@ -121,7 +134,7 @@ public static class Ver3DCommands
             var caminho = editor.GetString(new PromptStringOptions(Tr.T("\nArquivo da página 3D: ")) { AllowSpaces = true });
             if (caminho.Status != PromptStatus.OK) return;
 
-            if (Montar(documento) is { } cena) Gravar(documento, cena, caminho.StringResult.Trim().Trim('"'));
+            if (Montar(documento, NomeDaUsina.Atual(documento)) is { } cena) Gravar(documento, cena, caminho.StringResult.Trim().Trim('"'));
         }
         catch (System.Exception erro)
         {
@@ -139,12 +152,39 @@ public static class Ver3DCommands
 
         try
         {
-            if (Montar(documento) is { } cena) Publicar(documento, cena);
+            if (Montar(documento, NomeDaUsina.Atual(documento)) is { } cena) Publicar(documento, cena);
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao publicar o 3D (automático).", erro);
             documento.Editor.WriteMessage(Tr.F("\nNão consegui publicar o 3D: {0}\n", erro.Message));
+        }
+    }
+
+    /// <summary>
+    /// CLIVUS_3D_NOME_AUTO: o OK da janela do nome (42.10), pela linha de
+    /// comando: grava o nome da usina no desenho como a janela grava. Para o nível 2.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoVer3DNomeAutomatico)]
+    public static void Ver3DNomeAutomatico()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+
+        var editor = documento.Editor;
+
+        try
+        {
+            var resposta = editor.GetString(new PromptStringOptions(Tr.T("\nNome da usina no 3D: ")) { AllowSpaces = true });
+            if (resposta.Status != PromptStatus.OK) return;
+
+            var nome = NomeDaUsina.Confirmar(documento, resposta.StringResult, out var gravado);
+            editor.WriteMessage($"\nCLIVUS_3D_NOME nome=[{nome}] gravado={(gravado ? 1 : 0)} atual=[{NomeDaUsina.Atual(documento)}]\n");
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao gravar o nome da usina (automático).", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui gravar o nome da usina: {0}\n", erro.Message));
         }
     }
 
@@ -158,15 +198,18 @@ public static class Ver3DCommands
         return Path.Combine(pasta, $"{nome} - 3D.html");
     }
 
-    /// <summary>A cena do desenho, ou null (sem terreno, com a mensagem). <paramref name="andar"/>: a porcentagem e o que está sendo lido (e o Cancelar).</summary>
-    private static Scene3D? Montar(Document documento, Action<double, string>? andar = null)
+    /// <summary>
+    /// A cena do desenho, ou null (sem terreno, com a mensagem). <paramref name="titulo"/>:
+    /// o nome da usina (42.10). <paramref name="andar"/>: a porcentagem e o que está sendo lido (e o Cancelar).
+    /// </summary>
+    private static Scene3D? Montar(Document documento, string titulo, Action<double, string>? andar = null)
     {
         var editor = documento.Editor;
 
         var terreno = FileiraCommands.ExigirTerreno(editor, documento);
         if (terreno is null) return null;
 
-        var (cena, modulosFora, pilaresFora) = Viewer3DPage.OnTerrain(Cena(documento, terreno, andar), (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null);
+        var (cena, modulosFora, pilaresFora) = Viewer3DPage.OnTerrain(Cena(documento, terreno, titulo, andar), (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null);
         andar?.Invoke(58, Tr.T("Conferindo o terreno debaixo das mesas..."));
 
         if (modulosFora + pilaresFora > 0)
@@ -312,13 +355,14 @@ public static class Ver3DCommands
 
         editor.WriteMessage(
             Tr.F("\n3D {0}, publicado em {1:0.0} s.\n", Resumo(cena), relogio.Elapsed.TotalSeconds)
+            + Tr.F("  Nome no 3D: {0}\n", cena.Title)
             + Tr.F("  Link: {0}\n", publicada.Url)
             + (publicada.ExpiresAt is { } expira ? Tr.F("  Vale até {0:dd/MM/yyyy HH:mm}.\n", expira.ToLocalTime()) : string.Empty));
 
         return publicada.Url;
     }
 
-    private static Scene3D Cena(Document documento, ProcessedTerrain terreno, Action<double, string>? andar = null)
+    private static Scene3D Cena(Document documento, ProcessedTerrain terreno, string titulo, Action<double, string>? andar = null)
     {
         var database = documento.Database;
         andar?.Invoke(2, Tr.T("Lendo o terreno..."));
@@ -413,7 +457,6 @@ public static class Ver3DCommands
                 faces.Add(new Scene3DFace(cantos, cores.TryGetValue(modulo, out var c) ? c : new RgbColor(30, 60, 140), sombraDoModulo.GetValueOrDefault(modulo)));
         }
 
-        var titulo = Path.GetFileNameWithoutExtension(documento.Name);
         andar?.Invoke(38, Tr.T("Lendo as canaletas e o carport..."));
         // O carport (36.1) vai junto com as canaletas: faces prontas, na cor de cada peça.
         var extras = Canaletas(database, terreno);

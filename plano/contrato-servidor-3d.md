@@ -31,6 +31,11 @@ Corpo:
 }
 ```
 
+`desenho` (e o `titulo` da cena) é o nome da usina: desde o 42.10 (31/10/2026), o
+que o usuário deu na janela "Publicar o 3D", gravado no desenho; sem nome dado, o
+nome do arquivo do DWG, como antes. O servidor agrupa os projetos da área do
+cliente por ele.
+
 A cena é exatamente o JSON que o plugin já gera para a página 3D local
 (`Viewer3DPage.Json`, em `src/Clivus.Core/Viewer3DPage.cs`). Coordenadas em
 metro, relativas a `origem` (para caber em float de 32 bits no navegador);

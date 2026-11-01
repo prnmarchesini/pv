@@ -2,6 +2,9 @@
 ; uma fileira, e a usina publicada no servidor falso local (o runner sobe o
 ; servidor e poe CLIVUS_SERVIDOR e CLIVUS_SERVIDOR_CHAVE no ambiente). O
 ; plugin escreve o link; o runner confere o corpo que o servidor recebeu.
+; Antes, o nome da usina (42.10), com acento (chr 227 = a com til, o roteiro
+; vai em ASCII): o OK da janela do CLIVUS_3D pela linha de comando; ele vai
+; no "desenho" e no "titulo" do corpo, e a janela do nome sai num PNG.
 
 (setq clivus:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
@@ -13,6 +16,8 @@
 (command "CLIVUS_ALINHAMENTO" "{{L1}}" "{{L2}}" "" "{{LADO}}" "Alinhamento publicar")
 (command "CLIVUS_FILEIRA_AUTO")
 (setvar "OSMODE" clivus:osmode)
+(command "CLIVUS_3D_NOME_AUTO" (strcat "Usina S" (chr 227) "o Jo" (chr 227) "o 3D"))
+(clivus-renderizar-janela "nome3d" "{{PNG}}" "420")
 (command "CLIVUS_3D_PUBLICAR_AUTO")
 
 (defun clivus:conta (ss) (if ss (sslength ss) 0))
