@@ -411,7 +411,11 @@ public static class AreasTestHooks
                 // O Renomear pela linha da janela (31/10/2026: "nao funciona o
                 // renomear. o F2 nao funciona tbm"): a janela de verdade, o menu
                 // do botão direito (ou o F2), a caixa do nome e o Enter.
-                case "renomear-na-linha" or "renomear-f2" when valores.Length > 2:
+                // "renomear-seguidas" atual novo atual novo...: vários na mesma
+                // janela, F2 e menu alternados (01/11/2026: "consigo renomear
+                // apenas uma linha depois o renomear para de funcionar"); uma
+                // linha AREAS_SEGUIDA por nome, ok=1 se a área ficou com ele.
+                case "renomear-na-linha" or "renomear-f2" or "renomear-seguidas" when valores.Length > 2 && valores.Length % 2 == 1:
                 {
                     if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
                     {
@@ -426,7 +430,17 @@ public static class AreasTestHooks
                         conteudo.Measure(new System.Windows.Size(1100, 800));
                         conteudo.Arrange(new System.Windows.Rect(0, 0, 1100, 800));
                         conteudo.UpdateLayout();
-                        frase = janela.RenomearComoNaTela(valores[1], valores[2], pelaTecla: valores[0] == "renomear-f2");
+
+                        frase = string.Empty;
+                        for (var i = 1; i + 1 < valores.Length; i += 2)
+                        {
+                            var pelaTecla = valores[0] == "renomear-f2" || (valores[0] == "renomear-seguidas" && i % 4 == 1);
+                            frase = janela.RenomearComoNaTela(valores[i], valores[i + 1], pelaTecla);
+                            if (valores[0] != "renomear-seguidas") continue;
+
+                            var ficou = AreasDoDesenho.Varrer(documento.Database).Any(a => a.Identity.DisplayName == valores[i + 1]);
+                            editor.WriteMessage($"\nAREAS_SEGUIDA {i / 2 + 1} tecla={(pelaTecla ? 1 : 0)} ok={(ficou ? 1 : 0)} {frase}\n");
+                        }
                     }
                     finally
                     {

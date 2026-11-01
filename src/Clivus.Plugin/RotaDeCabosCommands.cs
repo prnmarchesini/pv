@@ -1028,7 +1028,10 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
 
     /// <summary>
     /// Grava as vias do circuito (vazio ou igual às da aba = volta às da aba)
-    /// e remonta, depois que a grade fecha a edição.
+    /// e remonta, depois que a grade fecha a edição: abaixo do DataBind,
+    /// porque no fim da linha a própria grade esvazia a fila até ele, e na
+    /// prioridade Normal a remontagem caía ali dentro e prendia a edição das
+    /// outras linhas (o mesmo da janela Áreas, 01/11/2026).
     /// </summary>
     private void TrocarVias(CableReport.CircuitRun circuito, string texto)
     {
@@ -1038,7 +1041,7 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
             if (!NumberInput.TryParseCount(texto, out var n) || n < 1 || n > RouteSettings.MaxWires)
             {
                 Avisar(Tr.F("Vias de {0}: tem que ser um inteiro de 1 a {1}. Nada mudou.", CableReport.DePara(circuito.FromName, circuito.ToName), RouteSettings.MaxWires), erro: true);
-                Dispatcher.BeginInvoke(Montar);
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(Montar));
                 return;
             }
 
@@ -1049,12 +1052,12 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
         if (vias == daAba) vias = null;
 
         var problema = EscritaForaDeComando.Fazer(Documento, () => RotaDeCabosStore.GravarVias(Documento.Database, circuito.Route, circuito.From, circuito.To, vias));
-        Dispatcher.BeginInvoke(() =>
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
         {
             Montar();
             if (problema is not null) Avisar(Tr.F("Não gravei as vias: {0}", problema), erro: true);
             else Avisar(Tr.F("Vias de {0}: {1}.", CableReport.DePara(circuito.FromName, circuito.ToName), vias is { } v ? v.ToString(Tr.Culture) : Tr.F("as da aba ({0})", daAba)));
-        });
+        }));
     }
 
     private void Montar()

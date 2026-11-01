@@ -275,6 +275,18 @@ function Testar-Areas {
         $erros += 'renomear pelo menu da linha: o XData da polilinha ou o letreiro nao ficaram com o nome novo'
     }
 
+    # Quatro seguidas na mesma janela (01/11/2026: so a primeira gravava; as
+    # outras nao abriam o nome ate fechar e abrir a janela).
+    $seguidas = @([regex]::Matches((Bloco 'CLIVUS_AREAS_SEGUIDAS' 'CLIVUS_AREAS_FIM_SEGUIDAS'), 'AREAS_SEGUIDA (\d) tecla=(\d) ok=(\d) ([^\r\n]*)'))
+    $gravadas = @($seguidas | Where-Object { $_.Groups[3].Value -eq '1' }).Count
+    if ($seguidas.Count -ne 4 -or $gravadas -ne 4) {
+        $erros += "renomear quatro seguidas na mesma janela: $gravadas de 4 gravaram (" + (($seguidas | ForEach-Object { "$($_.Groups[1].Value): $($_.Groups[4].Value)" }) -join '; ') + ')'
+    }
+
+    if ($r.Texto -notmatch 'CLIVUS_AREAS_FIM_SEGUIDAS oeste=(\d+) leste=(\d+) b=(\d+) fim' -or $Matches[1] -ne '1' -or $Matches[2] -ne '1' -or $Matches[3] -ne '0') {
+        $erros += 'renomear seguidas: no fim os nomes nao voltaram a Area Oeste e Area Leste 2'
+    }
+
     if ($r.Texto -notmatch 'CLIVUS_AREAS_TIRAR hachuras=(\d+) nomes=(\d+) oeste=(\d) fim' -or $Matches[1] -ne '1' -or $Matches[2] -ne '1' -or $Matches[3] -ne '0') {
         $erros += 'tirar a hachura da Oeste nao deixou so a da Leste'
     }

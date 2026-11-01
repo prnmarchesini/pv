@@ -109,6 +109,16 @@
                " velho=" (itoa (clivus:areas-com-nome "Area Leste"))
                " letreiro=" (if (clivus:nome "Area Leste 2") "1" "0") " fim"))
 
+; 01/11/2026 ("consigo renomear apenas uma linha depois o renomear para de
+; funcionar"; fechar e abrir a janela destravava): quatro seguidas na mesma
+; janela, F2 e menu alternados, a Oeste duas vezes; no fim os nomes voltam
+; aos de antes, para o resto do teste.
+(princ "\nCLIVUS_AREAS_SEGUIDAS")
+(clivus-areas-pela-janela "renomear-seguidas" "Area Oeste" "Area Oeste B" "Area Leste 2" "Area Leste B" "Area Oeste B" "Area Oeste" "Area Leste B" "Area Leste 2")
+(princ (strcat "\nCLIVUS_AREAS_FIM_SEGUIDAS oeste=" (itoa (clivus:areas-com-nome "Area Oeste"))
+               " leste=" (itoa (clivus:areas-com-nome "Area Leste 2"))
+               " b=" (itoa (+ (clivus:areas-com-nome "Area Oeste B") (clivus:areas-com-nome "Area Leste B"))) " fim"))
+
 (clivus-areas-pela-janela "tirar" "Area Oeste")
 (princ (strcat "\nCLIVUS_AREAS_TIRAR hachuras=" (itoa (clivus:conta (clivus:hachuras))) " nomes=" (itoa (clivus:conta (clivus:nomes)))
                " oeste=" (if (clivus:nome "Area Oeste") "1" "0") " fim"))

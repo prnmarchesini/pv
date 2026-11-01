@@ -203,7 +203,11 @@ internal sealed class JanelaDeAreas : Window
             if (nome.Length == 0 || nome == area.Identity.DisplayName) return;
 
             // Depois que a edição fecha: ler a lista de novo no meio dela quebra o DataGrid.
-            Dispatcher.BeginInvoke(new Action(() => Tentar(() => Renomear(area, nome))));
+            // Abaixo do DataBind: no fim da linha o próprio DataGrid esvazia a fila até
+            // o DataBind (Dispatcher.Invoke), e na prioridade Normal o Renomear lia a
+            // lista ali dentro; a linha ficava presa e o F2 não abria mais nome nenhum
+            // até fechar a janela (01/11/2026: "consigo renomear apenas uma linha").
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => Tentar(() => Renomear(area, nome))));
         };
         _lista.PreviewKeyDown += (_, e) => Tentar(() =>
         {
@@ -332,7 +336,8 @@ internal sealed class JanelaDeAreas : Window
     {
         if (!ComandosQueMudamAsAreas.Contains(e.GlobalCommandName)) return;
 
-        Dispatcher.BeginInvoke(new Action(() => Tentar(Preencher)));
+        // Abaixo do DataBind, como o Renomear: nunca no meio do fim de uma edição da lista.
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => Tentar(Preencher)));
     }
 
     /// <summary>Abre a janela do desenho, ou traz para a frente a que já está aberta (lida de novo).</summary>
@@ -528,6 +533,10 @@ internal sealed class JanelaDeAreas : Window
     private void Preencher()
     {
         var antes = Escolhida;
+
+        // O nome aberto na linha fecha antes, gravado (como nas pastas do
+        // Windows ao clicar fora): trocar a lista no meio da edição prende o DataGrid.
+        _lista.CommitEdit(DataGridEditingUnit.Row, true);
 
         try
         {
