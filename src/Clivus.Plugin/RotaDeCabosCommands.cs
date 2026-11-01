@@ -1031,7 +1031,8 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
     /// e remonta, depois que a grade fecha a edição: abaixo do DataBind,
     /// porque no fim da linha a própria grade esvazia a fila até ele, e na
     /// prioridade Normal a remontagem caía ali dentro e prendia a edição das
-    /// outras linhas (o mesmo da janela Áreas, 01/11/2026).
+    /// outras linhas (o mesmo da janela Áreas, 01/11/2026). O aviso vai depois
+    /// do Montar, que termina dizendo "Recontado." e apagava o de vias erradas.
     /// </summary>
     private void TrocarVias(CableReport.CircuitRun circuito, string texto)
     {
@@ -1040,8 +1041,12 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
         {
             if (!NumberInput.TryParseCount(texto, out var n) || n < 1 || n > RouteSettings.MaxWires)
             {
-                Avisar(Tr.F("Vias de {0}: tem que ser um inteiro de 1 a {1}. Nada mudou.", CableReport.DePara(circuito.FromName, circuito.ToName), RouteSettings.MaxWires), erro: true);
-                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(Montar));
+                var aviso = Tr.F("Vias de {0}: tem que ser um inteiro de 1 a {1}. Nada mudou.", CableReport.DePara(circuito.FromName, circuito.ToName), RouteSettings.MaxWires);
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
+                {
+                    Montar();
+                    Avisar(aviso, erro: true);
+                }));
                 return;
             }
 
@@ -1052,7 +1057,7 @@ internal sealed class AbaResumoDeCabos : AbaEletrica
         if (vias == daAba) vias = null;
 
         var problema = EscritaForaDeComando.Fazer(Documento, () => RotaDeCabosStore.GravarVias(Documento.Database, circuito.Route, circuito.From, circuito.To, vias));
-        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
         {
             Montar();
             if (problema is not null) Avisar(Tr.F("Não gravei as vias: {0}", problema), erro: true);

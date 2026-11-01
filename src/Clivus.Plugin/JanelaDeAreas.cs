@@ -161,8 +161,10 @@ internal sealed class JanelaDeAreas : Window
         {
             _cliqueDevagar.Stop();
 
-            // Só o duplo clique numa linha (no cabeçalho, nada).
-            if (e.OriginalSource is DependencyObject alvo && ItemsControl.ContainerFromElement(_lista, alvo) is DataGridRow) Zoom();
+            // Só o duplo clique numa linha (no cabeçalho, nada); na caixa do
+            // nome aberta, ele escolhe a palavra, sem zoom.
+            if (e.OriginalSource is not DependencyObject alvo || Acima<DataGridCell>(alvo) is { IsEditing: true }) return;
+            if (ItemsControl.ContainerFromElement(_lista, alvo) is DataGridRow) Zoom();
         });
 
         // O nome se edita na linha: F2, ou o segundo clique, devagar, no nome
@@ -179,12 +181,13 @@ internal sealed class JanelaDeAreas : Window
 
         // O clique devagar, como nas pastas do Windows: o segundo clique, um
         // só, no nome da área que já estava escolhida; se dentro do tempo do
-        // duplo clique vier outro, é o zoom.
+        // duplo clique vier outro, é o zoom. Na caixa já aberta, o clique só
+        // põe o cursor (o Tick tirava o foco dela, e o Del ia para a área).
         _lista.PreviewMouseLeftButtonDown += (_, e) => Tentar(() =>
         {
             _cliqueDevagar.Stop();
             if (e.ClickCount != 1 || e.OriginalSource is not DependencyObject alvo) return;
-            if (Acima<DataGridCell>(alvo) is not { } celula || celula.Column != _colunaNome) return;
+            if (Acima<DataGridCell>(alvo) is not { } celula || celula.Column != _colunaNome || celula.IsEditing) return;
             if (celula.DataContext is not Linha { Apagavel: true } linha || !ReferenceEquals(_lista.SelectedItem, linha)) return;
 
             _linhaDoCliqueDevagar = linha;
@@ -205,9 +208,10 @@ internal sealed class JanelaDeAreas : Window
             // Depois que a edição fecha: ler a lista de novo no meio dela quebra o DataGrid.
             // Abaixo do DataBind: no fim da linha o próprio DataGrid esvazia a fila até
             // o DataBind (Dispatcher.Invoke), e na prioridade Normal o Renomear lia a
-            // lista ali dentro; a linha ficava presa e o F2 não abria mais nome nenhum
-            // até fechar a janela (01/11/2026: "consigo renomear apenas uma linha").
-            Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => Tentar(() => Renomear(area, nome))));
+            // lista ali dentro; a linha ficava com erro de validação e o F2 não abria
+            // mais nome nenhum (01/11/2026: "consigo renomear apenas uma linha"). O
+            // Loaded ainda vem antes das teclas e cliques que esperam na fila.
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => Tentar(() => Renomear(area, nome))));
         };
         _lista.PreviewKeyDown += (_, e) => Tentar(() =>
         {
@@ -336,8 +340,9 @@ internal sealed class JanelaDeAreas : Window
     {
         if (!ComandosQueMudamAsAreas.Contains(e.GlobalCommandName)) return;
 
-        // Abaixo do DataBind, como o Renomear: nunca no meio do fim de uma edição da lista.
-        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => Tentar(Preencher)));
+        // Abaixo do DataBind, como o Renomear: nunca no meio do fim de uma edição da
+        // lista; e antes dos cliques que esperaram o comando (eles veem a lista nova).
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => Tentar(Preencher)));
     }
 
     /// <summary>Abre a janela do desenho, ou traz para a frente a que já está aberta (lida de novo).</summary>
@@ -534,9 +539,16 @@ internal sealed class JanelaDeAreas : Window
     {
         var antes = Escolhida;
 
-        // O nome aberto na linha fecha antes, gravado (como nas pastas do
-        // Windows ao clicar fora): trocar a lista no meio da edição prende o DataGrid.
-        _lista.CommitEdit(DataGridEditingUnit.Row, true);
+        // A troca da lista tira da árvore a célula com o foco, e o WPF o devolve
+        // à janela: as setas, o F2 e o Del paravam de passar pela lista até um
+        // clique nela. O foco volta à linha escolhida só se estava na lista (a
+        // releitura do fim de um comando não o tira do desenho).
+        var tinhaFoco = _lista.IsKeyboardFocusWithin;
+
+        // Um nome aberto e não confirmado (sem Enter) fecha sem gravar, como no
+        // Esc: trocar a lista no meio da edição prende o DataGrid, e o desenho
+        // pode ter mudado embaixo dele (um U, um apagar).
+        _lista.CancelEdit(DataGridEditingUnit.Row);
 
         try
         {
@@ -553,6 +565,7 @@ internal sealed class JanelaDeAreas : Window
         _lista.SelectedItem =
             linhas.FirstOrDefault(l => antes?.Area is { } a ? l.Origem.Area?.Handle == a.Handle : antes is not null && l.Origem.Area is null && l.Origem.Resumo.Kind == antes.Resumo.Kind)
             ?? linhas.FirstOrDefault();
+        if (tinhaFoco) FocarNaEscolhida();
 
         _avisos.Text = string.Join("\n", _leitura.Avisos);
         _avisos.Visibility = _leitura.Avisos.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -727,6 +740,9 @@ internal sealed class JanelaDeAreas : Window
             return;
         }
 
+        // Já aberto nesta linha: nada (o Focus abaixo tiraria o cursor da caixa).
+        if (Acima<DataGridCell>(_colunaNome.GetCellContent(linha)) is { IsEditing: true }) return;
+
         _lista.ScrollIntoView(linha, _colunaNome);
         _lista.UpdateLayout();
         _lista.Focus();
@@ -737,6 +753,17 @@ internal sealed class JanelaDeAreas : Window
             RegistroDeDiagnostico.Registrar($"Áreas: o BeginEdit do nome de {linha.Nome} não abriu.");
             Recado(Tr.T("Não consegui abrir o nome para editar; use o botão direito › Renomear."), true);
         }
+    }
+
+    /// <summary>O foco do teclado na célula do nome da linha escolhida (as setas, o F2 e o Del seguem dali).</summary>
+    private void FocarNaEscolhida()
+    {
+        if (_lista.SelectedItem is not Linha linha) return;
+
+        _lista.ScrollIntoView(linha, _colunaNome);
+        _lista.UpdateLayout();
+        _lista.CurrentCell = new DataGridCellInfo(linha, _colunaNome);
+        Acima<DataGridCell>(_colunaNome.GetCellContent(linha))?.Focus();
     }
 
 #if DEBUG
