@@ -3,8 +3,9 @@ namespace Clivus.Core.Tests;
 /// <summary>
 /// O nome da usina no 3D (42.10, Renan, 31/10/2026: "eu exporto e fica o nome
 /// do arquivo do dwg, isso é ruim"): o gravado no desenho manda; sem ele, o do
-/// arquivo, como antes; o digitado sai limpo; e aceitar o nome de sempre não
-/// mexe no desenho.
+/// arquivo, exatamente como antes; o digitado sai limpo; aceitar o nome de
+/// sempre não mexe no desenho; e o nome dado em outro arquivo (o "Salvar como"
+/// da plataforma A para a B) é avisado.
 /// </summary>
 public class PlantNameTests
 {
@@ -22,6 +23,17 @@ public class PlantNameTests
         Assert.Equal("PLAT A_Perfiles", PlantName.Resolve(null, Arquivo, "Usina"));
         Assert.Equal("PLAT A_Perfiles", PlantName.Resolve("   ", Arquivo, "Usina"));
         Assert.Equal("Drawing1", PlantName.Resolve(null, "Drawing1.dwg", "Usina"));
+    }
+
+    [Fact]
+    public void Sem_nome_gravado_o_nome_do_arquivo_vai_como_sempre_foi_sem_limpar()
+    {
+        // O servidor agrupa os projetos pelo nome: limpar o do arquivo (os dois
+        // espaços, o corte em 100) abriria um projeto novo para o mesmo desenho.
+        var longo = new string('p', 120);
+
+        Assert.Equal("UFV  Aurora", PlantName.Resolve(null, @"C:\x\UFV  Aurora.dwg", "Usina"));
+        Assert.Equal(longo, PlantName.Resolve(null, $@"C:\x\{longo}.dwg", "Usina"));
     }
 
     [Fact]
@@ -48,6 +60,7 @@ public class PlantNameTests
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("\r\n\t")]
+    [InlineData("\u0007\u0001")]
     public void Nome_vazio_nao_serve(string? digitado)
     {
         Assert.Null(PlantName.Clean(digitado));
@@ -75,18 +88,36 @@ public class PlantNameTests
     [Fact]
     public void Aceitar_o_nome_do_arquivo_sem_nada_gravado_nao_mexe_no_desenho()
     {
-        Assert.False(PlantName.NeedsSaving("PLAT A_Perfiles", null, Arquivo));
-        Assert.True(PlantName.NeedsSaving("UFV Aurora", null, Arquivo));
+        Assert.False(PlantName.NeedsSaving("PLAT A_Perfiles", null, null, Arquivo));
+        Assert.True(PlantName.NeedsSaving("UFV Aurora", null, null, Arquivo));
+
+        // O nome do arquivo com dois espaços, aceito na janela, chega limpo e continua sendo ele.
+        Assert.False(PlantName.NeedsSaving("UFV Aurora", null, null, @"C:\x\UFV  Aurora.dwg"));
     }
 
     [Fact]
     public void Com_nome_gravado_so_grava_quando_muda()
     {
-        Assert.False(PlantName.NeedsSaving("UFV Aurora", "UFV Aurora", Arquivo));
-        Assert.True(PlantName.NeedsSaving("UFV Aurora II", "UFV Aurora", Arquivo));
+        Assert.False(PlantName.NeedsSaving("UFV Aurora", "UFV Aurora", "PLAT A_Perfiles", Arquivo));
+        Assert.True(PlantName.NeedsSaving("UFV Aurora II", "UFV Aurora", "PLAT A_Perfiles", Arquivo));
 
         // Voltar ao nome do arquivo com outro gravado é mudar: o gravado sai.
-        Assert.True(PlantName.NeedsSaving("PLAT A_Perfiles", "UFV Aurora", Arquivo));
+        Assert.True(PlantName.NeedsSaving("PLAT A_Perfiles", "UFV Aurora", "PLAT A_Perfiles", Arquivo));
+    }
+
+    [Fact]
+    public void O_nome_dado_em_outro_arquivo_e_avisado_e_confirmar_passa_a_ser_deste()
+    {
+        const string copia = @"C:\Projetos\Panama\PLAT B_Perfiles.dwg";
+
+        Assert.True(PlantName.GivenInOtherFile("PLAT A_Perfiles", copia));
+        Assert.False(PlantName.GivenInOtherFile("PLAT A_Perfiles", Arquivo));
+        Assert.False(PlantName.GivenInOtherFile("plat a_perfiles", Arquivo));
+        Assert.False(PlantName.GivenInOtherFile(null, copia));
+
+        // Confirmar o mesmo nome na cópia grava de novo, agora com o arquivo dela, e o aviso some.
+        Assert.True(PlantName.NeedsSaving("UFV Aurora", "UFV Aurora", "PLAT A_Perfiles", copia));
+        Assert.False(PlantName.NeedsSaving("UFV Aurora", "UFV Aurora", "PLAT B_Perfiles", copia));
     }
 
     [Fact]

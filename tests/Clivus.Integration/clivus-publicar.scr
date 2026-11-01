@@ -4,7 +4,9 @@
 ; plugin escreve o link; o runner confere o corpo que o servidor recebeu.
 ; Antes, o nome da usina (42.10), com acento (chr 227 = a com til, o roteiro
 ; vai em ASCII): o OK da janela do CLIVUS_3D pela linha de comando; ele vai
-; no "desenho" e no "titulo" do corpo, e a janela do nome sai num PNG.
+; no "desenho" e no "titulo" do corpo, e a janela do nome sai num PNG; num
+; segundo PNG, a janela de uma copia do desenho (o arquivo fingido), com o
+; aviso do nome dado em outro arquivo.
 
 (setq clivus:secureload (getvar "SECURELOAD"))
 (setvar "SECURELOAD" 0)
@@ -18,6 +20,7 @@
 (setvar "OSMODE" clivus:osmode)
 (command "CLIVUS_3D_NOME_AUTO" (strcat "Usina S" (chr 227) "o Jo" (chr 227) "o 3D"))
 (clivus-renderizar-janela "nome3d" "{{PNG}}" "420")
+(clivus-renderizar-janela "nome3d" "{{PNG_OUTRO}}" "420" "C:/Projetos/PLAT B_Perfiles.dwg")
 (command "CLIVUS_3D_PUBLICAR_AUTO")
 
 (defun clivus:conta (ss) (if ss (sslength ss) 0))

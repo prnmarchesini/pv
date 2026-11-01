@@ -42,8 +42,12 @@ public static class Ver3DCommands
 
         try
         {
-            // O nome da usina (42.10), antes de tudo: vai no título da página,
-            // no link e na área do cliente, e fica gravado no desenho.
+            // O terreno primeiro: sem ele, nem pergunta o nome (que gravaria no
+            // desenho à toa). Depois o nome da usina (42.10): vai no título da
+            // página e na área do cliente, e fica gravado no desenho.
+            var terreno = FileiraCommands.ExigirTerreno(editor, documento);
+            if (terreno is null) return;
+
             var titulo = NomeDaUsina.Atual(documento);
 
             if (ClivusExtension.TemInterface())
@@ -74,7 +78,7 @@ public static class Ver3DCommands
                 if (janela.Cancelado) throw new OperationCanceledException();
             }
 
-            var cena = Montar(documento, titulo, Andar);
+            var cena = Montar(documento, titulo, Andar, terreno);
             if (cena is null) return;
 
             // Com o servidor 3D configurado, a usina vai para ele e o link
@@ -163,7 +167,8 @@ public static class Ver3DCommands
 
     /// <summary>
     /// CLIVUS_3D_NOME_AUTO: o OK da janela do nome (42.10), pela linha de
-    /// comando: grava o nome da usina no desenho como a janela grava. Para o nível 2.
+    /// comando: grava o nome da usina no desenho como a janela grava. "." é o
+    /// OK sem mexer na caixa (o nome que a janela traz). Para o nível 2.
     /// </summary>
     [CommandMethod(PluginInfo.ComandoVer3DNomeAutomatico)]
     public static void Ver3DNomeAutomatico()
@@ -178,8 +183,9 @@ public static class Ver3DCommands
             var resposta = editor.GetString(new PromptStringOptions(Tr.T("\nNome da usina no 3D: ")) { AllowSpaces = true });
             if (resposta.Status != PromptStatus.OK) return;
 
-            var nome = NomeDaUsina.Confirmar(documento, resposta.StringResult, out var gravado);
-            editor.WriteMessage($"\nCLIVUS_3D_NOME nome=[{nome}] gravado={(gravado ? 1 : 0)} atual=[{NomeDaUsina.Atual(documento)}]\n");
+            var digitado = resposta.StringResult.Trim() == "." ? NomeDaUsina.Atual(documento) : resposta.StringResult;
+            var nome = NomeDaUsina.Confirmar(documento, digitado, out var gravado);
+            editor.WriteMessage($"\nCLIVUS_3D_NOME nome=[{nome}] gravado={(gravado ? 1 : 0)} atual=[{NomeDaUsina.Atual(documento)}] arquivo=[{NomeDaUsina.Ler(documento.Database).Arquivo}]\n");
         }
         catch (System.Exception erro)
         {
@@ -201,12 +207,13 @@ public static class Ver3DCommands
     /// <summary>
     /// A cena do desenho, ou null (sem terreno, com a mensagem). <paramref name="titulo"/>:
     /// o nome da usina (42.10). <paramref name="andar"/>: a porcentagem e o que está sendo lido (e o Cancelar).
+    /// <paramref name="terreno"/>: o já exigido, ou null para exigir aqui.
     /// </summary>
-    private static Scene3D? Montar(Document documento, string titulo, Action<double, string>? andar = null)
+    private static Scene3D? Montar(Document documento, string titulo, Action<double, string>? andar = null, ProcessedTerrain? terreno = null)
     {
         var editor = documento.Editor;
 
-        var terreno = FileiraCommands.ExigirTerreno(editor, documento);
+        terreno ??= FileiraCommands.ExigirTerreno(editor, documento);
         if (terreno is null) return null;
 
         var (cena, modulosFora, pilaresFora) = Viewer3DPage.OnTerrain(Cena(documento, terreno, titulo, andar), (x, y) => terreno.Mesh.TryGetZ(x, y, out var z) ? z : null);

@@ -161,8 +161,10 @@ public static class GanchosDeTeste
             // O resumo da mesa (42.9): (clivus-renderizar-janela "resumo" "caminho.png" largura "GUID da mesa").
             "resumo" when valores.Length >= 4 && Guid.TryParse(valores[3], out var mesa) && ResumoDaMesaCommands.Montar(documento, mesa) is { } resumo
                 => new JanelaDoResumoDaMesa(resumo),
-            // A janela do nome da usina antes do 3D (42.10), com o nome de agora na caixa.
-            "nome3d" => NomeDaUsina.Janela(documento),
+            // A janela do nome da usina antes do 3D (42.10), com o nome de agora na caixa:
+            // (clivus-renderizar-janela "nome3d" "caminho.png" largura ["arquivo fingido.dwg"]); o arquivo
+            // fingido desenha o aviso do nome dado em outro arquivo (o "Salvar como").
+            "nome3d" => NomeDaUsina.Janela(documento, valores.Length >= 4 ? valores[3] : null),
             "areas" => new JanelaDeAreas(documento),
             "analises" => new JanelaDeAnalises(documento, () => { }),
             "mesa" => new JanelaDeMesa(

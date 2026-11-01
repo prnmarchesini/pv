@@ -22,7 +22,8 @@ internal sealed class JanelaDeNome : Window
     /// <param name="pergunta">A pergunta, em cima da caixa.</param>
     /// <param name="inicial">O nome que já vem na caixa, selecionado (renomear), ou null.</param>
     /// <param name="dica">Uma linha em cinza embaixo da caixa (para onde o nome vai), ou null.</param>
-    internal JanelaDeNome(string titulo, string pergunta, string? inicial = null, string? dica = null)
+    /// <param name="alerta">Uma linha em laranja, antes da dica (o nome que pode ser de outro desenho), ou null.</param>
+    internal JanelaDeNome(string titulo, string pergunta, string? inicial = null, string? dica = null, string? alerta = null)
     {
         Title = titulo;
         Width = 420;
@@ -37,6 +38,9 @@ internal sealed class JanelaDeNome : Window
         _caixa = new TextBox { MaxLength = Perguntas.MaiorNome, Margin = new Thickness(0, 0, 0, 6) };
         _caixa.TextChanged += (_, _) => Conferir();
         painel.Children.Add(_caixa);
+
+        if (!string.IsNullOrEmpty(alerta))
+            painel.Children.Add(new TextBlock { Text = alerta, TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.DarkOrange, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
 
         if (!string.IsNullOrEmpty(dica))
             painel.Children.Add(new TextBlock { Text = dica, TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.DimGray, Margin = new Thickness(0, 0, 0, 6) });
@@ -75,8 +79,8 @@ internal sealed class JanelaDeNome : Window
         {
             var nome = _caixa.Text.Trim();
 
-            _aviso.Text = nome.Length == 0 ? Clivus.Core.Tr.T("Digite um nome.") : string.Empty;
-            _ok.IsEnabled = nome.Length > 0 && nome.Length <= Perguntas.MaiorNome;
+            _aviso.Text = Serve(nome) || nome.Length > Perguntas.MaiorNome ? string.Empty : Clivus.Core.Tr.T("Digite um nome.");
+            _ok.IsEnabled = Serve(nome);
         }
         catch (System.Exception erro)
         {
@@ -84,12 +88,16 @@ internal sealed class JanelaDeNome : Window
         }
     }
 
+    /// <summary>Nome que serve: até o limite e com algo além de espaço e caractere de controle (colado de outro programa).</summary>
+    private static bool Serve(string nome) =>
+        nome.Length > 0 && nome.Length <= Perguntas.MaiorNome && nome.Any(c => !char.IsWhiteSpace(c) && !char.IsControl(c));
+
     private void Confirmar()
     {
         try
         {
             var nome = _caixa.Text.Trim();
-            if (nome.Length == 0 || nome.Length > Perguntas.MaiorNome) return;
+            if (!Serve(nome)) return;
 
             Nome = nome;
             DialogResult = true;
