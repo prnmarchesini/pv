@@ -343,7 +343,7 @@ public static class TermoVisionCommands
             var feito = TermoVisionProjeto.Criar(documento, interativo: false, gravarEm: enviar ? null : texto);
 
             editor.WriteMessage(FormattableString.Invariant(
-                $"\nCLIVUS_TV PROJETO mesas={feito.Mesas} recusadas={feito.Recusadas} terreno={feito.Grade} sistema={feito.Sistema} guid={feito.Guid:D}\n"));
+                $"\nCLIVUS_TV PROJETO mesas={feito.Mesas} recusadas={feito.Recusadas} terreno={feito.Grade} sistema={feito.Sistema} guid={feito.Guid:D} estrutura={(feito.Estrutura.Length > 0 ? feito.Estrutura : "-")} triangulos={feito.Triangulos}\n"));
             if (feito.Erro is { } erro) editor.WriteMessage($"\nCLIVUS_TV ERRO {erro}\n");
             if (feito.Resultado is { } r)
                 editor.WriteMessage(FormattableString.Invariant(

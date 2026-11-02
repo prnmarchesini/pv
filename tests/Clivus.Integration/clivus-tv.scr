@@ -36,6 +36,9 @@
 (setvar "OSMODE" clivus:osmode)
 (command "CLIVUS_TV_EXPORTAR_AUTO" "{{JSON}}")
 
+; 33.10: o mesmo desenho como projeto sem envio, so o corpo (sem rede), com a estrutura das mesas.
+(command "CLIVUS_TV_PROJETO_AUTO" "{{PROJETO}}")
+
 (princ "\nCLIVUS_TV_FIM")
 (setvar "SECURELOAD" clivus:secureload)
 (princ)

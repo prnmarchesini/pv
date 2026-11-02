@@ -81,8 +81,75 @@ internal static class TermoVisionProjeto
         Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps
         && (uri.Host.Equals("termovision.tech", StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".termovision.tech", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>O resultado de montar e mandar o projeto.</summary>
-    internal sealed record Feito(int Mesas, int Recusadas, string Grade, string Sistema, Guid Guid, TermoVisionProjectResult? Resultado, string? Erro);
+    /// <summary>
+    /// O resultado de montar e mandar o projeto. <paramref name="Estrutura"/>:
+    /// quanto do suporte das mesas fixas foi (o <see cref="TermoVisionStructure.Detail"/>,
+    /// ou vazio sem estrutura); <paramref name="Triangulos"/>: os triângulos de estrutura do envio.
+    /// </summary>
+    internal sealed record Feito(int Mesas, int Recusadas, string Grade, string Sistema, Guid Guid, TermoVisionProjectResult? Resultado, string? Erro,
+        string Estrutura = "", int Triangulos = 0);
+
+    /// <summary>
+    /// O suporte de cada mesa fixa (33.10), como está no desenho: os pilares
+    /// (o bloco: o topo na origem, a seção na escala e no giro; o pé na cota do
+    /// <paramref name="chao"/>, o terreno que vai junto) e as barras do biposte
+    /// (a peça movida aparece onde está, como no 3D do Clivus: o centro do
+    /// sólido menos o meio do eixo gravado é o quanto ela andou).
+    /// </summary>
+    private static Dictionary<Guid, (List<TermoVisionStructure.Pillar> Pilares, List<StructureIdentity> Barras)> Suportes(
+        Database database, IReadOnlySet<Guid> fixas, Func<double, double, double?> chao)
+    {
+        var suportes = new Dictionary<Guid, (List<TermoVisionStructure.Pillar>, List<StructureIdentity>)>();
+
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        foreach (var (guid, partes) in LayoutScan.Tables(transacao, database))
+        {
+            if (!fixas.Contains(guid)) continue;
+
+            var pilares = new List<TermoVisionStructure.Pillar>();
+            foreach (var id in partes.Pillars)
+            {
+                if (id.IsErased || transacao.GetObject(id, OpenMode.ForRead) is not BlockReference bloco || LayoutXData.LoadPillar(bloco) is not { } pilar) continue;
+
+                var topo = bloco.Position;
+                if ((chao(topo.X, topo.Y) ?? pilar.GroundZ ?? (topo.Z - pilar.FreeHeight)) is not { } pe) continue;
+
+                var escala = bloco.ScaleFactors;
+                pilares.Add(new TermoVisionStructure.Pillar(new Clivus.Geo.Point3(topo.X, topo.Y, topo.Z), pe, Math.Abs(escala.X), Math.Abs(escala.Y), bloco.Rotation));
+            }
+
+            var barras = new List<StructureIdentity>();
+            foreach (var id in partes.StructureBars)
+            {
+                if (id.IsErased || transacao.GetObject(id, OpenMode.ForRead) is not Solid3d solido || LayoutXData.LoadStructure(solido) is not { } peca) continue;
+
+                var caixa = solido.GeometricExtents;
+                var (dx, dy, dz) = (
+                    (caixa.MinPoint.X + caixa.MaxPoint.X) / 2 - (peca.Start.X + peca.End.X) / 2,
+                    (caixa.MinPoint.Y + caixa.MaxPoint.Y) / 2 - (peca.Start.Y + peca.End.Y) / 2,
+                    (caixa.MinPoint.Z + caixa.MaxPoint.Z) / 2 - (peca.Start.Z + peca.End.Z) / 2);
+                barras.Add(peca with
+                {
+                    Start = new Clivus.Geo.Point3(peca.Start.X + dx, peca.Start.Y + dy, peca.Start.Z + dz),
+                    End = new Clivus.Geo.Point3(peca.End.X + dx, peca.End.Y + dy, peca.End.Z + dz),
+                });
+            }
+
+            suportes[guid] = (pilares, barras);
+        }
+
+        return suportes;
+    }
+
+    /// <summary>O nome do detalhe da estrutura para o relato.</summary>
+    internal static string NomeDoDetalhe(TermoVisionStructure.Detail? detalhe) => detalhe switch
+    {
+        TermoVisionStructure.Detail.Full => Tr.T("completa"),
+        TermoVisionStructure.Detail.NoRods => Tr.T("sem os tirantes"),
+        TermoVisionStructure.Detail.NoPurlins => Tr.T("sem os tirantes e as terças"),
+        TermoVisionStructure.Detail.PillarsOnly => Tr.T("só os pilares"),
+        _ => Tr.T("sem a estrutura"),
+    };
 
     /// <summary>
     /// Monta o projeto e, sem <paramref name="gravarEm"/>, manda; com ele,
@@ -149,10 +216,44 @@ internal static class TermoVisionProjeto
                 antes.Nome, Path.GetFileName(antes.Arquivo))))
             guid = Guid.NewGuid();
 
+        // A estrutura das mesas fixas (33.10: "leve a estrutura tbm, fica mais
+        // profissional"): os pilares com o pé no terreno do desenho e as barras do
+        // biposte, o mais completa que couber no envio (o limite do contrato).
+        Andar(30, Tr.T("Montando a estrutura das mesas..."));
+        var fixas = mesas.Where(m => m.Kind == TermoVisionTable.TipoFixa).Select(m => m.Id).ToHashSet();
+        // O pé no mais baixo do TIN e dos nós da grade que vai junto: o pilar não flutua sobre o terreno de lá.
+        var suportes = Suportes(database, fixas, (x, y) =>
+        {
+            double? noTin = tin.TryGetZ(x, y, out var z) ? z : null;
+            var naGrade = TermoVisionStructure.LowestNodeAround(grade, x, y);
+            return noTin is { } a && naGrade is { } b ? Math.Min(a, b) : noTin ?? naGrade;
+        });
+        List<TermoVisionTable> ComEstrutura(TermoVisionStructure.Detail? detalhe) => mesas
+            .Select(m => detalhe is { } d && suportes.TryGetValue(m.Id, out var s) ? m with { Structure = TermoVisionStructure.Table(s.Pilares, s.Barras, d) } : m)
+            .ToList();
+
         Andar(40, Tr.T("Montando o projeto..."));
         var nome = NomeDaUsina.Atual(documento);
-        var corpo = TermoVisionProject.Build(ClivusCommands.VersaoDoPlugin(), TermoVisionCommands.NomeDoDesenho(documento), nome, guid, crs, grade, mesas, out var invalidas);
+        byte[] corpo = [];
+        List<string> invalidas = [];
+        var triangulos = 0;
+        (int, long) Montar(TermoVisionStructure.Detail? detalhe)
+        {
+            var comEla = ComEstrutura(detalhe);
+            corpo = TermoVisionProject.Build(ClivusCommands.VersaoDoPlugin(), TermoVisionCommands.NomeDoDesenho(documento), nome, guid, crs, grade, comEla, out invalidas);
+            triangulos = comEla.Sum(m => m.Structure?.Count ?? 0);
+            return (triangulos, corpo.LongLength);
+        }
+
+        // O Fit monta o corpo de cada detalhe até um caber: o último montado é o que vai.
+        var detalhe = TermoVisionStructure.Fit(d => Montar(d));
+        if (detalhe is null) Montar(null);
         recusadas.AddRange(invalidas);
+        var estrutura = detalhe?.ToString() ?? "";
+        if (detalhe is not (null or TermoVisionStructure.Detail.Full))
+            editor.WriteMessage(Tr.F("\nTermoVision: a estrutura das mesas foi simplificada para caber no envio ({0}).\n", NomeDoDetalhe(detalhe)));
+        else if (detalhe is null && suportes.Count > 0)
+            editor.WriteMessage(Tr.T("\nTermoVision: a estrutura das mesas não cabe no envio; vão só as placas.\n"));
 
         // Sem idioma: a linha vai para o nível 2 e para o relato em qualquer idioma.
         var descricaoDaGrade = FormattableString.Invariant($"{grade.Columns}x{grade.Rows}, {grade.Step:0.##} m");
@@ -165,7 +266,7 @@ internal static class TermoVisionProjeto
         if (gravarEm is not null)
         {
             File.WriteAllBytes(gravarEm, corpo);
-            return new Feito(enviadas, recusadas.Count, descricaoDaGrade, sistema, guid, null, null);
+            return new Feito(enviadas, recusadas.Count, descricaoDaGrade, sistema, guid, null, null, estrutura, triangulos);
         }
 
         // O GUID fica no desenho ANTES de ir: se a resposta não voltar (a
@@ -176,12 +277,12 @@ internal static class TermoVisionProjeto
 
         editor.WriteMessage(Tr.F("\nTermoVision: mandando {0} mesa(s) e o terreno ({1})...\n", enviadas, descricaoDaGrade));
         var (resultado, erro) = MandarComAndamento(corpo, guid, janela);
-        if (resultado is null) return new Feito(enviadas, recusadas.Count, descricaoDaGrade, sistema, guid, null, erro);
+        if (resultado is null) return new Feito(enviadas, recusadas.Count, descricaoDaGrade, sistema, guid, null, erro, estrutura, triangulos);
 
         Gravar(database, new TermoVisionProjetoDoDesenho(guid, arquivo, resultado.PlantCode ?? "", resultado.PlantName ?? nome, resultado.Url ?? "",
             resultado.ExpiresAt?.ToString("O", System.Globalization.CultureInfo.InvariantCulture) ?? ""));
         GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
-        return new Feito(enviadas, recusadas.Count, descricaoDaGrade, sistema, guid, resultado, null);
+        return new Feito(enviadas, recusadas.Count, descricaoDaGrade, sistema, guid, resultado, null, estrutura, triangulos);
     }
 
     /// <summary>
