@@ -1080,6 +1080,385 @@ public static class SombrasCommands
         return new RelatoDasSombras(resumo, detalhe.ToString());
     }
 
+    // ------------------------------------------------------------ o resumo de uma mesa (42.14)
+
+    /// <summary>
+    /// O pedido do botão "Resumo de uma mesa…" da janela de sombras: o período
+    /// e o que faz sombra dela no clique (o comando, que pede a mesa no
+    /// desenho, lê daqui; sem pedido, pergunta o período).
+    /// </summary>
+    internal static (PeriodoDeSombra Periodo, ShadowCasters QueFaz)? PedidoDaMesa { get; set; }
+
+    /// <summary>
+    /// O resumo das sombras de uma mesa (42.14, Renan: "um botão no modal
+    /// sombras que eu seleciono a mesa e ele me da o resumo das sombras, me
+    /// uma lista estruturadas dos dias que bate sombra em cada modulo e
+    /// quantos % em cada hora"): o mesmo cálculo do Gerar sombras, com o
+    /// escopo só nela, instante a instante, sem desenhar nem gravar nada.
+    /// </summary>
+    /// <returns>O calendário e o letreiro da mesa; sem ele, o porquê.</returns>
+    internal static (ShadeCalendar? Calendario, string Letreiro, string Porque) SombrasDaMesa(
+        Document documento, PeriodoDeSombra periodo, Guid mesa, ShadowCasters? queFaz = null, Func<double, string, bool>? avancar = null)
+    {
+        queFaz ??= ShadowCasters.All;
+        if (Preparar(documento, periodo, new ShadowScope(ShadowScopeKind.Selection, [], [mesa]), queFaz, out var naoDa) is not { } p)
+            return (null, string.Empty, naoDa!.Resumo);
+
+        var k = p.Mesas.FindIndex(m => m.Id == mesa);
+        if (k < 0 || p.Mesas[k].Faces.Count == 0) return (null, string.Empty, Tr.T("A mesa não tem módulo gerado pelo plugin."));
+
+        // As faces dela, por módulo (uma face por módulo; com duas, vale a maior fração).
+        var modulos = new List<(FaceLida Face, List<int> Faces)>();
+        var doModulo = new Dictionary<ObjectId, int>();
+        for (var f = 0; f < p.Faces.Count; f++)
+        {
+            if (!p.RecebeFace[f] || p.DeQuem[f].Mesa != k) continue;
+            var face = p.DeQuem[f].Face;
+            if (!doModulo.TryGetValue(face.Modulo, out var i))
+            {
+                i = modulos.Count;
+                doModulo[face.Modulo] = i;
+                modulos.Add((face, []));
+            }
+
+            modulos[i].Faces.Add(f);
+        }
+
+        var fracoes = modulos.Select(_ => new List<float>(p.Lista.Count)).ToList();
+        var causas = modulos.Select(_ => new List<ShadowCause>(p.Lista.Count)).ToList();
+        var instantes = new List<DateTime>(p.Lista.Count);
+        var feitos = 0;
+
+        foreach (var t in p.Lista)
+        {
+            if (avancar is not null && !avancar(100.0 * feitos++ / Math.Max(1, p.Lista.Count), Tr.F("Calculando {0:dd/MM HH:mm}...", t)))
+                return (null, p.Mesas[k].Letreiro, Tr.T("Cancelado."));
+
+            var sol = SolarCalculator.Compute(p.Lugar.Latitude, p.Lugar.Longitude, t, periodo.Fuso);
+            if (sol.ElevationDegrees < Shading.MinimumElevationDegrees) continue;
+
+            var r = p.Modelo.At(sol);
+            instantes.Add(t);
+            for (var i = 0; i < modulos.Count; i++)
+            {
+                var pior = modulos[i].Faces.MaxBy(f => r.Fractions[f]);
+                fracoes[i].Add((float)r.Fractions[pior]);
+                causas[i].Add(r.Causes[pior]);
+            }
+        }
+
+        var series = modulos
+            .Select((m, i) => new ShadeSeries(m.Face.Modulo.Handle.ToString(), Tr.F("col {0} fil {1}", m.Face.Coluna + 1, m.Face.Fila + 1), m.Face.Coluna, m.Face.Fila, fracoes[i], causas[i]))
+            .OrderBy(s => s.Row).ThenBy(s => s.Column)
+            .ToList();
+
+        return (new ShadeCalendar(instantes, TimeSpan.FromMinutes(periodo.PassoMinutos), periodo.Instante ? 1 : periodo.PassoDias, series,
+            periodo.Ate.DayNumber - periodo.De.DayNumber + 1), p.Mesas[k].Letreiro, string.Empty);
+    }
+
+    /// <summary>O resumo de uma mesa com a janela de andamento e o Cancelar; sem interface, sem janela.</summary>
+    internal static (ShadeCalendar? Calendario, string Letreiro, string Porque) SombrasDaMesaComAndamento(
+        Document documento, PeriodoDeSombra periodo, Guid mesa, ShadowCasters? queFaz)
+    {
+        if (!ClivusExtension.TemInterface()) return SombrasDaMesa(documento, periodo, mesa, queFaz);
+
+        JanelaDeProgresso? janela = null;
+        try
+        {
+            try
+            {
+                janela = JanelaDeProgresso.Abrir(null, Tr.T("Resumo das sombras da mesa"), podeCancelar: true);
+            }
+            catch (System.Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao abrir o andamento do resumo da mesa.", erro);
+                janela = null;
+            }
+
+            return janela is null
+                ? SombrasDaMesa(documento, periodo, mesa, queFaz)
+                : SombrasDaMesa(documento, periodo, mesa, queFaz, (p, texto) =>
+                {
+                    janela.Avancar(p, texto);
+                    return !janela.Cancelado;
+                });
+        }
+        finally
+        {
+            try
+            {
+                janela?.Fechar();
+            }
+            catch (System.Exception erro)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao fechar o andamento do resumo da mesa.", erro);
+            }
+        }
+    }
+
+    /// <summary>CLIVUS_SOMBRAS_MESA: o clique numa peça da mesa e o resumo das sombras dela, no período da janela de sombras.</summary>
+    [CommandMethod(PluginInfo.ComandoSombrasMesa)]
+    public static void SombrasMesa()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+        var editor = documento.Editor;
+
+        try
+        {
+            // O período e o que faz sombra: os da janela, se foi ela que pediu; senão, perguntados.
+            var pedido = PedidoDaMesa;
+            PedidoDaMesa = null;
+            var periodo = pedido?.Periodo ?? PerguntarPeriodo(editor);
+            if (periodo is null) return;
+
+            var mesa = RecalcularCommands.MesaClicada(editor, documento, Tr.T("\nClique numa peça da mesa: "), Tr.T("\nSOMBRAS Isso não é uma peça de mesa do plugin.\n"));
+            if (mesa is null) return;
+
+            var (calendario, letreiro, porque) = SombrasDaMesaComAndamento(documento, periodo, mesa.Value, pedido?.QueFaz);
+            if (calendario is null)
+            {
+                editor.WriteMessage(Tr.F("\nSOMBRAS {0}\n", porque));
+                return;
+            }
+
+            editor.WriteMessage("\n" + LinhaDaMesa(calendario, letreiro) + "\n");
+            if (ClivusExtension.TemInterface()) AcadApp.ShowModelessWindow(new JanelaDoCalendarioDeSombras(calendario, letreiro, periodo.Descrever()));
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no resumo das sombras da mesa.", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui montar o resumo das sombras da mesa: {0}\n", erro.Message));
+        }
+    }
+
+    /// <summary>
+    /// CLIVUS_SOMBRAS_MESA_AUTO: o letreiro da mesa e o período (como no
+    /// CLIVUS_SOMBRAS_AUTO); escreve o resumo e confere, módulo a módulo, os
+    /// dias e as horas contra o registro do último Gerar sombras dela. Para o nível 2.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoSombrasMesaAutomatico)]
+    public static void SombrasMesaAutomatico()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+        var editor = documento.Editor;
+
+        var letreiro = editor.GetString(new PromptStringOptions("\nMesa: ") { AllowSpaces = false });
+        if (letreiro.Status != PromptStatus.OK) return;
+        var periodo = PerguntarPeriodo(editor);
+        if (periodo is null) return;
+
+        try
+        {
+            if (MesaPeloNome(documento.Database, letreiro.StringResult) is not { } mesa)
+            {
+                editor.WriteMessage($"\nSOMBRA_MESA ERRO não achei a mesa {letreiro.StringResult}\n");
+                return;
+            }
+
+            var (calendario, rotulo, porque) = SombrasDaMesa(documento, periodo, mesa);
+            if (calendario is null)
+            {
+                editor.WriteMessage($"\nSOMBRA_MESA ERRO {porque}\n");
+                return;
+            }
+
+            editor.WriteMessage("\n" + LinhaDaMesa(calendario, rotulo) + "\n");
+
+            // O mesmo período no registro: os dias e as horas de cada módulo batem com o calendário.
+            var motivos = LerMotivos(documento.Database);
+            int iguais = 0, diferentes = 0, semRegistro = 0;
+            for (var i = 0; i < calendario.Modules.Count; i++)
+            {
+                var guardado = motivos.Find(calendario.Modules[i].Handle);
+                var horas = calendario.Hours(i);
+                if (guardado is not { Days: { } dias, Hours: { } h })
+                {
+                    if (horas > 0) semRegistro++;
+                    continue;
+                }
+
+                if (dias == calendario.DaysWithShade(i) && Math.Abs(h - horas) < 0.01) iguais++;
+                else
+                {
+                    diferentes++;
+                    editor.WriteMessage(FormattableString.Invariant($"\nSOMBRA_MESA_DIFERENTE {calendario.Modules[i].Label} registro={dias}d/{h:0.###}h calendario={calendario.DaysWithShade(i)}d/{horas:0.###}h"));
+                }
+            }
+
+            var linhas = calendario.ToTsv("cabeçalho", c => c.ToString()).Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Length - 1;
+            editor.WriteMessage(FormattableString.Invariant($"\nSOMBRA_MESA_CONFERE iguais={iguais} diferentes={diferentes} sem_registro={semRegistro} linhas_do_excel={linhas}\n"));
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no CLIVUS_SOMBRAS_MESA_AUTO.", erro);
+            editor.WriteMessage($"\nSOMBRA_MESA ERRO {erro.Message}\n");
+        }
+    }
+
+    // ------------------------------------------------------------ os piores módulos (42.15)
+
+    /// <summary>
+    /// Destaca no desenho os piores módulos do escopo (42.15, Renan: "Me mostre
+    /// os X piores modulo que bate sombra ... o sistema pinta os modulos mais
+    /// fudidos com ordem. Ou então ... me mostre os modulos pegam sombra em x
+    /// dias por ano"), pelos dias e horas que o último Gerar sombras guardou em
+    /// cada módulo: uma hachura sobre o módulo, do vinho (o pior) ao amarelo,
+    /// e o lugar escrito em cima. O destaque anterior sai. Uma transação.
+    /// </summary>
+    /// <param name="piores">Os <paramref name="quantos"/> piores; false: os com sombra em <paramref name="quantos"/> dias ou mais.</param>
+    internal static RelatoDasSombras Destacar(Document documento, ShadowScope escopo, bool piores, int quantos)
+    {
+        if (escopo.WhyInvalid() is { } falta) return new RelatoDasSombras(falta);
+        if (quantos < 1)
+            return new RelatoDasSombras(piores ? Tr.T("Quantos piores? Um número de 1 para cima.") : Tr.T("Em quantos dias? Um número de 1 para cima."));
+
+        var database = documento.Database;
+        var mesas = LerMesas(database, comFaces: true);
+        var areas = AreasDoDesenho.Varrer(database);
+        var plano = ShadowScopePlan.Build(escopo, ParaOEscopo(areas), mesas.Select(m => new ShadowTable(m.Id, m.Contorno)).ToList(), FolgaDaSelecao);
+        var noEscopo = Enumerable.Range(0, mesas.Count).Where(k => plano.Receives[k]).Select(k => mesas[k].Id).ToHashSet();
+        var nomeDoEscopo = NomeDoEscopo(escopo, areas);
+
+        var candidatos = LerMotivos(database).Modules.Where(m => noEscopo.Contains(m.Table)).ToList();
+        if (candidatos.Count == 0) return new RelatoDasSombras(Tr.F("Nenhum módulo com sombra {0}: gere as sombras primeiro.", nomeDoEscopo));
+        if (!candidatos.Any(ShadowRanking.HasTally))
+            return new RelatoDasSombras(Tr.F("As sombras {0} são de antes de 02/11/2026 e não guardaram os dias e as horas de cada módulo: gere as sombras de novo.", nomeDoEscopo));
+
+        var escolhidos = piores ? ShadowRanking.Worst(candidatos, quantos) : ShadowRanking.WithAtLeastDays(candidatos, quantos);
+
+        // A face e o nome de cada módulo (com duas faces, a primeira).
+        var faces = new Dictionary<string, (MesaLida Mesa, FaceLida Face)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var m in mesas)
+            foreach (var f in m.Faces)
+                faces.TryAdd(f.Modulo.Handle.ToString(), (m, f));
+
+        string Nome(ModuleShadow m) => faces.TryGetValue(m.Handle, out var x) ? Tr.F("{0} col {1} fil {2}", x.Mesa.Letreiro, x.Face.Coluna + 1, x.Face.Fila + 1) : m.Handle;
+
+        int apagados, desenhados;
+        using (var transacao = database.TransactionManager.StartTransaction())
+        {
+            apagados = DestaqueDasSombras.Apagar(transacao, database);
+            desenhados = DestaqueDasSombras.Desenhar(transacao, database, escolhidos
+                .Select((m, i) => (m, i))
+                .Where(x => faces.ContainsKey(x.m.Handle))
+                .Select(x => new DestaqueDasSombras.Destaque(x.i + 1, ShadowRanking.RankColor(x.i, escolhidos.Count), faces[x.m.Handle].Face.Cantos, x.m.Handle)));
+            transacao.Commit();
+        }
+
+        if (escolhidos.Count == 0)
+            return new RelatoDasSombras(Tr.F("Nenhum módulo {0} pega sombra em {1} dia(s) ou mais no período calculado.", nomeDoEscopo, quantos),
+                apagados > 0 ? Tr.F("O destaque anterior saiu ({0} entidade(s)).", apagados) : string.Empty);
+
+        var lista = escolhidos.Take(10).Select((m, i) => Tr.F("{0}º {1} ({2:0.#} h, {3} dias, pior {4:0}%)", i + 1, Nome(m), m.Hours ?? 0, m.Days ?? 0, m.Fraction * 100));
+        var resumo = (piores
+                ? Tr.F("Os {0} piores módulos {1}, pintados do vinho (o pior) ao amarelo e numerados no desenho:", desenhados, nomeDoEscopo)
+                : Tr.F("{0} módulo(s) {1} com sombra em {2} dia(s) ou mais, pintados do vinho (o pior) ao amarelo e numerados no desenho:", desenhados, nomeDoEscopo, quantos))
+            + Environment.NewLine + string.Join("; ", lista) + (escolhidos.Count > 10 ? "…" : ".");
+
+        var detalhe = string.Join(Environment.NewLine + "  ", escolhidos.Select((m, i) =>
+            FormattableString.Invariant($"SOMBRA_DESTAQUE {i + 1} {Nome(m)} handle={m.Handle} horas={m.Hours ?? 0:0.###} dias={m.Days ?? 0} pior={m.Fraction * 100:0}%")));
+        return new RelatoDasSombras(resumo, detalhe);
+    }
+
+    /// <summary>Tira o destaque dos piores módulos do desenho inteiro.</summary>
+    internal static RelatoDasSombras LimparDestaque(Document documento)
+    {
+        int apagados;
+        using (var transacao = documento.Database.TransactionManager.StartTransaction())
+        {
+            apagados = DestaqueDasSombras.Apagar(transacao, documento.Database);
+            transacao.Commit();
+        }
+
+        return new RelatoDasSombras(apagados > 0 ? Tr.T("O destaque dos piores módulos saiu do desenho.") : Tr.T("Não há destaque no desenho."));
+    }
+
+    /// <summary>
+    /// CLIVUS_SOMBRAS_DESTACAR_AUTO: "PIORES n", "DIAS n" ou "LIMPAR", e o escopo
+    /// (como no CLIVUS_SOMBRAS_ESCOPO_AUTO: tipo, áreas, mesas). Escreve o
+    /// relato e quantos módulos estão destacados. Para o nível 2.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoSombrasDestacarAutomatico)]
+    public static void DestacarAutomatico()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+        var editor = documento.Editor;
+
+        string? Texto(string pergunta)
+        {
+            var r = editor.GetString(new PromptStringOptions($"\n{pergunta}: ") { AllowSpaces = true });
+            return r.Status == PromptStatus.OK ? r.StringResult.Trim() : null;
+        }
+
+        var modo = Texto("PIORES, DIAS ou LIMPAR");
+        if (modo is null) return;
+
+        try
+        {
+            RelatoDasSombras relato;
+            if (modo.Equals("LIMPAR", StringComparison.OrdinalIgnoreCase))
+            {
+                relato = LimparDestaque(documento);
+            }
+            else
+            {
+                var n = Texto("Quantos");
+                var tipo = Texto("Escopo (TUDO, AREA, AREAS, SELECAO, AREA+SELECAO)");
+                var nomes = Texto("Áreas (por ;, - para nenhuma)");
+                var letreiros = Texto("Mesas (por ;, - para nenhuma)");
+                if (n is null || tipo is null || nomes is null || letreiros is null) return;
+
+                if (!int.TryParse(n, NumberStyles.Integer, Invariante, out var quantos)) quantos = 0;
+                var escopo = EscopoPelosNomes(documento.Database, tipo, nomes, letreiros, out var porque);
+                relato = escopo is null ? new RelatoDasSombras(porque) : Destacar(documento, escopo, modo.Equals("PIORES", StringComparison.OrdinalIgnoreCase), quantos);
+            }
+
+            int destacados;
+            using (var transacao = documento.Database.TransactionManager.StartOpenCloseTransaction())
+                destacados = DestaqueDasSombras.Contar(transacao, documento.Database);
+
+            editor.WriteMessage($"\n{relato}\n");
+            editor.WriteMessage(FormattableString.Invariant($"\nSOMBRA_DESTACADOS {destacados}\n"));
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no CLIVUS_SOMBRAS_DESTACAR_AUTO.", erro);
+            editor.WriteMessage($"\nSOMBRA_DESTAQUE ERRO {erro.Message}\n");
+        }
+    }
+
+    /// <summary>
+    /// A mesa pelo letreiro (F1.3), pelo handle de uma peça dela (um módulo)
+    /// ou "PIOR" (a do pior módulo do registro, 42.15); null se não achou.
+    /// </summary>
+    internal static Guid? MesaPeloNome(Database database, string texto)
+    {
+        texto = texto.Trim();
+        if (texto.Equals("PIOR", StringComparison.OrdinalIgnoreCase))
+            return ShadowRanking.Worst(LerMotivos(database).Modules, 1).FirstOrDefault()?.Table;
+
+        if (LerMesas(database, comFaces: false).FirstOrDefault(m => m.Letreiro == texto) is { } pelaLetra) return pelaLetra.Id;
+
+        if (!long.TryParse(texto, NumberStyles.HexNumber, Invariante, out var numero)) return null;
+        if (!database.TryGetObjectId(new Handle(numero), out var id) || id.IsErased) return null;
+
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        return transacao.GetObject(id, OpenMode.ForRead) is Entity e ? LayoutScan.TableOf(e) : null;
+    }
+
+    /// <summary>A linha do resumo da mesa na linha de comando (e para o nível 2).</summary>
+    private static string LinhaDaMesa(ShadeCalendar calendario, string letreiro)
+    {
+        var comSombra = Enumerable.Range(0, calendario.Modules.Count).Count(m => calendario.Hours(m) > 0);
+        var (pior, quando) = calendario.Worst(ShadeCalendar.WholeTable);
+        var piorModulo = Enumerable.Range(0, calendario.Modules.Count).Select(calendario.Worst).DefaultIfEmpty((0f, null)).Max(w => w.Fraction);
+        return FormattableString.Invariant(
+            $"SOMBRA_MESA {letreiro} modulos={calendario.Modules.Count} com_sombra={comSombra} instantes={calendario.Instants.Count} dias={calendario.DaysWithShade(ShadeCalendar.WholeTable)} horas={calendario.Hours(ShadeCalendar.WholeTable):0.###} pior_modulo={piorModulo * 100:0}% pior_mesa={pior * 100:0}% quando={quando:dd/MM/yyyy HH:mm}");
+    }
+
     // ------------------------------------------------------------ apagar, ocultar, mostrar
 
     /// <summary>

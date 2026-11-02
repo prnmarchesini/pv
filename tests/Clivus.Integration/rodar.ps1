@@ -4287,7 +4287,13 @@ function Testar-SombrasPorQue {
     $terreno = Sondar-TerrenoDasSombras -Desenho $Desenho -Rotulo 'clivus-sombras-porque'
     if ($null -eq $terreno) { return $false }
 
-    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-porque' -Script (Join-Path $PSScriptRoot 'clivus-sombras-porque.scr') -Substituicoes (Pontos-DasSombras $terreno)
+    # A janela do resumo da mesa em PNG (42.14).
+    $pngCal = Join-Path $saida 'clivus-sombras-calendario.png'
+    if (Test-Path $pngCal) { Remove-Item $pngCal -Force }
+    $trocas = Pontos-DasSombras $terreno
+    $trocas['{{PNG_CAL}}'] = ($pngCal -replace '\\', '/')
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-porque' -Script (Join-Path $PSScriptRoot 'clivus-sombras-porque.scr') -Substituicoes $trocas
 
     if ($r.Estourou -or $r.Codigo -ne 0 -or $r.Texto.IndexOf('CLIVUS_PORQUE_FIM') -lt 0) {
         $problemas.Add("clivus-sombras-porque terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
@@ -4327,10 +4333,23 @@ function Testar-SombrasPorQue {
     # inteiro acima de 30 graus da 96 (no maximo 39: a janela valeu, revisao do 42.13).
     $soJanela = Bloco 'CLIVUS_PORQUE_SO_JANELA' 'CLIVUS_PORQUE_JANELA_E_ALTURA'
     if ($soJanela -notmatch '(\d+) instante\(s\), (\d+) com sol' -or [int]$Matches[1] -ne 39) { $erros += 'a janela das 08:00 as 10:00 sem altura nao deu os 39 instantes (13 dias x 3 horas)' }
-    $juntas = Bloco 'CLIVUS_PORQUE_JANELA_E_ALTURA' 'CLIVUS_PORQUE_FIM'
+    $juntas = Bloco 'CLIVUS_PORQUE_JANELA_E_ALTURA' 'CLIVUS_PORQUE_MESA'
     if ($juntas -notmatch 'das 08:00 \S+ 10:00 com o sol acima de 30\S*, de 60 em 60 min' -or $juntas -notmatch '(\d+) instante\(s\), (\d+) com sol') { $erros += 'a janela de horario com a altura solar nao foi calculada' }
     elseif ([int]$Matches[1] -lt 1 -or [int]$Matches[1] -ge 39) { $erros += "a janela com a altura solar teve $($Matches[1]) instante(s), fora de 1 a 38 (13 dias x 3 horas = 39 na janela)" }
     if ($juntas -notmatch 'de 39 na janela com o sol acima de 30') { $erros += 'o relato da altura nao diz quantos instantes a janela tinha (de 39 na janela)' }
+
+    # 02/11/2026 (42.14): o resumo da mesa do modulo marcado, no mesmo periodo: os 27 instantes, e os dias e as
+    # horas de cada modulo batem com o que o Gerar sombras guardou no registro.
+    $mesa = Bloco 'CLIVUS_PORQUE_MESA' 'CLIVUS_PORQUE_DESTAQUE'
+    if ($mesa -notmatch 'SOMBRA_MESA \S+ modulos=(\d+) com_sombra=(\d+) instantes=27 ') { $erros += 'o resumo da mesa nao saiu com os 27 instantes do periodo' }
+    if ($mesa -notmatch 'SOMBRA_MESA_CONFERE iguais=(\d+) diferentes=0 sem_registro=0 linhas_do_excel=(\d+)' -or [int]$Matches[1] -lt 1 -or [int]$Matches[2] -lt 1) { $erros += 'os dias e as horas do resumo da mesa nao batem com o registro do Gerar sombras' }
+
+    # 42.15: os 5 piores destacados, depois os com sombra em 1 dia ou mais (todos os com sombra), e o limpar.
+    $destaque = Bloco 'CLIVUS_PORQUE_DESTAQUE' 'CLIVUS_PORQUE_CALENDARIO'
+    $contagens = @([regex]::Matches($destaque, 'SOMBRA_DESTACADOS (\d+)') | ForEach-Object { [int]$_.Groups[1].Value })
+    if ($contagens.Count -ne 3 -or $contagens[0] -ne 5 -or $contagens[1] -lt 5 -or $contagens[2] -ne 0) { $erros += "o destaque dos piores nao deu 5, 5 ou mais e 0 (deu $($contagens -join ', '))" }
+    if ($destaque -notmatch 'SOMBRA_DESTAQUE 1 \S+ col \d+ fil \d+ handle=\w+ horas=') { $erros += 'o destaque nao escreveu o pior modulo com as horas' }
+    if ($t -notmatch 'RENDER calendario \d+x\d+' -or -not (Test-Path $pngCal)) { $erros += "a janela do resumo da mesa nao foi desenhada em $pngCal" }
 
     if ($t -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) { $erros += 'o SECURELOAD nao voltou ao que era' }
 

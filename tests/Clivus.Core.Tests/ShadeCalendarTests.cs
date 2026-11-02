@@ -61,6 +61,12 @@ public class ShadeCalendarTests
 
         Assert.Equal((1f, Instantes[0]), c.Worst(0));
         Assert.Equal((0f, (DateTime?)null), c.Worst(2));
+
+        // Os dias estimados não passam dos do período (como o registro do Gerar sombras).
+        var curto = new ShadeCalendar(Instantes, TimeSpan.FromMinutes(30), 7, c.Modules, periodDays: 10);
+        Assert.Equal(7, curto.DaysWithShade(0));
+        var mesa = new ShadeCalendar(Instantes, TimeSpan.FromMinutes(30), 7, [Serie("x", 0, 1f, 0f, 0f, 1f, 0f)], periodDays: 10);
+        Assert.Equal(10, mesa.DaysWithShade(0));   // 2 dias calculados × 7 = 14, e o período tem 10
     }
 
     [Fact]

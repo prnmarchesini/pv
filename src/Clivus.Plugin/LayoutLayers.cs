@@ -74,6 +74,9 @@ internal static class LayoutLayers
     /// <summary>Os módulos marcados pela sombra (9.7): a marca é cor na peça; a camada é a dos textos de sombra.</summary>
     internal const string SombraTexto = Prefixo + "SOMBRA_TEXTO";
 
+    /// <summary>O destaque dos piores módulos (42.15): a hachura da cor do lugar sobre o módulo e o lugar escrito.</summary>
+    internal const string SombraDestaque = Prefixo + "SOMBRA_DESTAQUE";
+
     /// <summary>Drenagem (25.2): as flechas do sentido da água e a legenda delas.</summary>
     internal const string DrenagemFlecha = Prefixo + "DRN_FLECHA";
 

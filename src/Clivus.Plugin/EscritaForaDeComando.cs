@@ -142,6 +142,23 @@ public static class GanchosDeTeste
     /// para ver se a linha quebra em vez de cortar. Devolve T, ou nil se a
     /// linha do Core Console não é STA (o WPF exige).
     /// </summary>
+    /// <summary>A janela do resumo das sombras de uma mesa para o desenho em PNG; null se a mesa ou o período não deram.</summary>
+    private static JanelaDoCalendarioDeSombras? CalendarioParaTeste(Document documento, string mesa)
+    {
+        if (SombrasCommands.MesaPeloNome(documento.Database, mesa) is not { } guid) return null;
+        var periodo = SombrasCommands.Ler("01/01/2026", "31/12/2026", "06:00", "18:00", "60", "-3", out _, "7");
+        if (periodo is null) return null;
+
+        var (calendario, letreiro, porque) = SombrasCommands.SombrasDaMesa(documento, periodo, guid);
+        if (calendario is null)
+        {
+            documento.Editor.WriteMessage($"\nRENDER calendario sem calendário: {porque}\n");
+            return null;
+        }
+
+        return new JanelaDoCalendarioDeSombras(calendario, letreiro, periodo.Descrever());
+    }
+
     [LispFunction("CLIVUS-RENDERIZAR-JANELA")]
     public static object? RenderizarJanela(ResultBuffer argumentos)
     {
@@ -166,6 +183,9 @@ public static class GanchosDeTeste
             // fingido desenha o aviso do nome dado em outro arquivo (o "Salvar como").
             "nome3d" => NomeDaUsina.Janela(documento, valores.Length >= 4 ? valores[3] : null),
             "areas" => new JanelaDeAreas(documento),
+            // O resumo das sombras de uma mesa (42.14): (clivus-renderizar-janela "calendario" "caminho.png" largura "mesa ou handle"),
+            // o ano de 2026, das 06:00 às 18:00 de hora em hora, a cada 7 dias.
+            "calendario" when valores.Length >= 4 && CalendarioParaTeste(documento, valores[3]) is { } calendario => calendario,
             "analises" => new JanelaDeAnalises(documento, () => { }),
             "mesa" => new JanelaDeMesa(
                 new TableProfileStore(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "clivus-render-mesa")),

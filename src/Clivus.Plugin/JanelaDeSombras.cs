@@ -61,6 +61,10 @@ internal sealed class JanelaDeSombras : Window
     // contam os instantes da janela de horário com o sol acima dela.
     private readonly CheckBox _soAcima = new() { Content = Tr.T("Simular só com o sol acima de"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 2, 6, 2), ToolTip = Tr.T("No Dia inteiro e no Período inteiro, junto com o horário: só contam os instantes com o sol acima desta altura (as horas em que isso acontece mudam dia a dia). Para só a altura, ponha o horário de 00:00 às 23:59.") };
     private readonly TextBox _altura = new() { Width = 40, Text = "15", ToolTip = Tr.T("A altura solar mínima, em graus: só contam sombras com o sol acima dela.") };
+
+    // O destaque dos piores módulos (42.15): os X piores, ou os com sombra em N dias ou mais.
+    private readonly TextBox _quantosPiores = new() { Width = 40, Text = "10", ToolTip = Tr.T("Quantos módulos destacar: os de mais horas de sombra no período do último cálculo.") };
+    private readonly TextBox _quantosDias = new() { Width = 40, Text = "30", ToolTip = Tr.T("Destaca os módulos com sombra em pelo menos tantos dias do período do último cálculo (com o ano inteiro, dias por ano).") };
     private readonly TextBlock _fuso = new() { VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Gray };
     private readonly double _fusoDoLugar;
 
@@ -190,6 +194,20 @@ internal sealed class JanelaDeSombras : Window
                 Preencher(3, new DateTime(d.Year, 1, 1), new DateTime(d.Year, 12, 31), "00:00", "23:59", "30", "7", soAcima: true, alturaMinima: "20");
             })));
 
+        // Os piores módulos (42.15): pelos dias e horas que o último cálculo guardou, no escopo de "Calcular".
+        pilha.Children.Add(Linha(
+            R(Tr.T("Destacar"), 88),
+            R(Tr.T("os")), _quantosPiores, R(Tr.T("piores módulos")),
+            Atalho(Tr.T("Mostrar"), Tr.T("Pinta no desenho os piores módulos do escopo, do vinho (o pior) ao amarelo, com o lugar escrito em cima; o destaque anterior sai."), () =>
+                Fazer(() => SombrasCommands.Destacar(_documento, _seletor.Escopo(), piores: true, Quantos(_quantosPiores)))),
+            R("   "),
+            R(Tr.T("os com sombra em")), _quantosDias, R(Tr.T("dias ou mais")),
+            Atalho(Tr.T("Mostrar"), Tr.T("Pinta no desenho os módulos do escopo com sombra em pelo menos tantos dias, dos mais sombreados aos menos."), () =>
+                Fazer(() => SombrasCommands.Destacar(_documento, _seletor.Escopo(), piores: false, Quantos(_quantosDias)))),
+            R("   "),
+            Atalho(Tr.T("Limpar destaque"), Tr.T("Tira o destaque dos piores módulos do desenho (as sombras ficam)."), () =>
+                Fazer(() => SombrasCommands.LimparDestaque(_documento)))));
+
         pilha.Children.Add(new TextBlock
         {
             Text = Tr.T("A sombra é desenhada em magenta no chão (acompanhando o terreno) e sobre os módulos, até onde ela pega; num dia ou período, é a soma das sombras de todos os passos. Cada cálculo troca só as sombras do que foi marcado, e as áreas convivem no desenho."),
@@ -219,6 +237,14 @@ internal sealed class JanelaDeSombras : Window
             _documento.SendStringToExecute($"_{PluginInfo.ComandoSombraPorQue} ", true, false, false);
         });
 
+        // O resumo de uma mesa (42.14): o período desta janela vai junto; a mesa se escolhe no desenho.
+        var daMesa = Botao(Tr.T("Resumo de uma mesa…"), Tr.T("Clique numa mesa no desenho: o calendário das sombras dela no período desta janela, módulo a módulo, com os dias e a % em cada hora."), () =>
+        {
+            if (!ClivusExtension.TemInterface()) return;
+            SombrasCommands.PedidoDaMesa = (PeriodoDaTela(), QueFazSombra());
+            _documento.SendStringToExecute($"_{PluginInfo.ComandoSombrasMesa} ", true, false, false);
+        });
+
         var fechar = new Button { Content = Tr.T("Fechar"), Width = 80, Height = 26, IsCancel = true, ToolTip = Tr.T("Fecha a janela; as sombras desenhadas ficam.") };
         fechar.Click += (_, _) => Tentar(Close);
 
@@ -231,6 +257,7 @@ internal sealed class JanelaDeSombras : Window
         botoes.Children.Add(new Border { Width = 1, Height = 20, Margin = new Thickness(4, 3, 10, 3), Background = Brushes.Silver });
         botoes.Children.Add(analises);
         botoes.Children.Add(porQue);
+        botoes.Children.Add(daMesa);
         botoes.Children.Add(fechar);
         pilha.Children.Add(botoes);
 
@@ -314,13 +341,7 @@ internal sealed class JanelaDeSombras : Window
 
         Fazer(() =>
         {
-            AjustarModo();
-
-            // A altura solar junto com o horário, à parte (revisão do 42.13).
-            var comAltura = _soAcima.IsChecked == true && _modo.SelectedIndex is 1 or 3;
-            var periodo = SombrasCommands.Ler(Data(_de), Data(_ate), _horaDe.Text, _horaAte.Text, _passo.Text, _fusoDoLugar.ToString(CultureInfo.InvariantCulture), out var porque,
-                    _dias.Text, comAltura ? _altura.Text : null)
-                ?? throw new ArgumentException(porque);
+            var periodo = PeriodoDaTela();
 
             // Com o andamento e o Cancelar (05/10/2026); esta janela fica travada
             // enquanto isso. O recado diz o período que valeu (revisão do 42.13).
@@ -328,6 +349,25 @@ internal sealed class JanelaDeSombras : Window
             return relato with { Resumo = relato.Resumo + Environment.NewLine + Tr.F("Período: {0}.", periodo.Descrever()) };
         });
     }
+
+    /// <summary>
+    /// O período como a tela está (o Gerar e o resumo de uma mesa): o modo
+    /// trava o que não vale nele, e a altura solar vai à parte, junto com o
+    /// horário (revisão do 42.13). Período que não vale: ArgumentException com o porquê.
+    /// </summary>
+    private PeriodoDeSombra PeriodoDaTela()
+    {
+        AjustarModo();
+
+        var comAltura = _soAcima.IsChecked == true && _modo.SelectedIndex is 1 or 3;
+        return SombrasCommands.Ler(Data(_de), Data(_ate), _horaDe.Text, _horaAte.Text, _passo.Text, _fusoDoLugar.ToString(CultureInfo.InvariantCulture), out var porque,
+                _dias.Text, comAltura ? _altura.Text : null)
+            ?? throw new ArgumentException(porque);
+    }
+
+    /// <summary>O número de uma caixa do destaque; o que não é número vira 0 (e o destaque diz).</summary>
+    private static int Quantos(TextBox caixa) =>
+        int.TryParse(caixa.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : 0;
 
     private void Apagar()
     {

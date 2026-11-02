@@ -32,8 +32,10 @@ public sealed class ShadeCalendar
     /// <param name="step">O passo do dia.</param>
     /// <param name="dayStep">O passo de dias (7: um dia por semana; cada dia calculado vale 7).</param>
     /// <param name="modules">A série de cada módulo, com um valor por instante.</param>
-    public ShadeCalendar(IReadOnlyList<DateTime> instants, TimeSpan step, int dayStep, IReadOnlyList<ShadeSeries> modules)
+    /// <param name="periodDays">Quantos dias o período tem: os dias com sombra estimados (os calculados vezes o passo) não passam disso, como no registro do Gerar sombras.</param>
+    public ShadeCalendar(IReadOnlyList<DateTime> instants, TimeSpan step, int dayStep, IReadOnlyList<ShadeSeries> modules, int? periodDays = null)
     {
+        PeriodDays = periodDays;
         ArgumentNullException.ThrowIfNull(instants);
         ArgumentNullException.ThrowIfNull(modules);
         if (step <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(step), "O passo precisa ser positivo.");
@@ -68,6 +70,9 @@ public sealed class ShadeCalendar
 
     /// <summary>O passo de dias.</summary>
     public int DayStep { get; }
+
+    /// <summary>Quantos dias o período tem, ou null sem limite.</summary>
+    public int? PeriodDays { get; }
 
     /// <summary>Os módulos da mesa.</summary>
     public IReadOnlyList<ShadeSeries> Modules { get; }
@@ -112,8 +117,12 @@ public sealed class ShadeCalendar
         return soma * Step.TotalHours * DayStep;
     }
 
-    /// <summary>Em quantos dias do período ele pegou sombra: os dias calculados com sombra vezes o passo de dias.</summary>
-    public int DaysWithShade(int module) => ShadedDays(module).Count * DayStep;
+    /// <summary>
+    /// Em quantos dias do período ele pegou sombra: os dias calculados com
+    /// sombra vezes o passo de dias, sem passar dos dias do período (13 dias
+    /// de 30 em 30 no ano dão 390, e o ano tem 365).
+    /// </summary>
+    public int DaysWithShade(int module) => Math.Min(ShadedDays(module).Count * DayStep, PeriodDays ?? int.MaxValue);
 
     /// <summary>A maior fração do módulo e quando, ou (0, null) sem sombra.</summary>
     public (float Fraction, DateTime? When) Worst(int module)

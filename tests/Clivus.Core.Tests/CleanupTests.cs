@@ -36,6 +36,10 @@ public class CleanupTests
         Assert.Equal(CleanupTarget.StringPath, Cleanup.Classify(ElectricalString.Tipo, isText: false));
         Assert.Equal(CleanupTarget.ShadowOutline, Cleanup.Classify(Cleanup.ShadowType, isText: false));
         Assert.Equal(CleanupTarget.ShadowLabel, Cleanup.Classify(Cleanup.ShadowType, isText: true));
+
+        // O destaque dos piores módulos (42.15) sai com as sombras: a hachura e o lugar escrito.
+        Assert.Equal(CleanupTarget.ShadowOutline, Cleanup.Classify(Cleanup.ShadowHighlightType, isText: false));
+        Assert.Equal(CleanupTarget.ShadowLabel, Cleanup.Classify(Cleanup.ShadowHighlightType, isText: true));
         Assert.Equal(CleanupTarget.Equipment, Cleanup.Classify(EquipmentPlacement.Tipo, isText: false));
         Assert.Equal(CleanupTarget.TransformerArea, Cleanup.Classify(TransformerAreaMark.Tipo, isText: false));
     }

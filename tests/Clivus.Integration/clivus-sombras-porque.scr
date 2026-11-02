@@ -82,6 +82,16 @@
 (command "CLIVUS_SOMBRAS_AUTO" "01/01/2026" "31/12/2026" "08:00" "10:00" "60" "-3" "30")
 (princ "\nCLIVUS_PORQUE_JANELA_E_ALTURA")
 (command "CLIVUS_SOMBRAS_AUTO" "01/01/2026" "31/12/2026" "08:00>30" "10:00" "60" "-3" "30")
+; 42.14: o resumo da mesa do pior modulo do registro, no mesmo periodo do calculo acima (o registro guardou os dias e as horas).
+(princ "\nCLIVUS_PORQUE_MESA")
+(command "CLIVUS_SOMBRAS_MESA_AUTO" "PIOR" "01/01/2026" "31/12/2026" "08:00>30" "10:00" "60" "-3" "30")
+; 42.15: os 5 piores, os com sombra em 1 dia ou mais, e o limpar.
+(princ "\nCLIVUS_PORQUE_DESTAQUE")
+(command "CLIVUS_SOMBRAS_DESTACAR_AUTO" "PIORES" "5" "TUDO" "-" "-")
+(command "CLIVUS_SOMBRAS_DESTACAR_AUTO" "DIAS" "1" "TUDO" "-" "-")
+(command "CLIVUS_SOMBRAS_DESTACAR_AUTO" "LIMPAR")
+(princ "\nCLIVUS_PORQUE_CALENDARIO")
+(if clivus:marcado (clivus-renderizar-janela "calendario" "{{PNG_CAL}}" "1060" clivus:marcado))
 (princ "\nCLIVUS_PORQUE_FIM")
 (setvar "SECURELOAD" clivus:secureload)
 (princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))

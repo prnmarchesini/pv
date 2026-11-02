@@ -388,6 +388,15 @@ public static partial class PluginInfo
     /// <summary>O porquê da sombra pelo handle do bloco do módulo. Para o nível 2.</summary>
     public const string ComandoSombraPorQueAutomatico = "CLIVUS_SOMBRA_PORQUE_AUTO";
 
+    /// <summary>Clica numa mesa e mostra as sombras dela no período da janela: o calendário dos módulos, os dias e a % em cada hora (42.14).</summary>
+    public const string ComandoSombrasMesa = "CLIVUS_SOMBRAS_MESA";
+
+    /// <summary>O resumo das sombras de uma mesa pelo letreiro e o período, na linha de comando. Para o nível 2.</summary>
+    public const string ComandoSombrasMesaAutomatico = "CLIVUS_SOMBRAS_MESA_AUTO";
+
+    /// <summary>Destaca no desenho os piores módulos (ou os com sombra em N dias), ou limpa o destaque. Para o nível 2 (42.15).</summary>
+    public const string ComandoSombrasDestacarAutomatico = "CLIVUS_SOMBRAS_DESTACAR_AUTO";
+
     /// <summary>Grava a página 3D (terreno, mesas, árvores) e abre no navegador (9.9).</summary>
     public const string ComandoVer3D = "CLIVUS_3D";
 

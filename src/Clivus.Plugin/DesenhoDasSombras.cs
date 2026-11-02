@@ -287,7 +287,7 @@ internal static class DesenhoDasSombras
     {
         var mudaram = 0;
 
-        foreach (var nome in new[] { LayoutLayers.Sombra, LayoutLayers.SombraTexto })
+        foreach (var nome in new[] { LayoutLayers.Sombra, LayoutLayers.SombraTexto, LayoutLayers.SombraDestaque })
         {
             var estava = LayoutLayers.EstaDesligada(transacao, database, nome);
             if (estava is null || estava == !ligadas) continue;

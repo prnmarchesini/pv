@@ -150,6 +150,9 @@ public static class Cleanup
     /// <summary>O tipo do XData das sombras (contorno e etiqueta), o mesmo que SombrasCommands grava.</summary>
     public const string ShadowType = "Sombra";
 
+    /// <summary>O tipo do XData do destaque dos piores módulos (42.15): sai com as sombras.</summary>
+    public const string ShadowHighlightType = "SombraDestaque";
+
     /// <summary>O magenta da mesa que não cabe (o mesmo do desenho da usina).</summary>
     public static readonly RgbColor MarkedColor = new(255, 0, 255);
 
@@ -181,7 +184,7 @@ public static class Cleanup
         StringTagText.Tipo or StringPreTag.Tipo => CleanupTarget.StringTag,   // a pré-tag do inversor (10/10/2026) sai como a tag
         StringSign.Tipo => CleanupTarget.StringSign,
         ElectricalString.Tipo => CleanupTarget.StringPath,
-        ShadowType => isText ? CleanupTarget.ShadowLabel : CleanupTarget.ShadowOutline,
+        ShadowType or ShadowHighlightType => isText ? CleanupTarget.ShadowLabel : CleanupTarget.ShadowOutline,
         EquipmentPlacement.Tipo => CleanupTarget.Equipment,
         TransformerAreaMark.Tipo => CleanupTarget.TransformerArea,
         _ => CleanupTarget.None,
