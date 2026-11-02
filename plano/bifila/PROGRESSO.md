@@ -83,6 +83,7 @@ estrutura para este novo tipo, TUDO deve funcionar com ela"). As decisões do
   - a linha de comando lista até 200 módulos.
 
   Core: 2762 de 2762.
+- Versão 0.1.14 (02/11/2026, 614824f, id 12 no servidor; SHA-256 92e08fc9…1b77): traz o 42.13, o 42.14, o 42.15 e o 33.9, com as revisões. Está publicada e instalada no PC do Renan (o Civil 3D estava fechado). A bateria completa passou: nível 2 107/107, serviço 53/53, sol, rosa, instalador e acervo. O placar acusava os 20 casos do `PlantNameTests` (42.10) sem etapa, e isso foi corrigido no 684dc30.
 
 ## Observações
 

@@ -27,6 +27,12 @@ As decisões 1 a 4 do `LEIA-PRIMEIRO.md` ficam para ele confirmar.**
 - Envio real (02/11/2026, a cópia do PLAT A_Perfiles pelo Core Console, licença desta máquina): 589 mesas, terreno 278x358 de 2 m, 17N EPSG 31971. O link é https://app.termovision.tech/v/tvv_Hh1ajMUX-lxIqkg_zdt0hf1eMH2FI0vwWfLnypegCZo (usina mc7qhhf0, 90 dias).
   - O 3D está certo: as mesas sobre o terreno com o satélite da Esri e a sombra do instante.
   - O 2D do TermoVision abria no interior de SP, e não no Panamá. Foi avisado à sessão do TermoVision, que é dona da correção.
+  - A termovision-63 corrigiu tudo no mesmo dia:
+    - o 2D enquadra pela grade do terreno (7982d652);
+    - o terreno do Clivus não vira mais "objeto" (43c88048): os taludes de 4 m faziam sombra falsa;
+    - o 3D guarda as placas (0,3 s em vez de 10 s).
+  - Conferido de novo no Chrome: a usina em 8,2138 / -81,5972, ao lado da subestação e da rodovia; 21/06 às 07:30 dá sombra em 175 mesas, de outra mesa.
+  - Sai na 0.1.14 (614824f), publicada e instalada.
 
 Nível 2 (`rodar.ps1 -SoTermoVision`): abre o pacote da Paradise sem rede num
 desenho vazio. Confere superfície, orto, árvores, área e árvore na cota do TIN.
