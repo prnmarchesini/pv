@@ -4317,9 +4317,17 @@ function Testar-SombrasPorQue {
     if ($analises -notmatch 'SOMBRA_TOPICO 3 col \d+ fil \d+ .{1,4}\d+% .{1,4}\S+.{1,4}21/06/2026 \d\d:\d\d') { $erros += 'as analises nao trazem os topicos dos modulos (%, causa, quando)' }
 
     # 05/10/2026: o ano com o sol acima de 20 graus (os horarios saem do sol).
-    $altura = $t.Substring($t.IndexOf('CLIVUS_PORQUE_ALTURA'))
+    $altura = Bloco 'CLIVUS_PORQUE_ALTURA' 'CLIVUS_PORQUE_JANELA_E_ALTURA'
     if ($altura -notmatch 'com o sol acima de 20\S*, de 60 em 60 min' -or $altura -notmatch '(\d+) instante\(s\), (\d+) com sol') { $erros += 'o periodo pela altura solar nao foi calculado' }
     elseif ([int]$Matches[1] -lt 50 -or [int]$Matches[1] -gt 13 * 13) { $erros += "o periodo pela altura solar teve $($Matches[1]) instante(s), fora do esperado para 13 dias com o sol acima de 20 graus" }
+
+    # 02/11/2026: a janela de horario e a altura solar juntas ("deixe assim e tambem coloque a trava em
+    # altura solar"): das 08:00 as 10:00, de hora em hora, 13 dias = 39 instantes na janela. Com o sol acima
+    # de 30 graus, as manhas de inverno saem (menos de 39: a altura filtrou); o dia inteiro acima de 30 graus
+    # daria uns 80 (no maximo 39: a janela valeu).
+    $juntas = Bloco 'CLIVUS_PORQUE_JANELA_E_ALTURA' 'CLIVUS_PORQUE_FIM'
+    if ($juntas -notmatch 'das 08:00 \S+ 10:00 com o sol acima de 30\S*, de 60 em 60 min' -or $juntas -notmatch '(\d+) instante\(s\), (\d+) com sol') { $erros += 'a janela de horario com a altura solar nao foi calculada' }
+    elseif ([int]$Matches[1] -lt 1 -or [int]$Matches[1] -ge 39) { $erros += "a janela com a altura solar teve $($Matches[1]) instante(s), fora de 1 a 38 (13 dias x 3 horas = 39 na janela)" }
 
     if ($t -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) { $erros += 'o SECURELOAD nao voltou ao que era' }
 
@@ -4348,7 +4356,13 @@ function Testar-SombrasJanela {
     $terreno = Sondar-TerrenoDasSombras -Desenho $Desenho -Rotulo 'clivus-sombras-janela'
     if ($null -eq $terreno) { return $false }
 
-    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-janela' -Script (Join-Path $PSScriptRoot 'clivus-sombras-janela.scr') -Substituicoes (Pontos-DasSombras $terreno)
+    # A janela desenhada em PNG (42.13), para conferir a tela sem o Civil 3D.
+    $png = Join-Path $saida 'clivus-sombras-janela.png'
+    if (Test-Path $png) { Remove-Item $png -Force }
+    $trocas = Pontos-DasSombras $terreno
+    $trocas['{{PNG}}'] = ($png -replace '\\', '/')
+
+    $r = Invoke-CoreConsole -Desenho $Desenho -Rotulo 'clivus-sombras-janela' -Script (Join-Path $PSScriptRoot 'clivus-sombras-janela.scr') -Substituicoes $trocas
 
     if ($r.Estourou -or $r.Codigo -ne 0) {
         $problemas.Add("clivus-sombras-janela terminou mal (codigo $($r.Codigo)). Veja $($r.Saida)")
@@ -4372,6 +4386,7 @@ function Testar-SombrasJanela {
     if ($m[5] -ne '1') { $erros += 'a sombra mudou a cor ou a camada de modulo (nao pinta mais o bloco)' }
     if ($m[6] -ne '1') { $erros += 'Ocultar nao desligou a camada CLIVUS_SOMBRA' }
     if ($m[7] -ne '1') { $erros += 'Mostrar nao ligou a camada CLIVUS_SOMBRA de novo' }
+    if ($r.Texto -notmatch 'RENDER sombras \d+x\d+' -or -not (Test-Path $png)) { $erros += "a janela de sombras nao foi desenhada em $png" }
     if ($r.Texto -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) { $erros += 'o SECURELOAD nao voltou ao que era' }
 
     if ($erros.Count -gt 0) {

@@ -14,22 +14,27 @@ using AcadApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 namespace Clivus.Plugin;
 
 /// <summary>
-/// O período das sombras: dias (de quantos em quantos), janela de horário ou
-/// altura solar mínima, passo e fuso. Com <see cref="AlturaMinima"/>, o dia
-/// inteiro é percorrido e só contam os instantes com o sol acima dela
-/// (05/10/2026, Renan: "se eu rodar o ano inteiro com horário fixo vai dar
-/// ruim ... só vou considerar sombras com altura solar maior que 20 graus;
-/// os horários vão se ajustando dia a dia").
+/// O período das sombras: dias (de quantos em quantos), janela de horário,
+/// passo e fuso, e a altura solar mínima. Com <see cref="AlturaMinima"/>, só
+/// contam os instantes da janela com o sol acima dela (05/10/2026, Renan: "se
+/// eu rodar o ano inteiro com horário fixo vai dar ruim ... só vou considerar
+/// sombras com altura solar maior que 20 graus; os horários vão se ajustando
+/// dia a dia"); com a janela do dia inteiro (00:00 às 23:59), é a altura
+/// sozinha. Desde 02/11/2026 as duas valem juntas (Renan: "deixe assim e
+/// tambem coloque a trava em altura solar ... simular somente com altura
+/// solar maior que 15 graus").
 /// </summary>
 internal sealed record PeriodoDeSombra(DateOnly De, DateOnly Ate, TimeOnly HoraDe, TimeOnly HoraAte, int PassoMinutos, double Fuso, int PassoDias = 1, double? AlturaMinima = null)
 {
     /// <summary>Um instante só: mesmo dia, mesma hora (sem altura solar).</summary>
     internal bool Instante => AlturaMinima is null && De == Ate && HoraDe == HoraAte;
 
-    /// <summary>Os instantes do período (na altura solar, o dia inteiro; o filtro do sol vem em <see cref="InstantesComSol"/>).</summary>
-    internal IEnumerable<DateTime> Instantes() => AlturaMinima is null
-        ? Shading.Instants(De, Ate, HoraDe, HoraAte, TimeSpan.FromMinutes(PassoMinutos), PassoDias)
-        : Shading.Instants(De, Ate, TimeOnly.MinValue, new TimeOnly(23, 59), TimeSpan.FromMinutes(PassoMinutos), PassoDias);
+    /// <summary>A janela é o dia inteiro: com a altura solar, os horários saem só do sol.</summary>
+    private bool DiaInteiro => HoraDe == TimeOnly.MinValue && HoraAte == new TimeOnly(23, 59);
+
+    /// <summary>Os instantes da janela de horário (o filtro do sol vem em <see cref="InstantesComSol"/>).</summary>
+    internal IEnumerable<DateTime> Instantes() =>
+        Shading.Instants(De, Ate, HoraDe, HoraAte, TimeSpan.FromMinutes(PassoMinutos), PassoDias);
 
     /// <summary>Os instantes que contam: o sol acima da altura mínima (ou do mínimo do cálculo, 2°).</summary>
     internal IEnumerable<DateTime> InstantesComSol(double latitude, double longitude)
@@ -38,14 +43,22 @@ internal sealed record PeriodoDeSombra(DateOnly De, DateOnly Ate, TimeOnly HoraD
         return Instantes().Where(t => SolarCalculator.Compute(latitude, longitude, t, Fuso).ElevationDegrees >= minimo);
     }
 
-    internal string Descrever() =>
-        Instante
-            ? Tr.F("{0:dd/MM/yyyy} às {1:HH:mm}", De, HoraDe)
-            : AlturaMinima is { } altura
-                ? Tr.F("{0:dd/MM/yyyy} a {1:dd/MM/yyyy}{2}, com o sol acima de {3:0.#}°, de {4} em {4} min",
-                    De, Ate, PassoDias > 1 ? Tr.F(" (a cada {0} dias)", PassoDias) : string.Empty, altura, PassoMinutos)
-                : Tr.F("{0:dd/MM/yyyy} a {1:dd/MM/yyyy}{2}, das {3:HH:mm} às {4:HH:mm}, de {5} em {5} min",
-                    De, Ate, PassoDias > 1 ? Tr.F(" (a cada {0} dias)", PassoDias) : string.Empty, HoraDe, HoraAte, PassoMinutos);
+    internal string Descrever()
+    {
+        if (Instante) return Tr.F("{0:dd/MM/yyyy} às {1:HH:mm}", De, HoraDe);
+
+        var dias = PassoDias > 1 ? Tr.F(" (a cada {0} dias)", PassoDias) : string.Empty;
+
+        return AlturaMinima switch
+        {
+            { } altura when DiaInteiro => Tr.F("{0:dd/MM/yyyy} a {1:dd/MM/yyyy}{2}, com o sol acima de {3:0.#}°, de {4} em {4} min",
+                De, Ate, dias, altura, PassoMinutos),
+            { } altura => Tr.F("{0:dd/MM/yyyy} a {1:dd/MM/yyyy}{2}, das {3:HH:mm} às {4:HH:mm} com o sol acima de {5:0.#}°, de {6} em {6} min",
+                De, Ate, dias, HoraDe, HoraAte, altura, PassoMinutos),
+            _ => Tr.F("{0:dd/MM/yyyy} a {1:dd/MM/yyyy}{2}, das {3:HH:mm} às {4:HH:mm}, de {5} em {5} min",
+                De, Ate, dias, HoraDe, HoraAte, PassoMinutos),
+        };
+    }
 }
 
 /// <summary>
@@ -594,19 +607,29 @@ public static class SombrasCommands
 
         if (!DateOnly.TryParseExact(de.Trim(), "d/M/yyyy", Brasil, DateTimeStyles.None, out var d0)) { porque = Tr.T("O primeiro dia precisa ser dd/mm/aaaa."); return null; }
         if (!DateOnly.TryParseExact(ate.Trim(), "d/M/yyyy", Brasil, DateTimeStyles.None, out var d1)) { porque = Tr.T("O último dia precisa ser dd/mm/aaaa."); return null; }
-        // Altura solar em vez do horário: a hora inicial vem como ">20".
+        // A altura solar mínima vem na hora inicial: ">20" é o dia inteiro com
+        // o sol acima de 20°; "08:00>15" (02/11/2026), a janela de horário e,
+        // nela, só os instantes com o sol acima de 15°.
         double? altura = null;
-        if (horaDe.Trim().StartsWith('>'))
+        var seta = horaDe.IndexOf('>', StringComparison.Ordinal);
+        if (seta >= 0)
         {
-            if (!double.TryParse(horaDe.Trim()[1..].Replace(',', '.'), NumberStyles.Float, Invariante, out var a) || a is < 0 or >= 90)
+            if (!double.TryParse(horaDe[(seta + 1)..].Trim().Replace(',', '.'), NumberStyles.Float, Invariante, out var a) || a is < 0 or >= 90)
             {
                 porque = Tr.T("A altura solar mínima precisa ser de 0 a 89 graus.");
                 return null;
             }
 
             altura = a;
-            horaDe = "00:00";
-            horaAte = "23:59";
+            if (horaDe[..seta].Trim().Length == 0)
+            {
+                horaDe = "00:00";
+                horaAte = "23:59";
+            }
+            else
+            {
+                horaDe = horaDe[..seta];
+            }
         }
 
         if (!TimeOnly.TryParseExact(horaDe.Trim(), ["H:mm", "H"], Brasil, DateTimeStyles.None, out var h0)) { porque = Tr.T("A hora inicial precisa ser hh:mm."); return null; }

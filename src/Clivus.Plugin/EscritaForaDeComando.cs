@@ -177,6 +177,9 @@ public static class GanchosDeTeste
         // A janela da Mesa na aba da estrutura (o biposte, 38.12): (clivus-renderizar-janela "mesa" "caminho.png" largura).
         if (janela is JanelaDeMesa && AcharAbas(janela.Content as System.Windows.DependencyObject) is { } abasDaMesa) abasDaMesa.SelectedIndex = 1;
 
+        // As sombras com o horário e a altura solar juntos (42.13): (clivus-renderizar-janela "sombras" "caminho.png" largura "altura").
+        if (janela is JanelaDeSombras sombras && valores.Length >= 4 && valores[3] == "altura") sombras.PeriodoComAlturaParaTeste();
+
         // A aba das análises a mostrar: (clivus-renderizar-janela "analises" "caminho.png" largura "PillarAbove").
         if (janela is JanelaDeAnalises && valores.Length >= 4 && Enum.TryParse<IndependentKind>(valores[3], out var aba)
             && ((System.Windows.Controls.DockPanel)janela.Content).Children.OfType<System.Windows.Controls.TabControl>().FirstOrDefault() is { } abas)

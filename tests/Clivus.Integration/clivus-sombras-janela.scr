@@ -78,6 +78,8 @@
                " modulos=" (itoa (length (clivus-sombras-modulos)))
                " vermelhos=" (itoa (clivus:cor '(16711680)))
                " igual=" clivus:igual " oculta=" clivus:oculta " mostra=" clivus:mostra " fim"))
+; A janela de sombras desenhada (42.13: o horário e a altura solar juntos).
+(clivus-renderizar-janela "sombras" "{{PNG}}" "780" "altura")
 (setvar "SECURELOAD" clivus:secureload)
 (princ (strcat "\nCLIVUS_SECURELOAD_ANTES=" (itoa clivus:secureload) " DEPOIS=" (itoa (getvar "SECURELOAD"))))
 (princ)
