@@ -7,6 +7,7 @@ namespace Clivus.Core.Tests;
 /// sempre não mexe no desenho; e o nome dado em outro arquivo (o "Salvar como"
 /// da plataforma A para a B) é avisado.
 /// </summary>
+[Trait("Etapa", "42")]
 public class PlantNameTests
 {
     private const string Arquivo = @"C:\Projetos\Panama\PLAT A_Perfiles.dwg";
