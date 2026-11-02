@@ -711,7 +711,7 @@ public static class Viewer3DPage
   .rosa-norte .rosa-ponta { fill: #F4A51C; }
   .rosa-norte .rosa-ponta.rosa-sombra { fill: #B86E00; }
   .rosa-letra { fill: var(--texto); font: 700 14px "Segoe UI", system-ui, sans-serif; }
-  .rosa-norte .rosa-letra { fill: #B86E00; }
+  .rosa-norte .rosa-letra { fill: #8A5200; }
   .rosa-rumo.ativo .rosa-letra { fill: #0F2533; }
   .rosa-meio circle { fill: #fff; stroke: var(--borda); }
   .rosa-cadeado { display: none; }

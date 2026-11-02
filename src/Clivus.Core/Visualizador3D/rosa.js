@@ -56,7 +56,10 @@
     no('circle', { r: 21, class: 'rosa-anel' }, giro);
     for (let k = 0; k < 4; k++) no('path', { d: 'M0,-17L3,-3L0,0L-3,-3Z', class: 'rosa-diagonal', transform: `rotate(${45 + 90 * k})` }, giro);
 
-    // Um botão por rumo: a ponta e a letra, que fica sempre em pé.
+    // Um botão por rumo: a ponta e a letra, que fica sempre em pé. O nome do
+    // botão é o <title> (a ação: travar nesse rumo ou soltar), que é também a
+    // dica do mouse. O segundo clique de um duplo clique e o Enter segurado
+    // não contam: alternariam a trava e a soltura (revisão do 42.12).
     const botoes = [], letrasNaTela = [];
     for (let i = 0; i < 4; i++) {
       const botao = no('g', { class: 'rosa-rumo' + (i === 0 ? ' rosa-norte' : ''), transform: `rotate(${90 * i})`, role: 'button', tabindex: '0' }, giro);
@@ -66,8 +69,12 @@
       no('path', { d: 'M0,-28L6,-6L0,0Z', class: 'rosa-ponta rosa-sombra' }, botao);
       const letra = no('text', { x: 0, y: -38, class: 'rosa-letra', 'text-anchor': 'middle', 'dominant-baseline': 'central' }, botao);
       letra.textContent = letras[i] || '';
-      botao.addEventListener('click', () => escolher(i));
-      botao.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); escolher(i); } });
+      botao.addEventListener('click', e => { if (!(e && e.detail > 1)) escolher(i); });
+      botao.addEventListener('keydown', e => {
+        if (e.repeat || (e.key !== 'Enter' && e.key !== ' ')) return;
+        e.preventDefault();
+        escolher(i);
+      });
       botoes.push({ botao, dica });
       letrasNaTela.push(letra);
     }
@@ -78,7 +85,7 @@
     const cadeado = no('g', { class: 'rosa-cadeado' }, meio);
     no('rect', { x: -3.4, y: -0.6, width: 6.8, height: 5, rx: 1 }, cadeado);
     no('path', { d: 'M-2,-0.6v-1.6a2,2 0 0 1 4,0v1.6' }, cadeado);
-    meio.addEventListener('click', () => { if (travado >= 0) soltar(); });
+    meio.addEventListener('click', e => { if (travado >= 0 && !(e && e.detail > 1)) soltar(); });
 
     const aviso = document.createElement('div');
     aviso.className = 'rosa-aviso';
@@ -98,11 +105,8 @@
       caixa.classList.toggle('travada', travado >= 0);
       botoes.forEach(({ botao, dica }, i) => {
         const ativo = i === travado;
-        const texto = preencher(ativo ? t.soltar : t.travar, { rumo: rumos[i] || '' });
         botao.classList.toggle('ativo', ativo);
-        botao.setAttribute('aria-pressed', String(ativo));
-        botao.setAttribute('aria-label', texto);
-        dica.textContent = texto;
+        dica.textContent = preencher(ativo ? t.soltar : t.travar, { rumo: rumos[i] || '' });
       });
     }
 
@@ -117,6 +121,14 @@
 
     function soltar() {
       virada = null;
+      // O arraste de lado com a trava fica guardado na inércia do OrbitControls
+      // (o clamp só descarta o que já entrou): ao soltar, a vista girava
+      // sozinha, até 39° logo depois de um arraste (revisão do 42.12). Um
+      // update sem amortecer, ainda travado, gasta esse resto ali.
+      const amortecer = controles.enableDamping;
+      controles.enableDamping = false;
+      controles.update();
+      controles.enableDamping = amortecer;
       travado = -1;
       controles.minAzimuthAngle = -Infinity;
       controles.maxAzimuthAngle = Infinity;

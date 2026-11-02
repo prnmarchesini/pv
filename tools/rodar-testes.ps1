@@ -310,6 +310,31 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
     Escrever-Linha 'Sol (JS)' '-' 'sem node'
 }
 
+# ---- a rosa dos ventos do 3D (node) --------------------------------------------
+# Passo 42.12: o rosa.js com a three r128 e o OrbitControls de verdade (a seta,
+# os rumos para cima, a trava, a soltura sem giro sozinho, o duplo clique).
+
+if (Get-Command node -ErrorAction SilentlyContinue) {
+    $antes = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $saidaRosa = & node (Join-Path $PSScriptRoot 'conferir-rosa.js') 2>&1 | Out-String
+        $codigoRosa = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $antes
+    }
+
+    if ($codigoRosa -eq 0) {
+        Escrever-Linha 'Rosa (JS)' '' 'OK'
+    } else {
+        Escrever-Linha 'Rosa (JS)' '' 'FALHOU'
+        $problemas.Add("a rosa dos ventos do 3D falhou (tools/conferir-rosa.js):`n$saidaRosa")
+    }
+} else {
+    Escrever-Linha 'Rosa (JS)' '-' 'sem node'
+}
+
 # ---- instalador -------------------------------------------------------------
 # Gera o ClivusSolar-Setup.exe e instala e desinstala em silencio numa pasta
 # de teste (/teste=: plugins e dados dentro dela, registro com "_Teste"), sem

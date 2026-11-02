@@ -46,12 +46,17 @@ public class Viewer3DCompassTests
 
     [Theory]
     [Trait("Etapa", "42")]
-    [InlineData(UiLanguage.English, "data-letras=\"N E S W\" data-rumos=\"north|east|south|west\"")]
-    [InlineData(UiLanguage.Spanish, "data-letras=\"N E S O\" data-rumos=\"norte|este|sur|oeste\"")]
+    [InlineData(UiLanguage.English, "<div id=\"rosa\" data-titulo=\"Compass rose\" data-letras=\"N E S W\" data-rumos=\"north|east|south|west\" "
+        + "data-travar=\"Turn {rumo} to the top and lock the rotation\" data-soltar=\"Unlock the rotation\" "
+        + "data-travado=\"Rotation locked with {rumo} at the top. To unlock, click {letra} again.\" data-solto=\"Rotation unlocked.\"></div>")]
+    [InlineData(UiLanguage.Spanish, "<div id=\"rosa\" data-titulo=\"Rosa de los vientos\" data-letras=\"N E S O\" data-rumos=\"norte|este|sur|oeste\" "
+        + "data-travar=\"Poner el {rumo} arriba y bloquear el giro\" data-soltar=\"Desbloquear el giro\" "
+        + "data-travado=\"Giro bloqueado con el {rumo} arriba. Para desbloquear, haga clic de nuevo en la {letra}.\" data-solto=\"Giro desbloqueado.\"></div>")]
     public void ARosaFalaOIdiomaDoPlugin(UiLanguage lingua, string esperado)
     {
         using var idioma = Tr.Use(lingua);
 
+        // A rosa inteira no idioma, com os campos {rumo} e {letra} intactos para o rosa.js.
         Assert.Contains(esperado, Viewer3DPage.Html(Cena()), StringComparison.Ordinal);
     }
 }
