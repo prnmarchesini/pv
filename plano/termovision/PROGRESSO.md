@@ -40,7 +40,8 @@ As decisões 1 a 4 do `LEIA-PRIMEIRO.md` ficam para ele confirmar.**
   - O código está em `TermoVisionStructure` (Core, 7 testes) e no `TermoVisionProjeto.Suportes`.
   - Nível 2 (`-SoTermoVision`): o projeto da Paradise com 21 pilares, o pé de cada um abaixo do terreno.
   - O PLAT A foi reenviado sem os tirantes, porque com eles passava dos 18 MB: 158.688 triângulos, 16,6 MB (1,8 MB em gzip). Nenhum dos 7.068 pilares fica acima da grade, e nada passa acima da face dos módulos. O link é o mesmo.
-  - Commits 3955e0e e f969eb5. Ainda não está numa versão publicada: o botão no CAD só manda a estrutura a partir da próxima versão.
+  - Commits 3955e0e e f969eb5. Saiu na 0.1.15 (0e380aa, id 13 no servidor, SHA-256 c048ebe5…1e4a), publicada e instalada no PC do Renan. Core 2769/2769.
+  - Do lado do TermoVision ficaram dois pontos, anotados pela termovision-63 para quando a energia voltar: a treliça aparece por cima da face em algumas mesas (é briga de profundidade, porque a estrutura fica 32 a 33 mm abaixo da face em todas as 589; o conserto é um gl.polygonOffset) e a rota das placas, que pesa 19,5 MB e leva de 10 a 30 s.
 
 Nível 2 (`rodar.ps1 -SoTermoVision`): abre o pacote da Paradise sem rede num
 desenho vazio. Confere superfície, orto, árvores, área e árvore na cota do TIN.
