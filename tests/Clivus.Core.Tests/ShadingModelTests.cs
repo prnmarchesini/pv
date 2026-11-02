@@ -95,6 +95,46 @@ public class ShadingModelTests
         Assert.NotNull(r.When[1]);
     }
 
+    /// <summary>
+    /// As contas de cada face no período (02/11/2026, para os piores módulos e
+    /// os dias de sombra): em quantos instantes e dias ela pegou sombra e a
+    /// soma das frações, que batem com o instante a instante.
+    /// </summary>
+    [Fact]
+    [Trait("Etapa", "42")]
+    public void OPeriodoContaOsInstantesOsDiasEASomaDasFracoesDeCadaFace()
+    {
+        var modelo = new ShadingModel([Mesa(0, 0.5, 0), Mesa(-4, 0.5, 1)], []);
+        var instantes = Shading.Instants(new DateOnly(2026, 6, 20), new DateOnly(2026, 6, 22), new TimeOnly(7, 0), new TimeOnly(17, 0), TimeSpan.FromMinutes(30)).ToList();
+
+        var r = modelo.Worst(-23, -46.8, -3, instantes);
+
+        // O instante a instante, para conferir.
+        var comSombra = 0;
+        var dias = new HashSet<DateOnly>();
+        var soma = 0.0;
+        foreach (var t in instantes)
+        {
+            var sol = SolarCalculator.Compute(-23, -46.8, t, -3);
+            if (sol.ElevationDegrees < Shading.MinimumElevationDegrees) continue;
+            var f = modelo.At(sol).Fractions[1];
+            if (f <= 0) continue;
+            comSombra++;
+            dias.Add(DateOnly.FromDateTime(t));
+            soma += f;
+        }
+
+        var conta = r.Tallies![1];
+        Assert.True(comSombra > 0);
+        Assert.Equal(comSombra, conta.Instants);
+        Assert.Equal(dias.Count, conta.Days);
+        Assert.Equal(3, conta.Days);   // os três dias de inverno
+        Assert.Equal(soma, conta.FractionSum, 9);
+
+        // A da frente não pega sombra de ninguém.
+        Assert.Equal(new ShadeTally(0, 0, 0), r.Tallies[0]);
+    }
+
     [Fact]
     [Trait("Etapa", "9")]
     public void PassoDeDias()

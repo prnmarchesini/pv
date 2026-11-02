@@ -12,13 +12,23 @@ namespace Clivus.Core;
 /// <param name="InstantsWithSun">Quantos instantes do período tinham sol acima do mínimo.</param>
 /// <param name="Instants">Quantos instantes o período tinha.</param>
 /// <param name="Causes">O que fez a sombra no pior instante de cada face (null nas contas só com árvores).</param>
+/// <param name="Tallies">Quanto cada face ficou na sombra no período (null nas contas só com árvores).</param>
 public sealed record ShadingWorstCase(
     IReadOnlyList<double> Fractions, IReadOnlyList<DateTime?> When, DateTime? WorstInstant, int InstantsWithSun, int Instants,
-    IReadOnlyList<ShadowCause>? Causes = null)
+    IReadOnlyList<ShadowCause>? Causes = null, IReadOnlyList<ShadeTally>? Tallies = null)
 {
     /// <summary>Quantas faces pegaram alguma sombra.</summary>
     public int ShadedCount => Fractions.Count(f => f > 0);
 }
+
+/// <summary>
+/// Quanto uma face ficou na sombra num período (02/11/2026, para os piores
+/// módulos e os dias de sombra por ano): só os instantes calculados contam.
+/// </summary>
+/// <param name="Instants">Em quantos instantes ela pegou alguma sombra.</param>
+/// <param name="Days">Em quantos dias calculados ela pegou alguma sombra.</param>
+/// <param name="FractionSum">A soma das frações nesses instantes (vezes o passo, as horas de sombra cheia).</param>
+public readonly record struct ShadeTally(int Instants, int Days, double FractionSum);
 
 /// <summary>
 /// A sombra dos objetos (9.6, 9.8). Cada objeto é um ou mais cilindros

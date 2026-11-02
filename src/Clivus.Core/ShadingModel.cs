@@ -249,6 +249,14 @@ public sealed class ShadingModel
         var comSol = 0;
         var total = 0;
 
+        // Quanto cada face ficou na sombra (02/11/2026): os instantes, os dias
+        // (o dia conta uma vez, os instantes vêm em ordem) e a soma das frações.
+        var instantes = new int[_faces.Count];
+        var dias = new int[_faces.Count];
+        var somas = new double[_faces.Count];
+        var ultimoDia = new int[_faces.Count];
+        Array.Fill(ultimoDia, int.MinValue);
+
         foreach (var instante in instants)
         {
             cancel.ThrowIfCancellationRequested();
@@ -261,13 +269,25 @@ public sealed class ShadingModel
             comSol++;
             var r = At(sol);
             var soma = 0.0;
+            var dia = DateOnly.FromDateTime(instante).DayNumber;
 
             for (var k = 0; k < pior.Length; k++)
             {
-                soma += r.Fractions[k];
-                if (r.Fractions[k] <= pior[k]) continue;
+                var f = r.Fractions[k];
+                soma += f;
+                if (f <= 0) continue;
 
-                pior[k] = r.Fractions[k];
+                instantes[k]++;
+                somas[k] += f;
+                if (ultimoDia[k] != dia)
+                {
+                    dias[k]++;
+                    ultimoDia[k] = dia;
+                }
+
+                if (f <= pior[k]) continue;
+
+                pior[k] = f;
                 quando[k] = instante;
                 causas[k] = r.Causes[k];
             }
@@ -279,7 +299,10 @@ public sealed class ShadingModel
             }
         }
 
-        return new ShadingWorstCase(pior, quando, piorInstante, comSol, total, causas);
+        var contas = new ShadeTally[_faces.Count];
+        for (var k = 0; k < contas.Length; k++) contas[k] = new ShadeTally(instantes[k], dias[k], somas[k]);
+
+        return new ShadingWorstCase(pior, quando, piorInstante, comSol, total, causas, contas);
     }
 
     /// <summary>O que bloqueia o raio do ponto: árvore, depois mesa; nada.</summary>

@@ -51,14 +51,14 @@ public class ShadowReasonsTests
 
     [Fact]
     [Trait("Etapa", "42")]
-    public void OV2VaiEVoltaIgualEOPeriodoPodeTerBarra()
+    public void OV3VaiEVoltaIgualEOPeriodoPodeTerBarra()
     {
         var registro = ShadowReasons.Empty
-            .Replace([A1], "21/06/2026 | teste", [M("1A", A1, 0.375)])
+            .Replace([A1], "21/06/2026 | teste", [M("1A", A1, 0.375) with { Days = 42, Hours = 12.75 }])
             .Replace([B1], "o ano", [new ModuleShadow("3A", B1, 1, ShadowCause.Object, null, "?")]);
 
         var linhas = registro.Serialize();
-        Assert.Equal("V2", linhas[0]);
+        Assert.Equal("V3", linhas[0]);
 
         var lido = ShadowReasons.Parse(linhas);
         Assert.Equal(linhas, lido.Serialize());
@@ -67,11 +67,41 @@ public class ShadowReasonsTests
         Assert.Equal(Sete, lido.Find("1A")!.When);
         Assert.Null(lido.Find("3A")!.When);
         Assert.Equal(ShadowCause.Object, lido.Find("3A")!.Cause);
+
+        // Os dias e as horas de sombra (02/11/2026) vão e voltam; sem eles, ficam vazios.
+        Assert.Equal(42, lido.Find("1A")!.Days);
+        Assert.Equal(12.75, lido.Find("1A")!.Hours);
+        Assert.Null(lido.Find("3A")!.Days);
+        Assert.Null(lido.Find("3A")!.Hours);
+        Assert.Equal("21/06/2026 | teste", lido.Find("1A")!.Period);
     }
 
     [Fact]
     [Trait("Etapa", "42")]
-    public void OV1DeAntesELidoComAMesaDeCadaModuloEOPrimeiroCalculoGravaEmV2()
+    public void OV2DeAntesELidoSemOsDiasEAsHorasEOPrimeiroCalculoGravaEmV3()
+    {
+        // O formato de 31/10 a 02/11/2026: sem os dias e as horas, o período por último.
+        string[] v2 =
+        [
+            "V2",
+            "T|" + A1.ToString("D") + "|21/06/2026 | teste",
+            "M|1A|" + A1.ToString("D") + "|0.5|Table|2026-06-21T07:00:00|21/06/2026 | teste",
+        ];
+
+        var antigo = ShadowReasons.Parse(v2);
+        var m = antigo.Find("1A")!;
+        Assert.Equal(0.5, m.Fraction);
+        Assert.Equal(Sete, m.When);
+        Assert.Equal("21/06/2026 | teste", m.Period);
+        Assert.Null(m.Days);
+        Assert.Null(m.Hours);
+        Assert.Equal("V3", antigo.Serialize()[0]);
+        Assert.Equal(antigo.Serialize(), ShadowReasons.Parse(antigo.Serialize()).Serialize());
+    }
+
+    [Fact]
+    [Trait("Etapa", "42")]
+    public void OV1DeAntesELidoComAMesaDeCadaModuloEOPrimeiroCalculoGravaEmV3()
     {
         // O formato até 30/10/2026: um cálculo só, do desenho inteiro.
         string[] v1 = ["V1", "21/06/2026 às 09:00", "1A|0.5|Object|2026-06-21T09:00:00", "3A|1|Table|2026-06-21T09:00:00", "lixo"];
@@ -88,7 +118,7 @@ public class ShadowReasonsTests
         Assert.Null(novo.LegacyPeriod);
         Assert.Null(novo.Find("1A"));
         Assert.Equal("21/06/2026 às 09:00", novo.Find("3A")!.Period);
-        Assert.Equal("V2", novo.Serialize()[0]);
+        Assert.Equal("V3", novo.Serialize()[0]);
 
         // O registro zerado (o Apagar de antes deixava só a versão) e o que não se entende.
         Assert.True(ShadowReasons.Parse(["V1"]).IsEmpty);

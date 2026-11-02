@@ -736,24 +736,68 @@ public static class SombrasCommands
     internal static RelatoDasSombras Gerar(Document documento, PeriodoDeSombra periodo, ShadowScope escopo, Func<double, string, bool>? avancar = null, Action? semVolta = null, ShadowCasters? queFaz = null)
     {
         queFaz ??= ShadowCasters.All;
-        if (queFaz.None) return new RelatoDasSombras(Tr.T("Nada marcado em \"Fazem sombra\": marque as mesas, as árvores ou o relevo."));
+        if (Preparar(documento, periodo, escopo, queFaz, out var naoDa) is not { } preparo) return naoDa!;
+
+        var (database, tin, lugar, mesas, areas, areasDoEscopo, nomeDoEscopo, lista, elevacaoMinima, plano, caixa,
+            fazem, recebem, posicaoNoRelevo, cilindros, arvoresQueFazem, faces, recebeFace, deQuem, relevo, modelo) = preparo;
+        double? Chao(double x, double y) => tin.TryGetZ(x, y, out var z) ? z : null;
+
+        var mancha = new ShadowFootprint(cilindros, fazem.Select(k => mesas[k].Contorno).ToList(), Chao, tablesCastShadow: queFaz.Tables, receivers: fazem.Select(k => plano.Receives[k]).ToList(), groundBounds: caixa);
+
+        return Calcular(documento, periodo, avancar, semVolta, queFaz, preparo, mancha);
+    }
+
+    /// <summary>
+    /// O que o cálculo monta antes de varrer os instantes, o mesmo para gerar
+    /// as sombras e para o resumo de uma mesa (42.14): as mesas, quem recebe e
+    /// quem faz sombra, o relevo, o modelo e os instantes com sol.
+    /// </summary>
+    private sealed record Preparo(
+        Database Database, Tin Tin, GeoLocation Lugar, List<MesaLida> Mesas, IReadOnlyList<AreaNoDesenho> Areas, List<ShadowArea> AreasDoEscopo,
+        string NomeDoEscopo, List<DateTime> Lista, double ElevacaoMinima, ShadowScopePlan Plano, (double MinX, double MinY, double MaxX, double MaxY) Caixa,
+        List<int> Fazem, List<int> Recebem, Dictionary<int, int> PosicaoNoRelevo, List<ShadowCylinder> Cilindros, int ArvoresQueFazem,
+        List<ShadowQuad> Faces, List<bool> RecebeFace, List<(int Mesa, FaceLida Face)> DeQuem, TerrainShadow? Relevo, ShadingModel Modelo);
+
+    /// <summary>Monta o cálculo do escopo no período; null com o porquê.</summary>
+    private static Preparo? Preparar(Document documento, PeriodoDeSombra periodo, ShadowScope escopo, ShadowCasters queFaz, out RelatoDasSombras? porque)
+    {
+        porque = null;
+        if (queFaz.None)
+        {
+            porque = new RelatoDasSombras(Tr.T("Nada marcado em \"Fazem sombra\": marque as mesas, as árvores ou o relevo."));
+            return null;
+        }
 
         var database = documento.Database;
         var terreno = TerrainCache.Get(documento);
 
         if (terreno is null && FileiraCommands.ExigirTerreno(documento.Editor, documento) is null)
-            return new RelatoDasSombras(Tr.T("Nenhum terreno processado neste desenho. Use o botão Terreno primeiro."));
+        {
+            porque = new RelatoDasSombras(Tr.T("Nenhum terreno processado neste desenho. Use o botão Terreno primeiro."));
+            return null;
+        }
 
         terreno ??= TerrainCache.Get(documento)!;
 
         var lugar = Lugar(documento);
         if (lugar is null || !lugar.IsValid)
-            return new RelatoDasSombras(Tr.T("O desenho não tem localização (latitude e longitude). Corrija em Terreno > Resumo > Localização."));
+        {
+            porque = new RelatoDasSombras(Tr.T("O desenho não tem localização (latitude e longitude). Corrija em Terreno > Resumo > Localização."));
+            return null;
+        }
 
-        if (escopo.WhyInvalid() is { } falta) return new RelatoDasSombras(falta);
+        if (escopo.WhyInvalid() is { } falta)
+        {
+            porque = new RelatoDasSombras(falta);
+            return null;
+        }
 
         var mesas = LerMesas(database, comFaces: true);
-        if (mesas.All(m => m.Faces.Count == 0)) return new RelatoDasSombras(Tr.T("Não há módulo gerado pelo plugin no desenho."));
+        if (mesas.All(m => m.Faces.Count == 0))
+        {
+            porque = new RelatoDasSombras(Tr.T("Não há módulo gerado pelo plugin no desenho."));
+            return null;
+        }
 
         var areas = AreasDoDesenho.Varrer(database);
         var arvores = queFaz.Trees ? LerArvores(database) : [];
@@ -770,8 +814,11 @@ public static class SombrasCommands
             .ToList();
 
         if (elevacoes.Count == 0)
-            return new RelatoDasSombras(Tr.F("O sol não está acima do horizonte em {0}: nada a sombrear.", periodo.Descrever()),
+        {
+            porque = new RelatoDasSombras(Tr.F("O sol não está acima do horizonte em {0}: nada a sombrear.", periodo.Descrever()),
                 Tr.F("{0} instante(s), 0 com sol.", lista.Count));
+            return null;
+        }
 
         var elevacaoMinima = elevacoes.Min();
 
@@ -779,7 +826,10 @@ public static class SombrasCommands
         var areasDoEscopo = ParaOEscopo(areas);
         var plano = ShadowScopePlan.Build(escopo, areasDoEscopo, mesas.Select(m => new ShadowTable(m.Id, m.Contorno)).ToList(), FolgaDaSelecao);
         if (plano.ReceiverCount == 0 || plano.Bounds is not { } caixa)
-            return new RelatoDasSombras(Tr.F("Nenhuma mesa {0}: nada a calcular.", nomeDoEscopo));
+        {
+            porque = new RelatoDasSombras(Tr.F("Nenhuma mesa {0}: nada a calcular.", nomeDoEscopo));
+            return null;
+        }
 
         var minimo = CotaMaisBaixa(tin, caixa, Enumerable.Range(0, mesas.Count).Where(k => plano.Receives[k]).Select(k => mesas[k].Contorno));
 
@@ -826,7 +876,27 @@ public static class SombrasCommands
 
         // Sem as mesas em "Fazem sombra", elas só recebem: nem umas nas outras, nem no chão.
         var modelo = new ShadingModel(faces, cilindros, tablesCastShadow: queFaz.Tables, receivers: recebeFace, terrain: relevo);
-        var mancha = new ShadowFootprint(cilindros, fazem.Select(k => mesas[k].Contorno).ToList(), Chao, tablesCastShadow: queFaz.Tables, receivers: fazem.Select(k => plano.Receives[k]).ToList(), groundBounds: caixa);
+
+        return new Preparo(database, tin, lugar, mesas, areas, areasDoEscopo, nomeDoEscopo, lista, elevacaoMinima, plano, caixa,
+            fazem, recebem, posicaoNoRelevo, cilindros, arvoresQueFazem, faces, recebeFace, deQuem, relevo, modelo);
+    }
+
+    /// <summary>
+    /// Os dias e as horas de sombra de uma face no período: os dias calculados
+    /// e a soma das frações valem pelo passo de dias (um dia por semana vale
+    /// 7), e as horas pelo passo do dia; num instante só, 1 dia e nenhuma hora.
+    /// </summary>
+    private static (int? Dias, double? Horas) Contas(ShadeTally? conta, PeriodoDeSombra periodo, int diasDoPeriodo) =>
+        conta is not { } c ? (null, null)
+        : periodo.Instante ? (c.Days > 0 ? 1 : 0, 0)
+        : (Math.Min(c.Days * periodo.PassoDias, diasDoPeriodo), c.FractionSum * periodo.PassoMinutos / 60.0 * periodo.PassoDias);
+
+    /// <summary>O cálculo do Gerar sombras, com o que o <see cref="Preparar"/> montou: os instantes, a mancha, o desenho e os motivos.</summary>
+    private static RelatoDasSombras Calcular(
+        Document documento, PeriodoDeSombra periodo, Func<double, string, bool>? avancar, Action? semVolta, ShadowCasters queFaz, Preparo preparo, ShadowFootprint mancha)
+    {
+        var (database, tin, lugar, mesas, areas, areasDoEscopo, nomeDoEscopo, lista, elevacaoMinima, plano, caixa,
+            fazem, recebem, posicaoNoRelevo, cilindros, arvoresQueFazem, faces, recebeFace, deQuem, relevo, modelo) = preparo;
 
         var relogio = System.Diagnostics.Stopwatch.StartNew();
         using var cancelar = new CancellationTokenSource();
@@ -903,15 +973,19 @@ public static class SombrasCommands
 
         relogio.Stop();
 
-        // O pior de cada módulo do escopo (uma face por módulo; se houver duas, a pior).
+        // O pior de cada módulo do escopo (uma face por módulo; se houver duas,
+        // a pior), com os dias e as horas de sombra no período (02/11/2026: os
+        // piores módulos e os dias de sombra por ano saem delas).
         var descrito = periodo.Descrever();
+        var diasDoPeriodo = periodo.Ate.DayNumber - periodo.De.DayNumber + 1;
         var porModulo = new Dictionary<ObjectId, (int Mesa, ModuleShadow Sombra)>();
         for (var f = 0; f < faces.Count; f++)
         {
             if (!recebeFace[f] || pior.Fractions[f] <= 0) continue;
 
             var (k, face) = deQuem[f];
-            var sombra = new ModuleShadow(face.Modulo.Handle.ToString(), mesas[k].Id, pior.Fractions[f], pior.Causes![f], pior.When[f], descrito);
+            var (dias, horas) = Contas(pior.Tallies?[f], periodo, diasDoPeriodo);
+            var sombra = new ModuleShadow(face.Modulo.Handle.ToString(), mesas[k].Id, pior.Fractions[f], pior.Causes![f], pior.When[f], descrito, dias, horas);
             if (!porModulo.TryGetValue(face.Modulo, out var antes) || antes.Sombra.Fraction < sombra.Fraction) porModulo[face.Modulo] = (k, sombra);
         }
 

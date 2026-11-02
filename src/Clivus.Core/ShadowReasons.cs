@@ -9,7 +9,9 @@ namespace Clivus.Core;
 /// <param name="Cause">O que fez a sombra nesse pior instante.</param>
 /// <param name="When">O pior instante, ou null.</param>
 /// <param name="Period">O período do cálculo, como a janela descreve.</param>
-public sealed record ModuleShadow(string Handle, Guid Table, double Fraction, ShadowCause Cause, DateTime? When, string Period);
+/// <param name="Days">Em quantos dias do período ele pegou sombra (os calculados vezes o passo de dias), ou null num registro de antes de 02/11/2026.</param>
+/// <param name="Hours">As horas de sombra cheia no período (a soma das frações vezes o passo, vezes o passo de dias), ou null num registro antigo.</param>
+public sealed record ModuleShadow(string Handle, Guid Table, double Fraction, ShadowCause Cause, DateTime? When, string Period, int? Days = null, double? Hours = null);
 
 /// <summary>
 /// O registro dos motivos da sombra (SOMBRA_MOTIVOS), por módulo (42.1):
@@ -17,17 +19,18 @@ public sealed record ModuleShadow(string Handle, Guid Table, double Fraction, Sh
 /// escopo troca só as mesas dele: as linhas das mesas de fora ficam (as
 /// áreas são calculadas uma a uma e convivem no desenho).
 /// <para>
-/// Formato V2, uma linha por item: <c>V2</c>; <c>T|mesa|período</c> para
-/// cada mesa calculada (com ou sem sombra); <c>M|handle|mesa|fração|causa|quando|período</c>
-/// para cada módulo com sombra. O V1 (até 30/10/2026: um cálculo só, do
-/// desenho inteiro) é lido: <c>V1</c>, o período, e <c>handle|fração|causa|quando</c>;
-/// a mesa de cada módulo sai de quem lê (o desenho), e a primeira troca ou
-/// apagamento grava em V2.
+/// Formato V3 (02/11/2026), uma linha por item: <c>V3</c>; <c>T|mesa|período</c>
+/// para cada mesa calculada (com ou sem sombra); <c>M|handle|mesa|fração|causa|quando|dias|horas|período</c>
+/// para cada módulo com sombra (dias e horas vazios quando não se sabem).
+/// O V2 (até 02/11/2026) é o mesmo sem os dias e as horas. O V1 (até
+/// 30/10/2026: um cálculo só, do desenho inteiro) é lido: <c>V1</c>, o
+/// período, e <c>handle|fração|causa|quando</c>; a mesa de cada módulo sai de
+/// quem lê (o desenho). A primeira troca ou apagamento grava em V3.
 /// </para>
 /// </summary>
 public sealed class ShadowReasons
 {
-    private const string Versao = "V2";
+    private const string Versao = "V3";
 
     private readonly Dictionary<Guid, string> _mesas;
     private readonly Dictionary<string, ModuleShadow> _modulos;
@@ -83,7 +86,9 @@ public sealed class ShadowReasons
             return new ShadowReasons(mesas, modulos, periodo);
         }
 
-        if (lines[0] != Versao) return new ShadowReasons(mesas, modulos, null);
+        // O V2 não tem os dias e as horas; o V3 tem, antes do período (o último campo, que é texto livre).
+        var v3 = lines[0] == Versao;
+        if (!v3 && lines[0] != "V2") return new ShadowReasons(mesas, modulos, null);
 
         foreach (var linha in lines.Skip(1))
         {
@@ -94,20 +99,22 @@ public sealed class ShadowReasons
             }
             else if (linha.StartsWith("M|", StringComparison.Ordinal))
             {
-                var c = linha.Split('|', 7);
-                if (c.Length < 7 || c[1].Length == 0) continue;
+                var c = linha.Split('|', v3 ? 9 : 7);
+                if (c.Length < (v3 ? 9 : 7) || c[1].Length == 0) continue;
                 if (!Guid.TryParse(c[2], out var mesa)) mesa = Guid.Empty;
                 if (!double.TryParse(c[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var f)) continue;
 
                 var causa = Enum.TryParse<ShadowCause>(c[4], out var k) ? k : ShadowCause.None;
-                modulos[c[1]] = new ModuleShadow(c[1], mesa, f, causa, Quando(c[5]), c[6]);
+                int? dias = v3 && int.TryParse(c[6], NumberStyles.Integer, CultureInfo.InvariantCulture, out var d) && d >= 0 ? d : null;
+                double? horas = v3 && double.TryParse(c[7], NumberStyles.Float, CultureInfo.InvariantCulture, out var h) && double.IsFinite(h) && h >= 0 ? h : null;
+                modulos[c[1]] = new ModuleShadow(c[1], mesa, f, causa, Quando(c[5]), c[v3 ? 8 : 6], dias, horas);
             }
         }
 
         return new ShadowReasons(mesas, modulos, null);
     }
 
-    /// <summary>As linhas do registro, em V2 (as mesas e os módulos em ordem, para o arquivo não mudar à toa).</summary>
+    /// <summary>As linhas do registro, em V3 (as mesas e os módulos em ordem, para o arquivo não mudar à toa).</summary>
     public IReadOnlyList<string> Serialize()
     {
         var linhas = new List<string> { Versao };
@@ -119,7 +126,10 @@ public sealed class ShadowReasons
         {
             linhas.Add(string.Join('|',
                 "M", m.Handle, m.Table.ToString("D"), m.Fraction.ToString("R", CultureInfo.InvariantCulture), m.Cause.ToString(),
-                m.When?.ToString("s", CultureInfo.InvariantCulture) ?? string.Empty, m.Period));
+                m.When?.ToString("s", CultureInfo.InvariantCulture) ?? string.Empty,
+                m.Days?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+                m.Hours?.ToString("R", CultureInfo.InvariantCulture) ?? string.Empty,
+                m.Period));
         }
 
         return linhas;
