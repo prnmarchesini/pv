@@ -508,7 +508,7 @@ public static class SombrasCommands
 
         var de = Texto(Tr.T("Primeiro dia (dd/mm/aaaa)"));
         var ate = Texto(Tr.T("Último dia (dd/mm/aaaa)"));
-        var horaDe = Texto(Tr.T("Hora inicial (hh:mm)"));
+        var horaDe = Texto(Tr.T("Hora inicial (hh:mm; hh:mm>graus para só o sol acima dessa altura)"));
         var horaAte = Texto(Tr.T("Hora final (hh:mm)"));
         var passo = Texto(Tr.T("Passo (min)"));
         var fuso = Texto(Tr.T("Fuso (horas, -3 em Brasília)"));
@@ -599,7 +599,8 @@ public static class SombrasCommands
     }
 
     /// <summary>Lê o período dos textos; null com o porquê.</summary>
-    internal static PeriodoDeSombra? Ler(string de, string ate, string horaDe, string horaAte, string passo, string fuso, out string porque, string dias = "1")
+    /// <param name="alturaMinima">A altura solar mínima da janela de sombras, em graus (vazio: sem altura); junto com o horário digitado.</param>
+    internal static PeriodoDeSombra? Ler(string de, string ate, string horaDe, string horaAte, string passo, string fuso, out string porque, string dias = "1", string? alturaMinima = null)
     {
         porque = string.Empty;
 
@@ -607,33 +608,37 @@ public static class SombrasCommands
 
         if (!DateOnly.TryParseExact(de.Trim(), "d/M/yyyy", Brasil, DateTimeStyles.None, out var d0)) { porque = Tr.T("O primeiro dia precisa ser dd/mm/aaaa."); return null; }
         if (!DateOnly.TryParseExact(ate.Trim(), "d/M/yyyy", Brasil, DateTimeStyles.None, out var d1)) { porque = Tr.T("O último dia precisa ser dd/mm/aaaa."); return null; }
-        // A altura solar mínima vem na hora inicial: ">20" é o dia inteiro com
-        // o sol acima de 20°; "08:00>15" (02/11/2026), a janela de horário e,
-        // nela, só os instantes com o sol acima de 15°.
+
+        // A altura solar mínima. Na linha de comando, na hora inicial: ">20" é o
+        // dia inteiro com o sol acima de 20°; "08:00>15" (02/11/2026), a janela
+        // de horário e, nela, só o sol acima de 15°. A janela de sombras manda
+        // a altura à parte (a hora inicial em branco continua sendo erro).
         double? altura = null;
         var seta = horaDe.IndexOf('>', StringComparison.Ordinal);
-        if (seta >= 0)
+        if (seta >= 0 || !string.IsNullOrWhiteSpace(alturaMinima))
         {
-            if (!double.TryParse(horaDe[(seta + 1)..].Trim().Replace(',', '.'), NumberStyles.Float, Invariante, out var a) || a is < 0 or >= 90)
+            var texto = seta >= 0 ? horaDe[(seta + 1)..] : alturaMinima!;
+            if (Altura(texto) is not { } a)
             {
                 porque = Tr.T("A altura solar mínima precisa ser de 0 a 89 graus.");
                 return null;
             }
 
             altura = a;
-            if (horaDe[..seta].Trim().Length == 0)
+            if (seta >= 0 && horaDe[..seta].Trim().Length == 0)
             {
                 horaDe = "00:00";
                 horaAte = "23:59";
             }
-            else
+            else if (seta >= 0)
             {
                 horaDe = horaDe[..seta];
             }
         }
 
-        if (!TimeOnly.TryParseExact(horaDe.Trim(), ["H:mm", "H"], Brasil, DateTimeStyles.None, out var h0)) { porque = Tr.T("A hora inicial precisa ser hh:mm."); return null; }
-        if (!TimeOnly.TryParseExact(horaAte.Trim(), ["H:mm", "H"], Brasil, DateTimeStyles.None, out var h1)) { porque = Tr.T("A hora final precisa ser hh:mm."); return null; }
+        // "%H" e não "H": um especificador sozinho é lido como formato padrão, que não existe ("8" dava FormatException).
+        if (!TimeOnly.TryParseExact(horaDe.Trim(), ["H:mm", "%H"], Brasil, DateTimeStyles.None, out var h0)) { porque = Tr.T("A hora inicial precisa ser hh:mm."); return null; }
+        if (!TimeOnly.TryParseExact(horaAte.Trim(), ["H:mm", "%H"], Brasil, DateTimeStyles.None, out var h1)) { porque = Tr.T("A hora final precisa ser hh:mm."); return null; }
         if (!int.TryParse(passo.Trim(), NumberStyles.Integer, Brasil, out var p) || p is < 1 or > 1440) { porque = Tr.T("O passo precisa ser de 1 a 1440 minutos."); return null; }
         if (!double.TryParse(fuso.Trim().Replace(',', '.'), NumberStyles.Float, Invariante, out var f) || f is < -14 or > 14) { porque = Tr.T("O fuso precisa ser de -14 a 14 horas."); return null; }
         if (d1 < d0) { porque = Tr.T("O último dia vem antes do primeiro."); return null; }
@@ -647,6 +652,13 @@ public static class SombrasCommands
 
         return new PeriodoDeSombra(d0, d1, h0, h1, p, f, pd, altura);
     }
+
+    /// <summary>A altura solar mínima digitada (com vírgula ou ponto, com ou sem o °), de 0 a menos de 90; null se não serve.</summary>
+    private static double? Altura(string texto) =>
+        double.TryParse(texto.Trim().TrimEnd('°').Trim().Replace(',', '.'), NumberStyles.Float, Invariante, out var a)
+            && double.IsFinite(a) && a is >= 0 and < 90
+            ? a == 0 ? 0 : a
+            : null;
 
     /// <summary>
     /// O fuso do relógio do lugar do desenho (05/10/2026: saiu da janela de
@@ -815,8 +827,12 @@ public static class SombrasCommands
 
         if (elevacoes.Count == 0)
         {
-            porque = new RelatoDasSombras(Tr.F("O sol não está acima do horizonte em {0}: nada a sombrear.", periodo.Descrever()),
-                Tr.F("{0} instante(s), 0 com sol.", lista.Count));
+            // Com a altura solar, quem tirou tudo foi ela, não o horizonte (revisão do 42.13).
+            porque = periodo.AlturaMinima is { } altura
+                ? new RelatoDasSombras(Tr.F("Em {0}, o sol não passa de {1:0.#}°: nenhum instante a sombrear.", periodo.Descrever(), altura),
+                    Tr.F("{0} instante(s) na janela, nenhum com o sol acima de {1:0.#}°.", periodo.Instantes().Count(), altura))
+                : new RelatoDasSombras(Tr.F("O sol não está acima do horizonte em {0}: nada a sombrear.", periodo.Descrever()),
+                    Tr.F("{0} instante(s), 0 com sol.", lista.Count));
             return null;
         }
 
@@ -1028,6 +1044,11 @@ public static class SombrasCommands
         detalhe.Append(Tr.F("{0} (fuso {1:+0.#;-0.#;0}), em {2:0.0000}°, {3:0.0000}°: ", descrito, periodo.Fuso, lugar.Latitude, lugar.Longitude));
         detalhe.Append(Tr.F("{0} mesa(s) no escopo, {1} mesa(s) e {2} árvore(s) fazendo sombra, {3} instante(s), {4} com sol; ",
             recebem.Count, fazem.Count, arvoresQueFazem, pior.Instants, pior.InstantsWithSun));
+
+        // O que a altura cortou da janela (revisão do 42.13): "de 39 na janela".
+        if (periodo.AlturaMinima is { } corte && !periodo.Instante)
+            detalhe.Append(Tr.F("de {0} na janela com o sol acima de {1:0.#}°; ", periodo.Instantes().Count(), corte));
+
         detalhe.Append(Tr.F("{0} módulo(s) com sombra: {1} por árvore, {2} por outra mesa, {3} pelo terreno.", porModulo.Count, Por(ShadowCause.Object), Por(ShadowCause.Table), Por(ShadowCause.Terrain)));
 
         if (!queFaz.Tables || !queFaz.Trees || !queFaz.Terrain)

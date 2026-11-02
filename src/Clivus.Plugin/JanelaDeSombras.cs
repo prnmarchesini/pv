@@ -59,7 +59,7 @@ internal sealed class JanelaDeSombras : Window
     // tambem coloque a trava em altura solar, faz muito mais sentido, ai eu
     // escolho 'simular somente com altura solar maior que 15 graus'"): só
     // contam os instantes da janela de horário com o sol acima dela.
-    private readonly CheckBox _soAcima = new() { Content = Tr.T("Simular só com o sol acima de"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 2, 6, 2), ToolTip = Tr.T("Junto com o horário: só contam os instantes com o sol acima desta altura, que muda dia a dia. Para só a altura, ponha o horário de 00:00 às 23:59.") };
+    private readonly CheckBox _soAcima = new() { Content = Tr.T("Simular só com o sol acima de"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 2, 6, 2), ToolTip = Tr.T("No Dia inteiro e no Período inteiro, junto com o horário: só contam os instantes com o sol acima desta altura (as horas em que isso acontece mudam dia a dia). Para só a altura, ponha o horário de 00:00 às 23:59.") };
     private readonly TextBox _altura = new() { Width = 40, Text = "15", ToolTip = Tr.T("A altura solar mínima, em graus: só contam sombras com o sol acima dela.") };
     private readonly TextBlock _fuso = new() { VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.Gray };
     private readonly double _fusoDoLugar;
@@ -137,8 +137,15 @@ internal sealed class JanelaDeSombras : Window
             ? SolarCalculator.WorstShadowDay(doDesenho.Latitude, doDesenho.Longitude, hoje.Year, _fusoDoLugar)
             : null;
 
-        _soAcima.Checked += (_, _) => Tentar(AplicarModo);
-        _soAcima.Unchecked += (_, _) => Tentar(AplicarModo);
+        // A caixa só liga o campo dos graus (revisão do 42.13: chamar o
+        // AplicarModo inteiro resetava as horas). Desmarcada com o dia inteiro
+        // do atalho de 20°, o horário volta ao usual, das 9h às 15h.
+        _soAcima.Checked += (_, _) => Tentar(() => _altura.IsEnabled = _soAcima.IsEnabled);
+        _soAcima.Unchecked += (_, _) => Tentar(() =>
+        {
+            _altura.IsEnabled = false;
+            if (DiaInteiroNasCaixas()) (_horaDe.Text, _horaAte.Text) = ("09:00", "15:00");
+        });
 
         _modo.SelectionChanged += (_, _) => Tentar(AplicarModo);
         _modo.SelectedIndex = 0;
@@ -164,7 +171,7 @@ internal sealed class JanelaDeSombras : Window
                         throw new InvalidOperationException(Tr.T("O desenho não tem localização: defina em Terreno > Resumo > Localização para saber o pior dia do ano do lugar."));
 
                     var dia = SolarCalculator.WorstShadowDay(lugar.Latitude, lugar.Longitude, (_de.SelectedDate ?? hoje).Year, _fusoDoLugar).ToDateTime(TimeOnly.MinValue);
-                    Preencher(1, dia, dia, "09:00", "15:00", "30", "1");
+                    Preencher(1, dia, dia, "09:00", "15:00", "30", "1", soAcima: false);
                 }),
             Atalho(Tr.T("Este mês"), Tr.T("Todos os dias do mês do primeiro dia, das 9h às 15h, de hora em hora."), () =>
             {
@@ -180,7 +187,7 @@ internal sealed class JanelaDeSombras : Window
             Atalho(Tr.T("Ano, sol acima de 20°"), Tr.T("Um dia por semana do ano, de 30 em 30 minutos, contando só o sol acima de 20°: os horários se ajustam ao dia."), () =>
             {
                 var d = _de.SelectedDate ?? hoje;
-                Preencher(3, new DateTime(d.Year, 1, 1), new DateTime(d.Year, 12, 31), "00:00", "23:59", "30", "7", alturaMinima: "20");
+                Preencher(3, new DateTime(d.Year, 1, 1), new DateTime(d.Year, 12, 31), "00:00", "23:59", "30", "7", soAcima: true, alturaMinima: "20");
             })));
 
         pilha.Children.Add(new TextBlock
@@ -309,14 +316,16 @@ internal sealed class JanelaDeSombras : Window
         {
             AjustarModo();
 
-            // A altura solar junto com o horário: a hora inicial vai como "08:00>15" (SombrasCommands.Ler).
+            // A altura solar junto com o horário, à parte (revisão do 42.13).
             var comAltura = _soAcima.IsChecked == true && _modo.SelectedIndex is 1 or 3;
-            var horaDe = comAltura ? _horaDe.Text.Trim() + ">" + _altura.Text.Trim() : _horaDe.Text;
-            var periodo = SombrasCommands.Ler(Data(_de), Data(_ate), horaDe, _horaAte.Text, _passo.Text, _fusoDoLugar.ToString(CultureInfo.InvariantCulture), out var porque, _dias.Text)
+            var periodo = SombrasCommands.Ler(Data(_de), Data(_ate), _horaDe.Text, _horaAte.Text, _passo.Text, _fusoDoLugar.ToString(CultureInfo.InvariantCulture), out var porque,
+                    _dias.Text, comAltura ? _altura.Text : null)
                 ?? throw new ArgumentException(porque);
 
-            // Com o andamento e o Cancelar (05/10/2026); esta janela fica travada enquanto isso.
-            return SombrasCommands.GerarComAndamento(_documento, periodo, escopo, this, QueFazSombra());
+            // Com o andamento e o Cancelar (05/10/2026); esta janela fica travada
+            // enquanto isso. O recado diz o período que valeu (revisão do 42.13).
+            var relato = SombrasCommands.GerarComAndamento(_documento, periodo, escopo, this, QueFazSombra());
+            return relato with { Resumo = relato.Resumo + Environment.NewLine + Tr.F("Período: {0}.", periodo.Descrever()) };
         });
     }
 
@@ -370,11 +379,16 @@ internal sealed class JanelaDeSombras : Window
 #if DEBUG
     /// <summary>Para o nível 2 desenhar a janela (42.13): o ano inteiro, das 08:00 às 16:30, com o sol acima de 15°.</summary>
     internal void PeriodoComAlturaParaTeste() =>
-        Preencher(3, new DateTime(2027, 1, 1), new DateTime(2027, 12, 31), "08:00", "16:30", "30", "1", alturaMinima: "15");
+        Preencher(3, new DateTime(2027, 1, 1), new DateTime(2027, 12, 31), "08:00", "16:30", "30", "1", soAcima: true, alturaMinima: "15");
 #endif
 
-    /// <summary>O atalho preenche o período; sem <paramref name="alturaMinima"/>, a altura solar desliga.</summary>
-    private void Preencher(int modo, DateTime de, DateTime ate, string horaDe, string horaAte, string? passo = null, string? dias = null, string? alturaMinima = null)
+    /// <summary>
+    /// O atalho preenche o período. A altura solar só muda com
+    /// <paramref name="soAcima"/>: o pior dia desliga (o critério das 9h às
+    /// 15h), o "Ano, sol acima de 20°" liga; os outros deixam como está
+    /// (revisão do 42.13).
+    /// </summary>
+    private void Preencher(int modo, DateTime de, DateTime ate, string horaDe, string horaAte, string? passo = null, string? dias = null, bool? soAcima = null, string? alturaMinima = null)
     {
         _modo.SelectedIndex = modo;
         _de.SelectedDate = de;
@@ -384,13 +398,19 @@ internal sealed class JanelaDeSombras : Window
         if (passo is not null) _passo.Text = passo;
         if (dias is not null) _dias.Text = dias;
         if (alturaMinima is not null) _altura.Text = alturaMinima;
-        _soAcima.IsChecked = alturaMinima is not null;
+        if (soAcima is { } liga) _soAcima.IsChecked = liga;
         AplicarModo();
     }
+
+    /// <summary>O horário nas caixas é o dia inteiro (00:00 às 23:59), o do atalho da altura.</summary>
+    private bool DiaInteiroNasCaixas() => _horaDe.Text.Trim() == "00:00" && _horaAte.Text.Trim() == "23:59";
 
     /// <summary>O modo trava o que não vale nele.</summary>
     private void AplicarModo()
     {
+        // O dia inteiro do atalho da altura não serve ao instante nem ao horário fixo: 9h (revisão do 42.13).
+        if (_modo.SelectedIndex is 0 or 2 && DiaInteiroNasCaixas()) (_horaDe.Text, _horaAte.Text) = ("09:00", "09:00");
+
         switch (_modo.SelectedIndex)
         {
             case 0:

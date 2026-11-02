@@ -4317,17 +4317,20 @@ function Testar-SombrasPorQue {
     if ($analises -notmatch 'SOMBRA_TOPICO 3 col \d+ fil \d+ .{1,4}\d+% .{1,4}\S+.{1,4}21/06/2026 \d\d:\d\d') { $erros += 'as analises nao trazem os topicos dos modulos (%, causa, quando)' }
 
     # 05/10/2026: o ano com o sol acima de 20 graus (os horarios saem do sol).
-    $altura = Bloco 'CLIVUS_PORQUE_ALTURA' 'CLIVUS_PORQUE_JANELA_E_ALTURA'
+    $altura = Bloco 'CLIVUS_PORQUE_ALTURA' 'CLIVUS_PORQUE_SO_JANELA'
     if ($altura -notmatch 'com o sol acima de 20\S*, de 60 em 60 min' -or $altura -notmatch '(\d+) instante\(s\), (\d+) com sol') { $erros += 'o periodo pela altura solar nao foi calculado' }
     elseif ([int]$Matches[1] -lt 50 -or [int]$Matches[1] -gt 13 * 13) { $erros += "o periodo pela altura solar teve $($Matches[1]) instante(s), fora do esperado para 13 dias com o sol acima de 20 graus" }
 
     # 02/11/2026: a janela de horario e a altura solar juntas ("deixe assim e tambem coloque a trava em
-    # altura solar"): das 08:00 as 10:00, de hora em hora, 13 dias = 39 instantes na janela. Com o sol acima
-    # de 30 graus, as manhas de inverno saem (menos de 39: a altura filtrou); o dia inteiro acima de 30 graus
-    # daria uns 80 (no maximo 39: a janela valeu).
+    # altura solar"): das 08:00 as 10:00, de hora em hora, 13 dias = 39 instantes na janela (medido, sem a
+    # altura). Com o sol acima de 30 graus, as manhas de inverno saem (menos de 39: a altura filtrou); o dia
+    # inteiro acima de 30 graus da 96 (no maximo 39: a janela valeu, revisao do 42.13).
+    $soJanela = Bloco 'CLIVUS_PORQUE_SO_JANELA' 'CLIVUS_PORQUE_JANELA_E_ALTURA'
+    if ($soJanela -notmatch '(\d+) instante\(s\), (\d+) com sol' -or [int]$Matches[1] -ne 39) { $erros += 'a janela das 08:00 as 10:00 sem altura nao deu os 39 instantes (13 dias x 3 horas)' }
     $juntas = Bloco 'CLIVUS_PORQUE_JANELA_E_ALTURA' 'CLIVUS_PORQUE_FIM'
     if ($juntas -notmatch 'das 08:00 \S+ 10:00 com o sol acima de 30\S*, de 60 em 60 min' -or $juntas -notmatch '(\d+) instante\(s\), (\d+) com sol') { $erros += 'a janela de horario com a altura solar nao foi calculada' }
     elseif ([int]$Matches[1] -lt 1 -or [int]$Matches[1] -ge 39) { $erros += "a janela com a altura solar teve $($Matches[1]) instante(s), fora de 1 a 38 (13 dias x 3 horas = 39 na janela)" }
+    if ($juntas -notmatch 'de 39 na janela com o sol acima de 30') { $erros += 'o relato da altura nao diz quantos instantes a janela tinha (de 39 na janela)' }
 
     if ($t -notmatch 'CLIVUS_SECURELOAD_ANTES=(\d+) DEPOIS=(\d+)' -or $Matches[1] -ne $Matches[2]) { $erros += 'o SECURELOAD nao voltou ao que era' }
 
