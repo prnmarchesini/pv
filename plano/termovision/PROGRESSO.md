@@ -33,6 +33,14 @@ As decisões 1 a 4 do `LEIA-PRIMEIRO.md` ficam para ele confirmar.**
     - o 3D guarda as placas (0,3 s em vez de 10 s).
   - Conferido de novo no Chrome: a usina em 8,2138 / -81,5972, ao lado da subestação e da rodovia; 21/06 às 07:30 dá sombra em 175 mesas, de outra mesa.
   - Sai na 0.1.14 (614824f), publicada e instalada.
+- 33.10 A estrutura das mesas fixas no projeto do TermoVision (02/11/2026; o Renan, olhando o 3D do PLAT A só com as placas: "leve a estrutura tbm, fica mais profissional"; o TermoVision desenha os `estrutura.triangulos` da mesa fixa por baixo da face, d6426dc7): AGUARDANDO VALIDAÇÃO (a tela é o 3D do link).
+  - Vão os pilares, do pé ao topo do bloco, e as barras do biposte que estão no desenho: viga, mão francesa, terça e tirante. Os módulos não vão, e a monoposte leva só os pilares.
+  - O pé do pilar fica 0,3 m abaixo do menor entre o TIN e o nó mais baixo da célula da grade de 2 m que vai junto. No talude, a grade passava até 0,5 m abaixo do TIN, e 13 pilares flutuavam.
+  - O detalhe desce até caber: 5000 triângulos por mesa, 400 mil no envio e 18 MB de corpo.
+  - O código está em `TermoVisionStructure` (Core, 7 testes) e no `TermoVisionProjeto.Suportes`.
+  - Nível 2 (`-SoTermoVision`): o projeto da Paradise com 21 pilares, o pé de cada um abaixo do terreno.
+  - O PLAT A foi reenviado sem os tirantes, porque com eles passava dos 18 MB: 158.688 triângulos, 16,6 MB (1,8 MB em gzip). Nenhum dos 7.068 pilares fica acima da grade, e nada passa acima da face dos módulos. O link é o mesmo.
+  - Commits 3955e0e e f969eb5. Ainda não está numa versão publicada: o botão no CAD só manda a estrutura a partir da próxima versão.
 
 Nível 2 (`rodar.ps1 -SoTermoVision`): abre o pacote da Paradise sem rede num
 desenho vazio. Confere superfície, orto, árvores, área e árvore na cota do TIN.
