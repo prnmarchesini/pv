@@ -17,6 +17,16 @@ As decisões 1 a 4 do `LEIA-PRIMEIRO.md` ficam para ele confirmar.**
 - 33.7 Exportar para o TermoVision: AGUARDANDO VALIDAÇÃO
 - 33.8 TermoVision na ribbon: AGUARDANDO VALIDAÇÃO
 - 33.9 O projeto do TermoVision sem envio (02/11/2026, contrato v2 com a sessão do TermoVision; Renan: "se eu fizer pelo termovision, o cliente vai ver outro produto e ficar curioso"; "a meta é eu chegar e ver o dwg ... aberto em um 3D do termovision sobre vista de satelite em link publico"): o desenho com mesas que não veio do TermoVision vira uma usina pública de lá (dona: a empresa de sistema "Clivus Solar"); as mesas (com monoposte/biposte), o terreno em grade (2 m até 2 km de lado, as mesas com 100 m de folga, linha 0 ao sul) e o sistema de coordenadas (a zona e o hemisfério, o EPSG do SIRGAS na América do Sul) vão ao servidor do Clivus com a licença, que repassa ao TermoVision com a chave dele (nunca no PC) e devolve o link; o GUID do desenho fica no dicionário do plugin (TERMOVISION_PROJETO): mandar de novo atualiza a mesma usina e o mesmo link, e o "Salvar como" pergunta; o desenho fora de UTM na zona da localização é recusado: AGUARDANDO VALIDAÇÃO — `TermoVisionProject` (Core, 6 testes), `TermoVisionProjeto` (plugin), `CLIVUS_TV_PROJETO_AUTO`; o corpo do PLAT A_Perfiles (Panamá): 589 mesas biposte, terreno 278 × 358 de 2 m, 17N EPSG 31971
+- Revisão do 33.9 (02/11/2026, por subagente):
+  - As duas perguntas do botão têm o Não como padrão e dizem que o link é público. Se o desenho já criou a usina, a pergunta passa a ser "Atualizar".
+  - O GUID é gravado no desenho antes do envio. O X-Pedido sai do GUID e do corpo: o mesmo conteúdo dá o mesmo pedido.
+  - A zona UTM vem do código do sistema do desenho (UTM84-17N, SIRGAS2000.UTM-23S), senão da localização, senão de uma zona vizinha. O código WGS 84 dá o EPSG 326/327 (`TermoVisionProjectCrs.Resolve`, 2 testes novos).
+  - O envio tem janela de andamento com Cancelar, vai em pedaços e usa Expect: 100-continue.
+  - O plugin recusa sem mesa válida ou com mais de 5000 mesas.
+  - Só abre e copia o link se for https de termovision.tech.
+- Envio real (02/11/2026, a cópia do PLAT A_Perfiles pelo Core Console, licença desta máquina): 589 mesas, terreno 278x358 de 2 m, 17N EPSG 31971. O link é https://app.termovision.tech/v/tvv_Hh1ajMUX-lxIqkg_zdt0hf1eMH2FI0vwWfLnypegCZo (usina mc7qhhf0, 90 dias).
+  - O 3D está certo: as mesas sobre o terreno com o satélite da Esri e a sombra do instante.
+  - O 2D do TermoVision abria no interior de SP, e não no Panamá. Foi avisado à sessão do TermoVision, que é dona da correção.
 
 Nível 2 (`rodar.ps1 -SoTermoVision`): abre o pacote da Paradise sem rede num
 desenho vazio. Confere superfície, orto, árvores, área e árvore na cota do TIN.

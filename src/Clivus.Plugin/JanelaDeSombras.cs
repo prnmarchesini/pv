@@ -33,6 +33,9 @@ internal sealed class JanelaDeSombras : Window
     private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
     private static readonly Dictionary<Document, JanelaDeSombras> Abertas = [];
 
+    /// <summary>A janela de sombras aberta para o desenho, ou null (a dona do andamento do resumo de uma mesa).</summary>
+    internal static Window? AbertaPara(Document documento) => Abertas.TryGetValue(documento, out var janela) ? janela : null;
+
     private readonly Document _documento;
 
     // Ocultar e Mostrar num botão só (42.3, tela de 31/10/2026: "ocultei e não
@@ -241,8 +244,11 @@ internal sealed class JanelaDeSombras : Window
         var daMesa = Botao(Tr.T("Resumo de uma mesa…"), Tr.T("Clique numa mesa no desenho: o calendário das sombras dela no período desta janela, módulo a módulo, com os dias e a % em cada hora."), () =>
         {
             if (!ClivusExtension.TemInterface()) return;
-            SombrasCommands.PedidoDaMesa = (PeriodoDaTela(), QueFazSombra());
-            _documento.SendStringToExecute($"_{PluginInfo.ComandoSombrasMesa} ", true, false, false);
+            SombrasCommands.PedidoDaMesa = (_documento, PeriodoDaTela(), QueFazSombra());
+
+            // Um comando em andamento no desenho comeria o pedido: cancela antes (como nas outras janelas).
+            var cancelar = string.IsNullOrEmpty(_documento.CommandInProgress) ? string.Empty : "\x03\x03";
+            _documento.SendStringToExecute($"{cancelar}_{PluginInfo.ComandoSombrasMesa} ", true, false, false);
         });
 
         var fechar = new Button { Content = Tr.T("Fechar"), Width = 80, Height = 26, IsCancel = true, ToolTip = Tr.T("Fecha a janela; as sombras desenhadas ficam.") };

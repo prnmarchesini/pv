@@ -25,11 +25,16 @@ namespace Clivus.Plugin;
 /// e a porcentagem dela;</description></item>
 /// <item><description>o Copiar leva para o Excel uma linha por módulo, dia e hora com sombra.</description></item>
 /// </list>
+/// Com uma hora só por dia (o horário fixo), os instantes não têm duração:
+/// a medida da mesa deixa de ser as horas e passa a ser os dias com sombra.
 /// </summary>
 internal sealed class JanelaDoCalendarioDeSombras : Window
 {
     private static readonly CultureInfo Brasil = CultureInfo.GetCultureInfo("pt-BR");
     private static readonly Color Cinza = Color.FromRgb(232, 232, 232);
+
+    /// <summary>Quantos dias com sombra a lista mostra (um ano de dia em dia daria milhares de etiquetas); o Excel leva todos.</summary>
+    private const int DiasNaLista = 120;
 
     private readonly ShadeCalendar _calendario;
     private readonly List<(Border Celula, int Modulo)> _celulas = [];
@@ -38,13 +43,20 @@ internal sealed class JanelaDoCalendarioDeSombras : Window
     private readonly TextBlock _titulo = new() { FontWeight = FontWeights.SemiBold, FontSize = 13, Margin = new Thickness(0, 0, 0, 4), TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _sobOMouse = new() { Foreground = Brushes.DimGray, Margin = new Thickness(0, 2, 0, 0), MinHeight = 16 };
     private readonly StackPanel _dias = new();
-    private readonly double[] _horasDoModulo;
+    private readonly TextBlock _recado = new() { Foreground = Brushes.ForestGreen, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+
+    /// <summary>A medida de cada módulo no mapa: as horas de sombra cheia, ou os dias com sombra quando os instantes não têm duração.</summary>
+    private readonly double[] _medida;
+
+    /// <summary>Os instantes têm duração (uma janela de horário): a medida são as horas; senão, os dias.</summary>
+    private readonly bool _emHoras;
     private int _modulo = ShadeCalendar.WholeTable;
 
     internal JanelaDoCalendarioDeSombras(ShadeCalendar calendario, string mesa, string periodo)
     {
         _calendario = calendario;
-        _horasDoModulo = Enumerable.Range(0, calendario.Modules.Count).Select(calendario.Hours).ToArray();
+        _emHoras = calendario.StepHours > 0;
+        _medida = Enumerable.Range(0, calendario.Modules.Count).Select(m => _emHoras ? calendario.Hours(m) : calendario.DaysWithShade(m)).ToArray();
 
         Title = Tr.F("Clivus Solar — Sombras da mesa {0}", mesa);
         Width = 1060;
@@ -57,9 +69,9 @@ internal sealed class JanelaDoCalendarioDeSombras : Window
 
         var raiz = new DockPanel { Margin = new Thickness(12) };
 
-        // ---- o cabeçalho: o período e a mesa em números
-        var comSombra = Enumerable.Range(0, calendario.Modules.Count).Count(m => _horasDoModulo[m] > 0);
-        var (piorF, piorQuando) = calendario.Worst(ShadeCalendar.WholeTable);
+        // ---- o cabeçalho: o período e a mesa em números. Pega sombra quem tem
+        // um dia com sombra (com horário fixo, as horas são 0 e a sombra existe).
+        var comSombra = Enumerable.Range(0, calendario.Modules.Count).Count(m => calendario.ShadedDays(m).Count > 0);
         var piorModulo = Enumerable.Range(0, calendario.Modules.Count).Select(m => (m, calendario.Worst(m))).OrderByDescending(x => x.Item2.Fraction).FirstOrDefault();
         var cabeca = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
         cabeca.Children.Add(new TextBlock { Text = Tr.F("Mesa {0}", mesa), FontWeight = FontWeights.Bold, FontSize = 16 });
@@ -70,35 +82,29 @@ internal sealed class JanelaDoCalendarioDeSombras : Window
             TextWrapping = TextWrapping.Wrap,
             Text = comSombra == 0
                 ? Tr.F("Nenhum dos {0} módulos pega sombra no período.", calendario.Modules.Count)
-                : Tr.F("{0} de {1} módulos pegam sombra · {2:0.#} h de sombra cheia na mesa (média dos módulos) em {3} dia(s) · pior: {4}, {5:0}% em {6:dd/MM HH:mm}",
-                    comSombra, calendario.Modules.Count, calendario.Hours(ShadeCalendar.WholeTable), calendario.DaysWithShade(ShadeCalendar.WholeTable),
-                    calendario.Modules[piorModulo.m].Label, piorModulo.Item2.Fraction * 100, piorModulo.Item2.When ?? piorQuando ?? DateTime.MinValue),
+                : _emHoras
+                    ? Tr.F("{0} de {1} módulos pegam sombra · {2:0.#} h de sombra cheia na mesa (média dos módulos) em {3} dia(s) · pior: {4}, {5:0}% em {6:dd/MM HH:mm}",
+                        comSombra, calendario.Modules.Count, calendario.Hours(ShadeCalendar.WholeTable), calendario.DaysWithShade(ShadeCalendar.WholeTable),
+                        calendario.Modules[piorModulo.m].Label, piorModulo.Item2.Fraction * 100, piorModulo.Item2.When ?? DateTime.MinValue)
+                    : Tr.F("{0} de {1} módulos pegam sombra · a mesa pega sombra em {2} dia(s) · pior: {3}, {4:0}% em {5:dd/MM HH:mm}",
+                        comSombra, calendario.Modules.Count, calendario.DaysWithShade(ShadeCalendar.WholeTable),
+                        calendario.Modules[piorModulo.m].Label, piorModulo.Item2.Fraction * 100, piorModulo.Item2.When ?? DateTime.MinValue),
         });
         DockPanel.SetDock(cabeca, Dock.Top);
         raiz.Children.Add(cabeca);
 
         // ---- os botões, embaixo
-        var recado = new TextBlock { Foreground = Brushes.ForestGreen, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-        var copiar = new Button { Content = Tr.T("Copiar para o Excel"), Height = 26, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(0, 0, 6, 0), ToolTip = Tr.T("Copia uma linha por módulo, dia e hora com sombra (módulo, data, hora, %, causa); cole no Excel.") };
-        copiar.Click += (_, _) =>
+        var copiar = new Button { Content = Tr.T("Copiar para o Excel"), Height = 26, Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(0, 0, 6, 0), ToolTip = Tr.T("Copia uma linha por módulo, dia e hora com sombra (mesa, módulo, data, hora, %, causa); cole no Excel.") };
+        copiar.Click += (_, _) => Protegido(() =>
         {
-            try
-            {
-                Clipboard.SetText(calendario.ToTsv(Tr.T("Módulo\tData\tHora\t% na sombra\tCausa"), ShadowTopics.CauseName));
-                recado.Foreground = Brushes.ForestGreen;
-                recado.Text = Tr.T("Copiado: cole no Excel.");
-            }
-            catch (Exception erro)
-            {
-                RegistroDeDiagnostico.Registrar("Falha ao copiar o calendário de sombras.", erro);
-                recado.Foreground = Brushes.Firebrick;
-                recado.Text = Tr.F("Não consegui copiar: {0}", erro.Message);
-            }
-        };
+            Clipboard.SetText(calendario.ToTsv(Tr.T("Mesa\tMódulo\tData\tHora\t% na sombra\tCausa"), ShadowTopics.CauseName, mesa));
+            _recado.Foreground = Brushes.ForestGreen;
+            _recado.Text = Tr.T("Copiado: cole no Excel.");
+        }, Tr.T("copiar"));
         var fechar = new Button { Content = Tr.T("Fechar"), Width = 80, Height = 26, IsCancel = true };
         fechar.Click += (_, _) => Close();
         var botoes = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
-        botoes.Children.Add(recado);
+        botoes.Children.Add(_recado);
         botoes.Children.Add(copiar);
         botoes.Children.Add(fechar);
         DockPanel.SetDock(botoes, Dock.Bottom);
@@ -108,12 +114,21 @@ internal sealed class JanelaDoCalendarioDeSombras : Window
         var mapa = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
         var linhaDoMapa = new DockPanel();
         var inteira = new Button { Content = Tr.T("Mesa inteira"), Height = 26, Padding = new Thickness(10, 0, 10, 0), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Top, ToolTip = Tr.T("O calendário da mesa: a média dos módulos em cada hora.") };
-        inteira.Click += (_, _) => Escolher(ShadeCalendar.WholeTable);
+        inteira.Click += (_, _) => Protegido(() => Escolher(ShadeCalendar.WholeTable), Tr.T("mostrar a mesa inteira"));
         DockPanel.SetDock(inteira, Dock.Left);
         linhaDoMapa.Children.Add(inteira);
         linhaDoMapa.Children.Add(new ScrollViewer { Content = Mesa(), HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled });
         mapa.Children.Add(linhaDoMapa);
-        mapa.Children.Add(new TextBlock { Text = Tr.T("Cada quadrado é um módulo, como a mesa é vista de cima: a cor e o número são as horas de sombra cheia no período. Clique para ver o calendário dele."), Foreground = Brushes.Gray, FontSize = 11, Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap });
+        mapa.Children.Add(new TextBlock
+        {
+            Text = _emHoras
+                ? Tr.T("Cada quadrado é um módulo, como a mesa é vista de cima: a cor e o número são as horas de sombra cheia no período. Clique para ver o calendário dele.")
+                : Tr.T("Cada quadrado é um módulo, como a mesa é vista de cima: a cor e o número são os dias com sombra no período. Clique para ver o calendário dele."),
+            Foreground = Brushes.Gray,
+            FontSize = 11,
+            Margin = new Thickness(0, 4, 0, 0),
+            TextWrapping = TextWrapping.Wrap,
+        });
         DockPanel.SetDock(mapa, Dock.Top);
         raiz.Children.Add(mapa);
 
@@ -140,9 +155,9 @@ internal sealed class JanelaDoCalendarioDeSombras : Window
         DockPanel.SetDock(calendarioDoAno, Dock.Top);
         raiz.Children.Add(calendarioDoAno);
 
-        _imagem.MouseMove += (_, e) => SobOMouse(e.GetPosition(_imagem));
+        _imagem.MouseMove += (_, e) => Protegido(() => SobOMouse(e.GetPosition(_imagem)), Tr.T("ler o calendário"));
         _imagem.MouseLeave += (_, _) => _sobOMouse.Text = string.Empty;
-        _meses.SizeChanged += (_, _) => Meses();
+        _meses.SizeChanged += (_, _) => Protegido(Meses, Tr.T("escrever os meses"));
 
         // ---- os dias com sombra, com as horas
         var lista = new DockPanel();
@@ -154,8 +169,32 @@ internal sealed class JanelaDoCalendarioDeSombras : Window
 
         Content = raiz;
 
-        // Abre no pior módulo: é o que se quer ver primeiro; sem sombra, na mesa inteira.
-        Escolher(comSombra > 0 ? piorModulo.m : ShadeCalendar.WholeTable);
+        // Abre no pior módulo, o de mais horas (ou dias) de sombra, como o
+        // "os X piores" da janela de sombras: é o que se quer ver primeiro;
+        // sem sombra, na mesa inteira.
+        var maisSombra = Enumerable.Range(0, calendario.Modules.Count)
+            .OrderByDescending(m => _medida[m]).ThenByDescending(m => calendario.DaysWithShade(m)).ThenByDescending(m => calendario.Worst(m).Fraction)
+            .FirstOrDefault();
+        Escolher(comSombra > 0 ? maisSombra : ShadeCalendar.WholeTable);
+    }
+
+    /// <summary>
+    /// Um manipulador de evento que não deixa exceção sair: solta num evento
+    /// do WPF, ela fecha o Civil 3D (como na janela de Mesa).
+    /// </summary>
+    /// <param name="oQue">O que o usuário tentou fazer, para o recado ("copiar").</param>
+    private void Protegido(Action acao, string oQue)
+    {
+        try
+        {
+            acao();
+        }
+        catch (Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar($"Falha no resumo das sombras da mesa ao {oQue}.", erro);
+            _recado.Foreground = Brushes.Firebrick;
+            _recado.Text = Tr.F("Não consegui {0}: {1}", oQue, erro.Message);
+        }
     }
 
     /// <summary>A cor da fração na sombra: o branco sem sombra, o rosa claro com pouca, o magenta na metade e o roxo com a face inteira.</summary>
@@ -183,13 +222,14 @@ internal sealed class JanelaDoCalendarioDeSombras : Window
         for (var c = 0; c < colunas; c++) grade.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         for (var r = 0; r < fileiras; r++) grade.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        var maximo = _horasDoModulo.DefaultIfEmpty(0).Max();
+        var maximo = _medida.DefaultIfEmpty(0).Max();
         for (var i = 0; i < _calendario.Modules.Count; i++)
         {
             var m = _calendario.Modules[i];
-            var horas = _horasDoModulo[i];
+            var medida = _medida[i];
+            var dias = _calendario.DaysWithShade(i);
             var (pior, quando) = _calendario.Worst(i);
-            var cor = maximo > 0 ? CorDaFracao(horas / maximo) : Colors.White;
+            var cor = maximo > 0 ? CorDaFracao(medida / maximo) : Colors.White;
             var celula = new Border
             {
                 Width = 46,
@@ -199,20 +239,22 @@ internal sealed class JanelaDoCalendarioDeSombras : Window
                 BorderBrush = Brushes.Gray,
                 BorderThickness = new Thickness(1),
                 Cursor = Cursors.Hand,
-                ToolTip = horas > 0
-                    ? Tr.F("{0}: {1:0.#} h de sombra cheia em {2} dia(s); pior {3:0}% em {4:dd/MM HH:mm}", m.Label, horas, _calendario.DaysWithShade(i), pior * 100, quando ?? DateTime.MinValue)
-                    : Tr.F("{0}: sem sombra no período", m.Label),
+                ToolTip = pior <= 0
+                    ? Tr.F("{0}: sem sombra no período", m.Label)
+                    : _emHoras
+                        ? Tr.F("{0}: {1:0.#} h de sombra cheia em {2} dia(s); pior {3:0}% em {4:dd/MM HH:mm}", m.Label, medida, dias, pior * 100, quando ?? DateTime.MinValue)
+                        : Tr.F("{0}: sombra em {1} dia(s); pior {2:0}% em {3:dd/MM HH:mm}", m.Label, dias, pior * 100, quando ?? DateTime.MinValue),
                 Child = new TextBlock
                 {
-                    Text = horas > 0 ? horas.ToString(horas < 10 ? "0.#" : "0", Brasil) : "·",
+                    Text = pior <= 0 ? "·" : _emHoras ? medida.ToString(medida < 10 ? "0.#" : "0", Tr.Culture) : dias.ToString(Tr.Culture),
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                     FontSize = 11,
-                    Foreground = maximo > 0 && horas / maximo > 0.55 ? Brushes.White : Brushes.Black,
+                    Foreground = maximo > 0 && medida / maximo > 0.55 ? Brushes.White : Brushes.Black,
                 },
             };
             var modulo = i;
-            celula.MouseLeftButtonUp += (_, _) => Escolher(modulo);
+            celula.MouseLeftButtonUp += (_, _) => Protegido(() => Escolher(modulo), Tr.T("mostrar o módulo"));
             Grid.SetColumn(celula, m.Column);
             Grid.SetRow(celula, fileiras - 1 - m.Row);
             grade.Children.Add(celula);
@@ -222,15 +264,21 @@ internal sealed class JanelaDoCalendarioDeSombras : Window
         return grade;
     }
 
-    /// <summary>As horas ao lado do calendário: uma a cada duas horas cheias.</summary>
+    /// <summary>
+    /// As horas ao lado do calendário: todas quando cabem (até 12 linhas);
+    /// senão, as cheias de duas em duas; sem hora cheia, uma a cada tantas
+    /// linhas (um passo de 20 min a partir das 6:10 nunca cai na hora cheia).
+    /// </summary>
     private Grid Horas()
     {
         var grade = new Grid { Height = _imagem.Height };
         var n = _calendario.Times.Count;
-        for (var h = 0; h < n; h++)
+        var cheias = Enumerable.Range(0, n).Where(h => _calendario.Times[h] is { Minute: 0 } t && t.Hour % 2 == 0).ToList();
+        var salto = (int)Math.Ceiling(n / 12.0);
+        IEnumerable<int> rotuladas = n <= 12 ? Enumerable.Range(0, n) : cheias.Count >= 2 ? cheias : Enumerable.Range(0, n).Where(h => h % salto == 0);
+        foreach (var h in rotuladas)
         {
             var t = _calendario.Times[h];
-            if (t.Minute != 0 || t.Hour % 2 != 0) continue;
             grade.Children.Add(new TextBlock
             {
                 Text = t.ToString("HH:mm", Brasil),
@@ -259,8 +307,7 @@ internal sealed class JanelaDoCalendarioDeSombras : Window
             var dia = _calendario.Days[d];
             if (dia.Month == ultimo) continue;
             ultimo = dia.Month;
-            var rotulo = new TextBlock { Text = Brasil.DateTimeFormat.GetAbbreviatedMonthName(dia.Month).TrimEnd('.'), FontSize = 10, Foreground = Brushes.DimGray };
-            if (Tr.Culture.TwoLetterISOLanguageName != "pt") rotulo.Text = Tr.Culture.DateTimeFormat.GetAbbreviatedMonthName(dia.Month).TrimEnd('.');
+            var rotulo = new TextBlock { Text = Tr.Culture.DateTimeFormat.GetAbbreviatedMonthName(dia.Month).TrimEnd('.'), FontSize = 10, Foreground = Brushes.DimGray };
             Canvas.SetLeft(rotulo, d / (double)n * largura);
             _meses.Children.Add(rotulo);
         }
@@ -296,10 +343,11 @@ internal sealed class JanelaDoCalendarioDeSombras : Window
 
         var nome = modulo == ShadeCalendar.WholeTable ? Tr.T("Mesa inteira (média dos módulos)") : _calendario.Modules[modulo].Label;
         var (pior, quando) = _calendario.Worst(modulo);
-        var horas = _calendario.Hours(modulo);
-        _titulo.Text = horas > 0
-            ? Tr.F("{0}: {1:0.#} h de sombra cheia em {2} dia(s); pior {3:0}% em {4:dd/MM/yyyy HH:mm}", nome, horas, _calendario.DaysWithShade(modulo), pior * 100, quando ?? DateTime.MinValue)
-            : Tr.F("{0}: sem sombra no período", nome);
+        _titulo.Text = pior <= 0
+            ? Tr.F("{0}: sem sombra no período", nome)
+            : _emHoras
+                ? Tr.F("{0}: {1:0.#} h de sombra cheia em {2} dia(s); pior {3:0}% em {4:dd/MM/yyyy HH:mm}", nome, _calendario.Hours(modulo), _calendario.DaysWithShade(modulo), pior * 100, quando ?? DateTime.MinValue)
+                : Tr.F("{0}: sombra em {1} dia(s); pior {2:0}% em {3:dd/MM/yyyy HH:mm}", nome, _calendario.DaysWithShade(modulo), pior * 100, quando ?? DateTime.MinValue);
 
         Desenhar();
         Listar();
@@ -360,7 +408,7 @@ internal sealed class JanelaDoCalendarioDeSombras : Window
             return;
         }
 
-        foreach (var d in dias)
+        foreach (var d in dias.Take(DiasNaLista))
         {
             var dia = _calendario.Days[d];
             var linha = new DockPanel { Margin = new Thickness(4, 2, 4, 2) };
@@ -389,7 +437,7 @@ internal sealed class JanelaDoCalendarioDeSombras : Window
                     Margin = new Thickness(0, 1, 4, 1),
                     Child = new TextBlock
                     {
-                        Text = string.Format(Brasil, "{0:HH:mm} {1:0}%", _calendario.Times[h], f * 100),
+                        Text = string.Format(Tr.Culture, "{0:HH:mm} {1:0}%", _calendario.Times[h], f * 100),
                         FontSize = 11,
                         Foreground = f > 0.55 ? Brushes.White : Brushes.Black,
                     },
@@ -399,5 +447,8 @@ internal sealed class JanelaDoCalendarioDeSombras : Window
             linha.Children.Add(horas);
             _dias.Children.Add(linha);
         }
+
+        if (dias.Count > DiasNaLista)
+            _dias.Children.Add(new TextBlock { Text = Tr.F("E mais {0} dia(s) com sombra: o Copiar para o Excel leva todos.", dias.Count - DiasNaLista), Foreground = Brushes.Gray, Margin = new Thickness(6) });
     }
 }

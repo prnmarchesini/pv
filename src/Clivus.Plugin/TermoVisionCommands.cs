@@ -42,8 +42,7 @@ public static class TermoVisionCommands
             Abrir();
         else if (TermoVisionStore.Load(documento.Database) is not null)
             Exportar();
-        else if (TemMesas(documento.Database) && Confirmar(documento.Editor, Tr.T(
-                     "Este desenho não veio do TermoVision. Criar lá uma usina pública com as mesas e o terreno dele (o link vale 90 dias sem acesso)? Não: abrir uma área do TermoVision.")))
+        else if (TemMesas(documento.Database) && Confirmar(documento.Editor, PerguntaDoProjeto(documento.Database, Tr.T("abrir uma área do TermoVision")), padraoSim: false))
             CriarProjeto(documento);
         else
             Abrir();
@@ -232,8 +231,8 @@ public static class TermoVisionCommands
         {
             // Sem envio, a usina pública (o projeto sem envio, 02/11/2026); o
             // "Não" segue para o colar o código de um envio, como antes.
-            if (TermoVisionStore.Load(documento.Database) is null && Confirmar(editor, Tr.T(
-                    "Este desenho não veio do TermoVision. Criar lá uma usina pública com as mesas e o terreno dele (o link vale 90 dias sem acesso)? Não: colar o código de um envio.")))
+            if (TermoVisionStore.Load(documento.Database) is null
+                && Confirmar(editor, PerguntaDoProjeto(documento.Database, Tr.T("colar o código de um envio")), padraoSim: false))
             {
                 CriarProjeto(documento);
                 return;
@@ -358,15 +357,44 @@ public static class TermoVisionCommands
     }
 
     /// <summary>
-    /// O projeto sem envio pelo botão: monta, manda e mostra o link (na linha
-    /// de comando, copiado para a área de transferência e aberto no navegador).
+    /// A pergunta do botão num desenho que não veio do TermoVision: criar a
+    /// usina, dizendo que o link é público; se este desenho já criou uma,
+    /// atualizar a mesma. O padrão é o Não (mandar publica).
+    /// </summary>
+    /// <param name="nao">O que o Não faz ("abrir uma área do TermoVision").</param>
+    private static string PerguntaDoProjeto(Database database, string nao) =>
+        TermoVisionProjeto.Ler(database) is { Link.Length: > 0 } feito
+            ? Tr.F("Este desenho já criou a usina \"{0}\" no TermoVision (link público: {1}). Atualizar a usina com as mesas e o terreno de agora? Não: {2}.", feito.Nome, feito.Link, nao)
+            : Tr.F("Este desenho não veio do TermoVision. Criar lá uma usina com as mesas e o terreno dele, aberta por um link público (quem tiver o link vê a usina; ele vale 90 dias sem acesso)? Não: {0}.", nao);
+
+    /// <summary>
+    /// O projeto sem envio pelo botão: monta, manda (com a janela de
+    /// andamento e o Cancelar) e mostra o link (na linha de comando, copiado
+    /// para a área de transferência e aberto no navegador, se for do TermoVision).
     /// </summary>
     private static void CriarProjeto(Document documento)
     {
         var editor = documento.Editor;
+        JanelaDeProgresso? janela = null;
         try
         {
-            var feito = TermoVisionProjeto.Criar(documento, interativo: true);
+            if (ClivusExtension.TemInterface())
+            {
+                try
+                {
+                    janela = JanelaDeProgresso.Abrir(null, Tr.T("Criando a usina no TermoVision"), podeCancelar: true);
+                }
+                catch (System.Exception semJanela)
+                {
+                    RegistroDeDiagnostico.Registrar("Falha ao abrir o andamento do TermoVision.", semJanela);
+                    janela = null;
+                }
+            }
+
+            var feito = TermoVisionProjeto.Criar(documento, interativo: true, janela: janela);
+            janela?.Fechar();
+            janela = null;
+
             if (feito.Erro is { } erro)
             {
                 editor.WriteMessage(Tr.F("\nNão consegui criar a usina no TermoVision: {0}\n", erro));
@@ -380,6 +408,13 @@ public static class TermoVisionCommands
             if (r.ExpiresAt is { } expira) editor.WriteMessage(Tr.F("  O link vale até {0:dd/MM/yyyy} sem acesso; mandar de novo atualiza a mesma usina e o mesmo link.\n", expira.ToLocalTime()));
             if (feito.Recusadas > 0) editor.WriteMessage(Tr.F("  {0} mesa(s) ficaram de fora.\n", feito.Recusadas));
 
+            // Só abre e copia o link do TermoVision (plano/seguranca.md).
+            if (!TermoVisionProjeto.LinkDoTermoVision(url))
+            {
+                editor.WriteMessage(Tr.F("  ATENÇÃO: o servidor devolveu um link de outro endereço ({0}); por segurança não abro.\n", url));
+                return;
+            }
+
             try
             {
                 System.Windows.Clipboard.SetText(url);
@@ -390,13 +425,20 @@ public static class TermoVisionCommands
                 RegistroDeDiagnostico.Registrar("Falha ao copiar o link do TermoVision.", falha);
             }
 
-            if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp))
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (OperationCanceledException)
+        {
+            editor.WriteMessage(Tr.T("\nTermoVision cancelado: se o envio já tinha chegado lá, mandar de novo atualiza a mesma usina.\n"));
         }
         catch (System.Exception erro)
         {
             RegistroDeDiagnostico.Registrar("Falha ao criar a usina no TermoVision.", erro);
             editor.WriteMessage(Tr.F("\nNão consegui criar a usina no TermoVision: {0}\n", erro.Message));
+        }
+        finally
+        {
+            janela?.Fechar();
         }
     }
 

@@ -43,6 +43,15 @@ internal sealed record PeriodoDeSombra(DateOnly De, DateOnly Ate, TimeOnly HoraD
         return Instantes().Where(t => SolarCalculator.Compute(latitude, longitude, t, Fuso).ElevationDegrees >= minimo);
     }
 
+    /// <summary>Os dias calculados (<see cref="ShadeEstimate.SampledDays"/>), também os em que o sol não passou da altura.</summary>
+    internal IEnumerable<DateOnly> DiasCalculados() => ShadeEstimate.SampledDays(De, Ate, PassoDias);
+
+    /// <summary>Quantos dias do período cada dia calculado vale (<see cref="ShadeEstimate.DayWeight"/>); num instante, 1.</summary>
+    internal double PesoDoDia => Instante ? 1 : ShadeEstimate.DayWeight(De, Ate, PassoDias);
+
+    /// <summary>Quanto cada instante dura, em horas (<see cref="ShadeEstimate.StepHours"/>); num instante ou numa hora só por dia, 0.</summary>
+    internal double HorasDoPasso => Instante ? 0 : ShadeEstimate.StepHours(HoraDe, HoraAte, PassoMinutos);
+
     internal string Descrever()
     {
         if (Instante) return Tr.F("{0:dd/MM/yyyy} às {1:HH:mm}", De, HoraDe);
@@ -643,6 +652,9 @@ public static class SombrasCommands
         if (!double.TryParse(fuso.Trim().Replace(',', '.'), NumberStyles.Float, Invariante, out var f) || f is < -14 or > 14) { porque = Tr.T("O fuso precisa ser de -14 a 14 horas."); return null; }
         if (d1 < d0) { porque = Tr.T("O último dia vem antes do primeiro."); return null; }
         if (h1 < h0) { porque = Tr.T("A hora final vem antes da inicial."); return null; }
+
+        // Um dia só não tem passo de dias (o relato diria "a cada 7 dias").
+        if (d0 == d1) pd = 1;
         var instantes = Shading.CountInstants(d0, d1, h0, h1, TimeSpan.FromMinutes(p), pd);
         if (instantes > Shading.MaxInstants)
         {
@@ -898,14 +910,16 @@ public static class SombrasCommands
     }
 
     /// <summary>
-    /// Os dias e as horas de sombra de uma face no período: os dias calculados
-    /// e a soma das frações valem pelo passo de dias (um dia por semana vale
-    /// 7), e as horas pelo passo do dia; num instante só, 1 dia e nenhuma hora.
+    /// Os dias e as horas de sombra de uma face no período, pela conta do
+    /// <see cref="ShadeEstimate"/> (a mesma do resumo da mesa): cada dia
+    /// calculado vale os dias do período ÷ os calculados, e cada instante, o
+    /// passo do dia (com uma hora só por dia, nenhuma hora); num instante
+    /// só, 1 dia e nenhuma hora.
     /// </summary>
-    private static (int? Dias, double? Horas) Contas(ShadeTally? conta, PeriodoDeSombra periodo, int diasDoPeriodo) =>
+    private static (int? Dias, double? Horas) Contas(ShadeTally? conta, PeriodoDeSombra periodo) =>
         conta is not { } c ? (null, null)
         : periodo.Instante ? (c.Days > 0 ? 1 : 0, 0)
-        : (Math.Min(c.Days * periodo.PassoDias, diasDoPeriodo), c.FractionSum * periodo.PassoMinutos / 60.0 * periodo.PassoDias);
+        : ShadeEstimate.Of(c, periodo.PesoDoDia, periodo.HorasDoPasso);
 
     /// <summary>O cálculo do Gerar sombras, com o que o <see cref="Preparar"/> montou: os instantes, a mancha, o desenho e os motivos.</summary>
     private static RelatoDasSombras Calcular(
@@ -993,14 +1007,13 @@ public static class SombrasCommands
         // a pior), com os dias e as horas de sombra no período (02/11/2026: os
         // piores módulos e os dias de sombra por ano saem delas).
         var descrito = periodo.Descrever();
-        var diasDoPeriodo = periodo.Ate.DayNumber - periodo.De.DayNumber + 1;
         var porModulo = new Dictionary<ObjectId, (int Mesa, ModuleShadow Sombra)>();
         for (var f = 0; f < faces.Count; f++)
         {
             if (!recebeFace[f] || pior.Fractions[f] <= 0) continue;
 
             var (k, face) = deQuem[f];
-            var (dias, horas) = Contas(pior.Tallies?[f], periodo, diasDoPeriodo);
+            var (dias, horas) = Contas(pior.Tallies?[f], periodo);
             var sombra = new ModuleShadow(face.Modulo.Handle.ToString(), mesas[k].Id, pior.Fractions[f], pior.Causes![f], pior.When[f], descrito, dias, horas);
             if (!porModulo.TryGetValue(face.Modulo, out var antes) || antes.Sombra.Fraction < sombra.Fraction) porModulo[face.Modulo] = (k, sombra);
         }
@@ -1021,7 +1034,8 @@ public static class SombrasCommands
 
         using (var transacao = database.TransactionManager.StartTransaction())
         {
-            apagadas = ApagarDoEscopo(transacao, database, plano, Legado(areas, mesas));
+            // O destaque dos piores saiu do registro de antes: com o registro novo, ele vale outra coisa.
+            apagadas = ApagarDoEscopo(transacao, database, plano, Legado(areas, mesas)) + DestaqueDasSombras.Apagar(transacao, database);
             (devolvidos, var sobram) = DevolverPintadas(transacao, database, pintadas, calculadas);
             feito = DesenhoDasSombras.Desenhar(transacao, database, tin, chao, naMesa, Rotulo(periodo, passos), marca, descrito, pecasDasMesas);
             DesenhoDasSombras.Ligar(transacao, database, true);
@@ -1083,11 +1097,12 @@ public static class SombrasCommands
     // ------------------------------------------------------------ o resumo de uma mesa (42.14)
 
     /// <summary>
-    /// O pedido do botão "Resumo de uma mesa…" da janela de sombras: o período
-    /// e o que faz sombra dela no clique (o comando, que pede a mesa no
-    /// desenho, lê daqui; sem pedido, pergunta o período).
+    /// O pedido do botão "Resumo de uma mesa…" da janela de sombras: o
+    /// desenho, o período e o que faz sombra dela no clique (o comando, que
+    /// pede a mesa no desenho, lê daqui; sem pedido, ou com o pedido de outro
+    /// desenho, pergunta o período).
     /// </summary>
-    internal static (PeriodoDeSombra Periodo, ShadowCasters QueFaz)? PedidoDaMesa { get; set; }
+    internal static (Document Documento, PeriodoDeSombra Periodo, ShadowCasters QueFaz)? PedidoDaMesa { get; set; }
 
     /// <summary>
     /// O resumo das sombras de uma mesa (42.14, Renan: "um botão no modal
@@ -1152,8 +1167,8 @@ public static class SombrasCommands
             .OrderBy(s => s.Row).ThenBy(s => s.Column)
             .ToList();
 
-        return (new ShadeCalendar(instantes, TimeSpan.FromMinutes(periodo.PassoMinutos), periodo.Instante ? 1 : periodo.PassoDias, series,
-            periodo.Ate.DayNumber - periodo.De.DayNumber + 1), p.Mesas[k].Letreiro, string.Empty);
+        var dias = periodo.Instante ? null : periodo.DiasCalculados();
+        return (new ShadeCalendar(instantes, periodo.HorasDoPasso, periodo.PesoDoDia, series, dias), p.Mesas[k].Letreiro, string.Empty);
     }
 
     /// <summary>O resumo de uma mesa com a janela de andamento e o Cancelar; sem interface, sem janela.</summary>
@@ -1167,7 +1182,8 @@ public static class SombrasCommands
         {
             try
             {
-                janela = JanelaDeProgresso.Abrir(null, Tr.T("Resumo das sombras da mesa"), podeCancelar: true);
+                // Sobre a janela de sombras, se ela está aberta (travada enquanto isso, como no Gerar).
+                janela = JanelaDeProgresso.Abrir(JanelaDeSombras.AbertaPara(documento), Tr.T("Resumo das sombras da mesa"), podeCancelar: true);
             }
             catch (System.Exception erro)
             {
@@ -1207,7 +1223,7 @@ public static class SombrasCommands
         try
         {
             // O período e o que faz sombra: os da janela, se foi ela que pediu; senão, perguntados.
-            var pedido = PedidoDaMesa;
+            var pedido = PedidoDaMesa is { } feito && feito.Documento == documento ? PedidoDaMesa : null;
             PedidoDaMesa = null;
             var periodo = pedido?.Periodo ?? PerguntarPeriodo(editor);
             if (periodo is null) return;
@@ -1357,8 +1373,11 @@ public static class SombrasCommands
                 : Tr.F("{0} módulo(s) {1} com sombra em {2} dia(s) ou mais, pintados do vinho (o pior) ao amarelo e numerados no desenho:", desenhados, nomeDoEscopo, quantos))
             + Environment.NewLine + string.Join("; ", lista) + (escolhidos.Count > 10 ? "…" : ".");
 
-        var detalhe = string.Join(Environment.NewLine + "  ", escolhidos.Select((m, i) =>
-            FormattableString.Invariant($"SOMBRA_DESTAQUE {i + 1} {Nome(m)} handle={m.Handle} horas={m.Hours ?? 0:0.###} dias={m.Days ?? 0} pior={m.Fraction * 100:0}%")));
+        // Na linha de comando, os primeiros (os com sombra em 1 dia ou mais podem ser milhares, e o desenho mostra todos).
+        const int LinhasNoDetalhe = 200;
+        var detalhe = string.Join(Environment.NewLine + "  ", escolhidos.Take(LinhasNoDetalhe).Select((m, i) =>
+            FormattableString.Invariant($"SOMBRA_DESTAQUE {i + 1} {Nome(m)} handle={m.Handle} horas={m.Hours ?? 0:0.###} dias={m.Days ?? 0} pior={m.Fraction * 100:0}%")))
+            + (escolhidos.Count > LinhasNoDetalhe ? Environment.NewLine + "  " + Tr.F("… e mais {0} módulo(s), destacados no desenho.", escolhidos.Count - LinhasNoDetalhe) : string.Empty);
         return new RelatoDasSombras(resumo, detalhe);
     }
 
@@ -1482,7 +1501,8 @@ public static class SombrasCommands
 
         using (var transacao = database.TransactionManager.StartTransaction())
         {
-            apagadas = ApagarDoEscopo(transacao, database, plano, Legado(areas, mesas));
+            // O destaque dos piores sai junto: ele era do registro que muda aqui.
+            apagadas = ApagarDoEscopo(transacao, database, plano, Legado(areas, mesas)) + DestaqueDasSombras.Apagar(transacao, database);
             (devolvidos, var sobram) = DevolverPintadas(transacao, database, pintadas, noEscopo);
 
             if (temPintadas) GravarPintadas(database, sobram);

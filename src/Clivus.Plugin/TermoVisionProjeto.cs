@@ -2,6 +2,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
@@ -30,6 +31,9 @@ internal static class TermoVisionProjeto
     private const string CampoNome = "NOME";
     private const string CampoLink = "LINK";
     private const string CampoExpira = "EXPIRA";
+
+    /// <summary>Quantas mesas o servidor do Clivus aceita num projeto (MESAS_MAXIMO do app).</summary>
+    private const int MesasNoMaximo = 5_000;
 
     // Dez minutos: a grade de uma usina grande passa de alguns MB e a internet do canteiro é lenta.
     private static readonly HttpClient Cliente = new() { Timeout = TimeSpan.FromMinutes(10) };
@@ -68,6 +72,15 @@ internal static class TermoVisionProjeto
         PluginDictionary.Save(database, PluginInfo.ChaveTermoVisionProjeto, buffer);
     }
 
+    /// <summary>
+    /// Se o link é do TermoVision (https, em termovision.tech): só esse o
+    /// plugin abre no navegador (plano/seguranca.md: um servidor comprometido
+    /// não manda o usuário para outro site).
+    /// </summary>
+    internal static bool LinkDoTermoVision(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps
+        && (uri.Host.Equals("termovision.tech", StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".termovision.tech", StringComparison.OrdinalIgnoreCase));
+
     /// <summary>O resultado de montar e mandar o projeto.</summary>
     internal sealed record Feito(int Mesas, int Recusadas, string Grade, string Sistema, Guid Guid, TermoVisionProjectResult? Resultado, string? Erro);
 
@@ -78,12 +91,21 @@ internal static class TermoVisionProjeto
     /// <param name="documento">O desenho (travado por quem chama: o GUID e o link são gravados nele).</param>
     /// <param name="interativo">Se pergunta (o "Salvar como": atualizar a mesma usina ou criar outra).</param>
     /// <param name="gravarEm">O arquivo do corpo, para o teste; null manda.</param>
-    internal static Feito Criar(Document documento, bool interativo, string? gravarEm = null)
+    /// <param name="janela">A janela de andamento, com o Cancelar (<see cref="OperationCanceledException"/>); null sem interface.</param>
+    internal static Feito Criar(Document documento, bool interativo, string? gravarEm = null, JanelaDeProgresso? janela = null)
     {
         var editor = documento.Editor;
         var database = documento.Database;
         Feito Falha(string erro) => new(0, 0, "", "", Guid.Empty, null, erro);
 
+        void Andar(double porcento, string texto)
+        {
+            if (janela is null) return;
+            janela.Avancar(porcento, texto);
+            if (janela.Cancelado) throw new OperationCanceledException();
+        }
+
+        Andar(2, Tr.T("Lendo o terreno..."));
         var terreno = TerrainCache.Get(documento) ?? FileiraCommands.ExigirTerreno(editor, documento);
         if (terreno is null) return Falha(Tr.T("Nenhum terreno processado neste desenho. Use o botão Terreno primeiro."));
 
@@ -91,23 +113,28 @@ internal static class TermoVisionProjeto
         if (lugar is not { IsValid: true })
             return Falha(Tr.T("O desenho não tem localização (latitude e longitude). Corrija em Terreno > Resumo > Localização."));
 
+        Andar(8, Tr.T("Lendo as mesas..."));
         var mesas = TermoVisionCommands.LerMesas(editor, database, out var recusadas, out var faltaCarport);
         if (faltaCarport > 0)
             return Falha(Tr.F("Nada foi mandado: {0} vão(s) de carport não puderam ser montados (o terreno do desenho não está processado). Use o botão Terreno e exporte de novo.", faltaCarport));
         if (mesas.Count == 0) return Falha(Tr.T("Não há mesa no desenho para mandar ao TermoVision."));
+        if (mesas.Count > MesasNoMaximo)
+            return Falha(Tr.F("O desenho tem {0:N0} mesas; o TermoVision recebe até {1:N0} por usina. Nada foi mandado.", mesas.Count, MesasNoMaximo));
 
-        // O desenho tem de estar em UTM, na zona da localização: senão a usina iria parar em outro lugar do mapa.
-        var (codigo, _) = GeoStore.SistemaDoDesenho(database);
-        var crs = TermoVisionProjectCrs.Of(lugar.Latitude, lugar.Longitude, drawingName: codigo);
-        var centro = TerrenoResumoCommands.Centro(terreno);
-        if (!crs.LooksLikeUtm(centro.X, centro.Y, lugar.Latitude, lugar.Longitude))
-            return Falha(Tr.F("As coordenadas do desenho não parecem UTM na zona {0}{1} da localização ({2:0.0000}°, {3:0.0000}°): no TermoVision a usina iria parar em outro lugar. Confira o sistema de coordenadas do desenho e a localização em Terreno > Resumo.",
-                crs.Zone, crs.South ? "S" : "N", lugar.Latitude, lugar.Longitude));
+        // O desenho tem de estar em UTM: a zona do código do sistema do
+        // desenho, senão a da localização, senão uma vizinha (a usina na
+        // divisa). Nenhuma: a usina iria parar em outro lugar do mapa.
+        var cantos = mesas.SelectMany(m => m.Corners).ToList();
+        var (x0, y0) = (cantos.Min(c => c.E), cantos.Min(c => c.N));
+        var (x1, y1) = (cantos.Max(c => c.E), cantos.Max(c => c.N));
+        var (codigo, epsgDoDesenho) = GeoStore.SistemaDoDesenho(database);
+        if (TermoVisionProjectCrs.Resolve(lugar.Latitude, lugar.Longitude, (x0 + x1) / 2, (y0 + y1) / 2, epsgDoDesenho, codigo) is not { } crs)
+            return Falha(Tr.F("As coordenadas das mesas não parecem UTM na zona {0} da localização ({1:0.0000}°, {2:0.0000}°), nem numa vizinha: no TermoVision a usina iria parar em outro lugar. Confira o sistema de coordenadas do desenho e a localização em Terreno > Resumo.",
+                TerrainPlace.Utm(lugar.Latitude, lugar.Longitude).Label, lugar.Latitude, lugar.Longitude));
 
         // O terreno em grade, sobre as mesas com folga: 2 m até 2 km de lado.
-        var cantos = mesas.SelectMany(m => m.Corners).ToList();
-        var (x0, y0) = (cantos.Min(c => c.E) - TermoVisionProject.TerrainMargin, cantos.Min(c => c.N) - TermoVisionProject.TerrainMargin);
-        var (x1, y1) = (cantos.Max(c => c.E) + TermoVisionProject.TerrainMargin, cantos.Max(c => c.N) + TermoVisionProject.TerrainMargin);
+        Andar(15, Tr.T("Amostrando o terreno em grade..."));
+        (x0, y0, x1, y1) = (x0 - TermoVisionProject.TerrainMargin, y0 - TermoVisionProject.TerrainMargin, x1 + TermoVisionProject.TerrainMargin, y1 + TermoVisionProject.TerrainMargin);
         var tin = terreno.Mesh;
         var grade = Viewer3DPage.SampleTerrain(x0, y0, x1, y1, (x, y) => tin.TryGetZ(x, y, out var z) ? z : null,
             TermoVisionProject.GridCells(Math.Max(x1 - x0, y1 - y0)));
@@ -122,13 +149,18 @@ internal static class TermoVisionProjeto
                 antes.Nome, Path.GetFileName(antes.Arquivo))))
             guid = Guid.NewGuid();
 
+        Andar(40, Tr.T("Montando o projeto..."));
         var nome = NomeDaUsina.Atual(documento);
         var corpo = TermoVisionProject.Build(ClivusCommands.VersaoDoPlugin(), TermoVisionCommands.NomeDoDesenho(documento), nome, guid, crs, grade, mesas, out var invalidas);
         recusadas.AddRange(invalidas);
 
-        var descricaoDaGrade = FormattableString.Invariant($"{grade.Columns}x{grade.Rows} de {grade.Step:0.##} m");
+        // Sem idioma: a linha vai para o nível 2 e para o relato em qualquer idioma.
+        var descricaoDaGrade = FormattableString.Invariant($"{grade.Columns}x{grade.Rows}, {grade.Step:0.##} m");
         var sistema = crs.Epsg is { } epsg ? FormattableString.Invariant($"{crs.Zone}{(crs.South ? "S" : "N")} EPSG {epsg}") : FormattableString.Invariant($"{crs.Zone}{(crs.South ? "S" : "N")}");
         var enviadas = mesas.Count - invalidas.Count;
+        if (enviadas == 0)
+            return new Feito(0, recusadas.Count, descricaoDaGrade, sistema, guid, null,
+                Tr.F("nenhuma das {0} mesa(s) pôde ser montada; nada foi mandado", mesas.Count));
 
         if (gravarEm is not null)
         {
@@ -136,17 +168,68 @@ internal static class TermoVisionProjeto
             return new Feito(enviadas, recusadas.Count, descricaoDaGrade, sistema, guid, null, null);
         }
 
+        // O GUID fica no desenho ANTES de ir: se a resposta não voltar (a
+        // internet caiu no meio), mandar de novo atualiza a mesma usina em
+        // vez de criar outra. O link de antes só vale para o mesmo GUID.
+        if (antes is null || antes.Guid != guid || !string.Equals(antes.Arquivo, arquivo, StringComparison.OrdinalIgnoreCase))
+            Gravar(database, antes is not null && antes.Guid == guid ? antes with { Arquivo = arquivo } : new TermoVisionProjetoDoDesenho(guid, arquivo, "", nome, "", ""));
+
         editor.WriteMessage(Tr.F("\nTermoVision: mandando {0} mesa(s) e o terreno ({1})...\n", enviadas, descricaoDaGrade));
-        var (resultado, erro) = Task.Run(() => Mandar(corpo)).GetAwaiter().GetResult();
+        var (resultado, erro) = MandarComAndamento(corpo, guid, janela);
         if (resultado is null) return new Feito(enviadas, recusadas.Count, descricaoDaGrade, sistema, guid, null, erro);
 
         Gravar(database, new TermoVisionProjetoDoDesenho(guid, arquivo, resultado.PlantCode ?? "", resultado.PlantName ?? nome, resultado.Url ?? "",
             resultado.ExpiresAt?.ToString("O", System.Globalization.CultureInfo.InvariantCulture) ?? ""));
+        GeoCommands.AvisarSeNaoVaiSalvar(editor, documento);
         return new Feito(enviadas, recusadas.Count, descricaoDaGrade, sistema, guid, resultado, null);
     }
 
-    /// <summary>Manda o corpo ao servidor do Clivus, com a licença. O resultado, ou o erro em português.</summary>
-    private static async Task<(TermoVisionProjectResult? Resultado, string? Erro)> Mandar(byte[] corpo)
+    /// <summary>
+    /// Manda fora da linha do AutoCAD, como o 3D: esta só redesenha a janela
+    /// de andamento e repassa o Cancelar (o envio para no próximo pedaço).
+    /// </summary>
+    private static (TermoVisionProjectResult? Resultado, string? Erro) MandarComAndamento(byte[] corpo, Guid guid, JanelaDeProgresso? janela)
+    {
+        var fracao = 0.0;
+        var texto = Tr.T("Comprimindo...");
+        using var cancelar = new CancellationTokenSource();
+
+        var envio = Task.Run(() => Mandar(corpo, guid, (f, t) =>
+        {
+            Volatile.Write(ref fracao, f);
+            Volatile.Write(ref texto, t);
+        }, cancelar.Token));
+
+        while (!envio.IsCompleted)
+        {
+            if (janela is not null)
+            {
+                janela.Avancar(50 + 48 * Volatile.Read(ref fracao), Volatile.Read(ref texto));
+                if (janela.Cancelado) cancelar.Cancel();
+            }
+
+            envio.Wait(40);
+        }
+
+        if (cancelar.IsCancellationRequested) throw new OperationCanceledException();
+        return envio.GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// O X-Pedido: o mesmo para o mesmo desenho e o mesmo conteúdo. O clique
+    /// repetido depois de a resposta não voltar não grava duas vezes lá; o
+    /// conteúdo mudado é outro pedido.
+    /// </summary>
+    internal static string Pedido(Guid guid, byte[] corpo)
+    {
+        using var conta = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        conta.AppendData(guid.ToByteArray());
+        conta.AppendData(corpo);
+        return Convert.ToHexString(conta.GetHashAndReset())[..32].ToLowerInvariant();
+    }
+
+    /// <summary>Manda o corpo ao servidor do Clivus, com a licença, em pedaços. O resultado, ou o erro em português.</summary>
+    private static async Task<(TermoVisionProjectResult? Resultado, string? Erro)> Mandar(byte[] corpo, Guid guid, Action<double, string> andamento, CancellationToken cancelar)
     {
         if (Publicador3D.Endereco is not { } endereco) return (null, Tr.T("o servidor do Clivus não está configurado"));
         if (Viewer3DPage.WhyServerUnsafe(endereco) is { } inseguro) return (null, inseguro);
@@ -155,8 +238,11 @@ internal static class TermoVisionProjeto
         {
             using var comprimido = new MemoryStream();
             using (var gzip = new GZipStream(comprimido, CompressionLevel.Fastest, leaveOpen: true)) gzip.Write(corpo);
+            cancelar.ThrowIfCancellationRequested();
 
-            using var conteudo = new ByteArrayContent(comprimido.ToArray());
+            var dados = comprimido.ToArray();
+            var megas = dados.Length / 1024.0 / 1024.0;
+            using var conteudo = new Publicador3D.ConteudoComAndamento(dados, f => andamento(f, Tr.F("Enviando ao TermoVision: {0:0.0} de {1:0.0} MB...", f * megas, megas)));
             conteudo.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
             conteudo.Headers.ContentEncoding.Add("gzip");
 
@@ -164,12 +250,14 @@ internal static class TermoVisionProjeto
             var autorizacao = Publicador3D.Autorizacao();
             if (autorizacao is not null) pedido.Headers.Authorization = new AuthenticationHeaderValue(autorizacao.Scheme, autorizacao.Parameter);
 
-            // Um id por clique: o reenvio do mesmo clique não grava duas vezes lá.
-            pedido.Headers.Add("X-Pedido", Guid.NewGuid().ToString("N"));
+            // A licença recusada volta antes de o corpo ir (como no 3D).
+            pedido.Headers.ExpectContinue = true;
+            pedido.Headers.Add("X-Pedido", Pedido(guid, corpo));
             pedido.Headers.AcceptLanguage.ParseAdd(Tr.AcceptLanguage);
 
-            using var resposta = await Cliente.SendAsync(pedido).ConfigureAwait(false);
-            var texto = await resposta.Content.ReadAsStringAsync().ConfigureAwait(false);
+            using var resposta = await Cliente.SendAsync(pedido, cancelar).ConfigureAwait(false);
+            andamento(1, Tr.T("Esperando o TermoVision montar a usina..."));
+            var texto = await resposta.Content.ReadAsStringAsync(cancelar).ConfigureAwait(false);
 
             if (resposta.IsSuccessStatusCode && TermoVisionProjectResult.TryParse(texto) is { } resultado) return (resultado, null);
             return (null, Tr.F("o servidor recusou ({0}): {1}", (int)resposta.StatusCode, Erro(texto) ?? texto[..Math.Min(texto.Length, 300)]));
@@ -179,7 +267,7 @@ internal static class TermoVisionProjeto
             RegistroDeDiagnostico.Registrar("Falha ao mandar o projeto ao TermoVision.", erro);
             return (null, Tr.F("não consegui falar com o servidor do Clivus em {0} ({1})", endereco, erro.Message));
         }
-        catch (TaskCanceledException)
+        catch (TaskCanceledException) when (!cancelar.IsCancellationRequested)
         {
             return (null, Tr.F("o servidor do Clivus em {0} não respondeu a tempo", endereco));
         }

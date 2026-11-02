@@ -18,12 +18,13 @@ public class ShadeCalendarTests
     private static ShadeSeries Serie(string rotulo, int coluna, params float[] fracoes) =>
         new("H" + rotulo, rotulo, coluna, 0, fracoes, fracoes.Select(f => f > 0 ? ShadowCause.Table : ShadowCause.None).ToList());
 
-    private static ShadeCalendar Calendario() => new(Instantes, TimeSpan.FromMinutes(30), 7,
+    // Meia hora por instante; cada dia calculado vale 7.
+    private static ShadeCalendar Calendario(IEnumerable<DateOnly>? dias = null) => new(Instantes, 0.5, 7,
     [
         Serie("col 1 fil 1", 0, 1f, 0.5f, 0f, 0f, 0f),
         Serie("col 2 fil 1", 1, 0f, 0f, 0f, 0.25f, 0f),
         Serie("col 3 fil 1", 2, 0f, 0f, 0f, 0f, 0f),
-    ]);
+    ], dias);
 
     [Fact]
     [Trait("Etapa", "42")]
@@ -39,6 +40,18 @@ public class ShadeCalendarTests
         Assert.Null(c.At(0, 1, 0));   // 28/06 às 7h: não calculado
         Assert.Equal(0.25f, c.At(1, 1, 1));
         Assert.Equal(-1, c.InstantAt(1, 0));
+    }
+
+    [Fact]
+    [Trait("Etapa", "42")]
+    public void ODiaCalculadoSemSolAcimaDaAlturaEntraVazio()
+    {
+        // 05/07 foi calculado, mas o sol não passou da altura: nenhum instante, e o dia aparece (cinza).
+        var c = Calendario(ShadeEstimate.SampledDays(new DateOnly(2026, 6, 21), new DateOnly(2026, 7, 5), 7));
+
+        Assert.Equal([new DateOnly(2026, 6, 21), new DateOnly(2026, 6, 28), new DateOnly(2026, 7, 5)], c.Days);
+        Assert.All(Enumerable.Range(0, c.Times.Count), h => Assert.Null(c.At(0, 2, h)));
+        Assert.Equal([0], c.ShadedDays(0));
     }
 
     [Fact]
@@ -61,12 +74,45 @@ public class ShadeCalendarTests
 
         Assert.Equal((1f, Instantes[0]), c.Worst(0));
         Assert.Equal((0f, (DateTime?)null), c.Worst(2));
+    }
 
-        // Os dias estimados não passam dos do período (como o registro do Gerar sombras).
-        var curto = new ShadeCalendar(Instantes, TimeSpan.FromMinutes(30), 7, c.Modules, periodDays: 10);
-        Assert.Equal(7, curto.DaysWithShade(0));
-        var mesa = new ShadeCalendar(Instantes, TimeSpan.FromMinutes(30), 7, [Serie("x", 0, 1f, 0f, 0f, 1f, 0f)], periodDays: 10);
-        Assert.Equal(10, mesa.DaysWithShade(0));   // 2 dias calculados × 7 = 14, e o período tem 10
+    [Fact]
+    [Trait("Etapa", "42")]
+    public void OPesoDoDiaEOsDiasDoPeriodoDivididosPelosCalculados()
+    {
+        // 21 a 30/06, de 7 em 7: 21 e 28 calculados, 10 dias no período; cada um vale 5.
+        var peso = ShadeEstimate.DayWeight(new DateOnly(2026, 6, 21), new DateOnly(2026, 6, 30), 7);
+        Assert.Equal(5, peso, 9);
+
+        var c = new ShadeCalendar(Instantes, 0.5, peso, [Serie("x", 0, 1f, 0f, 0f, 1f, 0f)]);
+        Assert.Equal(10, c.DaysWithShade(0));   // os 2 dias calculados com sombra são o período inteiro
+        Assert.Equal(5, c.Hours(0), 9);         // (1 + 1) × 0,5 h × 5
+
+        // O ano de 30 em 30 dias: 13 dias calculados valem 365 (antes eram 390).
+        var ano = ShadeEstimate.DayWeight(new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31), 30);
+        Assert.Equal(365.0 / 13, ano, 9);
+        Assert.Equal(365, ShadeEstimate.Of(new ShadeTally(13 * 9, 13, 13 * 4.5), ano, 1).Days);
+        Assert.Equal(13 * 4.5 * ano, ShadeEstimate.Of(new ShadeTally(13 * 9, 13, 13 * 4.5), ano, 1).Hours, 9);
+
+        // Passo de 1 dia ou um dia só: cada dia vale 1.
+        Assert.Equal(1, ShadeEstimate.DayWeight(new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31), 1), 9);
+        Assert.Equal(1, ShadeEstimate.DayWeight(new DateOnly(2026, 6, 21), new DateOnly(2026, 6, 21), 7), 9);
+
+        Assert.Equal([new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 8), new DateOnly(2026, 1, 15)],
+            ShadeEstimate.SampledDays(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 15), 7));
+    }
+
+    [Fact]
+    [Trait("Etapa", "42")]
+    public void UmaHoraSoPorDiaNaoSomaHoras()
+    {
+        // Ao meio-dia, todo dia: cada instante não "dura" o passo (o passo não é o intervalo entre eles).
+        Assert.Equal(0, ShadeEstimate.StepHours(new TimeOnly(12, 0), new TimeOnly(12, 0), 60));
+        Assert.Equal(0.5, ShadeEstimate.StepHours(new TimeOnly(6, 0), new TimeOnly(18, 0), 30), 9);
+
+        var c = new ShadeCalendar([new DateTime(2026, 6, 21, 12, 0, 0)], 0, 1, [Serie("x", 0, 1f)]);
+        Assert.Equal(0, c.Hours(0));
+        Assert.Equal(1, c.DaysWithShade(0));
     }
 
     [Fact]
@@ -85,23 +131,28 @@ public class ShadeCalendarTests
     [Trait("Etapa", "42")]
     public void OTextoParaOExcelTemUmaLinhaPorModuloDiaEHoraComSombra()
     {
-        var tsv = Calendario().ToTsv("Módulo\tData\tHora\t%\tCausa", c => c == ShadowCause.Table ? "mesa" : "-");
+        var tsv = Calendario().ToTsv("Mesa\tMódulo\tData\tHora\t%\tCausa", c => c == ShadowCause.Table ? "mesa" : "-", "M1");
         var linhas = tsv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
 
         Assert.Equal(4, linhas.Length);
-        Assert.Equal("Módulo\tData\tHora\t%\tCausa", linhas[0]);
-        Assert.Equal("col 1 fil 1\t21/06/2026\t07:00\t100\tmesa", linhas[1]);
-        Assert.Equal("col 1 fil 1\t21/06/2026\t07:30\t50\tmesa", linhas[2]);
-        Assert.Equal("col 2 fil 1\t28/06/2026\t07:30\t25\tmesa", linhas[3]);
+        Assert.Equal("Mesa\tMódulo\tData\tHora\t%\tCausa", linhas[0]);
+        Assert.Equal("M1\tcol 1 fil 1\t21/06/2026\t07:00\t100\tmesa", linhas[1]);
+        Assert.Equal("M1\tcol 1 fil 1\t21/06/2026\t07:30\t50\tmesa", linhas[2]);
+        Assert.Equal("M1\tcol 2 fil 1\t28/06/2026\t07:30\t25\tmesa", linhas[3]);
+
+        // 12,5% vira 13, como a janela mostra (e não 12, o arredondamento para o par).
+        var meio = new ShadeCalendar([new DateTime(2026, 6, 21, 12, 0, 0)], 0.5, 1, [Serie("x", 0, 0.125f)]);
+        Assert.EndsWith("\t13\tmesa\r\n", meio.ToTsv("h", _ => "mesa", "M1"), StringComparison.Ordinal);
     }
 
     [Fact]
     [Trait("Etapa", "42")]
     public void OCalendarioRecusaSerieDeTamanhoErradoEPassoInvalido()
     {
-        Assert.Throws<ArgumentException>(() => new ShadeCalendar(Instantes, TimeSpan.FromMinutes(30), 1, [Serie("x", 0, 1f)]));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new ShadeCalendar(Instantes, TimeSpan.Zero, 1, []));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new ShadeCalendar(Instantes, TimeSpan.FromMinutes(30), 0, []));
+        Assert.Throws<ArgumentException>(() => new ShadeCalendar(Instantes, 0.5, 1, [Serie("x", 0, 1f)]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ShadeCalendar(Instantes, -0.5, 1, []));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ShadeCalendar(Instantes, double.NaN, 1, []));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ShadeCalendar(Instantes, 0.5, 0.5, []));
     }
 
     private static ModuleShadow M(string handle, double horas, int dias, double fracao = 0.5) =>

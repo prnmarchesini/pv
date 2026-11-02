@@ -3,6 +3,40 @@ using System.Text;
 
 namespace Clivus.Core;
 
+/// <summary>
+/// Os dias e as horas de sombra estimados no período, os mesmos para o
+/// registro do Gerar sombras e para o resumo da mesa (revisão do 42.14):
+/// cada dia calculado vale o peso, os dias do período sobre os dias
+/// calculados (um ano de 7 em 7 tem 53 dias calculados e 365 dias: cada um
+/// vale 6,9); as horas são a soma das frações vezes o passo do dia, vezes o
+/// mesmo peso. Com uma hora só por dia (o horário fixo, o instante), o passo
+/// não é duração: as horas são 0.
+/// </summary>
+public static class ShadeEstimate
+{
+    /// <summary>Os dias calculados do período: o primeiro e, de <paramref name="dayStep"/> em <paramref name="dayStep"/>, até o último.</summary>
+    public static IEnumerable<DateOnly> SampledDays(DateOnly first, DateOnly last, int dayStep)
+    {
+        for (var d = first; d <= last; d = d.AddDays(Math.Max(1, dayStep))) yield return d;
+    }
+
+    /// <summary>O peso de cada dia calculado: os dias do período sobre os dias calculados.</summary>
+    public static double DayWeight(DateOnly first, DateOnly last, int dayStep)
+    {
+        if (last < first) return 1;
+        var dias = last.DayNumber - first.DayNumber + 1;
+        var calculados = (last.DayNumber - first.DayNumber) / Math.Max(1, dayStep) + 1;
+        return (double)dias / calculados;
+    }
+
+    /// <summary>A duração de cada instante, em horas: o passo do dia, ou 0 com uma hora só por dia.</summary>
+    public static double StepHours(TimeOnly from, TimeOnly to, int stepMinutes) => from == to ? 0 : stepMinutes / 60.0;
+
+    /// <summary>Os dias e as horas estimados de uma face.</summary>
+    public static (int Days, double Hours) Of(ShadeTally tally, double dayWeight, double stepHours) =>
+        ((int)Math.Round(tally.Days * dayWeight, MidpointRounding.AwayFromZero), tally.FractionSum * stepHours * dayWeight);
+}
+
 /// <summary>A sombra de um módulo em cada instante calculado: a fração (0 a 1) e a causa, na ordem dos instantes do calendário.</summary>
 /// <param name="Handle">O handle do bloco do módulo.</param>
 /// <param name="Label">Como o módulo aparece (col 3 fil 1).</param>
@@ -29,25 +63,24 @@ public sealed class ShadeCalendar
     private readonly float[] _media;
 
     /// <param name="instants">Os instantes calculados, em ordem (os com sol).</param>
-    /// <param name="step">O passo do dia.</param>
-    /// <param name="dayStep">O passo de dias (7: um dia por semana; cada dia calculado vale 7).</param>
+    /// <param name="stepHours">Quanto cada instante dura, em horas (<see cref="ShadeEstimate.StepHours"/>; 0 com uma hora só por dia).</param>
+    /// <param name="dayWeight">Quantos dias do período cada dia calculado vale (<see cref="ShadeEstimate.DayWeight"/>).</param>
     /// <param name="modules">A série de cada módulo, com um valor por instante.</param>
-    /// <param name="periodDays">Quantos dias o período tem: os dias com sombra estimados (os calculados vezes o passo) não passam disso, como no registro do Gerar sombras.</param>
-    public ShadeCalendar(IReadOnlyList<DateTime> instants, TimeSpan step, int dayStep, IReadOnlyList<ShadeSeries> modules, int? periodDays = null)
+    /// <param name="sampledDays">Todos os dias calculados, também os sem instante nenhum (o sol não passou da altura): entram como colunas vazias.</param>
+    public ShadeCalendar(IReadOnlyList<DateTime> instants, double stepHours, double dayWeight, IReadOnlyList<ShadeSeries> modules, IEnumerable<DateOnly>? sampledDays = null)
     {
-        PeriodDays = periodDays;
         ArgumentNullException.ThrowIfNull(instants);
         ArgumentNullException.ThrowIfNull(modules);
-        if (step <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(step), "O passo precisa ser positivo.");
-        if (dayStep < 1) throw new ArgumentOutOfRangeException(nameof(dayStep), "O passo de dias precisa ser 1 ou mais.");
+        if (!double.IsFinite(stepHours) || stepHours < 0) throw new ArgumentOutOfRangeException(nameof(stepHours), "O passo não pode ser negativo.");
+        if (!double.IsFinite(dayWeight) || dayWeight < 1) throw new ArgumentOutOfRangeException(nameof(dayWeight), "Cada dia calculado vale pelo menos 1 dia.");
         if (modules.Any(m => m.Fractions.Count != instants.Count || m.Causes.Count != instants.Count))
             throw new ArgumentException("Cada módulo precisa de um valor por instante.", nameof(modules));
 
         Instants = instants;
-        Step = step;
-        DayStep = dayStep;
+        StepHours = stepHours;
+        DayWeight = dayWeight;
         Modules = modules;
-        Days = instants.Select(DateOnly.FromDateTime).Distinct().ToList();
+        Days = instants.Select(DateOnly.FromDateTime).Concat(sampledDays ?? []).Distinct().Order().ToList();
         Times = instants.Select(TimeOnly.FromDateTime).Distinct().Order().ToList();
 
         var dia = Days.Select((d, i) => (d, i)).ToDictionary(x => x.d, x => x.i);
@@ -65,14 +98,11 @@ public sealed class ShadeCalendar
     /// <summary>Os instantes calculados, em ordem.</summary>
     public IReadOnlyList<DateTime> Instants { get; }
 
-    /// <summary>O passo do dia.</summary>
-    public TimeSpan Step { get; }
+    /// <summary>Quanto cada instante dura, em horas.</summary>
+    public double StepHours { get; }
 
-    /// <summary>O passo de dias.</summary>
-    public int DayStep { get; }
-
-    /// <summary>Quantos dias o período tem, ou null sem limite.</summary>
-    public int? PeriodDays { get; }
+    /// <summary>Quantos dias do período cada dia calculado vale.</summary>
+    public double DayWeight { get; }
 
     /// <summary>Os módulos da mesa.</summary>
     public IReadOnlyList<ShadeSeries> Modules { get; }
@@ -109,20 +139,16 @@ public sealed class ShadeCalendar
         return dias;
     }
 
-    /// <summary>As horas de sombra cheia no período: a soma das frações vezes o passo, vezes o passo de dias.</summary>
+    /// <summary>As horas de sombra cheia no período, como no registro (<see cref="ShadeEstimate"/>): a soma das frações vezes o passo, vezes o peso do dia.</summary>
     public double Hours(int module)
     {
         var soma = 0.0;
         for (var i = 0; i < Instants.Count; i++) soma += Fraction(module, i);
-        return soma * Step.TotalHours * DayStep;
+        return soma * StepHours * DayWeight;
     }
 
-    /// <summary>
-    /// Em quantos dias do período ele pegou sombra: os dias calculados com
-    /// sombra vezes o passo de dias, sem passar dos dias do período (13 dias
-    /// de 30 em 30 no ano dão 390, e o ano tem 365).
-    /// </summary>
-    public int DaysWithShade(int module) => Math.Min(ShadedDays(module).Count * DayStep, PeriodDays ?? int.MaxValue);
+    /// <summary>Em quantos dias do período ele pegou sombra, como no registro: os dias calculados com sombra vezes o peso do dia.</summary>
+    public int DaysWithShade(int module) => (int)Math.Round(ShadedDays(module).Count * DayWeight, MidpointRounding.AwayFromZero);
 
     /// <summary>A maior fração do módulo e quando, ou (0, null) sem sombra.</summary>
     public (float Fraction, DateTime? When) Worst(int module)
@@ -142,12 +168,13 @@ public sealed class ShadeCalendar
 
     /// <summary>
     /// O texto para colar no Excel (separado por tabulação): o cabeçalho e uma
-    /// linha por módulo, dia e hora com sombra (o módulo, a data, a hora, a
-    /// porcentagem e a causa).
+    /// linha por módulo, dia e hora com sombra (a mesa, o módulo, a data, a
+    /// hora, a porcentagem, arredondada como a janela mostra, e a causa).
     /// </summary>
     /// <param name="header">O cabeçalho, já no idioma (as colunas separadas por tabulação).</param>
     /// <param name="causeName">O nome da causa no idioma.</param>
-    public string ToTsv(string header, Func<ShadowCause, string> causeName)
+    /// <param name="table">O letreiro da mesa.</param>
+    public string ToTsv(string header, Func<ShadowCause, string> causeName, string table = "")
     {
         ArgumentNullException.ThrowIfNull(header);
         ArgumentNullException.ThrowIfNull(causeName);
@@ -158,10 +185,10 @@ public sealed class ShadeCalendar
             for (var i = 0; i < Instants.Count; i++)
             {
                 if (m.Fractions[i] <= 0) continue;
-                texto.Append(m.Label).Append('\t')
+                texto.Append(table).Append('\t').Append(m.Label).Append('\t')
                     .Append(Instants[i].ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)).Append('\t')
                     .Append(Instants[i].ToString("HH:mm", CultureInfo.InvariantCulture)).Append('\t')
-                    .Append(Math.Round(m.Fractions[i] * 100).ToString(CultureInfo.InvariantCulture)).Append('\t')
+                    .Append(Math.Round(m.Fractions[i] * 100, MidpointRounding.AwayFromZero).ToString(CultureInfo.InvariantCulture)).Append('\t')
                     .Append(causeName(m.Causes[i])).Append("\r\n");
             }
         }

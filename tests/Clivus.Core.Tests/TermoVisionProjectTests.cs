@@ -91,6 +91,50 @@ public class TermoVisionProjectTests
 
     [Fact]
     [Trait("Etapa", "33")]
+    public void AZonaEOHemisferioSaemDoCodigoDoSistemaDoDesenho()
+    {
+        Assert.Equal((17, (bool?)false), TermoVisionProjectCrs.ZoneInName("UTM84-17N"));
+        Assert.Equal((23, (bool?)true), TermoVisionProjectCrs.ZoneInName("SIRGAS2000.UTM-23S"));
+        Assert.Equal((17, (bool?)false), TermoVisionProjectCrs.ZoneInName("WGS 84 / UTM zone 17N"));
+        Assert.Equal((17, (bool?)null), TermoVisionProjectCrs.ZoneInName("UTM83-17"));
+        Assert.Equal((22, (bool?)true), TermoVisionProjectCrs.ZoneInName("UTM Zone 22, Southern Hemisphere"));
+        Assert.Null(TermoVisionProjectCrs.ZoneInName("LL84"));
+        Assert.Null(TermoVisionProjectCrs.ZoneInName(""));
+        Assert.Null(TermoVisionProjectCrs.ZoneInName(null));
+    }
+
+    [Fact]
+    [Trait("Etapa", "33")]
+    public void ODesenhoNaZonaVizinhaPassaComAZonaDeleEODatumDoCodigo()
+    {
+        // O desenho do nível 2 (Itatiba, 23S): sem código, a zona da localização e o SIRGAS.
+        var itatiba = TermoVisionProjectCrs.Resolve(-22.992, -46.814, 314_068.8, 7_456_213.5);
+        Assert.Equal(new TermoVisionProjectCrs(31983, null, 23, true), itatiba);
+
+        // O mesmo com o código WGS 84: o EPSG do WGS 84 na zona.
+        Assert.Equal(32723, TermoVisionProjectCrs.Resolve(-22.992, -46.814, 314_068.8, 7_456_213.5, drawingName: "UTM84-23S")!.Epsg);
+
+        // Na divisa: a localização cai na zona 23 (-47,9°), e o desenho está na
+        // 22 (as coordenadas de lá, pela mesma conta aproximada). Sem código, a
+        // vizinha; com o código UTM84-22S, a 22 com o EPSG do WGS 84.
+        const double e22 = 500_000 + (-47.9 + 51) * 111_320 * 0.920553;
+        const double n22 = 10_000_000 - 22.992 * 110_600;
+        var vizinha = TermoVisionProjectCrs.Resolve(-22.992, -47.9, e22, n22);
+        Assert.Equal((22, true), (vizinha!.Zone, vizinha.South));
+        Assert.Null(vizinha.Epsg);   // o SIRGAS da localização é o da 23: não vale para a 22
+        Assert.Equal(new TermoVisionProjectCrs(32722, "UTM84-22S", 22, true), TermoVisionProjectCrs.Resolve(-22.992, -47.9, e22, n22, drawingName: "UTM84-22S"));
+
+        // O Panamá em WGS 84 / 17N.
+        var panama = TermoVisionProjectCrs.Resolve(8.5, -80.0, 500_000 + 1.0 * 111_320 * Math.Cos(8.5 * Math.PI / 180), 8.5 * 110_600, drawingName: "UTM84-17N");
+        Assert.Equal(new TermoVisionProjectCrs(32617, "UTM84-17N", 17, false), panama);
+
+        // Em coordenada local, nenhuma zona bate.
+        Assert.Null(TermoVisionProjectCrs.Resolve(-22.992, -46.814, 1_250, 830));
+        Assert.Null(TermoVisionProjectCrs.Resolve(-22.992, -46.814, 1_250, 830, drawingName: "UTM84-23S"));
+    }
+
+    [Fact]
+    [Trait("Etapa", "33")]
     public void AGradeTem2MAte2KmDeLadoEDepoisMilCelulas()
     {
         Assert.Equal(250, TermoVisionProject.GridCells(500));

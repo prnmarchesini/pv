@@ -142,23 +142,6 @@ public static class GanchosDeTeste
     /// para ver se a linha quebra em vez de cortar. Devolve T, ou nil se a
     /// linha do Core Console não é STA (o WPF exige).
     /// </summary>
-    /// <summary>A janela do resumo das sombras de uma mesa para o desenho em PNG; null se a mesa ou o período não deram.</summary>
-    private static JanelaDoCalendarioDeSombras? CalendarioParaTeste(Document documento, string mesa)
-    {
-        if (SombrasCommands.MesaPeloNome(documento.Database, mesa) is not { } guid) return null;
-        var periodo = SombrasCommands.Ler("01/01/2026", "31/12/2026", "06:00", "18:00", "60", "-3", out _, "7");
-        if (periodo is null) return null;
-
-        var (calendario, letreiro, porque) = SombrasCommands.SombrasDaMesa(documento, periodo, guid);
-        if (calendario is null)
-        {
-            documento.Editor.WriteMessage($"\nRENDER calendario sem calendário: {porque}\n");
-            return null;
-        }
-
-        return new JanelaDoCalendarioDeSombras(calendario, letreiro, periodo.Descrever());
-    }
-
     [LispFunction("CLIVUS-RENDERIZAR-JANELA")]
     public static object? RenderizarJanela(ResultBuffer argumentos)
     {
@@ -228,6 +211,23 @@ public static class GanchosDeTeste
         janela.Close();
         documento.Editor.WriteMessage($"\nRENDER {valores[0]} {w}x{h} em {valores[1]}\n");
         return true;
+    }
+
+    /// <summary>A janela do resumo das sombras de uma mesa para o desenho em PNG; null se a mesa ou o período não deram.</summary>
+    private static JanelaDoCalendarioDeSombras? CalendarioParaTeste(Document documento, string mesa)
+    {
+        if (SombrasCommands.MesaPeloNome(documento.Database, mesa) is not { } guid) return null;
+        var periodo = SombrasCommands.Ler("01/01/2026", "31/12/2026", "06:00", "18:00", "60", "-3", out _, "7");
+        if (periodo is null) return null;
+
+        var (calendario, letreiro, porque) = SombrasCommands.SombrasDaMesa(documento, periodo, guid);
+        if (calendario is null)
+        {
+            documento.Editor.WriteMessage($"\nRENDER calendario sem calendário: {porque}\n");
+            return null;
+        }
+
+        return new JanelaDoCalendarioDeSombras(calendario, letreiro, periodo.Descrever());
     }
 
     /// <summary>

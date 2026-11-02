@@ -19,14 +19,27 @@ internal static class DestaqueDasSombras
 {
     private const int Versao = 1;
 
+    /// <summary>
+    /// Quanto acima da face a hachura fica: acima da sombra magenta sobre o
+    /// módulo (<see cref="DesenhoDasSombras.AcimaDaMesa"/>), para não brigar
+    /// com ela na vista 3D.
+    /// </summary>
+    private const double AcimaDaFace = DesenhoDasSombras.AcimaDaMesa + 0.02;
+
     /// <summary>Um módulo a destacar: o lugar (1 é o pior), a cor, a face e o handle do módulo.</summary>
     internal sealed record Destaque(int Lugar, RgbColor Cor, IReadOnlyList<Point3> Cantos, string Modulo);
 
-    /// <summary>Desenha os destaques; quantos saíram (a face sem área fica de fora).</summary>
+    /// <summary>
+    /// Desenha os destaques; quantos saíram (a face sem área fica de fora). A
+    /// camada é ligada (o Ocultar sombras desliga ela também) e o destaque vai
+    /// para a frente na ordem de desenho, por cima da sombra.
+    /// </summary>
     internal static int Desenhar(Transaction transacao, Database database, IEnumerable<Destaque> destaques)
     {
         var camada = LayoutLayers.Garantir(transacao, database, LayoutLayers.SombraDestaque, new RgbColor(128, 0, 38));
+        LayoutLayers.Ligar(transacao, database, camada, true);
         var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForWrite);
+        var naFrente = new ObjectIdCollection();
         var feitos = 0;
 
         foreach (var d in destaques)
@@ -39,13 +52,28 @@ internal static class DestaqueDasSombras
 
             var texto = Lugar(transacao, database, espaco, camada, d.Cantos, d.Lugar, d.Cor);
             PluginXData.Save(transacao, texto, Cleanup.ShadowHighlightType, Versao, d.Lugar.ToString(CultureInfo.InvariantCulture), d.Modulo);
+            naFrente.Add(hachura.ObjectId);
+            naFrente.Add(texto.ObjectId);
             feitos++;
+        }
+
+        if (naFrente.Count > 0)
+        {
+            try
+            {
+                ((DrawOrderTable)transacao.GetObject(espaco.DrawOrderTableId, OpenMode.ForWrite)).MoveToTop(naFrente);
+            }
+            catch (System.Exception erro)
+            {
+                // A ordem de desenho é aparência: sem ela, o destaque está lá do mesmo jeito.
+                RegistroDeDiagnostico.Registrar("Não consegui pôr o destaque das sombras na frente.", erro);
+            }
         }
 
         return feitos;
     }
 
-    /// <summary>Apaga todo o destaque do desenho; quantas entidades saíram.</summary>
+    /// <summary>Apaga todo o destaque do desenho, também em camada travada; quantas entidades saíram.</summary>
     internal static int Apagar(Transaction transacao, Database database)
     {
         var espaco = (BlockTableRecord)transacao.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForRead);
@@ -56,8 +84,8 @@ internal static class DestaqueDasSombras
             if (id.IsErased || transacao.GetObject(id, OpenMode.ForRead) is not Entity e) continue;
             if (PluginXData.LoadAll(e, Cleanup.ShadowHighlightType, Versao, 0) is null) continue;
 
-            e.UpgradeOpen();
-            e.Erase();
+            // O UpgradeOpen falha com a camada travada; abrir de novo com forceOpenOnLockedLayer não.
+            ((Entity)transacao.GetObject(id, OpenMode.ForWrite, false, true)).Erase();
             apagadas++;
         }
 
@@ -99,8 +127,8 @@ internal static class DestaqueDasSombras
             hachura.Color = Color.FromRgb(cor.R, cor.G, cor.B);
             hachura.Normal = normal;
 
-            // Um centímetro acima da face, para ficar por cima dela e da sombra magenta.
-            var acima = normal * 0.01;
+            // Acima da face e da sombra magenta sobre ela.
+            var acima = normal * AcimaDaFace;
             var p0 = new Point3d(cantos[0].X, cantos[0].Y, cantos[0].Z) + acima;
             hachura.Elevation = p0.TransformBy(paraOcs).Z;
 
@@ -138,11 +166,13 @@ internal static class DestaqueDasSombras
     /// <summary>
     /// O lugar escrito no meio do módulo, no eixo da mesa (a borda mais
     /// nivelada da face) e nunca de cabeça para baixo; a letra do tamanho do
-    /// lado menor.
+    /// lado menor, e menor se o número não couber no comprimento do eixo
+    /// ("100" num módulo em retrato).
     /// </summary>
     private static DBText Lugar(Transaction transacao, Database database, BlockTableRecord espaco, string camada, IReadOnlyList<Point3> cantos, int lugar, RgbColor cor)
     {
-        var centro = new Point3d(cantos.Average(c => c.X), cantos.Average(c => c.Y), cantos.Max(c => c.Z) + 0.05);
+        // Acima da hachura em todo o módulo (a mais alta dela é o canto mais alto mais o AcimaDaFace).
+        var centro = new Point3d(cantos.Average(c => c.X), cantos.Average(c => c.Y), cantos.Max(c => c.Z) + AcimaDaFace + 0.03);
 
         // A borda mais nivelada (a que sobe menos) é a do eixo da mesa.
         var bordas = Enumerable.Range(0, cantos.Count).Select(i => (A: cantos[i], B: cantos[(i + 1) % cantos.Count])).ToList();
@@ -151,15 +181,20 @@ internal static class DestaqueDasSombras
         if (angulo > Math.PI / 2) angulo -= Math.PI;
         else if (angulo <= -Math.PI / 2) angulo += Math.PI;
 
-        var menor = bordas.Min(b => Math.Sqrt(Math.Pow(b.B.X - b.A.X, 2) + Math.Pow(b.B.Y - b.A.Y, 2)));
+        static double EmPlanta((Point3 A, Point3 B) b) => Math.Sqrt(Math.Pow(b.B.X - b.A.X, 2) + Math.Pow(b.B.Y - b.A.Y, 2));
+        var menor = bordas.Min(EmPlanta);
+        var numero = lugar.ToString(CultureInfo.InvariantCulture);
+
+        // Cada algarismo tem perto de 0,9 da altura de largura: o número ocupa até 80% do eixo.
+        var cabeNoEixo = 0.8 * EmPlanta(eixo) / (0.9 * numero.Length);
 
         var texto = new DBText();
         texto.SetDatabaseDefaults(database);
         texto.Layer = camada;
         // Claro no vinho e no vermelho, escuro no laranja e no amarelo.
         texto.Color = 0.299 * cor.R + 0.587 * cor.G + 0.114 * cor.B < 140 ? Color.FromRgb(255, 255, 255) : Color.FromRgb(20, 20, 20);
-        texto.TextString = lugar.ToString(CultureInfo.InvariantCulture);
-        texto.Height = Math.Clamp(menor * 0.45, 0.15, 1.5);
+        texto.TextString = numero;
+        texto.Height = Math.Clamp(Math.Min(menor * 0.45, cabeNoEixo), 0.1, 1.5);
         texto.Rotation = angulo;
         texto.HorizontalMode = TextHorizontalMode.TextCenter;
         texto.VerticalMode = TextVerticalMode.TextVerticalMid;

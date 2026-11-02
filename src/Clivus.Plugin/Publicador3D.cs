@@ -107,8 +107,8 @@ internal static class Publicador3D
         }
     }
 
-    /// <summary>O corpo mandado em pedaços de 64 kB, dizendo a fração que já foi.</summary>
-    private sealed class ConteudoComAndamento(byte[] dados, Action<double> andamento) : HttpContent
+    /// <summary>O corpo mandado em pedaços de 64 kB, dizendo a fração que já foi (o 3D e o projeto do TermoVision).</summary>
+    internal sealed class ConteudoComAndamento(byte[] dados, Action<double> andamento) : HttpContent
     {
         private const int Pedaco = 64 * 1024;
 
