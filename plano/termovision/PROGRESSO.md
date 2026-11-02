@@ -16,6 +16,7 @@ As decisões 1 a 4 do `LEIA-PRIMEIRO.md` ficam para ele confirmar.**
 - 33.6 Abrir do TermoVision: AGUARDANDO VALIDAÇÃO
 - 33.7 Exportar para o TermoVision: AGUARDANDO VALIDAÇÃO
 - 33.8 TermoVision na ribbon: AGUARDANDO VALIDAÇÃO
+- 33.9 O projeto do TermoVision sem envio (02/11/2026, contrato v2 com a sessão do TermoVision; Renan: "se eu fizer pelo termovision, o cliente vai ver outro produto e ficar curioso"; "a meta é eu chegar e ver o dwg ... aberto em um 3D do termovision sobre vista de satelite em link publico"): o desenho com mesas que não veio do TermoVision vira uma usina pública de lá (dona: a empresa de sistema "Clivus Solar"); as mesas (com monoposte/biposte), o terreno em grade (2 m até 2 km de lado, as mesas com 100 m de folga, linha 0 ao sul) e o sistema de coordenadas (a zona e o hemisfério, o EPSG do SIRGAS na América do Sul) vão ao servidor do Clivus com a licença, que repassa ao TermoVision com a chave dele (nunca no PC) e devolve o link; o GUID do desenho fica no dicionário do plugin (TERMOVISION_PROJETO): mandar de novo atualiza a mesma usina e o mesmo link, e o "Salvar como" pergunta; o desenho fora de UTM na zona da localização é recusado: AGUARDANDO VALIDAÇÃO — `TermoVisionProject` (Core, 6 testes), `TermoVisionProjeto` (plugin), `CLIVUS_TV_PROJETO_AUTO`; o corpo do PLAT A_Perfiles (Panamá): 589 mesas biposte, terreno 278 × 358 de 2 m, 17N EPSG 31971
 
 Nível 2 (`rodar.ps1 -SoTermoVision`): abre o pacote da Paradise sem rede num
 desenho vazio. Confere superfície, orto, árvores, área e árvore na cota do TIN.
@@ -46,6 +47,11 @@ Bate com o contrato; nada a mudar do lado deles.
 6. Sem o protocolo, num desenho que não veio do TermoVision: Saída ›
    TermoVision e colar o "Copiar o código" da página (CLIVUS_TV_ABRIR
    continua para abrir outra área num desenho que já veio de lá).
+7. **O projeto sem envio (33.9):** num desenho com mesas que não veio do TermoVision (o PLAT A_Perfiles),
+   Saída › TermoVision: a pergunta "Criar lá uma usina pública...?"; Sim. A linha de comando diz a usina, as
+   mesas e o link; o link vai para a área de transferência e abre no navegador: as mesas em 3D sobre o
+   terreno, com o satélite por baixo. Mandar de novo: o mesmo link. Salvar como outro arquivo e mandar: a
+   pergunta "Atualizar a mesma usina?".
 
 ## Observações
 

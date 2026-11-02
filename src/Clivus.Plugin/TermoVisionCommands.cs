@@ -36,10 +36,17 @@ public static class TermoVisionCommands
         var documento = AcadApp.DocumentManager.MdiActiveDocument;
         if (documento is null) return;
 
-        if (EntradaDoTermoVision.Pendente is not null || TermoVisionStore.Load(documento.Database) is null)
+        // Desde 02/11/2026 (o projeto sem envio): o desenho com mesas que não
+        // veio do TermoVision também vai para lá, como uma usina pública.
+        if (EntradaDoTermoVision.Pendente is not null)
             Abrir();
-        else
+        else if (TermoVisionStore.Load(documento.Database) is not null)
             Exportar();
+        else if (TemMesas(documento.Database) && Confirmar(documento.Editor, Tr.T(
+                     "Este desenho não veio do TermoVision. Criar lá uma usina pública com as mesas e o terreno dele (o link vale 90 dias sem acesso)? Não: abrir uma área do TermoVision.")))
+            CriarProjeto(documento);
+        else
+            Abrir();
     }
 
     /// <summary>CLIVUS_TV_ABRIR: abre uma área do TermoVision neste desenho.</summary>
@@ -223,6 +230,15 @@ public static class TermoVisionCommands
 
         try
         {
+            // Sem envio, a usina pública (o projeto sem envio, 02/11/2026); o
+            // "Não" segue para o colar o código de um envio, como antes.
+            if (TermoVisionStore.Load(documento.Database) is null && Confirmar(editor, Tr.T(
+                    "Este desenho não veio do TermoVision. Criar lá uma usina pública com as mesas e o terreno dele (o link vale 90 dias sem acesso)? Não: colar o código de um envio.")))
+            {
+                CriarProjeto(documento);
+                return;
+            }
+
             var link = EnvioDoDesenho(documento);
             if (link is null) return;
 
@@ -307,6 +323,91 @@ public static class TermoVisionCommands
     }
 
     /// <summary>
+    /// CLIVUS_TV_PROJETO_AUTO: o teste de nível 2 do projeto sem envio. Um
+    /// caminho grava o corpo nele, sem rede; "ENVIAR" manda ao servidor e
+    /// escreve o link.
+    /// </summary>
+    [CommandMethod(PluginInfo.ComandoTermoVisionProjetoAutomatico)]
+    public static void ProjetoAutomatico()
+    {
+        var documento = AcadApp.DocumentManager.MdiActiveDocument;
+        if (documento is null) return;
+        var editor = documento.Editor;
+
+        var destino = editor.GetString(new PromptStringOptions("\nArquivo .json ou ENVIAR: ") { AllowSpaces = true });
+        if (destino.Status != PromptStatus.OK) return;
+
+        try
+        {
+            var texto = destino.StringResult.Trim().Trim('"');
+            var enviar = texto.Equals("ENVIAR", StringComparison.OrdinalIgnoreCase);
+            var feito = TermoVisionProjeto.Criar(documento, interativo: false, gravarEm: enviar ? null : texto);
+
+            editor.WriteMessage(FormattableString.Invariant(
+                $"\nCLIVUS_TV PROJETO mesas={feito.Mesas} recusadas={feito.Recusadas} terreno={feito.Grade} sistema={feito.Sistema} guid={feito.Guid:D}\n"));
+            if (feito.Erro is { } erro) editor.WriteMessage($"\nCLIVUS_TV ERRO {erro}\n");
+            if (feito.Resultado is { } r)
+                editor.WriteMessage(FormattableString.Invariant(
+                    $"\nCLIVUS_TV LINK {r.Url} expira={r.ExpiresAt:O} usina={r.PlantCode} nome={r.PlantName}\n"));
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha no CLIVUS_TV_PROJETO_AUTO.", erro);
+            editor.WriteMessage($"\nCLIVUS_TV ERRO {erro.Message}\n");
+        }
+    }
+
+    /// <summary>
+    /// O projeto sem envio pelo botão: monta, manda e mostra o link (na linha
+    /// de comando, copiado para a área de transferência e aberto no navegador).
+    /// </summary>
+    private static void CriarProjeto(Document documento)
+    {
+        var editor = documento.Editor;
+        try
+        {
+            var feito = TermoVisionProjeto.Criar(documento, interativo: true);
+            if (feito.Erro is { } erro)
+            {
+                editor.WriteMessage(Tr.F("\nNão consegui criar a usina no TermoVision: {0}\n", erro));
+                return;
+            }
+
+            if (feito.Resultado is not { Url: { } url } r) return;
+
+            editor.WriteMessage(Tr.F("\nTermoVision: a usina \"{0}\" ({1}) tem {2} mesa(s) sobre o terreno ({3}). Link público: {4}\n",
+                r.PlantName ?? "", r.PlantCode ?? "", feito.Mesas, feito.Grade, url));
+            if (r.ExpiresAt is { } expira) editor.WriteMessage(Tr.F("  O link vale até {0:dd/MM/yyyy} sem acesso; mandar de novo atualiza a mesma usina e o mesmo link.\n", expira.ToLocalTime()));
+            if (feito.Recusadas > 0) editor.WriteMessage(Tr.F("  {0} mesa(s) ficaram de fora.\n", feito.Recusadas));
+
+            try
+            {
+                System.Windows.Clipboard.SetText(url);
+                editor.WriteMessage(Tr.T("  O link foi copiado para a área de transferência.\n"));
+            }
+            catch (System.Exception falha)
+            {
+                RegistroDeDiagnostico.Registrar("Falha ao copiar o link do TermoVision.", falha);
+            }
+
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp))
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+        }
+        catch (System.Exception erro)
+        {
+            RegistroDeDiagnostico.Registrar("Falha ao criar a usina no TermoVision.", erro);
+            editor.WriteMessage(Tr.F("\nNão consegui criar a usina no TermoVision: {0}\n", erro.Message));
+        }
+    }
+
+    /// <summary>Se o desenho tem alguma mesa do Clivus.</summary>
+    private static bool TemMesas(Database database)
+    {
+        using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+        return LayoutScan.Tables(transacao, database).Any();
+    }
+
+    /// <summary>
     /// O endereço do envio deste desenho, com o token deste PC. Sem envio, ou
     /// com o token em outro PC, pede o endereço colado (o "Copiar o código" da página).
     /// </summary>
@@ -334,7 +435,7 @@ public static class TermoVisionCommands
         return link;
     }
 
-    private static string NomeDoDesenho(Document documento) =>
+    internal static string NomeDoDesenho(Document documento) =>
         Path.GetFileName(documento.Database.Filename is { Length: > 0 } f && f.EndsWith(".dwg", StringComparison.OrdinalIgnoreCase) ? f : documento.Name);
 
     /// <summary>
@@ -342,7 +443,7 @@ public static class TermoVisionCommands
     /// (nunca da camada); os cantos, do contorno; colunas e fiadas, das faces
     /// dos módulos (a mesa cortada conta o que sobrou); o módulo, do perfil.
     /// </summary>
-    private static List<TermoVisionTable> LerMesas(Editor editor, Database database, out List<string> recusadas, out int faltaCarport)
+    internal static List<TermoVisionTable> LerMesas(Editor editor, Database database, out List<string> recusadas, out int faltaCarport)
     {
         recusadas = [];
         var vaosNoDesenho = new HashSet<Guid>();
@@ -393,9 +494,13 @@ public static class TermoVisionCommands
             var perfil = DrawingTables.Find(doDesenho, identidade.ProfileName)?.Profile
                 ?? FileiraCommands.PerfilDaMesaDesenhada(cantos.Select(c => new Point3(c.E, c.N, c.Z)).ToList(), padrao, identidade.ProfileName, database);
 
+            // A estrutura vai no projeto sem envio (contrato v2): biposte quando o perfil tem os dois pilares.
             var layout = perfil.Layout;
             mesas.Add(new TermoVisionTable(guid, nome, cantos, colunas, fiadas,
-                new TermoVisionModule(layout.Module.Width, layout.Module.Height, layout.HorizontalGap)));
+                new TermoVisionModule(layout.Module.Width, layout.Module.Height, layout.HorizontalGap))
+            {
+                Subtype = perfil.Frame?.Bifila is not null ? TermoVisionTable.SubtipoBiposte : TermoVisionTable.SubtipoMonoposte,
+            });
         }
 
         // O carport (36.1): cada vão vai como uma mesa.
@@ -427,7 +532,7 @@ public static class TermoVisionCommands
     /// a pergunta na linha de comando ninguém via, e o AutoCAD ficava parado
     /// nela); no Core Console, na linha de comando, para o nível 2.
     /// </summary>
-    private static bool Confirmar(Editor editor, string pergunta, bool padraoSim = true)
+    internal static bool Confirmar(Editor editor, string pergunta, bool padraoSim = true)
     {
         if (ClivusExtension.TemInterface())
         {

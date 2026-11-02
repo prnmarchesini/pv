@@ -24,4 +24,13 @@ public static partial class PluginInfo
 
     /// <summary>Chave do dicionário do plugin com o servidor e o envio do TermoVision.</summary>
     public const string ChaveTermoVision = "TERMOVISION";
+
+    /// <summary>
+    /// Teste de nível 2 do projeto sem envio (contrato v2, 02/11/2026): grava o
+    /// corpo num arquivo, ou manda ao servidor com "ENVIAR".
+    /// </summary>
+    public const string ComandoTermoVisionProjetoAutomatico = "CLIVUS_TV_PROJETO_AUTO";
+
+    /// <summary>Chave do dicionário do plugin com o projeto do TermoVision que o desenho criou (o GUID, a usina e o link).</summary>
+    public const string ChaveTermoVisionProjeto = "TERMOVISION_PROJETO";
 }

@@ -23,6 +23,15 @@ public sealed record TermoVisionTable(
     /// <summary>A estrutura em triângulos (UTM e cota absoluta), para o 3D de lá; null quando não vai.</summary>
     public IReadOnlyList<Scene3DFace>? Structure { get; init; }
 
+    /// <summary>
+    /// A estrutura da mesa fixa (contrato v2, 02/11/2026): <see cref="SubtipoMonoposte"/>
+    /// ou <see cref="SubtipoBiposte"/>; null no carport. Só vai no projeto sem envio.
+    /// </summary>
+    public string? Subtype { get; init; }
+
+    public const string SubtipoMonoposte = "monoposte";
+    public const string SubtipoBiposte = "biposte";
+
     public const string TipoFixa = "fixa";
     public const string TipoCarport = "carport";
 }
@@ -48,38 +57,59 @@ public static class TermoVisionReturn
             w.WriteString("desenho", desenho);
             w.WriteStartArray("mesas");
 
-            foreach (var m in mesas)
-            {
-                if (WhyInvalid(m) is { } porque)
-                {
-                    recusadas.Add(Tr.F("{0}: {1}", string.IsNullOrEmpty(m.Name) ? m.Id.ToString() : m.Name, porque));
-                    continue;
-                }
+            WriteTables(w, mesas, recusadas, subtype: false);
 
-                w.WriteStartObject();
-                w.WriteString("guid", m.Id.ToString());
-                w.WriteString("nome", m.Name);
-                w.WriteStartArray("cantos");
-                foreach (var (e, n, z) in m.Corners)
-                {
-                    w.WriteStartArray();
-                    w.WriteNumberValue(Math.Round(e, 4));
-                    w.WriteNumberValue(Math.Round(n, 4));
-                    w.WriteNumberValue(Math.Round(z, 4));
-                    w.WriteEndArray();
-                }
+            w.WriteEndArray();
+            w.WriteEndObject();
+        }
+        return memoria.ToArray();
+    }
+
+    /// <summary>
+    /// As mesas no formato do contrato (o retorno e o projeto sem envio usam o
+    /// mesmo); a que não serve vai para <paramref name="recusadas"/>. Com
+    /// <paramref name="subtype"/>, a estrutura da mesa fixa leva o tipo dela
+    /// (monoposte ou biposte), como o projeto sem envio pede.
+    /// </summary>
+    internal static void WriteTables(Utf8JsonWriter w, IEnumerable<TermoVisionTable> mesas, List<string> recusadas, bool subtype)
+    {
+        foreach (var m in mesas)
+        {
+            if (WhyInvalid(m) is { } porque)
+            {
+                recusadas.Add(Tr.F("{0}: {1}", string.IsNullOrEmpty(m.Name) ? m.Id.ToString() : m.Name, porque));
+                continue;
+            }
+
+            w.WriteStartObject();
+            w.WriteString("guid", m.Id.ToString());
+            w.WriteString("nome", m.Name);
+            w.WriteStartArray("cantos");
+            foreach (var (e, n, z) in m.Corners)
+            {
+                w.WriteStartArray();
+                w.WriteNumberValue(Math.Round(e, 4));
+                w.WriteNumberValue(Math.Round(n, 4));
+                w.WriteNumberValue(Math.Round(z, 4));
                 w.WriteEndArray();
-                w.WriteNumber("colunas", m.Columns);
-                w.WriteNumber("fiadas", m.Rows);
-                w.WriteStartObject("modulo");
-                w.WriteNumber("largura_m", m.Module.Width);
-                w.WriteNumber("altura_m", m.Module.Height);
-                w.WriteNumber("espaco_m", m.Module.Gap);
-                w.WriteEndObject();
-                w.WriteString("tipo", m.Kind);
+            }
+            w.WriteEndArray();
+            w.WriteNumber("colunas", m.Columns);
+            w.WriteNumber("fiadas", m.Rows);
+            w.WriteStartObject("modulo");
+            w.WriteNumber("largura_m", m.Module.Width);
+            w.WriteNumber("altura_m", m.Module.Height);
+            w.WriteNumber("espaco_m", m.Module.Gap);
+            w.WriteEndObject();
+            w.WriteString("tipo", m.Kind);
+
+            var comTipo = subtype && m.Subtype is { Length: > 0 };
+            if (m.Structure is { Count: > 0 } || comTipo)
+            {
+                w.WriteStartObject("estrutura");
+                if (comTipo) w.WriteString("tipo", m.Subtype);
                 if (m.Structure is { Count: > 0 } estrutura)
                 {
-                    w.WriteStartObject("estrutura");
                     w.WriteStartArray("triangulos");
                     foreach (var f in estrutura.Where(f => f.Corners.Count == 3))
                     {
@@ -94,15 +124,11 @@ public static class TermoVisionReturn
                         w.WriteEndArray();
                     }
                     w.WriteEndArray();
-                    w.WriteEndObject();
                 }
                 w.WriteEndObject();
             }
-
-            w.WriteEndArray();
             w.WriteEndObject();
         }
-        return memoria.ToArray();
     }
 
     /// <summary>

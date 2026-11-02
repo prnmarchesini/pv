@@ -45,6 +45,32 @@ internal static class GeoStore
     }
 
     /// <summary>
+    /// O sistema de coordenadas declarado no desenho (o código da
+    /// geolocalização, UTM84-17N), ou (null, null) sem geolocalização. O EPSG
+    /// fica null: o TermoVision aceita a zona e o hemisfério (contrato v2).
+    /// </summary>
+    internal static (string? Codigo, int? Epsg) SistemaDoDesenho(Database database)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+
+        try
+        {
+            var id = database.GeoDataObject;
+            if (id.IsNull) return (null, null);
+
+            using var transacao = database.TransactionManager.StartOpenCloseTransaction();
+            return transacao.GetObject(id, OpenMode.ForRead) is GeoLocationData geo && !string.IsNullOrWhiteSpace(geo.CoordinateSystem)
+                ? (geo.CoordinateSystem.Length > 120 ? null : geo.CoordinateSystem.Trim(), null)
+                : (null, null);
+        }
+        catch (Autodesk.AutoCAD.Runtime.Exception)
+        {
+            // Sem geolocalização o AutoCAD lança ao pedir o objeto: é o caso comum.
+            return (null, null);
+        }
+    }
+
+    /// <summary>
     /// A localização de um ponto do terreno, segundo a geolocalização do
     /// desenho, ou null se ele não tiver nenhuma.
     /// </summary>
