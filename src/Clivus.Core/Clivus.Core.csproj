@@ -35,6 +35,8 @@
     <EmbeddedResource Include="Visualizador3D\sol.js" LogicalName="Clivus.Core.sol.js" />
     <EmbeddedResource Include="Visualizador3D\resumo.js" LogicalName="Clivus.Core.resumo.js" />
     <EmbeddedResource Include="Visualizador3D\clivus-logo.svg" LogicalName="Clivus.Core.clivus-logo.svg" />
+    <!-- 02/11/2026: a rosa dos ventos, que tambem vai para app/estatico do clivussolar. -->
+    <EmbeddedResource Include="Visualizador3D\rosa.js" LogicalName="Clivus.Core.rosa.js" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Clipper2" Version="2.0.0" />

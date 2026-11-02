@@ -546,6 +546,7 @@ public static class Viewer3DPage
         var orbita = Recurso("Clivus.Core.OrbitControls.js");
         var sol = Recurso("Clivus.Core.sol.js");
         var resumo = Recurso("Clivus.Core.resumo.js");
+        var rosa = Recurso("Clivus.Core.rosa.js");
         var logo = Recurso("Clivus.Core.clivus-logo.svg");
 
         // Os scripts entram antes da cena e o título por último: um nome de
@@ -595,11 +596,22 @@ public static class Viewer3DPage
             .Replace("{{TXT_MOMENTO_OPCAO_UM}}", H(Tr.T("{dia}/{mes}/{ano} {hora} · {n} módulo")), StringComparison.Ordinal)
             .Replace("{{TXT_MOMENTO_DESTAQUE}}", H(Tr.T("{n} módulos com a pior sombra neste momento, segundo a análise do CAD: a sombra do sol deve cair sobre eles.")), StringComparison.Ordinal)
             .Replace("{{TXT_MOMENTO_DESTAQUE_UM}}", H(Tr.T("{n} módulo com a pior sombra neste momento, segundo a análise do CAD: a sombra do sol deve cair sobre ele.")), StringComparison.Ordinal)
+            // A rosa dos ventos (02/11/2026): as letras e os rumos na ordem
+            // norte, leste, sul, oeste; os campos {rumo} e {letra} quem
+            // preenche é o rosa.js.
+            .Replace("{{TXT_ROSA}}", H(Tr.T("Rosa dos ventos")), StringComparison.Ordinal)
+            .Replace("{{TXT_ROSA_LETRAS}}", H(Tr.T("N L S O")), StringComparison.Ordinal)
+            .Replace("{{TXT_ROSA_RUMOS}}", H(Tr.T("norte|leste|sul|oeste")), StringComparison.Ordinal)
+            .Replace("{{TXT_ROSA_TRAVAR}}", H(Tr.T("Pôr o {rumo} para cima e travar o giro")), StringComparison.Ordinal)
+            .Replace("{{TXT_ROSA_SOLTAR}}", H(Tr.T("Soltar o giro")), StringComparison.Ordinal)
+            .Replace("{{TXT_ROSA_TRAVADO}}", H(Tr.T("Giro travado com o {rumo} para cima. Para soltar, clique de novo no {letra}.")), StringComparison.Ordinal)
+            .Replace("{{TXT_ROSA_SOLTO}}", H(Tr.T("Giro solto.")), StringComparison.Ordinal)
             .Replace("{{LOGO}}", logo, StringComparison.Ordinal)
             .Replace("{{THREE}}", three, StringComparison.Ordinal)
             .Replace("{{ORBITA}}", orbita, StringComparison.Ordinal)
             .Replace("{{SOL}}", sol, StringComparison.Ordinal)
             .Replace("{{RESUMO_JS}}", resumo, StringComparison.Ordinal)
+            .Replace("{{ROSA_JS}}", rosa, StringComparison.Ordinal)
             .Replace("{{CENA}}", Json(scene).Replace("</", "<\\/", StringComparison.Ordinal).Replace("{{", "{\\u007b", StringComparison.Ordinal), StringComparison.Ordinal)
             .Replace("{{TITULO}}", System.Net.WebUtility.HtmlEncode(scene.Title), StringComparison.Ordinal);
     }
@@ -652,7 +664,7 @@ public static class Viewer3DPage
   html, body { margin: 0; height: 100%; overflow: hidden; background: #cfe3f3; font: 13px/1.4 "Segoe UI", system-ui, sans-serif; color: var(--texto); }
   [hidden] { display: none !important; }
   .caixa { position: absolute; background: var(--painel); border: 1px solid var(--borda); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
-  #painel { top: 12px; left: 12px; padding: 10px 12px; max-width: 300px; max-height: calc(100% - 50px); overflow-y: auto; }
+  #painel { top: 12px; left: 12px; padding: 10px 12px; max-width: 300px; max-height: calc(100% - 132px); overflow-y: auto; }
   #painel h1 { font-size: 14px; margin: 0 0 6px; }
   #painel label { display: inline-flex; align-items: center; gap: 4px; margin: 2px 10px 2px 0; cursor: pointer; }
   #painel .dica { color: var(--suave); margin-top: 6px; font-size: 12px; }
@@ -680,6 +692,37 @@ public static class Viewer3DPage
   #resumoQuadro tr.fora td:first-child { font-style: italic; }
   #marca { position: absolute; right: 12px; bottom: 12px; width: 92px; opacity: .92; pointer-events: none; }
   #marca svg { display: block; width: 100%; height: auto; }
+  /* A rosa dos ventos (02/11/2026, rosa.js): gira com a câmera; o clique num
+     rumo põe ele para cima e trava o giro. Embaixo à esquerda, abaixo das
+     camadas (o #painel para 132 px antes do fim da tela). */
+  #rosa { position: absolute; left: 12px; bottom: 12px; width: 96px; height: 96px; user-select: none; }
+  .rosa-desenho { display: block; width: 100%; height: 100%; overflow: visible; }
+  .rosa-fundo { fill: var(--painel); stroke: var(--borda); stroke-width: 1.2; }
+  #rosa.travada .rosa-fundo { stroke: #F4A51C; stroke-width: 2; }
+  .rosa-anel { fill: none; stroke: rgba(29,39,51,.15); }
+  .rosa-diagonal { fill: rgba(91,107,124,.45); }
+  .rosa-rumo { cursor: pointer; outline: none; }
+  .rosa-alvo { fill: transparent; }
+  .rosa-rumo:hover .rosa-alvo { fill: rgba(244,165,28,.25); }
+  .rosa-rumo:focus-visible .rosa-alvo { stroke: #B86E00; stroke-width: 1.5; }
+  .rosa-rumo.ativo .rosa-alvo { fill: #F4A51C; }
+  .rosa-ponta { fill: #9aa8b5; }
+  .rosa-ponta.rosa-sombra { fill: #3d4d5c; }
+  .rosa-norte .rosa-ponta { fill: #F4A51C; }
+  .rosa-norte .rosa-ponta.rosa-sombra { fill: #B86E00; }
+  .rosa-letra { fill: var(--texto); font: 700 14px "Segoe UI", system-ui, sans-serif; }
+  .rosa-norte .rosa-letra { fill: #B86E00; }
+  .rosa-rumo.ativo .rosa-letra { fill: #0F2533; }
+  .rosa-meio circle { fill: #fff; stroke: var(--borda); }
+  .rosa-cadeado { display: none; }
+  .rosa-cadeado rect { fill: #B86E00; }
+  .rosa-cadeado path { fill: none; stroke: #B86E00; stroke-width: 1.3; }
+  #rosa.travada .rosa-meio { cursor: pointer; }
+  #rosa.travada .rosa-cadeado { display: inline; }
+  .rosa-aviso { position: absolute; left: calc(100% + 8px); bottom: 50%; transform: translateY(50%); width: max-content; max-width: 260px;
+    padding: 6px 10px; border-radius: 8px; background: var(--painel); border: 1px solid var(--borda); box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    font-size: 12px; opacity: 0; transition: opacity .3s ease; pointer-events: none; }
+  .rosa-aviso.visivel { opacity: 1; }
 </style>
 </head>
 <body>
@@ -722,11 +765,13 @@ public static class Viewer3DPage
 </div>
 <div id="resumoQuadro" class="caixa" hidden data-titulo="{{TXT_QUADRO}}" data-mesas="{{TXT_MESAS}}" data-modulos="{{TXT_MODULOS}}" data-total="{{TXT_TOTAL}}" data-fora="{{TXT_FORA}}" data-area="{{TXT_AREA}}" data-tipo="{{TXT_TIPO}}"></div>
 <div id="marca" aria-hidden="true">{{LOGO}}</div>
+<div id="rosa" data-titulo="{{TXT_ROSA}}" data-letras="{{TXT_ROSA_LETRAS}}" data-rumos="{{TXT_ROSA_RUMOS}}" data-travar="{{TXT_ROSA_TRAVAR}}" data-soltar="{{TXT_ROSA_SOLTAR}}" data-travado="{{TXT_ROSA_TRAVADO}}" data-solto="{{TXT_ROSA_SOLTO}}"></div>
 <script>{{THREE}}</script>
 <script>{{ORBITA}}</script>
 <script>
 {{SOL}}
 {{RESUMO_JS}}
+{{ROSA_JS}}
 const D = {{CENA}};
 const cena = new THREE.Scene();
 cena.background = new THREE.Color(0xcfe3f3);
@@ -890,6 +935,9 @@ if (tin && Array.isArray(tin.v) && Array.isArray(tin.t) && tin.v.length >= 9 && 
 const controles = new THREE.OrbitControls(camera, render.domElement);
 controles.enableDamping = true;
 
+// A rosa dos ventos (02/11/2026): gira com a câmera e trava o giro no rumo clicado.
+const rosa = ClivusRosa.montar(controles);
+
 // O sol (42.2): com o lugar na cena, a luz vem de onde o sol está e faz
 // sombra; sem ele, a luz de sempre.
 const sombraDoSol = ClivusSol.montar({ THREE, render, cena, mundo, luz: sol, ceu, D, camadas, usina: ['mesas', 'pilares', 'arvores', 'canaletas'], forcaSol: 0.75, forcaCeu: 0.6 });
@@ -929,7 +977,7 @@ document.getElementById('resumo').textContent =
 
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); render.setSize(innerWidth, innerHeight); });
 enquadrar();
-(function quadro() { requestAnimationFrame(quadro); if (sombraDoSol) sombraDoSol.quadro(); controles.update(); render.render(cena, camera); })();
+(function quadro() { requestAnimationFrame(quadro); if (sombraDoSol) sombraDoSol.quadro(); if (rosa) rosa.quadro(); controles.update(); render.render(cena, camera); })();
 </script>
 </body>
 </html>
